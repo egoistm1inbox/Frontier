@@ -89,7 +89,8 @@ the difference; never replace a failed GPU feature with a nicer-looking fake CPU
 Required proof set:
 
 - dawn, sunrise, noon/zenith, sunset, dusk and night;
-- sun-disc close view;
+- sun-disc close view; the showcase now includes a clear-sky, 18-degree-FOV inspection
+  frame with the weather entities hidden and production exposure explicitly labelled;
 - moon and stars at night;
 - clouds in Visibility Raster and ReSTIR, with GI on and off where valid;
 - cloud/fog god rays;

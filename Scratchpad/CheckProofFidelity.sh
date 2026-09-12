@@ -44,6 +44,8 @@ grep -q 'FIDELITY CONTRACT' "$SkyProof"
 Report $? "the proof declares its fidelity contract in its header"
 grep -q 'ProjectZeroCelestial_VisibilityRaster_GIoff_Standard' Scratchpad/ProjectZeroShowcase.cpp
 Report $? "showcase output names include scene, path, GI state and quality tier"
+grep -q 'ClearSky_SunDisc' Scratchpad/ProjectZeroShowcase.cpp
+Report $? "showcase includes a clear-sky, zoomed sun-disc inspection frame"
 
 echo "[ProofFidelity] the moon proof drives the same wiring"
 MoonProof=Scratchpad/MoonRenderProof.cpp

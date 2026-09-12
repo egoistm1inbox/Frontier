@@ -1,7 +1,7 @@
 //============================================================================================================================================
 //                                                 PROJECTZEROSHOWCASE.CPP
 //============================================================================================================================================
-// 🧩 Project Zero's sky, sun, moon and stars as the game itself renders them — five aimed frames from the dedicated Project Zero scene (Visibility Raster, GI off, Standard tier).
+// 🧩 Project Zero's sky, sun, moon and stars as the game itself renders them — six aimed frames from the dedicated Project Zero scene (Visibility Raster, GI off, Standard tier).
 //
 //    WHAT THIS IS: the project's own CelestialSequence (prepare → tick → ApplyTo) driven exactly as GameExecution
 //    drives it — same tier budget via CelestialTier::BudgetFor, same shipping star catalogue, same six moon
@@ -25,7 +25,9 @@
 //    2 deg, slot 1 (Ember) at az 14 / el 15 at 3 deg — the MoonRenderProof arrangement, with the stars left on so
 //    the frame carries moons and stars together. The fifth frame turns to the parked local volume at 11h, when
 //    its patch runs densest (probed 0.76 mean across the day): the enable is flipped — the volume parks off
-//    until the scene wants weather somewhere specific — and the camera aims at the box's live centre.
+//    until the scene wants weather somewhere specific — and the camera aims at the box's live centre. The extra
+//    clear-sky frame below deliberately hides every weather entity and zooms the production camera to 18 degrees,
+//    making the bounded 0.53 degree solar body inspectable rather than confusing its pixels with the Mie aureole.
 
 #include "GeometricRaster/VisibilityRaster.h"
 #include "GeometricRaster/SceneRecordPacking.h"
@@ -145,7 +147,7 @@ void AimAt(const float* Direction, float Forward[3], float Right[3], float Up[3]
 
 int main()
 {
-    std::printf("\nProject Zero showcase: the sky the game renders, five aimed frames from the dedicated Project Zero scene (Visibility Raster, GI off, Standard tier)\n");
+    std::printf("\nProject Zero showcase: the sky the game renders, six aimed frames from the dedicated Project Zero scene (Visibility Raster, GI off, Standard tier)\n");
     for (int I = 0; I < 70; ++I) std::putchar('='); std::printf("\n\n");
 
     SceneStructure Level;
@@ -173,8 +175,9 @@ int main()
 
     const float TickOrigin[3] = { 0.0f, 0.0f, 2.0f };
     const float Eye[3]        = { 0.0f, -6.0f, 1.7f };
-    constexpr float kHalfFov  = 55.0f * 3.14159265f / 180.0f;
-    constexpr float kDeg      = 3.14159265f / 180.0f;
+    constexpr float kHalfFov      = 55.0f * 3.14159265f / 180.0f;
+    constexpr float kSunDiscFov   = 18.0f * 3.14159265f / 180.0f; // zoom only the proof view; the disc remains 0.53 deg
+    constexpr float kDeg           = 3.14159265f / 180.0f;
 
     auto TickTo = [&](float Hour, int Day = 10)
     {
@@ -206,7 +209,33 @@ int main()
         WriteFrame("Diagnostics/ProjectZeroCelestial_VisibilityRaster_GIoff_Standard_Dawn.png", Frame);
     }
 
-    // ── 2. Sunset: the sun at +1.5 deg, faced ────────────────────────────────────────────────────
+    // ── 2. Clear sky, zoomed: the bounded solar disc without any cloud/weather veil ──────────────
+    {
+        TickTo(SolveHourForElevation(10.0f, 6.0f, 10.0f));
+        Sky.Shown[static_cast<uint32_t>(CelestialEntity::CloudLayer)] = false;
+        Sky.Shown[static_cast<uint32_t>(CelestialEntity::LocalCloud)] = false;
+        Sky.Shown[static_cast<uint32_t>(CelestialEntity::LocalFog)] = false;
+        float F[3] = { Sky.Frame().Sun.Direction[0], Sky.Frame().Sun.Direction[1], Sky.Frame().Sun.Direction[2] };
+        float R[3], U[3];
+        AimAt(F, F, R, U);
+        VisibilityRaster Raster;
+        Sky.ApplyTo(Raster, Budget);
+        ColourTransfer InspectionTransfer = Raster.QueryColourTransfer();
+        InspectionTransfer.Exposure = 0.05f; // production exposure control, lowered only to inspect the disc shoulder
+        Raster.AssignColourTransfer(InspectionTransfer);
+        std::vector<unsigned char> Frame(static_cast<size_t>(kWidth) * kHeight * 4u, 0u);
+        double MeanLuminance = 0.0;
+        if (!Raster.Render(Level, Eye, F, R, U, kSunDiscFov, kWidth, kHeight, Frame.data(), MeanLuminance)) return 2;
+        std::printf("  clear sun disc: sun el %+.2f az %.1f at %.2fh, 18 deg proof FOV, exposure 0.05\n",
+                    static_cast<double>(Sky.Frame().Sun.Elevation), static_cast<double>(Sky.Frame().Sun.Azimuth),
+                    static_cast<double>(Sky.Observation.LocalHours));
+        WriteFrame("Diagnostics/ProjectZeroCelestial_VisibilityRaster_GIoff_Standard_ClearSky_SunDisc.png", Frame);
+        Sky.Shown[static_cast<uint32_t>(CelestialEntity::CloudLayer)] = true;
+        Sky.Shown[static_cast<uint32_t>(CelestialEntity::LocalCloud)] = true;
+        Sky.Shown[static_cast<uint32_t>(CelestialEntity::LocalFog)] = true;
+    }
+
+    // ── 3. Sunset: the sun at +1.5 deg, faced ────────────────────────────────────────────────────
     {
         TickTo(SolveHourForElevation(1.5f, 15.0f, 19.0f));
         float F[3] = { 0.0f, 1.0f, 0.0f };
@@ -228,7 +257,7 @@ int main()
         WriteFrame("Diagnostics/ProjectZeroCelestial_VisibilityRaster_GIoff_Standard_Sunset.png", Frame);
     }
 
-    // ── 3. Night, linked: slot 0 as Prepare() leaves it — Luna following the solved lunar frame ──
+    // ── 4. Night, linked: slot 0 as Prepare() leaves it — Luna following the solved lunar frame ──
     {
         // 26 Sep, full moon. The aim reads the SOLVED direction: a linked slot ignores Azimuth/Elevation.
         TickTo(22.0f, 26);
@@ -246,7 +275,7 @@ int main()
         WriteFrame("Diagnostics/ProjectZeroCelestial_VisibilityRaster_GIoff_Standard_Night_MoonStars.png", Frame);
     }
 
-    // ── 4. Night, placed: the roster driven the way the reference panel drives it ────────────────
+    // ── 5. Night, placed: the roster driven the way the reference panel drives it ────────────────
     {
         // The MoonRenderProof arrangement, stated plainly: slot 0 unlinked and put at az 0 / el 25 at 2 deg,
         //    slot 1 (Ember) at az 14 / el 15 at 3 deg, slots 2-3 as Prepare parks them (hidden). The stars stay
@@ -273,7 +302,7 @@ int main()
         WriteFrame("Diagnostics/ProjectZeroCelestial_VisibilityRaster_GIoff_Standard_Night_PlacedMoonStars.png", Frame);
     }
 
-    // ── 5. Morning, local: the parked volume with its enable flipped ────────────────────────────
+    // ── 6. Morning, local: the parked volume with its enable flipped ────────────────────────────
     {
         TickTo(11.0f, 10);
         Sky.LocalCloud.Enabled = true;
