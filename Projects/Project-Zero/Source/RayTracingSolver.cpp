@@ -44,6 +44,70 @@ RayTracingSolver::SpanScope RayTracingSolver::OpenSpan(const char* Name, bool Dy
 //                                                SCENE GEOMETRY SETUP
 //------------------------------------------------------------------------------------------------------------------------
 
+void RayTracingSolver::AppendTriangle(const Vector3& v0, const Vector3& v1, const Vector3& v2, uint32_t MaterialIdx) noexcept
+{
+    TriangleGeometry Tri{};
+    Tri.VertexAlpha    = v0;
+    Tri.VertexBeta     = v1;
+    Tri.VertexGamma    = v2;
+    Vector3 Edge1      = v1 - v0;
+    Vector3 Edge2      = v2 - v0;
+    Tri.SurfaceNormal  = OrientationClassifier::CrossProduct(Edge1, Edge2).Normalized();
+    Tri.MaterialIndex  = MaterialIdx;
+    Tri.TriangleIndex  = static_cast<uint32_t>(Triangles.size());
+    Triangles.push_back(Tri);
+}
+
+void RayTracingSolver::AppendQuad(const Vector3& v0, const Vector3& v1, const Vector3& v2, const Vector3& v3, uint32_t MaterialIdx) noexcept
+{
+    // Quad formed of two triangles with CCW outward normal
+    AppendTriangle(v0, v1, v2, MaterialIdx);
+    AppendTriangle(v0, v2, v3, MaterialIdx);
+}
+
+void RayTracingSolver::AppendBox(const Vector3& Center, const Vector3& Extents, float RotationDegrees, uint32_t MaterialIdx) noexcept
+{
+    // Z-up: the box is rotated about the vertical (+Z) axis; Extents = half-sizes (X, Y, Z).
+    float Rad = RotationDegrees * 3.14159265359f / 180.0f;
+    float CosAngle = std::cos(Rad);
+    float SinAngle = std::sin(Rad);
+
+    auto RotateZ = [CosAngle, SinAngle](const Vector3& p) -> Vector3
+    {
+        return Vector3{ p.x * CosAngle - p.y * SinAngle, p.x * SinAngle + p.y * CosAngle, p.z };
+    };
+
+    float hx = Extents.x;
+    float hy = Extents.y;
+    float hz = Extents.z;
+
+    Vector3 Corners[8] = {
+        Center + RotateZ(Vector3{ -hx, -hy, -hz }), // 0: Bottom-Left-Front   (−X, −Y, −Z)
+        Center + RotateZ(Vector3{  hx, -hy, -hz }), // 1: Bottom-Right-Front  (+X, −Y, −Z)
+        Center + RotateZ(Vector3{  hx,  hy, -hz }), // 2: Bottom-Right-Back   (+X, +Y, −Z)
+        Center + RotateZ(Vector3{ -hx,  hy, -hz }), // 3: Bottom-Left-Back    (−X, +Y, −Z)
+        Center + RotateZ(Vector3{ -hx, -hy,  hz }), // 4: Top-Left-Front      (−X, −Y, +Z)
+        Center + RotateZ(Vector3{  hx, -hy,  hz }), // 5: Top-Right-Front     (+X, −Y, +Z)
+        Center + RotateZ(Vector3{  hx,  hy,  hz }), // 6: Top-Right-Back      (+X, +Y, +Z)
+        Center + RotateZ(Vector3{ -hx,  hy,  hz })  // 7: Top-Left-Back       (−X, +Y, +Z)
+    };
+
+    // 6 faces, counter-clockwise seen from outside so the geometric normal points outward:
+    // Top (+Z)
+    AppendQuad(Corners[4], Corners[5], Corners[6], Corners[7], MaterialIdx);
+    // Bottom (−Z)
+    AppendQuad(Corners[3], Corners[2], Corners[1], Corners[0], MaterialIdx);
+    // Front (−Y)
+    AppendQuad(Corners[0], Corners[1], Corners[5], Corners[4], MaterialIdx);
+    // Back (+Y)
+    AppendQuad(Corners[2], Corners[3], Corners[7], Corners[6], MaterialIdx);
+    // Left (−X)
+    AppendQuad(Corners[3], Corners[0], Corners[4], Corners[7], MaterialIdx);
+    // Right (+X)
+    AppendQuad(Corners[1], Corners[2], Corners[6], Corners[5], MaterialIdx);
+}
+
+
 //------------------------------------------------------------------------------------------------------------------------
 //                                                  CELESTIAL MATERIAL TEST SCENE
 //------------------------------------------------------------------------------------------------------------------------
