@@ -97,6 +97,18 @@ printf '%s' "$Code" | grep -q 'CloudSunTransmittance(hitPos, shadeDir)'
 Report $? "the selected ReSTIR sun is shadowed by the cloud field"
 
 echo
+
+echo "[SkyKernel] the cloud light calibration is one production value"
+grep -q 'inline constexpr float kCloudDirectLightScale = 0.10f;' Engine/DisplayPresentation/VolumetricMedia.h
+Report $? "the CPU and record pack share one cloud direct-light scale"
+printf '%s' "$SkyCode" | grep -q 'uintBitsToFloat(SkyCloudControl.w)'
+Report $? "ReSTIR reads the packed cloud direct-light scale"
+! printf '%s' "$SkyCode" | grep -q 'SkySunRadiance.xyz \* (0.10'
+Report $? "the shader has no second cloud light literal"
+! grep -q '\* 0.10f' Engine/GeometricRaster/VisibilityRaster.cpp
+Report $? "the CPU raster has no second cloud light literal"
+
+echo
 echo "[SkyKernel] the kernel's drift cannot shred the slab"
 # The streak note lives in WindField::AdvectDrift: the local flow times time-of-day piled 76 km of offset
 #    across the slab by 7am. Both densities must route through the one CloudDriftAt twin, whose clamp and shear
@@ -151,21 +163,21 @@ echo "[SkyKernel] the coefficients are not copied into the shader"
 Report $? "the medium arrives in the block rather than being restated"
 
 echo
-echo "[SkyKernel] the aureole shoulder is one value on both paths"
-# The compression knee/slope/width exist twice (GLSL + C++) with no shared header, so the literals are pinned
-#    pairwise: a retune that lands on one path and not the other fails here rather than shipping two suns.
-printf '%s' "$SkyCode" | grep -qE 'kAureoleKnee += 1\.0;'
-Report $? "the shader's knee is 1.0 linear"
+echo "[SkyKernel] the reference aureole is not remapped"
+# The HTML/reference path keeps the physical Mie aureole in HDR and composes the bounded disc over it. The old
+#    duplicated 0.06 slope darkened the air around the source; the identity pins below make that regression visible.
+! printf '%s' "$SkyCode" | grep -q 'AureoleMix'
+Report $? "the shader does not carry a darkening aureole remap"
 grep -qE 'kAureoleKnee += 1\.0f;' Engine/DisplayPresentation/SkyConstantRecord.h
-Report $? "the host's knee is the same 1.0"
-printf '%s' "$SkyCode" | grep -qE 'kAureoleSlope += 0\.06;'
-Report $? "the shader's shoulder slope is 0.06"
-grep -qE 'kAureoleSlope += 0\.06f;' Engine/DisplayPresentation/SkyConstantRecord.h
-Report $? "the host's shoulder slope is the same 0.06"
-printf '%s' "$SkyCode" | grep -qE 'kAureoleSigma = 5\.0'
-Report $? "the shader's aureole width is 5 deg"
+Report $? "the host's aureole identity knee is retained"
+grep -qE 'kAureoleSlope += 1\.0f;' Engine/DisplayPresentation/SkyConstantRecord.h
+Report $? "the host does not compress the aureole"
 grep -qE 'kAureoleSigma = 5\.0f' Engine/DisplayPresentation/SkyConstantRecord.h
-Report $? "the host's aureole width is the same 5 deg"
+Report $? "the host keeps the diagnostic aureole width pin"
+! printf '%s' "$SkyCode" | grep -q 'AureoleTarget'
+Report $? "the shader has no darkening aureole remap"
+! grep -q 'AureoleMix' Engine/GeometricRaster/VisibilityRaster.cpp
+Report $? "the CPU raster has no darkening aureole remap"
 
 echo
 echo "[SkyKernel] the C++ mirror matches the shader's std140 layout"

@@ -37,6 +37,7 @@ constexpr uint32_t kTwinLayerFlag = 1u << 0u, kTwinLocalCloudFlag = 1u << 1u, kT
 constexpr uint32_t kTwinFollowWindFlag = 1u << 3u, kTwinBoxWindFlag = 1u << 4u, kTwinFogWindFlag = 1u << 5u;
 constexpr float kTwinExtinction = 0.01f;
 constexpr float kTwinMaxDistance = 200000.0f;
+constexpr float kTwinCloudSunScale = kCloudDirectLightScale;
 
 // ── Transcribed BACK from Engine/Shaders/SkyRecords.slang, not from VolumetricMedia ─────────────────────────
 float TwinSmoothstep(float E0, float E1, float V)
@@ -49,6 +50,13 @@ float TwinHash(const float P[3])
 {
     float H = std::sin(P[0]*127.1f + P[1]*311.7f + P[2]*74.7f) * 43758.5453f;
     return H - std::floor(H);
+}
+float TwinCloudSampleJitter(const float Origin[3], const float Direction[3])
+{
+    const float P[3] = { Direction[0] * 17.0f + Origin[0] * 0.001f,
+                          Direction[1] * 31.0f + Origin[1] * 0.001f,
+                          Direction[2] * 47.0f + Origin[2] * 0.001f };
+    return TwinHash(P);
 }
 float TwinNoise(const float P[3])
 {
@@ -258,6 +266,7 @@ void TwinMarchMedium(const SkyConstantRecord& K, const float Origin[3], const fl
     uint32_t Cap = Medium == 0u ? (Budget*4u > 4u ? Budget*4u : 4u) : Budget;
     if (Count > Cap) Count = Cap;
     float Step = Span/float(Count);
+    float SampleJitter = TwinCloudSampleJitter(Origin, Direction);
     float G = Medium == 0u ? K.CloudShape[3]
             : (Medium == 1u ? K.LocalCloudParams[3] : K.LocalFogParams[3]);
     float Mu = Direction[0]*SunDirection[0]+Direction[1]*SunDirection[1]+Direction[2]*SunDirection[2];
@@ -270,7 +279,7 @@ void TwinMarchMedium(const SkyConstantRecord& K, const float Origin[3], const fl
     float S[3] = { 0.0f, 0.0f, 0.0f };
     for (uint32_t I = 0u; I < Count; ++I)
     {
-        float Tm = Near + (float(I)+0.5f)*Step;
+        float Tm = Near + (float(I)+0.5f+SampleJitter-0.5f)*Step;
         float P[3] = { Origin[0]+Direction[0]*Tm, Origin[1]+Direction[1]*Tm, Origin[2]+Direction[2]*Tm };
         float Density = Medium == 0u ? TwinCloudDensityAt(K, P) : TwinLocalDensityAt(K, P, Medium == 2u);
         if (Density <= 1e-5f) continue;
@@ -400,9 +409,9 @@ int main()
     const float SunEl = std::asin(std::fmax(-1.0f, std::fmin(1.0f, Light.Direction[2]))) * 180.0f / kPi;
     const float DayF = (SunEl <= -12.0f) ? 0.0f : (SunEl >= 0.0f) ? 1.0f
         : (SunEl + 12.0f) / 12.0f * ((SunEl + 12.0f) / 12.0f) * (3.0f - 2.0f * (SunEl + 12.0f) / 12.0f);
-    float CloudSunRad[3] = { Light.Colour[0] * Light.Intensity * DayF,
-                             Light.Colour[1] * Light.Intensity * DayF,
-                             Light.Colour[2] * Light.Intensity * DayF };
+    float CloudSunRad[3] = { Light.Colour[0] * Light.Intensity * DayF * kTwinCloudSunScale,
+                             Light.Colour[1] * Light.Intensity * DayF * kTwinCloudSunScale,
+                             Light.Colour[2] * Light.Intensity * DayF * kTwinCloudSunScale };
 
     // Morning camera: face the sun's horizontal azimuth, level. Half-fov 55deg like the showcase.
     float F[3] = { 0.0f, 1.0f, 0.0f };

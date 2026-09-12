@@ -113,8 +113,8 @@ grep -q 'MakeSlider("Direct", 0.0f, 5.0f, SunDirect' Projects/Project-Zero/Sourc
 Report $? "the Sun row offers the Direct slider"
 grep -q 'ReadSlider(Sheet, "Direct", SunDirect)' Projects/Project-Zero/Source/CelestialSequence.cpp
 Report $? "the sheet writes the Direct slider back"
-grep -q 'LightSamples, Enabled, SunDirect)' Projects/Project-Zero/Source/CelestialSequence.cpp
-Report $? "the pack hands the gain to the record"
+grep -q 'LightSamples, Enabled, SunDirect, SunDiscGain)' Projects/Project-Zero/Source/CelestialSequence.cpp
+Report $? "the pack hands the gain and disc body to the record"
 
 echo
 echo "[SunDirect] the sun switch is the record, not a flag"

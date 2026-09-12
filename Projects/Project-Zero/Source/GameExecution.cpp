@@ -26,6 +26,7 @@
 #include "FlyThroughSolver.h"
 #include "RayTracingSolver.h"
 #include "EditorFeedSequence.h"
+#include "../../../Scratchpad/PngWriteShim.h"
 
 #include <algorithm>
 #include <chrono>
@@ -33,6 +34,7 @@
 #include <string>
 #include <cstdio>
 #include <cstring>
+#include <cstdlib>
 #include <filesystem>
 #include <iostream>
 
@@ -85,6 +87,27 @@ int main(int argc, char** argv)
     Frontier::ConfigurationRegistry Configuration;
     if (!Configuration.Load("Projects/Project-Zero/Content/Slate.config.toml"))
         std::cerr << "[Configuration] " << Configuration.QueryPath() << ": " << Configuration.QueryLastError() << " - using defaults\n";
+
+    // A capture is opt-in and still enters the same windowed production loop. It is intentionally not a second
+    // renderer: the scene, packed records, visibility front end, ReSTIR kernel, denoiser and presentation command
+    // are the normal path, while SwapchainExchange copies the resolved storage image before the UI blit.
+    const char* CaptureEnvironment = std::getenv("FRONTIER_RESTIR_CAPTURE");
+    const std::string CaptureSpec = CaptureEnvironment ? CaptureEnvironment : "";
+    const bool CaptureMode = !CaptureSpec.empty();
+    const bool CaptureClearSky = CaptureSpec.find("clear") != std::string::npos;
+    const bool CaptureGI = CaptureSpec.find("GIoff") == std::string::npos
+                        && CaptureSpec.find("gioff") == std::string::npos;
+    const uint32_t CaptureFrameCount = CaptureMode
+        ? std::max(1, std::atoi(std::getenv("FRONTIER_RESTIR_CAPTURE_FRAMES")
+                                ? std::getenv("FRONTIER_RESTIR_CAPTURE_FRAMES") : "64"))
+        : 0u;
+    if (CaptureMode)
+    {
+        Configuration.Access().Render.RenderPath = Frontier::RenderPathSelection::ReSTIR;
+        Configuration.Access().Render.GlobalIllumination = CaptureGI;
+        Configuration.Access().Render.AntiAliasing = false; // fixed framing; accumulation remains ReSTIR, not temporal AA
+        Configuration.Access().Render.RenderScale = 1.0f;  // readback extent is the native storage image
+    }
 
     Frontier::SceneStructure Level;
     Frontier::TextureIndex   Textures;
@@ -254,6 +277,72 @@ int main(int argc, char** argv)
     //    now carry pixels the CPU raster can borrow. A missing file degrades to the index's 1x1 placeholder —
     //    a pale disc, logged at decode — never a refusal to start.
     Celestial.AssignMoonAtlas(MoonSlots, Textures);
+
+    std::string CaptureOutputPath;
+    std::vector<unsigned char> ReSTIRCapture;
+    bool CaptureComplete = false;
+    if (CaptureMode)
+    {
+        // These are the showcase's solved states, not hand-authored sun vectors: the same date, clock, weather
+        // defaults, eye and framing are used by ProjectZeroShowcase.cpp. Only the selected GI bit and the capture
+        // output differ. Capture exposure follows the corresponding Visibility Raster proof (0.05 for the clear
+        // inspection frame, 1.0 for the weather frame).
+        Celestial.Observation.Year = 2026;
+        Celestial.Observation.Month = 9;
+        Celestial.Observation.Day = 10;
+        Celestial.Observation.UtcOffset = 2.0f;
+        Celestial.Observation.Latitude = -26.19f;
+        Celestial.Observation.Longitude = 28.32f;
+        Celestial.Observation.LocalHours = CaptureClearSky ? 6.98f : 11.0f;
+        Celestial.Clock.Animate = false;
+        if (CaptureClearSky)
+        {
+            Celestial.Shown[static_cast<uint32_t>(Frontier::ProjectZero::CelestialEntity::CloudLayer)] = false;
+            Celestial.Shown[static_cast<uint32_t>(Frontier::ProjectZero::CelestialEntity::LocalCloud)] = false;
+            Celestial.Shown[static_cast<uint32_t>(Frontier::ProjectZero::CelestialEntity::LocalFog)] = false;
+            Integrator.AssignExposure(0.05f);
+            Camera.AssignFieldOfView(18.0f);
+        }
+        else
+        {
+            Celestial.LocalCloud.Enabled = true;
+            Integrator.AssignExposure(1.0f);
+            Camera.AssignFieldOfView(55.0f);
+        }
+        Camera.AssignSpatialLocation(Frontier::Vector3{ 0.0f, -6.0f, 1.7f });
+        const float TickOrigin[3] = { 0.0f, 0.0f, 2.0f };
+        Celestial.Tick(0.0f, TickOrigin, 0.0f);
+        if (CaptureClearSky)
+        {
+            const Frontier::CelestialFrame& Frame = Celestial.Frame();
+            Camera.AssignOrientationEuler(std::asin(Frame.Sun.Direction[2]),
+                                          std::atan2(Frame.Sun.Direction[0], Frame.Sun.Direction[1]), 0.0f);
+        }
+        else
+        {
+            const Frontier::Vector3 Eye = Camera.QuerySpatialLocation();
+            const float Dx = Celestial.LocalCloud.Centre[0] - Eye.x;
+            const float Dy = Celestial.LocalCloud.Centre[1] - Eye.y;
+            const float Dz = Celestial.LocalCloud.Centre[2] - Eye.z;
+            const float Length = std::sqrt(Dx * Dx + Dy * Dy + Dz * Dz);
+            Camera.AssignOrientationEuler(std::asin(Dz / std::max(Length, 1e-6f)), std::atan2(Dx, Dy), 0.0f);
+        }
+        Camera.AssignAspectRatio(1280.0f / 720.0f);
+        const char* CapturePathEnvironment = std::getenv("FRONTIER_RESTIR_CAPTURE_OUTPUT");
+        if (CapturePathEnvironment && *CapturePathEnvironment)
+            CaptureOutputPath = CapturePathEnvironment;
+        else
+        {
+            CaptureOutputPath = "Diagnostics/ProjectZeroCelestial_ReSTIR_";
+            CaptureOutputPath += CaptureGI ? "GIon_" : "GIoff_";
+            CaptureOutputPath += "Standard_";
+            CaptureOutputPath += CaptureClearSky ? "Dawn_ClearSky_SunDisc.png" : "LateMorning_CloudGodRays.png";
+        }
+        Logger.RecordMessage(Frontier::DiagnosticSeverity::Information, "ReSTIR capture",
+                             ("armed " + CaptureOutputPath + " after " + std::to_string(CaptureFrameCount)
+                              + " settled frames; path=ReSTIR, GI=" + (CaptureGI ? "on" : "off")
+                              + ", state=" + (CaptureClearSky ? "clear sky" : "cloud present")).c_str());
+    }
     // Moon atlas census: which bindless slots the kernel's MoonAlong will sample, against what is resident.
     //    A slot past the resident count samples an unbound descriptor — white on most drivers — so this line
     //    next to the "Textures: N resident" line is the whole diagnosis for a textureless moon.
@@ -467,7 +556,7 @@ int main(int argc, char** argv)
     Frontier::EditorProperty* TintMirror  = nullptr;
     uint32_t                 AppliedOrbit = 0u;
 
-    while (!Surface.CloseRequested() && !Panel.Convert<bool>())
+    while (!Surface.CloseRequested() && !Panel.Convert<bool>() && !CaptureComplete)
     {
         const auto  NowTime = Clock::now();
         float       Δτ      = std::chrono::duration_cast<Duration>(NowTime - PreviousTime).count();
@@ -716,7 +805,7 @@ int main(int argc, char** argv)
             Celestial.BuildSheet(PickedCelestial, PickedSheet);
         }
         // The outliner's eye toggles live on the rows; carry them back so hiding a row hides the thing.
-        if (CelestialFirstRow != Frontier::kNoEditorInstance)
+        if (CelestialFirstRow != Frontier::kNoEditorInstance && !CaptureMode)
         {
             Celestial.Enabled = SceneInstances[CelestialFirstRow].Visible;
             for (uint32_t E = 0; E < Frontier::ProjectZero::kCelestialEntityCount; ++E)
@@ -936,7 +1025,38 @@ int main(int argc, char** argv)
         }
 
         // ⑥ Cull → raster → HiZ → resolve → kernel, or the CPU software upload, then blit/present ImGui.
-        Surface.RecordAndPresent(Dispatch);
+        // An armed capture is copied from the actual ReSTIR storage image on its final settled frame. The
+        // Visibility Raster branch never passes a capture vector, so its evidence cannot be mislabeled here.
+        const bool CaptureThisFrame = CaptureMode
+                                   && Integrator.QueryAccumulationIndex() + 1u >= CaptureFrameCount;
+        Surface.RecordAndPresent(Dispatch, CaptureThisFrame ? &ReSTIRCapture : nullptr);
+        if (CaptureThisFrame && !ReSTIRCapture.empty())
+        {
+            const size_t PixelCount = static_cast<size_t>(Surface.QueryWidth()) * Surface.QueryHeight();
+            std::vector<unsigned char> Rgb(PixelCount * 3u, 0u);
+            for (size_t P = 0u; P < PixelCount; ++P)
+            {
+                Rgb[P * 3u + 0u] = ReSTIRCapture[P * 4u + 0u];
+                Rgb[P * 3u + 1u] = ReSTIRCapture[P * 4u + 1u];
+                Rgb[P * 3u + 2u] = ReSTIRCapture[P * 4u + 2u];
+            }
+            std::error_code CaptureError;
+            const std::filesystem::path CaptureParent = std::filesystem::path(CaptureOutputPath).parent_path();
+            if (!CaptureParent.empty()) std::filesystem::create_directories(CaptureParent, CaptureError);
+            if (PngWriteShim::WritePng(CaptureOutputPath.c_str(), static_cast<int>(Surface.QueryWidth()),
+                                       static_cast<int>(Surface.QueryHeight()), 3, Rgb.data(),
+                                       static_cast<int>(Surface.QueryWidth() * 3u)))
+            {
+                Logger.RecordMessage(Frontier::DiagnosticSeverity::Information, "ReSTIR capture",
+                                     ("wrote actual ReSTIR storage output " + CaptureOutputPath
+                                      + " (scene=Project Zero celestial, path=ReSTIR, GI="
+                                      + (CaptureGI ? "on" : "off") + ")").c_str());
+            }
+            else
+                Logger.RecordMessage(Frontier::DiagnosticSeverity::Warning, "ReSTIR capture",
+                                     ("could not write " + CaptureOutputPath).c_str());
+            CaptureComplete = true;
+        }
 
         Integrator.IncrementAccumulationIndex();
 

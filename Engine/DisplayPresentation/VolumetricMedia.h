@@ -116,6 +116,11 @@ struct FogSettings
 //                                                    THE MEDIA
 //------------------------------------------------------------------------------------------------------------------------
 
+// One calibration for the reference cloud-light term. The CPU Visibility Raster and the GPU ReSTIR record both
+// consume this value; PackSkyVolumes also transports its IEEE-754 bits in CloudControl.w, so the shader has no
+// second literal that can drift from the production equation.
+inline constexpr float kCloudDirectLightScale = 0.10f;
+
 struct VolumetricBudget
 {
     uint32_t CloudSteps      = 28u;   // FidelityCriteria::CloudMarchStepCount
@@ -450,10 +455,15 @@ public:
             if (Count > Cap) Count = Cap;
             const float ActualStep = Span / static_cast<float>(Count);
             const float Phase = HenyeyGreenstein(CosTheta, PhaseG);
+            // A fixed midpoint comb is stable but it is not neutral: at grazing angles the same noise cells are
+            // crossed at the same phase on every ray, which turns an under-resolved shell into one-sided streaks.
+            // Use a deterministic world-ray jitter instead of a frame-random offset. It breaks that comb without
+            // introducing temporal shimmer, and the shader twin uses the same hash and inputs.
+            const float SampleJitter = CloudSampleJitter(Origin, Direction);
 
             for (uint32_t I = 0u; I < Count; ++I)
             {
-                const float T = SpanNear + (static_cast<float>(I) + 0.5f) * ActualStep;
+                const float T = SpanNear + (static_cast<float>(I) + 0.5f + SampleJitter - 0.5f) * ActualStep;
                 const float P[3] = { Origin[0] + Direction[0] * T,
                                      Origin[1] + Direction[1] * T,
                                      Origin[2] + Direction[2] * T };
@@ -554,6 +564,15 @@ private:
     {
         float S = std::sin(X * 127.1f + Y * 311.7f + Z * 74.7f) * 43758.5453f;
         return S - std::floor(S);
+    }
+
+    static float CloudSampleJitter(const float Origin[3], const float Direction[3]) noexcept
+    {
+        // Match SkyRecords.slang's CloudHash inputs without using the frame clock. A view-stable jitter is
+        // important here: temporal accumulation should converge the sky, not animate a random cloud pattern.
+        return Hash(Direction[0] * 17.0f + Origin[0] * 0.001f,
+                    Direction[1] * 31.0f + Origin[1] * 0.001f,
+                    Direction[2] * 47.0f + Origin[2] * 0.001f);
     }
 
     static float Noise(float X, float Y, float Z) noexcept

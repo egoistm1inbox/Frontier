@@ -43,7 +43,7 @@ layout(std140, binding = 21) uniform SkyConstants
     vec4 SkyCloudShape;      // feature scale, ceiling, anvil, HG anisotropy
     vec4 SkyCloudWind;       // speed, bearing [deg], shear [/km], veer [deg/km]
     vec4 SkyCloudAlbedo;     // rgb albedo, w = cloud clock seconds
-    uvec4 SkyCloudControl;   // cloud steps, local steps, sun-shadow taps, reserved
+    uvec4 SkyCloudControl;   // cloud steps, local steps, sun-shadow taps, float bits of the shared light scale
     vec4 SkyLocalCloudCentre;
     vec4 SkyLocalCloudHalfSize;
     vec4 SkyLocalCloudParams; // density, coverage, feature scale, HG anisotropy
@@ -213,6 +213,12 @@ float CloudNoise(vec3 P)
     float X00 = mix(N000, N100, U.x), X10 = mix(N010, N110, U.x);
     float X01 = mix(N001, N101, U.x), X11 = mix(N011, N111, U.x);
     return (mix(mix(X00, X10, U.y), mix(X01, X11, U.y), U.z) * 2.0) - 1.0;
+}
+
+float CloudSampleJitter(vec3 Origin, vec3 Direction)
+{
+    // View-stable, not frame-random: temporal accumulation must converge the cloud field rather than shimmer it.
+    return CloudHash(Direction * vec3(17.0, 31.0, 47.0) + Origin * 0.001);
 }
 
 float CloudHeightProfile(uint Type, float Normalised)
@@ -404,6 +410,7 @@ void CloudMarchMedium(vec3 Origin, vec3 Direction, float Near, float Far, uint M
     //    span takes the same steps on both paths, so a capped grazing ray shades identically in either.
     Count = min(Count, Medium == 0u ? max(Budget * 4u, 4u) : Budget);
     float Step = Span / float(Count);
+    float SampleJitter = CloudSampleJitter(Origin, Direction);
     float G = Medium == 0u ? SkyCloudShape.w : (Medium == 1u ? SkyLocalCloudParams.w : SkyLocalFogParams.w);
     float Phase = CloudHenyeyGreenstein(dot(Direction, SunDirection), G);
     // The layer's white rides the record; the box keeps the CPU default white (the sheet exposes no local
@@ -413,7 +420,7 @@ void CloudMarchMedium(vec3 Origin, vec3 Direction, float Near, float Far, uint M
                 : (Medium == 1u ? vec3(0.92, 0.94, 0.97) : vec3(0.88));
     for (uint I = 0u; I < Count; ++I)
     {
-        float T = Near + (float(I) + 0.5) * Step;
+        float T = Near + (float(I) + 0.5 + SampleJitter - 0.5) * Step;
         vec3 P = Origin + Direction * T;
         float Density = Medium == 0u ? CloudDensityAt(P) : LocalDensityAt(P, Medium == 2u);
         if (Density <= 1e-5) continue;
@@ -532,41 +539,25 @@ vec3 SkyAlong(vec3 Direction, vec3 Origin)
 
     // Clouds sit between the observer and the atmosphere. Compose their in-scatter before stars, moons and the
     //    sun body so all of those are attenuated by the same cloud transmittance. The day factor mirrors the CPU
-    //    raster's twilight hand-off: single-scattering clouds do not receive a full sun below the horizon.
+    //    raster's twilight hand-off: single-scattering clouds do not receive a full sun below the horizon. The
+    //    shared record-space scale matches the HTML/reference cloud term after this path's normalized HG/extinction
+    //    convention; it is deliberately not the old full solar radiance, which was the white streak failure.
     vec3 CloudScatter;
     float CloudTransmittance;
     float CloudDay = smoothstep(-12.0, 0.0, SkySunDirection.w);
+    float CloudDirectLightScale = uintBitsToFloat(SkyCloudControl.w);
     CloudAlong(Origin, Direction, kCloudMaxDistance, SkySunDirection.xyz,
-               SkySunRadiance.xyz * CloudDay, Radiance, CloudScatter, CloudTransmittance);
+               SkySunRadiance.xyz * (CloudDirectLightScale * CloudDay), Radiance, CloudScatter, CloudTransmittance);
     // Everything below this point is behind the weather too: stars, twilight, the lunar discs and the solar disc
     //    must all use the same cloud transmittance as the atmospheric background. Keep the atmosphere's
     //    transmittance multiplied in the value passed to MoonAlong and the sun body; otherwise clouds would
     //    shade only the blue sky while leaving the brightest celestial sources pasted on top.
     Transmittance *= CloudTransmittance;
     Radiance = Radiance * CloudTransmittance + CloudScatter;
-    // Aureole compression. Art-directed, twilight precedent: the single-scatter integral near the sun reaches
-    //    ~1.5 linear and the ACES curve renders that as near-white — no edge survives, so the sun reads as a
-    //    faded blob with no disk. The reference caps its halo the same way ("normalised to its own peak, so it
-    //    can never blow out") and draws the disc over the capped glow. Luminance-ratio soft shoulder inside an
-    //    angular gate: below the knee the sky passes through untouched (the dome, the horizons, the white line);
-    //    above it the peak eases toward the shoulder, so the aureole renders bright-but-not-clipped and the 12x
-    //    disc lands on top WITH a sharp edge. One ratio for all channels, so the hue survives; the gate fades
-    //    the effect out by ~15 deg off-sun. Function-locals like the disc's own boost (single consumer); the
-    //    values MUST equal SkyConstantRecord.h's kAureoleKnee/Slope/Sigma, pairwise-pinned by the parity proof.
-    if (!HitGround)
-    {
-        const float kAureoleKnee  = 1.0;
-        const float kAureoleSlope = 0.06;
-        const float kAureoleSigma = 5.0 * (3.14159265358979323846 / 180.0);
-        float AureoleAng = acos(clamp(dot(Direction, SkySunDirection.xyz), -1.0, 1.0));
-        float AureoleLum = dot(Radiance, vec3(0.2126, 0.7152, 0.0722));
-        float AureoleGate = exp(-AureoleAng / kAureoleSigma);
-        float AureoleTarget = AureoleLum <= kAureoleKnee
-            ? AureoleLum : kAureoleKnee + (AureoleLum - kAureoleKnee) * kAureoleSlope;
-        float AureoleMix = AureoleLum > 0.0
-            ? (AureoleLum + (AureoleTarget - AureoleLum) * AureoleGate) / AureoleLum : 1.0;
-        Radiance *= AureoleMix;
-    }
+    // Leave the physical Mie aureole in HDR. The HTML/reference path does not apply a second luminance shoulder:
+    // it composes weather, then adds the bounded solar body, and lets the display transfer roll off the highlight.
+    // The removed 0.06 shoulder made the sky darker immediately around the disc, which read as a dark halo or a
+    // missing sun. The identity constants in SkyConstantRecord remain a source/parity pin for this intentional no-op.
     // Stars read the integral's own luminance as their visibility gate — the raster's rule (a star shows only
     //    when it outshines the air behind it), evaluated before the moons and twilight join, exactly where the
     //    raster evaluates it. StarAlong is declared by PostRecords.slang, included before this file.

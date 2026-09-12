@@ -41,6 +41,7 @@
 #include "AtmosphereModel.h"
 #include "VolumetricMedia.h"
 
+#include <bit>
 #include <cstddef>
 #include <cstdint>
 
@@ -52,14 +53,16 @@ namespace Frontier {
 //    kSunAngularRadius; the SkyKernelParityProof pins the shader's literal, this pins the host's.
 inline constexpr float kSunAngularRadius = 0.53f * (3.14159265358979323846f / 180.0f) * 0.5f;
 
-// Aureole compression: the knee [linear], shoulder slope and angular width [rad] of the soft shoulder SkyAlong
-//    (both paths) eases the single-scatter peak through. MUST equal SkyRecords.slang's kAureoleKnee/Slope/Sigma;
-//    the SkyKernelParityProof pins the three literals pairwise, like the sun's radius above.
+// The reference demo leaves the physical Mie aureole in the HDR sky and lets the display transfer roll it off.
+// Earlier Frontier builds applied a 5-degree, 0.06-slope luminance shoulder here. That was not a harmless
+// highlight guard: at the solar position it made the physical sky darker than the surrounding air, producing the
+// dark halo visible in the clear-sky proof. There is no aureole remap now; these identity constants remain named so
+// the parity proof can assert that both consumers deliberately perform no compression.
 inline constexpr float kAureoleKnee  = 1.0f;
-inline constexpr float kAureoleSlope = 0.06f;
+inline constexpr float kAureoleSlope = 1.0f;
 inline constexpr float kAureoleSigma = 5.0f * (3.14159265358979323846f / 180.0f);
 // Shared visible-disc gain. It is intentionally modest: the disc is bounded by kSunAngularRadius and the
-// aureole is compressed separately, so exposure cannot turn the source into a frame-filling white patch.
+// physical aureole remains separate from the bounded body.
 inline constexpr float kSunDiscGain = 3.5f;
 
 //------------------------------------------------------------------------------------------------------------------------
@@ -85,7 +88,7 @@ struct SkyConstantRecord
     float    CloudShape[4];     // feature scale, ceiling, anvil, HG anisotropy
     float    CloudWind[4];      // speed [m/s], bearing [deg], shear [/km], veer [deg/km]
     float    CloudAlbedo[4];    // rgb albedo, w = cloud clock seconds
-    uint32_t CloudControl[4];   // cloud steps, local steps, sun taps, reserved
+    uint32_t CloudControl[4];   // cloud steps, local steps, sun taps, float bits of kCloudDirectLightScale
     float    LocalCloudCentre[4]; // xyz centre, w unused
     float    LocalCloudHalfSize[4]; // xyz half-size, w unused
     float    LocalCloudParams[4]; // density, coverage, feature scale, HG anisotropy
@@ -228,6 +231,7 @@ inline void PackSkyVolumes(SkyConstantRecord& R, bool Enabled,
     R.CloudControl[0] = Budget.CloudSteps == 0u ? 1u : Budget.CloudSteps;
     R.CloudControl[1] = Budget.LocalSteps == 0u ? 1u : Budget.LocalSteps;
     R.CloudControl[2] = Budget.LightTaps == 0u ? 1u : Budget.LightTaps;
+    R.CloudControl[3] = std::bit_cast<uint32_t>(kCloudDirectLightScale);
 
     for (int C = 0; C < 3; ++C)
     {

@@ -589,12 +589,14 @@ void VisibilityRaster::Shade(const SceneStructure& Level, const float Eye[3], co
     const float SunElevationDegrees = std::asin(std::fmax(-1.0f, std::fmin(1.0f, Celestial_.Light.Direction[2])))
                                     * 180.0f / kPi;
     // The clouds' sunlight, shared by the pixels and the ambient probe below: full sun above the horizon, none
-    //    below -12 deg, a twilight ramp between. The march knows no planet shadow (see the note at the pixel
-    //    composite), so both call sites take this rather than restating the ramp.
+    //    below -12 deg, a twilight ramp between. The HTML/reference cloud march feeds its normalized sunlight
+    //    term at the shared record-space scale for this march's normalized HG/extinction convention (the same
+    //    value is transported in SkyCloudControl.w to ReSTIR). Without this gate the weather stayed bright at
+    //    midnight; without the scale the old full-intensity path washed the sky into directional white streaks.
     const float CloudDayFactor = Smooth01(-12.0f, 0.0f, SunElevationDegrees);
-    const float CloudSunRad[3] = { Celestial_.Light.Colour[0] * Celestial_.Light.Intensity * CloudDayFactor,
-                                   Celestial_.Light.Colour[1] * Celestial_.Light.Intensity * CloudDayFactor,
-                                   Celestial_.Light.Colour[2] * Celestial_.Light.Intensity * CloudDayFactor };
+    const float CloudSunRad[3] = { Celestial_.Light.Colour[0] * Celestial_.Light.Intensity * CloudDayFactor * kCloudDirectLightScale,
+                                   Celestial_.Light.Colour[1] * Celestial_.Light.Intensity * CloudDayFactor * kCloudDirectLightScale,
+                                   Celestial_.Light.Colour[2] * Celestial_.Light.Intensity * CloudDayFactor * kCloudDirectLightScale };
     const float SunBearing = std::atan2(Celestial_.Light.Direction[0], Celestial_.Light.Direction[1]);
     const auto AzimuthDeltaFor = [SunBearing](const float Dir[3]) -> float
     {
@@ -632,25 +634,10 @@ void VisibilityRaster::Shade(const SceneStructure& Level, const float Eye[3], co
                                                               Celestial_.SampleCount, Celestial_.LightSampleCount);
         Out[0] = S.Radiance[0]; Out[1] = S.Radiance[1]; Out[2] = S.Radiance[2];
 
-        // Aureole compression, transcribed term for term from SkyAlong in SkyRecords.slang: the luminance-ratio
-        //    soft shoulder inside its angular gate (see the note there for why the knee exists). Runs here, on
-        //    the integral alone, so the twilight, the line, the moons and the disc all add afterward onto the
-        //    same capped air both paths share. Guarded on rock like everything below: the planet is shaded as
-        //    Lambertian terrain, not air, and must never see the shoulder.
-        if (!S.HitGround)
-        {
-            const float AureoleDot = Dir[0] * Celestial_.Light.Direction[0]
-                                   + Dir[1] * Celestial_.Light.Direction[1]
-                                   + Dir[2] * Celestial_.Light.Direction[2];
-            const float AureoleAng = std::acos(std::fmax(-1.0f, std::fmin(1.0f, AureoleDot)));
-            const float AureoleLum = Out[0] * 0.2126f + Out[1] * 0.7152f + Out[2] * 0.0722f;
-            const float AureoleGate = std::exp(-AureoleAng / kAureoleSigma);
-            const float AureoleTarget = AureoleLum <= kAureoleKnee
-                ? AureoleLum : kAureoleKnee + (AureoleLum - kAureoleKnee) * kAureoleSlope;
-            const float AureoleMix = AureoleLum > 0.0f
-                ? (AureoleLum + (AureoleTarget - AureoleLum) * AureoleGate) / AureoleLum : 1.0f;
-            Out[0] *= AureoleMix; Out[1] *= AureoleMix; Out[2] *= AureoleMix;
-        }
+        // The physical integral is intentionally left untouched here. The HTML/reference path draws its bounded
+        // solar body over the physical Mie aureole and relies on the common display transfer for highlight rolloff.
+        // The old luminance-ratio shoulder darkened the air immediately around the disc and was the source of the
+        // apparent disappearing/soft sun. Keep the named identity constants in SkyConstantRecord as a parity pin.
 
         // ⚠️ Rays that meet the planet must not go on to collect stars. AtmosphereModel already stops the
         //    integral at the surface and reports it, but the miss path had no notion of a world: the only ground

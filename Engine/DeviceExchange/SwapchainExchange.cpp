@@ -116,6 +116,13 @@ struct SwapchainExchange::VulkanRecord
     uint32_t                 SoftwareRasterHeight  = 0u;
     bool                     SoftwareRasterReady  = false;
 
+    // Lazy readback for an explicit ReSTIR capture. The copy is recorded from StorageImage before the swapchain
+    //    blit; it is never filled from the CPU/software raster path.
+    VkBuffer                 CaptureBuffer         = VK_NULL_HANDLE;
+    VkDeviceMemory           CaptureMemory        = VK_NULL_HANDLE;
+    void*                    CaptureMapped        = nullptr;
+    VkDeviceSize             CaptureCapacity      = 0u;
+
     // ── History image (linear HDR running mean for temporal accumulation; rgba32f, .a = sample count) ────────────────
     VkImage                  HistoryImage          = VK_NULL_HANDLE;
     VkDeviceMemory           HistoryMemory         = VK_NULL_HANDLE;
@@ -513,6 +520,14 @@ void SwapchainExchange::Retire() noexcept
     Vulkan->SoftwareRasterMapped = nullptr;
     Vulkan->SoftwareRasterBuffer = VK_NULL_HANDLE;
     Vulkan->SoftwareRasterMemory = VK_NULL_HANDLE;
+
+    if (Vulkan->CaptureMapped) vkUnmapMemory(Vulkan->Device, Vulkan->CaptureMemory);
+    if (Vulkan->CaptureBuffer) vkDestroyBuffer(Vulkan->Device, Vulkan->CaptureBuffer, nullptr);
+    if (Vulkan->CaptureMemory) vkFreeMemory(Vulkan->Device, Vulkan->CaptureMemory, nullptr);
+    Vulkan->CaptureMapped = nullptr;
+    Vulkan->CaptureBuffer = VK_NULL_HANDLE;
+    Vulkan->CaptureMemory = VK_NULL_HANDLE;
+    Vulkan->CaptureCapacity = 0u;
 
     if (Vulkan->TriangleBuffer)  vkDestroyBuffer (Vulkan->Device, Vulkan->TriangleBuffer, nullptr);
     if (Vulkan->TriangleMemory)  vkFreeMemory    (Vulkan->Device, Vulkan->TriangleMemory, nullptr);
@@ -2587,8 +2602,11 @@ bool SwapchainExchange::BringVisibility() noexcept
 //                                           RECORD AND PRESENT
 //============================================================================================================================================
 
-void SwapchainExchange::RecordAndPresent(const DispatchConfiguration& Dispatch) noexcept
+void SwapchainExchange::RecordAndPresent(const DispatchConfiguration& Dispatch,
+                                          std::vector<unsigned char>* ReSTIRCaptureRgba) noexcept
 {
+    if (ReSTIRCaptureRgba) ReSTIRCaptureRgba->clear();
+    bool CaptureStorageImage = ReSTIRCaptureRgba != nullptr;
     const uint32_t ActiveSlot = Vulkan->ActiveSlot;
 
     vkWaitForFences(Vulkan->Device, 1u, &Vulkan->CycleFences[ActiveSlot], VK_TRUE, UINT64_MAX);
@@ -2630,13 +2648,43 @@ void SwapchainExchange::RecordAndPresent(const DispatchConfiguration& Dispatch) 
         return;
     }
 
+    if (CaptureStorageImage)
+    {
+        const VkDeviceSize Bytes = static_cast<VkDeviceSize>(Configuration.Width)
+                                  * static_cast<VkDeviceSize>(Configuration.Height) * 4u;
+        if (Bytes > Vulkan->CaptureCapacity)
+        {
+            vkDeviceWaitIdle(Vulkan->Device);
+            if (Vulkan->CaptureMapped) vkUnmapMemory(Vulkan->Device, Vulkan->CaptureMemory);
+            if (Vulkan->CaptureBuffer) vkDestroyBuffer(Vulkan->Device, Vulkan->CaptureBuffer, nullptr);
+            if (Vulkan->CaptureMemory) vkFreeMemory(Vulkan->Device, Vulkan->CaptureMemory, nullptr);
+            Vulkan->CaptureMapped = nullptr;
+            Vulkan->CaptureBuffer = VK_NULL_HANDLE;
+            Vulkan->CaptureMemory = VK_NULL_HANDLE;
+            Vulkan->CaptureCapacity = 0u;
+            AllocateBuffer(Vulkan->Device, Vulkan->MemoryProperties, Bytes,
+                           VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                           VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                           Vulkan->CaptureBuffer, Vulkan->CaptureMemory);
+            if (!Vulkan->CaptureBuffer || !Vulkan->CaptureMemory
+                || vkMapMemory(Vulkan->Device, Vulkan->CaptureMemory, 0u, Bytes, 0u,
+                               &Vulkan->CaptureMapped) != VK_SUCCESS)
+            {
+                std::cerr << "[SwapchainExchange] ReSTIR capture staging allocation failed; frame continues without readback.\n";
+                ReSTIRCaptureRgba = nullptr;
+                CaptureStorageImage = false;
+            }
+            else Vulkan->CaptureCapacity = Bytes;
+        }
+    }
+
     if (Vulkan->ImageOrdinalFences[ImageOrdinal] != VK_NULL_HANDLE)
         vkWaitForFences(Vulkan->Device, 1u, &Vulkan->ImageOrdinalFences[ImageOrdinal], VK_TRUE, UINT64_MAX);
     Vulkan->ImageOrdinalFences[ImageOrdinal] = Vulkan->CycleFences[ActiveSlot];
 
     void* PrevReservoirs = SwapReservoirParity();   // R6: prev = last frame's curr before recording the new frame
     Visibility.AssignReservoirView(PrevReservoirs);   // R6 row 3: resolve binding 13 follows the kernel's prev buffer (M/W/Age views)
-    RecordComputeCommands(ImageOrdinal, Dispatch);
+    RecordComputeCommands(ImageOrdinal, Dispatch, CaptureStorageImage);
 
     vkResetFences(Vulkan->Device, 1u, &Vulkan->CycleFences[ActiveSlot]);
 
@@ -2666,6 +2714,17 @@ void SwapchainExchange::RecordAndPresent(const DispatchConfiguration& Dispatch) 
         (void)RebuildSwapchain();
     }
 
+    if (CaptureStorageImage && ReSTIRCaptureRgba && Vulkan->CaptureMapped)
+    {
+        // The normal frame remains asynchronous. An explicit capture is the exception: wait on the same fence that
+        // protects this cycle slot, then expose exactly the bytes the copy command wrote.
+        vkWaitForFences(Vulkan->Device, 1u, &Vulkan->CycleFences[ActiveSlot], VK_TRUE, UINT64_MAX);
+        const size_t Bytes = static_cast<size_t>(Configuration.Width)
+                           * static_cast<size_t>(Configuration.Height) * 4u;
+        ReSTIRCaptureRgba->assign(static_cast<const unsigned char*>(Vulkan->CaptureMapped),
+                                  static_cast<const unsigned char*>(Vulkan->CaptureMapped) + Bytes);
+    }
+
     Vulkan->ActiveSlot = (ActiveSlot + 1u) % kCycleSlotCount;
 }
 
@@ -2673,7 +2732,8 @@ void SwapchainExchange::RecordAndPresent(const DispatchConfiguration& Dispatch) 
 //                                           RECORD COMPUTE COMMANDS
 //------------------------------------------------------------------------------------------------------------------------
 
-void SwapchainExchange::RecordComputeCommands(uint32_t ImageOrdinal, const DispatchConfiguration& Dispatch) noexcept
+void SwapchainExchange::RecordComputeCommands(uint32_t ImageOrdinal, const DispatchConfiguration& Dispatch,
+                                               bool CaptureStorageImage) noexcept
 {
     VkCommandBuffer Command = Vulkan->ComputeCommands[ImageOrdinal];
 
@@ -3031,7 +3091,46 @@ void SwapchainExchange::RecordComputeCommands(uint32_t ImageOrdinal, const Dispa
 
     Visibility.RecordKernelEnd(Command, Vulkan->ActiveSlot);
 
-    // ②b Project overlay (SpatialInterface) — draws world-space figures onto the resolved scene before the blit, so
+    // ②b Explicit ReSTIR readback, before any editor/UI overlay. The returned pixels are the storage image written
+    //     by the compute kernel, not a screenshot of the ImGui window and never the software-raster upload.
+    if (CaptureStorageImage && Vulkan->CaptureBuffer)
+    {
+        VkImageMemoryBarrier ToReadback{ VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER };
+        ToReadback.oldLayout                   = VK_IMAGE_LAYOUT_GENERAL;
+        ToReadback.newLayout                   = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+        ToReadback.srcQueueFamilyIndex         = VK_QUEUE_FAMILY_IGNORED;
+        ToReadback.dstQueueFamilyIndex         = VK_QUEUE_FAMILY_IGNORED;
+        ToReadback.image                       = Vulkan->StorageImage;
+        ToReadback.subresourceRange             = { VK_IMAGE_ASPECT_COLOR_BIT, 0u, 1u, 0u, 1u };
+        ToReadback.srcAccessMask               = VK_ACCESS_SHADER_WRITE_BIT;
+        ToReadback.dstAccessMask               = VK_ACCESS_TRANSFER_READ_BIT;
+        vkCmdPipelineBarrier(Command, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                             0u, 0u, nullptr, 0u, nullptr, 1u, &ToReadback);
+        VkBufferImageCopy Copy{};
+        Copy.imageSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, 0u, 0u, 1u };
+        Copy.imageExtent      = { Configuration.Width, Configuration.Height, 1u };
+        vkCmdCopyImageToBuffer(Command, Vulkan->StorageImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                               Vulkan->CaptureBuffer, 1u, &Copy);
+        VkBufferMemoryBarrier HostBarrier{ VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER };
+        HostBarrier.srcAccessMask       = VK_ACCESS_TRANSFER_WRITE_BIT;
+        HostBarrier.dstAccessMask       = VK_ACCESS_HOST_READ_BIT;
+        HostBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        HostBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        HostBarrier.buffer              = Vulkan->CaptureBuffer;
+        HostBarrier.offset              = 0u;
+        HostBarrier.size                = Vulkan->CaptureCapacity;
+        vkCmdPipelineBarrier(Command, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_HOST_BIT,
+                             0u, 0u, nullptr, 1u, &HostBarrier, 0u, nullptr);
+        ToReadback.oldLayout     = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+        ToReadback.newLayout     = VK_IMAGE_LAYOUT_GENERAL;
+        ToReadback.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+        ToReadback.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_TRANSFER_READ_BIT;
+        vkCmdPipelineBarrier(Command, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                             VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT,
+                             0u, 0u, nullptr, 0u, nullptr, 1u, &ToReadback);
+    }
+
+    // ②c Project overlay (SpatialInterface) — draws world-space figures onto the resolved scene before the blit, so
     //     the panel is part of the presented image rather than a screen-space sticker on top of it.
     //     The overlay begins its own render pass expecting COLOR_ATTACHMENT_OPTIMAL, so the image is transitioned in
     //     and back out; without the round trip the following blit would read an image in the wrong layout.
@@ -3045,10 +3144,11 @@ void SwapchainExchange::RecordComputeCommands(uint32_t ImageOrdinal, const Dispa
         ToAttachment.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
         ToAttachment.subresourceRange.levelCount = 1u;
         ToAttachment.subresourceRange.layerCount = 1u;
-        ToAttachment.srcAccessMask               = (SoftwareFrame || DiagnosticFrame) ? VK_ACCESS_TRANSFER_READ_BIT : VK_ACCESS_SHADER_WRITE_BIT;
+        ToAttachment.srcAccessMask               = (SoftwareFrame || DiagnosticFrame || CaptureStorageImage)
+                                                    ? VK_ACCESS_TRANSFER_READ_BIT : VK_ACCESS_SHADER_WRITE_BIT;
         ToAttachment.dstAccessMask               = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
         vkCmdPipelineBarrier(Command,
-            (SoftwareFrame || DiagnosticFrame) ? VK_PIPELINE_STAGE_TRANSFER_BIT : VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+            (SoftwareFrame || DiagnosticFrame || CaptureStorageImage) ? VK_PIPELINE_STAGE_TRANSFER_BIT : VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
             VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
             0u, 0u, nullptr, 0u, nullptr, 1u, &ToAttachment);
 
@@ -3075,11 +3175,12 @@ void SwapchainExchange::RecordComputeCommands(uint32_t ImageOrdinal, const Dispa
         Barrier.subresourceRange.levelCount     = 1u;
         Barrier.subresourceRange.layerCount     = 1u;
         Barrier.srcAccessMask                   = Overlay ? VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT
-                                                            : (SoftwareFrame || DiagnosticFrame) ? VK_ACCESS_TRANSFER_WRITE_BIT : VK_ACCESS_SHADER_WRITE_BIT;
+                                                            : (SoftwareFrame || DiagnosticFrame) ? VK_ACCESS_TRANSFER_WRITE_BIT
+                                                            : CaptureStorageImage ? VK_ACCESS_TRANSFER_READ_BIT : VK_ACCESS_SHADER_WRITE_BIT;
         Barrier.dstAccessMask                   = VK_ACCESS_TRANSFER_READ_BIT;
         vkCmdPipelineBarrier(Command,
             Overlay ? VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
-                    : (SoftwareFrame || DiagnosticFrame) ? VK_PIPELINE_STAGE_TRANSFER_BIT : VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                    : (SoftwareFrame || DiagnosticFrame || CaptureStorageImage) ? VK_PIPELINE_STAGE_TRANSFER_BIT : VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
             VK_PIPELINE_STAGE_TRANSFER_BIT,
             0u, 0u, nullptr, 0u, nullptr, 1u, &Barrier);
     }

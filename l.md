@@ -130,13 +130,32 @@ At minimum the Editor must provide:
   diagnostic colour rather than changing renderer semantics.
 - The spare `SkySunDirect.w` lane is the packed shared sun-disc gain. `kSunDiscGain`
   is consumed by the CPU Visibility Raster equation and the SkyRecords disc equation;
-  the disc remains bounded by the common angular radius and the aureole shoulder.
+  the disc remains bounded by the common angular radius and the physical Mie aureole.
+  The old shader/CPU aureole remap (5 degree gate, 0.06 shoulder slope) was removed:
+  it was the source of the dark shoulder/apparent disappearance around the sun. The
+  reference composes the bounded disc after weather and lets display transfer roll off
+  the physical HDR aureole.
+- Cloud streaking was traced to two production-path issues rather than to a god-ray
+  blur: cloud samples used a fixed midpoint comb, and the cloud direct-light term was
+  overdriven relative to the normalized HG/extinction march. Both CPU and GPU now use
+  the same deterministic view-stable ray jitter, the same clamped wind/shear drift,
+  and one `kCloudDirectLightScale` calibration packed through `CloudControl.w`.
+  Cloud self-shadow taps remain the source of cloud shafts; no screen-space radial
+  blur or temporal cloud reprojection was added.
 - ShadowResolve now consumes the same sparse celestial records and resident texture
   table as ReSTIR, including `CloudAlong` for camera segments and `SkyAlong` for
   misses. This is the production parity seam for GI-off weather, not a painted proof.
 - CPU showcase generation loads the generated Project Zero scene through SceneCodec,
   uses the live CelestialSequence and ApplyTo, and labels outputs by scene, path, GI
   state and tier. It deliberately does not call a CPU image a ReSTIR/GPU capture.
+- `FRONTIER_RESTIR_CAPTURE` is an opt-in production harness in `GameExecution.cpp`.
+  `Scratchpad/RenderProjectZeroRestirCapture.sh` forces the actual ReSTIR path,
+  independently selects GI on/off, applies the solved Project Zero celestial/weather,
+  camera and exposure states, settles accumulation, and captures the storage image
+  before the UI blit through `RecordAndPresent`. Clear-sky and cloud-present output
+  names include scene, path, GI state and tier. The CPU evidence in `Diagnostics/`
+  remains Visibility Raster evidence and is labelled as such; it must not be renamed
+  as ReSTIR when the GPU runtime is unavailable.
 
 ## Assumption policy
 

@@ -244,7 +244,11 @@ public:
     [[nodiscard]] uint32_t      QueryClusterCount() const noexcept { return Visibility.QueryClusterCount(); }
     [[nodiscard]] bool          QueryDrawIndirectCount() const noexcept { return DrawIndirectCountSupported; }
 
-    void                        RecordAndPresent(const DispatchConfiguration& Dispatch) noexcept;
+    // Optional output is the resolved ReSTIR storage image before the presentation/UI blit. Supplying a vector is
+    //    an explicit capture request; the call waits for the same frame fence and returns RGBA8 pixels, so this
+    //    cannot accidentally be a CPU Visibility Raster image labelled as ReSTIR.
+    void                        RecordAndPresent(const DispatchConfiguration& Dispatch,
+                                                 std::vector<unsigned char>* ReSTIRCaptureRgba = nullptr) noexcept;
 
     void                        SignalResize() noexcept { ResizePending = true; }
 
@@ -337,7 +341,8 @@ private:
     [[nodiscard]] uint32_t ResolvePresentMode() const noexcept;   // VkPresentModeKHR as uint32_t (header stays Vulkan-free)
 
     void                RecordComputeCommands(uint32_t ImageOrdinal,
-                                              const DispatchConfiguration& Dispatch) noexcept;
+                                              const DispatchConfiguration& Dispatch,
+                                              bool CaptureStorageImage) noexcept;
     void                WriteDescriptorSet()   noexcept;
     void                ConstructSceneBuffers() noexcept;
 
