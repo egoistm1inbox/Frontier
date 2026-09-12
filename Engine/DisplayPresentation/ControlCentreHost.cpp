@@ -814,6 +814,7 @@ constexpr QuickTileStructure TileTable[static_cast<size_t>(QuickTileCategory::Co
     { QuickTileCategory::FrameRateOverlay,   ControlCentreIconCategory::GaugeFrameRate,       "FPS Overlay",         false },
     { QuickTileCategory::Notifications,      ControlCentreIconCategory::NotificationsBell,    "Notifications",       false },
     { QuickTileCategory::Quality,            ControlCentreIconCategory::SlidersQuality,       "Quality",             true  },
+    { QuickTileCategory::RenderPath,         ControlCentreIconCategory::VideoRenderScale,     "Render Path",          true  },
 };
 
 constexpr uint32_t GridColumns = 4u;
@@ -897,6 +898,7 @@ bool ControlCentreHost::IsTileActive(QuickTileCategory Tile) const noexcept
         case QuickTileCategory::FrameRateOverlay:   return Settings.FrameRateOverlay;
         case QuickTileCategory::Notifications:      return Settings.Notifications;
         case QuickTileCategory::Quality:            return true;   // a cycler is always "lit"; its label carries the state
+        case QuickTileCategory::RenderPath:         return Settings.RenderPath == RenderPathSelection::ReSTIR;
         default:                                    return false;
     }
 }
@@ -910,6 +912,9 @@ void ControlCentreHost::ToggleTile(QuickTileCategory Tile) noexcept
         case QuickTileCategory::FrameRateOverlay:   Settings.FrameRateOverlay   = !Settings.FrameRateOverlay; NotificationPage.MirrorFrameRateOverlay(Settings.FrameRateOverlay); break;
         case QuickTileCategory::Notifications:      Settings.Notifications      = !Settings.Notifications;      break;
         case QuickTileCategory::Quality:            Settings.Quality            = NextFidelity(Settings.Quality); break;
+        case QuickTileCategory::RenderPath:         Settings.RenderPath = Settings.RenderPath == RenderPathSelection::ReSTIR
+                                                                  ? RenderPathSelection::VisibilityRaster
+                                                                  : RenderPathSelection::ReSTIR; break;
         default: return;
     }
     ++Settings.Revision;
@@ -1047,7 +1052,9 @@ void ControlCentreHost::ConstructTileLayout(PixelSpace& Surface, uint32_t Slot, 
     if (Active) GlyphSpace::Fill(Surface, Path, Glyph);     // Notch: className "fill-current" on the active icon
     GlyphSpace::Stroke(Surface, Path, Glyph);
 
-    const char* Label = Tile.Cycles ? FidelityLabel(Settings.Quality) : Tile.Label;
+    const char* Label = Tile.Category == QuickTileCategory::RenderPath
+        ? RenderPathLabel(Settings.RenderPath)
+        : (Tile.Cycles ? FidelityLabel(Settings.Quality) : Tile.Label);
     const PlanePoint LabelSize = Surface.MeasureText(Label, TileLabelSize);
     const float LabelX = Disc.MinimumX + (TileDisc - LabelSize.X) * 0.5f;
     Surface.Text(LabelX, Disc.MaximumY + TileLabelGap, Faded(Ink70(), Opacity), Label, TileLabelSize);

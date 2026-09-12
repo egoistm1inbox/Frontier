@@ -35,7 +35,7 @@ layout(std140, binding = 21) uniform SkyConstants
     vec4 SkyPlanet;          // x = planet radius [m], y = atmosphere height [m], z = camera height [m], w = unused
     uvec4 SkyControl;        // x = view samples, y = light samples, z = weather flags, w = cloud type
     vec4 SkyTwilight;        // x = glow intensity, y = line intensity, z = 1 when the line is civil-only, w = unused
-    vec4 SkySunDirect;       // xyz = panel direct-sun factor 0.11·gain·colour·T (kernel: ÷Ω, ×Ω back); w = unused
+    vec4 SkySunDirect;       // xyz = panel direct-sun factor; w = shared bounded visible-disc gain
 
     // Weather is in the sky record, not a second binding, so primary misses, GI bounces and sun NEE share one
     //    coherent update. All rows are std140-sized; disabled media are gated by SkyControl.z.
@@ -592,7 +592,7 @@ vec3 SkyAlong(vec3 Direction, vec3 Origin)
         float SunAng = acos(clamp(dot(Direction, SkySunDirection.xyz), -1.0, 1.0));
         const float kSunRadius = kSunAngularRadius;   // the shared body: the NEE cone samples this same disc
         const float kSunSoft = 0.25;
-        const float kSunBoost = 12.0;
+        const float kSunBoost = max(SkySunDirect.w, 0.0);
         float ViewElev = degrees(asin(clamp(Direction.z, -1.0, 1.0)));
         // The panel evaluates the edge twice and keeps the second (horizon-softened) form; only it is kept here.
         float SunSoftElev = mix(1.0, 2.2, 1.0 - smoothstep(0.0, 4.0, ViewElev));

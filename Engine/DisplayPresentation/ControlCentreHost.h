@@ -99,7 +99,8 @@ enum class QuickTileCategory : uint32_t
     FrameRateOverlay   = 2,
     Notifications      = 3,
     Quality            = 4,
-    Count              = 5
+    RenderPath         = 5,
+    Count              = 6
 };
 
 // One entry of the 4 × 2 quick-settings grid. Slots ≥ Count are empty and draw nothing.
@@ -119,6 +120,7 @@ struct ControlCentreSettings
     bool             FrameRateOverlay   = false;
     bool             Notifications      = true;
     FidelityCategory Quality            = FidelityCategory::StandardFidelity;
+    RenderPathSelection RenderPath      = RenderPathSelection::ReSTIR;
     float            RenderScale        = 1.0f;     // [-] 0.25 … 1.0
     // Shadow map side, chosen on the Render page. Auto follows the Quality tier (256 … 2048); any other entry
     //    pins the map at that side and outranks the tier. The filter itself is always the tier's.

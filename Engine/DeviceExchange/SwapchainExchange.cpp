@@ -106,6 +106,16 @@ struct SwapchainExchange::VulkanRecord
     VkDeviceMemory           StorageMemory         = VK_NULL_HANDLE;
     VkImageView              StorageImageView      = VK_NULL_HANDLE;
 
+    // Host-visible upload used only by the explicit CPU/software Visibility Raster path. It is reused across frames,
+    //    so a level-design preview does not allocate or stage a new buffer every tick.
+    VkBuffer                 SoftwareRasterBuffer  = VK_NULL_HANDLE;
+    VkDeviceMemory           SoftwareRasterMemory  = VK_NULL_HANDLE;
+    void*                    SoftwareRasterMapped  = nullptr;
+    VkDeviceSize             SoftwareRasterCapacity = 0u;
+    uint32_t                 SoftwareRasterWidth   = 0u;
+    uint32_t                 SoftwareRasterHeight  = 0u;
+    bool                     SoftwareRasterReady  = false;
+
     // ── History image (linear HDR running mean for temporal accumulation; rgba32f, .a = sample count) ────────────────
     VkImage                  HistoryImage          = VK_NULL_HANDLE;
     VkDeviceMemory           HistoryMemory         = VK_NULL_HANDLE;
@@ -496,6 +506,13 @@ void SwapchainExchange::Retire() noexcept
 
     Visibility.Retire();
     RetireSwapchain();
+
+    if (Vulkan->SoftwareRasterMapped) vkUnmapMemory(Vulkan->Device, Vulkan->SoftwareRasterMemory);
+    if (Vulkan->SoftwareRasterBuffer) vkDestroyBuffer(Vulkan->Device, Vulkan->SoftwareRasterBuffer, nullptr);
+    if (Vulkan->SoftwareRasterMemory) vkFreeMemory(Vulkan->Device, Vulkan->SoftwareRasterMemory, nullptr);
+    Vulkan->SoftwareRasterMapped = nullptr;
+    Vulkan->SoftwareRasterBuffer = VK_NULL_HANDLE;
+    Vulkan->SoftwareRasterMemory = VK_NULL_HANDLE;
 
     if (Vulkan->TriangleBuffer)  vkDestroyBuffer (Vulkan->Device, Vulkan->TriangleBuffer, nullptr);
     if (Vulkan->TriangleMemory)  vkFreeMemory    (Vulkan->Device, Vulkan->TriangleMemory, nullptr);
@@ -2458,6 +2475,42 @@ bool SwapchainExchange::RefreshPost(const void* Bytes, uint32_t ByteCount) noexc
     return true;
 }
 
+bool SwapchainExchange::UploadSoftwareRasterFrame(const void* Rgba, uint32_t Width, uint32_t Height) noexcept
+{
+    if (!Vulkan || !Vulkan->Device || !Rgba || Width == 0u || Height == 0u) return false;
+    const VkDeviceSize Bytes = static_cast<VkDeviceSize>(Width) * static_cast<VkDeviceSize>(Height) * 4u;
+    if (Bytes > Vulkan->SoftwareRasterCapacity)
+    {
+        vkDeviceWaitIdle(Vulkan->Device);
+        if (Vulkan->SoftwareRasterMapped) vkUnmapMemory(Vulkan->Device, Vulkan->SoftwareRasterMemory);
+        if (Vulkan->SoftwareRasterBuffer) vkDestroyBuffer(Vulkan->Device, Vulkan->SoftwareRasterBuffer, nullptr);
+        if (Vulkan->SoftwareRasterMemory) vkFreeMemory(Vulkan->Device, Vulkan->SoftwareRasterMemory, nullptr);
+        Vulkan->SoftwareRasterBuffer = VK_NULL_HANDLE;
+        Vulkan->SoftwareRasterMemory = VK_NULL_HANDLE;
+        Vulkan->SoftwareRasterMapped = nullptr;
+        Vulkan->SoftwareRasterCapacity = 0u;
+        Vulkan->SoftwareRasterReady = false;
+        AllocateBuffer(Vulkan->Device, Vulkan->MemoryProperties, Bytes,
+                       VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                       VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                       Vulkan->SoftwareRasterBuffer, Vulkan->SoftwareRasterMemory);
+        if (!Vulkan->SoftwareRasterBuffer || !Vulkan->SoftwareRasterMemory
+            || vkMapMemory(Vulkan->Device, Vulkan->SoftwareRasterMemory, 0u, Bytes, 0u, &Vulkan->SoftwareRasterMapped) != VK_SUCCESS)
+            return false;
+        Vulkan->SoftwareRasterCapacity = Bytes;
+    }
+    std::memcpy(Vulkan->SoftwareRasterMapped, Rgba, static_cast<size_t>(Bytes));
+    Vulkan->SoftwareRasterWidth = Width;
+    Vulkan->SoftwareRasterHeight = Height;
+    Vulkan->SoftwareRasterReady = true;
+    return true;
+}
+
+void SwapchainExchange::InvalidateSoftwareRasterFrame() noexcept
+{
+    if (Vulkan) Vulkan->SoftwareRasterReady = false;
+}
+
 void SwapchainExchange::UploadStarTables(const void* CellBytes, uint32_t CellCount,
                                          const void* StarBytes, uint32_t StarCount) noexcept
 {
@@ -2520,6 +2573,10 @@ void SwapchainExchange::UploadScene(const SceneStructure& Scene, const Traversal
 
 bool SwapchainExchange::BringVisibility() noexcept
 {
+    // The Visibility Raster shadow resolve borrows the exact celestial records that the ReSTIR descriptor set reads.
+    // This is a transport seam, not a second weather state; every RefreshSky/RefreshMoons/RefreshPost update is
+    // visible to both paths without changing the dispatch push-constant ABI.
+    Visibility.AssignCelestialRecords(Vulkan->SkyBuffer, Vulkan->MoonBuffer, Vulkan->StarBuffer, Vulkan->PostBuffer);
     if (!Visibility.Bring(Vulkan->Device, Vulkan->PhysicalDevice, kCycleSlotCount, DrawIndirectCountSupported, Vulkan->DescriptorIndexing ? kTextureSlotCapacity : 0u)) return false;
     if (!Visibility.Resize(Configuration.Width, Configuration.Height, Vulkan->StorageImageView)) return false;
     WriteDescriptorSet();
@@ -2728,31 +2785,70 @@ void SwapchainExchange::RecordComputeCommands(uint32_t ImageOrdinal, const Dispa
 
     // ①c R2 front end: cull → visibility raster → HiZ → cull → raster → surface resolve (writes bindings 4/5 for the
     //    kernel; in a debug view it writes the presentation image directly and the kernel is skipped).
+    const bool VisibilityRasterPath = RenderPath == RenderPathMode::VisibilityRaster;
+    const bool SoftwareFrame = VisibilityRasterPath && Vulkan->SoftwareRasterReady
+                             && Vulkan->SoftwareRasterWidth == RenderWidth
+                             && Vulkan->SoftwareRasterHeight == RenderHeight;
     VisibilityFrameConfiguration Frame = VisibilityFrame;
     Frame.RenderWidth  = RenderWidth;
     Frame.RenderHeight = RenderHeight;
-    Visibility.RecordFrame(Command, Vulkan->ActiveSlot, Frame);
+    if (!VisibilityRasterPath && !SoftwareFrame)
+    {
+        // ReSTIR's GI-off mode still uses the GPU visibility/shadow front end. Visibility Raster itself never does:
+        //    its producer is the host upload below, and a missing upload must remain a visible diagnostic.
+        Visibility.RecordFrame(Command, Vulkan->ActiveSlot, Frame);
+    }
+    else if (SoftwareFrame)
+    {
+        // The explicit Visibility Raster selection is the CPU/software path. Upload its production RGBA8 result
+        //    directly; no GPU visibility, shadow resolve or ReSTIR dispatch is allowed to replace it.
+        VkImageMemoryBarrier ToTransfer{ VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER };
+        ToTransfer.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
+        ToTransfer.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+        ToTransfer.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        ToTransfer.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        ToTransfer.image = Vulkan->StorageImage;
+        ToTransfer.subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0u, 1u, 0u, 1u };
+        ToTransfer.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+        ToTransfer.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        vkCmdPipelineBarrier(Command, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                             0u, 0u, nullptr, 0u, nullptr, 1u, &ToTransfer);
+        VkBufferImageCopy Copy{};
+        Copy.imageSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, 0u, 0u, 1u };
+        Copy.imageExtent = { RenderWidth, RenderHeight, 1u };
+        vkCmdCopyBufferToImage(Command, Vulkan->SoftwareRasterBuffer, Vulkan->StorageImage,
+                               VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1u, &Copy);
+        ToTransfer.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+        ToTransfer.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+        ToTransfer.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        ToTransfer.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+        vkCmdPipelineBarrier(Command, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                             0u, 0u, nullptr, 0u, nullptr, 1u, &ToTransfer);
+    }
 
     // R10 ①d — the GI-off shadow stage. With Global Illumination off the ReSTIR kernel is not dispatched at all:
     //    light visibility comes from shadow maps rasterised here, and ShadowResolve writes the presentation image
     //    directly. The whole no-ray path lives in this branch, so with GI ON nothing below costs anything.
     //
-    //    The fallback matters. If the stage cannot be recorded — no shadow SPIR-V, no emissive geometry in the
-    //    scene, an unsupported map size — we must NOT skip straight to present: the presentation image would keep
-    //    whatever the last frame left in it and the viewport would freeze on a stale picture. Dropping through to
-    //    the kernel is the honest failure, since that path always writes every pixel.
+    //    A Visibility Raster selection is a strict path contract: it uses the deterministic raster/shadow stage
+    //    regardless of the ReSTIR GI toggle and never falls through to ReSTIR. The GI toggle is meaningful only
+    //    when ReSTIR is selected; this keeps "Visibility Raster + GI off" and "ReSTIR + GI off" distinguishable.
+    const bool ReSTIRPath           = RenderPath == RenderPathMode::ReSTIR;
     const bool GlobalIlluminationOff = (Dispatch.FeatureFlags & DispatchFeatureGlobalIllumination) == 0u;
-    bool ShadowStageRecorded = false;
-    if (Frame.DebugView == DebugViewCategory::Off && GlobalIlluminationOff && ShadowFrameValid && Visibility.IsShadowReady())
+    bool ShadowStageRecorded = SoftwareFrame;
+    if (!SoftwareFrame && !VisibilityRasterPath && Frame.DebugView == DebugViewCategory::Off
+        && GlobalIlluminationOff && ShadowFrameValid && Visibility.IsShadowReady())
     {
         ShadowFrameConfiguration Shadow = ShadowFrame;
         if (Visibility.PlaceShadowTaps(Shadow))
             ShadowStageRecorded = Visibility.RecordShadowFrame(Command, Vulkan->ActiveSlot, Shadow);
     }
 
-    if (Frame.DebugView == DebugViewCategory::Off && !ShadowStageRecorded)
+    const bool DiagnosticFrame = VisibilityRasterPath && !ShadowStageRecorded;
+    if (Frame.DebugView == DebugViewCategory::Off && ReSTIRPath && !ShadowStageRecorded)
     {
-        // ② Dispatch ReSTIR compute
+        // ② Dispatch ReSTIR compute. This branch is entered only when ReSTIR was explicitly selected; a failed
+        //    Visibility Raster stage is never hidden by a different renderer.
         vkCmdBindPipeline(Command, VK_PIPELINE_BIND_POINT_COMPUTE, Vulkan->ComputePipeline);
         vkCmdBindDescriptorSets(Command, VK_PIPELINE_BIND_POINT_COMPUTE,
             Vulkan->ComputePipelineLayout, 0u, 1u, &Vulkan->ComputeDescriptorSet, 0u, nullptr);
@@ -2909,6 +3005,29 @@ void SwapchainExchange::RecordComputeCommands(uint32_t ImageOrdinal, const Dispa
             vkCmdDispatch(Command, (TapsX + 7u) / 8u, (TapsY + 7u) / 8u, 1u);
         }
     }
+    else if (DiagnosticFrame)
+    {
+        // No silent renderer substitution. A missing/invalid raster stage produces a deterministic diagnostic
+        //    colour rather than presenting stale pixels or pretending that ReSTIR was the requested path.
+        VkImageMemoryBarrier ClearBarrier{ VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER };
+        ClearBarrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
+        ClearBarrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+        ClearBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        ClearBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        ClearBarrier.image = Vulkan->StorageImage;
+        ClearBarrier.subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0u, 1u, 0u, 1u };
+        ClearBarrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+        ClearBarrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        vkCmdPipelineBarrier(Command, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                             0u, 0u, nullptr, 0u, nullptr, 1u, &ClearBarrier);
+        VkClearColorValue MissingRaster{};
+        MissingRaster.float32[0] = 0.55f;
+        MissingRaster.float32[1] = 0.04f;
+        MissingRaster.float32[2] = 0.02f;
+        MissingRaster.float32[3] = 1.0f;
+        VkImageSubresourceRange Range{ VK_IMAGE_ASPECT_COLOR_BIT, 0u, 1u, 0u, 1u };
+        vkCmdClearColorImage(Command, Vulkan->StorageImage, VK_IMAGE_LAYOUT_GENERAL, &MissingRaster, 1u, &Range);
+    }
 
     Visibility.RecordKernelEnd(Command, Vulkan->ActiveSlot);
 
@@ -2926,10 +3045,11 @@ void SwapchainExchange::RecordComputeCommands(uint32_t ImageOrdinal, const Dispa
         ToAttachment.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
         ToAttachment.subresourceRange.levelCount = 1u;
         ToAttachment.subresourceRange.layerCount = 1u;
-        ToAttachment.srcAccessMask               = VK_ACCESS_SHADER_WRITE_BIT;
+        ToAttachment.srcAccessMask               = (SoftwareFrame || DiagnosticFrame) ? VK_ACCESS_TRANSFER_READ_BIT : VK_ACCESS_SHADER_WRITE_BIT;
         ToAttachment.dstAccessMask               = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
         vkCmdPipelineBarrier(Command,
-            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+            (SoftwareFrame || DiagnosticFrame) ? VK_PIPELINE_STAGE_TRANSFER_BIT : VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+            VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
             0u, 0u, nullptr, 0u, nullptr, 1u, &ToAttachment);
 
         Overlay(static_cast<void*>(Command), Vulkan->ActiveSlot);
@@ -2954,10 +3074,13 @@ void SwapchainExchange::RecordComputeCommands(uint32_t ImageOrdinal, const Dispa
         Barrier.subresourceRange.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
         Barrier.subresourceRange.levelCount     = 1u;
         Barrier.subresourceRange.layerCount     = 1u;
-        Barrier.srcAccessMask                   = VK_ACCESS_SHADER_WRITE_BIT;
+        Barrier.srcAccessMask                   = Overlay ? VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT
+                                                            : (SoftwareFrame || DiagnosticFrame) ? VK_ACCESS_TRANSFER_WRITE_BIT : VK_ACCESS_SHADER_WRITE_BIT;
         Barrier.dstAccessMask                   = VK_ACCESS_TRANSFER_READ_BIT;
         vkCmdPipelineBarrier(Command,
-            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+            Overlay ? VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
+                    : (SoftwareFrame || DiagnosticFrame) ? VK_PIPELINE_STAGE_TRANSFER_BIT : VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+            VK_PIPELINE_STAGE_TRANSFER_BIT,
             0u, 0u, nullptr, 0u, nullptr, 1u, &Barrier);
     }
 

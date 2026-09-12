@@ -16,6 +16,16 @@ namespace Frontier {
 // Mirrors RayTracingRequestCategory (DeviceExchange) without pulling Vulkan headers into the presentation layer.
 enum class RayTracingTierRequestCategory : uint32_t { Auto = 0, Software = 1, RayQuery = 2, Pipeline = 3, Count = 4 };
 
+// The Project Zero celestial showcase deliberately exposes the image-producing path separately from the
+// hardware-quality ladder. Visibility Raster is deterministic CPU/software raster intended for look-development;
+// ReSTIR remains an independent selectable path even when GI is disabled.
+enum class RenderPathSelection : uint32_t { VisibilityRaster = 0, ReSTIR = 1, Count = 2 };
+
+[[nodiscard]] inline const char* RenderPathLabel(RenderPathSelection Path) noexcept
+{
+    return Path == RenderPathSelection::VisibilityRaster ? "Visibility Raster" : "ReSTIR";
+}
+
 // Mirrors DebugViewCategory (DeviceExchange/VisibilityExchange.h): the R2 debug popup (F3) cycles these.
 enum class DebugViewSelection : uint32_t { Off = 0, Depth = 1, Visibility = 2, Motion = 3, Cluster = 4, HiZ = 5, Albedo = 6, Normal = 7, Roughness = 8, Metalness = 9, ShadingNormal = 10, ReservoirM = 11, ReservoirW = 12, ReservoirAge = 13, Count = 14 };
 

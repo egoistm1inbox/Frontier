@@ -201,7 +201,7 @@ int main(){
         const SkyConstantRecord Hid = PackSkyConstants(Medium, Hidden, Twilight, 50.0f, 2.0f, 16u, 6u, true);
         Expect(Hid.SunDirect[0] == 0.0f && Hid.SunDirect[1] == 0.0f && Hid.SunDirect[2] == 0.0f,
                "a hidden sun (zero intensity) packs zero direct sun");
-        Expect(D.SunDirect[3] == 0.0f, "the direct row's spare lane stays reserved");
+        Expect(D.SunDirect[3] == kSunDiscGain, "the packed spare lane carries the shared bounded sun-disc gain");
     }
 
     std::printf("\n");

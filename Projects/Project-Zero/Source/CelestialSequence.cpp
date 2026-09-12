@@ -360,6 +360,7 @@ void CelestialSequence::ApplyTo(VisibilityRaster& Raster, const CelestialBudget&
     Settings.Enabled = Enabled;
     Settings.Medium  = Medium;
     Settings.Light   = Light;
+    Settings.SunDiscGain = SunDiscGain;
 
     // ⚠️ The direction comes from the SOLVED frame, not from Light. Light.Direction is a cache the tick fills,
     //    and a caller that renders before its first tick would otherwise get the struct default (straight up)
@@ -432,7 +433,7 @@ SkyConstantRecord CelestialSequence::PackSkyRecord() const noexcept
 
     SkyConstantRecord Record = PackSkyConstants(Medium, Effective, Twilight, Solved.Sun.Elevation,
                                                   /*CameraHeightMetres=*/2.0f, Budget.AtmosphereSamples,
-                                                  Budget.AtmosphereLightSamples, Enabled, SunDirect);
+                                                  Budget.AtmosphereLightSamples, Enabled, SunDirect, SunDiscGain);
 
     // The GPU path used to stop at the atmosphere record, so the CPU raster showed broken cumulus while ReSTIR
     // showed a clear blue miss. Pack the same gated weather state that ApplyTo lends the raster; this is the only
@@ -677,6 +678,7 @@ void CelestialSequence::BuildSheet(CelestialEntity Entity, EditorSheet& Sheet) c
         EditorPropertyGroup& Beam = OpenGroup(Sheet, "Light");
         Push(Beam, MakeSlider("Intensity", 0.0f, 60.0f, Light.Intensity, 1, "x"));
         Push(Beam, MakeSlider("Direct", 0.0f, 5.0f, SunDirect, 2, "x"));
+        Push(Beam, MakeSlider("Disc Gain", 0.0f, 8.0f, SunDiscGain, 2, "x"));
 
         // Read-outs rather than sliders: these are SOLVED, and offering to edit them would imply the solver
         //    could be overridden, which it cannot.
@@ -922,6 +924,7 @@ void CelestialSequence::ApplySheet(CelestialEntity Entity, const EditorSheet& Sh
         Observation.Month      = static_cast<int32_t>(ReadSlider(Sheet, "Month", static_cast<float>(Observation.Month)));
         Light.Intensity        = ReadSlider(Sheet, "Intensity", Light.Intensity);
         SunDirect              = ReadSlider(Sheet, "Direct", SunDirect);
+        SunDiscGain            = ReadSlider(Sheet, "Disc Gain", SunDiscGain);
         break;
     }
     case CelestialEntity::Sky:

@@ -4,6 +4,7 @@
 // 🧩 Accumulates ReSTIR DI+GI radiance by numerically integrating light transport paths on the GPU compute pipeline.
 
 #include "ReSTIRIntegrator.h"
+#include "../GeometricRaster/SceneRecordPacking.h"
 #include <algorithm>
 #include <string>
 #include <cmath>
@@ -145,56 +146,13 @@ uint32_t ReSTIRIntegrator::CountLuminaireTriangles(const ProjectZero::RayTracing
 std::vector<TriangleIndex> ReSTIRIntegrator::BuildTriangleIndex(
     const ProjectZero::RayTracingSolver& Scene) noexcept
 {
-    const auto& Triangles = Scene.QueryTriangles();
-
-    std::vector<TriangleIndex> Records;
-    Records.reserve(Triangles.size());
-
-    for (const auto& Triangle : Triangles)
-    {
-        TriangleIndex Record{};
-        Record.VertexAlphaX  = Triangle.VertexAlpha.x;
-        Record.VertexAlphaY  = Triangle.VertexAlpha.y;
-        Record.VertexAlphaZ  = Triangle.VertexAlpha.z;
-        Record.MaterialSlot  = *reinterpret_cast<const float*>(&Triangle.MaterialIndex);
-        Record.VertexBetaX   = Triangle.VertexBeta.x;
-        Record.VertexBetaY   = Triangle.VertexBeta.y;
-        Record.VertexBetaZ   = Triangle.VertexBeta.z;
-        Record.VertexGammaX  = Triangle.VertexGamma.x;
-        Record.VertexGammaY  = Triangle.VertexGamma.y;
-        Record.VertexGammaZ  = Triangle.VertexGamma.z;
-        // R4a: no per-face normal or UVs in the analytical Cornell soup (flat-shaded, untextured)
-        Records.push_back(Record);
-    }
-    return Records;
+    return BuildProjectZeroTriangleRecords(Scene);
 }
 
 std::vector<MaterialDescriptor> ReSTIRIntegrator::BuildMaterialDescriptors(
     const ProjectZero::RayTracingSolver& Scene) noexcept
 {
-    const auto& Materials = Scene.QueryMaterials();
-
-    std::vector<MaterialDescriptor> Records;
-    Records.reserve(Materials.size());
-
-    for (const auto& Material : Materials)
-    {
-        MaterialDescriptor D;
-        // The R2 fallback path keeps its pinned material_N names (see SceneCodecR4Test): object names ride the
-        //    spans, not the materials, so the null-spans encode stays byte-identical.
-        D.Name = "material_" + std::to_string(Material.MaterialIdentifier);
-        D.Slabs.emplace_back();
-        MaterialSlabDescriptor& S = D.Slabs.back();
-        S.BaseColor[0] = Material.AlbedoColor.x; S.BaseColor[1] = Material.AlbedoColor.y; S.BaseColor[2] = Material.AlbedoColor.z;
-        S.SpecularRoughness = Material.RoughnessValue;
-        S.BaseMetalness     = Material.MetallicValue;
-        S.SpecularWeight    = 0.0f;   // R4b pin (approved): the analytical Cornell box is Lambertian — no dielectric lobe, so R3/R4a images stay the reference
-        const float E[3] = { Material.EmissiveRadiance.x, Material.EmissiveRadiance.y, Material.EmissiveRadiance.z };
-        const float Peak = std::max({ E[0], E[1], E[2], 0.0f });
-        if (Peak > 0.0f) { S.EmissionLuminance = Peak; S.EmissionColor[0] = E[0] / Peak; S.EmissionColor[1] = E[1] / Peak; S.EmissionColor[2] = E[2] / Peak; }
-        Records.push_back(std::move(D));
-    }
-    return Records;
+    return BuildProjectZeroMaterialRecords(Scene);
 }
 
 } // namespace Frontier

@@ -807,7 +807,7 @@ void VisibilityRaster::Shade(const SceneStructure& Level, const float Eye[3], co
                                + Dir[2] * Celestial_.Light.Direction[2];
             const float SunAng = std::acos(std::fmax(-1.0f, std::fmin(1.0f, SunDot)));
             constexpr float kSunSoft = 0.25f;
-            constexpr float kSunBoost = 12.0f;
+            const float kSunBoost = std::max(Celestial_.SunDiscGain, 0.0f);
             const float ViewElev = std::asin(std::fmax(-1.0f, std::fmin(1.0f, Dir[2]))) * 180.0f / kPi;
             const float SunSoftElev = Mix01(1.0f, 2.2f, 1.0f - Smooth01(0.0f, 4.0f, ViewElev));
             const float SunDisc = 1.0f - Smooth01(kSunAngularRadius * (1.0f - kSunSoft * 0.9f * SunSoftElev),

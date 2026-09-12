@@ -17,10 +17,19 @@
 
 #version 460
 #extension GL_GOOGLE_include_directive : require
+#extension GL_EXT_nonuniform_qualifier : require
 layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 
 #include "Shaders/SceneRecords.slang"
 #include "Shaders/ShadowSample.slang"
+#include "Shaders/RayGeneration.slang"
+
+// ShadowResolve is the strict Visibility Raster image path, but it must not invent a second celestial renderer.
+// The sparse bindings below are the same records/table ReSTIRViewport uses for misses, moons, stars and clouds.
+layout(set = 0, binding = 25) uniform sampler2D Textures[];
+#include "Shaders/MoonRecords.slang"
+#include "Shaders/PostRecords.slang"
+#include "Shaders/SkyRecords.slang"
 
 layout(std430, set = 0, binding = 1) readonly buffer InstanceExtent { InstanceRecord Instances[]; };
 layout(std430, set = 0, binding = 5) readonly buffer MaterialExtent { MaterialRecord Materials[]; };
@@ -42,7 +51,14 @@ void main()
     uint Visibility = floatBitsToUint(Surface.w);
     if (Visibility == kVisibilityInvalid)
     {
-        imageStore(OutputImage, ivec2(Pixel), vec4(pow(kMiss / (1.0 + kMiss), vec3(1.0 / 2.2)), 1.0));
+        CameraBasis Camera;
+        Camera.Origin = CameraOrigin.xyz; Camera.Forward = CameraForward.xyz;
+        Camera.Right = CameraRight.xyz; Camera.Up = CameraUp.xyz;
+        Camera.TanHalfFov = CameraForward.w; Camera.Aspect = CameraRight.w;
+        vec3 Direction = GeneratePrimaryDirection(Camera, Pixel, Jitter.zw, Extent.xy);
+        vec3 Environment = SkyAlong(Direction, CameraOrigin.xyz);
+        vec3 MappedEnvironment = Environment / (1.0 + Environment);
+        imageStore(OutputImage, ivec2(Pixel), vec4(pow(max(MappedEnvironment, vec3(0.0)), vec3(1.0 / 2.2)), 1.0));
         return;
     }
 
@@ -118,6 +134,21 @@ void main()
 
         Accumulated += (Diff + Spec) * Radiance * Geometry;
     }
+
+    // Camera segments to emissive/surface hits use the same CloudAlong equation and the same packed weather
+    //    record as SkyAlong and ReSTIR. This is the Visibility Raster counterpart to the ReSTIR camera-segment
+    //    cloud branch, so GI-off does not silently become a clear-sky renderer.
+    CameraBasis Camera;
+    Camera.Origin = CameraOrigin.xyz; Camera.Forward = CameraForward.xyz;
+    Camera.Right = CameraRight.xyz; Camera.Up = CameraUp.xyz;
+    Camera.TanHalfFov = CameraForward.w; Camera.Aspect = CameraRight.w;
+    vec3 Direction = GeneratePrimaryDirection(Camera, Pixel, Jitter.zw, Extent.xy);
+    vec3 CloudScatter; float CloudTransmittance;
+    float CameraDistance = length(Position - CameraOrigin.xyz);
+    CloudAlong(CameraOrigin.xyz, Direction, CameraDistance, SkySunDirection.xyz,
+               SkySunRadiance.xyz * smoothstep(-12.0, 0.0, SkySunDirection.w),
+               vec3(0.0), CloudScatter, CloudTransmittance);
+    Accumulated = Accumulated * CloudTransmittance + CloudScatter;
 
     vec3 Mapped = Accumulated / (1.0 + Accumulated);           // Reinhard, as on the CPU path
     imageStore(OutputImage, ivec2(Pixel), vec4(pow(max(Mapped, vec3(0.0)), vec3(1.0 / 2.2)), 1.0));

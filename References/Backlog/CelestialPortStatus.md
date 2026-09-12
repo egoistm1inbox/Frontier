@@ -1,15 +1,16 @@
 # Celestial port status
 
-This is the implementation status for the `Project-Zero` port of the reference at
+This is the implementation status for the Project Zero port of the reference at
 `SultanAladin/Frontier-` (`Diagnostics/CelestialPanel.html`). The reference is a WebGL
-panel; it is not copied into the renderer. Its simulation is split between the CPU
-sequence, the visibility raster, and the ReSTIR kernel so both render paths receive the
-same weather state.
+panel; it is not copied into the renderer. Project Zero is the one dedicated open
+celestial material-test scene, and its Editor mode is the native home of the ported
+controls.
 
 ## Ported and wired into Project Zero
 
 | Reference feature | Project Zero seam |
 | --- | --- |
+| One open material-test scene | `RayTracingSolver::ConstructCelestialTestScene`, `ProjectZeroCelestial.gltf`, `GameExecution` |
 | Sun, time of day, moon ephemeris | `CelestialSequence`, `CelestialSolver`, `SkyRecords.slang` |
 | Rayleigh/Mie/ozone atmosphere and twilight | `AtmosphereModel`, `SkyConstantRecord`, `SkyRecords.slang` |
 | Stars and Milky Way gating | `StarCatalogueIndex`, binding 23, `PostRecords.slang` |
@@ -21,27 +22,28 @@ same weather state.
 | Lens flare, ghosts, halo and streaks | `AtmosphericOptics`, `PostRecords.slang` |
 | God rays from cloud transmittance | unified cloud march and post integration |
 | Fidelity tiers and Auto | `CelestialTier` as the single tier translation |
-| Project Zero/editor integration | `CelestialSequence`, `GameExecution`, outliner sheets and volume markers |
+| Render path and GI controls | `ControlCentreSettings::RenderPath`, persisted `render_path`, strict Swapchain branch |
+| Bounded visible sun disc | shared `SkySunDirect.w` / `kSunDiscGain`, CPU `VisibilityRaster` and `SkyRecords.slang` |
+| Editor integration | `CelestialSequence`, `GameExecution`, outliner sheets and volume markers |
 
-The per-frame path is deliberately shared: `CelestialSequence::Tick` updates the
-authoritative state, `ApplyTo` feeds the CPU visibility raster, and the three packers
-(`PackSkyRecord`, `PackMoonRecord`, `PackPostRecord`) feed the GPU path. Visibility
-toggles and inspector edits therefore affect both paths instead of only changing the
-preview UI.
+The per-frame path is shared: `CelestialSequence::Tick` updates the authoritative state,
+`ApplyTo` feeds the CPU Visibility Raster, and `PackSkyRecord`, `PackMoonRecord` and
+`PackPostRecord` feed the GPU records. The strict Visibility Raster shadow resolve
+borrows the same binding 21–25 records/table as ReSTIR, so GI-off cannot silently lose
+clouds, sky, moon or stars through a second weather state. When Visibility Raster is
+selected in the live Project Zero loop, `VisibilityRaster::Render` is the producer and
+`SwapchainExchange::UploadSoftwareRasterFrame` copies that RGBA8 frame to the storage
+image; no GPU visibility or ReSTIR dispatch substitutes for it.
 
-## What is intentionally still separate
+## Current proof boundary
 
-These are not silently missing from the port:
-
-* The reference's **Height Field** is an external scene/geometry entity. Project Zero
-  currently uses its generated outdoor ground and glTF scene geometry; a procedural
-  height-field scene is the next terrain task.
-* **Post Process** exposure and tone mapping are owned by the renderer's exposure and
-  colour-transfer pipeline rather than by `CelestialSequence`; the celestial post
-  record contains the reference's star/rainbow/flare effects.
-* The reference's **Cine Camera** rig and its G/R/S gizmo workflow remain deferred.
-* The reference's CSS bespoke widget catalogue is represented by the existing native
-  inspector sheet types. A pixel-identical HTML panel is not a rendering requirement.
+`Scratchpad/ProjectZeroShowcase.cpp` loads the dedicated scene through SceneCodec and
+uses the same material records, sequence, packed weather state and CPU Visibility
+Raster equations as the application. Its filenames identify scene, path, GI state and
+tier. In a no-GPU sandbox it emits only explicitly labelled Visibility Raster / GI-off
+CPU images; it does not mislabel those images as ReSTIR captures. ReSTIR shader/record
+parity is structurally gated, while GPU/ReSTIR image captures require a Vulkan-capable
+runner. No painted or disconnected proof image is acceptable.
 
 ## Checks
 
@@ -49,12 +51,10 @@ From the repository root:
 
 ```sh
 bash Scratchpad/CheckCelestialScene.sh
+bash Scratchpad/CheckProofFidelity.sh
 bash Scratchpad/CheckPrecipitation.sh
 bash Scratchpad/CheckPostKernel.sh
 bash Scratchpad/CheckSkyKernel.sh
 bash Scratchpad/CheckCelestialTiers.sh
 bash Scratchpad/CheckStarCatalogue.sh
 ```
-
-The checks compile the CPU proofs and assert the production wiring; generated PNG
-captures are intentionally not build inputs.

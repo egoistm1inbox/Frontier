@@ -145,6 +145,9 @@ public:
     // R4b alpha mask in the raster: the kernel's slab SSBO (VkBuffer) and bindless table (VkSampler + VkImageView[]) are
     //    borrowed into raster bindings 6 / 7. Call after UploadScene / UploadTextures; the fragment stage reads them.
     void                AssignRasterMaterials(void* SlabBuffer, void* Sampler, const void* const* Views, uint32_t ViewCount) noexcept;
+    // Shared celestial records for the strict Visibility Raster shadow resolve. The buffers are the live binding 21–24
+    //    records owned by SwapchainExchange; the texture table is the same resident table used by ReSTIR.
+    void                AssignCelestialRecords(void* Sky, void* Moon, void* Stars, void* Post) noexcept;
 
     // R6 row 3: the kernel's prev-frame reservoir buffer (VkBuffer) borrowed into resolve binding 13 for the
     //    M / W / Age debug views. Called once per frame with the same buffer the kernel reads as binding 16

@@ -13,6 +13,7 @@
 #include "RayTracingCapabilitySet.h"
 #include "OrientationClassifier.h"
 #include "VisibilityExchange.h"
+#include "../GeometricRaster/TriangleIndex.h"
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -26,6 +27,10 @@ namespace Frontier {
 class SceneStructure;
 class TraversalIndex;   // GeometricRaster/TraversalIndex.h (R3 CWBVH)
 class TextureIndex;     // ContentInterchange/TextureIndex.h (R4a)
+
+// Runtime image path selected by the host. Kept outside DispatchConfiguration so the 128-byte shader push ABI is
+// unchanged: Visibility Raster never silently falls through to ReSTIR when its own stage is unavailable.
+enum class RenderPathMode : uint32_t { VisibilityRaster = 0, ReSTIR = 1 };
 // R7 à-trous levels. Five doublings reach an 81x81 pixel footprint (1+2+4+8+16 taps either side of centre) for
 //    5 x 25 taps instead of 6561 — the whole point of the "with holes" formulation.
 static constexpr uint32_t kDenoiseLevelCount    = 5u;   // CEILING: descriptor sets and images are allocated for
@@ -97,37 +102,6 @@ struct SwapchainConfiguration
 //    with the UVs — the kernel derives the normal from the edges — so texture lookup at secondary hits needs no
 //    vertex/index indirection. 🚧 R5 deletes this buffer in favour of VertexRecord/index/instance.
 //------------------------------------------------------------------------------------------------------------------------
-
-struct TriangleIndex
-{
-    float    VertexAlphaX,  VertexAlphaY,  VertexAlphaZ;   // [m]   vertex α world position
-    float    MaterialSlot;                                   // [-]   material index (uint reinterpreted)
-    float    VertexBetaX,   VertexBetaY,   VertexBetaZ;    // [m]   vertex β world position
-    float    TextureGammaU;                                  // [uv]  γ u   (R4a: replaced TriangleSlot — the slot IS the array index)
-    float    VertexGammaX,  VertexGammaY,  VertexGammaZ;   // [m]   vertex γ world position
-    float    TextureGammaV;                                  // [uv]  γ v
-    float    TextureAlphaU, TextureAlphaV;                   // [uv]  α
-    float    TextureBetaU,  TextureBetaV;                    // [uv]  β
-};
-static_assert(sizeof(TriangleIndex) == 64u, "TriangleIndex must be 64 bytes (std430 mirror)");
-
-//------------------------------------------------------------------------------------------------------------------------
-//                          TRIANGLE SPAN RECORD  (CPU only — object identity over a soup)
-//
-// Mechanism: a TriangleIndex soup carries no object identity — Floor, Ceiling and Back Wall share one material
-//    and would decode as one instance. The builders record one span per Append call (name + dynamic flag authored
-//    at the call site); SceneCodec::Encode turns each span into a named glTF node, so the decode carries one
-//    placement per scene object and the outliner walks the live scene instead of a parallel hand-typed table.
-//    Never uploaded; dies with TriangleIndex in R5.
-//------------------------------------------------------------------------------------------------------------------------
-
-struct TriangleSpanRecord
-{
-    uint32_t    FirstTriangle = 0u;      // [idx] first triangle of the object in the builder's soup
-    uint32_t    TriangleCount = 0u;      // [cnt]
-    std::string Name;                    // [-]   display name ("Tall Box")
-    bool        Dynamic = false;         // [-]   the object moves (--animate / physics drive it)
-};
 
 // R4a: RadianceStructure (48 B material summary) is gone — materials are MaterialRecord / MaterialSlabRecord
 //    (ContentInterchange/MaterialIndex.h), uploaded through UploadMaterials(const MaterialIndex&).
@@ -247,6 +221,10 @@ public:
     //    bytes packed by PostConstantRecord/PackPostConstants. False on null bytes, wrong size, or no buffer;
     //    the previous contents stand. Zero is everything off (stars, flare, bow), the kernel's early-out.
     [[nodiscard]] bool          RefreshPost(const void* Bytes, uint32_t ByteCount) noexcept;
+    // CPU/software Visibility Raster output. The host fills this after CelestialSequence::ApplyTo; RecordAndPresent
+    //    copies the exact RGBA8 frame into the presentation image and never dispatches ReSTIR for this selection.
+    [[nodiscard]] bool          UploadSoftwareRasterFrame(const void* Rgba, uint32_t Width, uint32_t Height) noexcept;
+    void                        InvalidateSoftwareRasterFrame() noexcept;
     // Star tables → binding 23, once after the catalogue loads: 1 024 cells of 8 B then StarCount stars of
     //    32 B, re-pointing the binding at the reallocated buffer. Skipped (never called) when the catalogue
     //    is empty — the bring-up zeros stand. A refused upload keeps the previous tables, never a hole.
@@ -280,6 +258,8 @@ public:
     // Ray-tracing capability (plan v2.1 §3.4): probed once the physical device is chosen. The request comes from
     //    Slate.config.toml [render] ray_tracing_tier; the resolved tier is what the renderer must build for.
     void                        AssignRayTracingRequest(RayTracingRequestCategory Request) noexcept { RayTracingRequest = Request; }
+    void                        AssignRenderPath(RenderPathMode Path) noexcept { RenderPath = Path; }
+    [[nodiscard]] RenderPathMode QueryRenderPath() const noexcept { return RenderPath; }
     [[nodiscard]] const RayTracingCapabilitySet& QueryRayTracingCapabilities() const noexcept { return Capabilities; }
     [[nodiscard]] RayTracingTierCategory QueryRayTracingTier() const noexcept { return Capabilities.ResolveTier(RayTracingRequest); }
     [[nodiscard]] RayTracingRequestCategory QueryRayTracingRequest() const noexcept { return RayTracingRequest; }
@@ -395,6 +375,7 @@ private:
     uint32_t                TargetGeneration = 0u;         // [cnt] bumped on every swapchain rebuild; overlays re-Resize on change
     bool                    DrawIndirectCountSupported = false;   // [-] VkPhysicalDeviceVulkan12Features::drawIndirectCount
     RayTracingRequestCategory RayTracingRequest = RayTracingRequestCategory::Auto;
+    RenderPathMode          RenderPath = RenderPathMode::ReSTIR;
     int                     WindowedX, WindowedY, WindowedW, WindowedH;   // [px] rectangle to restore on leaving fullscreen
 
     InputExchange*          ForwardInput;        // [-]   target for GLFW callback forwarding (valid during PollInput)

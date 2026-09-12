@@ -8,10 +8,9 @@
 #    celestial sheets honest — the sequence drives them, and no mock/fake/stub identifier exists in any
 #    image-emitting proof — plus the contract declarations that say so in the files themselves.
 #
-# What this gate does NOT claim: the sheets render the GI-off raster, the project's own fallback path, while the
-#    project displays the ReSTIR kernel's image. That deviation is declared in each proof's header (the kernel
-#    needs a GPU; the proofs run on a CPU) and the kernel is held to the same models by the transcription parity
-#    proofs and the structural gates instead. An honest declared deviation is not a fake.
+# This gate distinguishes CPU Visibility Raster images from GPU/ReSTIR captures. A headless run must never label
+#    a CPU image as ReSTIR; the latter requires a GPU capture or a separately declared scalar ReSTIR reference.
+#    The production ShadowResolve and ReSTIRViewport shaders are checked for the same packed celestial records.
 set -u
 cd "$(dirname "$0")/.."
 Fail=0
@@ -29,6 +28,12 @@ grep -q 'Sky\.Tick(0\.0f, TickOrigin, 0\.0f)' "$SkyProof"
 Report $? "the clock is the only input — the tick solves the rest"
 grep -q 'Sky\.ApplyTo(Raster, Budget)' "$SkyProof"
 Report $? "the raster is fed by ApplyTo, the GameExecution order"
+grep -q 'ProjectZeroCelestial' Scratchpad/ProjectZeroShowcase.cpp
+Report $? "the proof loads the dedicated Project Zero scene, not a hand-built sample"
+grep -q 'SunDiscGain' Engine/DisplayPresentation/SkyConstantRecord.h Engine/GeometricRaster/VisibilityRaster.h
+Report $? "CPU and packed GPU records carry the bounded sun-disc gain"
+grep -q 'RenderPathSelection' Engine/DisplayPresentation/ConfigurationStructure.h Projects/Project-Zero/Source/GameExecution.cpp
+Report $? "render-path semantics are an explicit host setting, not a quality tier"
 grep -q 'CelestialTier::BudgetFor(Criteria)' "$SkyProof"
 Report $? "tier budgets arrive via the project's own tier table"
 ! grep -q 'CelestialSettings Sky' "$SkyProof"
@@ -37,6 +42,8 @@ grep -q 'QuerySourceCount() > 0u' "$SkyProof"
 Report $? "the shipping star catalogue is asserted loaded, not assumed"
 grep -q 'FIDELITY CONTRACT' "$SkyProof"
 Report $? "the proof declares its fidelity contract in its header"
+grep -q 'ProjectZeroCelestial_VisibilityRaster_GIoff_Standard' Scratchpad/ProjectZeroShowcase.cpp
+Report $? "showcase output names include scene, path, GI state and quality tier"
 
 echo "[ProofFidelity] the moon proof drives the same wiring"
 MoonProof=Scratchpad/MoonRenderProof.cpp

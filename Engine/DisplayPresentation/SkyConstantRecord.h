@@ -58,6 +58,9 @@ inline constexpr float kSunAngularRadius = 0.53f * (3.14159265358979323846f / 18
 inline constexpr float kAureoleKnee  = 1.0f;
 inline constexpr float kAureoleSlope = 0.06f;
 inline constexpr float kAureoleSigma = 5.0f * (3.14159265358979323846f / 180.0f);
+// Shared visible-disc gain. It is intentionally modest: the disc is bounded by kSunAngularRadius and the
+// aureole is compressed separately, so exposure cannot turn the source into a frame-filling white patch.
+inline constexpr float kSunDiscGain = 3.5f;
 
 //------------------------------------------------------------------------------------------------------------------------
 //                                                     THE RECORD
@@ -73,7 +76,7 @@ struct SkyConstantRecord
     float    Planet[4];         // x = planet radius [m], y = shell height [m], z = camera height [m], w = unused
     uint32_t Control[4];        // x = view samples, y = light samples, z = weather flags, w = cloud type
     float    Twilight[4];       // x = glow, y = line, z = 1 when the line is civil-only, w = unused
-    float    SunDirect[4];      // xyz = panel direct-sun factor 0.11·gain·colour·T (kernel: ÷Ω, ×Ω back); w = unused
+    float    SunDirect[4];      // xyz = panel direct-sun factor; w = shared bounded visible-disc gain
 
     // The weather is carried in the same permanent sky block. Keeping it beside the atmosphere is important: a
     // ReSTIR miss and a bounce miss must see the exact same cloud field, and a second weather descriptor would
@@ -122,7 +125,8 @@ static_assert(offsetof(SkyConstantRecord, LocalFogParams)  == 304u, "SkyLocalFog
 inline SkyConstantRecord PackSkyConstants(const AtmosphereMedium& Medium, const AtmosphereLight& Light,
                                           const TwilightSettings& Twilight, float SunElevationDegrees,
                                           float CameraHeightMetres, uint32_t ViewSamples,
-                                          uint32_t LightSamples, bool Enabled, float SunDirectGain = 1.0f) noexcept
+                                          uint32_t LightSamples, bool Enabled, float SunDirectGain = 1.0f,
+                                          float SunDiscGain = kSunDiscGain) noexcept
 {
     SkyConstantRecord R{};
 
@@ -166,7 +170,8 @@ inline SkyConstantRecord PackSkyConstants(const AtmosphereMedium& Medium, const 
     //    Below the horizon the planet shadows the sun — hard zero, not the short ground-segment transmittance
     //    the march would return. A hidden or disabled sun is zero through the same Gain as the sky's radiance,
     //    so the direct light and the skylight cannot disagree about whether the sun is up.
-    //    R.SunDirect[3] stays 0: reserved, like Mie.w/Ozone.w/Planet.w/Twilight.w.
+    //    The spare w lane is the shared bounded-disc gain consumed by both the GPU and CPU raster equations.
+    R.SunDirect[3] = SunDiscGain > 0.0f ? SunDiscGain : 0.0f;
     constexpr float kPanelDirectSunGain = 0.11f;
     if (Gain > 0.0f && SunElevationDegrees > 0.0f && SunDirectGain > 0.0f)
     {

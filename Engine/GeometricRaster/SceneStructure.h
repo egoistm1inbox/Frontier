@@ -10,7 +10,7 @@
 //    ClusterRecord    48 B  object-space bounding sphere + normal cone + triangle range   (cull unit, ≤ 128 triangles)
 //    LuminaireRecord  32 B  emissive triangle + Walker alias entry for O(1) light selection
 //    MaterialRecord   64 B  ContentInterchange/MaterialIndex.h (header) + MaterialSlabRecord 288 B per slab (R4a)
-//    TriangleIndex    64 B  SwapchainExchange.h — flattened world-space triangles addressed by the CWBVH primitive index
+//    TriangleIndex    64 B  TriangleIndex.h — flattened world-space triangles addressed by the CWBVH primitive index
 //                           (R4a: carries per-vertex UVs for texture lookup; 🚧 R5 deletes it).
 //    PlacementRecord / CameraRecord / PunctualLuminaireRecord — CPU-only scene-graph rows (R4a, data only, no UI).
 //
@@ -25,7 +25,7 @@
 #endif
 
 #include "GeometryStructure.h"
-#include "../DeviceExchange/SwapchainExchange.h"
+#include "TriangleIndex.h"
 #include "../ContentInterchange/MaterialIndex.h"
 #include <cstdint>
 #include <string>

@@ -4,7 +4,7 @@
 // 🧩 tinybvh CWBVH builder. This is the only translation unit that defines TINYBVH_IMPLEMENTATION.
 
 #include "TraversalIndex.h"
-#include "../DeviceExchange/SwapchainExchange.h"   // TriangleIndex
+#include "TriangleIndex.h"
 
 #include <chrono>
 #include <cstring>

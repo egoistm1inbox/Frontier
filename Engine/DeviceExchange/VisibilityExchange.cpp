@@ -99,6 +99,9 @@ struct VisibilityExchange::VulkanRecord
     VkBuffer  BorrowedReservoir = VK_NULL_HANDLE;             // R6 row 3: kernel's prev-frame reservoirs (resolve binding 13, M/W/Age views)
     VkSampler BorrowedSampler = VK_NULL_HANDLE;                 // R4b: bindless table sampler + views (raster binding 7)
     std::vector<VkImageView> BorrowedTextures;
+    // The deterministic shadow resolve consumes the same celestial records/table as ReSTIR. These are borrowed from
+    //    SwapchainExchange; no second sky/weather state is created for the Visibility Raster branch.
+    VkBuffer CelestialSky = VK_NULL_HANDLE, CelestialMoon = VK_NULL_HANDLE, CelestialStar = VK_NULL_HANDLE, CelestialPost = VK_NULL_HANDLE;
     uint32_t  TextureSlotCapacity = 0u;                         // 0 = no descriptor indexing: raster set stops at binding 5
     GpuBuffer Draws, Counters, VisibleBitsA, VisibleBitsB;      // per-frame cull state (device-local except counters)
     GpuBuffer CounterReadback[kMaximumCycleSlots];              // host-visible copies for telemetry
@@ -496,9 +499,29 @@ bool VisibilityExchange::BringPipelines() noexcept
     if (!MakePipelineLayout(Vulkan->HiZLayout, sizeof(HiZPushRecord), CS, Vulkan->HiZPipelineLayout)) return false;
     if (!MakeCompute("Engine/Shaders/HiZReduce.spv", Vulkan->HiZPipelineLayout, Vulkan->HiZPipeline)) return false;
 
-    // ④ Resolve: 0 frame, 1 instances, 2 clusters, 3 vertices, 4 indices, 5 materials, 6 visibility, 7 motion, 8 depth, 9 HiZ, 10 surface, 11 normal, 12 presentation, 13 reservoirs (R6 row 3, M/W/Age views)
-    if (!MakeLayout({ Binding(0, UBO, CS), Binding(1, SSBO, CS), Binding(2, SSBO, CS), Binding(3, SSBO, CS), Binding(4, SSBO, CS), Binding(5, SSBO, CS),
-                      Binding(6, TEX, CS), Binding(7, TEX, CS), Binding(8, TEX, CS), Binding(9, TEX, CS), Binding(10, IMG, CS), Binding(11, IMG, CS), Binding(12, IMG, CS), Binding(13, SSBO, CS) }, Vulkan->ResolveLayout)) return false;
+    // ④ Resolve: the surface resolve's original bindings plus the exact celestial records used by the ReSTIR miss
+    //    path. ShadowResolve includes SkyRecords/MoonRecords/PostRecords, so its sparse bindings stay numerically
+    //    identical (21–25) and both paths consume the same weather, moons, stars and texture table.
+    std::vector<VkDescriptorSetLayoutBinding> ResolveBindings =
+    {
+        Binding(0, UBO, CS), Binding(1, SSBO, CS), Binding(2, SSBO, CS), Binding(3, SSBO, CS), Binding(4, SSBO, CS), Binding(5, SSBO, CS),
+        Binding(6, TEX, CS), Binding(7, TEX, CS), Binding(8, TEX, CS), Binding(9, TEX, CS), Binding(10, IMG, CS), Binding(11, IMG, CS),
+        Binding(12, IMG, CS), Binding(13, SSBO, CS), Binding(21, UBO, CS), Binding(22, UBO, CS), Binding(23, SSBO, CS),
+        Binding(24, UBO, CS), Binding(25, TEX, CS)
+    };
+    if (Vulkan->TextureSlotCapacity > 0u)
+    {
+        ResolveBindings.back().descriptorCount = Vulkan->TextureSlotCapacity;
+        std::vector<VkDescriptorBindingFlags> Flags(ResolveBindings.size(), 0u);
+        Flags.back() = VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT | VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT;
+        VkDescriptorSetLayoutBindingFlagsCreateInfo FlagsInfo{ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO };
+        FlagsInfo.bindingCount = static_cast<uint32_t>(Flags.size()); FlagsInfo.pBindingFlags = Flags.data();
+        VkDescriptorSetLayoutCreateInfo Info{ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO };
+        Info.pNext = &FlagsInfo; Info.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
+        Info.bindingCount = static_cast<uint32_t>(ResolveBindings.size()); Info.pBindings = ResolveBindings.data();
+        if (vkCreateDescriptorSetLayout(D, &Info, nullptr, &Vulkan->ResolveLayout) != VK_SUCCESS) return false;
+    }
+    else if (!MakeLayout(ResolveBindings, Vulkan->ResolveLayout)) return false;
     if (!MakePipelineLayout(Vulkan->ResolveLayout, 0u, 0u, Vulkan->ResolvePipelineLayout)) return false;
     if (!MakeCompute("Engine/Shaders/SurfaceResolve.spv", Vulkan->ResolvePipelineLayout, Vulkan->ResolvePipeline)) return false;
 
@@ -727,7 +750,7 @@ bool VisibilityExchange::BringDescriptorSets() noexcept
     constexpr uint32_t MaxHiZLevels = 16u;
     const uint32_t RasterSetCount = kMaximumCycleSlots * 2u;
     std::array<VkDescriptorPoolSize, 4u> Sizes{ { { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 32u }, { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 128u + 2u * RasterSetCount },
-                                                  { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 64u + Vulkan->TextureSlotCapacity * RasterSetCount }, { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 64u } } };
+                                                  { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 64u + Vulkan->TextureSlotCapacity * (RasterSetCount + kMaximumCycleSlots) }, { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 64u } } };
     VkDescriptorPoolCreateInfo Pool{ VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO };
     Pool.flags   = Vulkan->TextureSlotCapacity > 0u ? static_cast<VkDescriptorPoolCreateFlags>(VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT) : 0u;
     // 5 sets per slot as before, plus the one the R10 shadow stage adds (its own set 1 — its set 0 is the
@@ -741,7 +764,7 @@ bool VisibilityExchange::BringDescriptorSets() noexcept
         VkDescriptorSetVariableDescriptorCountAllocateInfo Variable{ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO };
         Variable.descriptorSetCount = 1u; Variable.pDescriptorCounts = &Vulkan->TextureSlotCapacity;
         VkDescriptorSetAllocateInfo Info{ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO };
-        Info.pNext = (Layout == Vulkan->RasterLayout && Vulkan->TextureSlotCapacity > 0u) ? &Variable : nullptr;
+        Info.pNext = ((Layout == Vulkan->RasterLayout || Layout == Vulkan->ResolveLayout) && Vulkan->TextureSlotCapacity > 0u) ? &Variable : nullptr;
         Info.descriptorPool = Vulkan->Pool; Info.descriptorSetCount = 1u; Info.pSetLayouts = &Layout;
         return vkAllocateDescriptorSets(D, &Info, &Out) == VK_SUCCESS;
     };
@@ -963,6 +986,10 @@ void VisibilityExchange::WriteDescriptorSets() noexcept
         Image (X, 10u, IMG, Vulkan->Surface.View);
         Image (X, 11u, IMG, Vulkan->Normal.View);
         if (Vulkan->PresentationView) Image(X, 12u, IMG, Vulkan->PresentationView);
+        if (Vulkan->CelestialSky)  Buffer(X, 21u, UBO,  Vulkan->CelestialSky);
+        if (Vulkan->CelestialMoon) Buffer(X, 22u, UBO,  Vulkan->CelestialMoon);
+        if (Vulkan->CelestialStar) Buffer(X, 23u, SSBO, Vulkan->CelestialStar);
+        if (Vulkan->CelestialPost) Buffer(X, 24u, UBO,  Vulkan->CelestialPost);
     }
     // HiZ sets: set L writes level L; set 0 reads the depth attachment, set L>0 reads level L−1.
     for (uint32_t L = 0u; L < Vulkan->HiZ.Levels; ++L)
@@ -991,6 +1018,13 @@ void VisibilityExchange::WriteDescriptorSets() noexcept
                 W.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER; W.pImageInfo = Table.data();
                 vkUpdateDescriptorSets(D, 1u, &W, 0u, nullptr);
             }
+        for (uint32_t S = 0u; S < Vulkan->SlotCount; ++S)
+        {
+            VkWriteDescriptorSet W{ VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET };
+            W.dstSet = Vulkan->ResolveSets[S]; W.dstBinding = 25u; W.descriptorCount = static_cast<uint32_t>(Table.size());
+            W.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER; W.pImageInfo = Table.data();
+            vkUpdateDescriptorSets(D, 1u, &W, 0u, nullptr);
+        }
     }
 }
 
@@ -1003,6 +1037,15 @@ void VisibilityExchange::AssignRasterMaterials(void* SlabBuffer, void* Sampler, 
     for (uint32_t I = 0u; I < Count; ++I) if (Views[I]) Vulkan->BorrowedTextures.push_back(static_cast<VkImageView>(const_cast<void*>(Views[I])));
     if (Vulkan->Device) vkDeviceWaitIdle(Vulkan->Device);
     WriteDescriptorSets();
+}
+
+void VisibilityExchange::AssignCelestialRecords(void* Sky, void* Moon, void* Stars, void* Post) noexcept
+{
+    Vulkan->CelestialSky  = static_cast<VkBuffer>(Sky);
+    Vulkan->CelestialMoon = static_cast<VkBuffer>(Moon);
+    Vulkan->CelestialStar = static_cast<VkBuffer>(Stars);
+    Vulkan->CelestialPost = static_cast<VkBuffer>(Post);
+    if (Vulkan->Device) WriteDescriptorSets();
 }
 
 //------------------------------------------------------------------------------------------------------------------------

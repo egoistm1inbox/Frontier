@@ -25,7 +25,7 @@
 
 namespace Frontier {
 
-struct TriangleIndex;   // DeviceExchange/SwapchainExchange.h — flat world-space triangle (48 B)
+struct TriangleIndex;   // TriangleIndex.h — flat world-space triangle (64 B)
 
 struct TraversalMetrics
 {

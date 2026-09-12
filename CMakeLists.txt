@@ -201,6 +201,7 @@ set(FRONTIER_ENGINE_SOURCES
     Engine/GeometricRaster/GeometryStructure.cpp
     Engine/GeometricRaster/CameraProjection.cpp
     Engine/GeometricRaster/SceneStructure.cpp
+    Engine/GeometricRaster/SceneRecordPacking.cpp
     Engine/GeometricRaster/TraversalIndex.cpp
     Engine/ContentInterchange/MaterialIndex.cpp
     Engine/ContentInterchange/MaterialCodec.cpp

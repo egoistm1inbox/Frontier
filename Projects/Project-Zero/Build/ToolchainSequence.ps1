@@ -678,6 +678,7 @@ $EngineRelative = @(
     'Engine\GeometricRaster\CameraProjection.cpp'
     'Engine\GeometricRaster\GeometryStructure.cpp'
     'Engine\GeometricRaster\SceneStructure.cpp'
+    'Engine\GeometricRaster\SceneRecordPacking.cpp'
     'Engine\GeometricRaster\StarCatalogueIndex.cpp'
     'Engine\GeometricRaster\TraversalIndex.cpp'
     'Engine\DeviceExchange\VisibilityExchange.cpp'

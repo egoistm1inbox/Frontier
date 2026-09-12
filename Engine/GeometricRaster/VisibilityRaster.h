@@ -31,6 +31,7 @@
 #include "DisplayPresentation/AtmosphereModel.h"
 #include "DisplayPresentation/ColourTransfer.h"
 #include "DisplayPresentation/MoonConstantRecord.h"
+#include "DisplayPresentation/SkyConstantRecord.h"
 #include "DisplayPresentation/VolumetricMedia.h"
 #include "StarCatalogueIndex.h"
 #include <cstdint>
@@ -111,6 +112,7 @@ public:
         float            GroundAlbedo[3]   = { 0.19f, 0.17f, 0.14f };
         float            StarBrightness    = 1.0f;   // [x] panel: Stars > Field > Brightness
         float            StarSize          = 1.0f;   // [x] panel: Stars > Field > Point Size
+        float            SunDiscGain       = kSunDiscGain; // [x] bounded visible solar disc gain, shared with SkyDirect.w
         float            LocalSiderealTime = 0.0f;   // [deg] from CelestialFrame
         float            Latitude          = 0.0f;   // [deg] north positive
         float            CameraHeight     = 2.0f;   // [m] above the surface

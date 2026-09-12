@@ -5,7 +5,7 @@
 #pragma once
 
 #include "TracingIndex.h"
-#include "../../../Engine/DeviceExchange/SwapchainExchange.h"
+#include "../../../Engine/GeometricRaster/TriangleIndex.h"
 #include <vector>
 
 namespace Frontier::ProjectZero {
@@ -20,11 +20,9 @@ public:
     RayTracingSolver() noexcept;
     ~RayTracingSolver() noexcept = default;
 
-    void                    ConstructCornellBoxScene() noexcept;
-
-    // An OPEN scene: ground and horizon with nothing overhead. Where the Cornell box is a closed room,
-    //    this is the framing complement — most of the default view misses geometry.
-    void                    ConstructOutdoorScene() noexcept;
+    // The single open Project Zero scene: ground and horizon with nothing overhead, framed around test materials
+    //    rather than a Cornell room, showroom or scene selector.
+    void                    ConstructCelestialTestScene() noexcept;
     void                    AppendTriangle(const Vector3& v0, const Vector3& v1, const Vector3& v2, uint32_t MaterialIdx) noexcept;
     void                    AppendQuad(const Vector3& v0, const Vector3& v1, const Vector3& v2, const Vector3& v3, uint32_t MaterialIdx) noexcept;
     void                    AppendBox(const Vector3& Center, const Vector3& Extents, float RotationDegrees, uint32_t MaterialIdx) noexcept;

@@ -185,6 +185,7 @@ public:
     float SkyTint[3]     = { 1.0f, 1.0f, 1.0f };
     float SkyBrightness  = 1.0f;
     float SunDirect      = 1.0f;   // [x] direct-sun gain on top of the panel's 0.11 (the Sun row's Direct slider)
+    float SunDiscGain    = Frontier::kSunDiscGain; // [x] bounded visible disc gain, shared by CPU and packed GPU paths
     float GroundAlbedo[3] = { 0.19f, 0.17f, 0.14f };
     float StarBrightness = 1.0f;
     float StarSize       = 1.0f;
