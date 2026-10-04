@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Frontier — Development Editor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/editor.css">
+</head>
+<body>
+<!-- ══════════════════════════════════════════════════════════════════════════════════════════
+     FrontierDockHost — the fullscreen dock host (EditorHost.cpp). Three docked windows over one
+     dockspace: Outliner (left column, 316 px) · Viewport (centre) · Inspector (right, 340 px).
+     The trapezoid tab sheet, the geometry tokens and the colour tokens are EditorStyleSpecification.
+     ══════════════════════════════════════════════════════════════════════════════════════════ -->
+<div id="dockhost">
+
+  <!-- ── LEFT COLUMN · Outliner ─────────────────────────────────────────────────────────────── -->
+  <section class="dock-column" id="col-outliner" data-col="outliner">
+    <div class="tab-strip">
+      <div class="tab active" data-window="outliner">
+        <span class="tab-label">Outliner</span>
+        <button class="tab-close" title="Close tab" aria-label="Close Outliner tab">×</button>
+      </div>
+      <button class="tab-add" id="outliner-add" title="Add an entity  (Shift A)" aria-label="Add">+</button>
+    </div>
+    <div class="window-body outliner-body">
+      <header class="panel-head" id="outliner-head"></header>
+      <div class="scene-stats" id="outliner-tiles"></div>
+      <div class="search-row" id="outliner-search"></div>
+      <div class="filters" id="outliner-chips"></div>
+      <div class="tree" id="outliner-tree"></div>
+      <footer class="foot-strip" id="outliner-foot"></footer>
+    </div>
+  </section>
+
+  <!-- ── CENTRE · Viewport ──────────────────────────────────────────────────────────────────── -->
+  <section class="dock-column centre" id="col-viewport" data-col="viewport">
+    <div class="tab-strip">
+      <div class="tab active" data-window="viewport">
+        <span class="tab-label">Viewport</span>
+        <button class="tab-close" title="Close tab" aria-label="Close Viewport tab">×</button>
+      </div>
+    </div>
+    <div class="window-body viewport-body">
+      <div class="viewport-rail" id="vp-rail"></div>
+      <div class="view-frame" id="vp-frame">
+        <canvas id="vp-canvas"></canvas>
+        <div class="view-hint" id="vp-hint"></div>
+        <div class="gizmo-readout" id="vp-gizmo-readout" hidden></div>
+      </div>
+      <div class="console" id="vp-console" hidden></div>
+      <footer class="foot-strip vp-foot" id="vp-foot"></footer>
+    </div>
+  </section>
+
+  <!-- ── RIGHT · Inspector ──────────────────────────────────────────────────────────────────── -->
+  <section class="dock-column" id="col-inspector" data-col="inspector">
+    <div class="tab-strip">
+      <div class="tab active" data-window="inspector">
+        <span class="tab-label">Inspector</span>
+        <button class="tab-close" title="Close tab" aria-label="Close Inspector tab">×</button>
+      </div>
+    </div>
+    <div class="window-body inspector-body" id="inspector-body"></div>
+  </section>
+</div>
+
+<!-- ── The Construct window (NativeConstructPanel) — opened with Shift A or the tab add ─────── -->
+<div class="modal-scrim" id="construct-scrim" hidden>
+  <div class="construct-window" role="dialog" aria-label="Construct">
+    <div class="construct-head">
+      <span class="construct-title">CONSTRUCT&nbsp;&nbsp;/&nbsp;&nbsp;FRONTIER</span>
+      <span class="construct-steps"><b id="construct-step1">01 Entities</b>&nbsp;&nbsp;&gt;&nbsp;&nbsp;<b id="construct-step2">02 Properties</b></span>
+      <button class="construct-close" id="construct-close" aria-label="Close Construct">×</button>
+    </div>
+    <div class="construct-sep"></div>
+    <div class="construct-slides" id="construct-slides">
+      <div class="construct-catalogue" id="construct-catalogue">
+        <input type="text" class="construct-search" id="construct-search"
+               placeholder="Search existing engine entities...">
+        <div class="construct-cols">
+          <div class="construct-cats" id="construct-cats"></div>
+          <div class="construct-tiles" id="construct-tiles"></div>
+        </div>
+        <p class="construct-note" id="construct-note">Existing scene records only. Select an entity to activate it or edit its native properties.</p>
+      </div>
+      <div class="construct-properties" id="construct-properties">
+        <div class="construct-prophead">
+          <button class="construct-back" id="construct-back">&lt; Entities</button>
+          <span class="construct-proplabel" id="construct-proplabel"></span>
+          <button class="construct-enable" id="construct-enable" hidden>Enable in world</button>
+        </div>
+        <div class="construct-sep"></div>
+        <div class="construct-inspector" id="construct-inspector"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── The Control Centre shade (gear) ─────────────────────────────────────────────────────── -->
+<div class="shade" id="shade" hidden>
+  <div class="shade-card" id="shade-card"></div>
+</div>
+
+<!-- ── Toasts (NotificationQueue) ──────────────────────────────────────────────────────────── -->
+<div class="toasts" id="toasts"></div>
+
+<!-- ── Menus / popups anchored by JS ───────────────────────────────────────────────────────── -->
+<div class="popup" id="popup" hidden></div>
+
+<script src="js/icons.js"></script>
+<script src="js/scene.js"></script>
+<script src="js/widgets.js"></script>
+<script src="js/outliner.js"></script>
+<script src="js/inspector.js"></script>
+<script src="js/viewport.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
