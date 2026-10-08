@@ -5,7 +5,7 @@
 // Heights are in metres. The grid covers worldSize × worldSize metres, resolution N × N.
 
 import { SimplexNoise, hash2, smoothstep, lerp, clamp01 } from './noise.js';
-import { makeBedTable, bedAt, bedJitter, bedHardness } from './strata-model.js';
+import { makeBedTable, bedAt, bedJitter, bedHardness, makeStrataFrame, strataPlanOffset, subTerrace } from './strata-model.js';
 
 export function synthesizeBase(params, progress = () => {}) {
   const N = params.resolution;
@@ -141,6 +141,7 @@ export function applyStrata(height, params, progress = () => {}, outcrop = null)
   const slopeMaskLo = 0.12, slopeMaskHi = 0.55;
   const table = makeBedTable(params);
   const lateral = params.strataLateral == null ? 0.18 : params.strataLateral;
+  const frame = makeStrataFrame(params);
   const bed = {};
 
   // Precompute slope of the un-terraced field so terracing targets steep ground.
@@ -162,12 +163,15 @@ export function applyStrata(height, params, progress = () => {}, outcrop = null)
       const idx = j * N + i;
       const h = height[idx];
 
-      // Work in the tilted frame so bands dip.
+      // Work in the tilted frame so bands dip; fault blocks + lateral warp shift the frame
+      // (Gaea broken / lateral stratification — the SAME frame feeds the 3-D chunks and the bed
+      // colours, so what was carved is what is painted).
       const tilt = gx * x + gz * z;
       // Lateral thickness jitter keeps layers from looking machine-cut (same expression as the
       // shader and the 3-D chunks).
       const jitter = bedJitter(x, z, lateral);
-      bedAt(table, (h + tilt) / jitter, bed);
+      const planOff = strataPlanOffset(x, z, frame);
+      bedAt(table, (h + tilt + planOff) / jitter, bed);
       const f = bed.f, bi = bed.index;
 
       // Bed hardness from the stratigraphic column + intra-layer variation (lenses, joints).
@@ -175,12 +179,17 @@ export function applyStrata(height, params, progress = () => {}, outcrop = null)
       hard = clamp01(hard + 0.12 * detail.fbm(x * 0.006 + bi * 3.7, z * 0.006, 3));
       hard = lerp(0.35, hard, params.hardnessContrast);
 
+      // Substrata: secondary bedding inside each bed (Gaea Substrata), strongest on steep ground
+      // where the main benches read. Monotone in f, so the height remap never folds.
+      const sm0 = smoothstep(slopeMaskLo, slopeMaskHi, slope[idx]);
+      const [fs] = subTerrace(f, frame.subCount, frame.subStrength, 0.25 + 0.75 * sm0);
+
       // Terrace profile: gain curve with per-layer steepness; thin beds step less.
       const k = lerp(1.2, 9, hard);
-      const fk = Math.pow(f, k);
-      const fp = fk / (fk + Math.pow(1 - f, k));
+      const fk = Math.pow(fs, k);
+      const fp = fk / (fk + Math.pow(1 - fs, k));
       const thin = smoothstep(0.1, 0.45, bed.thick / band);
-      const terraced = (table.tops[bi] - bed.thick + lerp(f, fp, thin) * bed.thick) * jitter - tilt;
+      const terraced = (table.tops[bi] - bed.thick + lerp(fs, fp, thin) * bed.thick) * jitter - tilt - planOff;
 
       const sm = smoothstep(slopeMaskLo, slopeMaskHi, slope[idx]);
       let amount = strength * lerp(0.25, 1, sm);

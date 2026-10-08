@@ -45,6 +45,28 @@ export const defaults = {
   strataDip: 4,             // [°]
   strataDipDirection: 35,   // [°]
   hardnessContrast: 0.8,
+  strataBreak: 0,           // [bands]
+  strataFaultScale: 120,    // [m]
+  strataFaultWidth: 6,      // [m]
+  strataSub: 0,
+  strataSubCount: 3,
+  strataLateralMode: 0,     // [bands]
+  // Rugged outcrops (Gaea Rugged / Outcrops / Rocky)
+  ruggedAmount: 0,
+  ruggedScale: 45,          // [m]
+  ruggedRelief: 8,          // [m]
+  ruggedBreakage: 0.5,
+  ruggedCrevice: 0.6,
+  ruggedDensity: 0,
+  ruggedOctaves: 2,
+  ruggedSweep: 1,
+  ruggedCoverage: 0.6,
+  ruggedSlopeMin: 12,       // [°]
+  ruggedSlopeMax: 75,       // [°]
+  ruggedHardBias: 0.5,
+  ruggedWarp: 0.4,
+  ruggedReverse: 0,
+  ruggedSeed: 11,
   // Erosion
   droplets: 180000,
   inertia: 0.08,
@@ -90,6 +112,7 @@ export const defaults = {
   sdfPits: 0.3,
   sdfJoints: 0.5,
   sdfRough: 0.5,
+  sdfRugged: 0.8,
   sdfMaxChunks: 400,
   // Cliff depth (mesh displacement)
   overhang: 3.5,            // [m]
@@ -396,6 +419,18 @@ Object.assign(presets, {
     snowOn: 0, vegetation: 0.85, mossiness: 0.9, waterEnabled: 1, seaLevel: 0, droplets: 200000, talusSoft: 36, talusHard: 88,
     overhang: 4, rockDensity: 0.25, sunElevation: 45, sunAzimuth: 170, turbidity: 6, fogDensity: 0.45,
   },
+  'Rugged escarpment': {
+    palette: 'granite', mountainHeight: 640, baseElevation: 60, baseFrequency: 1.4, ridgeSharpness: 2.4, peakPower: 1.5, warpStrength: 0.7,
+    reliefFrequency: 1.1, reliefContrast: 0.8, strataBand: 24, strataStrength: 0.9, strataDip: 5, strataDipDirection: 60, hardnessContrast: 0.9, plateauStrength: 0, canyonDepth: 0,
+    strataBreak: 0.7, strataFaultScale: 150, strataFaultWidth: 8, strataSub: 0.6, strataSubCount: 3, strataLateralMode: 0.5,
+    ruggedAmount: 0.85, ruggedScale: 55, ruggedRelief: 10, ruggedBreakage: 0.65, ruggedCrevice: 0.7, ruggedDensity: -0.2, ruggedCoverage: 0.75, ruggedSlopeMin: 10, ruggedHardBias: 0.4,
+    droplets: 200000, erodeSpeed: 0.4, thermalIterations: 36, talusSoft: 34, talusHard: 84,
+    snowOn: 1, snowLine: 560, snowSlope: 50, vegetation: 0.4, vegSlope: 40, mossiness: 0.35, waterEnabled: 0, seaLevel: -100,
+    rockDensity: 0.6, rockSlopeMax: 55, rockSizeMin: 1, rockSizeMax: 12, pebbleDensity: 0.6, gravelAmount: 0.9,
+    sdfOn: 1, sdfAngle: 56, sdfUndercut: 7, sdfRugged: 0.9, sdfJoints: 0.6, overhang: 3,
+    riverCatchment: 0.05, riverBraiding: 0.2, riverLakes: 1,
+    peelStrength: 0.5, flakeStrength: 0.7, sunElevation: 28, sunAzimuth: 220, turbidity: 4, fogDensity: 0.35,
+  },
 });
 
 export const palettes = {
@@ -475,6 +510,42 @@ export const groups = [
         ['strataDip', 'Dip angle', 0, 25, 0.5, '°', 'Tilt of the bedding planes'],
         ['strataDipDirection', 'Dip direction', 0, 360, 5, '°', 'Compass direction the beds dip towards'],
       ] },
+      { title: 'Broken plates', controls: [
+        ['strataBreak', 'Fault offset', 0, 1.5, 0.05, 'bands', 'Gaea-style broken strata: fault blocks shift the column up/down so beds end at scarps instead of wrapping the whole tile. 0 = continuous beds'],
+        ['strataFaultScale', 'Block size', 20, 400, 5, 'm', 'Width of the fault blocks'],
+        ['strataFaultWidth', 'Fault width', 1, 30, 0.5, 'm', 'Scarps stay continuous over this width so the heightfield never tears and the 3-D chunks stay watertight — keep it above the grid cell'],
+      ] },
+      { title: 'Substrata & lateral', controls: [
+        ['strataSub', 'Substrata', 0, 1, 0.05, '', 'Secondary bedding inside each bed (Gaea Substrata): fine terraces on the heightfield, lips in the 3-D carve, seams in the paint'],
+        ['strataSubCount', 'Sub-beds per bed', 2, 6, 1, '', ''],
+        ['strataLateralMode', 'Lateral drift', 0, 1.5, 0.05, 'bands', 'Gaea Lateral mode: packages swell, pinch and drift across the tile instead of stacking flat'],
+      ] },
+    ],
+  },
+  {
+    id: 'rugged', name: 'Rugged', type: 'Outcrops & shattered rock', stage: 'terrain', color: '#c98a5f',
+    cards: [
+      { title: 'Rugged outcrops', controls: [
+        ['ruggedAmount', 'Rugged amount', 0, 1, 0.05, '', 'Gaea Rugged / Outcrops / Rocky in one node: shattered plates, crevices and fragmentation broken into the relief before erosion, so water weathers them. 0 = off'],
+        ['ruggedScale', 'Plate scale', 8, 200, 1, 'm', 'Width of the broken plates'],
+        ['ruggedRelief', 'Plate relief', 0, 30, 0.5, 'm', 'How far plates rise and sink — the broad shape is preserved, only detail is added'],
+        ['ruggedBreakage', 'Breakage', 0, 1, 0.05, '', 'Clean tilted plates → fully shattered ground'],
+        ['ruggedCoverage', 'Coverage', 0, 1, 0.05, '', 'Share of the tile with outcrop fields'],
+      ] },
+      { title: 'Crevices & detail', controls: [
+        ['ruggedCrevice', 'Crevice depth', 0, 1, 0.05, '', 'V slots carved along the plate borders'],
+        ['ruggedDensity', 'Density', -1, 1, 0.05, '', '−1 deep wide crevices · +1 fused plates with small-rock pockets (Gaea Density)'],
+        ['ruggedOctaves', 'Detail octaves', 1, 4, 1, '', 'Iterations of fragmentation detail'],
+        ['ruggedSweep', 'Sweep', 0, 4, 1, '', 'Lateral smoothing passes on the broken rock (Gaea Sweep)'],
+        ['ruggedWarp', 'Warp', 0, 1, 0.05, '', 'Bend the plate lattice into curved shapes'],
+        ['ruggedReverse', 'Reverse', 0, 1, 1, '', 'Invert the breakage: pits become pinnacles'],
+        ['ruggedSeed', 'Rugged seed', 1, 999, 1, '', 'Plate layout without touching the landform seed'],
+      ] },
+      { title: 'Masking', controls: [
+        ['ruggedSlopeMin', 'Slope · min', 0, 60, 1, '°', 'No rugged detail on ground gentler than this'],
+        ['ruggedSlopeMax', 'Slope · max', 20, 89, 1, '°', 'No rugged detail on ground steeper than this'],
+        ['ruggedHardBias', 'Hard-rock bias', -1, 1, 0.05, '', '−1 only on soft beds · 0 everywhere · +1 only on hard caprock'],
+      ] },
     ],
   },
   {
@@ -489,6 +560,7 @@ export const groups = [
         ['sdfJoints', 'Joints', 0, 1.5, 0.05, '', 'Near-vertical joint cuts and chimneys'],
         ['sdfPits', 'Pits', 0, 1, 0.05, '', 'Weathering hollows'],
         ['sdfRough', 'Roughness', 0, 1.5, 0.05, '', 'Fine 3D roughness on the carved faces'],
+        ['sdfRugged', 'Rugged carve', 0, 1.5, 0.05, '', 'Crisp crevice slots along the rugged plates inside the 3-D chunks (needs Rugged amount > 0; band-limited to the voxel size so it fades instead of aliasing)'],
         ['sdfBlend', 'Blend margin', 1, 5, 1, 'cells', 'Cells over which the 3D field fades back to the plain heightfield'],
         ['sdfChunk', 'Chunk size', 8, 32, 8, 'cells', ''],
         ['sdfVoxel', 'Voxels per cell', 0, 3, 1, '', '0 = auto: the finest resolution that fits the voxel budget. 2 = voxels half the grid cell (8× the work), 3 = a third'],
@@ -804,7 +876,7 @@ export const groups = [
 ];
 
 export const outlinerSections = [
-  { label: 'TERRAIN', ids: ['landform', 'strata', 'relief', 'erosion', 'features'] },
+  { label: 'TERRAIN', ids: ['landform', 'strata', 'rugged', 'relief', 'erosion', 'features'] },
   { label: 'DRESSING', ids: ['rocks', 'material', 'flakes', 'exfoliation', 'cover'] },
   { label: 'ENVIRONMENT', ids: ['sun', 'water', 'viewport'] },
 ];

@@ -13,7 +13,8 @@
 //          piecewise-linear border → watertight with the terrain mesh, which skips the covered quads
 
 import { SimplexNoise, GradientNoise3, hash2, smoothstep, lerp, clamp01 } from './noise.js';
-import { makeBedTable, bedAt, bedJitter, bedHardness } from './strata-model.js';
+import { makeBedTable, bedAt, bedJitter, bedHardness, makeStrataFrame, strataPlanOffset, subTerrace } from './strata-model.js';
+import { ruggedPlates, ruggedFieldParams } from './rugged.js';
 import { NO_WATER } from './features.js';
 import { edgeTable, triTable } from './mc-tables.js';
 
@@ -128,10 +129,16 @@ export function selectChunks(fine, v) {
 export function packChunkJobs(fine, chunks, v) {
   const { resolution: N } = fine;
   const { C, list } = chunks;
-  const names = ['height', 'hardness', 'deposit', 'flow', 'cavity', 'road', 'river', 'lake', 'waterLevel', 'sdfWeight', 'outcrop'];
+  const names = ['height', 'hardness', 'deposit', 'flow', 'cavity', 'road', 'river', 'lake', 'waterLevel', 'sdfWeight', 'outcrop', 'rugged'];
   const jobs = [], transfer = [];
   const cell = fine.worldSize / (N - 1);
   const maxCarve = carveReach(v);
+  // Nodal heightfield gradients (central differences on the FULL field, clamped only at the map
+  // border). Packed like any other map and bilinearly sampled in the chunk — unlike a per-slice
+  // finite-difference stencil this gives every chunk IDENTICAL gradients on shared faces, so
+  // neighbouring chunks evaluate the same carve field there and their border vertices twin-match
+  // (watertight inter-chunk seams even on high-curvature rugged / faulted ground).
+  const H = fine.height;
   for (const c of list) {
     const Sx = c.cw + 1, Sz = c.ch + 1;
     const maps = {};
@@ -142,6 +149,16 @@ export function packChunkJobs(fine, chunks, v) {
       else if (name === 'waterLevel') out.fill(NO_WATER);
       maps[name] = out; transfer.push(out.buffer);
     }
+    const gx = new Float32Array(Sx * Sz), gz = new Float32Array(Sx * Sz);
+    for (let j = 0; j < Sz; j++) {
+      const gj = c.j0 + j, j0 = Math.max(0, gj - 1), j1 = Math.min(N - 1, gj + 1);
+      for (let i = 0; i < Sx; i++) {
+        const gi = c.i0 + i, i0 = Math.max(0, gi - 1), i1 = Math.min(N - 1, gi + 1);
+        gx[j * Sx + i] = (H[gj * N + i1] - H[gj * N + i0]) / ((i1 - i0) * cell);
+        gz[j * Sx + i] = (H[j1 * N + gi] - H[j0 * N + gi]) / ((j1 - j0) * cell);
+      }
+    }
+    maps.gx = gx; maps.gz = gz; transfer.push(gx.buffer, gz.buffer);
     jobs.push({ ci: c.ci, cj: c.cj, i0: c.i0, j0: c.j0, cw: c.cw, ch: c.ch, hmin: c.hmin, hmax: c.hmax, slopeF: c.slopeF, maps });
   }
   // voxel resolution: explicit, or the finest that fits the voxel budget (only the band around the
@@ -156,11 +173,18 @@ export function packChunkJobs(fine, chunks, v) {
   return { jobs, transfer, meta: { N, size: fine.worldSize, C, k, cell: cell / k } };
 }
 
-// largest distance the carve can move the surface along the normal
+// largest distance the carve can move the surface along the normal — every carve term must be
+// accounted here or the voxel band misses the surface (holes) / wastes voxels. Rugged crevices
+// included: the band covers the deepest slot.
 export function carveReach(v) {
   const undercut = Math.max(0, v.sdfUndercut == null ? 6 : v.sdfUndercut);
   const pits = v.sdfPits == null ? 0.3 : v.sdfPits, joints = v.sdfJoints == null ? 0.5 : v.sdfJoints;
-  return undercut * (1 + 0.5 * pits + 0.9 * joints) + 1.5;
+  let rug = 0;
+  if ((v.ruggedAmount || 0) > 0 && (v.sdfRugged == null ? 0.8 : v.sdfRugged) > 0) {
+    const fp = ruggedFieldParams(v);
+    rug = (fp.depthM + fp.pocketM) * Math.min(1, v.ruggedAmount) * (v.sdfRugged == null ? 0.8 : v.sdfRugged);
+  }
+  return undercut * (1 + 0.5 * pits + 0.9 * joints) + rug + 1.5;
 }
 
 // ---- strata hardness at a 3-D point (same model as heightfield.applyStrata) -----------------------
@@ -173,21 +197,31 @@ export function makeStrataSampler(params) {
   const contrast = params.hardnessContrast;
   const table = makeBedTable(params);
   const lateral = params.strataLateral == null ? 0.18 : params.strataLateral;
+  const frame = makeStrataFrame(params);
   function column(xw, zw) {
     const x = xw + size / 2, z = zw + size / 2;
-    return { x, z, tilt: gx * x + gz * z, jitter: bedJitter(x, z, lateral), layers: new Map(), bed: {} };
+    return { x, z, tilt: gx * x + gz * z, jitter: bedJitter(x, z, lateral), planOff: strataPlanOffset(x, z, frame), layers: new Map(), bed: {} };
   }
-  // returns [hardness, fraction within bed (0 base → 1 top), bed thickness, bed index]
+  // returns [hardness, fraction within bed (0 base → 1 top), bed thickness, bed index, sub-bed fraction]
   function at(col, y) {
-    const bed = bedAt(table, (y + col.tilt) / col.jitter, col.bed);
+    const bed = bedAt(table, (y + col.tilt + col.planOff) / col.jitter, col.bed);
     const bi = bed.index;
     let lens = col.layers.get(bi);
     if (lens === undefined) {
       lens = 0.12 * detail.fbm(col.x * 0.006 + bi * 3.7, col.z * 0.006, 3);
       col.layers.set(bi, lens);
     }
-    const hard = lerp(0.35, clamp01(bedHardness(bed) + lens), contrast);
-    return [hard, bed.f, bed.thick, bi];
+    let hard = lerp(0.35, clamp01(bedHardness(bed) + lens), contrast);
+    // substrata: every sub-bed grows a hard lip near its top so the carve leaves fine ledges that
+    // line up with the heightfield's sub-terraces. The pulse is 0 at both ends of the sub-bed, so
+    // it stays continuous across sub-bed wraps (no cracks in the iso-surface).
+    let subF = 0;
+    if (frame.subStrength > 0) {
+      subF = subTerrace(bed.f, frame.subCount, 1, 1)[1];
+      const lip = smoothstep(0.5, 0.7, subF) * (1 - smoothstep(0.82, 0.99, subF));
+      hard = clamp01(hard + (lip - 0.3) * frame.subStrength * 0.6);
+    }
+    return [hard, bed.f, bed.thick, bi, subF];
   }
   return { column, at, table, sample: (xw, zw, y) => at(column(xw, zw), y) };
 }
@@ -223,13 +257,8 @@ export function buildChunkGeometry(job, meta, v, ctx) {
     const a = arr[j * Sx + i], b = arr[j * Sx + i + 1], c = arr[(j + 1) * Sx + i], d = arr[(j + 1) * Sx + i + 1];
     return (a + (b - a) * fu) * (1 - fw) + (c + (d - c) * fu) * fw;
   };
-  const grad = (u, w) => {
-    const i = Math.min(Sx - 2, Math.max(0, Math.floor(u))), j = Math.min(Sz - 2, Math.max(0, Math.floor(w)));
-    const fu = Math.min(1, Math.max(0, u - i)), fw = Math.min(1, Math.max(0, w - j));
-    const h = m.height;
-    const a = h[j * Sx + i], b = h[j * Sx + i + 1], c = h[(j + 1) * Sx + i], d = h[(j + 1) * Sx + i + 1];
-    return [((b - a) * (1 - fw) + (d - c) * fw) / cell, ((c - a) * (1 - fu) + (d - b) * fu) / cell];
-  };
+  // gradient = bilinear sampling of the packed nodal gradients (identical on shared faces)
+  const grad = (u, w) => [bil(m.gx, u, w), bil(m.gz, u, w)];
 
   const undercut = Math.max(0, v.sdfUndercut == null ? 6 : v.sdfUndercut);
   const pocketScale = Math.max(1, v.sdfPockets || 12);
@@ -241,6 +270,20 @@ export function buildChunkGeometry(job, meta, v, ctx) {
   const bedPower = v.sdfBedContrast == null ? 1 : v.sdfBedContrast;
   const band = Math.max(2, v.strataBand || 26);
   const hasOutcrop = !!m.outcrop;
+  const hasRugged = !!m.rugged;
+
+  // rugged outcrops in 3-D: crisp crevices along the same plates the heightfield broke (the broad
+  // plate relief is already in h — the chunk carves only the sub-cell V slots the grid couldn't
+  // hold). Band-limited like the roughness: never narrower than 5 voxels, fading instead of
+  // aliasing when the voxels are coarse.
+  const rugAmount = Math.min(1, v.ruggedAmount || 0);
+  const rugSdf = v.sdfRugged == null ? 0.8 : v.sdfRugged;
+  const rugOn = rugAmount > 0 && rugSdf > 0 && hasRugged;
+  const rugFp = rugOn ? ruggedFieldParams(v) : null;
+  const rugWidthEff = rugOn ? Math.max(rugFp.widthCells, (vox * 5) / rugFp.scale) : 0;
+  const rugDepth = rugOn ? rugFp.depthM * rugAmount * rugSdf * 0.7 * (rugFp.widthCells / rugWidthEff) : 0;
+  const rugPockets = rugOn && rugFp.pocketM > 0 && (rugFp.scale / 3.1) >= vox * 5 ? 1 : 0;
+  const rugPocketM = rugOn ? rugFp.pocketM * rugAmount * rugSdf : 0;
 
   const maxCarve = carveReach(v);
   // everything that depends on the plan position only
@@ -252,7 +295,12 @@ export function buildChunkGeometry(job, meta, v, ctx) {
     const slopeF = Math.sqrt(1 + gx * gx + gz * gz);
     const steep = smoothstep(0.7, 1.7, Math.hypot(gx, gz));
     const oc = hasOutcrop ? bil(m.outcrop, u, wq) : 0;
-    return { x, z, h, w, slopeF, steep, oc, strata: w > 1e-6 && steep > 0 ? ctx.strata.column(x, z) : null };
+    const rug = hasRugged ? bil(m.rugged, u, wq) : 0;
+    // rugged plates depend on (x, z) only — evaluate once per column, not per voxel
+    const rugP = rugOn && rug > 0.001 && w > 1e-6 && steep > 0
+      ? ruggedPlates(x + size / 2, z + size / 2, rugFp.scale, rugFp.seed, rugFp.warp, rugWidthEff, rugPockets)
+      : null;
+    return { x, z, h, w, slopeF, steep, oc, rug, rugP, strata: w > 1e-6 && steep > 0 ? ctx.strata.column(x, z) : null };
   }
   function carve(col, y) {
     const { x, z } = col;
@@ -278,7 +326,14 @@ export function buildChunkGeometry(job, meta, v, ctx) {
     const rough = ctx.rough.fbm(x * roughFreq, y * roughFreq, z * roughFreq, 2, 2.1, 0.55) * roughAmp;
     // embedded boulders are massive rock: no bedding undercuts, spheroidal weathering only
     if (col.oc > 0) { soft *= 1 - col.oc; joint *= 1 - col.oc * 0.5; }
-    const d = undercut * (soft * (0.3 + 0.7 * pocket) + joint * 0.6 + fallen * 0.9 + pit * 0.5 + col.oc * 0.12 * pocket) + rough;
+    let d = undercut * (soft * (0.3 + 0.7 * pocket) + joint * 0.6 + fallen * 0.9 + pit * 0.5 + col.oc * 0.12 * pocket) + rough;
+    // rugged plates: V slots along the plate borders (+ small-rock pits when fused), evaluated
+    // per column above in corner-frame coords — the same field as the heightfield operator, so
+    // slots line up with the broken relief.
+    if (col.rugP) {
+      const crevice = col.rugP[1], pockets = col.rugP[2];
+      d += (Math.pow(crevice, 1.3) * rugDepth + pockets * rugPocketM) * col.rug;
+    }
     return d * col.steep * col.w;
   }
   function fCol(col, y) {
@@ -397,8 +452,11 @@ export function buildChunkGeometry(job, meta, v, ctx) {
     const cu = (x - x0) / cell, cw = (z - z0) / cell;
     aux[n * 4] = bil(m.deposit, cu, cw);
     aux[n * 4 + 1] = bil(m.flow, cu, cw);
-    // hardness from the 3-D strata model so beds read correctly on the undercut faces
-    aux[n * 4 + 2] = ctx.strata.sample(x, z, y)[0];
+    // hardness from the 3-D strata model so beds read correctly on the undercut faces;
+    // rugged plates read as exposed hard rock, matching the heightfield's hardness pin
+    let hard3 = ctx.strata.sample(x, z, y)[0];
+    if (hasRugged) hard3 = Math.max(hard3, bil(m.rugged, cu, cw) * 0.75);
+    aux[n * 4 + 2] = hard3;
     aux[n * 4 + 3] = bil(m.cavity, cu, cw);
     aux2[n * 4] = bil(m.road, cu, cw);
     aux2[n * 4 + 1] = bil(m.river, cu, cw);

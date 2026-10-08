@@ -92,6 +92,7 @@ export function refineField(field, v) {
     height: field.height.slice(), hardness: field.hardness, deposit: field.deposit, flow: field.flow, cavity: field.cavity, slope: field.slope,
     river: field.river || empty(), waterLevel: (field.waterLevel || empty().fill(NO_WATER)).slice(), lakeSim: field.lake || empty(),
     outcrop: field.outcrop || null,
+    rugged: field.rugged || null,
     stats: field.stats, base: field,
   } : {
     resolution: M,
@@ -106,6 +107,7 @@ export function refineField(field, v) {
     waterLevel: upsampleWaterLevel(field.waterLevel || empty().fill(NO_WATER), N, k),
     lakeSim: upsampleMap(field.lake || empty(), N, k, true),
     outcrop: field.outcrop ? upsampleMap(field.outcrop, N, k, true) : null,
+    rugged: field.rugged ? upsampleMap(field.rugged, N, k, true) : null,
     stats: field.stats,
     base: field,
   };

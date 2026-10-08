@@ -27,6 +27,42 @@ export function hash2(x, y, seed = 0) {
   return (h >>> 0) / 4294967296;
 }
 
+// 32-bit integer hash with the exact bit behaviour of the GLSL `plateHash()` in
+// surface-shader.js (unsigned 32-bit wrap on every op), so Voronoi plates evaluated in JS
+// (heightfield rugged relief, strata fault offsets, SDF carve) and in GLSL (bed lookup,
+// crevice shading) agree on which cell owns each point. Seeds must fit in 24 bits when they
+// cross into the shader (float uniform precision).
+export function plateHash(x, y, seed) {
+  let h = (Math.imul(x | 0, 374761393) ^ Math.imul(y | 0, 668265263) ^ Math.imul(seed | 0, 2246822519)) | 0;
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  h ^= h >>> 16;
+  return h >>> 0;
+}
+
+// Jittered-grid Voronoi in cell units. Returns [v1, v2, edge] where v1/v2 are the F1/F2 cells'
+// values in [-1, 1] (third hash stream) and edge = F2 − F1 (0 on borders, ~1 in cell interiors).
+// Feature-point jitter is ±0.45 cells, so F1 is always found in the 3×3 neighbourhood.
+// Mirrored by `voronoi2()` in surface-shader.js — keep the two in lock-step.
+export function voronoi2(x, z, seed) {
+  const ix = Math.floor(x), iz = Math.floor(z);
+  let f1 = 8, f2 = 8, v1 = 0, v2 = 0;
+  for (let dz = -1; dz <= 1; dz++) {
+    for (let dx = -1; dx <= 1; dx++) {
+      const cx = ix + dx, cz = iz + dz;
+      const hx = plateHash(cx, cz, seed) / 4294967296;
+      const hz = plateHash(cx, cz, (seed ^ 0x9e3779b9) | 0) / 4294967296;
+      const hv = plateHash(cx, cz, (seed ^ 0x51ed2703) | 0) / 4294967296;
+      const px = cx + 0.5 + (hx - 0.5) * 0.9;
+      const pz = cz + 0.5 + (hz - 0.5) * 0.9;
+      const ddx = x - px, ddz = z - pz;
+      const d = Math.sqrt(ddx * ddx + ddz * ddz);
+      if (d < f1) { f2 = f1; v2 = v1; f1 = d; v1 = hv * 2 - 1; }
+      else if (d < f2) { f2 = d; v2 = hv * 2 - 1; }
+    }
+  }
+  return [v1, v2, f2 - f1];
+}
+
 export class SimplexNoise {
   constructor(seed = 1) {
     const rand = mulberry32(seed);

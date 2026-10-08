@@ -33,11 +33,12 @@ const extra = {
 Object.assign(paths, extra);
 
 export const groupIcons = {
-  landform: 'mountain', strata: 'strata', relief: 'layers', erosion: 'droplets', features: 'route', water: 'waves', rocks: 'box', material: 'palette', flakes: 'sparkles', exfoliation: 'layers', cover: 'droplets', sun: 'sun', viewport: 'monitor',
+  landform: 'mountain', strata: 'strata', rugged: 'gem', relief: 'layers', erosion: 'droplets', features: 'route', water: 'waves', rocks: 'box', material: 'palette', flakes: 'sparkles', exfoliation: 'layers', cover: 'droplets', sun: 'sun', viewport: 'monitor',
 };
 export const cardIcons = {
   'Preset': 'sparkles', 'Elevation': 'mountain', 'Relief': 'wind', 'Mesa & canyon': 'strata', 'Grid': 'grid',
-  'Bedding': 'strata', 'Face displacement': 'layers', 'Geological dip': 'sliders', 'Hydraulic erosion': 'droplets', 'Thermal weathering': 'mountain',
+  'Bedding': 'strata', 'Broken plates': 'strata', 'Substrata & lateral': 'strata', 'Rugged outcrops': 'gem', 'Crevices & detail': 'sliders', 'Masking': 'layers',
+  'Face displacement': 'layers', 'Geological dip': 'sliders', 'Hydraulic erosion': 'droplets', 'Thermal weathering': 'mountain',
   'Scatter': 'box', 'Draw': 'route', 'Features': 'layers', 'Rivers': 'waves', 'Simulated rivers': 'waves', 'Drawn river guides': 'route', 'Dunes': 'wind', 'True-3D cliffs (SDF chunks)': 'box', 'Gravel stones': 'gem', 'Roads': 'route', 'Lakes': 'droplets', 'Water in channels': 'waves', 'Sea level': 'waves', 'Appearance': 'palette', 'Mesh detail': 'grid', 'Rock shape': 'gem', 'Rock type': 'palette', 'Colours': 'palette', 'Strata': 'strata', 'Grain': 'grid', 'Oxide & cavity': 'droplets', 'Material response': 'sliders',
   'Flakes': 'gem', 'Plate look': 'sparkles', 'Spalls': 'layers', 'Layer 1 · base chips': 'gem', 'Layer 2 · laminae': 'gem', 'Layer 3 · fine grain': 'sparkles', 'Isolate layer': 'layers', 'Runoff': 'droplets', 'Gravel': 'box', 'Vegetation': 'sparkles', 'Moss': 'sparkles', 'Snow': 'wind', 'Sun direction': 'sun', 'Atmosphere': 'wind', 'Water': 'waves', 'Display': 'monitor', 'Export': 'download',
 };

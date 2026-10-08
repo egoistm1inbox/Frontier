@@ -8,6 +8,7 @@ import { hydraulicErosion, thermalErosion, blurField } from './erosion.js';
 import { carveRivers, NO_WATER } from './features.js';
 import { simulateRivers } from './hydrology.js';
 import { addOutcrops } from './outcrops.js';
+import { applyRugged } from './rugged.js';
 
 export function generateTerrain(params, progress = () => {}) {
   const N = params.resolution;
@@ -23,6 +24,16 @@ export function generateTerrain(params, progress = () => {}) {
   progress({ phase: 'Layering strata', fraction: 0 });
   const hardness = applyStrata(height, params, (f) => progress({ phase: 'Layering strata', fraction: f }), outcrop);
   for (let i = 0; i < N * N; i++) if (outcrop[i] > 0) hardness[i] = Math.max(hardness[i], 0.55 + 0.4 * outcrop[i]);
+
+  // Rugged outcrops (Gaea Rugged / Outcrops / Rocky): shattered plates + crevices broken into
+  // the relief BEFORE erosion, so the water weathers them and drainage adapts to them.
+  let rugged = null;
+  if ((params.ruggedAmount || 0) > 0) {
+    progress({ phase: 'Breaking rugged outcrops', fraction: 0 });
+    rugged = applyRugged(height, hardness, params, outcrop, (f) => progress({ phase: 'Breaking rugged outcrops', fraction: f }));
+  } else {
+    rugged = new Float32Array(N * N);
+  }
 
   const erosionParams = { ...params, heightScale: Math.max(1, params.mountainHeight) };
 
@@ -100,6 +111,8 @@ export function generateTerrain(params, progress = () => {}) {
 
   // core-stones shed their debris: no scree skin on the boulders themselves
   for (let i = 0; i < N * N; i++) if (outcrop[i] > 0) deposit[i] *= 1 - 0.85 * outcrop[i];
+  // rugged plates stand proud of the scree: thin the debris skin where rock is exposed
+  for (let i = 0; i < N * N; i++) if (rugged[i] > 0) deposit[i] *= 1 - 0.55 * rugged[i];
 
   const cavityRaw = computeCavity(height, N, cell);
   const cavity = new Float32Array(N * N);
@@ -118,7 +131,7 @@ export function generateTerrain(params, progress = () => {}) {
     resolution: N,
     worldSize: params.worldSize,
     height, hardness, deposit, flow: flowNorm, cavity, slope,
-    river: riverResult.riverMask, waterLevel: riverResult.waterLevel, lake, outcrop,
+    river: riverResult.riverMask, waterLevel: riverResult.waterLevel, lake, outcrop, rugged,
     stats: { min, max, elapsedMs: now() - t0, rivers: hydro ? hydro.stats : null },
   };
 }

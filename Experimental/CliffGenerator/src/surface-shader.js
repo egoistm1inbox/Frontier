@@ -14,7 +14,8 @@
 // Vertex aux = (deposit, flow, hardness, cavity) from the erosion pipeline (zeros on rocks).
 
 import * as THREE from 'three';
-import { makeBedTable } from './strata-model.js';
+import { makeBedTable, makeStrataFrame } from './strata-model.js';
+import { ruggedFieldParams } from './rugged.js';
 
 const vertexHead = /* glsl */`
 attribute vec4 aux;
@@ -46,6 +47,9 @@ uniform float uStrataBand, uStrataContrast, uDipX, uDipZ, uSeamStrength, uSeamWi
 uniform sampler2D uBedTex;   // stratigraphic column: (top, hardness, tint, thickness) per bed
 uniform int uBedCount;
 uniform float uBedBase, uWorldSize, uBedLateral;
+uniform float uBreakAmp, uFaultScale, uFaultWidth, uPlateSeed, uLatAmp;  // broken plates + lateral warp (metres)
+uniform float uSubCount, uSubStrength;                                   // substrata paint
+uniform float uRugOn, uRugScale, uRugSeed, uRugWarp, uRugWidth;           // rugged plate shading
 uniform float uGrainSize, uGrainStrength, uGrainContrast, uGrainFineness;
 uniform float uOxideAmount, uOxideScale;
 uniform float uCavityStrength;
@@ -79,6 +83,60 @@ vec4 bedLookup( float t, out float base ) {
   vec4 b = texelFetch( uBedTex, ivec2( lo, 0 ), 0 );
   base = b.x - b.w;
   return b;
+}
+
+// ---- shared Voronoi plates (bit-identical with noise.js) -------------------------------------
+// The SAME plates position the heightfield's rugged relief, the strata fault offsets, the SDF
+// crevice carve and this shading — geometry and colour always agree. uint(int) wraps negative
+// cell indices mod 2^32 exactly like the JS path, and the plate value blends
+// symmetrically (average on the bisector) so a float-vs-double tie-break flip cannot tear it.
+uint plateHash( int x, int y, uint seed ) {
+  uint h = uint( x ) * 374761393u ^ uint( y ) * 668265263u ^ seed * 2246822519u;
+  h = ( h ^ ( h >> 13u ) ) * 1274126177u;
+  h ^= h >> 16u;
+  return h;
+}
+// mirror of voronoi2() in noise.js: (F1 value, F2 value, F2-F1 edge) in cell units
+vec3 voronoi2( vec2 p, uint seed ) {
+  ivec2 ip = ivec2( floor( p ) );
+  float f1 = 8.0, f2 = 8.0, v1 = 0.0, v2 = 0.0;
+  for ( int dz = -1; dz <= 1; dz++ ) for ( int dx = -1; dx <= 1; dx++ ) {
+    ivec2 c = ip + ivec2( dx, dz );
+    float hx = float( plateHash( c.x, c.y, seed ) ) / 4294967296.0;
+    float hz = float( plateHash( c.x, c.y, seed ^ 0x9e3779b9u ) ) / 4294967296.0;
+    float hv = float( plateHash( c.x, c.y, seed ^ 0x51ed2703u ) ) / 4294967296.0;
+    vec2 fp = vec2( c ) + 0.5 + ( vec2( hx, hz ) - 0.5 ) * 0.9;
+    float d = length( p - fp );
+    float v = hv * 2.0 - 1.0;
+    if ( d < f1 ) { f2 = f1; v2 = v1; f1 = d; v1 = v; }
+    else if ( d < f2 ) { f2 = d; v2 = v; }
+  }
+  return vec3( v1, v2, f2 - f1 );
+}
+// Gaea broken-strata frame offset in metres — identical to plateField() in strata-model.js
+float plateOffset( float x, float z ) {
+  if ( uBreakAmp <= 0.0 ) return 0.0;
+  vec3 vn = voronoi2( vec2( x, z ) / uFaultScale, uint( uPlateSeed + 0.5 ) );
+  float t = smoothstep( 0.0, max( 1e-3, uFaultWidth / uFaultScale ), vn.z );
+  float avg = ( vn.x + vn.y ) * 0.5;
+  return ( avg + ( vn.x - avg ) * t ) * uBreakAmp;
+}
+// Gaea lateral stratification warp in metres — identical to lateralWarp() in strata-model.js
+float lateralWarp( float x, float z ) {
+  if ( uLatAmp <= 0.0 ) return 0.0;
+  float a = sin( x * 0.0042 + 1.7 * sin( z * 0.0031 + 0.6 ) );
+  float b = cos( z * 0.0037 + 1.3 * sin( x * 0.0029 + 2.1 ) );
+  return uLatAmp * ( 0.55 * a + 0.45 * b );
+}
+// mirror of ruggedWarp() in rugged.js (note: w uses the updated u, like the JS)
+vec2 ruggedWarp( vec2 p, float warp, float seed ) {
+  if ( warp <= 0.0 ) return p;
+  float a = warp * 0.42;
+  float sm = mod( seed, 64.0 );
+  float s1 = sin( sm * 0.37 ), s2 = sin( sm * 1.13 + 2.0 );
+  float u = p.x + a * ( 0.65 * sin( p.y * 1.9 + s1 ) + 0.35 * sin( ( p.x * 0.8 + p.y ) * 3.1 + s2 ) );
+  float w = p.y + a * ( 0.65 * sin( u * 1.7 + s2 ) + 0.35 * sin( ( p.y * 0.8 - u ) * 2.7 + s1 ) );
+  return vec2( u, w );
 }
 
 float cgHash( uvec3 q ) {
@@ -415,9 +473,10 @@ Surface evaluateCliffSurface( vec3 wp, vec3 n, vec4 aux, vec4 aux2 ) {
   // ---- colour --------------------------------------------------------------------------------
   // strata: beds of varying thickness in the dipped frame, wavy, with soft broken seams
   // same frame as the heightfield / 3-D chunks: x,z measured from the tile corner, tilted by the
-  // dip, thinned / thickened by the lateral jitter, then looked up in the stratigraphic column
+  // dip, shifted by fault blocks + lateral warp, thinned / thickened by the lateral jitter, then
+  // looked up in the stratigraphic column
   float sxj = wp.x + uWorldSize * 0.5, szj = wp.z + uWorldSize * 0.5;
-  float bandY = wp.y + uDipX * sxj + uDipZ * szj;
+  float bandY = wp.y + uDipX * sxj + uDipZ * szj + plateOffset( sxj, szj ) + lateralWarp( sxj, szj );
   float warp = cgNoise3( wp * 0.012 ).x * 1.5 + cgNoise3( wp * 0.07 + 3.0 ).x * 0.5;
   float bedBase;
   vec4 bedRec = bedLookup( ( bandY + warp ) / ( bedJitter( sxj, szj ) * uStrataBand ), bedBase );
@@ -437,6 +496,14 @@ Surface evaluateCliffSurface( vec3 wp, vec3 n, vec4 aux, vec4 aux2 ) {
   float seamNoise = smoothstep( 0.35, 0.7, cgNoise3( wp * vec3( 0.09, 0.4, 0.09 ) ).x );
   float seam = ( 1.0 - smoothstep( 0.0, uSeamWidth, min( bf, 1.0 - bf ) ) ) * seamNoise;
   bandCol *= 1.0 - uSeamStrength * seam;
+  // substrata: fine seams + faint tone steps inside each bed (same sub-phase the heightfield
+  // terraced and the chunks carved lips from)
+  if ( uSubStrength > 0.001 ) {
+    float subF = fract( bf * uSubCount );
+    float subSeam = ( 1.0 - smoothstep( 0.0, uSeamWidth * 1.4, min( subF, 1.0 - subF ) ) ) * seamNoise;
+    bandCol *= 1.0 - uSubStrength * 0.4 * subSeam;
+    bandCol *= 1.0 - uSubStrength * 0.10 * ( 0.5 - subF );
+  }
   vec3 rock = mix( uRockA, bandCol, uStrataContrast );
   vec3 strataOnly = rock;
   // terrain beds carry the erosion hardness: caprock paler and cleaner, soft beds darker and warmer
@@ -467,6 +534,21 @@ Surface evaluateCliffSurface( vec3 wp, vec3 n, vec4 aux, vec4 aux2 ) {
 
   // cavity / convexity
   rock *= 1.0 + cavity * 0.35 * uCavityStrength;
+
+  // rugged outcrops: darken the same crevices the heightfield broke and the chunks carved, and
+  // give each plate a faint tone so the shattering reads at a glance. Terrain only (scattered
+  // rocks carry their own form), faded out where the pixel footprint swallows the slots.
+  if ( uRugOn > 0.5 ) {
+    float rugFade = ( 1.0 - uIsRock ) * ( 1.0 - smoothstep( 0.15, 0.6, footprint / max( 0.5, uRugWidth * uRugScale ) ) );
+    if ( rugFade > 0.001 ) {
+      vec2 rp = ruggedWarp( vec2( sxj, szj ) / uRugScale, uRugWarp, uRugSeed );
+      vec3 rv = voronoi2( rp, uint( uRugSeed + 0.5 ) );
+      float crev = 1.0 - smoothstep( 0.0, uRugWidth, rv.z );
+      float plateTone = ( rv.x + rv.y ) * 0.5;
+      rock *= 1.0 - crev * 0.30 * rugFade;
+      rock *= 1.0 + plateTone * 0.045 * rugFade;
+    }
+  }
 
   // runoff staining
   float streak = cgNoise3( vec3( wp.x, wp.y * 0.05, wp.z ) / uStreakScale ).x * 0.6 + cgNoise3( vec3( wp.x * 3.6, wp.y * 0.1, wp.z * 3.6 ) / uStreakScale + 5.0 ).x * 0.4;
@@ -612,6 +694,9 @@ export function makeSurfaceUniforms() {
   Object.assign(u, {
     uStrataBand: { value: 1 }, uDipX: { value: 0 }, uDipZ: { value: 0 },
     uBedTex: { value: makeBedTexture(new Float32Array(4), 1) }, uBedCount: { value: 1 }, uBedBase: { value: -1500 }, uWorldSize: { value: 2048 }, uBedLateral: { value: 0.18 },
+    uBreakAmp: { value: 0 }, uFaultScale: { value: 120 }, uFaultWidth: { value: 6 }, uPlateSeed: { value: 0 }, uLatAmp: { value: 0 },
+    uSubCount: { value: 3 }, uSubStrength: { value: 0 },
+    uRugOn: { value: 0 }, uRugScale: { value: 45 }, uRugSeed: { value: 0 }, uRugWarp: { value: 0.4 }, uRugWidth: { value: 0.15 },
     uVegSlope: { value: 0.72 }, uSnowLine: { value: 430 }, uSnowSlopeCos: { value: 0.67 },
     uSeaLevel: { value: 0 }, uSeed: { value: 428 },
   });
@@ -646,6 +731,25 @@ export function updateSurfaceUniforms(uniforms, v) {
   const dipRad = (v.strataDip * Math.PI) / 180, dirRad = (v.strataDipDirection * Math.PI) / 180;
   uniforms.uDipX.value = Math.tan(dipRad) * Math.cos(dirRad);
   uniforms.uDipZ.value = Math.tan(dipRad) * Math.sin(dirRad);
+  // broken plates + lateral warp + substrata: same frame object the heightfield and chunks use
+  const frame = makeStrataFrame(v);
+  uniforms.uBreakAmp.value = frame.breakAmp;
+  uniforms.uFaultScale.value = frame.faultScale;
+  uniforms.uFaultWidth.value = frame.faultWidth;
+  uniforms.uPlateSeed.value = frame.plateSeed;
+  uniforms.uLatAmp.value = frame.lateralAmp;
+  uniforms.uSubCount.value = frame.subCount;
+  uniforms.uSubStrength.value = frame.subStrength;
+  // rugged plate shading: same field the heightfield broke and the chunks carved
+  const rugOn = (v.ruggedAmount || 0) > 0 ? 1 : 0;
+  uniforms.uRugOn.value = rugOn;
+  if (rugOn) {
+    const fp = ruggedFieldParams(v);
+    uniforms.uRugScale.value = fp.scale;
+    uniforms.uRugSeed.value = fp.seed;
+    uniforms.uRugWarp.value = fp.warp;
+    uniforms.uRugWidth.value = fp.widthCells;
+  }
   uniforms.uVegSlope.value = Math.cos((v.vegSlope * Math.PI) / 180);
   uniforms.uSnowLine.value = v.snowOn ? v.snowLine : 1e6;
   uniforms.uSnowSlopeCos.value = Math.cos((v.snowSlope * Math.PI) / 180);
