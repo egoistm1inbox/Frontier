@@ -26,6 +26,8 @@ function applyPalette(name) {
 let scene = null;
 let worker = null;
 let generation = 0;
+let lastJob = null; // latest posted job (a worker boot retry re-posts it)
+let workerAttempts = 0;
 let rockTimer = 0;
 let lastField = null;
 
@@ -144,8 +146,12 @@ function updateStats(extra = {}) {
 
 function ensureWorker() {
   if (worker) return worker;
-  worker = new Worker(new URL('./generate.worker.js', import.meta.url), { type: 'module' });
-  worker.onmessage = (event) => {
+  workerAttempts += 1;
+  const w = new Worker(new URL('./generate.worker.js', import.meta.url), { type: 'module' });
+  worker = w;
+  let alive = false;
+  w.onmessage = (event) => {
+    alive = true;
     const msg = event.data;
     if (msg.id !== generation) return;
     if (msg.type === 'progress') editor.setProgress(msg.phase, msg.fraction);
@@ -168,7 +174,21 @@ function ensureWorker() {
       });
     }
   };
-  worker.onerror = (e) => { editor.setProgress(null); console.error(e); alert(`Worker error: ${e.message}`); };
+  w.onerror = (e) => {
+    editor.setProgress(null);
+    console.error(e);
+    // CDN/proxy flakes can kill the worker script load while the UI modules load fine (one
+    // worker-graph file comes back bad): retry the boot once before giving up.
+    if (!alive && workerAttempts < 2 && lastJob && lastJob.id === generation) {
+      worker = null;
+      editor.setProgress('Retrying worker', 0);
+      setTimeout(() => {
+        try { ensureWorker().postMessage(lastJob); } catch (err) { console.error(err); }
+      }, 1500);
+      return;
+    }
+    alert(`Worker error: ${e.message || 'the background script failed to load (network/CDN issue) — press Generate to retry'}`);
+  };
   return worker;
 }
 
@@ -178,7 +198,8 @@ function generate() {
   const params = { ...values };
   // Scale droplet count with resolution so erosion intensity is resolution-independent.
   params.droplets = Math.round(values.droplets * (values.resolution * values.resolution) / (512 * 512));
-  ensureWorker().postMessage({ id: generation, params });
+  lastJob = { id: generation, params };
+  ensureWorker().postMessage(lastJob);
 }
 
 // ---- drawing roads / rivers / lakes ------------------------------------------------------------
