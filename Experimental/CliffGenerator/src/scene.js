@@ -73,8 +73,10 @@ export class CliffScene {
     this.water.rotation.x = -Math.PI / 2;
     this.water.receiveShadow = true;
     this.scene.add(this.water);
-    // rivers & lakes share the sea material; feature guide lines live in their own group
-    this.waterBodies = new THREE.Mesh(new THREE.BufferGeometry(), this.water.material);
+    // rivers & lakes: own material with vertex alpha (depth-feathered shores from the
+    // geometry's colour attribute) and a touch less mirror so they read as water, not ink
+    this.waterBodyMaterial = new THREE.MeshStandardMaterial({ color: 0x15303c, roughness: 0.18, metalness: 0.05, transparent: true, opacity: 0.88, envMapIntensity: 1.1, vertexColors: true });
+    this.waterBodies = new THREE.Mesh(new THREE.BufferGeometry(), this.waterBodyMaterial);
     this.waterBodies.receiveShadow = true;
     this.waterBodies.visible = false;
     this.scene.add(this.waterBodies);
@@ -152,6 +154,8 @@ export class CliffScene {
     this.water.position.y = v.seaLevel;
     this.water.material.color.setStyle(v.waterColor || '#15303c');
     this.water.material.opacity = v.waterOpacity == null ? 0.9 : v.waterOpacity;
+    this.waterBodyMaterial.color.copy(this.water.material.color);
+    this.waterBodyMaterial.opacity = Math.min(0.88, this.water.material.opacity);
   }
 
   // River / lake water surfaces from the refined field's water-level map.

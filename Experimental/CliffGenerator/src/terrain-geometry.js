@@ -9,6 +9,9 @@ import { applyRoads, applyLakes, upsampleWaterLevel, NO_WATER } from './features
 // Face displacement: moves vertices horizontally along the outward face normal so that hard beds
 // stand proud of the face and soft beds are recessed. Because this is applied to the mesh (not the
 // heightfield) it produces genuine overhangs, ledges and alcoves that a heightmap cannot represent.
+// The raw field carries the full overhang amplitude (multi-cell lips); it is blurred + slope-limited
+// at build time so the grid never folds over itself — this is what lets beds protrude from every
+// cliff face, not just the fraction covered by SDF chunks.
 export function makeDisplacement(field, v) {
   const { resolution: N, worldSize: size } = field;
   const cell = size / (N - 1);
@@ -16,27 +19,68 @@ export function makeDisplacement(field, v) {
   const overhang = v.overhang || 0;
   const buttress = v.buttress || 0;
   const ledge = v.ledgeNoise || 0;
-  // Keep displacement below the cell size so the grid never folds over itself.
-  const limit = cell * 0.85;
+  const limit = cell * 2.5;
   return {
     limit,
-    // returns horizontal offset (dx, dz) and a small vertical sag for a grid vertex
-    at(i, j, nx, ny, nz, hardness, x, z, h) {
-      const steep = Math.min(1, Math.max(0, (1 - ny - 0.25) / 0.45)); // 0 below ~40°, 1 above ~70°
-      if (steep <= 0 || overhang + buttress <= 0) return [0, 0, 0];
-      const hl = Math.hypot(nx, nz) || 1e-6;
-      const ox = nx / hl, oz = nz / hl;
+    active: overhang + buttress > 0,
+    // raw signed offset along the outward face normal + the steep mask (0 below ~40°, 1 above ~70°)
+    raw(nx, ny, nz, hardness, x, z, h) {
+      const steep = Math.min(1, Math.max(0, (1 - ny - 0.25) / 0.45));
+      if (steep <= 0) return [0, 0];
       // caprock out, soft beds in; notch the ledges with noise so they are not continuous shelves
       let bed = (hardness - 0.45) * 2;
       const notch = noise.fbm(x * 0.03 + h * 0.05, z * 0.03, 3);
       bed *= 1 - ledge * 0.6 * Math.max(0, notch);
       let d = bed * overhang;
-      // large buttresses / alcoves
-      d += buttress * noise.fbm(x * 0.006, z * 0.006 + h * 0.004, 3) * limit * 1.4;
-      d = Math.max(-limit, Math.min(limit, d)) * steep;
-      // a lip sags slightly under its own weight
-      const sag = Math.min(0, -Math.max(0, d) * 0.15);
-      return [ox * d, oz * d, sag];
+      // large buttresses / alcoves (smooth long-wavelength swell)
+      d += buttress * noise.fbm(x * 0.006, z * 0.006 + h * 0.004, 3) * cell * 3;
+      return [d, steep];
+    },
+    // blur the raw field, clamp it, pin SDF-footprint / edge verts to 0, then slope-limit so
+    // neighbours can never overtake each other (no foldover). `pin` is 1 where d must stay 0.
+    solve(rawD, pin) {
+      const n = N * N;
+      const buf = [rawD, new Float32Array(n)];
+      let cur = 0;
+      for (let p = 0; p < 2; p++) {
+        const a = buf[cur], b = buf[1 - cur];
+        for (let j = 0; j < N; j++) {
+          const j0 = Math.max(0, j - 1) * N, j1 = Math.min(N - 1, j + 1) * N, jr = j * N;
+          for (let i = 0; i < N; i++) {
+            const i0 = Math.max(0, i - 1), i1 = Math.min(N - 1, i + 1);
+            b[jr + i] = (a[j0 + i0] + a[j0 + i] + a[j0 + i1] + a[jr + i0] + a[jr + i] + a[jr + i1] + a[j1 + i0] + a[j1 + i] + a[j1 + i1]) / 9;
+          }
+        }
+        cur = 1 - cur;
+      }
+      const a = buf[cur];
+      const lim = limit, step = cell * 0.9;
+      for (let k = 0; k < n; k++) a[k] = Math.max(-lim, Math.min(lim, a[k]));
+      if (pin) for (let k = 0; k < n; k++) if (pin[k]) a[k] = 0;
+      for (let it = 0; it < 2; it++) {
+        for (let j = 0; j < N; j++) {
+          const jr = j * N;
+          for (let i = 0; i < N - 1; i++) {
+            const x = jr + i, lo = a[x] - step, hi = a[x] + step;
+            if (a[x + 1] < lo) a[x + 1] = lo; else if (a[x + 1] > hi) a[x + 1] = hi;
+          }
+          for (let i = N - 1; i > 0; i--) {
+            const x = jr + i, lo = a[x] - step, hi = a[x] + step;
+            if (a[x - 1] < lo) a[x - 1] = lo; else if (a[x - 1] > hi) a[x - 1] = hi;
+          }
+        }
+        for (let i = 0; i < N; i++) {
+          for (let j = 0; j < N - 1; j++) {
+            const x = j * N + i, lo = a[x] - step, hi = a[x] + step;
+            if (a[x + N] < lo) a[x + N] = lo; else if (a[x + N] > hi) a[x + N] = hi;
+          }
+          for (let j = N - 1; j > 0; j--) {
+            const x = j * N + i, lo = a[x] - step, hi = a[x] + step;
+            if (a[x - N] < lo) a[x - N] = lo; else if (a[x - N] > hi) a[x - N] = hi;
+          }
+        }
+      }
+      return a;
     },
   };
 }
@@ -143,7 +187,7 @@ export function makeDetail(field, v) {
   const noise = new GradientNoise3((v.seed || 1) * 31 + 11);
   const seed = ((v.seed || 1) * 7919) >>> 0;
   const cell = field.worldSize / (field.resolution - 1);
-  const limit = cell * 0.9;
+  const limit = cell * 1.5;
   // cellular field: nearest jittered feature point in the 2×2×2 cells around p; the metric blends
   // Euclidean (cones) with Chebyshev (boxes) → pyramids / blocks
   const facet = (px, py, pz) => {
@@ -204,6 +248,29 @@ export function buildTerrainGeometry(field, v = {}, chunks = null) {
   // SDF cliff chunks: no displacement on / near their footprint (the chunk field is the authority
   // there and its border must coincide with the plain heightfield), and their quads are skipped
   const sdfFade = chunks ? chunks.fade : null;
+  // face-displacement pre-pass: raw multi-cell field → blur → slope-limit (skipped when inactive)
+  let solvedD = null, steepA = null;
+  if (disp.active) {
+    const rawD = new Float32Array(count);
+    steepA = new Float32Array(count);
+    const pin = new Uint8Array(count);
+    for (let j = 0; j < N; j++) {
+      const z = (j / (N - 1) - 0.5) * size;
+      const j0 = Math.max(0, j - 1), j1 = Math.min(N - 1, j + 1);
+      for (let i = 0; i < N; i++) {
+        const idx = j * N + i;
+        const x = (i / (N - 1) - 0.5) * size;
+        const i0 = Math.max(0, i - 1), i1 = Math.min(N - 1, i + 1);
+        const dx = (height[j * N + i1] - height[j * N + i0]) / ((i1 - i0) * cell);
+        const dz = (height[j1 * N + i] - height[j0 * N + i]) / ((j1 - j0) * cell);
+        const inv = 1 / Math.hypot(-dx, 1, -dz);
+        const [d, s] = disp.raw(-dx * inv, inv, -dz * inv, hardness[idx], x, z, height[idx]);
+        rawD[idx] = d; steepA[idx] = s;
+        if (i === 0 || j === 0 || i === N - 1 || j === N - 1 || (sdfFade && sdfFade[idx] <= 0)) pin[idx] = 1;
+      }
+    }
+    solvedD = disp.solve(rawD, pin);
+  }
 
   for (let j = 0; j < N; j++) {
     const z = (j / (N - 1) - 0.5) * size;
@@ -218,8 +285,14 @@ export function buildTerrainGeometry(field, v = {}, chunks = null) {
       const inv = 1 / Math.hypot(nx, ny, nz);
       const edge = i === 0 || j === 0 || i === N - 1 || j === N - 1;
       const chunkFade = sdfFade ? sdfFade[idx] : 1;
-      let [ox, oz, sag] = edge || chunkFade <= 0 ? [0, 0, 0] : disp.at(i, j, nx * inv, ny * inv, nz * inv, hardness[idx], x, z, height[idx]);
-      if (chunkFade < 1) { ox *= chunkFade; oz *= chunkFade; sag *= chunkFade; }
+      let ox = 0, oz = 0, sag = 0;
+      if (solvedD && !edge && chunkFade > 0) {
+        const d = solvedD[idx] * steepA[idx] * chunkFade;
+        const hl = Math.hypot(nx, nz) || 1e-6;
+        ox = (nx / hl) * d; oz = (nz / hl) * d;
+        // a lip sags slightly under its own weight
+        sag = Math.min(0, -Math.max(0, d) * 0.15);
+      }
       let det = 0;
       if (detail.amp > 0 && !edge && chunkFade > 0) {
         const border = Math.min(i, j, N - 1 - i, N - 1 - j) / fadeCells;
@@ -383,10 +456,15 @@ export function makeSampler(field) {
 export function buildWaterGeometry(field) {
   const { resolution: N, worldSize: size, height, waterLevel } = field;
   if (!waterLevel) return null;
+  const cell = size / (N - 1);
   const index = new Int32Array(N * N).fill(-1);
   const positions = [];
+  const alphas = [];
   const indices = [];
   const wet = (idx) => waterLevel[idx] > NO_WATER * 0.5 && waterLevel[idx] > height[idx] - 0.5;
+  // alpha feathers out over the last ~3/4 cell of depth so the sheet dissolves into the shore
+  // instead of ending in a hard line; fully dry corners are transparent (skirt vertices)
+  const feather = Math.max(0.35, cell * 0.75);
   // per-vertex level: own level when wet, else the highest wet neighbour (shore vertices) — the
   // sheet is then one continuous surface that follows the river's grade instead of stepped plates
   const vertexLevel = (i, j, idx) => {
@@ -403,7 +481,11 @@ export function buildWaterGeometry(field) {
   const vertex = (i, j, idx) => {
     if (index[idx] >= 0) return index[idx];
     const x = (i / (N - 1) - 0.5) * size, z = (j / (N - 1) - 0.5) * size;
-    positions.push(x, vertexLevel(i, j, idx), z);
+    const lvl = vertexLevel(i, j, idx);
+    positions.push(x, lvl, z);
+    const depth = lvl - height[idx];
+    const a = depth <= 0 ? 0 : depth >= feather ? 1 : depth / feather;
+    alphas.push(1, 1, 1, a * a * (3 - 2 * a)); // smoothstepped depth feather (linear RGB white)
     index[idx] = positions.length / 3 - 1;
     return index[idx];
   };
@@ -421,6 +503,7 @@ export function buildWaterGeometry(field) {
   if (!indices.length) return null;
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setAttribute('color', new THREE.Float32BufferAttribute(alphas, 4));
   geometry.setIndex(indices);
   geometry.computeVertexNormals();
   geometry.computeBoundingSphere();

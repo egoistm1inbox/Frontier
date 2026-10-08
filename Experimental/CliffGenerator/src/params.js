@@ -565,7 +565,7 @@ export const groups = [
         ['sdfChunk', 'Chunk size', 8, 32, 8, 'cells', ''],
         ['sdfVoxel', 'Voxels per cell', 0, 3, 1, '', '0 = auto: the finest resolution that fits the voxel budget. 2 = voxels half the grid cell (8× the work), 3 = a third'],
         ['sdfVoxelBudget', 'Voxel budget', 2, 80, 2, 'M', 'Total voxels (in the surface band) auto mode may spend; raise it for finer cliffs if the machine can take it'],
-        ['sdfMaxChunks', 'Chunk budget', 50, 2000, 50, '', 'Chunks with the most cliff area are built first; the rest fall back to the displaced heightfield'],
+        ['sdfMaxChunks', 'Chunk budget', 50, 4000, 50, '', 'Chunks with the most cliff area are built first; the rest fall back to the displaced heightfield'],
       ] },
       { title: 'Face displacement', controls: [
         ['overhang', 'Caprock overhang', 0, 8, 0.25, 'm', 'Hard beds pushed out of the face, soft beds recessed — real overhangs a heightmap cannot hold (capped at ~85% of the grid cell)'],

@@ -281,12 +281,25 @@ export function applyLakes(height, N, size, lakes, opts, waterLevel) {
 export function upsampleWaterLevel(src, N, k) {
   const M = (N - 1) * k + 1;
   const out = new Float32Array(M * M).fill(NO_WATER);
+  const valid = (v) => v > NO_WATER * 0.5;
   for (let J = 0; J < M; J++) {
-    const j = Math.min(N - 2, Math.floor(J / k));
+    const gj = J / k, j = Math.min(N - 2, Math.floor(gj)), tj = Math.min(1, Math.max(0, gj - j));
     for (let I = 0; I < M; I++) {
-      const i = Math.min(N - 2, Math.floor(I / k));
+      const gi = I / k, i = Math.min(N - 2, Math.floor(gi)), ti = Math.min(1, Math.max(0, gi - i));
       const idx = j * N + i;
-      out[J * M + I] = Math.max(src[idx], src[idx + 1], src[idx + N], src[idx + N + 1]);
+      // bilinear over the VALID corners only (dry corners carry NO_WATER and must not pollute
+      // the sheet): rivers become one continuous sloped surface, lake planes stay flat, and the
+      // sheet extends half a cell past the wet cells so shores have no stairsteps
+      const c00 = src[idx], c10 = src[idx + 1], c01 = src[idx + N], c11 = src[idx + N + 1];
+      const w00 = (1 - ti) * (1 - tj), w10 = ti * (1 - tj), w01 = (1 - ti) * tj, w11 = ti * tj;
+      let sum = 0, wsum = 0;
+      if (valid(c00)) { sum += c00 * w00; wsum += w00; }
+      if (valid(c10)) { sum += c10 * w10; wsum += w10; }
+      if (valid(c01)) { sum += c01 * w01; wsum += w01; }
+      if (valid(c11)) { sum += c11 * w11; wsum += w11; }
+      // a sub-cell surrounded by dry cells stays dry; where any corner is wet the sheet is the
+      // renormalised blend (weights rebalanced so a lone wet corner still yields its level)
+      out[J * M + I] = wsum > 1e-6 ? sum / wsum : NO_WATER;
     }
   }
   return out;

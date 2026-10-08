@@ -505,6 +505,11 @@ Surface evaluateCliffSurface( vec3 wp, vec3 n, vec4 aux, vec4 aux2 ) {
     bandCol *= 1.0 - uSubStrength * 0.10 * ( 0.5 - subF );
   }
   vec3 rock = mix( uRockA, bandCol, uStrataContrast );
+  // on cliff faces the beds must win over the runoff: widen the hard/soft tone steps and deepen
+  // the seams with slope so stratification reads even through rilled, streaked walls
+  float bedTone = smoothstep( 0.25, 0.7, bedHard );
+  rock *= 1.0 + ( bedTone - 0.5 ) * 0.30 * wall * uStrataContrast * ( 1.0 - uIsRock );
+  rock *= 1.0 - seam * 0.30 * wall * uStrataContrast * ( 1.0 - uIsRock );
   vec3 strataOnly = rock;
   // terrain beds carry the erosion hardness: caprock paler and cleaner, soft beds darker and warmer
   rock = mix( rock, rock * 1.12 + uRockC * 0.06, hardness * uHardnessTint * ( 1.0 - uIsRock ) );
@@ -553,7 +558,10 @@ Surface evaluateCliffSurface( vec3 wp, vec3 n, vec4 aux, vec4 aux2 ) {
   // runoff staining
   float streak = cgNoise3( vec3( wp.x, wp.y * 0.05, wp.z ) / uStreakScale ).x * 0.6 + cgNoise3( vec3( wp.x * 3.6, wp.y * 0.1, wp.z * 3.6 ) / uStreakScale + 5.0 ).x * 0.4;
   streak = smoothstep( 0.56, 0.78, streak ) * uStreakAmount;
-  float wet = clamp( uWetness * ( flow * 0.9 + streak * wall * 0.7 ), 0.0, 1.0 );
+  // the generic vertical striping yields to the beds on stratified walls; true gullies (flow)
+  // keep their full staining so drainage still reads
+  float streakHere = streak * ( 1.0 - 0.5 * wall * uStrataContrast * ( 1.0 - uIsRock ) );
+  float wet = clamp( uWetness * ( flow * 0.9 + streakHere * wall * 0.7 ), 0.0, 1.0 );
   rock *= 1.0 - wet * 0.5;
 
   // scree gravel on deposits: pebbles in a sandy matrix
@@ -594,7 +602,7 @@ Surface evaluateCliffSurface( vec3 wp, vec3 n, vec4 aux, vec4 aux2 ) {
   color = mix( color, uSnow, snow );
 
   // wet band at the shoreline and darker, cooler ground under water
-  float shore = 1.0 - smoothstep( waterLine - 0.3, waterLine + 1.2 * uShoreWet + 0.3, wp.y );
+  float shore = 1.0 - smoothstep( waterLine - 0.5, waterLine + 2.0 * uShoreWet + 0.5, wp.y );
   color *= mix( 1.0, 0.62, shore * uShoreWet );
   float under = 1.0 - smoothstep( waterLine - 2.5, waterLine, wp.y );
   color = mix( color, color * vec3( 0.55, 0.62, 0.62 ), under );

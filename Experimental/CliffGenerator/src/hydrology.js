@@ -434,8 +434,11 @@ export function simulateRivers(height, N, size, opts, seed = 1) {
 
   // lakes: water at spill level over the depression (and a shore band in the mask)
   if (opts.lakes) {
-    // shelving shore: ground just above the water line is eased down into a shallow beach
-    const shoreW = Math.max(2, Math.round(12 / cell));
+    // shelving shore: ground just above the water line is eased down into a shallow beach. The
+    // band is 16 m wide and reaches 10 m up the shore so even pit lakes with tall walls get a
+    // graded waterline instead of a knife edge; the profile is concave (gentle at the water,
+    // steeper at the back) and the band is relaxed afterwards so no crease rings the lake.
+    const shoreW = Math.max(2, Math.round(16 / cell));
     const shoreLvl = new Float32Array(total).fill(NO_WATER);
     const shoreD = new Float32Array(total).fill(Infinity);
     const q = [];
@@ -455,10 +458,24 @@ export function simulateRivers(height, N, size, opts, seed = 1) {
     for (let c = 0; c < total; c++) {
       if (!(shoreD[c] > 0 && shoreD[c] < Infinity)) continue;
       const lvl = shoreLvl[c], rise = height[c] - lvl;
-      if (rise <= 0 || rise > 6) continue;
+      if (rise <= 0 || rise > 10) continue;
       const t = shoreD[c] / shoreW; // 0 at the water line → 1 at the back of the beach
-      const beach = lvl - 0.25 + rise * t * t;
+      const beach = lvl - 0.25 + rise * Math.pow(t, 1.5);
       if (beach < height[c]) { height[c] = beach; lakeMask[c] = Math.max(lakeMask[c], 0.6 * (1 - t)); }
+    }
+    // relax the beach band so the ease-out leaves no crease where it meets the hillside
+    {
+      const tmp = Float32Array.from(height);
+      for (let c = 0; c < total; c++) {
+        if (!(shoreD[c] > 0 && shoreD[c] < Infinity)) continue;
+        const ci = c % N, cj = (c - ci) / N;
+        if (ci < 1 || cj < 1 || ci >= N - 1 || cj >= N - 1) continue;
+        const t = shoreD[c] / shoreW;
+        let sum = 0, n = 0;
+        for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) { sum += height[(cj + dj) * N + ci + di]; n++; }
+        tmp[c] += (sum / n - height[c]) * (1 - t) * 0.5;
+      }
+      height.set(tmp);
     }
     for (let c = 0; c < total; c++) {
       if (lakeLevel[c] <= NO_WATER * 0.5) continue;

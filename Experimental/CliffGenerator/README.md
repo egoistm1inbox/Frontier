@@ -93,7 +93,12 @@ through. The isolated proof of the technique lives in `../SdfCliffLab`.
    normals and an `aux` attribute `(deposit, flow, hardness, cavity)`; a skirt turns the tile
    into a cut block of ground. **Cliff depth**: steep vertices are displaced horizontally along
    the face normal — hard beds out, soft beds in, plus buttress/alcove noise — so the mesh has
-   genuine overhangs, ledges and recesses that the heightfield itself cannot represent.
+   genuine overhangs, ledges and recesses that the heightfield itself cannot represent. The raw
+   field carries the full multi‑cell amplitude and is blurred + slope‑limited at build time so
+   neighbours can never overtake (no foldover): beds protrude from *every* cliff face, not just
+   the fraction covered by SDF chunks. The surface shader backs this up with slope‑aware bed
+   contrast (wider hard/soft tone steps, deeper seams on walls) while the generic vertical
+   striping yields to the beds — true gullies keep their staining.
    **Mesh detail**: the mesh can carry 1–4× the heightfield's vertices (bicubic upsample, side
    capped at 2049) plus fine relief pushed along the surface normal (knobs on steep rock,
    hummocks on flat ground) and **rocky facets** (Gaea *Rocky*‑style: a cellular field of
