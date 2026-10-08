@@ -553,6 +553,89 @@ export function simulateRivers(height, N, size, opts, seed = 1) {
     height.set(tmp);
   }
 
+  // ---- fluvial sediment routing: discharge + sediment along the flow network ------------------
+  // Droplets evaporate, so nothing they erode ever reaches a lake; this pass routes water and
+  // sediment down the D8 network in one upstream-first sweep. Capacity C = K·Q^m·S^n: where the
+  // load exceeds it (flats, lake mouths) sediment drops out as bars, deltas and silt drapes;
+  // where the stream runs under capacity it incises (hardness-scaled). Lakes are pure sinks, so
+  // they become the pooled ends of flow lines instead of pasted bowls. Incised river cells shift
+  // their water level down with the bed; bars are capped near the surface so channels never dam.
+  const fluvialDep = new Float32Array(total);
+  const sedStrength = opts.sediment == null ? 1 : Math.max(0, opts.sediment);
+  if (sedStrength > 0) {
+    const sedK = 0.05 * sedStrength;
+    const sedM = 1.3, sedN = 1.4;
+    const deltaScale = opts.deltaSize == null ? 1 : Math.max(0, opts.deltaSize);
+    const hard = opts.hardness || null;
+    const load = new Float32Array(total);
+    const mouthW = new Float32Array(total); // feeding channel width at lake mouths
+    let fluvialCut = 0, fluvialFill = 0, deltaCells = 0;
+    for (let n = 0; n < total; n++) {
+      const c = order[n];
+      const d = down[c];
+      if (d < 0) { load[c] = 0; continue; } // pouring off the map: no edge fans
+      if (acc[c] < 9 && !isRiver[c]) { load[d] += load[c]; continue; }
+      if (height[c] <= sea) { load[c] = 0; continue; } // the sea is an infinite sink
+      const inLake = lakeLevel[c] > NO_WATER * 0.5;
+      if (inLake) {
+        // standing water: the whole load settles — a delta cone at the mouth plus a drape fan
+        const L = load[c]; load[c] = 0;
+        if (L > 0.02 && deltaScale > 0) {
+          const lvl = lakeLevel[c];
+          const R = Math.max(1, Math.min(6, Math.round((mouthW[c] / cell || 1.5) * deltaScale)));
+          const ci = c % N, cj = (c - ci) / N;
+          let wsum = 0;
+          for (let dj = -R; dj <= R; dj++) for (let di = -R; di <= R; di++) {
+            const dd = Math.hypot(di, dj);
+            if (dd > R + 0.5) continue;
+            wsum += (R + 1 - dd) * (R + 1 - dd);
+          }
+          const cap = lvl + 1.0 * deltaScale; // topsets emerge just above the water
+          for (let dj = -R; dj <= R; dj++) for (let di = -R; di <= R; di++) {
+            const dd = Math.hypot(di, dj);
+            if (dd > R + 0.5) continue;
+            const ii = ci + di, jj = cj + dj;
+            if (ii < 0 || jj < 0 || ii >= N || jj >= N) continue;
+            const k = jj * N + ii;
+            if (lakeLevel[k] <= NO_WATER * 0.5 && height[k] > lvl + 0.5) continue; // fans don't climb shores
+            const w = (R + 1 - dd) * (R + 1 - dd) / wsum;
+            const add = Math.min(L * w * deltaScale, cap - height[k]);
+            if (add > 0.005) {
+              height[k] += add; fluvialDep[k] += add;
+              fluvialFill += add; deltaCells++;
+            }
+          }
+        }
+        continue;
+      }
+      // fluvial cell: compare the sediment load against the stream-power capacity
+      const dc = d - c;
+      const dist = cell * ((dc % N === 0 || Math.abs(dc) === 1) ? 1 : Math.SQRT2);
+      const S = Math.max(0, (filled[c] - filled[d]) / dist);
+      const cap = sedK * Math.pow(acc[c], sedM) * Math.pow(Math.max(S, 1e-4), sedN);
+      let L = load[c]; load[c] = 0;
+      if (L > cap) {
+        let D = Math.min(L - cap, 2);
+        const wl0 = waterLevel[c];
+        if (wl0 > NO_WATER * 0.5) D = Math.min(D, Math.max(0.2, (wl0 - height[c]) * 0.7 + 0.3)); // bars stay near the surface
+        if (D > 0.005) { height[c] += D; fluvialDep[c] += D; fluvialFill += D; L -= D; }
+      } else {
+        const ero = hard ? 1 - 0.7 * hard[c] : 0.65;
+        const E = Math.min(cap - L, 0.4) * ero;
+        if (E > 0.005) {
+          height[c] -= E; fluvialCut += E;
+          if (waterLevel[c] > NO_WATER * 0.5) waterLevel[c] -= E; // the water follows the bed down
+        }
+        L += E * 0.9; // not all cut material travels (some slumps to the banks)
+      }
+      load[d] += L;
+      if (lakeLevel[d] > NO_WATER * 0.5) mouthW[d] = Math.max(mouthW[d], width[c] || 0);
+    }
+    stats.fluvialCut = fluvialCut * cell * cell;
+    stats.fluvialFill = fluvialFill * cell * cell;
+    stats.deltaCells = deltaCells;
+  }
+
   // the water level was copied from the nearest channel cell, which on steep reaches gives a
   // staircase of plates; relax it so the sheet becomes one continuous sloped surface
   {
@@ -602,6 +685,7 @@ export function simulateRivers(height, N, size, opts, seed = 1) {
       if (!(shoreD[c] > 0 && shoreD[c] < Infinity)) continue;
       const lvl = shoreLvl[c], rise = height[c] - lvl;
       if (rise <= 0 || rise > 10) continue;
+      if (fluvialDep[c] > 0.25) continue; // delta topsets keep their lobes
       const t = shoreD[c] / shoreW; // 0 at the water line → 1 at the back of the beach
       const beach = lvl - 0.25 + rise * Math.pow(t, 2.2);
       if (beach < height[c]) { height[c] = beach; lakeMask[c] = Math.max(lakeMask[c], 0.6 * (1 - t)); }
@@ -644,5 +728,5 @@ export function simulateRivers(height, N, size, opts, seed = 1) {
   let cut = 0;
   for (let c = 0; c < total; c++) cut += original[c] - height[c];
   stats.cutVolume = cut * cell * cell;
-  return { riverMask, waterLevel, lakeMask, flow, acc, filled, down, stats, debug: { bed, wl, width, depth, isRiver, dist, src } };
+  return { riverMask, waterLevel, lakeMask, flow, acc, filled, down, fluvialDep, stats, debug: { bed, wl, width, depth, isRiver, dist, src } };
 }

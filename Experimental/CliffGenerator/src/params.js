@@ -230,6 +230,8 @@ export const defaults = {
   riverLakeMin: 0.01,       // [km²]
   lakeConnect: 1,           // lake inlets & outlets join the river network
   lakeConnectLen: 200,      // [m] max connector length
+  fluvialSediment: 1,       // sediment-routing strength (0 = off)
+  fluvialDelta: 1,          // delta fan size multiplier
   riverGuideFlow: 1.0,      // [km²]
   lakeDepth: 6,             // [m]
   lakeLevelOffset: 6,       // [m]
@@ -627,6 +629,8 @@ export const groups = [
         ['riverLakeMin', 'Min. lake area', 0.001, 0.2, 0.001, 'km²', 'Smaller depressions stay dry unless a river feeds them'],
         ['lakeConnect', 'Lake inlets & outlets', 0, 1, 1, '', 'Every visible lake gets an outlet from its pour point plus up to two inlet streams, so lakes join the river network instead of sitting as isolated blobs'],
         ['lakeConnectLen', 'Connector length', 50, 500, 10, 'm', 'How far an inlet/outlet channel runs before it must join a river, another lake, or the sea'],
+        ['fluvialSediment', 'Fluvial sediment', 0, 1.5, 0.05, '', 'Water + sediment routed down the flow network (capacity ∝ discharge × slope): streams incise where under capacity, drop bars on flats, and build deltas where they meet lakes — lakes become the pooled ends of flow lines'],
+        ['fluvialDelta', 'Delta size', 0, 2, 0.05, '', 'Fan radius and topset height of inlet deltas (0 = sediment still routes, but no fans form)'],
         ['riverGuideFlow', 'Guide flow', 0, 5, 0.1, 'km²', 'Catchment injected at the head of each drawn river so it always carries water'],
       ] },
       { title: 'Drawn river guides', stage: 'terrain', controls: [

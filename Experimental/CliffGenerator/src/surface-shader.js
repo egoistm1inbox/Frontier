@@ -573,7 +573,13 @@ Surface evaluateCliffSurface( vec3 wp, vec3 n, vec4 aux, vec4 aux2 ) {
   // drawn features: river beds (cobbles → silt towards the banks), lake beds (silt), roads
   float cobble = cgNoise3( wp * 2.6 ).x * 0.5 + cgNoise3( wp * 9.0 + 3.0 ).x * 0.5;
   vec3 bedCol = mix( uSilt, mix( uGravel * ( 0.65 + 0.7 * cobble ), gravel, step( 0.001, uGravelAmount ) ), smoothstep( 0.45, 0.95, riverBed ) );
-  bedCol = mix( bedCol, uSilt * ( 0.9 + 0.2 * speckle ), lakeBed * ( 1.0 - riverBed ) );
+  // lake silt grades with water depth: warm pale silt in the shallows, darker cooler ooze in
+  // the deep — the graded bed of a sediment-fed lake (depth needs no new attribute: the
+  // waterline is already known per pixel)
+  float siltDepth = clamp( waterLine - wp.y, 0.0, 30.0 );
+  vec3 siltCol = uSilt * ( 0.9 + 0.2 * speckle );
+  siltCol = mix( siltCol * vec3( 1.06, 1.0, 0.9 ), siltCol * vec3( 0.62, 0.7, 0.74 ), smoothstep( 0.4, 9.0, siltDepth ) );
+  bedCol = mix( bedCol, siltCol, lakeBed * ( 1.0 - riverBed ) );
   float bedMix = smoothstep( 0.05, 0.5, max( riverBed, lakeBed ) );
   rock = mix( rock, bedCol, bedMix );
   float roadSurf = smoothstep( 0.5, 0.75, road );

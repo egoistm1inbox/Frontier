@@ -94,7 +94,13 @@ through. The isolated proof of the technique lives in `../SdfCliffLab`.
    shore (narrow, always wet — *Lake inlets & outlets* 0 restores isolated ponds), so lakes join
    the river network instead of sitting as disconnected blobs; the surface shader draws a thin
    bright water's‑edge line straddling the waterline (gated by the bed masks, faded where the
-   pixel footprint would alias it) — the visible shoreline. Drawn rivers are *guides*: carved
+   pixel footprint would alias it) — the visible shoreline. **Fluvial sediment**: water and
+   sediment are routed down the D8 network in one upstream‑first sweep (capacity ∝ discharge ×
+   slope): under‑capacity streams incise (hardness‑scaled, water level follows the bed down),
+   overloaded reaches drop bars (capped near the surface so channels never dam), and lake mouths
+   grow delta cones with silt drape fans — lakes become the pooled ends of flow lines. Fluvial
+   deposits feed the gravel map (delta topsets read as pebbles) and lake silt grades with water
+   depth in the shader (pale shallows → dark deep ooze). Drawn rivers are *guides*: carved
    first and injected as flow so the network passes through them. Flow and deposit maps pick the
    network up for shading (wet gullies, gravel beds).
 5. **Mesh** (`src/terrain-geometry.js`) — indexed grid with alternating diagonals, per‑vertex
