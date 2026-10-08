@@ -464,7 +464,7 @@ export function buildWaterGeometry(field) {
   const wet = (idx) => waterLevel[idx] > NO_WATER * 0.5 && waterLevel[idx] > height[idx] - 0.5;
   // alpha feathers out over the last ~3/4 cell of depth so the sheet dissolves into the shore
   // instead of ending in a hard line; fully dry corners are transparent (skirt vertices)
-  const feather = Math.max(0.35, cell * 0.75);
+  const feather = Math.max(0.5, cell * 1.0);
   // per-vertex level: own level when wet, else the highest wet neighbour (shore vertices) — the
   // sheet is then one continuous surface that follows the river's grade instead of stepped plates
   const vertexLevel = (i, j, idx) => {

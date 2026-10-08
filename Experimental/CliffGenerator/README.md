@@ -82,13 +82,21 @@ through. The isolated proof of the technique lives in `../SdfCliffLab`.
    and the floor smoothed, so a steep river is a ramp, not a staircase of treads. Reaches steeper
    than *Dry above grade* show the carved gully (wet rock, gravel) with no standing water — a
    mountain torrent does not read as flat water — unless the river is big; lake shores are eased
-   into a shelving beach. Steep reaches are wide shallow V gullies; inside closed depressions water runs down the
+   into a shelving beach (16 m band, 10 m up the shore, concave profile with a shallow toe,
+   relaxed afterwards so no crease rings the lake — even pit lakes with tall walls get a graded
+   waterline). Steep reaches are wide shallow V gullies; inside closed depressions water runs down the
    real floor into the lake instead of in straight lines across the filled flat; a little noise on
    the routing surface breaks the dead‑straight D8 lines smooth slopes produce. The water mesh is
-   one continuous sheet with per‑vertex levels (relaxed along the channel) so it follows the
-   river's grade. Drawn rivers are *guides*: carved first and injected as flow so the network
-   passes through them. Flow and deposit maps pick the network up for shading (wet gullies, gravel
-   beds).
+   one continuous sheet with per‑vertex levels (bilinear over wet cells, relaxed along the
+   channel) so it follows the river's grade, and per‑vertex alpha feathered by depth so shores
+   dissolve into the silt instead of ending in a hard line. Every visible lake gets an outlet
+   from its pour point plus up to two inlet streams along the strongest upstream paths into its
+   shore (narrow, always wet — *Lake inlets & outlets* 0 restores isolated ponds), so lakes join
+   the river network instead of sitting as disconnected blobs; the surface shader draws a thin
+   bright water's‑edge line straddling the waterline (gated by the bed masks, faded where the
+   pixel footprint would alias it) — the visible shoreline. Drawn rivers are *guides*: carved
+   first and injected as flow so the network passes through them. Flow and deposit maps pick the
+   network up for shading (wet gullies, gravel beds).
 5. **Mesh** (`src/terrain-geometry.js`) — indexed grid with alternating diagonals, per‑vertex
    normals and an `aux` attribute `(deposit, flow, hardness, cavity)`; a skirt turns the tile
    into a cut block of ground. **Cliff depth**: steep vertices are displaced horizontally along

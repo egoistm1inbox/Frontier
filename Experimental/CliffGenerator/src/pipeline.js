@@ -80,6 +80,7 @@ export function generateTerrain(params, progress = () => {}) {
       catchment: params.riverCatchment, widthScale: params.riverWidthScale, maxWidth: params.riverMaxWidth, depthScale: params.riverDepthScale,
       bankAngle: params.riverBank, maxBank: params.riverMaxBank, waterDepth: params.riverWaterFrac, braiding: params.riverBraiding, drySlope: params.riverDrySlope, dryBig: params.riverDryBig,
       lakes: params.riverLakes, lakeFill: params.riverLakeFill, lakeMaxArea: (params.riverLakeMax == null ? 8 : params.riverLakeMax) / 100, lakeMinArea: Math.round((params.riverLakeMin || 0.01) * 1e6 / (cell * cell)),
+      connect: params.lakeConnect, connectLen: params.lakeConnectLen,
       seaLevel: params.waterEnabled ? params.seaLevel : -Infinity, sources: riverResult.sources, guideFlow: params.riverGuideFlow,
     }, params.seed);
     for (let i = 0; i < N * N; i++) {

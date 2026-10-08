@@ -254,6 +254,148 @@ export function simulateRivers(height, N, size, opts, seed = 1) {
     }
   }
 
+  // ---- lake inlets & outlets: every visible lake joins the river network ----------------------
+  // Inlets usually fall below the catchment threshold and steep outlets run dry, so lakes read
+  // as isolated blobs. Each lake (big enough to see) is given forced river cells: an outlet
+  // from its pour point downstream, plus up to two inlets along the strongest upstream paths
+  // into its shore. Forced cells keep natural narrow widths from their own small accumulation,
+  // but always carry water so the connection reads. Only non-lake cells are marked; the lake
+  // floor itself is never carved.
+  const forced = new Uint8Array(total);
+  if (opts.lakes && opts.connect !== 0) {
+    const connectLen = Math.max(8, Math.min(100, Math.round((opts.connectLen == null ? 200 : opts.connectLen) / cell)));
+    const seaLvl = opts.seaLevel == null ? -Infinity : opts.seaLevel;
+    const lakeId = new Int32Array(total).fill(-1);
+    // reverse drainage links (upstream neighbours) for the inlet walks
+    const upHead = new Int32Array(total).fill(-1);
+    const upNext = new Int32Array(total);
+    for (let c = 0; c < total; c++) {
+      const d = down[c];
+      if (d >= 0 && d !== c) { upNext[c] = upHead[d]; upHead[d] = c; }
+    }
+    const walkMark = new Int32Array(total);
+    let walkId = 0;
+    // downstream walk with a loop guard; stops BEFORE a cell matching stop() and reports it
+    const walkDown = (start, maxSteps, stop) => {
+      const path = [];
+      let c = start, end = -1;
+      const id = ++walkId;
+      for (let s = 0; s < maxSteps; s++) {
+        if (c < 0 || c >= total || walkMark[c] === id) break;
+        walkMark[c] = id;
+        if (stop(c)) { end = c; break; }
+        path.push(c);
+        c = down[c];
+      }
+      return { path, end };
+    };
+    const seenLake = new Uint8Array(total);
+    const stack = [];
+    let lakeCount = 0, linkCells = 0;
+    for (let s = 0; s < total; s++) {
+      if (seenLake[s] || lakeLevel[s] <= NO_WATER * 0.5) continue;
+      stack.length = 0; stack.push(s); seenLake[s] = 1;
+      const cells = [];
+      while (stack.length) {
+        const c = stack.pop(); cells.push(c); lakeId[c] = lakeCount;
+        const ci = c % N, cj = (c - ci) / N;
+        for (let d = 0; d < 4; d++) {
+          const ni = ci + DX[d], nj = cj + DZ[d];
+          if (ni < 0 || nj < 0 || ni >= N || nj >= N) continue;
+          const nidx = nj * N + ni;
+          if (seenLake[nidx] || lakeLevel[nidx] <= NO_WATER * 0.5) continue;
+          seenLake[nidx] = 1; stack.push(nidx);
+        }
+      }
+      const id = lakeCount++;
+      if (cells.length < 8) continue; // ponds stay quiet
+      const boundary = cells.filter((c) => {
+        const ci = c % N, cj = (c - ci) / N;
+        for (let d = 0; d < 4; d++) {
+          const ni = ci + DX[d], nj = cj + DZ[d];
+          if (ni < 0 || nj < 0 || ni >= N || nj >= N || lakeId[nj * N + ni] !== id) return true;
+        }
+        return false;
+      });
+      // pour point: where the lake's own drainage leaves it (vote over boundary down-paths;
+      // walks that never leave — flat-interior loops — abstain)
+      const votes = new Map();
+      const stride = Math.max(1, Math.floor(boundary.length / 600));
+      for (let b = 0; b < boundary.length; b += stride) {
+        const w = walkDown(boundary[b], 200, (c) => lakeId[c] !== id);
+        if (w.end >= 0 && lakeId[w.end] !== id) votes.set(w.end, (votes.get(w.end) || 0) + 1);
+      }
+      let pour = -1, best = 0, bestH = Infinity;
+      for (const [exit, n] of votes) {
+        const h = filled[exit];
+        if (n > best || (n === best && h < bestH)) { best = n; bestH = h; pour = exit; }
+      }
+      if (pour < 0) {
+        // no drainage vote (pancake-flat floor): spill over the lowest neighbouring ground
+        for (const b of boundary) {
+          const ci = b % N, cj = (b - ci) / N;
+          for (let d = 0; d < 4; d++) {
+            const ni = ci + DX[d], nj = cj + DZ[d];
+            if (ni < 0 || nj < 0 || ni >= N || nj >= N) continue;
+            const nidx = nj * N + ni;
+            if (lakeId[nidx] !== -1 || height[nidx] <= seaLvl) continue;
+            if (filled[nidx] < bestH) { bestH = filled[nidx]; pour = nidx; }
+          }
+        }
+      }
+      const noInlet = new Set();
+      if (pour >= 0) {
+        // outlet: downstream until it joins a river, another lake, or the sea
+        const w = walkDown(pour, connectLen, (c) => acc[c] >= threshold || lakeId[c] !== -1 || height[c] <= seaLvl);
+        for (const c of w.path) { if (!forced[c]) { forced[c] = 1; linkCells++; } noInlet.add(c); }
+        noInlet.add(pour);
+        if (w.end >= 0) noInlet.add(w.end);
+      }
+      // inlet candidates: shore cells that genuinely drain into this lake, strongest first
+      const candSeen = new Set(), cand = [];
+      for (const b of boundary) {
+        const ci = b % N, cj = (b - ci) / N;
+        for (let d = 0; d < 4; d++) {
+          const ni = ci + DX[d], nj = cj + DZ[d];
+          if (ni < 0 || nj < 0 || ni >= N || nj >= N) continue;
+          const nidx = nj * N + ni;
+          if (lakeId[nidx] !== -1 || noInlet.has(nidx) || candSeen.has(nidx)) continue;
+          if (height[nidx] <= seaLvl) continue;
+          candSeen.add(nidx);
+          const probe = walkDown(nidx, 12, (c) => lakeId[c] === id);
+          if (probe.end >= 0 && lakeId[probe.end] === id) cand.push(nidx);
+        }
+      }
+      cand.sort((p, q) => acc[q] - acc[p]);
+      let inlets = 0;
+      for (const start of cand) {
+        if (inlets >= 2) break;
+        if (inlets === 1 && acc[start] < acc[cand[0]] * 0.25) break; // runner-up must matter
+        // upstream along the main stem (most accumulation) to a river / lake / the sea
+        const path = [];
+        let c = start;
+        const uid = ++walkId;
+        for (let k = 0; k < connectLen; k++) {
+          if (c < 0 || c >= total || walkMark[c] === uid) break;
+          walkMark[c] = uid;
+          if (acc[c] >= threshold || lakeId[c] !== -1 || height[c] <= seaLvl || forced[c]) break;
+          path.push(c);
+          let bestU = -1, bestA = -1;
+          for (let u = upHead[c]; u >= 0; u = upNext[u]) {
+            if (walkMark[u] === uid) continue;
+            if (acc[u] > bestA) { bestA = acc[u]; bestU = u; }
+          }
+          c = bestU;
+        }
+        if (path.length < 4) continue; // a lone peak cell is not a stream
+        for (const c of path) { forced[c] = 1; linkCells++; }
+        inlets++;
+      }
+    }
+    stats.lakeLinks = linkCells;
+    stats.lakes = lakeCount;
+  }
+
   const maxWidth = Math.max(cell * 2, opts.maxWidth || 120);
   const steep = new Float32Array(total), dry = new Uint8Array(total);
   const dryGrade = Math.tan(((opts.drySlope == null ? 12 : opts.drySlope) * Math.PI) / 180);
@@ -262,7 +404,7 @@ export function simulateRivers(height, N, size, opts, seed = 1) {
   // outlets first so the downstream bed is known
   for (let n = total - 1; n >= 0; n--) {
     const c = order[n];
-    if (acc[c] < threshold) continue;
+    if (acc[c] < threshold && !forced[c]) continue;
     isRiver[c] = 1; riverCells++;
     const km2 = acc[c] * cellKm2;
     // steep reaches run narrow and shallow (torrents), gentle reaches spread out
@@ -287,6 +429,7 @@ export function simulateRivers(height, N, size, opts, seed = 1) {
     steep[c] = steepness;
     // water only stands on gentle reaches (or in big rivers); steep gullies show the carved bed
     dry[c] = grade > dryGrade && km2 < dryBig ? 1 : 0;
+    if (forced[c]) dry[c] = 0; // lake inlets & outlets always carry water so the link reads
     let b = filled[c] - dep;
     let l = b + dep * waterFrac;
     if (filled[c] - routing[c] > 0.3) {
@@ -460,7 +603,7 @@ export function simulateRivers(height, N, size, opts, seed = 1) {
       const lvl = shoreLvl[c], rise = height[c] - lvl;
       if (rise <= 0 || rise > 10) continue;
       const t = shoreD[c] / shoreW; // 0 at the water line → 1 at the back of the beach
-      const beach = lvl - 0.25 + rise * Math.pow(t, 1.5);
+      const beach = lvl - 0.25 + rise * Math.pow(t, 2.2);
       if (beach < height[c]) { height[c] = beach; lakeMask[c] = Math.max(lakeMask[c], 0.6 * (1 - t)); }
     }
     // relax the beach band so the ease-out leaves no crease where it meets the hillside

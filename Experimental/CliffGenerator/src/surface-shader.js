@@ -606,6 +606,14 @@ Surface evaluateCliffSurface( vec3 wp, vec3 n, vec4 aux, vec4 aux2 ) {
   color *= mix( 1.0, 0.62, shore * uShoreWet );
   float under = 1.0 - smoothstep( waterLine - 2.5, waterLine, wp.y );
   color = mix( color, color * vec3( 0.55, 0.62, 0.62 ), under );
+  // thin bright water's-edge line straddling the waterline: the visible shoreline. Lake/river
+  // rims are gated by the bed masks (no false rings across valleys below lake level); the sea
+  // floods everything below its plane so its rim needs no gate. Faded out where the pixel
+  // footprint would alias it into shimmer.
+  float rimBand = 1.0 - smoothstep( 0.0, 0.45 + footprint * 0.5, abs( wp.y - waterLine ) );
+  float seaDom = 1.0 - smoothstep( 0.0, 0.5, localWater - uSeaLevel );
+  float rimGate = max( seaDom, ( 1.0 - seaDom ) * smoothstep( 0.05, 0.3, max( riverBed, lakeBed ) ) );
+  color += vec3( 0.10, 0.11, 0.10 ) * rimBand * rimGate * ( 1.0 - smoothstep( 0.35, 0.9, footprint ) );
 
   float roughness = uBaseRoughness - wet * 0.4 - fresh * 0.05 - shore * 0.35 * uShoreWet;
   roughness = mix( roughness, 0.95, roadSurf );

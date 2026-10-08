@@ -113,7 +113,7 @@ export const defaults = {
   sdfJoints: 0.5,
   sdfRough: 0.5,
   sdfRugged: 0.8,
-  sdfMaxChunks: 400,
+  sdfMaxChunks: 600,
   // Cliff depth (mesh displacement)
   overhang: 3.5,            // [m]
   buttress: 0.5,
@@ -228,6 +228,8 @@ export const defaults = {
   riverLakeFill: 0.8,
   riverLakeMax: 8,          // [% of map]
   riverLakeMin: 0.01,       // [km²]
+  lakeConnect: 1,           // lake inlets & outlets join the river network
+  lakeConnectLen: 200,      // [m] max connector length
   riverGuideFlow: 1.0,      // [km²]
   lakeDepth: 6,             // [m]
   lakeLevelOffset: 6,       // [m]
@@ -568,7 +570,7 @@ export const groups = [
         ['sdfMaxChunks', 'Chunk budget', 50, 4000, 50, '', 'Chunks with the most cliff area are built first; the rest fall back to the displaced heightfield'],
       ] },
       { title: 'Face displacement', controls: [
-        ['overhang', 'Caprock overhang', 0, 8, 0.25, 'm', 'Hard beds pushed out of the face, soft beds recessed — real overhangs a heightmap cannot hold (capped at ~85% of the grid cell)'],
+        ['overhang', 'Caprock overhang', 0, 8, 0.25, 'm', 'Hard beds pushed out of the face, soft beds recessed — real multi-cell overhangs a heightmap cannot hold (blurred + slope-limited so the grid never folds)'],
         ['buttress', 'Buttress bulge', 0, 1, 0.05, '', 'Large-scale swelling of the faces into ribs and alcoves'],
         ['ledgeNoise', 'Ledge irregularity', 0, 1, 0.05, '', 'Breaks ledges into blocks and notches'],
       ] },
@@ -623,6 +625,8 @@ export const groups = [
         ['riverLakeFill', 'Lake fill', 0, 1, 0.05, '', '1 = basins fill to their spill level · lower leaves a dry floor with the river crossing it'],
         ['riverLakeMax', 'Lake area cap', 0, 40, 1, '%', 'Largest/deepest basins are filled first until this share of the map is lake; beyond it only a small pond remains where a river ends in a hollow'],
         ['riverLakeMin', 'Min. lake area', 0.001, 0.2, 0.001, 'km²', 'Smaller depressions stay dry unless a river feeds them'],
+        ['lakeConnect', 'Lake inlets & outlets', 0, 1, 1, '', 'Every visible lake gets an outlet from its pour point plus up to two inlet streams, so lakes join the river network instead of sitting as isolated blobs'],
+        ['lakeConnectLen', 'Connector length', 50, 500, 10, 'm', 'How far an inlet/outlet channel runs before it must join a river, another lake, or the sea'],
         ['riverGuideFlow', 'Guide flow', 0, 5, 0.1, 'km²', 'Catchment injected at the head of each drawn river so it always carries water'],
       ] },
       { title: 'Drawn river guides', stage: 'terrain', controls: [
