@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Frontier VFX Editor — Streak & Burst Particles</title>
+  <link rel="stylesheet" href="/src/styles.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet" />
+</head>
+<body>
+  <div id="app">
+    <header>
+      <div>
+        <div class="logo">FRONTIER <span>VFX</span></div>
+        <div class="sub">streak · burst · flow editor</div>
+      </div>
+      <div style="width:1px;height:34px;background:rgba(255,255,255,.1)"></div>
+      <div>
+        <div id="effectName">Fiber Burst</div>
+        <div id="effectRef">Image 1 · radial fiber-optic starburst</div>
+      </div>
+      <div class="spacer"></div>
+      <div class="toolbar">
+        <button class="tool" id="btnPlay">⏸ Pause</button>
+        <button class="tool primary" id="btnBurst">✦ Burst</button>
+        <button class="tool" id="btnRotate">⟳ Orbit</button>
+        <button class="tool" id="btnShot">📷 PNG</button>
+        <button class="tool" id="btnImport">⇪ Import</button>
+        <button class="tool" id="btnExport">⇩ Export JSON</button>
+        <input type="file" id="fileInput" accept=".json" style="display:none" />
+      </div>
+    </header>
+    <div id="work">
+      <aside id="left">
+        <h3>Presets · your references</h3>
+        <div id="presetList" style="display:flex;flex-direction:column;gap:8px"></div>
+        <div class="hint">
+          <b>Drag</b> to orbit · <b>scroll</b> to zoom.<br />
+          Hit <b>✦ Burst</b> to punch radial presets.<br />
+          Export JSON drops straight into the Frontier runtime.
+        </div>
+      </aside>
+      <div id="viewport">
+        <div id="hud"><span id="fps">— fps</span><span>·</span><span id="stats"></span></div>
+        <div id="toast"></div>
+      </div>
+      <aside id="right">
+        <h3>Effect parameters</h3>
+        <div id="controls"></div>
+      </aside>
+    </div>
+  </div>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
