@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>SDF cliff lab — heightfield + local SDF chunks</title>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+  }
+}
+</script>
+<style>
+  :root { font-family: 'DM Sans', system-ui, sans-serif; font-size: 13px; color: #dcdcdc; color-scheme: dark; }
+  html, body { margin: 0; height: 100%; background: #101010; overflow: hidden; }
+  #view { position: fixed; inset: 0; }
+  #panel { position: fixed; top: 12px; left: 12px; width: 300px; max-height: calc(100% - 24px); overflow: auto; background: rgba(18,18,18,.92); border: 1px solid #2a2a2a; border-radius: 8px; padding: 12px 14px; backdrop-filter: blur(6px); }
+  h1 { font-size: 13px; font-weight: 600; margin: 0 0 2px; letter-spacing: .02em; }
+  .muted { color: #8b8b8b; font-size: 11.5px; line-height: 1.45; margin: 0 0 10px; }
+  h2 { font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: #9a9a9a; margin: 12px 0 6px; }
+  .row { display: grid; grid-template-columns: 1fr 44px; gap: 8px; align-items: center; margin: 4px 0; }
+  .row label { display: flex; justify-content: space-between; font-size: 12px; }
+  .row label small { color: #8b8b8b; }
+  .row input[type=range] { grid-column: 1 / 3; width: 100%; accent-color: #d8c38a; margin: 0; }
+  .toggles label { display: flex; gap: 8px; align-items: center; font-size: 12px; margin: 4px 0; cursor: pointer; }
+  button { font: inherit; background: #d8c38a; color: #111; border: 0; border-radius: 6px; padding: 7px 12px; font-weight: 600; cursor: pointer; width: 100%; margin-top: 10px; }
+  button:disabled { opacity: .5; cursor: default; }
+  #stats { font-family: ui-monospace, monospace; font-size: 11px; color: #bcbcbc; white-space: pre; line-height: 1.5; margin-top: 8px; }
+  #progress { height: 3px; background: #2a2a2a; border-radius: 2px; margin-top: 8px; overflow: hidden; }
+  #progress i { display: block; height: 100%; width: 0; background: #d8c38a; transition: width .1s; }
+  #hint { position: fixed; right: 12px; bottom: 10px; color: #8b8b8b; font-size: 11px; }
+</style>
+</head>
+<body>
+<canvas id="view"></canvas>
+<div id="panel">
+  <h1>SDF cliff lab</h1>
+  <p class="muted">Test bed only — not wired into the Cliff Generator. A heightfield is the ground truth everywhere; chunks over steep cells are re-meshed from a 3D field (heightfield distance + bed carving), so the cliffs get real undercuts and overhangs while the mesh stays watertight with the surrounding heightfield by construction.</p>
+  <div id="controls"></div>
+  <button id="build">Build</button>
+  <div id="progress"><i></i></div>
+  <div id="stats"></div>
+</div>
+<div id="hint">drag orbit · wheel zoom · H heightfield only · C chunk tint · B bounds · W wireframe</div>
+<script type="module" src="./lab.js"></script>
+</body>
+</html>
