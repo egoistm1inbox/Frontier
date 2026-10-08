@@ -460,10 +460,13 @@ export function buildWaterGeometry(field) {
   const index = new Int32Array(N * N).fill(-1);
   const positions = [];
   const alphas = [];
+  const grounds = [];
   const indices = [];
   const wet = (idx) => waterLevel[idx] > NO_WATER * 0.5 && waterLevel[idx] > height[idx] - 0.5;
-  // alpha feathers out over the last ~3/4 cell of depth so the sheet dissolves into the shore
-  // instead of ending in a hard line; fully dry corners are transparent (skirt vertices)
+  // alpha feathers out over the last ~1 cell of depth so the sheet dissolves into the shore
+  // instead of ending in a hard line; fully dry corners are transparent (skirt vertices).
+  // Ground height rides along so the fragment shader can discard exactly at the waterline —
+  // the shoreline is then a per-pixel contour of the flow field, not a mesh edge.
   const feather = Math.max(0.5, cell * 1.0);
   // per-vertex level: own level when wet, else the highest wet neighbour (shore vertices) — the
   // sheet is then one continuous surface that follows the river's grade instead of stepped plates
@@ -486,6 +489,7 @@ export function buildWaterGeometry(field) {
     const depth = lvl - height[idx];
     const a = depth <= 0 ? 0 : depth >= feather ? 1 : depth / feather;
     alphas.push(1, 1, 1, a * a * (3 - 2 * a)); // smoothstepped depth feather (linear RGB white)
+    grounds.push(height[idx]);
     index[idx] = positions.length / 3 - 1;
     return index[idx];
   };
@@ -504,6 +508,7 @@ export function buildWaterGeometry(field) {
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
   geometry.setAttribute('color', new THREE.Float32BufferAttribute(alphas, 4));
+  geometry.setAttribute('aGround', new THREE.Float32BufferAttribute(grounds, 1));
   geometry.setIndex(indices);
   geometry.computeVertexNormals();
   geometry.computeBoundingSphere();

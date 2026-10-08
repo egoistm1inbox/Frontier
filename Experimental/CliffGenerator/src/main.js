@@ -1,10 +1,11 @@
 // Entry: wires the editor chrome to the heightfield worker and the Three.js viewport.
+import { BUILD } from './version.js';
 import { defaults, presets, groups, stageOf, palettes, paletteKeys } from './params.js';
 import { Editor } from './ui.js';
 import { CliffScene } from './scene.js';
 
 const STORAGE_KEY = 'frontier-cliff-generator';
-const SCHEMA = 8; // bump when parameter semantics change so stale saved values do not override new defaults
+const SCHEMA = 9; // bump when parameter semantics change so stale saved values do not override new defaults
 
 function readStored() {
   try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); } catch { return {}; }
@@ -137,6 +138,7 @@ function updateStats(extra = {}) {
     '3D cliffs': scene.sdfStats ? `${scene.sdfStats.done}/${scene.sdfStats.total} chunks · ${scene.sdfStats.voxel.toFixed(2)} m voxels · ${scene.sdfStats.triangles.toLocaleString('en-US')} tris · ${(scene.sdfStats.ms / 1000).toFixed(1)} s${scene.sdfStats.candidates > scene.sdfStats.total ? ` (${scene.sdfStats.candidates - scene.sdfStats.total} skipped by cap)` : ''}` : 'off',
     'Relief': `${lastField.stats.min.toFixed(0)} – ${lastField.stats.max.toFixed(0)} m`,
     'Heightfield': `${(lastField.stats.elapsedMs / 1000).toFixed(1)} s`,
+    'Build': BUILD,
   });
 }
 

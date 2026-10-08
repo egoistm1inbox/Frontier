@@ -76,6 +76,18 @@ export class CliffScene {
     // rivers & lakes: own material with vertex alpha (depth-feathered shores from the
     // geometry's colour attribute) and a touch less mirror so they read as water, not ink
     this.waterBodyMaterial = new THREE.MeshStandardMaterial({ color: 0x15303c, roughness: 0.18, metalness: 0.05, transparent: true, opacity: 0.88, envMapIntensity: 1.1, vertexColors: true });
+    // Exact shorelines: each fragment compares its interpolated ground height against its
+    // interpolated water level (position.y) and discards above the waterline — shores, bars
+    // and delta lobes get pixel-perfect contours instead of quad stairsteps.
+    this.waterBodyMaterial.onBeforeCompile = (shader) => {
+      shader.vertexShader = shader.vertexShader
+        .replace('#include <common>', '#include <common>\nattribute float aGround;\nvarying float vGround;\nvarying float vLevel;')
+        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvGround = aGround;\nvLevel = position.y;');
+      shader.fragmentShader = shader.fragmentShader
+        .replace('#include <common>', '#include <common>\nvarying float vGround;\nvarying float vLevel;')
+        .replace('#include <clipping_planes_fragment>', '#include <clipping_planes_fragment>\nif ( vGround > vLevel + 0.02 ) discard;');
+    };
+    this.waterBodyMaterial.customProgramCacheKey = () => 'waterBodiesShore';
     this.waterBodies = new THREE.Mesh(new THREE.BufferGeometry(), this.waterBodyMaterial);
     this.waterBodies.receiveShadow = true;
     this.waterBodies.visible = false;

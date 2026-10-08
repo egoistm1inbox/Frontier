@@ -89,7 +89,11 @@ through. The isolated proof of the technique lives in `../SdfCliffLab`.
    the routing surface breaks the dead‑straight D8 lines smooth slopes produce. The water mesh is
    one continuous sheet with per‑vertex levels (bilinear over wet cells, relaxed along the
    channel) so it follows the river's grade, and per‑vertex alpha feathered by depth so shores
-   dissolve into the silt instead of ending in a hard line. Every visible lake gets an outlet
+   dissolve into the silt instead of ending in a hard line. Ground height rides in the water
+   geometry and the fragment shader discards above the waterline, so shorelines are per‑pixel
+   contours of the flow field — bars, deltas and shores never show quad stairsteps. The HUD
+   shows a build stamp (`src/version.js`, bumped every commit) proving which code made the
+   terrain on screen. Every visible lake gets an outlet
    from its pour point plus up to two inlet streams along the strongest upstream paths into its
    shore (narrow, always wet — *Lake inlets & outlets* 0 restores isolated ponds), so lakes join
    the river network instead of sitting as disconnected blobs; the surface shader draws a thin
