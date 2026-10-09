@@ -366,7 +366,7 @@ What the numbers show: the aggregate statistics barely move at matched resolutio
 - **Erosion is an approximation.** It is tuned for plausible results, not calibrated to real rock, rainfall or time. Results depend on grid size, because droplet density and flow areas are counted per cell. Retune when you change the grid.
 - **The fluvial "Added" stat includes uplift.** It is not net deposition.
 - **Closed depressions fill with water.** A closed depression below sea level is filled and coloured as a lake in the satmap. The Lake and Playa layers make deliberate basins, which are not tied to sea level.
-- **Water is not simulated.** A lake or playa is a fixed basin at the level you set. It has no inflow, outflow or evaporation. The 3D water plane is still at sea level only, so a lake or playa shows as a coloured floor in 3D.
+- **Water is not simulated.** A lake or playa is a fixed basin at the level you set. It has no inflow, outflow or evaporation. The 3D water plane is drawn at sea level only, and only when the sea reaches the land (sea level above the lowest ground). A lake or playa shows as a coloured floor in 3D.
 - **The mesa look is stylised.** The caprock tops are plain, the cliff bands are fairly regular, and the shorelines have little detail. The output is procedural. It has not been compared with photographs or with professional terrain.
 - **The desert satmap is slower.** Desert palettes paint more per pixel than temperate ones. A 16384 px Mesa country satmap is estimated at about 5 minutes in Node, and it has not been run.
 - **WebGL2 is required for the 3D view.** The 2D views work without it.

@@ -162,6 +162,7 @@ export class View3D {
     this.texture = gl.createTexture();
     this.result = null;
     this.terrain = null;
+    this.lowest = -Infinity; // the lowest ground, as a fraction of the height range
     this.N = 0;
     this.indexCount = 0;
     this.hasSat = false;
@@ -185,6 +186,9 @@ export class View3D {
     const gl = this.gl;
     this.result = result;
     this.terrain = terrain;
+    let low = Infinity;
+    for (let i = 0; i < result.height.length; i++) if (result.height[i] < low) low = result.height[i];
+    this.lowest = low;
     // The mesh is at most MESH_MAX cells a side. Larger working grids are averaged down for display only.
     this.mesh = meshGrid(result);
     const newGrid = this.mesh.N !== this.N;
@@ -361,7 +365,9 @@ export class View3D {
     gl.bindVertexArray(this.vao);
     gl.drawElements(gl.TRIANGLES, this.indexCount, gl.UNSIGNED_INT, 0);
 
-    if (this.settings.water) {
+    // The sea plane is drawn only when the sea reaches the land. Below the lowest ground it would show only as a band
+    // beyond the terrain's edges, so a desert with a low sea level has no plane.
+    if (this.settings.water && sea >= this.lowest) {
       const y = sea * this.verticalScale();
       const quad = new Float32Array([
         -0.5, y, -0.5, 0, 1, 0, 0, 0, sea,
