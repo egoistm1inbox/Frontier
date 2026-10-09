@@ -1,0 +1,23 @@
+{
+  "name": "terrain-editor",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Layer-based terrain and texturing editor in the Frontier Editor UI (dev-only browser build)",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0 --port 5173",
+    "build": "vite build",
+    "preview": "vite preview --host 0.0.0.0 --port 4173",
+    "check:engine": "node scripts/CheckEngine.mjs",
+    "check:browser": "node scripts/CheckBrowser.mjs"
+  },
+  "dependencies": {
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "three": "0.170.0"
+  },
+  "devDependencies": {
+    "puppeteer-core": "23.11.1",
+    "vite": "^6.0.0"
+  }
+}

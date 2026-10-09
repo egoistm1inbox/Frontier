@@ -1,0 +1,94 @@
+/* Terrain editor additions on top of the Frontier Editor stylesheet (Editor.css). */
+@font-face { font-family: "DM Sans"; src: url("/fonts/DMSans-Light.ttf") format("truetype"); font-weight: 300; font-style: normal; font-display: swap; }
+@font-face { font-family: "DM Sans"; src: url("/fonts/DMSans-Regular.ttf") format("truetype"); font-weight: 400; font-style: normal; font-display: swap; }
+
+body.resizing { cursor: col-resize; user-select: none; }
+
+.tab-actions { display: flex; align-items: center; gap: 6px; margin-left: auto; padding-right: 8px; flex-wrap: wrap; }
+.tab-actions > button, .file-button, .preset-anchor > button, .mask-adder button, .inspector-actions button, .viewport-icon-button, .construct-kinds button {
+  display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px; border-radius: 10px;
+  background: #222; color: #f0f0f0; border: 0; font: inherit; font-size: 12px; cursor: pointer; white-space: nowrap;
+}
+.tab-actions > button:disabled, .inspector-actions button:disabled { opacity: 0.35; cursor: default; }
+.tab-actions > button:hover, .file-button:hover, .preset-anchor > button:hover, .mask-adder button:hover, .inspector-actions button:hover, .viewport-icon-button:hover { background: #2c2c2c; }
+.file-button input { display: none; }
+.tab-divider { width: 1px; height: 18px; background: #333; margin: 0 2px; }
+.preset-anchor { position: relative; }
+.preset-menu {
+  position: absolute; top: 36px; right: 0; z-index: 30; min-width: 220px; padding: 6px; border-radius: 14px;
+  background: #151515; border: 1px solid #2b2b2b; box-shadow: 0 18px 40px rgba(0, 0, 0, 0.45);
+  display: flex; flex-direction: column; gap: 2px;
+}
+.preset-menu button { text-align: left; background: transparent; color: #e6e6e6; border: 0; padding: 8px 10px; border-radius: 10px; font: inherit; font-size: 13px; cursor: pointer; }
+.preset-menu button:hover { background: #242424; }
+
+.outliner-group { display: flex; align-items: center; justify-content: space-between; margin: 14px 4px 6px; color: #8d8d8d; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; }
+.outliner-group button { background: #1d1d1d; border: 0; color: #d6d6d6; width: 24px; height: 24px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+.row-icon { display: inline-flex; color: #bdbdbd; width: 24px; justify-content: center; }
+.row-status.warning { color: #d9a441; }
+.outliner-row .row-status.voxel, .outliner-row .row-status.close { background: #2a2a2a; color: #9a9a9a; }
+.outliner-row[draggable="true"] { cursor: grab; }
+
+.inspector-actions { display: flex; gap: 6px; margin-top: 8px; }
+.inspector-actions button { width: 30px; padding: 0; justify-content: center; }
+.icon-button { background: transparent; border: 0; color: #cfcfcf; width: 26px; height: 26px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+.icon-button:hover { background: #262626; }
+.muted { color: #8d8d8d; font-size: 12px; line-height: 1.5; margin: 6px 0; }
+.combine-help { color: #9a9a9a; font-size: 12px; margin: 4px 2px 10px; }
+.gaea-note { color: #8d8d8d; font-size: 11px; }
+.result-list { margin: 0; display: grid; gap: 6px; }
+.result-row { display: flex; justify-content: space-between; gap: 12px; font-size: 12px; }
+.result-row dt { color: #8d8d8d; }
+.result-row dd { margin: 0; color: #f0f0f0; font-variant-numeric: tabular-nums; text-align: right; }
+
+.mask-entry { display: grid; gap: 8px; padding: 12px; border-radius: 14px; background: #141414; border: 1px solid #222; margin-top: 10px; }
+.mask-entry.disabled { opacity: 0.55; }
+.mask-entry > header { display: flex; align-items: center; gap: 8px; }
+.mask-entry > header strong { font-weight: 400; font-size: 13px; }
+.mask-entry > header small { color: #8d8d8d; font-size: 11px; flex: 1; }
+.mask-adder { display: flex; gap: 8px; align-items: center; }
+.mask-adder select { flex: 1; min-width: 0; height: 30px; border-radius: 10px; background: #1b1b1b; color: #f0f0f0; border: 1px solid #2b2b2b; padding: 0 8px; font: inherit; font-size: 12px; }
+
+.viewport-canvas { position: relative; flex: 1; min-height: 0; overflow: hidden; background: #0b0c0d; }
+.relief-stage { position: absolute; inset: 0; }
+.relief-stage canvas { display: block; width: 100% !important; height: 100% !important; }
+.map-stage { position: absolute; inset: 0; display: grid; place-items: center; padding: 18px; }
+.map-stage canvas { width: 100%; height: 100%; object-fit: contain; image-rendering: pixelated; max-width: 100%; max-height: 100%; }
+.viewport-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 12px; flex-wrap: wrap; }
+.viewport-modes { display: flex; gap: 6px; flex-wrap: wrap; }
+.viewport-modes button { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px; border-radius: 10px; border: 0; background: #1d1d1d; color: #cfcfcf; font: inherit; font-size: 12px; cursor: pointer; }
+.viewport-modes button.active { background: #f0f0f0; color: #090909; }
+.viewport-settings { display: flex; align-items: center; gap: 10px; }
+.viewport-exaggeration { min-width: 220px; }
+.viewport-icon-button { width: 30px; padding: 0; justify-content: center; }
+.viewport-heading-row { display: flex; align-items: baseline; gap: 12px; padding: 4px 14px 8px; flex-wrap: wrap; }
+.viewport-heading-row h2 { margin: 0; font-weight: 400; font-size: 16px; }
+.viewport-heading-row small { color: #8d8d8d; font-size: 12px; }
+.busy-chip { margin-left: auto; font-size: 12px; color: #d9d9d9; background: #1d1d1d; padding: 4px 10px; border-radius: 999px; }
+.viewport-error { margin: 8px 14px; padding: 10px 12px; border-radius: 12px; background: #2a1414; color: #f3c5c5; font-size: 12px; }
+.viewport-error pre { white-space: pre-wrap; margin: 6px 0 0; font-size: 11px; }
+.viewport-footer { display: flex; gap: 18px; padding: 8px 14px; border-top: 1px solid #1b1b1b; flex-wrap: wrap; }
+.viewport-footer span { display: flex; flex-direction: column; gap: 2px; }
+.viewport-footer small { color: #7d7d7d; font-size: 10px; letter-spacing: 0.08em; }
+.viewport-footer b { font-weight: 400; font-size: 13px; font-variant-numeric: tabular-nums; }
+
+.construct-overlay { position: fixed; inset: 0; z-index: 60; background: rgba(0, 0, 0, 0.55); display: grid; place-items: center; padding: 32px; }
+.construct-dialog { width: min(1080px, 100%); height: min(720px, 100%); background: #101010; border: 1px solid #242424; border-radius: 22px; display: grid; grid-template-columns: 210px 1fr; grid-template-rows: auto 1fr; overflow: hidden; box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6); }
+.construct-dialog > header { grid-column: 1 / -1; display: flex; align-items: center; gap: 14px; padding: 14px 18px; border-bottom: 1px solid #1f1f1f; }
+.construct-dialog > header h2 { margin: 0; font-weight: 400; font-size: 18px; }
+.construct-dialog > header .icon-button { margin-left: auto; }
+.construct-kinds { display: flex; gap: 6px; }
+.construct-kinds button.active { background: #f0f0f0; color: #090909; }
+.construct-rail { display: flex; flex-direction: column; gap: 4px; padding: 12px; border-right: 1px solid #1f1f1f; overflow: auto; }
+.construct-rail button { display: flex; align-items: center; gap: 10px; text-align: left; background: transparent; color: #cfcfcf; border: 0; padding: 9px 10px; border-radius: 12px; font: inherit; font-size: 13px; cursor: pointer; }
+.construct-rail button:hover { background: #1b1b1b; }
+.construct-rail button.active { background: #f0f0f0; color: #090909; }
+.construct-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; padding: 16px; overflow: auto; align-content: start; }
+.construct-tile { display: grid; gap: 6px; text-align: left; padding: 14px; border-radius: 16px; background: #171717; border: 1px solid #242424; color: #f0f0f0; font: inherit; cursor: pointer; }
+.construct-tile:hover:not(:disabled) { background: #1f1f1f; border-color: #3a3a3a; }
+.construct-tile:disabled, .construct-tile.planned { opacity: 0.5; cursor: default; }
+.construct-tile strong { font-weight: 400; font-size: 14px; }
+.construct-tile small { color: #9a9a9a; font-size: 12px; line-height: 1.45; }
+.construct-glyph { color: #d8d8d8; }
+.gaea-chip { justify-self: start; font-style: normal; font-size: 10px; color: #bcbcbc; background: #242424; padding: 3px 8px; border-radius: 999px; letter-spacing: 0.04em; }
+.planned-note { grid-column: 1 / -1; }
