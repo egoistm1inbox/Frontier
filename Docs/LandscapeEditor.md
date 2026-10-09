@@ -244,6 +244,7 @@ Recomputes run in a module worker, so the UI stays responsive, and a new job can
 | Default stack, 1024² | Node | 12.2 s (12.6–13.4 s in other runs) | — |
 | Default stack, 1024², first compute | Headless Chromium | 14.5–15.5 s | — |
 | Grid change to 512² | Headless Chromium | 4.5 s | — |
+| Grid change to 2048² (3D mesh decimated to 1024) | Headless Chromium | 53 s (one run) | — |
 | Erosion at 1024²: fluvial, hydraulic, thermal | Node | 5.1 s, 4.5 s, 0.6–0.9 s | — |
 | Flow routing, 1M cells | Node | 175 ms (the heap version took 290 ms) | — |
 | Delivered code (ca56ae1), 1024² | Node | 23.3 s | — |
