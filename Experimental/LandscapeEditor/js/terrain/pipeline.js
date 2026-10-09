@@ -9,6 +9,9 @@ import { downsample, minMax, mean } from '../core/grid.js';
 import { generateIsland, generateRamp } from './generators.js';
 import { generatePrimitive } from './primitives.js';
 import { generateGeological } from './geological.js';
+import { generateMesaField } from './mesas.js';
+import { strataDef, applyStrata } from './strata.js';
+import { applyBasin } from './basins.js';
 import { falloffMask } from './falloff.js';
 import { applyTerrace, applySmooth, applyLevels } from './shaping.js';
 import { erodeHydraulic } from '../erosion/hydraulic.js';
@@ -50,6 +53,9 @@ export async function evaluateProject(project, options = {}) {
   const layerMs = {};
   let h = new Float32Array(n);
   let dep = null;
+  // Context from the layers below: the stratigraphic column, the lake water levels and the playa floors. The satmap
+  // reads it. Each layer that sets one returns a new object, so cached results are never changed in place.
+  let ctx = { strata: null, water: null, playa: null };
   let key = hashKey(JSON.stringify(terr));
   let step = 0;
 
@@ -67,12 +73,13 @@ export async function evaluateProject(project, options = {}) {
     if (cached && cached.key === key) {
       h = cached.height;
       dep = cached.dep;
+      ctx = cached.ctx;
       stats[layer.id] = cached.stats;
       layerMs[layer.id] = 0;
     } else {
       report(step, label, 0);
       const started = now();
-      const result = await runHeightLayer(layer, h, dep, N, n, terr, cellM, {
+      const result = await runHeightLayer(layer, h, dep, ctx, N, n, terr, cellM, {
         cancelled,
         tick: yieldNow,
         progress: (f) => report(step, label, f),
@@ -81,9 +88,10 @@ export async function evaluateProject(project, options = {}) {
       const before = h;
       h = result.height;
       dep = result.dep;
+      ctx = result.ctx;
       stats[layer.id] = summarise(before, h, N, cellM, terr.heightM, result.removed, result.eroded);
       layerMs[layer.id] = now() - started;
-      cache.set(layer.id, { key, height: h, dep, stats: stats[layer.id] });
+      cache.set(layer.id, { key, height: h, dep, ctx, stats: stats[layer.id] });
     }
     thumbs[layer.id] = thumbFromHeight(h, N);
     await yieldNow();
@@ -97,11 +105,19 @@ export async function evaluateProject(project, options = {}) {
   let analysis = cache.get('__analysis');
   if (!analysis || analysis.key !== analysisKey) {
     const started = now();
-    analysis = { key: analysisKey, value: analyseTerrain(h, N, terr), ms: now() - started };
+    // The shadow cache lives with the analysis, so it is rebuilt only when the heights change.
+    analysis = { key: analysisKey, value: analyseTerrain(h, N, terr), ms: now() - started, shadows: new Map() };
     cache.set('__analysis', analysis);
   }
   if (cancelled()) return null;
-  const an = { ...analysis.value, deposition: normalisedDeposition(dep) };
+  const an = {
+    ...analysis.value,
+    deposition: normalisedDeposition(dep),
+    strata: ctx.strata,
+    water: ctx.water,
+    playa: ctx.playa,
+    shadows: analysis.shadows,
+  };
   await yieldNow();
 
   // Texture layers.
@@ -181,27 +197,43 @@ export async function evaluateProject(project, options = {}) {
   return result;
 }
 
-async function runHeightLayer(layer, input, depIn, N, n, terr, cellM, hooks) {
+// Runs one height layer. Returns { height, dep, ctx } (plus the erosion fields), or null if the run was cancelled.
+async function runHeightLayer(layer, input, depIn, ctxIn, N, n, terr, cellM, hooks) {
   const p = layer.params;
   const op = clamp(layer.opacity, 0, 1);
   switch (layer.type) {
     case 'island':
-      return { height: blend(input, generateIsland(N, p, terr.seed), layer.blend, op, falloffMask(N, p.falloff)), dep: depIn };
+      return { height: blend(input, generateIsland(N, p, terr.seed), layer.blend, op, falloffMask(N, p.falloff)), dep: depIn, ctx: ctxIn };
     case 'ramp':
-      return { height: blend(input, generateRamp(N, p), layer.blend, op, falloffMask(N, p.falloff)), dep: depIn };
+      return { height: blend(input, generateRamp(N, p), layer.blend, op, falloffMask(N, p.falloff)), dep: depIn, ctx: ctxIn };
     case 'terrace':
-      return { height: lerpArr(input, applyTerrace(input, N, p), op), dep: depIn };
+      return { height: lerpArr(input, applyTerrace(input, N, p), op), dep: depIn, ctx: ctxIn };
     case 'smooth':
-      return { height: lerpArr(input, applySmooth(input, N, p), op), dep: depIn };
+      return { height: lerpArr(input, applySmooth(input, N, p), op), dep: depIn, ctx: ctxIn };
     case 'levels':
-      return { height: lerpArr(input, applyLevels(input, N, p), op), dep: depIn };
-    case 'erosion':
-      return runErosion(layer, input, depIn, N, cellM, terr, hooks);
+      return { height: lerpArr(input, applyLevels(input, N, p), op), dep: depIn, ctx: ctxIn };
+    case 'mesafield':
+      return { height: blend(input, generateMesaField(N, p, terr.seed, terr.heightM), layer.blend, op, falloffMask(N, p.falloff)), dep: depIn, ctx: ctxIn };
+    case 'strata': {
+      // The column is also handed to the satmap, so the bands on the cliffs match the rock units made here.
+      const def = strataDef(p, terr.seed, terr.heightM, terr.extentM);
+      return { height: applyStrata(input, N, def, op, cellM, terr.heightM), dep: depIn, ctx: { ...ctxIn, strata: def } };
+    }
+    case 'lake':
+    case 'playa': {
+      const isLake = layer.type === 'lake';
+      const r = applyBasin(layer.type, input, N, p, terr, op, isLake ? ctxIn.water : ctxIn.playa);
+      return { height: r.height, dep: depIn, ctx: isLake ? { ...ctxIn, water: r.field } : { ...ctxIn, playa: r.field } };
+    }
+    case 'erosion': {
+      const r = await runErosion(layer, input, depIn, N, cellM, terr, hooks);
+      return r === null ? null : { ...r, ctx: ctxIn };
+    }
     default: {
       const group = LAYER_TYPES[layer.type] && LAYER_TYPES[layer.type].group;
       if (group === 'primitive' || group === 'geological') {
         const field = group === 'primitive' ? generatePrimitive(layer.type, N, p, terr.seed) : generateGeological(layer.type, N, p, terr.seed);
-        return { height: blend(input, field, layer.blend, op, falloffMask(N, p.falloff)), dep: depIn };
+        return { height: blend(input, field, layer.blend, op, falloffMask(N, p.falloff)), dep: depIn, ctx: ctxIn };
       }
       throw new Error('Unknown height layer type: ' + layer.type);
     }

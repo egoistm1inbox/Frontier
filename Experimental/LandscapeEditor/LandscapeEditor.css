@@ -276,3 +276,18 @@ kbd { font: inherit; font-size: 9px; color: #8ee5ae; border: 1px solid #ffffff1a
 
 .logo { display: inline-block; }
 .ll-thumb.is-pending { background: #111; }
+
+/* New: the template menu, styled like the add-layer menu */
+.tpl-wrap { position: relative; display: inline-block; }
+.tpl-menu {
+  position: absolute; right: 0; top: 34px; z-index: 40; width: 320px; padding: 6px;
+  background: #151515; border: 1px solid #2c2c2c; border-radius: 14px; box-shadow: 0 16px 40px #000a;
+}
+.tpl-menu[hidden] { display: none; }
+.tpl-item {
+  width: 100%; display: flex; flex-direction: column; align-items: flex-start; gap: 3px; padding: 10px 12px;
+  border: 0; border-radius: 10px; background: transparent; text-align: left; color: var(--ink);
+}
+.tpl-item:hover, .tpl-item:focus-visible { background: #222; outline: none; }
+.tpl-title { font-size: 12px; color: var(--ink); }
+.tpl-desc { font-size: 11px; line-height: 1.4; color: var(--ink-3); white-space: normal; }

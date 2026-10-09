@@ -2,7 +2,9 @@
 
 A heightmap editor whose terrain comes from an ordered layer stack. Erosion is simulated on the stack, and a procedural satellite-style colour map (the "satmap") is draped over the result.
 
-The layer stack includes the 28 primitive types from Section 1 of the node list. Each one is its own layer type. It also includes six geological landform nodes, inspired by Hesiod's Primitive/Geological group, and a falloff that limits any generator to a region. The other categories are still to come.
+The layer stack includes the 28 primitive types from Section 1 of the node list. Each one is its own layer type. It also includes six geological landform nodes, inspired by Hesiod's Primitive/Geological group, and a falloff that limits any generator to a region.
+
+The Mesa country work adds a mesa field, a stratigraphic column, a lake and a playa. It also adds a desert palette for the satmap, with strata, desert varnish, sand, playa cracks, shrubs and cast shadows. New starts from either the default continental stack or the Mesa country template. The other categories are still to come.
 
 Location: `Experimental/LandscapeEditor/`. Plain ES modules with no build step and no dependencies. The UI follows the layout of `Experimental/ProjectZeroEditor`: top bar, layer stack on the left, viewport in the centre, inspector on the right, status bar along the bottom.
 
@@ -22,7 +24,7 @@ cd Experimental/LandscapeEditor
 npm test
 ```
 
-Runs six Node checks with no installs (tested on Node 22):
+Runs seven Node checks with no installs (tested on Node 22):
 
 - `CheckRng.mjs`: the PRNG, hashes and noise are deterministic and in range.
 - `CheckErosion.mjs`: hydraulic mass balance; thermal mass balance and steepest slope at or below the talus angle; every interior cell drains to the border and outlet areas sum to N²; pure fluvial incision never raises the ground; cancellation stops the solvers.
@@ -30,19 +32,20 @@ Runs six Node checks with no installs (tested on Node 22):
 - `CheckPrimitives.mjs`: the 28 types match Section 1. Each is finite, in [0, 1], has relief and is deterministic. Seeded types respond to the seed, and the fixed patterns ignore it. No two types are near duplicates (|r| ≤ 0.9).
 - `CheckExport.mjs`: at the working size the heightmap is an exact copy. The upscale reproduces the working samples and follows the terrain between them. The synthesised detail is capped at 0.02 of the height range and is deterministic for a seed.
 - `CheckGeological.mjs`: each landform is finite, deterministic and in range, sits at the zero level outside its footprint, and has its defining feature (the summit, the crater rim, the rift shoulders, the flat mesa top). The falloff mask is 1 inside its region and 0 outside, and respects its shape, softness and strength.
+- `CheckMesa.mjs`: the mesa profile is flat on top, steep at the cliff and falls monotonically over the talus. The mesa field is in range, is deterministic, and its mesas differ in size. The stratigraphy is monotonic and continuous at every unit boundary, and it steps only ground steeper than its gate. A lake bed lies below its water level, a playa floor is flat, and a basin never raises low ground. Cast shadows fall away from the sun. The desert satmap is opaque, varied and deterministic. Its desert features do nothing on temperate palettes. The Mesa country template evaluates, survives a save and open, and the default stack still matches its recorded hashes.
 
-Browser checks (menus, filter, drag and drop, undo, erosion dropdowns, export files, open and save, a 512 recompute) were run ad hoc in headless Chromium. They are not part of `npm test`.
+Browser checks (menus, filter, drag and drop, undo, erosion dropdowns, export files, open and save, a 512 recompute) were run ad hoc in headless Chromium. They are not part of `npm test`. The mesa work was also checked in headless Chromium, with no page errors: the Add menu (45 entries in 13 sections), the New menu, the Mesa country template, undo and redo of New, the four new layer types added by hand, and the satmap and stratigraphy inspectors.
 
 ## Layout
 
 - **Layers (left).** Height layers run bottom to top in evaluation order. Texture layers come last. Drag a row above or below another row of the same kind to reorder it. The eye toggle bypasses a layer, which keeps its thumbnail and clears its stats.
-- **Add menu.** "+ Add layer" opens a list grouped into Primitives (basic, noise, cells, fractals, patterns, waves), Shapes, Geological · landforms, Erosion, Shaping and Texture. The filter field at the top narrows the list as you type. Each entry has a one-line description. Adding a layer closes the menu. The Geological section lists the six landform nodes.
+- **Add menu.** "+ Add layer" opens a list grouped into Primitives (basic, noise, cells, fractals, patterns, waves), Shapes, Geological · landforms, Stratigraphy, Water · basins, Erosion, Shaping and Texture (13 sections, 45 entries). The filter field at the top narrows the list as you type. Each entry has a one-line description. Adding a layer closes the menu. The Geological section lists the six landform nodes and the mesa field. Stratigraphy holds the stratigraphic column. Water · basins holds the lake and the playa.
 - **Viewport (centre).** A 3D view (drag to orbit; right-drag, middle-drag or Shift-drag to pan, so the scene follows the cursor; wheel to zoom) and five 2D views: Satmap, Height, Slope, Flow (drainage, log scale) and Sediment. The 3D mesh has at most 1024 cells a side. Larger grids are averaged down for display only. Hovering over a 2D view shows a readout of position, altitude, slope and drainage area. "Satmap texture" and "Water" toggle the 3D surface. "Recompute" forces an update.
 - **Inspector (right).** Shows the selected layer: name, description, enable toggle, move, duplicate, reset and delete buttons, then its parameter cards. Generator layers (primitives, shapes and geological landforms) also have a Falloff card (see Falloff). The Map row shows the terrain settings: grid, extent, height range, sea level and seed (with a randomise button). Viewport settings are kept apart from the undo history.
-- **Top bar.** Project name, undo and redo, New, Open, Save JSON, Export .r16 and Export satmap.
+- **Top bar.** Project name, undo and redo, New, Open, Save JSON, Export .r16 and Export satmap. New opens a menu of two starting stacks, Default · continental and Mesa country. Choosing one replaces the project. Ctrl+Z brings the previous project back, name included.
 - **Status bar.** Compute state and time, elevation range, share of the map under water and mean slope. During an export it shows "Exporting heightmap" or "Exporting satmap" with progress.
 
-Keyboard: Ctrl+Z undo; Ctrl+Y or Ctrl+Shift+Z redo; Delete or Backspace removes the selected layer; R recomputes; Escape closes the add menu. The undo, delete and R keys do nothing while focus is in a text field, such as the filter.
+Keyboard: Ctrl+Z undo; Ctrl+Y or Ctrl+Shift+Z redo; Delete or Backspace removes the selected layer; R recomputes; Escape closes the add menu and the New menu. The undo, delete and R keys do nothing while focus is in a text field, such as the filter.
 
 ## Resolution
 
@@ -69,7 +72,9 @@ A project is the terrain settings plus an ordered list of layers. Layer and terr
 | Kind | Types |
 | --- | --- |
 | Primitives | The 28 types in the Primitives section below. Each is one algorithm. |
-| Geological | Mountain cone, Radial mountain range, Mesa, Inselberg, Crater, Rift valley (see Geological landforms) |
+| Geological | Mountain cone, Radial mountain range, Mesa, Inselberg, Crater, Rift valley (see Geological landforms), Mesa field (see Mesas, strata and water) |
+| Stratigraphy | Stratigraphy: rock units laid in beds, which step the steep ground (see Mesas, strata and water) |
+| Water | Lake, Playa (see Mesas, strata and water) |
 | Shapes | Island falloff, Tilt ramp |
 | Erosion | Erosion (choose hydraulic, thermal or fluvial in its process dropdown) |
 | Shaping | Terrace, Smooth, Levels |
@@ -96,6 +101,8 @@ Each layer has a name, an enable toggle, an opacity (labelled Strength for erosi
 8. Satellite · temperate: satmap.
 
 Falloff is off in the default stack, so the default terrain is unchanged.
+
+The **Mesa country** template is the second starting point. See Mesas, strata and water.
 
 ## Primitives
 
@@ -160,6 +167,8 @@ In the default stack, turning the falloff on for Continental hills (radius 80, s
 
 Six nodes, inspired by the Primitive/Geological group of Hesiod, a node-based terrain generator licensed under GPL-3.0. Each is a finite landform with a centre and a radius, so it stays where it is placed and needs no falloff. They blend in Add mode by default. Outside the landform the ground is at the zero level, so nothing else changes.
 
+The mesa field, which places many mesas at once, is a separate node. See Mesas, strata and water.
+
 | Node | What it makes | Main controls |
 | --- | --- | --- |
 | Mountain cone | A single conical massif with a sharp summit | Summit sharpness, Rugosity |
@@ -172,6 +181,59 @@ Six nodes, inspired by the Primitive/Geological group of Hesiod, a node-based te
 Every node also has Centre X and Y, Radius (percent of the half-width), Height (the tallest feature; 1 is half the height range above the base), Offset, Detail scale, Octaves and Seed.
 
 **Attribution and licence.** Hesiod is licensed under GPL-3.0. The Frontier repository has no licence file, so Hesiod's code cannot be copied in without changing the terms. These nodes are independent implementations of the kinds of landform that Hesiod's documentation describes, written for this editor. No code from Hesiod is used. Reusing Hesiod's code itself would bring in the GPL terms.
+
+## Mesas, strata and water
+
+These layers make the Mesa country template. Each one can also be added to any stack. The mesa field and the stratigraphy shape the ground. The lake and the playa are basins at a set level, and they add water to the satmap.
+
+**Mesa field (Geological).** Many mesas and buttes at once. The map is divided into cells, and each cell may hold one mesa. A mesa has a flat caprock top, a steep cliff band, and a talus apron that falls away at its foot. Each outline is a noisy circle, so no two mesas match. Sizes and top heights vary from mesa to mesa. The cliff profile is a closed-form curve, so it is smooth and monotonic, with no stray peaks. The mesas are added in Add mode, and the Falloff card applies, so a field can be limited to a region.
+
+| Control | Default | Meaning |
+| --- | --- | --- |
+| Mesas across | 6 | Grid cells across the map (2 to 14) |
+| Coverage | 0.60 | Share of the cells that hold a mesa |
+| Mesa size | 0.85 | Radius of each caprock top, as a share of its cell |
+| Size variation | 0.45 | How much sizes and top heights differ from one mesa to the next |
+| Placement jitter | 0.70 | How far each mesa moves from its cell centre. 0 centres them |
+| Top height | 260 m | Height of the caprock above the plain |
+| Cliff width | 0.22 | Width of the steep band, as a share of the radius. Smaller is steeper |
+| Talus apron | 0.70 | Width of the sloping apron at the foot of each cliff |
+| Outline | 0.35 | How far each outline strays from a circle. 0 gives round mesas |
+| Rugosity | 0.12 | Roughness of the cliffs and talus. The caprock stays flatter |
+| Detail scale, Octaves, Seed | 6 cyc, 4, 31 | Scale and detail of the roughness |
+
+**Stratigraphy (Stratigraphy).** A column of rock units laid in beds, between a base altitude and a top. Hard units form flat benches with steep risers, and soft units slope. Only ground steeper than Applies above (default 45°) is stepped, so gentle ground stays smooth. The layer reshapes the terrain below it, inside the column, so erosion layers above it cut through the beds. The satmap colours the rock by the unit it lies in. The mapping is monotonic and continuous at every boundary, so the beds never fold or tear. The beds can dip, and an undulation adds slow waviness.
+
+| Control | Default | Meaning |
+| --- | --- | --- |
+| Units | 10 | Rock units in the column (2 to 16). The top unit is always hard, as a caprock |
+| Unit thickness | 45 m | Average thickness of each unit. Each varies by about 20% |
+| Base | 150 m | Altitude of the bottom of the column. Ground below it is not touched |
+| Hard units | 0.50 | Share of the units that are hard. Hard units form benches and cliffs |
+| Riser sharpness | 0.60 | How steep the risers of the hard units are |
+| Applies above | 45° | Only ground steeper than this is stepped. 0 steps all the ground |
+| Dip, Dip direction | 3°, 90° | Tilt of the beds, and the compass direction they rise toward |
+| Undulation | 12 m | How much the beds wave up and down |
+
+**Lake (Water).** A basin with a flat water surface at the level you set. The bed lies Depth below the surface. A bank rises from the bed across the shore width, and the shoreline is wobbled so it is not a circle. A lake never raises low ground. The satmap paints the water by depth: pale teal on the shallows, deeper teal in the middle, and a muddy rim.
+
+**Playa (Water).** A dry lake bed: a flat clay floor at the floor level. Ground above that level is cut down, and ground below it is filled. The edge blends into the surrounding ground across the shore width. The satmap paints the floor pale, with a crack network.
+
+Both basins take Centre X and Y, Radius (percent of the half-width), Stretch (1 is round), Direction, a level, shore width, edge wobble and Seed. The lake adds Depth. The playa's level is its Floor level.
+
+**Mesa country template.** New, then Mesa country, builds this stack, bottom to top:
+
+1. Plateau base: fBm, a low plain.
+2. Mesa field: five cells across, coverage 0.5, caprock 300 m.
+3. Butte field: eleven cells across, caprock 150 m, steeper talus. Smaller buttes sit between the mesas.
+4. Stratigraphy: 12 units, 40 m each, base 120 m, beds dipping 3° and rising toward the east, undulation 20 m.
+5. Fluvial canyons: fluvial erosion, 80 iterations, erodibility 0.05.
+6. Thermal talus: thermal erosion at 60% strength, talus 50°.
+7. Playa: floor at 240 m, centred at 66%, 64%.
+8. Reservoir: lake at 190 m, centred at 24%, 72%.
+9. Mesa country texture: the desert satmap, with strata 0.6, varnish 0.35, sand 0.8 and cast shadows 0.85.
+
+The terrain is 1k (1024 cells), 6144 m across, with a 1000 m height range, sea level 0 and seed 1337. Sea level is 0 because the basins are the only water. The stack computes in about 12 s in Node, and 12.8 s in headless Chromium. Fluvial takes about 5 s of that, and the satmap about 2 s. The result has caprock mesas on banded cliffs, talus at their feet, sand and wash on the plain, a cracked playa and a flat reservoir. Its quality is stylised and procedural. The weaknesses are listed under Limitations. Its parameters were tuned by eye, so they are a starting point.
 
 ## Erosion
 
@@ -225,7 +287,15 @@ The satmap is a procedural, satellite-imagery-style colour map. It is not built 
 - Snow lies above the snowline.
 - Hillshade and cavity shading give relief, and field patches and grain break up the surface.
 
-Palettes: Temperate (default), Arid, Alpine, Tropical, Boreal, Autumn. Export size: 1024 (default), 2048, 4096, 8192 or 16384 px. The viewport preview is capped at 1024 px. Parameters: vegetation (0.70), wetness (0.60), rock slope (34°), snowline (900 m), hillshade (0.60), detail (0.50), saturation, contrast, sun azimuth (315°) and sun elevation (38°).
+Palettes: Temperate (default), Arid, Alpine, Tropical, Boreal, Autumn, and Mesa country. Export size: 1024 (default), 2048, 4096, 8192 or 16384 px. The viewport preview is capped at 1024 px. Parameters: vegetation (0.70), wetness (0.60), rock slope (34°), snowline (900 m), hillshade (0.60), detail (0.50), saturation, contrast, sun azimuth (315°) and sun elevation (38°).
+
+**Mesa country palette.** This palette turns on the desert features. Each one is off at zero, and the temperate palettes ignore them, so their output is unchanged.
+
+- **Strata** colours the bedrock by the unit it lies in, so cliffs show bands. It needs a Stratigraphy layer below.
+- **Desert varnish** adds dark mineral streaks, on the cliff faces only.
+- **Sand and wash** puts pale sand on gentle ground and in the dry channels.
+- The playa floor is pale, with a crack network. Shrubs and juniper grow on the caprock, and wind ripples mark the sand. Lake water is pale teal on the shallows, deeper teal in the middle, with a muddy rim.
+- **Cast shadows** (any palette) darken the ground that a ridge or cliff shades from the sun. Its strength is the control's value, and it uses the same sun as hillshade.
 
 ## Export and save
 
@@ -253,6 +323,12 @@ Recomputes run in a module worker, so the UI stays responsive, and a new job can
 | 16384² output | Browser | Not tested | — |
 | Geological landform, 1024² (each of the six nodes) | Node | 0.14–0.34 s | — |
 | Falloff mask, 1024² | Node | 0.04 s | — |
+| Mesa country stack, 1024² | Node | 12.0 s (11–15 s over several runs). Fluvial about 5 s, satmap about 2 s, thermal 0.5–0.7 s, playa and reservoir about 0.06 s each | — |
+| Mesa country stack, 1024², first compute after New | Headless Chromium | 12.8 s (one run) | — |
+| Mesa country satmap, 2048 px | Node | 5.2 s | — |
+| Mesa country satmap, 4096 px | Node | 19.6 s | — |
+| Mesa country satmap, 16384 px | Node | Not run. About 5 min, estimated as 16 times the 4096 time | — |
+| Mesa country satmap, 16384 px | Browser | Not tested | — |
 
 ## What changed for "looks basic"
 
@@ -289,6 +365,9 @@ What the numbers show: the aggregate statistics barely move at matched resolutio
 - **The satmap is procedural.** It imitates satellite colour using rules. It does not show real places.
 - **Erosion is an approximation.** It is tuned for plausible results, not calibrated to real rock, rainfall or time. Results depend on grid size, because droplet density and flow areas are counted per cell. Retune when you change the grid.
 - **The fluvial "Added" stat includes uplift.** It is not net deposition.
-- **Lakes can form in closed basins.** A closed depression below sea level fills with water in the satmap, which can look like an inland lake.
+- **Closed depressions fill with water.** A closed depression below sea level is filled and coloured as a lake in the satmap. The Lake and Playa layers make deliberate basins, which are not tied to sea level.
+- **Water is not simulated.** A lake or playa is a fixed basin at the level you set. It has no inflow, outflow or evaporation. The 3D water plane is still at sea level only, so a lake or playa shows as a coloured floor in 3D.
+- **The mesa look is stylised.** The caprock tops are plain, the cliff bands are fairly regular, and the shorelines have little detail. The output is procedural. It has not been compared with photographs or with professional terrain.
+- **The desert satmap is slower.** Desert palettes paint more per pixel than temperate ones. A 16384 px Mesa country satmap is estimated at about 5 minutes in Node, and it has not been run.
 - **WebGL2 is required for the 3D view.** The 2D views work without it.
 - **Testing is limited.** Checks ran in headless Chromium with software WebGL (SwiftShader). There was no real-GPU test, and Firefox and Safari were not tested.

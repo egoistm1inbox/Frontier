@@ -4,6 +4,7 @@ import {
   createDefaultProject, normaliseProject, evaluationSnapshot, workingSize, createLayer, newId, STORAGE_KEY,
 } from './terrain/project.js';
 import { layerKind } from './terrain/layers.js';
+import { STACK_TEMPLATES, buildTemplate } from './terrain/templates.js';
 import { renderLayerList, buildAddMenu } from './ui/layers-panel.js';
 import { renderInspector, updateInspectorStats } from './ui/inspector.js';
 import { View2D } from './ui/viewport2d.js';
@@ -47,9 +48,13 @@ let view3dError = null;
 
 // ---------------------------------------------------------------- project data helpers
 const dataSnapshot = () => JSON.stringify({ terrain: state.project.terrain, layers: state.project.layers });
+// Entries made by New, undo and redo also carry the project name, so undoing New brings the old name back.
+// Slider edits leave the name out, so undoing an edit does not revert a rename.
+const namedSnapshot = () => JSON.stringify({ name: state.project.name, terrain: state.project.terrain, layers: state.project.layers });
 
 function applySnapshot(json) {
   const data = JSON.parse(json);
+  if (typeof data.name === 'string') state.project.name = data.name;
   state.project.terrain = data.terrain;
   state.project.layers = data.layers;
   if (state.selected !== 'terrain' && !state.project.layers.some((l) => l.id === state.selected)) state.selected = 'terrain';
@@ -86,7 +91,7 @@ function afterProjectChange(delay) {
 
 function undo() {
   if (!state.history.length) return;
-  state.future.push(dataSnapshot());
+  state.future.push(namedSnapshot());
   applySnapshot(state.history.pop());
   state.lastKey = null;
   renderAll();
@@ -96,7 +101,7 @@ function undo() {
 
 function redo() {
   if (!state.future.length) return;
-  state.history.push(dataSnapshot());
+  state.history.push(namedSnapshot());
   applySnapshot(state.future.pop());
   state.lastKey = null;
   renderAll();
@@ -291,14 +296,43 @@ function openJSON(file) {
   reader.readAsText(file);
 }
 
-function newProject() {
-  state.history.push(dataSnapshot());
+// New starts from a template. The current project goes on the undo history first, so New can be undone.
+function newProject(templateId = 'default') {
+  state.history.push(namedSnapshot());
   state.future = [];
-  state.project = createDefaultProject();
+  state.project = buildTemplate(templateId);
   state.selected = 'terrain';
   renderAll();
   schedule(0);
   queuePersist();
+}
+
+function openTemplateMenu() {
+  const host = $('#tpl-menu');
+  if (!host.hidden) {
+    closeTemplateMenu();
+    return;
+  }
+  host.replaceChildren(...STACK_TEMPLATES.map((t) => el('button', {
+    type: 'button',
+    class: 'tpl-item',
+    role: 'menuitem',
+    'data-template': t.id,
+    onClick: () => {
+      closeTemplateMenu();
+      newProject(t.id);
+    },
+  },
+    el('span', { class: 'tpl-title', text: t.label }),
+    el('span', { class: 'tpl-desc', text: t.blurb }),
+  )));
+  host.hidden = false;
+  $('#btn-new').setAttribute('aria-expanded', 'true');
+}
+
+function closeTemplateMenu() {
+  $('#tpl-menu').hidden = true;
+  $('#btn-new').setAttribute('aria-expanded', 'false');
 }
 
 function flashStatus(message) {
@@ -626,7 +660,10 @@ function wireKeys() {
   window.addEventListener('keydown', (e) => {
     const typing = e.target instanceof HTMLElement && (e.target.matches('input, textarea, select') || e.target.isContentEditable);
     const mod = e.ctrlKey || e.metaKey;
-    if (e.key === 'Escape') closeAddMenu();
+    if (e.key === 'Escape') {
+      closeAddMenu();
+      closeTemplateMenu();
+    }
     if (mod && !e.shiftKey && e.key.toLowerCase() === 'z' && !typing) {
       e.preventDefault();
       undo();
@@ -676,7 +713,10 @@ function wireHeader() {
   });
   $('#btn-undo').addEventListener('click', undo);
   $('#btn-redo').addEventListener('click', redo);
-  $('#btn-new').addEventListener('click', newProject);
+  $('#btn-new').addEventListener('click', openTemplateMenu);
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.tpl-wrap')) closeTemplateMenu();
+  });
   $('#btn-open').addEventListener('click', () => $('#file-open').click());
   $('#file-open').addEventListener('change', (e) => {
     const file = e.target.files?.[0];

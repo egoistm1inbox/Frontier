@@ -157,13 +157,18 @@ const ADD_SECTIONS = [
   ['Primitives · patterns', ['grid', 'hex', 'brick', 'checker', 'stripes']],
   ['Primitives · waves', ['sine', 'sawtooth', 'triangle']],
   ['Shapes', ['island', 'ramp']],
-  ['Geological · landforms', ['cone', 'range', 'stump', 'inselberg', 'crater', 'rift']],
+  ['Geological · landforms', ['cone', 'range', 'stump', 'mesafield', 'inselberg', 'crater', 'rift']],
+  ['Stratigraphy', ['strata']],
+  ['Water · basins', ['lake', 'playa']],
   ['Erosion', ['erosion']],
   ['Shaping', ['terrace', 'smooth', 'levels']],
   ['Texture', ['satmap']],
 ];
 
-const ICON_FOR = { fbm: 'noise', constant: 'base', cone: 'ridged', range: 'ridged', stump: 'terrace', inselberg: 'base', crater: 'island', rift: 'ramp' };
+const ICON_FOR = {
+  fbm: 'noise', constant: 'base', cone: 'ridged', range: 'ridged', stump: 'terrace', inselberg: 'base', crater: 'island', rift: 'ramp',
+  mesafield: 'terrace', strata: 'levels', lake: 'island', playa: 'smooth',
+};
 const iconFor = (type) => ICONS[ICON_FOR[type] || type] || ICONS[LAYER_TYPES[type].group] || ICONS.noise;
 
 export function buildAddMenu(onPick) {

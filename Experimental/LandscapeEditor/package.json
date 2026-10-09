@@ -5,6 +5,6 @@
   "description": "Heightmap landscape editor with a layer stack, realistic erosion and satmap texturing. No dependencies: open through any static server.",
   "type": "module",
   "scripts": {
-    "test": "node CheckRng.mjs && node CheckErosion.mjs && node CheckPipeline.mjs && node CheckPrimitives.mjs && node CheckExport.mjs && node CheckGeological.mjs"
+    "test": "node CheckRng.mjs && node CheckErosion.mjs && node CheckPipeline.mjs && node CheckPrimitives.mjs && node CheckExport.mjs && node CheckGeological.mjs && node CheckMesa.mjs"
   }
 }

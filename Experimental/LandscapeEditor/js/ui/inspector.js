@@ -161,13 +161,12 @@ function renderLayer(container, layer, m) {
   } else if (!isTexture && controlsFor(layer).length) {
     container.append(card(def.label, 'Parameters', ...controlsFor(layer).map((spec) => controlRow(layer, spec, layer.params, h))));
   } else if (isTexture) {
-    const rows = controlsFor(layer).map((spec) => controlRow(layer, spec, layer.params, h));
-    const paletteCards = rows.slice(0, 2);
-    const surfaceCards = rows.slice(2, 6);
-    const lightCards = rows.slice(6);
-    container.append(card('Palette', 'Satmap', ...paletteCards));
-    container.append(card('Surface', 'Terrain response', ...surfaceCards));
-    container.append(card('Light and detail', 'Shading', ...lightCards, note('Hillshade and cavity shading use the sun bearing and elevation here. The 3D view lights the terrain with its own sun in the View card.')));
+    // Each card takes its controls by key, so adding a control never moves the others between cards.
+    const specs = controlsFor(layer);
+    const rowsFor = (keys) => specs.filter((s) => keys.includes(s.key)).map((spec) => controlRow(layer, spec, layer.params, h));
+    container.append(card('Palette', 'Satmap', ...rowsFor(['palette', 'resolution'])));
+    container.append(card('Surface', 'Terrain response', ...rowsFor(['vegetation', 'wetness', 'rockSlope', 'snowline', 'strata', 'varnish', 'sand'])));
+    container.append(card('Light and detail', 'Shading', ...rowsFor(['hillshade', 'shadow', 'detail', 'saturation', 'contrast', 'sunAzimuth', 'sunElevation']), note('Hillshade, cast shadows and cavity shading use the sun bearing and elevation here. The 3D view lights the terrain with its own sun in the View card.')));
   }
 
   if (isGenerator(layer.type)) container.append(falloffCard(layer, h));
