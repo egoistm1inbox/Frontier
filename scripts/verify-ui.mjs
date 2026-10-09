@@ -268,6 +268,36 @@ await clickText('.tree-row.layer-row .object-button', /Foothills/);
 const blendSelect = qa('.select-block select').find((s) => [...s.options].some((o) => /Additive/.test(o.textContent)));
 check('blend-mode select present on a shape layer', !!blendSelect);
 
+// Drag reorder. jsdom has no DragEvent/DataTransfer, but a MouseEvent with a
+// drag type carries clientY, which is all the row handlers read.
+const displayNames = () => qa('.tree-row.layer-row')
+  .map((r) => r.querySelector('.layer-meta > span')?.textContent.trim());
+const orderBeforeDrag = displayNames();
+const dragged = qa('.tree-row.layer-row').find((r) => /Surface detail/.test(r.textContent));
+const dropTarget = qa('.tree-row.layer-row').find((r) => /Continental relief/.test(r.textContent));
+if (dragged && dropTarget) {
+  const rect = dropTarget.getBoundingClientRect();
+  await act(async () => { dragged.dispatchEvent(new window.MouseEvent('dragstart', { bubbles: true })); });
+  await act(async () => {
+    dropTarget.dispatchEvent(new window.MouseEvent('dragover', { bubbles: true, cancelable: true, clientY: rect.top + 2 }));
+  });
+  await settle(120);
+  await act(async () => {
+    dropTarget.dispatchEvent(new window.MouseEvent('drop', { bubbles: true, cancelable: true, clientY: rect.top + 2 }));
+    dragged.dispatchEvent(new window.MouseEvent('dragend', { bubbles: true }));
+  });
+  await settle(700);
+  const orderAfterDrag = displayNames();
+  const iDragged = orderAfterDrag.indexOf('Surface detail');
+  const iTarget = orderAfterDrag.indexOf('Continental relief');
+  check('drag changes the stack order', JSON.stringify(orderBeforeDrag) !== JSON.stringify(orderAfterDrag),
+    `${orderBeforeDrag.slice(0, 4).join('>')} → ${orderAfterDrag.slice(0, 4).join('>')}`);
+  check('dropping above a row lands directly above it', iDragged === iTarget - 1,
+    `dragged at ${iDragged}, target at ${iTarget}`);
+} else {
+  check('drag reorder rows found', false, 'Surface detail / Continental relief rows missing');
+}
+
 /* ------------------------------------------------------------- sculpting */
 
 section('Sculpt tooling');

@@ -166,17 +166,27 @@ export default function LayerStack({
   const shapeList = useMemo(() => filter(shape), [shape, query]);
   const surfaceList = useMemo(() => filter(surface), [surface, query]);
 
+  /**
+   * Reorder from a drop. The list is displayed top-of-stack first but stored
+   * bake-order first, so both ends are converted through display positions:
+   * display index d holds array index n-1-d.
+   */
   const reorder = (list, listKind, fromId, toId, edge) => {
-    const from = list.findIndex((l) => l.id === fromId);
-    let to = list.findIndex((l) => l.id === toId);
-    if (from < 0 || to < 0 || from === to) return;
-    if (edge === 'above') to -= 1;
-    if (to < 0) to = 0;
-    if (to > list.length - 1) to = list.length - 1;
-    // The displayed list is reversed relative to bake order.
     const n = list.length;
-    if (listKind === 'shape') onReorderShape(n - 1 - from, n - 1 - to);
-    else onReorderTexture(n - 1 - from, n - 1 - to);
+    const from = list.findIndex((l) => l.id === fromId);
+    const to = list.findIndex((l) => l.id === toId);
+    if (from < 0 || to < 0 || from === to) return;
+
+    let dFrom = n - 1 - from;
+    let dTo = n - 1 - to;
+    if (edge === 'below') dTo += 1;
+    // Removing the dragged row first shifts everything below it up one slot.
+    if (dFrom < dTo) dTo -= 1;
+    dTo = Math.max(0, Math.min(n - 1, dTo));
+    const arrayTarget = n - 1 - dTo;
+    if (arrayTarget === from) return;
+    if (listKind === 'shape') onReorderShape(from, arrayTarget);
+    else onReorderTexture(from, arrayTarget);
   };
 
   const handleDragOver = (event, id) => {
@@ -193,9 +203,12 @@ export default function LayerStack({
     setDropTarget(null);
   };
 
-  const group = (title, icon, list, kind, count) => {
+  const group = (title, icon, arrayList, kind, count) => {
     const Icon = icon;
     const open = !collapsed[kind] || !!query;
+    // `arrayList` is bake order and is what reorder operates on; rows render in
+    // the reverse of it so the top row is the top of the stack.
+    const list = [...arrayList].reverse();
     return (
       <div className="group">
         <button
@@ -221,9 +234,17 @@ export default function LayerStack({
             onToggle={onToggleLayer}
             dragging={dragId === layer.id}
             dropEdge={dropTarget?.id === layer.id ? dropTarget.edge : null}
-            onDragStart={(e, id) => { setDragId(id); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', id); }}
+            onDragStart={(e, id) => {
+              setDragId(id);
+              // dataTransfer is always present in a real browser drag, but a
+              // synthetic dispatch may omit it; the drop path only needs state.
+              if (e.dataTransfer) {
+                e.dataTransfer.effectAllowed = 'move';
+                e.dataTransfer.setData('text/plain', id);
+              }
+            }}
             onDragOver={(e) => handleDragOver(e, layer.id)}
-            onDrop={(e, id) => handleDrop(e, id, list, kind)}
+            onDrop={(e, id) => handleDrop(e, id, arrayList, kind)}
           />
         ))}
         {(open || !!query) && !list.length && <p className="empty">No layers match.</p>}
@@ -306,8 +327,8 @@ export default function LayerStack({
         <div style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '0 14px 9px', fontSize: 8, letterSpacing: 1.3, color: '#6f6f6f' }}>
           <Info size={11} /> TOP OF STACK · BAKES LAST
         </div>
-        {group('Surface', Palette, [...surfaceList].reverse(), 'surface', surface.length)}
-        {group('Shape', Mountain, [...shapeList].reverse(), 'shape', shape.length)}
+        {group('Surface', Palette, surfaceList, 'surface', surface.length)}
+        {group('Shape', Mountain, shapeList, 'shape', shape.length)}
         <div style={{ padding: '2px 14px 14px', fontSize: 8, letterSpacing: 1.3, color: '#5f5f5f', display: 'flex', alignItems: 'center', gap: 7 }}>
           <Box size={11} /> BASE · BAKES FIRST
         </div>
