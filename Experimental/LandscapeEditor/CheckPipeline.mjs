@@ -194,4 +194,61 @@ console.log(`pipeline: stack of ${project.layers.length} layers evaluates to ${N
   assert.ok(EROSION_TYPES.thermal && EROSION_TYPES.fluvial && EROSION_TYPES.hydraulic);
 }
 
+// ---------------------------------------------------------------- falloff and geological layers in the stack
+{
+  const base = Float32Array.from([0.2, 0.8, 0.5, 0.1]);
+  const over = Float32Array.from([0.9, 0.1, 0.7, 0.4]);
+  const none = new Float32Array(4); // mask 0: the layer has no effect in any blend mode
+  const ones = new Float32Array(4).fill(1);
+  for (const mode of ['Normal', 'Add', 'Subtract', 'Multiply', 'Max', 'Min']) {
+    assert.deepEqual(Array.from(blend(base, over, mode, 0.8, none)), Array.from(base), `a zero mask leaves the base unchanged in ${mode} mode`);
+    assert.deepEqual(Array.from(blend(base, over, mode, 0.8, ones)), Array.from(blend(base, over, mode, 0.8)), `a full mask matches no mask in ${mode} mode`);
+  }
+}
+{
+  // A fractal limited to a region. The base is zero, so outside the region the terrain stays at zero.
+  const size = 64;
+  const proj = (layers) => ({ ...createDefaultProject(), terrain: { ...createDefaultProject().terrain, size }, layers });
+  const limited = createLayer('fbm', { params: { falloff: { enabled: true, radius: 50, softness: 0, strength: 100 } } });
+  const free = createLayer('fbm');
+  const withFalloff = await evaluateProject(proj([limited]), { cache: new Map() });
+  const without = await evaluateProject(proj([free]), { cache: new Map() });
+  const patchMean = (h, x0, y0) => {
+    let sum = 0;
+    for (let y = y0; y < y0 + 8; y++) for (let x = x0; x < x0 + 8; x++) sum += h[y * size + x];
+    return sum / 64;
+  };
+  assert.equal(patchMean(withFalloff.height, 0, 0), 0, 'with a falloff the layer does nothing outside its region');
+  assert.ok(patchMean(withFalloff.height, 28, 28) > 0.05, 'inside the region the layer is there');
+  assert.ok(patchMean(without.height, 0, 0) > 0.05, 'without a falloff the layer covers the whole map');
+}
+{
+  // A crater added in Add mode sinks a flat floor at its centre and leaves the floor alone outside its footprint.
+  const size = 64;
+  const proj = (layers) => ({ ...createDefaultProject(), terrain: { ...createDefaultProject().terrain, size }, layers });
+  const floor = createLayer('constant', { params: { value: 0.5 } });
+  const crater = createLayer('crater');
+  const r = await evaluateProject(proj([floor, crater]), { cache: new Map() });
+  const at = (x, y) => r.height[y * size + x];
+  assert.equal(crater.blend, 'Add', 'geological layers default to Add');
+  assert.ok(at(size >> 1, size >> 1) < 0.4, `a crater sinks a flat floor at its centre (${at(size >> 1, size >> 1).toFixed(3)})`);
+  assert.ok(Math.abs(at(0, 0) - 0.5) < 0.01, 'outside the crater the floor is unchanged');
+}
+{
+  // Projects written before the falloff existed still load, with the falloff off. A saved falloff block is kept.
+  const old = normaliseProject({
+    layers: [
+      { type: 'fbm', params: { octaves: 3 } },
+      { type: 'cone', params: { radius: 30, falloff: { enabled: true, radius: 40 } } },
+    ],
+  });
+  const fb = old.layers[0];
+  assert.equal(fb.params.falloff.enabled, false, 'a generator from an older file has the falloff off');
+  const cone = old.layers[1];
+  assert.equal(cone.params.radius, 30, 'geological parameters are kept');
+  assert.equal(cone.params.falloff.enabled, true, 'a falloff block from a file is kept');
+  assert.equal(cone.params.falloff.radius, 40, 'falloff settings from a file are kept');
+  assert.equal(cone.params.falloff.centreX, 50, 'missing falloff settings fall back to the defaults');
+}
+
 console.log('CheckPipeline: all checks passed');

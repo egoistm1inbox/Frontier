@@ -1,5 +1,6 @@
 // Project model: terrain settings, the layer list, view settings. Pure data, so it serialises to JSON.
-import { LAYER_TYPES, EROSION_TYPES, DEFAULT_VIEW, DEFAULT_GRID, GRID_SIZES, SATMAP_SIZES, defaultLayerName, layerKind } from './layers.js';
+import { LAYER_TYPES, EROSION_TYPES, DEFAULT_VIEW, DEFAULT_GRID, GRID_SIZES, SATMAP_SIZES, defaultLayerName, layerKind, isGenerator } from './layers.js';
+import { normaliseFalloff } from './falloff.js';
 
 // Version 2 renamed two types (noise to fbm, base to constant). Older files are migrated on load.
 export const PROJECT_VERSION = 2;
@@ -100,6 +101,7 @@ export function normaliseProject(input) {
     // The old base layer stored its height as "level". The constant primitive calls it "value".
     if (raw.type === 'base' && rawParams.value === undefined && rawParams.level !== undefined) rawParams.value = rawParams.level;
     mergeParams(params, rawParams);
+    if (isGenerator(type)) params.falloff = normaliseFalloff(params.falloff);
     if (type === 'erosion' && !EROSION_TYPES[params.type]) params.type = 'hydraulic';
     if (type === 'satmap' && !SATMAP_SIZES.includes(+params.resolution)) params.resolution = 1024;
     let id = typeof raw.id === 'string' && raw.id ? raw.id : fresh.id;

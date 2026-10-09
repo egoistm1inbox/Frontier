@@ -1,6 +1,8 @@
 import { downsample } from '../core/grid.js';
 
 const MESH_MAX = 1024;
+// Vertical field of view of the 3D camera, in degrees. Panning uses it too, so the pan matches the projection.
+const FOV_DEG = 40;
 
 // Mesh heights for a result: the working grid, averaged down to MESH_MAX cells a side if it is larger.
 function meshGrid(result) {
@@ -337,7 +339,7 @@ export class View3D {
     const aspect = this.canvas.width / Math.max(1, this.canvas.height);
     const eye = this.eye();
     const view = lookAt(eye, this.camera.target, [0, 1, 0]);
-    const proj = perspective((40 * Math.PI) / 180, aspect, 0.01, 20);
+    const proj = perspective((FOV_DEG * Math.PI) / 180, aspect, 0.01, 20);
     const vp = mul(proj, view);
     const az = (this.settings.sunAzimuth * Math.PI) / 180;
     const el = (this.settings.sunElevation * Math.PI) / 180;
@@ -389,8 +391,12 @@ export class View3D {
     const c = this.canvas;
     let drag = null;
     c.addEventListener('contextmenu', (e) => e.preventDefault());
+    // Right button, middle button, or Shift with the left button pans. Plain left drag orbits.
+    c.addEventListener('mousedown', (e) => {
+      if (e.button === 1) e.preventDefault(); // stops middle-click autoscroll
+    });
     c.addEventListener('pointerdown', (e) => {
-      drag = { x: e.clientX, y: e.clientY, pan: e.button === 2 || e.shiftKey };
+      drag = { x: e.clientX, y: e.clientY, pan: e.button === 2 || e.button === 1 || e.shiftKey };
       c.setPointerCapture(e.pointerId);
     });
     c.addEventListener('pointermove', (e) => {
@@ -400,11 +406,15 @@ export class View3D {
       drag.x = e.clientX;
       drag.y = e.clientY;
       if (drag.pan) {
+        // Pan in the camera's own plane. The scene moves with the cursor: a drag right moves the target left,
+        // a drag down moves it up in the view. One CSS pixel is the visible height divided by the pixel height.
         const cam = this.camera;
-        const s = cam.dist * 0.0016;
-        const right = [Math.cos(cam.yaw), 0, -Math.sin(cam.yaw)];
-        const fwd = [Math.sin(cam.yaw), 0, Math.cos(cam.yaw)];
-        for (let k = 0; k < 3; k++) cam.target[k] += (-dx * right[k] + dy * fwd[k]) * s;
+        const eye = this.eye();
+        const f = norm(sub(cam.target, eye));
+        const r = norm(cross(f, [0, 1, 0]));
+        const u = cross(r, f);
+        const perPx = (2 * cam.dist * Math.tan((FOV_DEG * Math.PI) / 360)) / Math.max(1, c.clientHeight);
+        for (let k = 0; k < 3; k++) cam.target[k] += (-dx * r[k] + dy * u[k]) * perPx;
       } else {
         this.camera.yaw -= dx * 0.006;
         this.camera.pitch = Math.min(1.5, Math.max(0.08, this.camera.pitch + dy * 0.005));

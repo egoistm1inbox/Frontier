@@ -8,6 +8,8 @@ import { hashKey, clamp } from '../core/rng.js';
 import { downsample, minMax, mean } from '../core/grid.js';
 import { generateIsland, generateRamp } from './generators.js';
 import { generatePrimitive } from './primitives.js';
+import { generateGeological } from './geological.js';
+import { falloffMask } from './falloff.js';
 import { applyTerrace, applySmooth, applyLevels } from './shaping.js';
 import { erodeHydraulic } from '../erosion/hydraulic.js';
 import { erodeThermal } from '../erosion/thermal.js';
@@ -184,9 +186,9 @@ async function runHeightLayer(layer, input, depIn, N, n, terr, cellM, hooks) {
   const op = clamp(layer.opacity, 0, 1);
   switch (layer.type) {
     case 'island':
-      return { height: blend(input, generateIsland(N, p, terr.seed), layer.blend, op), dep: depIn };
+      return { height: blend(input, generateIsland(N, p, terr.seed), layer.blend, op, falloffMask(N, p.falloff)), dep: depIn };
     case 'ramp':
-      return { height: blend(input, generateRamp(N, p), layer.blend, op), dep: depIn };
+      return { height: blend(input, generateRamp(N, p), layer.blend, op, falloffMask(N, p.falloff)), dep: depIn };
     case 'terrace':
       return { height: lerpArr(input, applyTerrace(input, N, p), op), dep: depIn };
     case 'smooth':
@@ -195,11 +197,14 @@ async function runHeightLayer(layer, input, depIn, N, n, terr, cellM, hooks) {
       return { height: lerpArr(input, applyLevels(input, N, p), op), dep: depIn };
     case 'erosion':
       return runErosion(layer, input, depIn, N, cellM, terr, hooks);
-    default:
-      if (LAYER_TYPES[layer.type] && LAYER_TYPES[layer.type].group === 'primitive') {
-        return { height: blend(input, generatePrimitive(layer.type, N, p, terr.seed), layer.blend, op), dep: depIn };
+    default: {
+      const group = LAYER_TYPES[layer.type] && LAYER_TYPES[layer.type].group;
+      if (group === 'primitive' || group === 'geological') {
+        const field = group === 'primitive' ? generatePrimitive(layer.type, N, p, terr.seed) : generateGeological(layer.type, N, p, terr.seed);
+        return { height: blend(input, field, layer.blend, op, falloffMask(N, p.falloff)), dep: depIn };
       }
       throw new Error('Unknown height layer type: ' + layer.type);
+    }
   }
 }
 
@@ -247,30 +252,32 @@ function normalisedDeposition(dep) {
 }
 
 // Blend modes for height layers (primitives, shapes and erosion). `over` is the new layer; `op` is its opacity.
-export function blend(base, over, mode, op) {
+// Combines a layer with the stack below. `mask`, when given, multiplies the opacity cell by cell (falloff).
+export function blend(base, over, mode, op, mask = null) {
   const out = new Float32Array(base.length);
   for (let i = 0; i < base.length; i++) {
     const b = base[i];
     const o = over[i];
+    const k = mask ? op * mask[i] : op;
     let v;
     switch (mode) {
       case 'Add':
-        v = b + (o - 0.5) * op;
+        v = b + (o - 0.5) * k;
         break;
       case 'Subtract':
-        v = b - (o - 0.5) * op;
+        v = b - (o - 0.5) * k;
         break;
       case 'Multiply':
-        v = b + (b * o - b) * op;
+        v = b + (b * o - b) * k;
         break;
       case 'Max':
-        v = b + (Math.max(b, o) - b) * op;
+        v = b + (Math.max(b, o) - b) * k;
         break;
       case 'Min':
-        v = b + (Math.min(b, o) - b) * op;
+        v = b + (Math.min(b, o) - b) * k;
         break;
       default:
-        v = b + (o - b) * op;
+        v = b + (o - b) * k;
     }
     out[i] = v < 0 ? 0 : v > 1 ? 1 : v;
   }

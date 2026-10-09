@@ -11,6 +11,7 @@
 //   'texture'  satmap layers, evaluated after all height layers, each producing an RGB colour map
 
 import { PALETTE_OPTIONS } from './satmap.js';
+import { FALLOFF_DEFAULTS, FALLOFF_SHAPES } from './falloff.js';
 
 export const BLEND_MODES = ['Normal', 'Add', 'Subtract', 'Multiply', 'Max', 'Min'];
 const BLEND_OPTIONS = BLEND_MODES.map((m) => [m, m]);
@@ -23,6 +24,7 @@ export const SATMAP_SIZES = [1024, 2048, 4096, 8192, 16384];
 export const GROUPS = {
   primitive: { label: 'Primitives', kind: 'height' },
   shape: { label: 'Shapes', kind: 'height' },
+  geological: { label: 'Geological', kind: 'height' },
   erosion: { label: 'Erosion', kind: 'height' },
   shaping: { label: 'Shaping', kind: 'height' },
   texture: { label: 'Texture', kind: 'texture' },
@@ -216,8 +218,69 @@ const PRIMITIVE_TYPES = {
     [{ ...C.freq, label: 'Waves across' }, C.angle, C.phase, C.relief, C.offset]),
 };
 
+// Geological landforms. Each one is finite: its centre and radius keep it in one place, so it needs no falloff.
+// Their family follows Hesiod's Primitive/Geological group (GPL-3.0). The code is written for this editor. See geological.js.
+const GEO = (label, blurb, defaults, controls) => ({ group: 'geological', label, blurb, blend: 'Add', defaults, controls });
+const GEO_CENTRE = [
+  { key: 'centreX', label: 'Centre X', min: 0, max: 100, step: 1, digits: 0, unit: '%', help: 'Horizontal position of the centre. 50 is the middle of the map.' },
+  { key: 'centreY', label: 'Centre Y', min: 0, max: 100, step: 1, digits: 0, unit: '%', help: 'Vertical position of the centre. 50 is the middle of the map.' },
+];
+const GEO_RADIUS = { key: 'radius', label: 'Radius', min: 5, max: 150, step: 1, digits: 0, unit: '%', help: 'Size of the landform. 100 reaches the middle of each edge of the map.' };
+const GEO_HEIGHT = { key: 'height', label: 'Height', min: 0, max: 2, step: 0.01, digits: 2, help: 'Height of the tallest feature. 1 is half the height range above the base.' };
+const GEO_DETAIL = [
+  { key: 'frequency', label: 'Detail scale', min: 0.5, max: 12, step: 0.1, digits: 1, unit: 'cyc', help: 'Scale of the surface roughness across the map.' },
+  C.octaves,
+];
+
+const GEOLOGICAL_TYPES = {
+  cone: GEO('Mountain cone', 'A single conical massif with a sharp summit. Its centre and radius place it. Add a falloff to keep its flanks from running on.',
+    { centreX: 50, centreY: 50, radius: 45, sharpness: 2, rugosity: 0.25, height: 1.2, offset: 0, frequency: 3, octaves: 5, seed: 61 },
+    [...GEO_CENTRE, GEO_RADIUS,
+      { key: 'sharpness', label: 'Summit sharpness', min: 0.5, max: 4, step: 0.05, digits: 2, help: 'Higher gives a narrower summit and steeper flanks.' },
+      { key: 'rugosity', label: 'Rugosity', min: 0, max: 1, step: 0.01, digits: 2, help: 'Roughness of the flanks.' },
+      GEO_HEIGHT, C.offset, ...GEO_DETAIL, C.seed]),
+  range: GEO('Radial mountain range', 'Ridges that radiate from a centre, like spokes. Good for a central massif with ridges running out from it.',
+    { centreX: 50, centreY: 50, radius: 80, spokes: 7, sharpness: 1.5, roughness: 0.4, height: 1, offset: 0, frequency: 3, octaves: 4, seed: 62 },
+    [...GEO_CENTRE, GEO_RADIUS,
+      { key: 'spokes', label: 'Ridges', min: 3, max: 14, step: 1, digits: 0, help: 'Approximate number of ridges around the centre.' },
+      { key: 'sharpness', label: 'Ridge sharpness', min: 0.5, max: 6, step: 0.05, digits: 2, help: 'Higher gives sharper crests.' },
+      { key: 'roughness', label: 'Roughness', min: 0, max: 1, step: 0.01, digits: 2, help: 'Roughness along the ridges.' },
+      GEO_HEIGHT, C.offset, ...GEO_DETAIL, C.seed]),
+  stump: GEO('Mesa', 'A mountain with a flat top and steep sides.',
+    { centreX: 50, centreY: 50, radius: 45, steepness: 2.5, plateau: 0.6, rugosity: 0.15, height: 1, offset: 0, frequency: 3, octaves: 4, seed: 63 },
+    [...GEO_CENTRE, GEO_RADIUS,
+      { key: 'steepness', label: 'Steepness', min: 1, max: 5, step: 0.05, digits: 2, help: 'Higher gives steeper sides.' },
+      { key: 'plateau', label: 'Top height', min: 0.2, max: 1, step: 0.01, digits: 2, help: 'Height of the flat top, relative to the tallest feature.' },
+      { key: 'rugosity', label: 'Rugosity', min: 0, max: 1, step: 0.01, digits: 2, help: 'Roughness of the flanks.' },
+      GEO_HEIGHT, C.offset, ...GEO_DETAIL, C.seed]),
+  inselberg: GEO('Inselberg', 'An isolated, rounded rock hill with steep sides.',
+    { centreX: 50, centreY: 50, radius: 35, roundness: 3, rugosity: 0.3, height: 1, offset: 0, frequency: 4, octaves: 5, seed: 64 },
+    [...GEO_CENTRE, GEO_RADIUS,
+      { key: 'roundness', label: 'Roundness', min: 1.5, max: 6, step: 0.05, digits: 2, help: 'Higher gives steeper sides and a flatter top.' },
+      { key: 'rugosity', label: 'Rugosity', min: 0, max: 1, step: 0.01, digits: 2, help: 'Roughness of the sides.' },
+      GEO_HEIGHT, C.offset, ...GEO_DETAIL, C.seed]),
+  crater: GEO('Crater', 'A bowl inside a raised rim, with an optional central peak and ejecta outside the rim.',
+    { centreX: 50, centreY: 50, radius: 40, rim: 0.5, rimWidth: 0.12, depth: 0.6, peak: 0.2, rugosity: 0.2, height: 1, offset: 0, frequency: 4, octaves: 4, seed: 65 },
+    [...GEO_CENTRE, GEO_RADIUS,
+      { key: 'rim', label: 'Rim height', min: 0, max: 1, step: 0.01, digits: 2, help: 'Height of the rim.' },
+      { key: 'rimWidth', label: 'Rim width', min: 0.04, max: 0.4, step: 0.01, digits: 2, help: 'Width of the rim, relative to the radius.' },
+      { key: 'depth', label: 'Floor depth', min: 0, max: 1.5, step: 0.01, digits: 2, help: 'How far the floor sinks inside the rim.' },
+      { key: 'peak', label: 'Central peak', min: 0, max: 1, step: 0.01, digits: 2, help: 'Height of a peak in the middle of the floor.' },
+      { key: 'rugosity', label: 'Rugosity', min: 0, max: 1, step: 0.01, digits: 2, help: 'Roughness of the rim and the ejecta.' },
+      GEO_HEIGHT, C.offset, ...GEO_DETAIL, C.seed]),
+  rift: GEO('Rift valley', 'An elongated depression along an axis, with raised shoulders on either side.',
+    { centreX: 50, centreY: 50, radius: 90, angle: 30, width: 0.25, depth: 0.8, shoulder: 0.3, rugosity: 0.2, height: 1, offset: 0, frequency: 4, octaves: 4, seed: 66 },
+    [...GEO_CENTRE, GEO_RADIUS, C.angle,
+      { key: 'width', label: 'Valley width', min: 0.05, max: 0.8, step: 0.01, digits: 2, help: 'Width of the valley, relative to the radius.' },
+      { key: 'depth', label: 'Valley depth', min: 0, max: 1.5, step: 0.01, digits: 2, help: 'How far the valley floor sinks.' },
+      { key: 'shoulder', label: 'Shoulders', min: 0, max: 1, step: 0.01, digits: 2, help: 'Height of the raised flanks beside the valley.' },
+      { key: 'rugosity', label: 'Rugosity', min: 0, max: 1, step: 0.01, digits: 2, help: 'Roughness of the valley floor.' },
+      GEO_HEIGHT, C.offset, ...GEO_DETAIL, C.seed]),
+};
+
 export const LAYER_TYPES = {
   ...PRIMITIVE_TYPES,
+  ...GEOLOGICAL_TYPES,
   island: {
     group: 'shape',
     label: 'Island falloff',
@@ -317,6 +380,24 @@ export const LAYER_TYPES = {
 
 // Primitive type ids in menu order. The Add menu uses this for its sections.
 export const PRIMITIVE_IDS = Object.keys(PRIMITIVE_TYPES);
+
+// Generator layers (primitives, shapes and geological landforms) can be limited to a region with a falloff.
+// Their parameters hold a falloff block, which is off by default. See falloff.js.
+export const GENERATOR_GROUPS = ['primitive', 'shape', 'geological'];
+export const isGenerator = (type) => GENERATOR_GROUPS.includes(LAYER_TYPES[type]?.group);
+for (const def of Object.values(LAYER_TYPES)) {
+  if (GENERATOR_GROUPS.includes(def.group)) def.defaults = { ...def.defaults, falloff: { ...FALLOFF_DEFAULTS } };
+}
+
+// Controls of the falloff card. The inspector stores them under params.falloff.
+export const FALLOFF_CONTROLS = [
+  { key: 'shape', label: 'Shape', kind: 'select', options: FALLOFF_SHAPES, help: 'Outline of the region: a circle, a square or a diamond.' },
+  { key: 'centreX', label: 'Centre X', min: 0, max: 100, step: 1, digits: 0, unit: '%', help: 'Horizontal centre of the region. 50 is the middle of the map.' },
+  { key: 'centreY', label: 'Centre Y', min: 0, max: 100, step: 1, digits: 0, unit: '%', help: 'Vertical centre of the region. 50 is the middle of the map.' },
+  { key: 'radius', label: 'Radius', min: 5, max: 150, step: 1, digits: 0, unit: '%', help: 'Edge of the region. 100 reaches the middle of each edge of the map.' },
+  { key: 'softness', label: 'Softness', min: 0, max: 100, step: 1, digits: 0, unit: '%', help: 'Width of the fade at the edge, as a share of the radius.' },
+  { key: 'strength', label: 'Strength', min: 0, max: 100, step: 1, digits: 0, unit: '%', help: 'How far the region limits the layer. 100 removes it completely outside.' },
+];
 
 export const TERRAIN_CONTROLS = [
   {

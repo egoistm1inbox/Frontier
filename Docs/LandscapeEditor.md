@@ -2,7 +2,7 @@
 
 A heightmap editor whose terrain comes from an ordered layer stack. Erosion is simulated on the stack, and a procedural satellite-style colour map (the "satmap") is draped over the result.
 
-The layer stack includes the 28 primitive types from Section 1 of the node list. Each one is its own layer type. The other categories are still to come.
+The layer stack includes the 28 primitive types from Section 1 of the node list. Each one is its own layer type. It also includes six geological landform nodes, inspired by Hesiod's Primitive/Geological group, and a falloff that limits any generator to a region. The other categories are still to come.
 
 Location: `Experimental/LandscapeEditor/`. Plain ES modules with no build step and no dependencies. The UI follows the layout of `Experimental/ProjectZeroEditor`: top bar, layer stack on the left, viewport in the centre, inspector on the right, status bar along the bottom.
 
@@ -22,22 +22,23 @@ cd Experimental/LandscapeEditor
 npm test
 ```
 
-Runs five Node checks with no installs (tested on Node 22):
+Runs six Node checks with no installs (tested on Node 22):
 
 - `CheckRng.mjs`: the PRNG, hashes and noise are deterministic and in range.
 - `CheckErosion.mjs`: hydraulic mass balance; thermal mass balance and steepest slope at or below the talus angle; every interior cell drains to the border and outlet areas sum to N²; pure fluvial incision never raises the ground; cancellation stops the solvers.
 - `CheckPipeline.mjs`: the default stack (eight layers, 1k grid) evaluates; editing the top layer reuses the cached layers beneath it; blend modes; project normalisation, including the version 1 migrations (`noise` becomes `fbm`, `base` becomes `constant`); the working-grid cap; satmap determinism; the 16-bit encoding.
 - `CheckPrimitives.mjs`: the 28 types match Section 1. Each is finite, in [0, 1], has relief and is deterministic. Seeded types respond to the seed, and the fixed patterns ignore it. No two types are near duplicates (|r| ≤ 0.9).
 - `CheckExport.mjs`: at the working size the heightmap is an exact copy. The upscale reproduces the working samples and follows the terrain between them. The synthesised detail is capped at 0.02 of the height range and is deterministic for a seed.
+- `CheckGeological.mjs`: each landform is finite, deterministic and in range, sits at the zero level outside its footprint, and has its defining feature (the summit, the crater rim, the rift shoulders, the flat mesa top). The falloff mask is 1 inside its region and 0 outside, and respects its shape, softness and strength.
 
 Browser checks (menus, filter, drag and drop, undo, erosion dropdowns, export files, open and save, a 512 recompute) were run ad hoc in headless Chromium. They are not part of `npm test`.
 
 ## Layout
 
 - **Layers (left).** Height layers run bottom to top in evaluation order. Texture layers come last. Drag a row above or below another row of the same kind to reorder it. The eye toggle bypasses a layer, which keeps its thumbnail and clears its stats.
-- **Add menu.** "+ Add layer" opens a list grouped into Primitives (basic, noise, cells, fractals, patterns, waves), Shapes, Erosion, Shaping and Texture. The filter field at the top narrows the list as you type. Each entry has a one-line description. Adding a layer closes the menu.
-- **Viewport (centre).** A 3D view (drag to orbit, Shift or right-drag to pan, wheel to zoom) and five 2D views: Satmap, Height, Slope, Flow (drainage, log scale) and Sediment. The 3D mesh has at most 1024 cells a side. Larger grids are averaged down for display only. Hovering over a 2D view shows a readout of position, altitude, slope and drainage area. "Satmap texture" and "Water" toggle the 3D surface. "Recompute" forces an update.
-- **Inspector (right).** Shows the selected layer: name, description, enable toggle, move, duplicate, reset and delete buttons, then its parameter cards. The Map row shows the terrain settings: grid, extent, height range, sea level and seed (with a randomise button). Viewport settings are kept apart from the undo history.
+- **Add menu.** "+ Add layer" opens a list grouped into Primitives (basic, noise, cells, fractals, patterns, waves), Shapes, Geological · landforms, Erosion, Shaping and Texture. The filter field at the top narrows the list as you type. Each entry has a one-line description. Adding a layer closes the menu. The Geological section lists the six landform nodes.
+- **Viewport (centre).** A 3D view (drag to orbit; right-drag, middle-drag or Shift-drag to pan, so the scene follows the cursor; wheel to zoom) and five 2D views: Satmap, Height, Slope, Flow (drainage, log scale) and Sediment. The 3D mesh has at most 1024 cells a side. Larger grids are averaged down for display only. Hovering over a 2D view shows a readout of position, altitude, slope and drainage area. "Satmap texture" and "Water" toggle the 3D surface. "Recompute" forces an update.
+- **Inspector (right).** Shows the selected layer: name, description, enable toggle, move, duplicate, reset and delete buttons, then its parameter cards. Generator layers (primitives, shapes and geological landforms) also have a Falloff card (see Falloff). The Map row shows the terrain settings: grid, extent, height range, sea level and seed (with a randomise button). Viewport settings are kept apart from the undo history.
 - **Top bar.** Project name, undo and redo, New, Open, Save JSON, Export .r16 and Export satmap.
 - **Status bar.** Compute state and time, elevation range, share of the map under water and mean slope. During an export it shows "Exporting heightmap" or "Exporting satmap" with progress.
 
@@ -68,6 +69,7 @@ A project is the terrain settings plus an ordered list of layers. Layer and terr
 | Kind | Types |
 | --- | --- |
 | Primitives | The 28 types in the Primitives section below. Each is one algorithm. |
+| Geological | Mountain cone, Radial mountain range, Mesa, Inselberg, Crater, Rift valley (see Geological landforms) |
 | Shapes | Island falloff, Tilt ramp |
 | Erosion | Erosion (choose hydraulic, thermal or fluvial in its process dropdown) |
 | Shaping | Terrace, Smooth, Levels |
@@ -93,9 +95,11 @@ Each layer has a name, an enable toggle, an opacity (labelled Strength for erosi
 7. Hydraulic gullies: hydraulic erosion, 80%.
 8. Satellite · temperate: satmap.
 
+Falloff is off in the default stack, so the default terrain is unchanged.
+
 ## Primitives
 
-Each primitive is a separate layer type with its own controls. None of them is a catch-all layer.
+Each primitive is a separate layer type with its own controls. None of them is a catch-all layer. Each one also has a Falloff card (see Falloff).
 
 Every raw field is standardised to 2.5 standard deviations and clamped to ±1. Relief (the fraction of the height range) and Offset then place it on the common 0–1 scale. Constant is the only exception: it is a flat level. Frequency is the number of features across the map. Resolution does not change the look.
 
@@ -137,6 +141,37 @@ Shapes, which are not primitives but generate heights: **Island falloff** (a rad
 **Interpretations.** Swiss and Jordan turbulence are written for this editor, in the style of the published forms. They are not published definitions, and the names describe a family rather than a standard formula.
 
 **How these compare with Gaea.** They are not Gaea's algorithms. QuadSpinner's node internals are proprietary. Its public documentation lists parameters (for example, the Voronoi Form, Function, Dual and Perturb options) but not the formulas behind them. These primitives use standard published methods. They belong to the same families as some Gaea nodes, but they are not the same code, they do not reproduce Gaea's parameters, and the same settings will not give the same output.
+
+## Falloff
+
+A falloff limits a generator layer to a region, so noise does not run on to the edges of the map. Each generator layer has a Falloff card with a switch, "Limit to a region". The card applies to all 28 primitives, the island and tilt shapes, and the six geological landforms. It is off by default.
+
+- **Shape:** circle, square or diamond.
+- **Centre X and Y:** the centre of the region, in percent of the map (50 is the middle).
+- **Radius:** the edge of the region, in percent of the half-width. 100 reaches the middle of each edge of the map.
+- **Softness:** the width of the fade inside the edge, as a share of the radius. 0 gives a hard edge.
+- **Strength:** how far the region limits the layer. 100 removes the layer completely outside the region.
+
+The falloff multiplies the layer's opacity cell by cell. Where it is zero, the layer has no effect in any blend mode, so the terrain below shows through. Erosion and shaping layers have no falloff, because they act on the stack below them.
+
+In the default stack, turning the falloff on for Continental hills (radius 80, softness 40) keeps the hills near the middle of the map. The water share rises from 36% to 64%. Undo restores the default.
+
+## Geological landforms
+
+Six nodes, inspired by the Primitive/Geological group of Hesiod, a node-based terrain generator licensed under GPL-3.0. Each is a finite landform with a centre and a radius, so it stays where it is placed and needs no falloff. They blend in Add mode by default. Outside the landform the ground is at the zero level, so nothing else changes.
+
+| Node | What it makes | Main controls |
+| --- | --- | --- |
+| Mountain cone | A single conical massif with a sharp summit | Summit sharpness, Rugosity |
+| Radial mountain range | Ridges that radiate from a centre, like spokes, around a central massif | Ridges, Ridge sharpness, Roughness |
+| Mesa | A mountain with a flat top and steep sides | Steepness, Top height, Rugosity |
+| Inselberg | An isolated, rounded rock hill with steep sides | Roundness, Rugosity |
+| Crater | A bowl inside a raised rim, with an optional central peak and ejecta outside the rim | Rim height, Rim width, Floor depth, Central peak, Rugosity |
+| Rift valley | An elongated depression along an axis, with raised shoulders | Direction, Valley width, Valley depth, Shoulders, Rugosity |
+
+Every node also has Centre X and Y, Radius (percent of the half-width), Height (the tallest feature; 1 is half the height range above the base), Offset, Detail scale, Octaves and Seed.
+
+**Attribution and licence.** Hesiod is licensed under GPL-3.0. The Frontier repository has no licence file, so Hesiod's code cannot be copied in without changing the terms. These nodes are independent implementations of the kinds of landform that Hesiod's documentation describes, written for this editor. No code from Hesiod is used. Reusing Hesiod's code itself would bring in the GPL terms.
 
 ## Erosion
 
@@ -215,6 +250,8 @@ Recomputes run in a module worker, so the UI stays responsive, and a new job can
 | 4096² output, 2048² working grid | Node | 50.6 s evaluate, 2.2 s heightmap, 11.4 s satmap | 464 MB |
 | 16384² output, 2048² working grid | Node | 55.3 s evaluate, 49.4 s heightmap, 149 s satmap (268 M px) | 0.9 GB heightmap, 2.0 GB satmap |
 | 16384² output | Browser | Not tested | — |
+| Geological landform, 1024² (each of the six nodes) | Node | 0.14–0.34 s | — |
+| Falloff mask, 1024² | Node | 0.04 s | — |
 
 ## What changed for "looks basic"
 
@@ -243,6 +280,9 @@ What the numbers show: the aggregate statistics barely move at matched resolutio
 - **Only Section 1 is in.** The primitives are the first category. The other categories are still to come.
 - **16k has not been tested in a browser.** The Node figures above show the work. The 16384² satmap is 1 GB of RGBA data, and its PNG needs a 16384² canvas. Browser canvas or memory limits may stop it. If it fails, export a smaller satmap.
 - **Above 2048 the detail is synthesised.** See Resolution.
+- **The geological nodes are simpler than Hesiod's.** Each landform is one formula with fBm detail. They do not have Hesiod's envelope input or its post-processing controls (Gain, Gamma, Invert output, Remap, Saturation, Smoothing). The shaping layers (Terrace, Smooth, Levels) cover part of that.
+- **Other Hesiod generators are not added yet.** Dunes, tectonic plates, basalt fields, shattered peaks, dendritic patterns and island chains are still to come.
+- **The falloff has circle, square and diamond shapes.** Hesiod's Euclidean-Chebyshev blend is not included.
 - **Fine grain remains.** Speckle on the slopes is still visible in the hillshade. I have not yet traced its source.
 - **At 512 the peaks clip at the height range.** The default stack reaches the 1000 m ceiling on a 512 grid, while the 1024 grid peaks at 955 m. Raise the height range, or lower the relief of the layers that drive the peaks.
 - **The satmap is procedural.** It imitates satellite colour using rules. It does not show real places.

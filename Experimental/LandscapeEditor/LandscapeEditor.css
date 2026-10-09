@@ -259,8 +259,8 @@ kbd { font: inherit; font-size: 9px; color: #8ee5ae; border: 1px solid #ffffff1a
   position: relative; min-width: 0; height: 60px; border-radius: 20px; background: var(--tile); border: 1px solid var(--tile-line);
   padding: 11px 12px; display: flex; flex-direction: column; align-items: flex-start;
 }
-.stat-k { position: absolute; bottom: 10px; left: 12px; color: #a1a1a1; font-size: 10px; letter-spacing: 0.3px; white-space: nowrap; }
-.stat-v { position: absolute; bottom: 6px; right: 12px; font-size: 18px; font-weight: 300; font-variant-numeric: tabular-nums; color: var(--ink); max-width: calc(100% - 78px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: right; }
+.stat-k { position: absolute; top: 10px; left: 12px; color: #a1a1a1; font-size: 10px; letter-spacing: 0.3px; white-space: nowrap; }
+.stat-v { position: absolute; bottom: 6px; right: 12px; font-size: 18px; font-weight: 300; font-variant-numeric: tabular-nums; color: var(--ink); max-width: calc(100% - 24px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: right; }
 
 .note { margin: 2px 0 0; color: var(--ink-4); font-size: 11px; line-height: 1.5; }
 

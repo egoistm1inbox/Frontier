@@ -2,10 +2,10 @@
 // (stats) are updated in place, so a slider under the pointer is never replaced mid-drag.
 import { el, fmt, fmtMetres, fmtVolume, fmtMs, percentText } from './dom.js';
 import { ICONS } from './icons.js';
-import { card, rangeRow, selectRow, statTile, note, button } from './controls.js';
+import { card, rangeRow, selectRow, checkRow, statTile, note, button } from './controls.js';
 import {
   LAYER_TYPES, EROSION_TYPES, GROUPS, BLEND_MODES, TERRAIN_CONTROLS, VIEW_CONTROLS,
-  controlsFor, paramBucket, layerKind,
+  controlsFor, paramBucket, layerKind, isGenerator, FALLOFF_CONTROLS,
 } from '../terrain/layers.js';
 
 const EROSION_OPTIONS = Object.entries(EROSION_TYPES).map(([id, t]) => [id, t.label]);
@@ -130,13 +130,13 @@ function renderLayer(container, layer, m) {
 
   // Output: blend (primitives and shapes only) and opacity or strength.
   const outputRows = [];
-  if (group.kind === 'height' && (def.group === 'primitive' || def.group === 'shape')) {
+  if (group.kind === 'height' && isGenerator(layer.type)) {
     outputRows.push(selectRow({ key: 'blend', label: 'Blend', options: BLEND_OPTIONS, help: 'How this layer combines with the stack below it.' }, layer.blend, (v) => {
       h.edit(() => { layer.blend = v; }, { key: 'blend:' + layer.id, immediate: true });
       h.refreshInspector();
     }));
   }
-  const opacityLabel = isTexture ? 'Opacity' : def.group === 'primitive' || def.group === 'shape' ? 'Opacity' : 'Strength';
+  const opacityLabel = isTexture ? 'Opacity' : isGenerator(layer.type) ? 'Opacity' : 'Strength';
   outputRows.push(rangeRow({ key: 'opacity', label: opacityLabel, min: 0, max: 100, step: 1, digits: 0, unit: '%', help: 'Mix between the layer below and this layer.' }, layer.opacity * 100, {
     onInput: (v) => h.edit(() => { layer.opacity = v / 100; }, { key: 'op:' + layer.id }),
     onChange: () => h.schedule(0),
@@ -170,17 +170,34 @@ function renderLayer(container, layer, m) {
     container.append(card('Light and detail', 'Shading', ...lightCards, note('Hillshade and cavity shading use the sun bearing and elevation here. The 3D view lights the terrain with its own sun in the View card.')));
   }
 
+  if (isGenerator(layer.type)) container.append(falloffCard(layer, h));
   container.append(card('Result', isErosion ? 'Erosion' : 'Output', resultTiles(layer, m)));
 }
 
-function controlRow(layer, spec, bucket, h) {
+// Falloff: limits a generator layer to a region, so noise does not run to the edges of the map.
+function falloffCard(layer, h) {
+  const f = layer.params.falloff;
+  const rows = [
+    checkRow('Limit to a region', f.enabled, (v) => {
+      h.edit(() => { f.enabled = v; }, { key: 'falloff:' + layer.id, immediate: true });
+      h.refreshInspector();
+    }),
+    ...FALLOFF_CONTROLS.map((spec) => controlRow(layer, spec, f, h, 'f:')),
+    note(f.enabled
+      ? 'Outside the region this layer has no effect, so the terrain below shows through.'
+      : 'Off: the layer covers the whole map. Turn this on to keep its terrain inside a region.'),
+  ];
+  return card('Falloff', f.enabled ? 'On' : 'Off', ...rows);
+}
+
+function controlRow(layer, spec, bucket, h, prefix = 'p:') {
   if (spec.kind === 'select') {
     return selectRow(spec, bucket[spec.key], (v) => {
-      h.edit(() => { bucket[spec.key] = typeof spec.options[0][0] === 'number' ? +v : v; }, { key: 'p:' + layer.id + ':' + spec.key, immediate: true });
+      h.edit(() => { bucket[spec.key] = typeof spec.options[0][0] === 'number' ? +v : v; }, { key: prefix + layer.id + ':' + spec.key, immediate: true });
       h.refreshInspector();
     });
   }
-  const key = 'p:' + layer.id + ':' + spec.key;
+  const key = prefix + layer.id + ':' + spec.key;
   return rangeRow(spec, bucket[spec.key], {
     onInput: (v) => h.edit(() => { bucket[spec.key] = v; }, { key }),
     onChange: () => h.schedule(0),

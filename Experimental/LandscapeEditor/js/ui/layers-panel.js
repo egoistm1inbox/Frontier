@@ -157,12 +157,13 @@ const ADD_SECTIONS = [
   ['Primitives · patterns', ['grid', 'hex', 'brick', 'checker', 'stripes']],
   ['Primitives · waves', ['sine', 'sawtooth', 'triangle']],
   ['Shapes', ['island', 'ramp']],
+  ['Geological · landforms', ['cone', 'range', 'stump', 'inselberg', 'crater', 'rift']],
   ['Erosion', ['erosion']],
   ['Shaping', ['terrace', 'smooth', 'levels']],
   ['Texture', ['satmap']],
 ];
 
-const ICON_FOR = { fbm: 'noise', constant: 'base' };
+const ICON_FOR = { fbm: 'noise', constant: 'base', cone: 'ridged', range: 'ridged', stump: 'terrace', inselberg: 'base', crater: 'island', rift: 'ramp' };
 const iconFor = (type) => ICONS[ICON_FOR[type] || type] || ICONS[LAYER_TYPES[type].group] || ICONS.noise;
 
 export function buildAddMenu(onPick) {
