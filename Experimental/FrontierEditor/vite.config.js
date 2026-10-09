@@ -8,6 +8,9 @@ const root = fileURLToPath(new URL('.', import.meta.url));
 export default defineConfig({
   root,
   base: './',
+  // Terrain workspace is a second page; its evaluation worker is an ES module bundle.
+  build: { rollupOptions: { input: { main: resolve(root, 'index.html'), terrain: resolve(root, 'terrain.html') } } },
+  worker: { format: 'es' },
   server: { host: '0.0.0.0', allowedHosts: ['.e2b.app'], proxy: { '/api/construct': 'http://127.0.0.1:5191' } },
   plugins: [{
     name: 'standalone-experimental-pages',
