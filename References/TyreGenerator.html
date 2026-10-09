@@ -1,0 +1,1354 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Slate Tyre Generator — procedural 3D tyres &amp; tread editor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@200;300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0c0d0f;--card:#17181b;--card2:#1e2024;--card3:#25272c;--line:rgba(255,255,255,.06);--txt:#e6e7ea;--mut:#8a8d94;--dim:#5c5f66;
+    --green:#38c46d;--yellow:#d6c93a;--red:#e5423f;--orange:#f0a04b;--acc:#ffffff;
+    font-family:"Outfit",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:13px;font-weight:300;letter-spacing:.01em;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);overflow:hidden}
+  #app{display:grid;grid-template-columns:320px 1fr 340px;grid-template-rows:60px 1fr;height:100vh;gap:10px;padding:10px;background:radial-gradient(1200px 600px at 60% -10%,#1a1c20 0%,var(--bg) 60%)}
+  header{grid-column:1/4;display:flex;align-items:center;gap:8px;padding:0 6px}
+  .logo{width:34px;height:34px;border-radius:50%;background:conic-gradient(from 210deg,var(--txt) 0 12%,transparent 12% 25%,var(--txt) 25% 37%,transparent 37% 50%,var(--txt) 50% 62%,transparent 62% 75%,var(--txt) 75% 87%,transparent 87%);-webkit-mask:radial-gradient(circle,transparent 30%,#000 32%);mask:radial-gradient(circle,transparent 30%,#000 32%);margin-right:10px;opacity:.9}
+  .tabs{display:flex;gap:4px}
+  .tab{padding:10px 20px;border-radius:999px;color:var(--mut);cursor:pointer;font-weight:400;transition:.2s}
+  .tab:hover{color:var(--txt)}
+  .tab.on{background:var(--card2);color:var(--txt)}
+  aside,#bottom,#view{min-height:0}
+  aside{display:flex;flex-direction:column;gap:10px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:#2a2c31 transparent}
+  .card{background:var(--card);border-radius:22px;padding:18px 18px 14px;flex:0 0 auto;position:relative}
+  .card h2{display:flex;align-items:center;gap:10px;font-size:15px;font-weight:400;margin:0 0 12px;color:var(--txt);letter-spacing:.01em}
+  .card h2::before{content:"";width:3px;height:16px;border-radius:2px;background:var(--bar,var(--green))}
+  .card h2 .r{margin-left:auto;color:var(--mut);font-size:12px;font-weight:300}
+  .big{font-size:42px;font-weight:200;letter-spacing:-.02em;line-height:1;color:#fff;margin:2px 0 10px}
+  .big small{font-size:16px;color:var(--dim);margin-left:4px;font-weight:300}
+  .big .frac{color:var(--dim)}
+  .sub{display:flex;gap:6px;margin:0 0 6px;flex-wrap:wrap}
+  .pill{padding:5px 11px;border-radius:999px;font-size:12px;background:rgba(214,201,58,.12);color:var(--yellow)}
+  .pill.g{background:rgba(56,196,109,.12);color:var(--green)} .pill.r{background:rgba(229,66,63,.14);color:var(--red)} .pill.n{background:var(--card2);color:var(--mut)}
+  .sec{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);margin:14px 0 6px;font-weight:400}
+  .row{display:flex;align-items:center;gap:8px;margin:7px 0}
+  .row label{flex:0 0 118px;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:12.5px}
+  .row .val{flex:0 0 54px;text-align:right;font-variant-numeric:tabular-nums;color:var(--txt);font-weight:400}
+  .row input[type=range]{flex:1;min-width:0;-webkit-appearance:none;appearance:none;height:18px;background:transparent;cursor:pointer}
+  .row input[type=range]::-webkit-slider-runnable-track{height:2px;background:#2d3036;border-radius:2px}
+  .row input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;border-radius:50%;background:#fff;margin-top:-5px;box-shadow:0 0 0 3px var(--card)}
+  .row input[type=range]::-moz-range-track{height:2px;background:#2d3036;border-radius:2px}
+  .row input[type=range]::-moz-range-thumb{width:12px;height:12px;border:0;border-radius:50%;background:#fff}
+  .row select,.row input[type=text],.row input[type=file]{flex:1;min-width:0;background:var(--card2);color:var(--txt);border:1px solid transparent;border-radius:999px;padding:7px 12px;font:inherit;font-size:12.5px;outline:0}
+  .row select:focus,.row input[type=text]:focus{border-color:#3a3d44}
+  .row input[type=color]{flex:0 0 28px;width:28px;height:28px;border:0;background:transparent;padding:0;border-radius:50%;overflow:hidden;cursor:pointer}
+  .row input[type=color]::-webkit-color-swatch-wrapper{padding:0}.row input[type=color]::-webkit-color-swatch{border:2px solid #2d3036;border-radius:50%}
+  .row input[type=checkbox]{appearance:none;width:34px;height:20px;border-radius:999px;background:#2d3036;position:relative;cursor:pointer;transition:.2s}
+  .row input[type=checkbox]::after{content:"";position:absolute;top:3px;left:3px;width:14px;height:14px;border-radius:50%;background:#9a9da4;transition:.2s}
+  .row input[type=checkbox]:checked{background:var(--green)} .row input[type=checkbox]:checked::after{left:17px;background:#fff}
+  button{background:var(--card2);color:var(--txt);border:1px solid transparent;border-radius:999px;padding:8px 14px;font:inherit;font-size:12.5px;font-weight:400;cursor:pointer;transition:.15s}
+  button:hover{background:var(--card3)}
+  button.primary{background:#fff;color:#111}
+  button.primary:hover{background:#e8e8e8}
+  button.small{padding:5px 11px;font-size:12px}
+  .btns{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 2px}
+  #view{position:relative;border-radius:22px;overflow:hidden;background:#0b0c0e}
+  #view canvas{display:block}
+  .float{position:absolute;background:rgba(23,24,27,.78);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-radius:20px;padding:14px 18px}
+  #badge{left:16px;top:16px;min-width:230px}
+  #badge .t{display:flex;align-items:center;gap:8px;color:var(--mut);font-size:13px}
+  #badge .t::before{content:"";width:3px;height:14px;border-radius:2px;background:var(--green)}
+  #badge .name{font-size:34px;font-weight:300;letter-spacing:-.01em;color:#fff;margin:6px 0 2px}
+  #badge .size{font-size:15px;color:var(--mut)}
+  #tiles{right:16px;top:16px;display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:8px;background:transparent;backdrop-filter:none}
+  .tile{background:rgba(23,24,27,.82);backdrop-filter:blur(14px);border-radius:18px;padding:12px 14px;min-width:120px}
+  .tile .l{color:var(--mut);font-size:11.5px;display:flex;align-items:center;gap:6px}
+  .tile .l i{width:7px;height:7px;border-radius:50%;background:var(--green);display:inline-block}
+  .tile .v{font-size:26px;font-weight:200;color:#fff;margin-top:4px;letter-spacing:-.02em;line-height:1.1}
+  .tile .v small{font-size:12px;color:var(--dim);margin-left:3px}
+  #viewbtns{left:16px;bottom:16px;display:flex;gap:4px;padding:6px}
+  #viewbtns button{background:transparent;color:var(--mut)} #viewbtns button:hover,#viewbtns button.primary{background:var(--card2);color:#fff}
+  .wear-control{padding-bottom:2px}
+  .wear-control .wear-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;color:var(--mut);font-size:12px;margin-bottom:4px}
+  .wear-control .wear-head b{font-weight:300;color:#fff;font-size:20px}
+  .wear-control input{width:100%;margin:0}
+  .wear-control .wear-note{color:var(--dim);font-size:11.5px;margin-top:5px;line-height:1.35}
+  #presets{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .preset{background:var(--card2);border-radius:16px;padding:8px;cursor:pointer;border:1px solid transparent;transition:.15s}
+  .preset:hover{background:var(--card3)}
+  .preset.active{border-color:#fff}
+  .preset canvas{width:100%;height:38px;display:block;border-radius:10px;background:#222}
+  .preset .n{font-weight:400;margin-top:7px;font-size:13px;color:#fff}
+  .preset .t{color:var(--mut);font-size:10.5px;text-transform:uppercase;letter-spacing:.1em;margin-top:1px}
+  #layers{display:flex;flex-direction:column;gap:4px}
+  .layer{display:flex;align-items:center;gap:6px;background:var(--card2);border-radius:12px;padding:7px 8px 7px 12px;cursor:pointer;border:1px solid transparent}
+  .layer.sel{border-color:#fff}
+  .layer .nm{flex:1;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-weight:400}
+  .layer .nm small{color:var(--mut);font-weight:300;margin-left:4px}
+  .layer .ic{width:3px;height:14px;border-radius:2px;flex:0 0 3px}
+  .layer button{padding:0 6px;line-height:20px;background:transparent;color:var(--mut)} .layer button:hover{color:#fff;background:var(--card3)}
+  #decalLayers{display:flex;flex-direction:column;gap:4px;margin-top:8px}
+  .decal{display:flex;align-items:center;gap:7px;background:var(--card2);border:1px solid transparent;border-radius:12px;padding:7px 8px 7px 12px;cursor:pointer}
+  .decal.sel{border-color:#fff}.decal.off{opacity:.48}
+  .decal .swatch{width:4px;height:18px;border-radius:3px;flex:0 0 4px}.decal .copy{min-width:0;flex:1;line-height:1.15}
+  .decal .name{display:block;font-weight:400;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}.decal .preview{display:block;color:var(--mut);font-size:10.5px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;margin-top:2px}
+  .decal button{padding:0 5px;line-height:20px;background:transparent;color:var(--mut)}.decal button:hover{background:var(--card3);color:#fff}
+  #decalProps{margin-top:10px;border-top:1px solid var(--line);padding-top:10px}
+  .decal-title{font-size:12px;color:var(--txt);font-weight:400;margin:1px 0 8px}
+  .decal-note{color:var(--dim);font-size:11px;line-height:1.45;margin:8px 0 1px}
+  #treadView{width:100%;height:150px;display:block;border-radius:14px;background:#111}
+  #treadStrip{width:100%;height:26px;display:block;border-radius:8px;background:#111;margin-top:6px}
+  #profile{cursor:crosshair;touch-action:none}
+  #rimProfile{display:block;width:100%;height:190px;background:#111;border-radius:14px}
+  .mode.sm span{padding:4px 9px;font-size:11px}
+  .hint{color:var(--mut);font-size:12px;line-height:1.5;margin:4px 0}
+  code{background:var(--card2);padding:1px 6px;border-radius:6px;font-size:11px;font-family:ui-monospace,Menlo,monospace}
+  #toast{position:absolute;left:50%;bottom:20px;transform:translateX(-50%);background:#fff;color:#111;padding:8px 16px;border-radius:999px;opacity:0;transition:opacity .3s;pointer-events:none;font-weight:400}
+  .mode{display:flex;gap:2px;background:var(--card2);border-radius:999px;padding:3px;margin-left:auto}
+  .mode span{padding:5px 12px;border-radius:999px;color:var(--mut);cursor:pointer;font-size:12px}
+  .mode span.on{background:var(--card3);color:#fff}
+  .panel{display:none}.panel.on{display:block}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="logo"></div>
+    <div class="tabs" id="tabs">
+      <div class="tab on" data-tab="size">Tyre</div><div class="tab" data-tab="rim">Rim</div><div class="tab" data-tab="look">Look</div><div class="tab" data-tab="export">Export</div>
+    </div>
+  </header>
+
+  <aside id="left">
+    <div class="panel on" data-panel="size">
+      <div class="card" style="--bar:var(--green)">
+        <h2>Tyre size <span class="r" id="sizeR"></span></h2>
+        <div class="big" id="bigSize"></div>
+        <div class="sub" id="sizePills"></div>
+        <div id="tyreParams"></div>
+      </div>
+      <div class="card" style="--bar:var(--green);margin-top:10px">
+        <h2>Tyre condition <span class="r" id="wearVal">New</span></h2>
+        <div class="wear-control">
+          <div class="wear-head"><span>Tread wear</span><b id="wearPercent">0%</b></div>
+          <div class="row" style="margin:0"><input id="wearSlider" type="range" min="0" max="1" step="0.01" value="0" aria-label="Tread wear"></div>
+          <div class="wear-note" id="wearNote">0.0 mm worn · 8.0 mm remaining</div>
+        </div>
+      </div>
+      <div class="card" style="--bar:var(--yellow);margin-top:10px">
+        <h2>Cross-section <span class="r">drag the handles</span></h2>
+        <canvas id="profile" width="280" height="210" style="width:100%;height:210px;background:#111;border-radius:14px"></canvas>
+        <div id="profileParams"></div>
+      </div>
+      <div class="card" style="--bar:var(--red);margin-top:10px">
+        <h2>Tread materials <div class="mode sm" id="treadMode"><span class="on" data-m="color">Colour</span><span data-m="height">Depth</span><span data-m="normal">Normal</span><span data-m="rough">Rough</span></div></h2>
+        <canvas id="treadView"></canvas>
+        <canvas id="treadStrip"></canvas>
+        <div class="hint" id="treadDims" style="margin-top:6px"></div>
+      </div>
+    </div>
+    <div class="panel" data-panel="look">
+      <div class="card" style="--bar:var(--yellow)"><h2>Compound &amp; look</h2><div id="lookParams"></div></div>
+      <div class="card" style="--bar:var(--red);margin-top:10px">
+        <h2>Sidewall decals <span class="r" id="decalCount"></span></h2>
+        <div class="hint">Build the sidewall lettering as editable text layers. Select a layer to change its copy, typeface, size, colour and placement.</div>
+        <div class="btns"><button id="addDecalBtn" class="primary">Add text decal</button></div>
+        <div id="decalLayers"></div>
+        <div id="decalProps" class="hint">Select a decal layer to edit it.</div>
+      </div>
+    </div>
+    <div class="panel" data-panel="rim">
+      <div class="card" style="--bar:var(--orange)"><h2>Rim generator</h2><div id="rimParams"></div></div>
+      <div class="card" style="--bar:var(--yellow);margin-top:10px"><h2>Rim cross-section <span class="r">procedural profile</span></h2>
+        <canvas id="rimProfile" width="280" height="190"></canvas>
+        <div class="hint" id="rimProfileInfo">The profile follows the tyre bead and is generated from the flange and drop-well controls.</div>
+      </div>
+    </div>
+    <div class="panel" data-panel="export">
+      <div class="card" style="--bar:var(--red)"><h2>Export</h2>
+        <div class="hint">Textures are exported at the current map resolution. GLB is in metres, Y-up, tyre axis along X.</div>
+        <div class="btns"><button id="exportJson">Pattern JSON</button><button id="exportHeight">Height PNG</button><button id="exportNormal">Normal PNG</button><button id="exportGlb" class="primary">GLB (3D)</button></div>
+        <div class="row" style="margin-top:12px"><label>Import JSON</label><input type="file" id="importJson" accept=".json"></div>
+      </div>
+    </div>
+  </aside>
+
+  <main id="view">
+    <div class="float" id="badge"><div class="t" id="badgeType">Slick</div><div class="name" id="badgeName">GZero</div><div class="size" id="badgeSize">245/40 R18</div></div>
+    <div class="float" id="tiles"></div>
+    <div class="float" id="viewbtns">
+      <button class="small" data-view="iso">Iso</button><button class="small" data-view="side">Side</button><button class="small" data-view="tread">Tread</button><button class="small" data-view="front">Front</button><button class="small" id="spinBtn">Spin</button><button class="small" id="threadsBtn">X-ray cords</button>
+    </div>
+    <div id="toast"></div>
+  </main>
+
+  <aside id="right">
+    <div class="card" style="--bar:var(--green)">
+      <h2>Tread presets <span class="r" id="presetCount"></span></h2>
+      <div id="presets"></div>
+      <div class="btns"><button id="randomBtn" class="primary">Random tyre</button><button id="randomName">New name</button></div>
+    </div>
+    <div class="card" style="--bar:var(--yellow)">
+      <h2>Tread editor</h2>
+      <div class="row"><label>Name</label><input type="text" id="pName"></div>
+      <div class="row"><label>Type</label><select id="pType"></select></div>
+      <div class="row"><label>Add layer</label><select id="addLayer"></select><button id="addLayerBtn" class="small">Add</button></div>
+      <div id="layers"></div>
+    </div>
+    <div class="card" style="--bar:var(--red)">
+      <h2>Layer properties</h2>
+      <div id="layerProps" class="hint">Select a layer to edit it. Layers are drawn in order; deeper cuts win.<br>Across-position <code>-1…1</code> = tread edges, <code>±1.3</code> reaches the shoulder.</div>
+    </div>
+  </aside>
+
+</div>
+
+<script src="https://unpkg.com/clipper-lib@6.4.2/clipper.js"></script>
+<script type="importmap">
+{ "imports": {
+  "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+} }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
+
+// =====================================================================================================================
+//  STATE
+// =====================================================================================================================
+const T = {                       // tyre carcass parameters (mm / inch / fractions)
+  width: 245, aspect: 40, rim: 18, treadDepth: 8, wear: 0, wearBias: 0,
+  treadFrac: 0.88, crown: 2.0, shoulder: 18, bulge: 1.0, rimWidthFrac: 0.78,
+  radial: 720, across: 96, meshMode: 'poly', polyDetail: 6,
+  rubber: '#151515', letter: 'white', lettering: true, brand: 'SLATE',
+  factoryStripes: true, stripeRed: '#d63842', stripeBlue: '#3184c7', stripePattern: 'zigzag', stripeWidth: 1.4, stripeGap: 4.2, stripeWave: 1.1, stripeOffset: 0, stripePitch: 12
+};
+// Rim generation is intentionally separate from the tyre controls. Diameter and bead width remain
+// shared with the tyre so the procedural rim continues to fit every tyre preset.
+const R = {
+  material: 'Steel', tint: '#ffffff', lip: 8, well: 10,
+  layout: 'Blank barrel', pieceCount: 5, spokeWidth: 18, spokeDepth: 8, hubRatio: 0.28,
+  valve: true, valveAngle: 215
+};
+const DECAL_FONTS = [
+  { id: 'outfit', label: 'Outfit', css: 'Outfit, system-ui, sans-serif' },
+  { id: 'impact', label: 'Impact / heavy', css: 'Impact, "Arial Black", sans-serif' },
+  { id: 'sans', label: 'Clean sans', css: 'Arial, Helvetica, sans-serif' },
+  { id: 'serif', label: 'Classic serif', css: 'Georgia, serif' },
+  { id: 'mono', label: 'Technical mono', css: 'ui-monospace, Menlo, Consolas, monospace' },
+  { id: 'script', label: 'Script', css: 'cursive' }
+];
+const CUSTOM_DECAL_FONTS = new Map();
+let decalSequence = 0;
+const newDecal = (o = {}) => Object.assign({
+  id: `decal-${++decalSequence}`, name: 'Text decal', text: 'YOUR TEXT', font: 'outfit', fontLabel: 'Outfit',
+  size: 42, color: '#e8e8e8', x: 50, y: 50, align: 'center', weight: 700, italic: false,
+  opacity: 1, embossed: false, repeat: true, enabled: true
+}, o);
+const defaultDecals = () => [
+  newDecal({ name: 'Brand mark', text: '{brand}', font: 'impact', fontLabel: 'Impact / heavy', size: 68, color: '#e8e8e8', x: 2, y: 50, align: 'left', weight: 900, embossed: true }),
+  newDecal({ name: 'Model name', text: '{name}', font: 'outfit', fontLabel: 'Outfit', size: 54, color: '#e8e8e8', x: 14, y: 50, align: 'left', weight: 800, italic: true, embossed: true }),
+  newDecal({ name: 'Specification', text: '{size}  ·  {type}  ·  {depth}mm', font: 'mono', fontLabel: 'Technical mono', size: 25, color: '#bfbfbf', x: 28, y: 50, align: 'left', weight: 600 }),
+  newDecal({ name: 'Compliance', text: 'DOT SL8T {serial}  ·  TUBELESS RADIAL  ·  MAX 51 PSI', font: 'mono', fontLabel: 'Technical mono', size: 16, color: '#a7a7a7', x: 2, y: 72, align: 'left', weight: 600, opacity: .65, embossed: true })
+];
+const P = { name: 'GZero', type: 'Slick', layers: [], decals: defaultDecals() };   // tread pattern + sidewall decal layers
+const UI = { sel: -1, decalSel: -1, threads: false, spin: false, treadMode: 'color' };
+
+const TYPES = ['Slick', 'Semi-slick', 'Drift', 'Street', 'Grip / UHP', 'Wet', 'Winter', 'Rally', 'Off-road', 'Drag'];
+const RIM_MATERIALS = {
+  'Steel': { color: '#9ea5ad', metalness: 0.88, roughness: 0.3 },
+  'Maraging steel': { color: '#66717b', metalness: 0.91, roughness: 0.2 },
+  'Cast steel': { color: '#51555a', metalness: 0.72, roughness: 0.47 },
+  'Aluminium': { color: '#cfd5d9', metalness: 0.9, roughness: 0.23 },
+  'Brass': { color: '#b88943', metalness: 0.82, roughness: 0.28 }
+};
+
+const LAYER_DEFS = {
+  circ:    { label: 'Circumferential groove', color: '#38c46d', pos: 0, width: 8, depth: 1, zig: 0, zigCount: 60 },
+  lateral: { label: 'Lateral groove',          color: '#d6c93a', count: 48, angle: 20, width: 6, depth: 1, from: -1, to: 1, phase: 0, mirror: false, curve: 0, zig: 0 },
+  chevron: { label: 'Chevron / V groove',      color: '#f0a04b', count: 40, angle: 55, width: 7, depth: 1, from: 0.08, to: 1.3, phase: 0, mirror: true, curve: 0.3, zig: 0 },
+  sipe:    { label: 'Sipes',                   color: '#9aa4ff', count: 140, angle: 0, width: 1.2, depth: 0.55, from: -1, to: 1, phase: 0.5, mirror: false, curve: 0, zig: 1.5 },
+  dimple:  { label: 'Circular pattern',        color: '#4fc3f7', rows: 3, count: 60, radius: 3, depth: 0.5, from: -0.7, to: 0.7, stagger: true, ring: false },
+  hex:     { label: 'Hexagon cells',           color: '#e5423f', size: 14, width: 3, depth: 0.8, from: -1, to: 1, rotate: 0 },
+  terrain: { label: 'Terrain lug network',      color: '#c7772a', count: 18, width: 10, depth: 1, shoulder: 1.1, phase: 0 },
+  noise:   { label: 'Micro texture',           color: '#8a8d94', amount: 0.06, scale: 3 }
+};
+const RANGES = {
+  pos: [-1.3, 1.3, 0.01], width: [0.5, 30, 0.1], depth: [0.05, 1, 0.01], zig: [0, 12, 0.1], zigCount: [4, 240, 1],
+  count: [2, 300, 1], angle: [-80, 80, 1], from: [-1.3, 1.3, 0.01], to: [-1.3, 1.3, 0.01], phase: [0, 1, 0.01], curve: [-1.5, 1.5, 0.01],
+  rows: [1, 14, 1], radius: [0.5, 15, 0.1], size: [4, 40, 0.5], rotate: [0, 60, 1], shoulder: [0.55, 1.28, 0.01], amount: [0, 0.5, 0.01], scale: [1, 12, 0.5]
+};
+const LABELS = { pos: 'Across position', width: 'Width (mm)', depth: 'Depth (×tread)', zig: 'Zig-zag (mm)', zigCount: 'Zig-zag count', count: 'Count around', angle: 'Angle (°)', from: 'From (across)', to: 'To (across)', phase: 'Phase', curve: 'Curvature', rows: 'Rows', radius: 'Radius (mm)', size: 'Cell size (mm)', rotate: 'Cell rotation (°)', shoulder: 'Shoulder reach', amount: 'Amount', scale: 'Scale', mirror: 'Mirror (V)', stagger: 'Stagger rows', ring: 'Rings instead of dots' };
+
+// =====================================================================================================================
+//  PRESETS — each one is a named tread design with its own default tyre size
+// =====================================================================================================================
+const L = (type, o = {}) => Object.assign({ type }, strip(LAYER_DEFS[type]), o);
+function strip(d) { const r = {}; for (const k in d) if (k !== 'label' && k !== 'color') r[k] = d[k]; return r; }
+
+const PRESETS = [
+  { name: 'GZero', type: 'Slick', tyre: { width: 305, aspect: 30, rim: 19, treadDepth: 4, treadFrac: 0.93, crown: 1.2, shoulder: 26, letter: 'yellow' },
+    layers: [L('dimple', { rows: 2, count: 4, radius: 2.5, depth: 0.7, from: -0.55, to: 0.55, stagger: false }), L('noise', { amount: 0.04, scale: 2 })] },
+  { name: 'Grizzly Magnum', type: 'Off-road', tyre: { width: 285, aspect: 70, rim: 17, treadDepth: 15, treadFrac: 0.92, crown: 3, shoulder: 14, letter: 'white' },
+    layers: [L('circ', { pos: 0, width: 12, zig: 6, zigCount: 28 }), L('circ', { pos: 0.55, width: 11, zig: 5, zigCount: 28 }), L('circ', { pos: -0.55, width: 11, zig: 5, zigCount: 28 }),
+             L('lateral', { count: 28, angle: 18, width: 12, from: 0.3, to: 1.3, phase: 0 }), L('lateral', { count: 28, angle: -18, width: 12, from: -1.3, to: -0.3, phase: 0.5 }),
+             L('lateral', { count: 28, angle: 0, width: 9, from: -0.3, to: 0.3, phase: 0.25 }), L('sipe', { count: 56, angle: 12, width: 1.5, depth: 0.4, from: -1.3, to: 1.3, zig: 2 })] },
+  { name: 'Vortex R1', type: 'Grip / UHP', tyre: { width: 255, aspect: 35, rim: 19, treadDepth: 7, crown: 1.8, shoulder: 16 },
+    layers: [L('circ', { pos: 0.22, width: 7 }), L('circ', { pos: -0.22, width: 7 }), L('chevron', { count: 44, angle: 58, width: 6, from: 0.3, to: 1.3, curve: 0.35 }),
+             L('sipe', { count: 88, angle: 60, width: 1.2, depth: 0.5, from: 0.45, to: 1.25, mirror: true, phase: 0.5 })] },
+  { name: 'Smokestack D', type: 'Drift', tyre: { width: 235, aspect: 40, rim: 18, treadDepth: 6, crown: 1.5, shoulder: 20, letter: 'red' },
+    layers: [L('circ', { pos: 0.35, width: 6 }), L('circ', { pos: -0.35, width: 6 }), L('lateral', { count: 24, angle: 35, width: 5, from: 0.5, to: 1.3, phase: 0 }),
+             L('lateral', { count: 24, angle: -35, width: 5, from: -1.3, to: -0.5, phase: 0.5 })] },
+  { name: 'Urban Pulse', type: 'Street', tyre: { width: 205, aspect: 55, rim: 16, treadDepth: 8, crown: 2.2, shoulder: 15, letter: 'black' },
+    layers: [L('circ', { pos: 0.6, width: 8 }), L('circ', { pos: 0.2, width: 7 }), L('circ', { pos: -0.2, width: 7 }), L('circ', { pos: -0.6, width: 8 }),
+             L('lateral', { count: 64, angle: 10, width: 4, from: -1.3, to: 1.3, phase: 0 }), L('sipe', { count: 128, angle: 10, width: 1, depth: 0.6, from: -1.3, to: 1.3, zig: 1.2, phase: 0.5 })] },
+  { name: 'Monsoon Cut', type: 'Wet', tyre: { width: 245, aspect: 45, rim: 18, treadDepth: 10, crown: 2.5, shoulder: 15, letter: 'white' },
+    layers: [L('circ', { pos: 0, width: 12 }), L('circ', { pos: 0.5, width: 8 }), L('circ', { pos: -0.5, width: 8 }),
+             L('chevron', { count: 36, angle: 50, width: 9, from: 0.05, to: 1.3, curve: 0.5 }), L('chevron', { count: 36, angle: 50, width: 3, depth: 0.6, from: 0.05, to: 1.3, curve: 0.5, phase: 0.5 })] },
+  { name: 'Apex Shadow', type: 'Grip / UHP', tyre: { width: 265, aspect: 35, rim: 20, treadDepth: 7, crown: 1.6, shoulder: 17, letter: 'black' },
+    layers: [L('circ', { pos: -0.15, width: 9 }), L('circ', { pos: -0.55, width: 8 }), L('circ', { pos: 0.4, width: 6 }),
+             L('lateral', { count: 56, angle: 22, width: 4, from: -1.3, to: -0.15, phase: 0 }), L('lateral', { count: 22, angle: -25, width: 6, from: 0.4, to: 1.3, phase: 0.3, curve: 0.3 }),
+             L('sipe', { count: 112, angle: 22, width: 1, depth: 0.5, from: -1.3, to: -0.15, phase: 0.5 })] },
+  { name: 'HexaGrip Nova', type: 'Street', tyre: { width: 225, aspect: 45, rim: 17, treadDepth: 8, crown: 2, shoulder: 16, letter: 'white' },
+    layers: [L('hex', { size: 13, width: 3.5, depth: 0.9, from: -1.3, to: 1.3 }), L('circ', { pos: 0, width: 7 })] },
+  { name: 'Dimple Rave', type: 'Semi-slick', tyre: { width: 245, aspect: 40, rim: 18, treadDepth: 5, crown: 1.5, shoulder: 20, letter: 'yellow' },
+    layers: [L('dimple', { rows: 7, count: 90, radius: 3.2, depth: 0.7, from: -1.1, to: 1.1, stagger: true }), L('circ', { pos: 0, width: 5, depth: 0.9 })] },
+  { name: 'Frostbite Sipe', type: 'Winter', tyre: { width: 215, aspect: 60, rim: 16, treadDepth: 10, crown: 2.5, shoulder: 14, letter: 'black' },
+    layers: [L('circ', { pos: 0.45, width: 7, zig: 2, zigCount: 80 }), L('circ', { pos: -0.45, width: 7, zig: 2, zigCount: 80 }),
+             L('chevron', { count: 40, angle: 35, width: 6, from: 0.05, to: 1.3, curve: 0.1 }), L('sipe', { count: 200, angle: 35, width: 1.1, depth: 0.7, from: 0.05, to: 1.3, mirror: true, zig: 1.6, phase: 0.33 }),
+             L('sipe', { count: 200, angle: 35, width: 1.1, depth: 0.7, from: 0.05, to: 1.3, mirror: true, zig: 1.6, phase: 0.66 })] },
+  { name: 'Kestrel TC', type: 'Semi-slick', tyre: { width: 275, aspect: 35, rim: 18, treadDepth: 5, crown: 1.2, shoulder: 22, letter: 'white' },
+    layers: [L('circ', { pos: 0.3, width: 9 }), L('circ', { pos: -0.3, width: 9 }), L('lateral', { count: 18, angle: 40, width: 5, from: 0.65, to: 1.3, phase: 0 }),
+             L('lateral', { count: 18, angle: -40, width: 5, from: -1.3, to: -0.65, phase: 0.5 }), L('noise', { amount: 0.03, scale: 3 })] },
+  { name: 'Ravager Mud', type: 'Rally', tyre: { width: 235, aspect: 75, rim: 15, treadDepth: 14, treadFrac: 0.9, crown: 4, shoulder: 12, letter: 'white' },
+    layers: [L('lateral', { count: 22, angle: 30, width: 14, from: 0.1, to: 1.3, phase: 0 }), L('lateral', { count: 22, angle: -30, width: 14, from: -1.3, to: -0.1, phase: 0.5 }),
+             L('circ', { pos: 0, width: 9, zig: 8, zigCount: 22 }), L('lateral', { count: 22, angle: 0, width: 10, from: -0.1, to: 0.1, phase: 0.25 })] },
+  { name: 'Comet Drag', type: 'Drag', tyre: { width: 375, aspect: 50, rim: 15, treadDepth: 4, treadFrac: 0.95, crown: 1, shoulder: 30, rimWidthFrac: 0.85, letter: 'white' },
+    layers: [L('dimple', { rows: 2, count: 3, radius: 3, depth: 0.8, from: -0.7, to: 0.7, stagger: true }), L('noise', { amount: 0.05, scale: 2 })] },
+  { name: 'Talon Trail', type: 'Off-road', tyre: { width: 265, aspect: 65, rim: 17, treadDepth: 13, crown: 3, shoulder: 13, letter: 'white' },
+    layers: [L('hex', { size: 22, width: 8, depth: 1, from: -1.3, to: 1.3 }), L('circ', { pos: 0, width: 9, zig: 4, zigCount: 30 })] },
+  { name: 'Ribline Touring 4', type: 'Street', tyre: { width: 225, aspect: 55, rim: 17, treadDepth: 8, treadFrac: 0.91, crown: 2.0, shoulder: 16, letter: 'blue' },
+    layers: [L('circ', { pos: -0.7, width: 6.5 }), L('circ', { pos: -0.25, width: 6 }), L('circ', { pos: 0.25, width: 6 }), L('circ', { pos: 0.7, width: 6.5 }),
+             L('lateral', { count: 72, angle: 13, width: 3.4, depth: 0.92, from: -1.02, to: -0.38, phase: 0.05, zig: 2 }), L('lateral', { count: 72, angle: -13, width: 3.4, depth: 0.92, from: 0.38, to: 1.02, phase: 0.55, zig: 2 }),
+             L('sipe', { count: 144, angle: 10, width: 1.05, depth: 0.5, from: -1.16, to: 1.16, phase: 0.25, zig: 1.1 })] },
+  { name: 'Trail Lock A/T', type: 'Off-road', tyre: { width: 285, aspect: 70, rim: 17, treadDepth: 15, treadFrac: 0.91, crown: 3.2, shoulder: 12, letter: 'white' },
+    layers: [L('terrain', { count: 17, width: 10, shoulder: 1.12, phase: 0.04 }), L('sipe', { count: 34, angle: 4, width: 1.5, depth: 0.38, from: -1.17, to: 1.17, phase: 0.5, zig: 3 })] },
+  { name: 'Rocklock M/T', type: 'Off-road', tyre: { width: 305, aspect: 65, rim: 18, treadDepth: 16, treadFrac: 0.9, crown: 3.8, shoulder: 11, letter: 'white' },
+    layers: [L('terrain', { count: 15, width: 13, shoulder: 1.22, phase: 0.28 }), L('circ', { pos: 0, width: 5, depth: 0.72, zig: 7, zigCount: 15 }),
+             L('sipe', { count: 30, angle: 7, width: 1.6, depth: 0.34, from: -1.18, to: 1.18, phase: 0.5, zig: 3.5 })] },
+  { name: 'Vector Trail V', type: 'Grip / UHP', tyre: { width: 275, aspect: 40, rim: 19, treadDepth: 10, treadFrac: 0.92, crown: 2.0, shoulder: 15, letter: 'red' },
+    layers: [L('chevron', { count: 19, angle: 52, width: 14, from: 0.03, to: 1.28, curve: 0.16 }), L('circ', { pos: 0, width: 7, zig: 5, zigCount: 19 }),
+             L('lateral', { count: 19, angle: 5, width: 7, depth: 0.84, from: 0.78, to: 1.28, phase: 0.18, zig: 2, mirror: true }), L('sipe', { count: 76, angle: 49, width: 1.2, depth: 0.46, from: 0.3, to: 1.2, phase: 0.48, mirror: true, zig: 1.5 })] },
+];
+
+// =====================================================================================================================
+//  NAME GENERATOR
+// =====================================================================================================================
+const PRE = ['Grizzly', 'Vortex', 'Apex', 'Phantom', 'Raptor', 'Kestrel', 'Titan', 'Nomad', 'Viper', 'Comet', 'Ghost', 'Ember', 'Frost', 'Monsoon', 'Talon', 'Rogue', 'Sabre', 'Nitro', 'Onyx', 'Havoc', 'Quasar', 'Slate', 'Cobra', 'Tempest', 'Falcon'];
+const SUF = ['Magnum', 'R1', 'GT', 'Zero', 'Cut', 'Sport', 'Pro', 'X', 'Ultra', 'Drift', 'Evo', 'Nova', 'S3', 'Max', 'Grip', 'Blade', 'Trail', 'Prime', 'RS', 'TC', 'Rain', 'Ice'];
+const rnd = (a, b) => a + Math.random() * (b - a);
+const ri = (a, b) => Math.floor(rnd(a, b + 1));
+const pick = a => a[ri(0, a.length - 1)];
+function randomName() {
+  const r = Math.random();
+  if (r < 0.2) return pick('GZKVTXRQ'.split('')) + pick(['Zero', 'One', 'Force', 'Max', 'Prime']);
+  if (r < 0.35) return pick(PRE) + ' ' + pick(SUF) + ' ' + ri(2, 9);
+  return pick(PRE) + ' ' + pick(SUF);
+}
+function randomTyre() {
+  const type = pick(TYPES); const layers = [];
+  const size = { Slick: [305, 30, 19, 4], 'Semi-slick': [265, 35, 18, 5], Drift: [235, 40, 18, 6], Street: [205, 55, 16, 8], 'Grip / UHP': [255, 35, 19, 7], Wet: [245, 45, 18, 10], Winter: [215, 60, 16, 10], Rally: [235, 70, 15, 14], 'Off-road': [285, 70, 17, 15], Drag: [375, 50, 15, 4] }[type];
+  Object.assign(T, { width: size[0] + ri(-2, 2) * 10, aspect: size[1] + ri(-1, 1) * 5, rim: size[2], treadDepth: size[3], letter: pick(['white', 'yellow', 'red', 'black', 'blue']), crown: rnd(1, 3), shoulder: rnd(12, 26) });
+  const grooves = type === 'Slick' || type === 'Drag' ? 0 : type === 'Semi-slick' || type === 'Drift' ? ri(1, 2) : ri(2, 4);
+  const positions = grooves === 1 ? [0] : grooves === 2 ? [-0.3, 0.3] : grooves === 3 ? [-0.5, 0, 0.5] : [-0.6, -0.2, 0.2, 0.6];
+  const zig = type === 'Off-road' || type === 'Rally' ? rnd(3, 7) : (type === 'Winter' ? rnd(0, 2) : 0);
+  positions.forEach(p => layers.push(L('circ', { pos: p, width: rnd(5, 11), zig, zigCount: ri(22, 80) })));
+  const style = pick(['sym', 'dir', 'asym', 'terrain', 'hex', 'dot']);
+  if (type === 'Slick' || type === 'Drag') { layers.push(L('dimple', { rows: 2, count: ri(3, 6), radius: 2.5, depth: 0.7, from: -0.6, to: 0.6, stagger: false })); layers.push(L('noise', { amount: 0.04, scale: 2 })); }
+  else if (style === 'dir') layers.push(L('chevron', { count: ri(30, 50), angle: ri(35, 65), width: rnd(4, 9), from: rnd(0.05, 0.3), to: 1.3, curve: rnd(0, 0.6) }));
+  else if (style === 'asym') { layers.push(L('lateral', { count: ri(40, 64), angle: ri(10, 30), width: rnd(3, 5), from: -1.3, to: rnd(-0.3, -0.1) })); layers.push(L('lateral', { count: ri(16, 26), angle: -ri(15, 40), width: rnd(4, 7), from: rnd(0.2, 0.5), to: 1.3, curve: 0.3 })); }
+  else if (style === 'terrain') layers.push(L('terrain', { count: ri(14, 24), width: rnd(7, 13), depth: rnd(0.8, 1), shoulder: rnd(0.9, 1.25), phase: Math.random() * 0.5 }));
+  else if (style === 'hex') layers.push(L('hex', { size: rnd(10, 24), width: rnd(3, 7), depth: rnd(0.7, 1), from: -1.3, to: 1.3 }));
+  else if (style === 'dot') layers.push(L('dimple', { rows: ri(3, 8), count: ri(40, 100), radius: rnd(2, 5), depth: rnd(0.4, 0.9), from: -1.1, to: 1.1, stagger: true, ring: Math.random() < 0.3 }));
+  else { const a = ri(-30, 30), c = ri(20, 64); layers.push(L('lateral', { count: c, angle: a, width: rnd(4, 10), from: 0.2, to: 1.3 })); layers.push(L('lateral', { count: c, angle: -a, width: rnd(4, 10), from: -1.3, to: -0.2, phase: 0.5 })); }
+  if (type === 'Winter' || (type === 'Street' && Math.random() < 0.7)) layers.push(L('sipe', { count: ri(100, 220), angle: ri(-30, 30), width: 1.1, depth: rnd(0.4, 0.7), from: -1.3, to: 1.3, zig: rnd(0, 2), phase: 0.5 }));
+  P.name = randomName(); P.type = type; P.layers = layers; UI.sel = -1;
+}
+
+// =====================================================================================================================
+//  GEOMETRY DERIVED VALUES
+// =====================================================================================================================
+function dims(t = T) {
+  const Rrim = t.rim * 25.4 / 2, H = t.width * t.aspect / 100, Rout = Rrim + H;
+  const halfW = t.width / 2, treadHalf = halfW * t.treadFrac, sr = Math.min(t.shoulder, H * 0.6);
+  const shoulderExt = sr * Math.sin(80 * Math.PI / 180);
+  const acrossHalf = treadHalf + shoulderExt;
+  return { Rrim, H, Rout, halfW, treadHalf, sr, shoulderExt, acrossHalf, circ: 2 * Math.PI * Rout, bw: halfW * t.rimWidthFrac };
+}
+
+// =====================================================================================================================
+//  TREAD PATTERN RENDERER  (mm space → depth map). White = full rubber, black = full tread depth cut.
+// =====================================================================================================================
+// Interlocking AT/MT groove network. Each repeat creates a stepped centre bridge and offset shoulder
+// release cuts, leaving large independent-looking lugs instead of a repeated herringbone strip.
+function terrainNetworkLines(ly, th, circ) {
+  const count = Math.max(4, Math.round(ly.count)), pitch = circ / count, shoulder = Math.min(1.28, Math.max(.55, ly.shoulder || 1.1)) * th;
+  const core = shoulder * .5, edge = Math.min(th * 1.28, shoulder + th * .18), lines = [];
+  for (let i = -1; i <= count; i++) {
+    const x = (i + (ly.phase || 0)) * pitch, flip = i & 1 ? 1 : -1;
+    // The two stepped central cuts outline alternating N/Z-shaped centre lugs.
+    lines.push([[x + pitch * .04, -core], [x + pitch * .27, -core], [x + pitch * .39, -core * .16], [x + pitch * .64, -core * .16], [x + pitch * .64, core * .43], [x + pitch * .9, core * .43]]);
+    lines.push([[x + pitch * .08, core], [x + pitch * .31, core], [x + pitch * .43, core * .16], [x + pitch * .58, core * .16], [x + pitch * .58, -core * .5], [x + pitch * .83, -core * .5]]);
+    // Staggered shoulder releases turn the outer field into large offset blocks.
+    for (const sign of [1, -1]) {
+      const lead = flip * sign > 0 ? .03 : .18;
+      lines.push([[x + pitch * lead, sign * core], [x + pitch * .18, sign * shoulder], [x + pitch * .51, sign * shoulder], [x + pitch * .72, sign * edge]]);
+      lines.push([[x + pitch * .74, sign * shoulder], [x + pitch * .92, sign * edge]]);
+    }
+  }
+  return lines;
+}
+function renderPattern(pattern, d, H, wear = 0, wearBias = 0, treadDepth = 8, skipNoise = false) {
+  const k = H / (2 * d.acrossHalf);                   // px per mm (uniform)
+  const W = Math.max(64, Math.min(4096, Math.round(d.circ * k)));
+  const kx = W / d.circ, ky = k;                       // tiny anisotropy fix so it wraps exactly
+  const c = document.createElement('canvas'); c.width = W; c.height = H;
+  const ctx = c.getContext('2d', { willReadFrequently: true });
+  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H);
+  const th = d.treadHalf, circ = d.circ;
+  const g = v => { const q = Math.round(255 * (1 - Math.min(1, Math.max(0, v)))); return `rgb(${q},${q},${q})`; };
+  ctx.lineJoin = 'round'; ctx.lineCap = 'butt';
+  for (const off of [-circ, 0, circ]) {
+    ctx.setTransform(kx, 0, 0, ky, off * kx, H / 2);
+    ctx.globalCompositeOperation = 'darken';
+    for (const ly of pattern.layers) {
+      if (ly.type === 'noise') continue;
+      ctx.strokeStyle = ctx.fillStyle = g(ly.depth);
+      if (ly.type === 'circ') {
+        const y = ly.pos * th;
+        if (ly.zig > 0) {
+          ctx.lineWidth = ly.width; ctx.beginPath(); const n = Math.max(2, Math.round(ly.zigCount)) * 2;
+          for (let i = 0; i <= n; i++) { const x = i / n * circ, yy = y + (i % 2 ? ly.zig : -ly.zig); i ? ctx.lineTo(x, yy) : ctx.moveTo(x, yy); }
+          ctx.stroke();
+        } else ctx.fillRect(-5, y - ly.width / 2, circ + 10, ly.width);
+      } else if (ly.type === 'lateral' || ly.type === 'chevron' || ly.type === 'sipe') {
+        ctx.lineWidth = ly.width; const tan = Math.tan(ly.angle * Math.PI / 180); const n = Math.max(1, Math.round(ly.count));
+        const steps = 14; ctx.beginPath();
+        for (let i = 0; i < n; i++) {
+          const x0 = (i + ly.phase) / n * circ;
+          for (const s of ly.mirror ? [1, -1] : [1]) {
+            for (let j = 0; j <= steps; j++) {
+              const cc = ly.from + (ly.to - ly.from) * j / steps;
+              const yy = (ly.mirror ? s * cc : cc) * th;
+              const ac = ly.mirror ? Math.abs(cc) : cc;
+              let xx = x0 + ac * th * tan + (ly.curve || 0) * ac * ac * th * 0.5;
+              if (ly.zig) xx += (j % 2 ? ly.zig : -ly.zig) * 0.5;
+              j ? ctx.lineTo(xx, yy) : ctx.moveTo(xx, yy);
+            }
+          }
+        }
+        ctx.stroke();
+      } else if (ly.type === 'terrain') {
+        ctx.lineWidth = ly.width; ctx.beginPath();
+        for (const line of terrainNetworkLines(ly, th, circ)) line.forEach((point, i) => i ? ctx.lineTo(point[0], point[1]) : ctx.moveTo(point[0], point[1]));
+        ctx.stroke();
+      } else if (ly.type === 'dimple') {
+        const rows = Math.max(1, Math.round(ly.rows)), n = Math.max(1, Math.round(ly.count));
+        for (let r = 0; r < rows; r++) {
+          const cc = rows === 1 ? (ly.from + ly.to) / 2 : ly.from + (ly.to - ly.from) * r / (rows - 1); const y = cc * th;
+          const sh = ly.stagger && r % 2 ? 0.5 : 0;
+          for (let i = 0; i < n; i++) {
+            const x = (i + sh) / n * circ; ctx.beginPath(); ctx.arc(x, y, ly.radius, 0, Math.PI * 2);
+            if (ly.ring) { ctx.lineWidth = Math.max(0.6, ly.radius * 0.4); ctx.stroke(); } else ctx.fill();
+          }
+        }
+      } else if (ly.type === 'hex') {
+        const s = Math.max(2, ly.size); const nx = Math.max(2, 2 * Math.round(circ / (3 * s))); const sx = circ / nx; const sy = Math.sqrt(3) * s;
+        const y0 = ly.from * th, y1 = ly.to * th; ctx.save(); ctx.beginPath(); ctx.rect(-5, y0, circ + 10, y1 - y0); ctx.clip();
+        ctx.lineWidth = ly.width; ctx.beginPath(); const rot = ly.rotate * Math.PI / 180;
+        const j0 = Math.floor((y0 - sy) / sy), j1 = Math.ceil((y1 + sy) / sy);
+        for (let i = -1; i <= nx; i++) for (let j = j0; j <= j1; j++) {
+          const cx = i * sx, cy = j * sy + (Math.abs(i) % 2 ? sy / 2 : 0);
+          for (let v = 0; v < 6; v++) { const a = rot + v * Math.PI / 3; const px = cx + s * Math.cos(a), py = cy + s * Math.sin(a); v ? ctx.lineTo(px, py) : ctx.moveTo(px, py); }
+          ctx.closePath();
+        }
+        ctx.stroke(); ctx.restore();
+      }
+    }
+    // tread-wear indicator bars (1.6 mm legal limit) inside deep circumferential grooves
+    ctx.globalCompositeOperation = 'source-over'; ctx.fillStyle = g(1 - 1.6 / treadDepth);
+    for (const ly of pattern.layers) if (ly.type === 'circ' && ly.width >= 4 && ly.depth >= 0.9 && !ly.zig)
+      for (let i = 0; i < 6; i++) ctx.fillRect((i + 0.5) / 6 * circ - 3, ly.pos * th - ly.width / 2 - 0.2, 6, ly.width + 0.4);
+  }
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalCompositeOperation = 'source-over';
+  // ---- post: depth array, wear, micro texture ----
+  const img = ctx.getImageData(0, 0, W, H).data; const depth = new Float32Array(W * H);
+  const noiseLayers = skipNoise ? [] : pattern.layers.filter(l => l.type === 'noise');
+  for (let y = 0; y < H; y++) {
+    const cc = (y / H * 2 - 1) * d.acrossHalf / th;                                 // across coordinate in tread units
+    const wLocal = Math.min(1, Math.max(0, wear * (1 + 0.6 * wearBias * (1 - 2 * Math.min(1, cc * cc)))));
+    for (let x = 0; x < W; x++) {
+      let dv = 1 - img[(y * W + x) * 4] / 255;
+      for (const nl of noiseLayers) dv += nl.amount * (vnoise(x / (nl.scale * k), y / (nl.scale * k)) - 0.5) + nl.amount * 0.4 * (vnoise(x / (nl.scale * k) * 4, y / (nl.scale * k) * 4) - 0.5);
+      depth[y * W + x] = Math.max(0, dv - wLocal);
+    }
+  }
+  return { W, H, k, depth, wearRow: y => { const cc = (y / H * 2 - 1) * d.acrossHalf / th; return Math.min(1, Math.max(0, wear * (1 + 0.6 * wearBias * (1 - 2 * Math.min(1, cc * cc))))); } };
+}
+function hash2(x, y) { const s = Math.sin(x * 127.1 + y * 311.7) * 43758.5453; return s - Math.floor(s); }
+function vnoise(x, y) {
+  const xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi, u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf);
+  const a = hash2(xi, yi), b = hash2(xi + 1, yi), c = hash2(xi, yi + 1), dd = hash2(xi + 1, yi + 1);
+  return a + (b - a) * u + (c - a) * v + (a - b - c + dd) * u * v;
+}
+
+// Build colour / roughness / normal canvases from the depth field
+function buildTreadMaps(pm, treadDepth, rubberHex, wear) {
+  const { W, H, depth, k } = pm;
+  const base = new THREE.Color(rubberHex), worn = new THREE.Color('#4a4846'), grooveC = new THREE.Color('#0a0a0a');
+  const stripeRed = new THREE.Color(T.stripeRed), stripeBlue = new THREE.Color(T.stripeBlue);
+  const col = new ImageData(W, H), rou = new ImageData(W, H), nor = new ImageData(W, H);
+  const mmPerPx = 1 / k; const tmp = new THREE.Color();
+  const stripeWidth = Math.max(0.5, T.stripeWidth) * k * 0.5;
+  const stripeGap = Math.max(1.5, T.stripeGap) * k * 0.5;
+  const stripeWave = Math.max(0, T.stripeWave) * k;
+  const stripeOffset = T.stripeOffset * k;
+  const stripePitch = Math.max(4, T.stripePitch) * k;
+  const stripePeriod = Math.max(16, 42 * k);
+  const stripeCover = distance => Math.max(0, Math.min(1, (stripeWidth + 0.7 - distance) / 0.7));
+  const stripePaintAt = (x, y, centre, phaseOffset = 0) => {
+    const px = x + phaseOffset, cell = Math.floor(px / stripePitch), local = (px / stripePitch - cell - 0.5) * stripePitch;
+    if (T.stripePattern === 'dotted') return stripeCover(Math.hypot(local, y - centre));
+    if (T.stripePattern === 'dashed') return Math.abs(local) < stripePitch * 0.31 ? stripeCover(Math.abs(y - centre)) : 0;
+    if (T.stripePattern === 'stitch') {
+      if (Math.abs(local) >= stripePitch * 0.35) return 0;
+      const slope = cell % 2 ? 0.65 : -0.65;
+      return stripeCover(Math.abs((y - centre) - local * slope) / Math.sqrt(1 + slope * slope));
+    }
+    return stripeCover(Math.abs(y - centre));
+  };
+  for (let y = 0; y < H; y++) {
+    const wl = pm.wearRow(y);
+    for (let x = 0; x < W; x++) {
+      const i = y * W + x, o = i * 4; const dv = depth[i];
+      const grain = vnoise(x / 6, y / 6) * 0.5 + vnoise(x / 1.7, y / 1.7) * 0.5;
+      // colour: contact surface polishes/greys as it wears; groove floors are dark
+      tmp.copy(base).lerp(worn, wl * 0.75 * (0.7 + 0.6 * grain));
+      tmp.lerp(grooveC, Math.min(1, dv * 1.2));
+      tmp.offsetHSL(0, 0, (grain - 0.5) * 0.06);
+      // Fresh tyres often have coloured factory identification stripes. Paint only the
+      // raised tread blocks, then fade the markings with wear rather than colouring grooves.
+      let paint = 0;
+      if (T.factoryStripes && dv < 0.025 && wl < 0.98) {
+        const phase = (x / stripePeriod) - Math.floor(x / stripePeriod);
+        const zig = (1 - 4 * Math.abs(phase - 0.5)) * stripeWave;
+        const redPaint = stripePaintAt(x, y, H * 0.5 + stripeOffset - stripeGap + zig);
+        const bluePaint = stripePaintAt(x, y, H * 0.5 + stripeOffset + stripeGap - zig, stripePitch * 0.5);
+        const fade = 1 - wl * 0.92;
+        if (redPaint >= bluePaint && redPaint > 0) { paint = redPaint * fade; tmp.lerp(stripeRed, paint * 0.92); }
+        else if (bluePaint > 0) { paint = bluePaint * fade; tmp.lerp(stripeBlue, paint * 0.92); }
+      }
+      col.data[o] = tmp.r * 255; col.data[o + 1] = tmp.g * 255; col.data[o + 2] = tmp.b * 255; col.data[o + 3] = 255;
+      const r = paint > 0 ? 0.72 : (dv > 0.02 ? 0.92 : 0.9 - wl * 0.42 + (grain - 0.5) * 0.15); const rq = Math.max(0, Math.min(1, r)) * 255;
+      rou.data[o] = rq; rou.data[o + 1] = rq; rou.data[o + 2] = rq; rou.data[o + 3] = 255;
+      const xl = depth[y * W + (x + W - 1) % W], xr = depth[y * W + (x + 1) % W];
+      const yu = depth[Math.max(0, y - 1) * W + x], yd = depth[Math.min(H - 1, y + 1) * W + x];
+      const dzdx = (xr - xl) * treadDepth / (2 * mmPerPx), dzdy = (yd - yu) * treadDepth / (2 * mmPerPx);
+      let nx = dzdx, ny = dzdy, nz = 1; const len = Math.hypot(nx, ny, nz); nx /= len; ny /= len; nz /= len;
+      nor.data[o] = (nx * 0.5 + 0.5) * 255; nor.data[o + 1] = (ny * 0.5 + 0.5) * 255; nor.data[o + 2] = (nz * 0.5 + 0.5) * 255; nor.data[o + 3] = 255;
+    }
+  }
+  const mk = id => { const c = document.createElement('canvas'); c.width = W; c.height = H; c.getContext('2d').putImageData(id, 0, 0); return c; };
+  const hc = document.createElement('canvas'); hc.width = W; hc.height = H; const hid = new ImageData(W, H);
+  for (let i = 0; i < W * H; i++) { const q = (1 - depth[i]) * 255; hid.data[i * 4] = hid.data[i * 4 + 1] = hid.data[i * 4 + 2] = q; hid.data[i * 4 + 3] = 255; }
+  hc.getContext('2d').putImageData(hid, 0, 0);
+  return { color: mk(col), rough: mk(rou), normal: mk(nor), height: hc };
+}
+
+// Sidewall canvas: editable lettering / decal layers + mould detail.
+function decalFontFamily(decal) {
+  const custom = CUSTOM_DECAL_FONTS.get(decal.font);
+  if (custom) return custom.css;
+  return DECAL_FONTS.find(font => font.id === decal.font)?.css || 'Outfit, system-ui, sans-serif';
+}
+function decalFontLabel(decal) {
+  return CUSTOM_DECAL_FONTS.get(decal.font)?.label || DECAL_FONTS.find(font => font.id === decal.font)?.label || decal.fontLabel || 'Outfit';
+}
+function decalCopy(decal) {
+  const token = {
+    brand: T.brand, name: P.name, size: sizeString(), type: P.type.toUpperCase(), depth: Math.round(T.treadDepth),
+    serial: Math.abs(hashStr(P.name)) % 9000
+  };
+  return String(decal.text || '').replace(/\{(brand|name|size|type|depth|serial)\}/gi, (_, key) => token[key.toLowerCase()]);
+}
+function paintDecal(ctx, hx, decal, W, H) {
+  if (!decal.enabled) return;
+  const text = decalCopy(decal); if (!text.trim()) return;
+  const x = Math.max(-10, Math.min(110, +decal.x || 0)) / 100 * W, y = Math.max(0, Math.min(100, +decal.y || 0)) / 100 * H;
+  const font = `${decal.italic ? 'italic ' : ''}${decal.weight || 700} ${Math.max(8, +decal.size || 42)}px ${decalFontFamily(decal)}`;
+  const positions = decal.repeat ? [x, x + W / 2] : [x];
+  for (const px of positions) {
+    ctx.save(); ctx.globalAlpha = Math.max(0, Math.min(1, +decal.opacity ?? 1)); ctx.fillStyle = decal.color || '#e8e8e8';
+    ctx.font = font; ctx.textBaseline = 'middle'; ctx.textAlign = decal.align || 'center'; ctx.fillText(text, px, y); ctx.restore();
+    if (decal.embossed) {
+      hx.save(); hx.globalAlpha = Math.max(0.1, Math.min(1, +decal.opacity ?? 1)) * 0.62; hx.fillStyle = '#d0d0d0';
+      hx.font = font; hx.textBaseline = 'middle'; hx.textAlign = decal.align || 'center'; hx.fillText(text, px, y); hx.restore();
+    }
+  }
+}
+function buildSidewall() {
+  const W = 4096, H = 256; const c = document.createElement('canvas'); c.width = W; c.height = H; const ctx = c.getContext('2d');
+  const hc = document.createElement('canvas'); hc.width = W; hc.height = H; const hx = hc.getContext('2d'); hx.fillStyle = '#808080'; hx.fillRect(0, 0, W, H);
+  drawSidewallThreads(hx, W, H);
+  ctx.fillStyle = T.rubber; ctx.fillRect(0, 0, W, H);
+  // subtle radial texture streaks
+  ctx.globalAlpha = 0.08; for (let i = 0; i < 1200; i++) { ctx.fillStyle = Math.random() < 0.5 ? '#000' : '#fff'; ctx.fillRect(Math.random() * W, Math.random() * H, 1, rnd(4, 40)); } ctx.globalAlpha = 1;
+  // bead / rim protector rib and shoulder rib  (s: 0 = bead at bottom, 1 = shoulder at top)
+  ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fillRect(0, H * 0.14, W, 4); ctx.fillRect(0, H * 0.86, W, 3);
+  ctx.fillStyle = 'rgba(255,255,255,.06)'; ctx.fillRect(0, H * 0.18, W, 2); ctx.fillRect(0, H * 0.83, W, 3);
+  if (T.lettering) (P.decals || []).forEach(decal => paintDecal(ctx, hx, decal, W, H));
+  return { color: c, normal: heightToNormal(hc, 2.2) };
+}
+// the 'threads': radial body-cord ridges, woven chafer fabric at the bead, mould parting line, vent spews
+function drawSidewallThreads(hx, W, H) {
+  const rand = mulberry(hashStr(P.name + T.width));
+  // Radial carcass cords are internal to a tyre. Drawing them into the exterior normal
+  // map created repeated bright spikes at the shoulder, so the sidewall remains smooth here.
+  hx.strokeStyle = 'rgba(255,255,255,.22)'; for (let x = -H; x < W + H; x += 3) { hx.beginPath(); hx.moveTo(x, 0); hx.lineTo(x + H * 0.16, H * 0.16); hx.stroke(); hx.beginPath(); hx.moveTo(x + H * 0.16, 0); hx.lineTo(x, H * 0.16); hx.stroke(); }   // woven chafer
+  hx.fillStyle = 'rgba(0,0,0,.35)'; hx.fillRect(0, H * 0.16 - 1, W, 2); hx.fillStyle = 'rgba(255,255,255,.45)'; hx.fillRect(0, H * 0.5 + 44, W, 1.5);   // parting line above the lettering
+  // No exterior stitch row: it is not part of a moulded tyre sidewall and aliases into teeth at the shoulder.
+  for (let i = 0; i < 40; i++) { const x = rand() * W, y = H * (0.2 + rand() * 0.65); const g = hx.createRadialGradient(x, y, 0, x, y, 3.5); g.addColorStop(0, 'rgba(255,255,255,.9)'); g.addColorStop(1, 'rgba(255,255,255,0)'); hx.fillStyle = g; hx.fillRect(x - 4, y - 4, 8, 8); }   // vent spews
+}
+function mulberry(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function heightToNormal(src, strength) {
+  const W = src.width, H = src.height; const d = src.getContext('2d').getImageData(0, 0, W, H).data; const out = new ImageData(W, H);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const o = (y * W + x) * 4; const l = d[(y * W + (x + W - 1) % W) * 4], r = d[(y * W + (x + 1) % W) * 4], u = d[(Math.max(0, y - 1) * W + x) * 4], b = d[(Math.min(H - 1, y + 1) * W + x) * 4];
+    let nx = -(r - l) / 255 * strength, ny = -(b - u) / 255 * strength, nz = 1; const ln = Math.hypot(nx, ny, nz); out.data[o] = (nx / ln * 0.5 + 0.5) * 255; out.data[o + 1] = (ny / ln * 0.5 + 0.5) * 255; out.data[o + 2] = (nz / ln * 0.5 + 0.5) * 255; out.data[o + 3] = 255; }
+  const c = document.createElement('canvas'); c.width = W; c.height = H; c.getContext('2d').putImageData(out, 0, 0); return c;
+}
+function hashStr(s) { let h = 7; for (const ch of s) h = (h * 31 + ch.charCodeAt(0)) | 0; return h; }
+function sizeString() { return `${T.width}/${T.aspect} R${T.rim}`; }
+
+
+// =====================================================================================================================
+//  POLYGON TREAD — groove shapes as 2D polygons (mm), boolean-combined, extruded as flat faces + vertical walls
+// =====================================================================================================================
+const TAU = Math.PI * 2;
+const CS = 100;                                            // Clipper works in integers: 0.01 mm units
+const CL = () => window.ClipperLib;
+const toPath = ring => ring.map(p => ({ X: Math.round(p[0] * CS), Y: Math.round(p[1] * CS) }));
+const orient = path => { if (!CL().Clipper.Orientation(path)) path.reverse(); return path; };
+function circleRing(cx, cy, r, n = 24) { const ring = []; for (let i = 0; i < n; i++) ring.push([cx + r * Math.cos(i / n * TAU), cy + r * Math.sin(i / n * TAU)]); return ring; }
+function rectPath(x0, y0, x1, y1) { return orient(toPath([[x0, y0], [x1, y0], [x1, y1], [x0, y1]])); }
+// polylines (open or closed outlines) → filled groove areas via ClipperOffset
+function strokePaths(polylines, w, closed = false) {
+  const L = CL(); const co = new L.ClipperOffset(2, 0.25 * CS);
+  for (const pl of polylines) co.AddPath(toPath(pl), L.JoinType.jtRound, closed ? L.EndType.etClosedLine : L.EndType.etOpenButt);
+  const out = new L.Paths(); co.Execute(out, w / 2 * CS); return out;
+}
+function boolOp(type, subj, clip) {
+  const L = CL(); const c = new L.Clipper(); c.AddPaths(subj, L.PolyType.ptSubject, true); if (clip && clip.length) c.AddPaths(clip, L.PolyType.ptClip, true);
+  const out = new L.Paths(); c.Execute(type, out, L.PolyFillType.pftNonZero, L.PolyFillType.pftNonZero); return out;
+}
+const union = (a, b) => boolOp(CL().ClipType.ctUnion, a, b || []);
+const diff = (a, b) => boolOp(CL().ClipType.ctDifference, a, b);
+const inter = (a, b) => boolOp(CL().ClipType.ctIntersection, a, b);
+function exPolygons(paths) {                               // → [{outer:[[x,y]..], holes:[[[x,y]..]]}] in mm
+  const L = CL(); const c = new L.Clipper(); c.AddPaths(paths, L.PolyType.ptSubject, true); const tree = new L.PolyTree(); c.Execute(L.ClipType.ctUnion, tree, L.PolyFillType.pftNonZero, L.PolyFillType.pftNonZero);
+  return L.JS.PolyTreeToExPolygons(tree).map(ex => ({ outer: ex.outer.map(p => [p.X / CS, p.Y / CS]), holes: ex.holes.map(h => h.map(p => [p.X / CS, p.Y / CS])) }));
+}
+// Every groove layer as Clipper paths with its depth
+function patternPolygons(pattern, d, treadDepth) {
+  const th = d.treadHalf, circ = d.circ, A = d.acrossHalf; const out = []; const bars = [];
+  const shift = (paths, dx) => paths.map(p => p.map(q => ({ X: q.X + Math.round(dx * CS), Y: q.Y })));
+  for (const ly of pattern.layers) {
+    if (ly.type === 'noise') continue; let paths = []; let wrap = true;
+    if (ly.type === 'circ') {
+      const y = ly.pos * th;
+      if (ly.zig > 0) { const n = Math.max(2, Math.round(ly.zigCount)) * 2; const pts = []; for (let i = -2; i <= n + 2; i++) pts.push([i / n * circ, y + (Math.abs(i) % 2 ? ly.zig : -ly.zig)]); paths = strokePaths([pts], ly.width); wrap = false; }
+      else { paths = [rectPath(-circ, y - ly.width / 2, 2 * circ, y + ly.width / 2)]; wrap = false; }
+      if (ly.width >= 4 && ly.depth >= 0.9 && !ly.zig) for (let i = 0; i < 6; i++) { const x = (i + 0.5) / 6 * circ; bars.push(rectPath(x - 3, y - ly.width / 2 - 0.2, x + 3, y + ly.width / 2 + 0.2)); }
+    } else if (ly.type === 'lateral' || ly.type === 'chevron' || ly.type === 'sipe') {
+      const tan = Math.tan(ly.angle * Math.PI / 180), n = Math.max(1, Math.round(ly.count)); const steps = (ly.curve || ly.zig) ? 8 : 1; const lines = [];
+      for (let i = 0; i < n; i++) { const x0 = (i + ly.phase) / n * circ;
+        for (const sg of ly.mirror ? [1, -1] : [1]) { const pts = [];
+          for (let j = 0; j <= steps; j++) { const cc = ly.from + (ly.to - ly.from) * j / steps; const yy = (ly.mirror ? sg * cc : cc) * th; const ac = ly.mirror ? Math.abs(cc) : cc;
+            let xx = x0 + ac * th * tan + (ly.curve || 0) * ac * ac * th * 0.5; if (ly.zig) xx += (j % 2 ? ly.zig : -ly.zig) * 0.5; pts.push([xx, yy]); }
+          lines.push(pts); } }
+      paths = strokePaths(lines, ly.width);
+    } else if (ly.type === 'terrain') {
+      paths = strokePaths(terrainNetworkLines(ly, th, circ), ly.width); wrap = false;
+    } else if (ly.type === 'dimple') {
+      const rows = Math.max(1, Math.round(ly.rows)), n = Math.max(1, Math.round(ly.count)); const rings = [];
+      for (let r = 0; r < rows; r++) { const cc = rows === 1 ? (ly.from + ly.to) / 2 : ly.from + (ly.to - ly.from) * r / (rows - 1); const y = cc * th; const sh = ly.stagger && r % 2 ? 0.5 : 0;
+        for (let i = 0; i < n; i++) { const x = (i + sh) / n * circ; const seg = Math.max(12, Math.min(48, Math.round(ly.radius * 6))); rings.push(circleRing(x, y, ly.radius, seg)); } }
+      paths = ly.ring ? strokePaths(rings, Math.max(0.6, ly.radius * 0.4), true) : rings.map(r => orient(toPath(r)));
+    } else if (ly.type === 'hex') {
+      const sz = Math.max(2, ly.size); const nx = Math.max(2, 2 * Math.round(circ / (3 * sz))); const sx = circ / nx; const sy = Math.sqrt(3) * sz; const y0 = ly.from * th, y1 = ly.to * th; const rot = ly.rotate * Math.PI / 180;
+      const j0 = Math.floor((y0 - sy) / sy), j1 = Math.ceil((y1 + sy) / sy); const hexes = [];
+      for (let i = -1; i <= nx; i++) for (let j = j0; j <= j1; j++) { const cx = i * sx, cy = j * sy + (Math.abs(i) % 2 ? sy / 2 : 0); const pts = []; for (let v = 0; v < 6; v++) { const a = rot + v * Math.PI / 3; pts.push([cx + sz * Math.cos(a), cy + sz * Math.sin(a)]); } hexes.push(pts); }
+      paths = inter(strokePaths(hexes, ly.width, true), [rectPath(-circ, y0, 2 * circ, y1)]); wrap = false;
+    }
+    if (!paths.length) continue;
+    if (wrap) paths = paths.concat(shift(paths, circ), shift(paths, -circ));      // seam continuity
+    out.push({ paths, depth: Math.round(ly.depth * 100) / 100 });
+  }
+  return { grooves: out, bars, barDepth: Math.round((1 - 1.6 / treadDepth) * 100) / 100 };
+}
+// nested regions R_i (everything cut to depth >= d_i) → floor pieces S_i = R_i − R_{i+1}
+function treadRegions(pattern, d, treadDepth, wear) {
+  const { grooves, bars, barDepth } = patternPolygons(pattern, d, treadDepth);
+  const A = d.acrossHalf, circ = d.circ; const rect = [rectPath(0, -A, circ, A)];
+  const depths = [...new Set(grooves.map(g => g.depth).filter(v => v > wear + 0.005))].sort((a, b) => b - a);
+  const wantBars = bars.length && barDepth > wear + 0.005 && depths.some(v => v > barDepth);
+  if (wantBars && !depths.includes(barDepth)) { depths.push(barDepth); depths.sort((a, b) => b - a); }
+  let R = []; const regions = [];
+  for (const dep of depths) { const paths = grooves.filter(g => g.depth === dep).flatMap(g => g.paths); R = union(R.concat(paths)); regions.unshift({ depth: dep, R }); }
+  if (wantBars) for (const rg of regions) if (rg.depth > barDepth) rg.R = diff(rg.R, bars);
+  for (const rg of regions) rg.R = inter(rg.R, rect);
+  const pieces = [{ depth: 0, paths: regions.length ? diff(rect, regions[0].R) : rect }];
+  for (let i = 0; i < regions.length; i++) pieces.push({ depth: regions[i].depth, paths: i + 1 < regions.length ? diff(regions[i].R, regions[i + 1].R) : regions[i].R });
+  return { pieces, levels: [0, ...regions.map(r => r.depth)] };
+}
+function pointInRing(x, y, ring) { let inside = false; for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) { const xi = ring[i][0], yi = ring[i][1], xj = ring[j][0], yj = ring[j][1]; if (((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi)) inside = !inside; } return inside; }
+function subdivideRing(ring, lx, ly, th = 1e9, lyShoulder = ly) { const out = []; for (let i = 0; i < ring.length; i++) { const a = ring[i], b = ring[(i + 1) % ring.length]; const lyy = Math.max(Math.abs(a[1]), Math.abs(b[1])) > th - 0.5 ? lyShoulder : ly; const n = Math.max(1, Math.ceil(Math.max(Math.abs(b[0] - a[0]) / lx, Math.abs(b[1] - a[1]) / lyy))); for (let k = 0; k < n; k++) out.push([a[0] + (b[0] - a[0]) * k / n, a[1] + (b[1] - a[1]) * k / n]); } return out; }
+// across-position (mm) → axial position, radius and outward normal on the crowned/shouldered profile
+function treadProfileAt(y, d) {
+  const ay = Math.abs(y), sgn = Math.sign(y) || 1;
+  if (ay <= d.treadHalf) return { x: y, r: d.Rout - T.crown * (y / d.treadHalf) ** 2, nx: 0, nr: 1, w: 1 };
+  const phi = Math.min(80 * Math.PI / 180, Math.asin(Math.min(1, (ay - d.treadHalf) / d.sr))); const c80 = Math.cos(80 * Math.PI / 180);
+  return { x: sgn * (d.treadHalf + d.sr * Math.sin(phi)), r: d.Rout - T.crown - d.sr + d.sr * Math.cos(phi), nx: sgn * Math.sin(phi), nr: Math.cos(phi), w: Math.max(0, (Math.cos(phi) - c80) / (1 - c80)) };
+}
+function buildPolyTread(d, pmGeo) {
+  const { pieces, levels } = treadRegions(P, d, T.treadDepth, T.wear);
+  const D = T.treadDepth, A = d.acrossHalf, circ = d.circ, LX = T.polyDetail, LY = T.polyDetail * 2;
+  const pos = [], nrm = [], uv = [], tan = []; let tris = 0;
+  const wl = y => pmGeo.wearRow((y + A) / (2 * A) * pmGeo.H);
+  const place = (x, y, hFrac) => { const pr = treadProfileAt(y, d); const off = D * Math.max(hFrac, wl(y)) * pr.w; const ax = pr.x - pr.nx * off, r = pr.r - pr.nr * off; const th = x / circ * TAU; return [ax, r * Math.cos(th), r * Math.sin(th), pr.nx, pr.nr * Math.cos(th), pr.nr * Math.sin(th)]; };
+  const push = (p, n, u, v, t) => { pos.push(p[0], p[1], p[2]); nrm.push(n[0], n[1], n[2]); uv.push(u, v); tan.push(t[0], t[1], t[2], 1); };
+  const tangentAt = u => { const th = u * TAU; return [0, -Math.sin(th), Math.cos(th)]; };   // +u direction (circumferential)
+  const snapLevel = h => levels.reduce((b, l) => Math.abs(l - h) < Math.abs(b - h) ? l : b, 0);
+  const LYS = Math.max(1.5, d.sr * 0.17);                         // finer across-steps on the shoulder arc (~10°)
+  const rowsY = []; for (let y = 0; y <= d.treadHalf - LY * 0.5; y += LY) rowsY.push(y); for (let ph = 10; ph < 80; ph += 10) rowsY.push(d.treadHalf + d.sr * Math.sin(ph * Math.PI / 180)); const ROWS = [...rowsY.map(y => -y).reverse(), ...rowsY.slice(1)];
+  const SW = LX * 2;                                              // strip width for wide polygons (keeps earcut inputs small)
+  const bbox = ring => { let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9; for (const p of ring) { if (p[0] < x0) x0 = p[0]; if (p[0] > x1) x1 = p[0]; if (p[1] < y0) y0 = p[1]; if (p[1] > y1) y1 = p[1]; } return [x0, y0, x1, y1]; };
+  const splitWide = ex => {
+    const [x0, y0, x1, y1] = bbox(ex.outer); if (x1 - x0 <= SW * 2.5) return [ex];
+    const outerP = toPath(ex.outer); const holes = ex.holes.map(h => ({ p: toPath(h), b: bbox(h) })); const out = [];
+    for (let xs = Math.floor(x0 / SW) * SW; xs < x1; xs += SW) {
+      const xe = xs + SW; const hp = holes.filter(h => h.b[2] >= xs && h.b[0] <= xe).map(h => h.p);
+      const part = inter([outerP, ...hp], [rectPath(xs, y0 - 1, xe, y1 + 1)]); if (part.length) out.push(...exPolygons(part));
+    }
+    return out;
+  };
+  for (const pc of pieces) for (const ex0 of exPolygons(pc.paths)) for (const poly of splitWide(ex0)) {
+    const rings = [poly.outer, ...poly.holes].map(r => subdivideRing(r, LX, LY, d.treadHalf, LYS)); if (rings[0].length < 3) continue;
+    const contour = rings[0].map(p => new THREE.Vector2(p[0], p[1])); const holes = rings.slice(1).map(r => r.map(p => new THREE.Vector2(p[0], p[1])));
+    let faces; try { faces = THREE.ShapeUtils.triangulateShape(contour, holes); } catch (e) { continue; }
+    const all = contour.concat(...holes); const hz = pc.depth;
+    const edgeLength = (u, v) => { const a3 = place(u.x, u.y, hz), b3 = place(v.x, v.y, hz); return Math.hypot(b3[0] - a3[0], b3[1] - a3[1], b3[2] - a3[2]); };
+    let longestTopEdge = 0;
+    for (const f of faces) { const a = all[f[0]], b = all[f[1]], c = all[f[2]]; longestTopEdge = Math.max(longestTopEdge, edgeLength(a, b), edgeLength(b, c), edgeLength(c, a)); }
+    // A single level per boolean polygon keeps every shared top edge conforming. This
+    // avoids the T-junctions created when adjacent Earcut triangles refined independently.
+    const topSteps = Math.min(4, Math.max(1, Math.ceil(longestTopEdge / Math.max(28, T.polyDetail * 5))));
+    const pushTop = q => { const P3 = place(q.x, q.y, hz); push(P3, [P3[3], P3[4], P3[5]], q.x / circ, (q.y + A) / (2 * A), tangentAt(q.x / circ)); };
+    for (const f of faces) { const a = all[f[0]], b = all[f[1]], c = all[f[2]]; const area = (b.x - a.x) * (c.y - a.y) - (c.x - a.x) * (b.y - a.y); if (Math.abs(area) < 1e-6) continue;
+      const ord = area > 0 ? [a, b, c] : [a, c, b]; const [q0, q1, q2] = ord;
+      const point = (i, j) => new THREE.Vector2(q0.x + (q1.x - q0.x) * i / topSteps + (q2.x - q0.x) * j / topSteps, q0.y + (q1.y - q0.y) * i / topSteps + (q2.y - q0.y) * j / topSteps);
+      for (let i = 0; i < topSteps; i++) for (let j = 0; j < topSteps - i; j++) {
+        const p0 = point(i, j), p1 = point(i + 1, j), p2 = point(i, j + 1); pushTop(p0); pushTop(p1); pushTop(p2); tris++;
+        if (i + j < topSteps - 1) { const p3 = point(i + 1, j + 1); pushTop(p1); pushTop(p3); pushTop(p2); tris++; }
+      }
+    }
+    // walls: generated from the lower side of every boundary edge
+    for (const r of rings) for (let i = 0; i < r.length; i++) {
+      const edgeA = r[i], edgeB = r[(i + 1) % r.length];
+      for (let segment = 0; segment < topSteps; segment++) {
+        const a = [edgeA[0] + (edgeB[0] - edgeA[0]) * segment / topSteps, edgeA[1] + (edgeB[1] - edgeA[1]) * segment / topSteps];
+        const b = [edgeA[0] + (edgeB[0] - edgeA[0]) * (segment + 1) / topSteps, edgeA[1] + (edgeB[1] - edgeA[1]) * (segment + 1) / topSteps];
+        const dx = b[0] - a[0], dy = b[1] - a[1]; const l = Math.hypot(dx, dy); if (l < 1e-6) continue;
+      const ox = dy / l, oy = -dx / l; const mx = (a[0] + b[0]) / 2 + ox * 0.9, my = (a[1] + b[1]) / 2 + oy * 0.9;
+      const smp = sampleDepth(pmGeo, mx / circ, (my + A) / (2 * A)); const hOut = smp > 0.02 ? snapLevel(smp + wl(my)) : 0;
+      const hIn = pc.depth; if (hOut >= hIn - 0.005) continue;
+      const u = mx / circ, v = (my + A) / (2 * A);
+      const a0 = place(a[0], a[1], hOut), b0 = place(b[0], b[1], hOut), a1 = place(a[0], a[1], hIn), b1 = place(b[0], b[1], hIn);
+      if (Math.hypot(a0[0] - a1[0], a0[1] - a1[1], a0[2] - a1[2]) < 0.02 && Math.hypot(b0[0] - b1[0], b0[1] - b1[1], b0[2] - b1[2]) < 0.02) continue;
+      const n = [0, 0, 0]; { const e1 = [b0[0] - a0[0], b0[1] - a0[1], b0[2] - a0[2]], e2 = [a1[0] - a0[0], a1[1] - a0[1], a1[2] - a0[2]]; n[0] = e1[1] * e2[2] - e1[2] * e2[1]; n[1] = e1[2] * e2[0] - e1[0] * e2[2]; n[2] = e1[0] * e2[1] - e1[1] * e2[0]; const ln = Math.hypot(...n) || 1; n[0] /= ln; n[1] /= ln; n[2] /= ln; }
+      // wall must face into the groove (toward −outward): flip if needed
+      const th = u * TAU; const want = [-oy, ox * Math.sin(th), -ox * Math.cos(th)]; /* −outward: x→circumferential tangent, y→axle */ const flip = n[0] * want[0] + n[1] * want[1] + n[2] * want[2] < 0; if (flip) { n[0] = -n[0]; n[1] = -n[1]; n[2] = -n[2]; }
+      // wall UVs sit just inside the groove floor (flat in the depth map) so the normal map does not tilt them
+      const inU = -ox * 1.2 / circ, inV = -oy * 1.2 / (2 * A); const uvA0 = [a[0] / circ + inU, (a[1] + A) / (2 * A) + inV], uvB0 = [b[0] / circ + inU, (b[1] + A) / (2 * A) + inV];
+      const uvA1 = [uvA0[0] + inU * 0.6, uvA0[1] + inV * 0.6], uvB1 = [uvB0[0] + inU * 0.6, uvB0[1] + inV * 0.6];
+      const et = [b0[0] - a0[0], b0[1] - a0[1], b0[2] - a0[2]]; const el = Math.hypot(...et) || 1; const wt = [et[0] / el, et[1] / el, et[2] / el];
+      const quad = flip ? [[a0, uvA0], [a1, uvA1], [b0, uvB0], [b0, uvB0], [a1, uvA1], [b1, uvB1]] : [[a0, uvA0], [b0, uvB0], [a1, uvA1], [a1, uvA1], [b0, uvB0], [b1, uvB1]];
+        for (const [q, t] of quad) push(q, n, t[0], t[1], wt); tris += 2;
+      }
+    }
+  }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setAttribute('tangent', new THREE.Float32BufferAttribute(tan, 4)); g.computeBoundingSphere();
+  g.userData.tris = tris; return g;
+}
+// sidewall-only lathe (used together with the polygon tread)
+function buildSidewallGeometry(d, prof) {
+  // Match the polygon tread's shoulder-ring tessellation. The outer row is inset
+  // beneath the polygon edge to avoid a second, overlapping shoulder surface.
+  const side = prof.filter(p => p.zone === 'side' || p.edge); const M = Math.max(90, Math.ceil(d.circ / Math.max(3, T.polyDetail)));
+  const left = side.filter(p => p.x < 0), right = side.filter(p => p.x > 0);
+  const pos = [], uv = [], idx = []; let base = 0;
+  for (const run of [left, right]) { const N = run.length;
+    for (let i = 0; i < N; i++) { const p = run[i], inset = p.edge ? 0.55 : 0; for (let j = 0; j <= M; j++) { const u = j / M, th = u * TAU, x = p.x - p.nx * inset, r = p.r - p.nr * inset; pos.push(x, r * Math.cos(th), r * Math.sin(th)); uv.push(p.x < 0 ? 1 - u : u, Math.max(-0.05, p.s ?? 1)); } }
+    for (let i = 0; i < N - 1; i++) for (let j = 0; j < M; j++) { const a = base + i * (M + 1) + j, b = a + 1, c = a + M + 1, e = c + 1; idx.push(a, b, c, b, e, c); }
+    base += N * (M + 1); }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(idx); g.computeVertexNormals(); return g;
+}
+
+// =====================================================================================================================
+//  3D TYRE MESH (procedural profile revolved, displaced by tread depth map along profile normals)
+// =====================================================================================================================
+function buildProfile(d) {
+  const { Rrim, H, Rout, halfW, treadHalf, sr, bw } = d; const crown = T.crown;
+  const right = [];
+  const treadN = Math.round(T.across / 2), shN = 12, sideN = 26;
+  for (let i = 0; i <= treadN; i++) { const x = i / treadN * treadHalf; right.push({ x, r: Rout - crown * (x / treadHalf) ** 2, zone: 'tread', w: 1 }); }
+  const cx = treadHalf, cr = Rout - crown - sr; let last;
+  for (let i = 1; i <= shN; i++) { const phi = i / shN * 80 * Math.PI / 180; last = { x: cx + sr * Math.sin(phi), r: cr + sr * Math.cos(phi), zone: 'tread', w: Math.max(0, (Math.cos(phi) - Math.cos(80 * Math.PI / 180)) / (1 - Math.cos(80 * Math.PI / 180))), edge: i === shN, s: 1 }; right.push(last); }
+  const P0 = last, P3 = { x: bw, r: Rrim + 2 }, bul = T.bulge;
+  const P1 = { x: P0.x + (halfW - P0.x) * 1.35 * bul + 4, r: P0.r - H * 0.22 }, P2 = { x: bw + (halfW - bw) * 0.55 * bul, r: Rrim + H * 0.2 };
+  for (let i = 1; i <= sideN; i++) {
+    const t = i / sideN, mt = 1 - t; const x = mt ** 3 * P0.x + 3 * mt * mt * t * P1.x + 3 * mt * t * t * P2.x + t ** 3 * P3.x, r = mt ** 3 * P0.r + 3 * mt * mt * t * P1.r + 3 * mt * t * t * P2.r + t ** 3 * P3.r;
+    right.push({ x, r, zone: 'side', w: 0, s: 1 - t });
+  }
+  right.push({ x: bw - 3, r: Rrim - 1, zone: 'side', w: 0, s: -0.05 });   // tuck under the rim flange
+  const left = right.slice(1).reverse().map(p => Object.assign({}, p, { x: -p.x }));
+  const pts = left.concat(right);
+  // 2D profile normals (pointing outward)
+  for (let i = 0; i < pts.length; i++) {
+    const a = pts[Math.max(0, i - 1)], b = pts[Math.min(pts.length - 1, i + 1)]; let tx = b.x - a.x, tr = b.r - a.r; const l = Math.hypot(tx, tr) || 1; tx /= l; tr /= l;
+    pts[i].nx = tr; pts[i].nr = -tx; if (pts[i].nr < 0 && pts[i].zone === 'tread') { pts[i].nx = -tr; pts[i].nr = tx; }
+  }
+  // sidewall normals should point away from the axis plane; fix orientation by sign of x
+  for (const p of pts) if (p.zone === 'side') { const s = Math.sign(p.x) || 1; if (Math.sign(p.nx) !== s && Math.abs(p.nx) > 0.3) { p.nx = -p.nx; p.nr = -p.nr; } else if (p.nr < -0.2 && Math.abs(p.nx) <= 0.3) { p.nx = -p.nx; p.nr = -p.nr; } }
+  return pts;
+}
+
+function sampleDepth(pm, u, v) {
+  const { W, H, depth } = pm; let fx = ((u % 1) + 1) % 1 * W, fy = Math.min(H - 1.001, Math.max(0, v * H));
+  const x0 = Math.floor(fx) % W, y0 = Math.floor(fy), x1 = (x0 + 1) % W, y1 = Math.min(H - 1, y0 + 1), tx = fx - Math.floor(fx), ty = fy - y0;
+  return (depth[y0 * W + x0] * (1 - tx) + depth[y0 * W + x1] * tx) * (1 - ty) + (depth[y1 * W + x0] * (1 - tx) + depth[y1 * W + x1] * tx) * ty;
+}
+
+function buildTyreGeometry(d, pm) {
+  const prof = buildProfile(d); const N = prof.length, M = T.radial;
+  const pos = new Float32Array(N * (M + 1) * 3), uv = new Float32Array(N * (M + 1) * 2);
+  const D = T.treadDepth; const A = d.acrossHalf;
+  for (let i = 0; i < N; i++) {
+    const p = prof[i]; const v = (p.x + A) / (2 * A);
+    for (let j = 0; j <= M; j++) {
+      const u = j / M, th = u * Math.PI * 2; let x = p.x, r = p.r;
+      if (p.w > 0) {
+        const h = sampleDepth(pm, u, v); const worn = pm.wearRow(v * pm.H) * D;
+        const off = (h * D + worn) * p.w; x -= p.nx * off; r -= p.nr * off;
+      }
+      const k = (i * (M + 1) + j); pos[k * 3] = x; pos[k * 3 + 1] = r * Math.cos(th); pos[k * 3 + 2] = r * Math.sin(th);
+      if (p.zone === 'tread') { uv[k * 2] = u; uv[k * 2 + 1] = v; } else { uv[k * 2] = p.x < 0 ? 1 - u : u; uv[k * 2 + 1] = p.s; }
+    }
+  }
+  const treadIdx = [], sideIdx = [];
+  for (let i = 0; i < N - 1; i++) {
+    const arr = (prof[i].zone === 'tread' && prof[i + 1].zone === 'tread') ? treadIdx : sideIdx;
+    for (let j = 0; j < M; j++) { const a = i * (M + 1) + j, b = a + 1, c = a + (M + 1), dd = c + 1; arr.push(a, b, c, b, dd, c); }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+  g.setIndex(treadIdx.concat(sideIdx)); g.addGroup(0, treadIdx.length, 0); g.addGroup(treadIdx.length, sideIdx.length, 1);
+  g.computeVertexNormals(); g.computeBoundingSphere();
+  return { geometry: g, profile: prof };
+}
+
+// Procedural rim generator. The barrel is formed by revolving this closed profile; all centre
+// designs are generated from beams, never imported meshes or images.
+function rimProfilePoints(d) {
+  const half = d.bw + 3, seat = d.Rrim + 2, lip = seat + Math.max(4, R.lip), well = seat - Math.max(3, R.well), wall = 3.5;
+  return [
+    [-half, lip - 1], [-half - 1, lip + 1], [-half + 2, lip + 1], [-half + 3.5, seat + 3], [-half + 7, seat],
+    [-half + 15, seat - 1], [-half + 21, well], [half - 21, well], [half - 15, seat - 1], [half - 7, seat],
+    [half - 3.5, seat + 3], [half - 2, lip + 1], [half + 1, lip + 1], [half, lip - 1],
+    [half, lip - 1 - wall], [half - 1, lip + 1 - wall], [half - 2, lip + 1 - wall], [half - 3.5, seat + 3 - wall],
+    [half - 5, seat - wall], [half - 13, seat - wall - 1], [half - 20, well - wall], [-half + 20, well - wall],
+    [-half + 13, seat - wall - 1], [-half + 5, seat - wall], [-half + 3.5, seat + 3 - wall],
+    [-half + 2, lip + 1 - wall], [-half - 1, lip + 1 - wall], [-half, lip - 1 - wall]
+  ];
+}
+function buildBlankRimGeometry(d) {
+  const profile = rimProfilePoints(d), N = profile.length, M = Math.max(112, Math.min(256, Math.round(T.radial / 3))), pos = [], uv = [], idx = [];
+  for (let i = 0; i < N; i++) for (let j = 0; j <= M; j++) {
+    const [x, r] = profile[i], u = j / M, th = u * TAU; pos.push(x, r * Math.cos(th), r * Math.sin(th)); uv.push(u, i / N);
+  }
+  for (let i = 0; i < N; i++) {
+    const ni = (i + 1) % N;
+    for (let j = 0; j < M; j++) { const a = i * (M + 1) + j, b = a + 1, c = ni * (M + 1) + j, e = c + 1; idx.push(a, b, c, b, e, c); }
+  }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(idx); g.computeVertexNormals(); g.computeBoundingSphere(); return g;
+}
+function rimMaterial() {
+  const spec = RIM_MATERIALS[R.material] || RIM_MATERIALS.Steel;
+  const colour = new THREE.Color(spec.color).multiply(new THREE.Color(R.tint));
+  return new THREE.MeshStandardMaterial({ color: colour, metalness: spec.metalness, roughness: spec.roughness, envMapIntensity: 1.1 });
+}
+function addRimBeam(group, from, to, faceX, material) {
+  const dy = to[0] - from[0], dz = to[1] - from[1], length = Math.hypot(dy, dz); if (length < 0.1) return;
+  const beam = new THREE.Mesh(new THREE.BoxGeometry(R.spokeDepth, length, R.spokeWidth), material);
+  beam.position.set(faceX, (from[0] + to[0]) / 2, (from[1] + to[1]) / 2); beam.rotation.x = Math.atan2(dz, dy); group.add(beam);
+}
+function rimPoint(radius, angle) { return [Math.cos(angle) * radius, Math.sin(angle) * radius]; }
+function buildRimCentre(d, material) {
+  if (R.layout === 'Blank barrel') return null;
+  const group = new THREE.Group(), faceX = d.bw, hubR = Math.max(32, d.Rrim * R.hubRatio), outerR = d.Rrim - 10, count = Math.max(3, Math.round(R.pieceCount));
+  const hub = new THREE.Mesh(new THREE.CylinderGeometry(hubR, hubR, R.spokeDepth, 48), material); hub.rotation.z = Math.PI / 2; hub.position.x = faceX; group.add(hub);
+  for (let i = 0; i < count; i++) {
+    const a = i / count * TAU - Math.PI / 2;
+    if (R.layout === 'Straight spokes') addRimBeam(group, rimPoint(hubR * 0.7, a), rimPoint(outerR, a), faceX, material);
+    else if (R.layout === 'Split spokes') {
+      const spread = Math.min(0.25, Math.PI / count * 0.45);
+      for (const side of [-1, 1]) addRimBeam(group, rimPoint(hubR * 0.78, a), rimPoint(outerR, a + side * spread), faceX, material);
+    } else { // Y spokes: one trunk and two procedural branches per piece.
+      const midR = hubR + (outerR - hubR) * 0.5, spread = Math.min(0.28, Math.PI / count * 0.52), joint = rimPoint(midR, a);
+      addRimBeam(group, rimPoint(hubR * 0.72, a), joint, faceX, material);
+      addRimBeam(group, joint, rimPoint(outerR, a - spread), faceX, material); addRimBeam(group, joint, rimPoint(outerR, a + spread), faceX, material);
+    }
+  }
+  group.name = `${count}-piece ${R.layout}`; return group;
+}
+function buildValveStem(d, capMaterial) {
+  if (!R.valve) return null;
+  const a = R.valveAngle * Math.PI / 180, seat = d.Rrim + 2, well = seat - Math.max(3, R.well), stem = new THREE.Group();
+  stem.position.set(d.bw + 1, Math.cos(a) * (well + 1), Math.sin(a) * (well + 1)); stem.rotation.x = a;
+  const rubber = new THREE.MeshStandardMaterial({ color: '#151619', roughness: 0.6, metalness: 0.05 });
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(2.3, 3.4, 15, 12), rubber); body.position.y = 7.5; stem.add(body);
+  const collar = new THREE.Mesh(new THREE.CylinderGeometry(3.5, 3.5, 3, 12), capMaterial); collar.position.y = 1.5; stem.add(collar);
+  const cap = new THREE.Mesh(new THREE.CylinderGeometry(2.5, 2.5, 5, 12), capMaterial); cap.position.y = 17; stem.add(cap);
+  stem.name = 'Tyre inflation valve'; return stem;
+}
+function buildRim(d) {
+  const material = rimMaterial(), barrel = new THREE.Mesh(buildBlankRimGeometry(d), material); barrel.name = `Blank ${R.material} rim barrel`;
+  const group = new THREE.Group(); group.name = 'Procedural rim'; group.add(barrel);
+  const centre = buildRimCentre(d, material); if (centre) group.add(centre);
+  const valve = buildValveStem(d, material); if (valve) group.add(valve);
+  return group;
+}
+
+// carcass "threads": radial body cords + steel belt cords under the tread
+function buildThreads(profile, d) {
+  const verts = []; const cords = 160; const M = 240;
+  for (let i = 0; i < cords; i++) {
+    const th = i / cords * Math.PI * 2, c = Math.cos(th), s = Math.sin(th);
+    for (let j = 0; j < profile.length - 1; j++) {
+      const a = profile[j], b = profile[j + 1]; const off = 1.2;
+      const ax = a.x + a.nx * off, ar = a.r + a.nr * off - (a.zone === 'tread' ? T.treadDepth * (1 - T.wear) + 1 : 0), bx = b.x + b.nx * off, br = b.r + b.nr * off - (b.zone === 'tread' ? T.treadDepth * (1 - T.wear) + 1 : 0);
+      verts.push(ax, ar * c, ar * s, bx, br * c, br * s);
+    }
+  }
+  const beltR = d.Rout - T.crown * 0.5 - T.treadDepth * (1 - T.wear) - 0.4;
+  for (const sgn of [1, -1]) for (let i = 0; i < 90; i++) {
+    const th0 = i / 90 * Math.PI * 2; const span = d.treadHalf * 2 * Math.tan(20 * Math.PI / 180) / beltR;
+    for (let j = 0; j < 6; j++) {
+      const x0 = -d.treadHalf + j / 6 * d.treadHalf * 2, x1 = -d.treadHalf + (j + 1) / 6 * d.treadHalf * 2;
+      const t0 = th0 + sgn * span * j / 6, t1 = th0 + sgn * span * (j + 1) / 6;
+      verts.push(x0, beltR * Math.cos(t0), beltR * Math.sin(t0), x1, beltR * Math.cos(t1), beltR * Math.sin(t1));
+    }
+  }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
+  return new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: '#d6c93a', transparent: true, opacity: 0.55 }));
+}
+
+// =====================================================================================================================
+//  THREE.JS SCENE
+// =====================================================================================================================
+const view = document.getElementById('view');
+const renderer = new THREE.WebGLRenderer({ antialias: true }); renderer.setPixelRatio(Math.min(2, devicePixelRatio)); renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05; view.prepend(renderer.domElement);
+const scene = new THREE.Scene(); scene.background = new THREE.Color('#0b0c0e');
+const pmrem = new THREE.PMREMGenerator(renderer); scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+const camera = new THREE.PerspectiveCamera(38, 1, 1, 20000); camera.position.set(700, 380, 720);
+const controls = new OrbitControls(camera, renderer.domElement); controls.enableDamping = true; controls.target.set(0, 0, 0);
+controls.zoomSpeed = 0.8; controls.maxPolarAngle = Math.PI / 2 - 0.03; controls.zoomToCursor = false;
+function fitZoom(d) { const R = d.Rout; controls.minDistance = R * 0.75; controls.maxDistance = R * 7; camera.near = R * 0.02; camera.far = R * 60; camera.updateProjectionMatrix();
+  const dist = camera.position.distanceTo(controls.target); if (dist > controls.maxDistance || dist < controls.minDistance) { const dir = camera.position.clone().sub(controls.target).normalize(); camera.position.copy(controls.target).addScaledVector(dir, THREE.MathUtils.clamp(dist, controls.minDistance, controls.maxDistance)); } }
+const key = new THREE.DirectionalLight('#fff4e0', 2.2); key.position.set(600, 900, 500); key.castShadow = true; key.shadow.mapSize.set(2048, 2048); key.shadow.camera.left = key.shadow.camera.bottom = -600; key.shadow.camera.right = key.shadow.camera.top = 600; key.shadow.camera.far = 3000; key.shadow.bias = -0.0002; key.shadow.normalBias = 2.5; scene.add(key);
+scene.add(new THREE.DirectionalLight('#9fc5ff', 0.6).translateX(-800).translateY(200).translateZ(-400));
+scene.add(new THREE.HemisphereLight('#3a4050', '#0b0b0d', 0.6));
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(6000, 6000), new THREE.MeshStandardMaterial({ color: '#121316', roughness: 0.95 })); ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
+const grid = new THREE.GridHelper(4000, 80, '#232529', '#1a1c1f'); grid.position.y = 0.5; scene.add(grid);
+const tyreGroup = new THREE.Group(); scene.add(tyreGroup);
+
+let tyreMesh, rimGroup, threadLines, maps, patternMap, profileCache, treadMat, sideMatL, sideMatR;
+function disposeGroup() { tyreGroup.traverse(o => { if (o.geometry) o.geometry.dispose(); }); tyreGroup.clear(); }
+
+function rebuild(full = true) {
+  const d = dims();
+  patternMap = renderPattern(P, d, 384, T.wear, T.wearBias, T.treadDepth);
+  maps = buildTreadMaps(patternMap, T.treadDepth, T.rubber, T.wear);
+  disposeGroup();
+  const tex = c => { const t = new THREE.CanvasTexture(c); t.flipY = false; t.wrapS = THREE.RepeatWrapping; t.anisotropy = 8; t.colorSpace = THREE.NoColorSpace; return t; };
+  const colTex = tex(maps.color); colTex.colorSpace = THREE.SRGBColorSpace;
+  const usePoly = !!window.ClipperLib;
+  // Polygon tread already carries the real groove walls and corner normals. Applying a
+  // tangent-space height-map normal to those discontinuous faces can flip highlights at
+  // sharp block corners, so reserve that normal map for the height-map fallback only.
+  const treadNormal = usePoly ? null : tex(maps.normal);
+  treadMat = new THREE.MeshStandardMaterial({ map: colTex, normalMap: treadNormal, normalScale: new THREE.Vector2(treadNormal ? 0.7 : 0, treadNormal ? 0.7 : 0), roughnessMap: tex(maps.rough), roughness: 1, metalness: 0.0 });
+  const sw = buildSidewall(true); const sideTex = tex(sw.color); sideTex.colorSpace = THREE.SRGBColorSpace;
+  const sideMat = new THREE.MeshStandardMaterial({ map: sideTex, normalMap: tex(sw.normal), normalScale: new THREE.Vector2(0.45, 0.45), roughness: 0.8, metalness: 0, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
+  tyreMesh = new THREE.Group(); let triCount = 0;
+  if (usePoly) {
+    const pmGeo = renderPattern(P, d, 384, T.wear, T.wearBias, T.treadDepth, true);
+    let treadGeo; try { treadGeo = buildPolyTread(d, pmGeo); } catch (e) { console.warn('polygon tread failed, falling back', e); }
+    if (treadGeo) { const prof = buildProfile(d); profileCache = prof; tyreMesh.add(new THREE.Mesh(treadGeo, treadMat)); tyreMesh.add(new THREE.Mesh(buildSidewallGeometry(d, prof), sideMat)); triCount = treadGeo.userData.tris; }
+    else { const { geometry, profile } = buildTyreGeometry(d, patternMap); profileCache = profile; tyreMesh.add(new THREE.Mesh(geometry, [treadMat, sideMat])); triCount = geometry.index.count / 3; }
+  } else { const { geometry, profile } = buildTyreGeometry(d, patternMap); profileCache = profile; tyreMesh.add(new THREE.Mesh(geometry, [treadMat, sideMat])); triCount = geometry.index.count / 3; }
+  tyreMesh.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; if (UI.threads) [].concat(o.material).forEach(m => { m.transparent = true; m.opacity = 0.35; }); } });
+  tyreMesh.userData.tris = triCount; tyreGroup.add(tyreMesh);
+  rimGroup = buildRim(d); rimGroup.traverse(o => { o.castShadow = true; }); tyreGroup.add(rimGroup);
+  threadLines = buildThreads(profileCache, d); threadLines.visible = UI.threads; tyreGroup.add(threadLines);
+  const groundR = d.Rout - T.wear * T.treadDepth; tyreGroup.position.y = groundR; tyreGroup.rotation.z = 0;
+  if (!controls.userData?.init) { controls.userData = { init: true }; controls.target.set(0, groundR, 0); camera.position.set(d.Rout * 2.6, groundR + d.Rout * 0.6, d.Rout * 2.7); }
+  fitZoom(d);
+  updateHud(d); drawProfile(d, profileCache); drawRimProfile(d); drawTreadView();
+}
+
+function updateHud(d) {
+  const worn = T.wear * T.treadDepth, remaining = T.treadDepth - worn;
+  document.getElementById('badgeName').textContent = P.name; document.getElementById('badgeType').textContent = P.type; document.getElementById('badgeSize').textContent = sizeString();
+  const od = (d.Rout - worn) * 2; const circ = Math.PI * od;
+  const col = remaining < 1.6 ? 'var(--red)' : remaining < 3 ? 'var(--yellow)' : 'var(--green)';
+  const tile = (l, v, u, dot) => `<div class="tile"><div class="l"><i style="background:${dot || 'var(--green)'}"></i>${l}</div><div class="v">${v}<small>${u}</small></div></div>`;
+  document.getElementById('tiles').innerHTML =
+    tile('Overall Ø', od.toFixed(0), 'mm', 'var(--yellow)') + tile('Tread left', remaining.toFixed(1), '/ ' + T.treadDepth + ' mm', col) +
+    tile('Circumference', (circ / 1000).toFixed(2), 'm', 'var(--yellow)') + tile('Tread mesh', (tyreMesh?.userData.tris / 1000 || 0).toFixed(1), 'k tris · polygons', 'var(--green)');
+  const bigNum = v => { const [a, b] = String(v).split('.'); return a + (b ? '<span class="frac">.' + b + '</span>' : ''); };
+  document.getElementById('bigSize').innerHTML = `${T.width}<span class="frac">/${T.aspect}</span><small>R${T.rim}</small>`;
+  document.getElementById('sizeR').textContent = `${(d.Rrim * 2).toFixed(0)} mm rim`;
+  document.getElementById('sizePills').innerHTML = `<span class="pill n">sidewall ${d.H.toFixed(0)} mm</span><span class="pill n">tread ${(d.treadHalf * 2).toFixed(0)} mm</span><span class="pill ${remaining < 1.6 ? 'r' : 'g'}">${T.wear ? '-' + worn.toFixed(1) + ' mm worn' : 'new'}</span>`;
+  document.getElementById('presetCount').textContent = PRESETS.length + ' designs';
+  const wearLabel = T.wear === 0 ? 'New' : T.wear >= 1 ? 'Bald' : Math.round(T.wear * 100) + '%';
+  document.getElementById('wearVal').textContent = wearLabel;
+  document.getElementById('wearPercent').textContent = Math.round(T.wear * 100) + '%';
+  document.getElementById('wearNote').textContent = `${worn.toFixed(1)} mm worn · ${remaining.toFixed(1)} mm remaining`;
+}
+
+const profView = { X: null, Y: null, sc: 1, handles: [] };
+function profileHandles(d) {
+  const sr = d.sr, s45 = Math.sin(Math.PI / 4), c45 = Math.cos(Math.PI / 4);
+  const list = [
+    { id: 'tread', x: d.treadHalf, r: d.Rout - T.crown, label: 'tread edge / crown', color: '#38c46d' },
+    { id: 'shoulder', x: d.treadHalf + sr * s45, r: d.Rout - T.crown - sr + sr * c45, label: 'shoulder radius', color: '#d6c93a' },
+    { id: 'bulge', x: d.halfW * (0.6 + 0.4 * T.bulge), r: d.Rrim + d.H * 0.52, label: 'sidewall bulge', color: '#f0a04b' },
+    { id: 'depth', x: 0, r: d.Rout - T.treadDepth, label: 'tread depth', color: '#e5423f' },
+  ];
+  return list.flatMap(h => h.x === 0 ? [h] : [h, Object.assign({}, h, { x: -h.x, mirror: true })]);
+}
+function drawProfile(d, prof) {
+  const c = document.getElementById('profile'), ctx = c.getContext('2d'); const W = c.width, H = c.height; ctx.clearRect(0, 0, W, H);
+  const worn = T.wear * T.treadDepth;
+  const sc = Math.min((W - 44) / (T.width * 1.15), (H - 40) / (d.Rout - d.Rrim + 40)); const ox = W / 2, oy = H - 16;
+  const X = x => ox + x * sc, Y = r => oy - (r - d.Rrim + 20) * sc; Object.assign(profView, { X, Y, sc, ox, oy, d });
+  ctx.strokeStyle = '#2b2f38'; ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.moveTo(X(-d.bw - 10), Y(d.Rrim)); ctx.lineTo(X(d.bw + 10), Y(d.Rrim)); ctx.stroke(); ctx.setLineDash([]);
+  ctx.fillStyle = '#9aa0ab'; ctx.fillRect(X(-d.bw), Y(d.Rrim) - 3, (2 * d.bw) * sc, 6);
+  ctx.beginPath(); prof.forEach((p, i) => { const rr = p.r - (p.zone === 'tread' ? worn * p.w : 0); i ? ctx.lineTo(X(p.x), Y(rr)) : ctx.moveTo(X(p.x), Y(rr)); }); ctx.closePath();
+  ctx.fillStyle = '#1e2024'; ctx.fill(); ctx.strokeStyle = '#e6e7ea'; ctx.lineWidth = 1.2; ctx.stroke();
+  ctx.strokeStyle = '#d6c93a'; ctx.lineWidth = 1; ctx.setLineDash([2, 3]); ctx.beginPath(); prof.filter(p => p.zone === 'tread').forEach((p, i) => { const rr = p.r - (T.treadDepth + worn) * p.w; i ? ctx.lineTo(X(p.x), Y(rr)) : ctx.moveTo(X(p.x), Y(rr)); }); ctx.stroke(); ctx.setLineDash([]);
+  // handles
+  profView.handles = profileHandles(d);
+  for (const h of profView.handles) {
+    const hx = X(h.x), hy = Y(h.r); const active = profView.drag && profView.drag.id === h.id;
+    ctx.beginPath(); ctx.arc(hx, hy, active ? 7 : 5, 0, Math.PI * 2); ctx.fillStyle = '#111'; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = h.color; ctx.stroke();
+    if (!h.mirror) { ctx.fillStyle = h.color; ctx.font = '300 10px Outfit, system-ui'; ctx.textAlign = h.id === 'depth' ? 'center' : 'left'; ctx.fillText(h.label, hx + (h.id === 'depth' ? 0 : 9), hy + (h.id === 'depth' ? 14 : -8)); }
+  }
+  ctx.fillStyle = '#8a8d94'; ctx.font = '300 11px Outfit, system-ui'; ctx.textAlign = 'center';
+  ctx.fillText(`${T.width} mm`, ox, Y(d.Rout) - 10); ctx.fillText(`rim ${T.rim}" · ${(d.bw * 2).toFixed(0)} mm`, ox, oy - 4);
+  ctx.textAlign = 'left'; ctx.fillText(`${d.H.toFixed(0)} mm`, X(d.halfW) + 10, (Y(d.Rout) + Y(d.Rrim)) / 2);
+  ctx.textAlign = 'right'; ctx.fillStyle = '#5c5f66'; ctx.fillText(`crown ${T.crown.toFixed(1)} · R${d.sr.toFixed(0)} · depth ${T.treadDepth}`, W - 8, 14);
+}
+(function initProfileEditor() {
+  const c = document.getElementById('profile'); const clamp = THREE.MathUtils.clamp;
+  const toCanvas = e => { const r = c.getBoundingClientRect(); return [(e.clientX - r.left) * c.width / r.width, (e.clientY - r.top) * c.height / r.height]; };
+  const pick = (px, py) => { let best = null, bd = 12; for (const h of profView.handles) { const dd = Math.hypot(profView.X(h.x) - px, profView.Y(h.r) - py); if (dd < bd) { bd = dd; best = h; } } return best; };
+  c.addEventListener('pointermove', e => { if (!profView.drag) { c.style.cursor = pick(...toCanvas(e)) ? 'grab' : 'crosshair'; return; }
+    const [px, py] = toCanvas(e); const d = profView.d; const sgn = profView.drag.mirror ? -1 : 1;
+    const xmm = sgn * (px - profView.ox) / profView.sc, rmm = d.Rrim - 20 + (profView.oy - py) / profView.sc;
+    switch (profView.drag.id) {
+      case 'tread': T.treadFrac = clamp(xmm / d.halfW, 0.7, 0.98); T.crown = clamp(d.Rout - rmm, 0, 8); break;
+      case 'shoulder': T.shoulder = clamp((xmm - d.treadHalf) / Math.sin(Math.PI / 4), 4, 40); break;
+      case 'bulge': T.bulge = clamp((xmm / d.halfW - 0.6) / 0.4, 0.4, 1.6); break;
+      case 'depth': T.treadDepth = clamp(Math.round((d.Rout - rmm) * 2) / 2, 2, 20); break;
+    }
+    const nd = dims(); drawProfile(nd, buildProfile(nd)); schedule(); });
+  c.addEventListener('pointerdown', e => { const h = pick(...toCanvas(e)); if (!h) return; profView.drag = h; c.setPointerCapture(e.pointerId); c.style.cursor = 'grabbing'; });
+  const end = () => { if (!profView.drag) return; profView.drag = null; c.style.cursor = 'crosshair'; buildTyreUI(); const nd = dims(); drawProfile(nd, buildProfile(nd)); };
+  c.addEventListener('pointerup', end); c.addEventListener('pointercancel', end);
+})();
+function drawTreadView() {
+  const src = maps[UI.treadMode]; const bright = UI.treadMode === 'color' ? 'brightness(2.6) contrast(1.05)' : 'none';
+  const c = document.getElementById('treadView'); const r = c.getBoundingClientRect(); if (!r.width) return; c.width = Math.round(r.width * devicePixelRatio); c.height = Math.round(r.height * devicePixelRatio);
+  const ctx = c.getContext('2d'); ctx.imageSmoothingQuality = 'high'; ctx.filter = bright;
+  const cropW = Math.min(src.width, Math.round(src.height * c.width / c.height));     // a window of the circumference at true aspect
+  ctx.drawImage(src, 0, 0, cropW, src.height, 0, 0, c.width, c.height); ctx.filter = 'none';
+  const st = document.getElementById('treadStrip'); const rs = st.getBoundingClientRect(); st.width = Math.round(rs.width * devicePixelRatio); st.height = Math.round(rs.height * devicePixelRatio);
+  const sx = st.getContext('2d'); sx.filter = bright; sx.drawImage(src, 0, 0, st.width, st.height); sx.filter = 'none';
+  sx.strokeStyle = '#fff'; sx.lineWidth = 2; sx.strokeRect(1, 1, st.width * cropW / src.width - 2, st.height - 2);
+  const d = dims(); document.getElementById('treadDims').textContent = `Showing ${(cropW / patternMap.k).toFixed(0)} mm of ${(d.circ).toFixed(0)} mm circumference · map ${patternMap.W}×${patternMap.H} @ ${patternMap.k.toFixed(2)} px/mm`;
+}
+function resize() { const w = view.clientWidth, h = view.clientHeight; renderer.setSize(w, h); camera.aspect = w / h; camera.updateProjectionMatrix(); if (maps) drawTreadView(); }
+new ResizeObserver(resize).observe(view); resize();
+let last = performance.now();
+renderer.setAnimationLoop(now => { const dt = (now - last) / 1000; last = now; if (UI.spin && tyreGroup) tyreGroup.rotation.x -= dt * 0.8; controls.update(); renderer.render(scene, camera); });
+
+// =====================================================================================================================
+//  UI
+// =====================================================================================================================
+let timer; const schedule = () => { clearTimeout(timer); timer = setTimeout(() => rebuild(), 40); };
+function slider(parent, label, obj, key, min, max, step, fmt = v => v, after = schedule) {
+  const row = document.createElement('div'); row.className = 'row'; row.innerHTML = `<label title="${label}">${label}</label><input type="range" min="${min}" max="${max}" step="${step}" value="${obj[key]}"><span class="val">${fmt(obj[key])}</span>`;
+  const inp = row.querySelector('input'), val = row.querySelector('.val');
+  inp.oninput = () => { obj[key] = parseFloat(inp.value); val.textContent = fmt(obj[key]); after(); }; parent.appendChild(row); return row;
+}
+function select(parent, label, obj, key, opts, after = schedule) {
+  const row = document.createElement('div'); row.className = 'row'; row.innerHTML = `<label>${label}</label><select>${opts.map(o => `<option ${o == obj[key] ? 'selected' : ''}>${o}</option>`).join('')}</select>`;
+  row.querySelector('select').onchange = e => { obj[key] = isNaN(+e.target.value) ? e.target.value : +e.target.value; after(); }; parent.appendChild(row); return row;
+}
+function check(parent, label, obj, key, after = schedule) {
+  const row = document.createElement('div'); row.className = 'row'; row.innerHTML = `<label>${label}</label><input type="checkbox" ${obj[key] ? 'checked' : ''}>`;
+  row.querySelector('input').onchange = e => { obj[key] = e.target.checked; after(); }; parent.appendChild(row); return row;
+}
+function color(parent, label, obj, key, after = schedule) {
+  const row = document.createElement('div'); row.className = 'row'; row.innerHTML = `<label>${label}</label><input type="color" value="${obj[key]}">`;
+  row.querySelector('input').oninput = e => { obj[key] = e.target.value; after(); }; parent.appendChild(row); return row;
+}
+function textInput(parent, label, obj, key, after = schedule, onBlur) {
+  const row = document.createElement('div'); row.className = 'row';
+  const lab = document.createElement('label'); lab.textContent = label; row.appendChild(lab);
+  const input = document.createElement('input'); input.type = 'text'; input.value = obj[key] ?? ''; input.autocomplete = 'off'; row.appendChild(input);
+  input.oninput = () => { obj[key] = input.value; after(); };
+  if (onBlur) input.onchange = onBlur;
+  parent.appendChild(row); return input;
+}
+function decalSelect(parent, label, obj, key, options, after = schedule) {
+  const row = document.createElement('div'); row.className = 'row';
+  const lab = document.createElement('label'); lab.textContent = label; const sel = document.createElement('select');
+  for (const option of options) { const el = document.createElement('option'); el.value = option.value; el.textContent = option.label; el.selected = String(option.value) === String(obj[key]); sel.appendChild(el); }
+  sel.onchange = () => { obj[key] = sel.value; const option = options.find(o => o.value === sel.value); if (key === 'font' && option) obj.fontLabel = option.label; after(); };
+  row.append(lab, sel); parent.appendChild(row); return sel;
+}
+function decalLayers() {
+  if (!Array.isArray(P.decals)) P.decals = defaultDecals();
+  return P.decals;
+}
+function updateDecalLayerLabel() { buildDecalUI(); }
+async function loadDecalFont(file, decal) {
+  if (!file) return;
+  try {
+    const fontId = `custom-${Date.now()}-${Math.round(Math.random() * 1e6)}`;
+    const family = `Slate decal ${fontId}`;
+    const face = new FontFace(family, await file.arrayBuffer()); await face.load(); document.fonts.add(face);
+    CUSTOM_DECAL_FONTS.set(fontId, { label: file.name, css: `"${family}", sans-serif` });
+    decal.font = fontId; decal.fontLabel = file.name; buildDecalUI(); schedule(); toast(`Loaded ${file.name}`);
+  } catch (error) { console.warn('Custom decal font failed to load', error); toast('That font file could not be loaded'); }
+}
+function buildDecalUI() {
+  const decals = decalLayers();
+  if (UI.decalSel >= decals.length) UI.decalSel = decals.length - 1;
+  document.getElementById('decalCount').textContent = `${decals.length} layer${decals.length === 1 ? '' : 's'}`;
+  const list = document.getElementById('decalLayers'); list.innerHTML = '';
+  decals.forEach((decal, i) => {
+    const layer = document.createElement('div'); layer.className = `decal${i === UI.decalSel ? ' sel' : ''}${decal.enabled ? '' : ' off'}`;
+    const swatch = document.createElement('span'); swatch.className = 'swatch'; swatch.style.background = decal.color || '#e8e8e8';
+    const copy = document.createElement('span'); copy.className = 'copy';
+    const name = document.createElement('span'); name.className = 'name'; name.textContent = decal.name || 'Text decal';
+    const preview = document.createElement('span'); preview.className = 'preview'; preview.textContent = decalCopy(decal) || 'Empty decal'; copy.append(name, preview);
+    const action = (glyph, title, fn) => { const b = document.createElement('button'); b.type = 'button'; b.textContent = glyph; b.title = title; b.onclick = e => { e.stopPropagation(); fn(); }; layer.appendChild(b); };
+    layer.append(swatch, copy);
+    action(decal.enabled ? '◉' : '○', decal.enabled ? 'Hide decal' : 'Show decal', () => { decal.enabled = !decal.enabled; buildDecalUI(); schedule(); });
+    action('⧉', 'Duplicate decal', () => { const duplicate = Object.assign({}, decal, { name: `${decal.name || 'Text decal'} copy` }); delete duplicate.id; decals.splice(i + 1, 0, newDecal(duplicate)); UI.decalSel = i + 1; buildDecalUI(); schedule(); });
+    action('↑', 'Move earlier', () => { if (i) { [decals[i - 1], decals[i]] = [decals[i], decals[i - 1]]; UI.decalSel = i - 1; buildDecalUI(); schedule(); } });
+    action('↓', 'Move later', () => { if (i < decals.length - 1) { [decals[i + 1], decals[i]] = [decals[i], decals[i + 1]]; UI.decalSel = i + 1; buildDecalUI(); schedule(); } });
+    action('✕', 'Delete decal', () => { decals.splice(i, 1); UI.decalSel = -1; buildDecalUI(); schedule(); });
+    layer.onclick = () => { UI.decalSel = i; buildDecalUI(); };
+    list.appendChild(layer);
+  });
+  const props = document.getElementById('decalProps'); props.innerHTML = '';
+  const decal = decals[UI.decalSel];
+  if (!decal) { props.className = 'hint'; props.textContent = 'Select a decal layer to edit it. Add a text decal to create your own sidewall mark.'; return; }
+  props.className = '';
+  const title = document.createElement('div'); title.className = 'decal-title'; title.textContent = decal.name || 'Text decal'; props.appendChild(title);
+  textInput(props, 'Layer name', decal, 'name', schedule, updateDecalLayerLabel);
+  textInput(props, 'Decal text', decal, 'text', schedule, updateDecalLayerLabel);
+  const fontOptions = [
+    ...DECAL_FONTS.map(font => ({ value: font.id, label: font.label })),
+    ...[...CUSTOM_DECAL_FONTS.entries()].map(([value, font]) => ({ value, label: `Custom · ${font.label}` }))
+  ];
+  if (!fontOptions.some(font => font.value === decal.font)) fontOptions.push({ value: decal.font, label: `Reload custom font · ${decal.fontLabel || 'unknown'}` });
+  decalSelect(props, 'Typeface', decal, 'font', fontOptions, () => { buildDecalUI(); schedule(); });
+  const fontRow = document.createElement('div'); fontRow.className = 'row';
+  const fontLab = document.createElement('label'); fontLab.textContent = 'Load own font'; const fontFile = document.createElement('input'); fontFile.type = 'file'; fontFile.accept = '.ttf,.otf,.woff,.woff2,font/*'; fontFile.title = 'Load a TTF, OTF, WOFF or WOFF2 font';
+  fontFile.onchange = () => loadDecalFont(fontFile.files[0], decal); fontRow.append(fontLab, fontFile); props.appendChild(fontRow);
+  slider(props, 'Text size', decal, 'size', 10, 130, 1, v => `${Math.round(v)} px`);
+  color(props, 'Text colour', decal, 'color');
+  slider(props, 'Around sidewall', decal, 'x', -10, 110, 1, v => `${Math.round(v)}%`);
+  slider(props, 'Sidewall height', decal, 'y', 8, 92, 1, v => `${Math.round(v)}%`);
+  decalSelect(props, 'Alignment', decal, 'align', [{ value: 'left', label: 'Left' }, { value: 'center', label: 'Centre' }, { value: 'right', label: 'Right' }]);
+  decalSelect(props, 'Weight', decal, 'weight', [300, 400, 500, 600, 700, 800, 900].map(weight => ({ value: String(weight), label: String(weight) })), () => { decal.weight = +decal.weight; schedule(); });
+  slider(props, 'Opacity', decal, 'opacity', 0.1, 1, 0.05, v => `${Math.round(v * 100)}%`);
+  check(props, 'Italic', decal, 'italic'); check(props, 'Moulded / embossed', decal, 'embossed'); check(props, 'Repeat half-turn', decal, 'repeat');
+  const note = document.createElement('div'); note.className = 'decal-note'; note.innerHTML = 'Tokens: <code>{brand}</code> <code>{name}</code> <code>{size}</code> <code>{type}</code> <code>{depth}</code>. Custom font files stay in this browser session; JSON keeps the text settings but you will need to load the font again after importing on another device.'; props.appendChild(note);
+}
+
+function drawRimProfile(d) {
+  const c = document.getElementById('rimProfile'), ctx = c.getContext('2d'), W = c.width, H = c.height, profile = rimProfilePoints(d);
+  ctx.clearRect(0, 0, W, H); ctx.fillStyle = '#101114'; ctx.fillRect(0, 0, W, H);
+  const minX = Math.min(...profile.map(p => p[0])), maxX = Math.max(...profile.map(p => p[0])), minR = Math.min(...profile.map(p => p[1])), maxR = Math.max(...profile.map(p => p[1]));
+  const scale = Math.min((W - 30) / (maxX - minX), (H - 48) / (maxR - minR)); const X = x => W / 2 + x * scale, Y = r => H - 24 - (r - minR) * scale;
+  ctx.beginPath(); profile.forEach((p, i) => i ? ctx.lineTo(X(p[0]), Y(p[1])) : ctx.moveTo(X(p[0]), Y(p[1]))); ctx.closePath();
+  const spec = RIM_MATERIALS[R.material] || RIM_MATERIALS.Steel; ctx.fillStyle = spec.color; ctx.globalAlpha = .86; ctx.fill(); ctx.globalAlpha = 1; ctx.strokeStyle = '#f2f3f4'; ctx.lineWidth = 1.5; ctx.stroke();
+  const seat = d.Rrim + 2, well = seat - R.well; ctx.setLineDash([3, 3]); ctx.strokeStyle = '#38c46d'; ctx.beginPath(); ctx.moveTo(X(minX - 4), Y(seat)); ctx.lineTo(X(maxX + 4), Y(seat)); ctx.stroke(); ctx.strokeStyle = '#e5423f'; ctx.beginPath(); ctx.moveTo(X(minX - 4), Y(well)); ctx.lineTo(X(maxX + 4), Y(well)); ctx.stroke(); ctx.setLineDash([]);
+  ctx.fillStyle = '#d6c93a'; ctx.font = '11px Outfit, system-ui'; ctx.fillText('flange', 10, 16); ctx.fillStyle = '#38c46d'; ctx.fillText('bead seat', 10, 30); ctx.fillStyle = '#e5423f'; ctx.fillText('drop well', 10, 44);
+  document.getElementById('rimProfileInfo').textContent = `${T.rim} in rim · ${(d.bw * 2).toFixed(0)} mm bead width · ${R.lip.toFixed(1)} mm flange · ${R.well.toFixed(1)} mm drop well`;
+}
+function buildRimUI() {
+  const p = document.getElementById('rimParams'); p.innerHTML = '';
+  const h = title => { const e = document.createElement('div'); e.className = 'sec'; e.textContent = title; p.appendChild(e); };
+  h('Tyre fit');
+  slider(p, 'Rim diameter (in)', T, 'rim', 12, 24, 1); slider(p, 'Bead width fraction', T, 'rimWidthFrac', 0.6, 0.92, 0.01, v => v.toFixed(2));
+  const fitNote = document.createElement('div'); fitNote.className = 'hint'; fitNote.textContent = 'These shared dimensions keep the rim seated correctly inside the selected tyre.'; p.appendChild(fitNote);
+  h('Barrel profile');
+  slider(p, 'Flange height (mm)', R, 'lip', 4, 14, 0.5, v => v.toFixed(1)); slider(p, 'Drop well (mm)', R, 'well', 3, 18, 0.5, v => v.toFixed(1));
+  h('Material');
+  select(p, 'Rim material', R, 'material', Object.keys(RIM_MATERIALS)); color(p, 'Rim tint', R, 'tint');
+  h('Centre construction');
+  select(p, 'Centre design', R, 'layout', ['Blank barrel', 'Straight spokes', 'Split spokes', 'Y spokes']);
+  slider(p, 'Piece count', R, 'pieceCount', 3, 18, 1, v => `${Math.round(v)}`); slider(p, 'Piece width (mm)', R, 'spokeWidth', 8, 34, 1, v => v.toFixed(0));
+  slider(p, 'Piece depth (mm)', R, 'spokeDepth', 4, 16, 1, v => v.toFixed(0)); slider(p, 'Hub size', R, 'hubRatio', 0.16, 0.46, 0.01, v => v.toFixed(2));
+  const constructionNote = document.createElement('div'); constructionNote.className = 'hint'; constructionNote.textContent = 'Pieces are procedural beams. Blank barrel keeps the centre fully open; split and Y designs branch from each hub piece.'; p.appendChild(constructionNote);
+  h('Air valve');
+  check(p, 'Inflation valve', R, 'valve'); slider(p, 'Valve angle (°)', R, 'valveAngle', 0, 359, 1, v => `${Math.round(v)}°`);
+}
+
+function buildTyreUI() {
+  const p = document.getElementById('tyreParams'); p.innerHTML = '';
+  const h = t => { const e = document.createElement('div'); e.className = 'sec'; e.textContent = t; p.appendChild(e); };
+  h('Size');
+  slider(p, 'Section width (mm)', T, 'width', 135, 405, 5); slider(p, 'Aspect ratio (%)', T, 'aspect', 20, 85, 5);
+  h('Wear');
+  slider(p, 'Wear bias (edge↔centre)', T, 'wearBias', -1, 1, 0.01, v => v.toFixed(2));
+  h('Tread mesh');
+  const meshRow = document.createElement('div'); meshRow.className = 'row'; meshRow.innerHTML = '<label>Mesh mode</label><span class="val" style="flex:1;text-align:left">Polygon topology</span>'; p.appendChild(meshRow);
+  slider(p, 'Polygon detail (mm)', T, 'polyDetail', 3, 16, 0.5, v => v.toFixed(1)); slider(p, 'Segments around', T, 'radial', 180, 1440, 20);
+  const pp = document.getElementById('profileParams'); pp.innerHTML = '';
+  slider(pp, 'Tread depth (mm)', T, 'treadDepth', 2, 20, 0.5); slider(pp, 'Tread width fraction', T, 'treadFrac', 0.7, 0.98, 0.01, v => v.toFixed(2));
+  slider(pp, 'Crown drop (mm)', T, 'crown', 0, 8, 0.1, v => v.toFixed(1)); slider(pp, 'Shoulder radius (mm)', T, 'shoulder', 4, 40, 1);
+  slider(pp, 'Sidewall bulge', T, 'bulge', 0.4, 1.6, 0.01, v => v.toFixed(2));
+  const l = document.getElementById('lookParams'); l.innerHTML = '';
+  color(l, 'Rubber colour', T, 'rubber'); check(l, 'Show sidewall decals', T, 'lettering');
+  const b = document.createElement('div'); b.className = 'row'; b.innerHTML = '<label>Brand</label><input type="text" value="' + T.brand + '">'; b.querySelector('input').oninput = e => { T.brand = e.target.value; schedule(); }; l.appendChild(b);
+  const markingHead = document.createElement('div'); markingHead.className = 'sec'; markingHead.textContent = 'Factory tread paint'; l.appendChild(markingHead);
+  check(l, 'Coloured tread stripes', T, 'factoryStripes');
+  const patternRow = document.createElement('div'); patternRow.className = 'row'; patternRow.innerHTML = '<label>Stripe pattern</label><select><option value="zigzag">Solid zig-zag</option><option value="dotted">Dotted zig-zag</option><option value="dashed">Dashed zig-zag</option><option value="stitch">Stitch marks</option></select>';
+  const patternSelect = patternRow.querySelector('select'); patternSelect.value = T.stripePattern; patternSelect.onchange = e => { T.stripePattern = e.target.value; schedule(); }; l.appendChild(patternRow);
+  color(l, 'Red stripe', T, 'stripeRed'); color(l, 'Blue stripe', T, 'stripeBlue');
+  slider(l, 'Lateral position (mm)', T, 'stripeOffset', -70, 70, 0.5, v => (v > 0 ? '+' : '') + v.toFixed(1));
+  slider(l, 'Stripe width (mm)', T, 'stripeWidth', 0.5, 4, 0.1, v => v.toFixed(1));
+  slider(l, 'Stripe gap (mm)', T, 'stripeGap', 1.5, 10, 0.1, v => v.toFixed(1));
+  slider(l, 'Stripe weave (mm)', T, 'stripeWave', 0, 4, 0.1, v => v.toFixed(1));
+  slider(l, 'Pattern pitch (mm)', T, 'stripePitch', 4, 24, 0.5, v => v.toFixed(1));
+}
+function buildPresetUI() {
+  const box = document.getElementById('presets'); box.innerHTML = '';
+  PRESETS.forEach((pr, i) => {
+    const el = document.createElement('div'); el.className = 'preset' + (pr.name === P.name ? ' active' : ''); el.innerHTML = `<canvas width="240" height="60"></canvas><div class="n">${pr.name}</div><div class="t">${pr.type}</div>`;
+    const t = Object.assign({}, T, pr.tyre); const d = dims(t); const pm = renderPattern({ layers: pr.layers }, d, 60, 0, 0, t.treadDepth);
+    const ctx = el.querySelector('canvas').getContext('2d'); const id = ctx.createImageData(240, 60);
+    for (let y = 0; y < 60; y++) for (let x = 0; x < 240; x++) { const sx = Math.floor(x / 240 * Math.min(pm.W, pm.H * 4)); const v = 40 + (1 - pm.depth[y * pm.W + sx]) * 60; const o = (y * 240 + x) * 4; id.data[o] = id.data[o + 1] = id.data[o + 2] = v; id.data[o + 3] = 255; }
+    ctx.putImageData(id, 0, 0);
+    el.onclick = () => applyPreset(i); box.appendChild(el);
+  });
+}
+function applyPreset(i) {
+  const pr = PRESETS[i]; Object.assign(T, pr.tyre); P.name = pr.name; P.type = pr.type; P.layers = pr.layers.map(l => Object.assign({}, l)); UI.sel = -1; T.wear = 0; document.getElementById('wearSlider').value = 0;
+  refreshAll();
+}
+function refreshAll() { buildTyreUI(); buildRimUI(); buildDecalUI(); buildPresetUI(); buildLayerUI(); document.getElementById('pName').value = P.name; document.getElementById('pType').value = P.type; rebuild(); }
+
+function buildLayerUI() {
+  const box = document.getElementById('layers'); box.innerHTML = '';
+  P.layers.forEach((ly, i) => {
+    const def = LAYER_DEFS[ly.type]; const el = document.createElement('div'); el.className = 'layer' + (i === UI.sel ? ' sel' : '');
+    const desc = ly.type === 'circ' ? `@${ly.pos} · ${ly.width}mm` : ly.type === 'hex' ? `${ly.size}mm cells` : ly.type === 'dimple' ? `${ly.rows}×${ly.count}` : ly.type === 'terrain' ? `×${ly.count} · ${ly.width}mm lugs` : ly.type === 'noise' ? `${ly.amount}` : `×${ly.count} · ${ly.angle}°`;
+    el.innerHTML = `<span class="ic" style="background:${def.color}"></span><span class="nm">${def.label} <small>${desc}</small></span><button title="duplicate">⧉</button><button title="up">↑</button><button title="down">↓</button><button title="delete">✕</button>`;
+    const [dup, up, dn, del] = el.querySelectorAll('button');
+    el.onclick = () => { UI.sel = i; buildLayerUI(); };
+    dup.onclick = e => { e.stopPropagation(); P.layers.splice(i + 1, 0, Object.assign({}, ly)); UI.sel = i + 1; buildLayerUI(); schedule(); };
+    up.onclick = e => { e.stopPropagation(); if (i > 0) { [P.layers[i - 1], P.layers[i]] = [P.layers[i], P.layers[i - 1]]; UI.sel = i - 1; buildLayerUI(); schedule(); } };
+    dn.onclick = e => { e.stopPropagation(); if (i < P.layers.length - 1) { [P.layers[i + 1], P.layers[i]] = [P.layers[i], P.layers[i + 1]]; UI.sel = i + 1; buildLayerUI(); schedule(); } };
+    del.onclick = e => { e.stopPropagation(); P.layers.splice(i, 1); UI.sel = -1; buildLayerUI(); schedule(); };
+    box.appendChild(el);
+  });
+  const props = document.getElementById('layerProps'); props.innerHTML = '';
+  const ly = P.layers[UI.sel];
+  if (!ly) { props.className = 'hint'; props.innerHTML = 'Select a layer to edit it. Layers are drawn in order; deeper cuts win.<br>Across-position <code>-1…1</code> = tread edges, <code>±1.3</code> reaches the shoulder.'; return; }
+  props.className = '';
+  const t = document.createElement('div'); t.className = 'hint'; t.innerHTML = `<b style="color:${LAYER_DEFS[ly.type].color}">${LAYER_DEFS[ly.type].label}</b>`; props.appendChild(t);
+  for (const k in ly) {
+    if (k === 'type') continue;
+    if (typeof ly[k] === 'boolean') check(props, LABELS[k] || k, ly, k, () => { buildLayerUI(); schedule(); });
+    else if (RANGES[k]) slider(props, LABELS[k] || k, ly, k, ...RANGES[k], v => (+v).toFixed(RANGES[k][2] < 1 ? 2 : 0), () => { refreshLayerLabel(); schedule(); });
+  }
+  const mir = document.createElement('div'); mir.className = 'btns';
+  mir.innerHTML = '<button class="small">Mirror layer across centre</button>'; mir.querySelector('button').onclick = () => {
+    const c = Object.assign({}, ly); if ('pos' in c) c.pos = -c.pos; if ('from' in c) { const f = -c.to, tt = -c.from; c.from = f; c.to = tt; } if ('angle' in c && !c.mirror) c.angle = -c.angle; if ('phase' in c) c.phase = (c.phase + 0.5) % 1;
+    P.layers.splice(UI.sel + 1, 0, c); UI.sel++; buildLayerUI(); schedule();
+  }; props.appendChild(mir);
+}
+function refreshLayerLabel() { const els = document.querySelectorAll('#layers .layer'); const ly = P.layers[UI.sel]; if (!ly || !els[UI.sel]) return; const desc = ly.type === 'circ' ? `@${ly.pos} · ${ly.width}mm` : ly.type === 'hex' ? `${ly.size}mm cells` : ly.type === 'dimple' ? `${ly.rows}×${ly.count}` : ly.type === 'terrain' ? `×${ly.count} · ${ly.width}mm lugs` : ly.type === 'noise' ? `${ly.amount}` : `×${ly.count} · ${ly.angle}°`; els[UI.sel].querySelector('small').textContent = desc; }
+
+// static controls
+document.getElementById('pType').innerHTML = TYPES.map(t => `<option>${t}</option>`).join('');
+document.getElementById('pType').onchange = e => { P.type = e.target.value; schedule(); };
+document.getElementById('pName').oninput = e => { P.name = e.target.value; schedule(); };
+document.getElementById('addLayer').innerHTML = Object.keys(LAYER_DEFS).map(k => `<option value="${k}">${LAYER_DEFS[k].label}</option>`).join('');
+document.getElementById('addLayerBtn').onclick = () => { P.layers.push(L(document.getElementById('addLayer').value)); UI.sel = P.layers.length - 1; buildLayerUI(); schedule(); };
+document.getElementById('addDecalBtn').onclick = () => { const decals = decalLayers(); decals.push(newDecal({ name: 'New text decal', text: 'YOUR TEXT', x: 50, y: 50, repeat: false })); UI.decalSel = decals.length - 1; buildDecalUI(); schedule(); };
+document.getElementById('randomBtn').onclick = () => { randomTyre(); refreshAll(); };
+document.getElementById('randomName').onclick = () => { P.name = randomName(); document.getElementById('pName').value = P.name; schedule(); };
+document.getElementById('wearSlider').oninput = e => { T.wear = +e.target.value; schedule(); };
+document.querySelectorAll('#treadMode span').forEach(el => el.onclick = () => { document.querySelectorAll('#treadMode span').forEach(x => x.classList.remove('on')); el.classList.add('on'); UI.treadMode = el.dataset.m; drawTreadView(); });
+document.querySelectorAll('.tab').forEach(el => el.onclick = () => { document.querySelectorAll('.tab').forEach(x => x.classList.remove('on')); el.classList.add('on'); document.querySelectorAll('.panel').forEach(p => p.classList.toggle('on', p.dataset.panel === el.dataset.tab)); });
+document.getElementById('spinBtn').onclick = e => { UI.spin = !UI.spin; e.target.classList.toggle('primary', UI.spin); };
+document.getElementById('threadsBtn').onclick = e => { UI.threads = !UI.threads; e.target.classList.toggle('primary', UI.threads); if (threadLines) threadLines.visible = UI.threads; if (tyreMesh) tyreMesh.traverse(o => { if (o.isMesh) [].concat(o.material).forEach(m => { m.transparent = UI.threads; m.opacity = UI.threads ? 0.35 : 1; m.needsUpdate = true; }); }); };
+document.querySelectorAll('[data-view]').forEach(b => b.onclick = () => {
+  const d = dims(); const R = d.Rout; const v = b.dataset.view;
+  const pos = { iso: [R * 2.6, R * 1.4, R * 2.7], side: [R * 4.2, R * 0.9, 0.01], front: [0.01, R * 0.9, R * 4.2], tread: [R * 0.9, R * 2.9, R * 0.7] }[v];
+  controls.target.set(0, v === 'tread' ? R * 1.6 : R * 0.95, 0); camera.position.set(pos[0], pos[1] + (v === 'tread' ? R * 0.7 : 0), pos[2]); fitZoom(d); tyreGroup.rotation.x = 0;
+});
+// exports
+const dl = (name, url) => { const a = document.createElement('a'); a.href = url; a.download = name; a.click(); };
+const toast = m => { const t = document.getElementById('toast'); t.textContent = m; t.style.opacity = 1; setTimeout(() => t.style.opacity = 0, 1800); };
+document.getElementById('exportJson').onclick = () => { dl(P.name.replace(/\s+/g, '_') + '.tyre.json', URL.createObjectURL(new Blob([JSON.stringify({ tyre: T, rim: R, pattern: P }, null, 2)], { type: 'application/json' }))); toast('Pattern JSON exported'); };
+document.getElementById('exportHeight').onclick = () => { dl(P.name.replace(/\s+/g, '_') + '_height.png', maps.height.toDataURL()); toast('Height map exported'); };
+document.getElementById('exportNormal').onclick = () => { dl(P.name.replace(/\s+/g, '_') + '_normal.png', maps.normal.toDataURL()); toast('Normal map exported'); };
+document.getElementById('exportGlb').onclick = () => {
+  const ex = new GLTFExporter(); const g = tyreGroup.clone(); g.remove(...g.children.filter(c => c.isLineSegments)); g.position.set(0, 0, 0); g.scale.setScalar(0.001);
+  ex.parse(g, r => { dl(P.name.replace(/\s+/g, '_') + '.glb', URL.createObjectURL(new Blob([r], { type: 'model/gltf-binary' }))); toast('GLB exported (metres)'); }, e => toast('Export failed: ' + e), { binary: true });
+};
+document.getElementById('importJson').onchange = e => { const f = e.target.files[0]; if (!f) return; f.text().then(txt => { const j = JSON.parse(txt); if (j.tyre) Object.assign(T, j.tyre); if (j.rim) Object.assign(R, j.rim); else if (j.tyre) { if (j.tyre.rimMaterial) R.material = j.tyre.rimMaterial; if (j.tyre.rimColor) R.tint = j.tyre.rimColor; if (j.tyre.rimLip) R.lip = j.tyre.rimLip; if (j.tyre.rimWell) R.well = j.tyre.rimWell; } if (j.pattern) { P.name = j.pattern.name; P.type = j.pattern.type; P.layers = j.pattern.layers; P.decals = Array.isArray(j.pattern.decals) ? j.pattern.decals.map(decal => newDecal(decal)) : defaultDecals(); } UI.sel = -1; UI.decalSel = -1; refreshAll(); toast('Imported ' + P.name); }); };
+window.addEventListener('keydown', e => { if (e.key === 'r' && !e.target.matches('input,select')) { randomTyre(); refreshAll(); } });
+
+applyPreset(0);
+</script>
+</body>
+</html>

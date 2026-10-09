@@ -1,0 +1,36 @@
+# Publishes the browser experiments (terrain generator, SDF cliff lab, tyre generator) to GitHub Pages.
+name: Pages
+on:
+  push:
+    branches: [arena/068dcdf5-slate]
+  workflow_dispatch:
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: pages
+  cancel-in-progress: true
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Assemble site
+        run: |
+          mkdir -p site/Frontier/Experimental site/References
+          cp index.html .nojekyll site/
+          cp -r Frontier/Experimental/CliffGenerator Frontier/Experimental/SdfCliffLab site/Frontier/Experimental/
+          cp References/TyreGenerator.html site/References/
+          rm -rf site/Frontier/Experimental/*/node_modules
+      - uses: actions/configure-pages@v5
+        with:
+          enablement: true
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - id: deployment
+        uses: actions/deploy-pages@v4

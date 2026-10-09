@@ -1,0 +1,12 @@
+[submodule "ExternalPackages/tinybvh"]
+	path = ExternalPackages/tinybvh
+	url = https://github.com/jbikker/tinybvh.git
+[submodule "ExternalPackages/ufbx"]
+	path = ExternalPackages/ufbx
+	url = https://github.com/ufbx/ufbx.git
+[submodule "ExternalPackages/fast_obj"]
+	path = ExternalPackages/fast_obj
+	url = https://github.com/thisistherk/fast_obj.git
+[submodule "ExternalPackages/stb"]
+	path = ExternalPackages/stb
+	url = https://github.com/nothings/stb.git
