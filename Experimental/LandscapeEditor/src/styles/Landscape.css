@@ -1,0 +1,409 @@
+/* Landscape editor additions. Everything here extends the Frontier editor styles in Editor.css. */
+
+.lx-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+.lx-panel .outliner-rows {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+.lx-viewport .scene-image {
+  flex: 1;
+  min-height: 0;
+}
+
+/* Stats cards: the Frontier .stats rules, applied to divs (these are read-only counters). */
+.lx-stats > div {
+  height: 64px;
+  flex: 1;
+  position: relative;
+  border-radius: 20px;
+  background: #191919;
+  border: 1px solid #2c2c2c;
+  padding: 11px 12px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+}
+
+/* Layer rows are two lines tall: name over description. */
+.outliner-row.lx-layer {
+  height: 48px;
+}
+.outliner-row.lx-layer.busy {
+  background: linear-gradient(90deg, #ffb45414, transparent 80%);
+}
+.lx-row-text {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  flex: 1;
+  line-height: 1.3;
+}
+.lx-row-text strong {
+  font-weight: 400;
+  font-size: 12px;
+  color: inherit;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lx-row-text small {
+  font-size: 9.5px;
+  color: #626262;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lx-row-text input {
+  width: 100%;
+  height: 22px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+.outliner-row.selected .lx-row-text small {
+  color: #8a8a8a;
+}
+.outliner-row.hidden-row .visibility {
+  opacity: 1;
+  color: #5c5c5c;
+}
+.outliner-row.lx-layer .visibility {
+  cursor: pointer;
+}
+.lx-group-label {
+  padding: 14px 14px 6px;
+  font-size: 9.5px;
+  letter-spacing: 1.4px;
+  color: #5f5f5f;
+  text-transform: uppercase;
+}
+.lx-icon {
+  flex: none;
+  display: block;
+  pointer-events: none;
+}
+.lx-drop-before {
+  box-shadow: inset 0 2px 0 #ffb454;
+}
+.lx-drop-after {
+  box-shadow: inset 0 -2px 0 #ffb454;
+}
+
+/* Progress bars: row-level and HUD-level share one style. */
+.lx-progress {
+  display: block;
+  height: 4px;
+  background: #2a2a2a;
+  border-radius: 3px;
+  overflow: hidden;
+  margin-top: 8px;
+}
+.lx-progress i {
+  display: block;
+  height: 100%;
+  width: var(--p, 0%);
+  background: linear-gradient(90deg, #ffb454, #ff8a3d);
+  transition: width 0.15s linear;
+}
+.lx-row-progress {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 2px;
+  height: 2px;
+  margin: 0;
+  border-radius: 2px;
+}
+
+/* Viewport overlays. */
+.lx-scene-host {
+  position: absolute;
+  inset: 0;
+}
+.lx-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  outline: none;
+}
+.lx-hud {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  z-index: 2;
+  min-width: 230px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: #101010e6;
+  border: 1px solid #ffffff14;
+  color: #d4d4d4;
+  font-size: 11px;
+  box-shadow: 0 10px 30px #0006;
+  backdrop-filter: blur(8px);
+}
+.lx-hud:not(.lx-hud-progress) {
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: #9a9a9a;
+}
+.lx-hud-title {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: baseline;
+}
+.lx-hud-title b {
+  font-weight: 300;
+  font-size: 18px;
+  color: #ffb454;
+  font-variant-numeric: tabular-nums;
+}
+.lx-legend {
+  position: absolute;
+  left: 14px;
+  bottom: 14px;
+  z-index: 2;
+  width: 240px;
+  padding: 10px 12px 9px;
+  border-radius: 14px;
+  background: #101010e6;
+  border: 1px solid #ffffff14;
+  color: #bababa;
+  font-size: 10px;
+}
+.lx-legend-caption {
+  display: block;
+  margin-bottom: 6px;
+  color: #d4d4d4;
+  letter-spacing: 0.3px;
+}
+.lx-legend-bar {
+  height: 8px;
+  border-radius: 4px;
+}
+.lx-legend-labels {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 5px;
+  color: #7d7d7d;
+}
+.viewport-preview-badge.live {
+  color: #ffb454;
+  border-color: #ffb45466;
+  animation: lx-pulse 1.4s ease-in-out infinite;
+}
+@keyframes lx-pulse {
+  50% {
+    opacity: 0.55;
+  }
+}
+.lx-stop {
+  background: #3a1d1d !important;
+  color: #ffb3a8 !important;
+  border-color: #5a2b2b !important;
+}
+.viewport-footer {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Buttons and inspector building blocks. */
+.lx-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: 10px;
+  background: #1c1c1c;
+  border: 1px solid #333;
+  color: #d8d8d8;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.lx-button:hover:not(:disabled) {
+  background: #262626;
+  border-color: #444;
+}
+.lx-button:disabled {
+  opacity: 0.4;
+}
+.lx-primary {
+  background: #ffb454 !important;
+  border-color: #ffb454 !important;
+  color: #1a1205 !important;
+}
+.lx-primary:hover:not(:disabled) {
+  background: #ffc27a !important;
+}
+.lx-button-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin: 12px 0 4px;
+}
+.lx-inline-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+}
+.lx-inline-row .field {
+  flex: 1;
+  min-width: 0;
+}
+.lx-inline-row .lx-button {
+  margin-bottom: 26px;
+  flex: none;
+}
+.lx-note {
+  margin: 10px 0 0;
+  font-size: 10.5px;
+  line-height: 1.5;
+  color: #7f7f7f;
+}
+.lx-card-aside {
+  margin-left: auto;
+  font-style: normal;
+  font-size: 9.5px;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: #6b6b6b;
+}
+.lx-shortcuts {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 9px 12px;
+  margin: 0;
+  font-size: 11px;
+}
+.lx-shortcuts dt {
+  color: #8d8d8d;
+}
+.lx-shortcuts dd {
+  margin: 0;
+  color: #d6d6d6;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.lx-text {
+  height: 30px;
+  width: 100%;
+  border-radius: 8px;
+  background: #161616;
+  border: 1px solid #2c2c2c;
+  color: #eee;
+  padding: 0 10px;
+  font: inherit;
+  font-size: 12px;
+}
+.lx-preview {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1 / 1;
+  border-radius: 14px;
+  background: #000;
+  margin-bottom: 6px;
+  image-rendering: auto;
+}
+.colour-field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 12px 0;
+  font-size: 12px;
+}
+.colour-chip {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.colour-chip code {
+  font-size: 10px;
+  color: #9a9a9a;
+}
+.colour-chip input[type='color'] {
+  width: 34px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+.field > .lx-text {
+  margin-top: 6px;
+}
+
+/* Context menus extend the Frontier popup menu. */
+.lx-menu {
+  min-width: 240px;
+}
+.lx-menu-heading {
+  padding: 10px 10px 4px;
+  font-size: 9.5px;
+  letter-spacing: 1.2px;
+  color: #6b6b6b;
+  text-transform: uppercase;
+}
+.lx-menu > button {
+  gap: 9px;
+}
+.lx-menu-item.danger {
+  color: #ff9d92;
+}
+.lx-menu-spacer {
+  display: inline-block;
+  width: 14px;
+  flex: none;
+}
+.lx-menu > button kbd,
+.lx-menu-item kbd {
+  margin-left: auto;
+  padding-left: 14px;
+  font-size: 10px;
+  color: #6b6b6b;
+  font-family: inherit;
+}
+.lx-dismiss {
+  background: transparent;
+}
+
+/* Toast: the Frontier .toast, placed at the bottom centre of the window. */
+.lx-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 12px 18px;
+  border-radius: 14px;
+  background: #222;
+  border: 1px solid #444;
+  box-shadow: 0 12px 40px #0009;
+  color: #f0f0f0;
+  font-size: 12px;
+  max-width: 80vw;
+  animation: lx-toast-in 0.2s ease-out;
+}
+.lx-toast .glyph {
+  color: #ffb454;
+}
+@keyframes lx-toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 6px);
+  }
+}
