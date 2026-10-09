@@ -1,16 +1,28 @@
 // Project model: terrain settings, the layer list, view settings. Pure data, so it serialises to JSON.
-import { LAYER_TYPES, EROSION_TYPES, DEFAULT_VIEW, defaultLayerName, layerKind } from './layers.js';
+import { LAYER_TYPES, EROSION_TYPES, DEFAULT_VIEW, DEFAULT_GRID, GRID_SIZES, SATMAP_SIZES, defaultLayerName, layerKind } from './layers.js';
 
-export const PROJECT_VERSION = 1;
+// Version 2 renamed two types (noise to fbm, base to constant). Older files are migrated on load.
+export const PROJECT_VERSION = 2;
 export const STORAGE_KEY = 'Frontier.LandscapeEditor.v1';
 
+// Erosion and the other working-grid stages never run above WORKING_MAX cells a side. Larger outputs are
+// produced from that grid by upscaling plus synthesised detail at export time (see terrain/export.js).
+export const WORKING_MAX = 2048;
+// The viewport colour preview is never larger than this, whatever the satmap export size is.
+export const PREVIEW_MAX = 1024;
+
+export const workingSize = (size) => Math.min(size, WORKING_MAX);
+
 export const TERRAIN_DEFAULTS = {
-  size: 256,
+  size: DEFAULT_GRID,
   extentM: 6144,
   heightM: 1000,
   seed: 1337,
   seaLevel: 0.18,
 };
+
+// Old type names and the parameter each one used to store under.
+const TYPE_RENAMES = { noise: 'fbm', base: 'constant' };
 
 let idCounter = 0;
 export function newId(prefix = 'L') {
@@ -45,8 +57,9 @@ function mergeParams(target, source) {
 
 export function createDefaultProject() {
   const layers = [
-    createLayer('noise', { name: 'Continental hills', params: { frequency: 1.6, octaves: 7, warp: 0.45, relief: 1.6, seed: 3 } }),
-    createLayer('ridged', { name: 'Mountain ridges', opacity: 0.5, blend: 'Add', params: { frequency: 2.6, relief: 1.5, seed: 11 } }),
+    createLayer('fbm', { name: 'Continental hills', params: { frequency: 1.6, octaves: 7, warp: 0.45, relief: 1.3, seed: 3 } }),
+    createLayer('ridged', { name: 'Mountain ridges', opacity: 0.5, blend: 'Add', params: { frequency: 2.6, relief: 1.3, seed: 11 } }),
+    createLayer('billow', { name: 'Foothills', opacity: 0.2, blend: 'Add', params: { frequency: 3.5, octaves: 5, relief: 0.8, seed: 41 } }),
     createLayer('island', { name: 'Coastline mask', params: { radius: 1.2, falloff: 2.2, wobble: 0.45, seed: 5 } }),
     createLayer('erosion', { name: 'Fluvial valleys', params: { type: 'fluvial' } }),
     createLayer('erosion', { name: 'Thermal scree', opacity: 0.7, params: { type: 'thermal' } }),
@@ -63,13 +76,13 @@ export function createDefaultProject() {
 }
 
 // Brings any loaded or stored project to the current shape: fills missing fields from the registry,
-// drops unknown keys and orders layers so height layers come before texture layers.
+// drops unknown keys, renames old layer types and orders layers so height layers come before texture layers.
 export function normaliseProject(input) {
   const base = createDefaultProject();
   if (!input || typeof input !== 'object') return base;
   const out = { ...base, name: typeof input.name === 'string' ? input.name : base.name };
   out.terrain = { ...TERRAIN_DEFAULTS, ...(input.terrain || {}) };
-  out.terrain.size = [128, 256, 384, 512].includes(+out.terrain.size) ? +out.terrain.size : TERRAIN_DEFAULTS.size;
+  out.terrain.size = GRID_SIZES.includes(+out.terrain.size) ? +out.terrain.size : TERRAIN_DEFAULTS.size;
   out.terrain.extentM = clampNum(out.terrain.extentM, 1000, 16000, TERRAIN_DEFAULTS.extentM);
   out.terrain.heightM = clampNum(out.terrain.heightM, 100, 4000, TERRAIN_DEFAULTS.heightM);
   out.terrain.seaLevel = clampNum(out.terrain.seaLevel, 0, 0.6, TERRAIN_DEFAULTS.seaLevel);
@@ -78,21 +91,27 @@ export function normaliseProject(input) {
   const layers = [];
   const seen = new Set();
   for (const raw of Array.isArray(input.layers) ? input.layers : []) {
-    if (!raw || !LAYER_TYPES[raw.type]) continue;
-    const fresh = createLayer(raw.type, {});
+    if (!raw || typeof raw !== 'object') continue;
+    const type = TYPE_RENAMES[raw.type] || raw.type;
+    if (!LAYER_TYPES[type]) continue;
+    const fresh = createLayer(type, {});
     const params = { ...fresh.params };
-    if (raw.params && typeof raw.params === 'object') mergeParams(params, raw.params);
-    if (raw.type === 'erosion' && !EROSION_TYPES[params.type]) params.type = 'hydraulic';
+    const rawParams = raw.params && typeof raw.params === 'object' ? { ...raw.params } : {};
+    // The old base layer stored its height as "level". The constant primitive calls it "value".
+    if (raw.type === 'base' && rawParams.value === undefined && rawParams.level !== undefined) rawParams.value = rawParams.level;
+    mergeParams(params, rawParams);
+    if (type === 'erosion' && !EROSION_TYPES[params.type]) params.type = 'hydraulic';
+    if (type === 'satmap' && !SATMAP_SIZES.includes(+params.resolution)) params.resolution = 1024;
     let id = typeof raw.id === 'string' && raw.id ? raw.id : fresh.id;
     if (seen.has(id)) id = newId();
     seen.add(id);
     layers.push({
       id,
-      type: raw.type,
-      name: typeof raw.name === 'string' && raw.name ? raw.name : defaultLayerName(raw.type, params),
+      type,
+      name: typeof raw.name === 'string' && raw.name ? raw.name : defaultLayerName(type, params),
       enabled: raw.enabled !== false,
       opacity: clampNum(raw.opacity, 0, 1, 1),
-      blend: LAYER_TYPES[raw.type].blend && ['Normal', 'Add', 'Subtract', 'Multiply', 'Max', 'Min'].includes(raw.blend) ? raw.blend : fresh.blend,
+      blend: LAYER_TYPES[type].blend && ['Normal', 'Add', 'Subtract', 'Multiply', 'Max', 'Min'].includes(raw.blend) ? raw.blend : fresh.blend,
       params,
     });
   }

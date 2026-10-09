@@ -24,23 +24,26 @@ export async function erodeHydraulic(height, N, p, hooks = {}) {
   const gravity = p.gravity;
 
   // Brush: a cone of radius r, normalised so one unit of erosion removes one unit in total.
-  const brushDx = [];
-  const brushDy = [];
-  const brushW = [];
+  const brushList = [];
   let wsum = 0;
   for (let dy = -r; dy <= r; dy++) {
     for (let dx = -r; dx <= r; dx++) {
       const d = Math.sqrt(dx * dx + dy * dy);
       if (d >= r) continue;
       const w = r - d;
-      brushDx.push(dx);
-      brushDy.push(dy);
-      brushW.push(w);
+      brushList.push([dx, dy, w]);
       wsum += w;
     }
   }
-  for (let k = 0; k < brushW.length; k++) brushW[k] /= wsum;
-  const brushCount = brushW.length;
+  const brushCount = brushList.length;
+  const brushDx = new Int32Array(brushCount);
+  const brushDy = new Int32Array(brushCount);
+  const brushW = new Float64Array(brushCount);
+  for (let k = 0; k < brushCount; k++) {
+    brushDx[k] = brushList[k][0];
+    brushDy[k] = brushList[k][1];
+    brushW[k] = brushList[k][2] / wsum;
+  }
 
   const deposition = new Float32Array(n);
   let eroded = 0;
@@ -117,10 +120,12 @@ export async function erodeHydraulic(height, N, p, hooks = {}) {
         if (want > 0) {
           const cx0 = ix;
           const cy0 = iy;
+          // Brush cells outside the map are skipped. Interior droplets (nearly all of them) need no checks.
+          const inside = cx0 >= r && cy0 >= r && cx0 < N - r && cy0 < N - r;
           for (let k = 0; k < brushCount; k++) {
             const bx = cx0 + brushDx[k];
             const by = cy0 + brushDy[k];
-            if (bx < 0 || by < 0 || bx >= N || by >= N) continue;
+            if (!inside && (bx < 0 || by < 0 || bx >= N || by >= N)) continue;
             const ci = by * N + bx;
             let w = want * brushW[k];
             if (h[ci] < w) w = h[ci];

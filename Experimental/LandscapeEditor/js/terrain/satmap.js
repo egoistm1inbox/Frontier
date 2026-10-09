@@ -51,10 +51,11 @@ export const PALETTES = {
 
 export const PALETTE_OPTIONS = Object.entries(PALETTES).map(([id, p]) => [id, p.label]);
 
-// Returns Uint8ClampedArray RGBA, size*size*4, row 0 at the north edge (same orientation as the heightmap).
-export function renderSatmap(p, size, h, N, analysis, terrain, seed = 1) {
+// Painter for a satmap of size x size pixels. Returns paintRows(out, j0, j1), which fills rows j0..j1-1 of an
+// RGBA buffer (size*size*4 bytes, row 0 at the north edge, same orientation as the heightmap). Rows can be
+// painted in chunks, so the export can report progress and yield between them.
+export function satmapPainter(p, size, h, N, analysis, terrain, seed = 1) {
   const pal = PALETTES[p.palette] || PALETTES.temperate;
-  const out = new Uint8ClampedArray(size * size * 4);
   const { gx, gy, slope, ridge, wet, heightM } = analysis;
   const dep = analysis.deposition || null;
   const seaM = terrain.seaLevel * heightM;
@@ -83,88 +84,97 @@ export function renderSatmap(p, size, h, N, analysis, terrain, seed = 1) {
     col[2] += (b[2] - a[2]) * t;
   };
 
-  for (let j = 0; j < size; j++) {
-    const v = (j + 0.5) * inv * span;
-    const u0 = j * inv;
-    for (let i = 0; i < size; i++) {
-      const u = (i + 0.5) * inv * span;
-      const hv = bilinear(h, N, u, v);
-      const alt = hv * heightM;
-      const s = bilinear(slope, N, u, v);
-      const rd = bilinear(ridge, N, u, v);
-      const w = smoothstep(0.3, 0.95, bilinear(wet, N, u, v)); // emphasise the channels
-      const d = dep ? bilinear(dep, N, u, v) : 0;
-      const uu = i * inv;
-      const patch = fbm(patchNoise, uu * 9, u0 * 9, 3, 2.1, 0.5); // field-scale variation, roughly [-0.5, 0.5]
-      const field = fieldNoise(uu * 60, u0 * 60) * 0.5 + 0.5;
-      const grain = hash2(i, j, seed);
+  return function paintRows(out, j0, j1) {
+    for (let j = j0; j < j1; j++) {
+      const v = (j + 0.5) * inv * span;
+      const u0 = j * inv;
+      for (let i = 0; i < size; i++) {
+        const u = (i + 0.5) * inv * span;
+        const hv = bilinear(h, N, u, v);
+        const alt = hv * heightM;
+        const s = bilinear(slope, N, u, v);
+        const rd = bilinear(ridge, N, u, v);
+        const w = smoothstep(0.3, 0.95, bilinear(wet, N, u, v)); // emphasise the channels
+        const d = dep ? bilinear(dep, N, u, v) : 0;
+        const uu = i * inv;
+        const patch = fbm(patchNoise, uu * 9, u0 * 9, 3, 2.1, 0.5); // field-scale variation, roughly [-0.5, 0.5]
+        const field = fieldNoise(uu * 60, u0 * 60) * 0.5 + 0.5;
+        const grain = hash2(i, j, seed);
 
-      const depth = seaM - alt; // positive under water
-      const waterW = smoothstep(-1.5, 2.0, depth);
-      const deepW = smoothstep(4, 70, depth);
-      const beachW = smoothstep(-3, 2, alt - seaM) * (1 - smoothstep(4, 14, alt - seaM)) * (1 - smoothstep(4, 14, s));
+        const depth = seaM - alt; // positive under water
+        const waterW = smoothstep(-1.5, 2.0, depth);
+        const deepW = smoothstep(4, 70, depth);
+        const beachW = smoothstep(-3, 2, alt - seaM) * (1 - smoothstep(4, 14, alt - seaM)) * (1 - smoothstep(4, 14, s));
 
-      const snowW = smoothstep(snowM - 160, snowM + 30, alt + patch * 60) * (1 - 0.7 * smoothstep(34, 52, s));
-      const rockW = clamp(smoothstep(rockSlope - 8, rockSlope + 8, s) + 0.35 * smoothstep(0.004, 0.02, rd), 0, 1);
-      const screeW = smoothstep(rockSlope - 20, rockSlope - 8, s) * (1 - rockW);
-      const vegW = veg * (1 - smoothstep(rockSlope - 14, rockSlope - 2, s)) * (1 - snowW) * (1 - waterW);
-      const alpineF = smoothstep(0.45, 0.8, hv);
-      const wetness = clamp(w * wetInfl + patch * 0.35 + 0.15 * (field - 0.5), 0, 1);
-      const forestW = clamp(vegW * smoothstep(0.3, 0.62, wetness + 0.08 * (1 - alpineF)), 0, 1);
-      const grassW = clamp(vegW - forestW, 0, 1);
-      const scrubW = clamp(vegW * smoothstep(0.55, 0.25, wetness) * 0.7, 0, 1);
-      const soilW = clamp((d * 1.2 + smoothstep(0.55, 0.9, w) * 0.5) * (1 - smoothstep(3, 9, s)), 0, 1) * (1 - waterW) * (1 - snowW);
+        const snowW = smoothstep(snowM - 160, snowM + 30, alt + patch * 60) * (1 - 0.7 * smoothstep(34, 52, s));
+        const rockW = clamp(smoothstep(rockSlope - 8, rockSlope + 8, s) + 0.35 * smoothstep(0.004, 0.02, rd), 0, 1);
+        const screeW = smoothstep(rockSlope - 20, rockSlope - 8, s) * (1 - rockW);
+        const vegW = veg * (1 - smoothstep(rockSlope - 14, rockSlope - 2, s)) * (1 - snowW) * (1 - waterW);
+        const alpineF = smoothstep(0.45, 0.8, hv);
+        const wetness = clamp(w * wetInfl + patch * 0.35 + 0.15 * (field - 0.5), 0, 1);
+        const forestW = clamp(vegW * smoothstep(0.3, 0.62, wetness + 0.08 * (1 - alpineF)), 0, 1);
+        const grassW = clamp(vegW - forestW, 0, 1);
+        const scrubW = clamp(vegW * smoothstep(0.55, 0.25, wetness) * 0.7, 0, 1);
+        const soilW = clamp((d * 1.2 + smoothstep(0.55, 0.9, w) * 0.5) * (1 - smoothstep(3, 9, s)), 0, 1) * (1 - waterW) * (1 - snowW);
 
-      col[0] = pal.rock[0];
-      col[1] = pal.rock[1];
-      col[2] = pal.rock[2];
-      mix(col, pal.scree, screeW);
-      mix(col, pal.soil, soilW * (1 - rockW));
-      const grassTone = pal.dry;
-      const lush = pal.grass;
-      const tone = [
-        grassTone[0] + (lush[0] - grassTone[0]) * wetness,
-        grassTone[1] + (lush[1] - grassTone[1]) * wetness,
-        grassTone[2] + (lush[2] - grassTone[2]) * wetness,
-      ];
-      mix(col, tone, grassW);
-      mix(col, pal.scrub, scrubW);
-      mix(col, pal.forest, forestW * (1 - alpineF));
-      mix(col, pal.conifer, forestW * alpineF);
-      mix(col, pal.sand, beachW * (1 - snowW));
-      mix(col, pal.snow, snowW);
-      mix(col, pal.shallow, waterW * (1 - deepW));
-      mix(col, pal.deep, waterW * deepW);
+        col[0] = pal.rock[0];
+        col[1] = pal.rock[1];
+        col[2] = pal.rock[2];
+        mix(col, pal.scree, screeW);
+        mix(col, pal.soil, soilW * (1 - rockW));
+        const grassTone = pal.dry;
+        const lush = pal.grass;
+        const tone = [
+          grassTone[0] + (lush[0] - grassTone[0]) * wetness,
+          grassTone[1] + (lush[1] - grassTone[1]) * wetness,
+          grassTone[2] + (lush[2] - grassTone[2]) * wetness,
+        ];
+        mix(col, tone, grassW);
+        mix(col, pal.scrub, scrubW);
+        mix(col, pal.forest, forestW * (1 - alpineF));
+        mix(col, pal.conifer, forestW * alpineF);
+        mix(col, pal.sand, beachW * (1 - snowW));
+        mix(col, pal.snow, snowW);
+        mix(col, pal.shallow, waterW * (1 - deepW));
+        mix(col, pal.deep, waterW * deepW);
 
-      // Hillshade from the gradient; water is flat so it is not shaded.
-      const nxg = bilinear(gx, N, u, v);
-      const nyg = bilinear(gy, N, u, v);
-      const nl = Math.hypot(nxg, nyg, 1);
-      const dot = clamp((-nxg * sx - nyg * sy + sz) / nl, 0, 1);
-      const shade = (1 - waterW) * (1 - hillAmt + hillAmt * (0.2 + 0.95 * dot)) + waterW;
-      const cavity = 1 - 0.14 * smoothstep(0.002, 0.02, -rd) * (1 - waterW);
-      const texture = 1 + detail * ((grain - 0.5) * 0.12 + (field - 0.5) * 0.09);
+        // Hillshade from the gradient; water is flat so it is not shaded.
+        const nxg = bilinear(gx, N, u, v);
+        const nyg = bilinear(gy, N, u, v);
+        const nl = Math.hypot(nxg, nyg, 1);
+        const dot = clamp((-nxg * sx - nyg * sy + sz) / nl, 0, 1);
+        const shade = (1 - waterW) * (1 - hillAmt + hillAmt * (0.2 + 0.95 * dot)) + waterW;
+        const cavity = 1 - 0.14 * smoothstep(0.002, 0.02, -rd) * (1 - waterW);
+        const texture = 1 + detail * ((grain - 0.5) * 0.12 + (field - 0.5) * 0.09);
 
-      let r = col[0] * shade * cavity * texture;
-      let g = col[1] * shade * cavity * texture;
-      let b = col[2] * shade * cavity * texture;
-      const lum = 0.3 * r + 0.59 * g + 0.11 * b;
-      r = lum + (r - lum) * sat;
-      g = lum + (g - lum) * sat;
-      b = lum + (b - lum) * sat;
-      r = (r - 128) * con + 128;
-      g = (g - 128) * con + 128;
-      b = (b - 128) * con + 128;
+        let r = col[0] * shade * cavity * texture;
+        let g = col[1] * shade * cavity * texture;
+        let b = col[2] * shade * cavity * texture;
+        const lum = 0.3 * r + 0.59 * g + 0.11 * b;
+        r = lum + (r - lum) * sat;
+        g = lum + (g - lum) * sat;
+        b = lum + (b - lum) * sat;
+        r = (r - 128) * con + 128;
+        g = (g - 128) * con + 128;
+        b = (b - 128) * con + 128;
 
-      const o = (j * size + i) * 4;
-      out[o] = r;
-      out[o + 1] = g;
-      out[o + 2] = b;
-      out[o + 3] = 255;
-      col[0] = 0;
-      col[1] = 0;
-      col[2] = 0;
+        const o = (j * size + i) * 4;
+        out[o] = r;
+        out[o + 1] = g;
+        out[o + 2] = b;
+        out[o + 3] = 255;
+        col[0] = 0;
+        col[1] = 0;
+        col[2] = 0;
+      }
     }
-  }
+    return out;
+  };
+}
+
+// Whole satmap in one call: used for the viewport preview. Returns Uint8ClampedArray RGBA, size*size*4.
+export function renderSatmap(p, size, h, N, analysis, terrain, seed = 1) {
+  const out = new Uint8ClampedArray(size * size * 4);
+  satmapPainter(p, size, h, N, analysis, terrain, seed)(out, 0, size);
   return out;
 }

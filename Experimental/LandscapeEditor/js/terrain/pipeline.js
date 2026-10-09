@@ -6,14 +6,16 @@
 // evaluateProject() is async so that long erosion runs can yield (and be cancelled) between batches.
 import { hashKey, clamp } from '../core/rng.js';
 import { downsample, minMax, mean } from '../core/grid.js';
-import { generateNoise, generateRidged, generateIsland, generateBase, generateRamp } from './generators.js';
+import { generateIsland, generateRamp } from './generators.js';
+import { generatePrimitive } from './primitives.js';
 import { applyTerrace, applySmooth, applyLevels } from './shaping.js';
 import { erodeHydraulic } from '../erosion/hydraulic.js';
 import { erodeThermal } from '../erosion/thermal.js';
 import { erodeFluvial } from '../erosion/fluvial.js';
 import { analyseTerrain } from './analysis.js';
 import { renderSatmap } from './satmap.js';
-import { layerKind, paramBucket } from './layers.js';
+import { layerKind, paramBucket, LAYER_TYPES } from './layers.js';
+import { workingSize, PREVIEW_MAX } from './project.js';
 
 export const THUMB = 40;
 const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
@@ -23,9 +25,11 @@ export async function evaluateProject(project, options = {}) {
   const hooks = options.hooks || {};
   const cancelled = () => !!(hooks.cancelled && hooks.cancelled());
   const terr = project.terrain;
-  const N = terr.size;
+  // Everything below runs on the working grid. The output grid can be larger; export.js upscales to it.
+  const N = workingSize(terr.size);
   const n = N * N;
   const cellM = terr.extentM / (N - 1);
+  const outCellM = terr.extentM / (terr.size - 1);
   const t0 = now();
 
   const layers = project.layers;
@@ -114,7 +118,8 @@ export async function evaluateProject(project, options = {}) {
     const started = now();
     let entry = cache.get(layer.id);
     if (!entry || entry.key !== texKey) {
-      const size = layer.params.resolution;
+      // The viewport preview is capped. The export size is rendered on demand by the worker (see export.js).
+      const size = Math.min(layer.params.resolution, PREVIEW_MAX);
       const rgba = renderSatmap(layer.params, size, h, N, an, terr, terr.seed);
       entry = { key: texKey, rgba, size };
       cache.set(layer.id, entry);
@@ -155,6 +160,9 @@ export async function evaluateProject(project, options = {}) {
     deposition: an.deposition,
     thumbs,
     stats,
+    // N is the working grid. outN is the output grid the user asked for (equal to N unless it is above WORKING_MAX).
+    outN: terr.size,
+    an,
     summary: {
       min: mm.min,
       max: mm.max,
@@ -162,6 +170,7 @@ export async function evaluateProject(project, options = {}) {
       water: water / n,
       meanSlope: mean(an.slope),
       cellM,
+      outCellM,
       extentM: terr.extentM,
       heightM: terr.heightM,
     },
@@ -174,14 +183,8 @@ async function runHeightLayer(layer, input, depIn, N, n, terr, cellM, hooks) {
   const p = layer.params;
   const op = clamp(layer.opacity, 0, 1);
   switch (layer.type) {
-    case 'noise':
-      return { height: blend(input, generateNoise(N, p, terr.seed), layer.blend, op), dep: depIn };
-    case 'ridged':
-      return { height: blend(input, generateRidged(N, p, terr.seed), layer.blend, op), dep: depIn };
     case 'island':
       return { height: blend(input, generateIsland(N, p, terr.seed), layer.blend, op), dep: depIn };
-    case 'base':
-      return { height: blend(input, generateBase(N, p), layer.blend, op), dep: depIn };
     case 'ramp':
       return { height: blend(input, generateRamp(N, p), layer.blend, op), dep: depIn };
     case 'terrace':
@@ -193,6 +196,9 @@ async function runHeightLayer(layer, input, depIn, N, n, terr, cellM, hooks) {
     case 'erosion':
       return runErosion(layer, input, depIn, N, cellM, terr, hooks);
     default:
+      if (LAYER_TYPES[layer.type] && LAYER_TYPES[layer.type].group === 'primitive') {
+        return { height: blend(input, generatePrimitive(layer.type, N, p, terr.seed), layer.blend, op), dep: depIn };
+      }
       throw new Error('Unknown height layer type: ' + layer.type);
   }
 }
@@ -240,7 +246,7 @@ function normalisedDeposition(dep) {
   return out;
 }
 
-// Blend modes for generator layers. `over` is the new layer; `op` is its opacity.
+// Blend modes for height layers (primitives, shapes and erosion). `over` is the new layer; `op` is its opacity.
 export function blend(base, over, mode, op) {
   const out = new Float32Array(base.length);
   for (let i = 0; i < base.length; i++) {

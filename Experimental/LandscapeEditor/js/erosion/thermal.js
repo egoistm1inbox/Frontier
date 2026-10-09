@@ -5,11 +5,10 @@
 // without the checkerboard oscillation a simultaneous update can produce.
 // Border cells are open: material that reaches them leaves the map and is reported as `lost`.
 
-const OFFS = [
-  [-1, -1, Math.SQRT2], [0, -1, 1], [1, -1, Math.SQRT2],
-  [-1, 0, 1], [1, 0, 1],
-  [-1, 1, Math.SQRT2], [0, 1, 1], [1, 1, Math.SQRT2],
-];
+// Eight neighbours: x and y offsets, and the step length (diagonal steps are sqrt(2) cells long).
+const OX = [-1, 0, 1, -1, 1, -1, 0, 1];
+const OY = [-1, -1, -1, 0, 0, 1, 1, 1];
+const STEP = [Math.SQRT2, 1, Math.SQRT2, 1, 1, Math.SQRT2, 1, Math.SQRT2];
 
 export async function erodeThermal(height, N, p, hooks = {}) {
   const h = height;
@@ -18,6 +17,20 @@ export async function erodeThermal(height, N, p, hooks = {}) {
   const deposition = new Float32Array(N * N);
   const ex = new Float64Array(8);
   const target = new Int32Array(8);
+  // Flat neighbour offsets and per-direction thresholds, so the inner loop does no table lookups or multiplies.
+  const off = new Int32Array(8);
+  const thr = new Float64Array(8);
+  for (let t = 0; t < 8; t++) {
+    off[t] = OY[t] * N + OX[t];
+    thr[t] = tanTalus * k * STEP[t];
+  }
+  const border = new Uint8Array(N * N);
+  for (let i = 0; i < N; i++) {
+    border[i] = 1;
+    border[(N - 1) * N + i] = 1;
+    border[i * N] = 1;
+    border[i * N + N - 1] = 1;
+  }
   const iters = Math.max(1, Math.round(p.iterations));
   let moved = 0;
   let lost = 0;
@@ -35,9 +48,8 @@ export async function erodeThermal(height, N, p, hooks = {}) {
         let sumE = 0;
         let cnt = 0;
         for (let t = 0; t < 8; t++) {
-          const o = OFFS[t];
-          const j = (y + o[1]) * N + (x + o[0]);
-          const e = hc - h[j] - tanTalus * k * o[2];
+          const j = c + off[t];
+          const e = hc - h[j] - thr[t];
           if (e > 0) {
             ex[cnt] = e;
             target[cnt] = j;
@@ -52,9 +64,7 @@ export async function erodeThermal(height, N, p, hooks = {}) {
         for (let q = 0; q < cnt; q++) {
           const share = (m * ex[q]) / sumE;
           const j = target[q];
-          const jx = j % N;
-          const jy = (j - jx) / N;
-          if (jx === 0 || jy === 0 || jx === N - 1 || jy === N - 1) {
+          if (border[j]) {
             lost += share; // open border: material leaves the map
           } else {
             h[j] += share;

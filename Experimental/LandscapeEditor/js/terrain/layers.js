@@ -1,13 +1,13 @@
 // Layer registry. One place that says what each layer type is, what it stores, and how the inspector
 // should present it. The inspector, the pipeline and the layer list all read from here, so adding a
-// type means adding an entry here and a branch in pipeline.js.
+// type means adding an entry here and a branch in pipeline.js (or an entry in primitives.js for a primitive).
 //
 // Control descriptors:
 //   { key, label, min, max, step, digits, unit, help }   range slider with a numeric field
 //   { key, label, kind: 'select', options: [[value, label], ...] }
 //
 // Layer kinds:
-//   'height'   generators and modifiers, evaluated bottom to top, each producing a new heightmap
+//   'height'   primitives, shapes and modifiers, evaluated bottom to top, each producing a new heightmap
 //   'texture'  satmap layers, evaluated after all height layers, each producing an RGB colour map
 
 import { PALETTE_OPTIONS } from './satmap.js';
@@ -15,8 +15,14 @@ import { PALETTE_OPTIONS } from './satmap.js';
 export const BLEND_MODES = ['Normal', 'Add', 'Subtract', 'Multiply', 'Max', 'Min'];
 const BLEND_OPTIONS = BLEND_MODES.map((m) => [m, m]);
 
+// Output grid sizes. The working grid (the size erosion actually runs on) is capped in project.js.
+export const GRID_SIZES = [512, 1024, 2048, 4096, 8192, 16384];
+export const DEFAULT_GRID = 1024;
+export const SATMAP_SIZES = [1024, 2048, 4096, 8192, 16384];
+
 export const GROUPS = {
-  generator: { label: 'Generators', kind: 'height' },
+  primitive: { label: 'Primitives', kind: 'height' },
+  shape: { label: 'Shapes', kind: 'height' },
   erosion: { label: 'Erosion', kind: 'height' },
   shaping: { label: 'Shaping', kind: 'height' },
   texture: { label: 'Texture', kind: 'texture' },
@@ -76,44 +82,144 @@ const erosionDefaults = () => {
   return out;
 };
 
-export const LAYER_TYPES = {
-  noise: {
-    group: 'generator',
-    label: 'Fractal noise',
-    blurb: 'Layered gradient noise for rolling hills. Domain warp bends the shapes into organic forms.',
-    blend: 'Normal',
-    defaults: { frequency: 1.6, octaves: 7, lacunarity: 2.0, gain: 0.5, warp: 0.45, relief: 1.6, offset: 0, seed: 3 },
-    controls: [
-      { key: 'frequency', label: 'Frequency', min: 0.5, max: 8, step: 0.05, digits: 2, unit: 'cyc', help: 'Feature count across the map.' },
-      { key: 'octaves', label: 'Octaves', min: 1, max: 9, step: 1, digits: 0, help: 'Layers of detail.' },
-      { key: 'lacunarity', label: 'Lacunarity', min: 1.5, max: 3.5, step: 0.05, digits: 2, help: 'Frequency step between octaves.' },
-      { key: 'gain', label: 'Gain', min: 0.1, max: 0.9, step: 0.01, digits: 2, help: 'Amplitude kept per octave. Higher is rougher.' },
-      { key: 'warp', label: 'Domain warp', min: 0, max: 1, step: 0.01, digits: 2, help: 'Bends the noise coordinates for organic shapes.' },
-      { key: 'relief', label: 'Relief', min: 0.2, max: 3, step: 0.01, digits: 2, help: 'Height range of the noise around its mid level.' },
-      { key: 'offset', label: 'Offset', min: -0.5, max: 0.5, step: 0.01, digits: 2, help: 'Raises or lowers the whole layer.' },
-      { key: 'seed', label: 'Seed', min: 0, max: 999, step: 1, digits: 0, help: 'Changes the pattern without changing the settings.' },
-    ],
-  },
-  ridged: {
-    group: 'generator',
-    label: 'Ridged mountains',
-    blurb: 'Ridged multifractal noise. Sharp crests and valleys, suited to ranges.',
-    blend: 'Max',
-    defaults: { frequency: 2.6, octaves: 6, lacunarity: 2.1, gain: 0.5, sharpness: 2, warp: 0.4, relief: 1.5, offset: 0, seed: 11 },
-    controls: [
-      { key: 'frequency', label: 'Frequency', min: 0.5, max: 8, step: 0.05, digits: 2, unit: 'cyc', help: 'Range count across the map.' },
-      { key: 'octaves', label: 'Octaves', min: 1, max: 9, step: 1, digits: 0 },
-      { key: 'lacunarity', label: 'Lacunarity', min: 1.5, max: 3.5, step: 0.05, digits: 2 },
-      { key: 'gain', label: 'Gain', min: 0.1, max: 0.9, step: 0.01, digits: 2 },
+// Shared control descriptors for the primitives. Each primitive picks the ones it uses.
+const C = {
+  freq: { key: 'frequency', label: 'Frequency', min: 0.5, max: 32, step: 0.05, digits: 2, unit: 'cyc', help: 'Features across the map. Resolution does not change the look.' },
+  octaves: { key: 'octaves', label: 'Octaves', min: 1, max: 10, step: 1, digits: 0, help: 'Layers of detail.' },
+  lac: { key: 'lacunarity', label: 'Lacunarity', min: 1.5, max: 3.5, step: 0.05, digits: 2, help: 'Frequency step between octaves.' },
+  gain: { key: 'gain', label: 'Gain', min: 0.1, max: 0.9, step: 0.01, digits: 2, help: 'Amplitude kept per octave. Higher is rougher.' },
+  warp: { key: 'warp', label: 'Domain warp', min: 0, max: 1, step: 0.01, digits: 2, help: 'Bends the coordinates for organic shapes.' },
+  relief: { key: 'relief', label: 'Relief', min: 0, max: 3, step: 0.01, digits: 2, help: 'Height range. 1 uses the full range of the layer; below 1 flattens it.' },
+  offset: { key: 'offset', label: 'Offset', min: -0.5, max: 0.5, step: 0.01, digits: 2, help: 'Raises or lowers the whole layer.' },
+  seed: { key: 'seed', label: 'Seed', min: 0, max: 999, step: 1, digits: 0, help: 'Changes the pattern without changing the settings.' },
+  jitter: { key: 'jitter', label: 'Jitter', min: 0, max: 1, step: 0.01, digits: 2, help: 'How far feature points wander from their cell centres. 0 gives a regular grid.' },
+  bandwidth: { key: 'bandwidth', label: 'Bandwidth', min: 0.12, max: 0.5, step: 0.01, digits: 2, unit: 'cells', help: 'Width of each kernel, in cells.' },
+  impulses: { key: 'impulses', label: 'Impulses per cell', min: 1, max: 6, step: 1, digits: 0, help: 'Kernels scattered in each cell.' },
+  angle: { key: 'angle', label: 'Direction', min: 0, max: 360, step: 1, digits: 0, unit: '°', help: 'Direction the pattern runs.' },
+  phase: { key: 'phase', label: 'Phase', min: 0, max: 1, step: 0.01, digits: 2, unit: 'turn', help: 'Shifts the pattern along its direction.' },
+};
+
+// Primitives: one entry per algorithm. Defaults give a pleasant result on their own at 1k.
+const PRIM = (group, label, blurb, defaults, controls) => ({ group, label, blurb, blend: 'Normal', defaults, controls });
+
+const PRIMITIVE_TYPES = {
+  constant: PRIM('primitive', 'Constant', 'A flat level at a chosen height. With Normal blending at full opacity it replaces everything beneath.',
+    { value: 0.3 },
+    [{ key: 'value', label: 'Level', min: 0, max: 1, step: 0.005, digits: 3, help: 'Normalised height. Multiply by the height range to get metres.' }]),
+  perlin: PRIM('primitive', 'Perlin noise', 'Classic gradient noise (Perlin 2002). Smooth, isotropic hills. The basic building block of terrain.',
+    { frequency: 2, relief: 1.2, offset: 0, seed: 21 },
+    [C.freq, C.relief, C.offset, C.seed]),
+  simplex: PRIM('primitive', 'Simplex noise', 'Simplex gradient noise (Gustavson 2005). Like Perlin, with fewer grid-aligned artefacts.',
+    { frequency: 2, relief: 1.2, offset: 0, seed: 22 },
+    [C.freq, C.relief, C.offset, C.seed]),
+  value: PRIM('primitive', 'Value noise', 'Random heights on a lattice, interpolated. Linear gives blocky creases; Smooth gives soft bumps.',
+    { frequency: 4, curve: 'linear', relief: 1, offset: 0, seed: 23 },
+    [C.freq,
+      { key: 'curve', label: 'Interpolation', kind: 'select', options: [['linear', 'Linear (blocky)'], ['smooth', 'Smooth']] },
+      C.relief, C.offset, C.seed]),
+  voronoi1: PRIM('primitive', 'Voronoi F1', 'Distance to the nearest feature point. Domes and rounded cells: the base of many rock and cobble forms.',
+    { frequency: 6, jitter: 1, relief: 1.2, offset: 0, seed: 31 },
+    [C.freq, C.jitter, C.relief, C.offset, C.seed]),
+  voronoi2: PRIM('primitive', 'Voronoi F2', 'Distance to the second-nearest feature point. Softer, flatter cells than F1.',
+    { frequency: 6, jitter: 1, relief: 1.2, offset: 0, seed: 31 },
+    [C.freq, C.jitter, C.relief, C.offset, C.seed]),
+  voronoi3: PRIM('primitive', 'Voronoi F3', 'Distance to the third-nearest feature point.',
+    { frequency: 6, jitter: 1, relief: 1.2, offset: 0, seed: 31 },
+    [C.freq, C.jitter, C.relief, C.offset, C.seed]),
+  voronoi4: PRIM('primitive', 'Voronoi F4', 'Distance to the fourth-nearest feature point. Busiest of the four.',
+    { frequency: 6, jitter: 1, relief: 1.2, offset: 0, seed: 31 },
+    [C.freq, C.jitter, C.relief, C.offset, C.seed]),
+  crackle: PRIM('primitive', 'Voronoi crackle', 'F2 minus F1, shown as cracks between cells. Dried mud, plates and rock joints.',
+    { frequency: 6, jitter: 1, width: 0.15, relief: 1, offset: 0, seed: 31 },
+    [C.freq, C.jitter,
+      { key: 'width', label: 'Crack width', min: 0.01, max: 0.5, step: 0.01, digits: 2, help: 'Width of the cracks, as a fraction of the cell distance.' },
+      C.relief, C.offset, C.seed]),
+  worley: PRIM('primitive', 'Worley cells', 'Each feature point carries a random height, blended by inverse distance. Soft cellular relief.',
+    { frequency: 6, jitter: 1, sharpness: 4, relief: 1.2, offset: 0, seed: 34 },
+    [C.freq, C.jitter,
+      { key: 'sharpness', label: 'Sharpness', min: 0.5, max: 12, step: 0.1, digits: 1, help: 'How strongly the nearest cell dominates. High gives crisp cells.' },
+      C.relief, C.offset, C.seed]),
+  cellular: PRIM('primitive', 'Cellular automaton', 'Random seed cells run through a cave rule. Gives blobby masses, caves and islands.',
+    { frequency: 3, fill: 0.46, steps: 4, relief: 1, offset: 0, seed: 35 },
+    [C.freq,
+      { key: 'fill', label: 'Fill', min: 0.2, max: 0.7, step: 0.01, digits: 2, help: 'Share of cells alive at the start.' },
+      { key: 'steps', label: 'Steps', min: 1, max: 12, step: 1, digits: 0, help: 'Rule passes. More passes give larger, smoother masses.' },
+      C.relief, C.offset, C.seed]),
+  gabor: PRIM('primitive', 'Gabor noise', 'Oriented, band-limited wavelets scattered per cell. Directional ridges and sheared textures.',
+    { frequency: 3, bandwidth: 0.5, carrier: 2.2, angle: 35, impulses: 3, relief: 1, offset: 0, seed: 36 },
+    [C.freq, C.bandwidth,
+      { key: 'carrier', label: 'Carrier', min: 0.2, max: 4, step: 0.05, digits: 2, unit: 'cyc/cell', help: 'Oscillation frequency inside each kernel. Sets the ridge spacing.' },
+      C.angle, C.impulses, C.relief, C.offset, C.seed]),
+  sparse: PRIM('primitive', 'Sparse convolution', 'Isotropic Gaussian kernels scattered per cell. Soft, speckled hills with no direction.',
+    { frequency: 6, bandwidth: 0.35, impulses: 2, relief: 1, offset: 0, seed: 37 },
+    [C.freq, C.bandwidth, C.impulses, C.relief, C.offset, C.seed]),
+  wavelet: PRIM('primitive', 'Wavelet noise', 'Band-pass random tile, periodic. Fine, even texture with no visible lattice.',
+    { frequency: 2, relief: 1, offset: 0, seed: 38 },
+    [{ ...C.freq, label: 'Tiles', help: 'Repeats of the wavelet tile across the map.' }, C.relief, C.offset, C.seed]),
+  fbm: PRIM('primitive', 'Fractal Brownian motion', 'Layered octaves of gradient noise. Rolling hills, and domain warp makes them organic.',
+    { frequency: 1.6, octaves: 7, lacunarity: 2, gain: 0.5, warp: 0.45, relief: 1.6, offset: 0, seed: 3 },
+    [C.freq, C.octaves, C.lac, C.gain, C.warp, C.relief, C.offset, C.seed]),
+  ridged: PRIM('primitive', 'Ridged multifractal', 'Musgrave ridged multifractal: noise folded into sharp crests and valleys. Suited to ranges.',
+    { frequency: 2.6, octaves: 6, lacunarity: 2.1, gain: 0.5, sharpness: 2, warp: 0.4, relief: 1.5, offset: 0, seed: 11 },
+    [C.freq, C.octaves, C.lac, C.gain,
       { key: 'sharpness', label: 'Sharpness', min: 1, max: 4, step: 0.05, digits: 2, help: 'Exponent on the ridge profile. Higher gives thinner crests.' },
-      { key: 'warp', label: 'Domain warp', min: 0, max: 1, step: 0.01, digits: 2 },
-      { key: 'relief', label: 'Relief', min: 0.2, max: 4, step: 0.01, digits: 2 },
-      { key: 'offset', label: 'Offset', min: -0.5, max: 0.5, step: 0.01, digits: 2 },
-      { key: 'seed', label: 'Seed', min: 0, max: 999, step: 1, digits: 0 },
-    ],
-  },
+      C.warp, C.relief, C.offset, C.seed]),
+  billow: PRIM('primitive', 'Billow', 'Folded noise octaves that give rounded, pillow-like bumps.',
+    { frequency: 3, octaves: 6, lacunarity: 2, gain: 0.5, relief: 1, offset: 0, seed: 41 },
+    [C.freq, C.octaves, C.lac, C.gain, C.relief, C.offset, C.seed]),
+  swiss: PRIM('primitive', 'Swiss turbulence', 'Swiss-style turbulence, an interpretation rather than a published formula. Squared distance to zero crossings, fed back on itself: ridged channels with holes.',
+    { frequency: 2.5, octaves: 6, lacunarity: 2, gain: 0.5, warp: 0.5, relief: 1.3, offset: 0, seed: 42 },
+    [C.freq, C.octaves, C.lac, C.gain, C.warp, C.relief, C.offset, C.seed]),
+  jordan: PRIM('primitive', 'Jordan turbulence', 'Jordan-style turbulence, an interpretation rather than a published formula. Two domain-warp stages then fBm: swirled, eroded-looking masses.',
+    { frequency: 1.4, octaves: 5, warp: 1, relief: 1.4, offset: 0, seed: 43 },
+    [C.freq, C.octaves, { ...C.warp, label: 'Warp strength' }, C.relief, C.offset, C.seed]),
+  random: PRIM('primitive', 'Random cells', 'A random height for every block of cells. Raw grain for breakup and texture.',
+    { cellSize: 1, relief: 0.6, offset: 0, seed: 51 },
+    [{ key: 'cellSize', label: 'Block size', min: 1, max: 16, step: 1, digits: 0, unit: 'cells', help: 'Cells per random block.' }, C.relief, C.offset, C.seed]),
+  grid: PRIM('primitive', 'Grid lines', 'Straight lines on a regular grid. Field boundaries and survey grids.',
+    { frequency: 8, width: 0.08, softness: 0.06, relief: 0.8, offset: 0 },
+    [{ ...C.freq, label: 'Lines across' },
+      { key: 'width', label: 'Line width', min: 0.005, max: 0.45, step: 0.005, digits: 3, help: 'Width of each line, as a fraction of a cell.' },
+      { key: 'softness', label: 'Softness', min: 0, max: 0.4, step: 0.01, digits: 2, help: 'Feathering at the line edges.' },
+      C.relief, C.offset]),
+  hex: PRIM('primitive', 'Hexagonal tiles', 'Hexagonal cells with bevelled edges. Honeycomb and tile patterns.',
+    { frequency: 8, bevel: 0.2, relief: 0.8, offset: 0 },
+    [{ ...C.freq, label: 'Hexes across' },
+      { key: 'bevel', label: 'Bevel', min: 0, max: 0.45, step: 0.01, digits: 2, help: 'Width of the sloped edge of each tile.' },
+      C.relief, C.offset]),
+  brick: PRIM('primitive', 'Brick bond', 'Running-bond brickwork with mortar joints and per-brick variation.',
+    { frequency: 8, aspect: 2, mortar: 0.12, variation: 0.3, relief: 0.8, offset: 0, seed: 61 },
+    [{ ...C.freq, label: 'Rows across' },
+      { key: 'aspect', label: 'Brick aspect', min: 1, max: 4, step: 0.05, digits: 2, help: 'Brick length to height.' },
+      { key: 'mortar', label: 'Mortar', min: 0, max: 0.4, step: 0.01, digits: 2, help: 'Joint width, as a fraction of a brick.' },
+      { key: 'variation', label: 'Variation', min: 0, max: 1, step: 0.01, digits: 2, help: 'Random height difference between bricks.' },
+      C.relief, C.offset, C.seed]),
+  checker: PRIM('primitive', 'Checkerboard', 'Alternating squares with soft or sharp edges.',
+    { frequency: 6, softness: 0.1, relief: 0.8, offset: 0 },
+    [{ ...C.freq, label: 'Squares across' },
+      { key: 'softness', label: 'Edge softness', min: 0, max: 0.5, step: 0.01, digits: 2, help: 'Width of the blend at each square edge. 0 is sharp.' },
+      C.relief, C.offset]),
+  stripes: PRIM('primitive', 'Stripes', 'Straight stripes at any angle, with duty cycle and edge softness.',
+    { frequency: 6, angle: 20, duty: 0.5, softness: 0.1, phase: 0, relief: 0.8, offset: 0 },
+    [{ ...C.freq, label: 'Stripes across' }, C.angle,
+      { key: 'duty', label: 'Duty', min: 0.02, max: 0.98, step: 0.01, digits: 2, help: 'Share of each period that is high.' },
+      { key: 'softness', label: 'Edge softness', min: 0, max: 0.5, step: 0.01, digits: 2 },
+      C.phase, C.relief, C.offset]),
+  sine: PRIM('primitive', 'Sine wave', 'A sine undulation across the map at any angle. Clean periodic ridges.',
+    { frequency: 3, angle: 0, phase: 0, relief: 1, offset: 0 },
+    [{ ...C.freq, label: 'Waves across' }, C.angle, C.phase, C.relief, C.offset]),
+  sawtooth: PRIM('primitive', 'Sawtooth', 'A ramp that climbs and drops sharply each period. Strata and step-like banding.',
+    { frequency: 3, angle: 0, phase: 0, relief: 1, offset: 0 },
+    [{ ...C.freq, label: 'Teeth across' }, C.angle, C.phase, C.relief, C.offset]),
+  triangle: PRIM('primitive', 'Triangle wave', 'Linear rise and fall each period. Even, evenly spaced ridges.',
+    { frequency: 3, angle: 0, phase: 0, relief: 1, offset: 0 },
+    [{ ...C.freq, label: 'Waves across' }, C.angle, C.phase, C.relief, C.offset]),
+};
+
+export const LAYER_TYPES = {
+  ...PRIMITIVE_TYPES,
   island: {
-    group: 'generator',
+    group: 'shape',
     label: 'Island falloff',
     blurb: 'Radial mask with a wobbly coastline. Multiply it into the stack to sink the edges below sea level.',
     blend: 'Multiply',
@@ -125,16 +231,8 @@ export const LAYER_TYPES = {
       { key: 'seed', label: 'Seed', min: 0, max: 999, step: 1, digits: 0 },
     ],
   },
-  base: {
-    group: 'generator',
-    label: 'Base level',
-    blurb: 'A flat plane at a chosen height. At full opacity with Normal blending it replaces everything beneath.',
-    blend: 'Normal',
-    defaults: { level: 0.3 },
-    controls: [{ key: 'level', label: 'Level', min: 0, max: 1, step: 0.005, digits: 3, help: 'Normalised height. Multiply by the height range to get metres.' }],
-  },
   ramp: {
-    group: 'generator',
+    group: 'shape',
     label: 'Tilt ramp',
     blurb: 'A linear slope across the map. Good for giving a continent a prevailing tilt.',
     blend: 'Normal',
@@ -198,7 +296,11 @@ export const LAYER_TYPES = {
     },
     controls: [
       { key: 'palette', label: 'Palette', kind: 'select', options: PALETTE_OPTIONS },
-      { key: 'resolution', label: 'Resolution', kind: 'select', options: [[512, '512 px'], [1024, '1024 px'], [2048, '2048 px']] },
+      {
+        key: 'resolution', label: 'Export size', kind: 'select',
+        options: [[1024, '1k · 1024 px'], [2048, '2k · 2048 px'], [4096, '4k · 4096 px'], [8192, '8k · 8192 px'], [16384, '16k · 16384 px']],
+        help: 'Size of the exported PNG. The viewport preview is always at most 1k.',
+      },
       { key: 'vegetation', label: 'Vegetation', min: 0, max: 1, step: 0.01, digits: 2, help: 'Cover on gentle, low, wet ground.' },
       { key: 'wetness', label: 'Wetness', min: 0, max: 1, step: 0.01, digits: 2, help: 'How much drainage and valley floors green the land.' },
       { key: 'rockSlope', label: 'Rock slope', min: 15, max: 60, step: 0.5, digits: 1, unit: '°', help: 'Slope above which bare rock shows.' },
@@ -213,8 +315,15 @@ export const LAYER_TYPES = {
   },
 };
 
+// Primitive type ids in menu order. The Add menu uses this for its sections.
+export const PRIMITIVE_IDS = Object.keys(PRIMITIVE_TYPES);
+
 export const TERRAIN_CONTROLS = [
-  { key: 'size', label: 'Grid', kind: 'select', options: [[128, '128 × 128'], [256, '256 × 256'], [384, '384 × 384'], [512, '512 × 512']] },
+  {
+    key: 'size', label: 'Grid', kind: 'select',
+    options: [[512, '512 × 512'], [1024, '1k · 1024 × 1024'], [2048, '2k · 2048 × 2048'], [4096, '4k · 4096 × 4096'], [8192, '8k · 8192 × 8192'], [16384, '16k · 16384 × 16384']],
+    help: 'Output grid. Erosion runs on at most a 2k working grid; larger outputs add synthesised detail.',
+  },
   { key: 'extentM', label: 'Extent', min: 1000, max: 16000, step: 100, digits: 0, unit: 'm', help: 'Width of the map in metres.' },
   { key: 'heightM', label: 'Height range', min: 100, max: 4000, step: 10, digits: 0, unit: 'm', help: 'Metres that normalised height 1.0 represents.' },
   { key: 'seaLevel', label: 'Sea level', min: 0, max: 0.6, step: 0.005, digits: 3, help: 'Normalised height of the water surface.' },

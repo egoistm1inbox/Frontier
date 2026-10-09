@@ -1,3 +1,13 @@
+import { downsample } from '../core/grid.js';
+
+const MESH_MAX = 1024;
+
+// Mesh heights for a result: the working grid, averaged down to MESH_MAX cells a side if it is larger.
+function meshGrid(result) {
+  if (result.N <= MESH_MAX) return { N: result.N, height: result.height };
+  return { N: MESH_MAX, height: downsample(result.height, result.N, MESH_MAX) };
+}
+
 // 3D view: the heightfield as a WebGL 2 mesh, textured with the satmap (or a height ramp when the satmap is
 // off), lit by the view's sun, with a water plane at sea level. The mesh is rebuilt only when the result
 // changes; camera and lighting changes just redraw.
@@ -171,11 +181,13 @@ export class View3D {
   // result: worker output (N, height, colour, colourSize). terrain: the terrain settings it was made with.
   setTerrain(result, terrain) {
     const gl = this.gl;
-    const newGrid = result.N !== this.N;
     this.result = result;
     this.terrain = terrain;
+    // The mesh is at most MESH_MAX cells a side. Larger working grids are averaged down for display only.
+    this.mesh = meshGrid(result);
+    const newGrid = this.mesh.N !== this.N;
     if (newGrid) {
-      const N = result.N;
+      const N = this.mesh.N;
       this.N = N;
       const idx = new Uint32Array((N - 1) * (N - 1) * 6);
       let k = 0;
@@ -245,7 +257,7 @@ export class View3D {
   uploadHeights() {
     if (!this.result) return;
     const gl = this.gl;
-    const { N, height: h } = this.result;
+    const { N, height: h } = this.mesh;
     const vs = this.verticalScale();
     const verts = new Float32Array(N * N * 9);
     const cell = 1 / (N - 1);

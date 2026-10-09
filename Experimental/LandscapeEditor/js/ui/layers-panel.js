@@ -41,7 +41,7 @@ export function renderLayerList(list, model) {
     for (const layer of texture) list.append(layerRow(layer, { selected, result, handlers }));
   }
   list.append(el('div', { class: 'ol-group', text: 'Height stack · ' + height.length }));
-  if (!height.length) list.append(el('p', { class: 'empty-results', text: 'No height layers yet. Add a generator to begin.' }));
+  if (!height.length) list.append(el('p', { class: 'empty-results', text: 'No height layers yet. Add a primitive or shape to begin.' }));
   for (const layer of height) list.append(layerRow(layer, { selected, result, handlers }));
 
   list.append(el('div', { class: 'ol-group', text: 'Map' }));
@@ -147,32 +147,64 @@ function clearDrag(container) {
   drag.kind = null;
 }
 
-// Add-layer menu: grouped, and each entry says what it does.
+// Add-layer menu: grouped by family, searchable, and each entry says what it does. The 28 primitives are
+// separate types. Each one is a single algorithm, so none of them is a catch-all layer.
+const ADD_SECTIONS = [
+  ['Primitives · basic', ['constant']],
+  ['Primitives · noise', ['perlin', 'simplex', 'value', 'wavelet', 'gabor', 'sparse']],
+  ['Primitives · cells', ['voronoi1', 'voronoi2', 'voronoi3', 'voronoi4', 'crackle', 'worley', 'cellular', 'random']],
+  ['Primitives · fractals', ['fbm', 'ridged', 'billow', 'swiss', 'jordan']],
+  ['Primitives · patterns', ['grid', 'hex', 'brick', 'checker', 'stripes']],
+  ['Primitives · waves', ['sine', 'sawtooth', 'triangle']],
+  ['Shapes', ['island', 'ramp']],
+  ['Erosion', ['erosion']],
+  ['Shaping', ['terrace', 'smooth', 'levels']],
+  ['Texture', ['satmap']],
+];
+
+const ICON_FOR = { fbm: 'noise', constant: 'base' };
+const iconFor = (type) => ICONS[ICON_FOR[type] || type] || ICONS[LAYER_TYPES[type].group] || ICONS.noise;
+
 export function buildAddMenu(onPick) {
-  const sections = [
-    ['Generators', ['noise', 'ridged', 'island', 'base', 'ramp']],
-    ['Erosion', ['erosion']],
-    ['Shaping', ['terrace', 'smooth', 'levels']],
-    ['Texture', ['satmap']],
-  ];
   const menu = el('div', { class: 'add-menu', role: 'menu' });
-  for (const [title, types] of sections) {
-    menu.append(el('div', { class: 'add-menu-h', text: title }));
+  const search = el('input', { type: 'search', class: 'add-filter', placeholder: 'Filter layers…', 'aria-label': 'Filter layers' });
+  menu.append(search);
+  const sections = [];
+  for (const [title, types] of ADD_SECTIONS) {
+    const head = el('div', { class: 'add-menu-h', text: title });
+    menu.append(head);
+    const items = [];
     for (const type of types) {
       const def = LAYER_TYPES[type];
-      menu.append(el('button', {
+      const item = el('button', {
         type: 'button',
         class: 'add-item',
         role: 'menuitem',
+        'data-search': (def.label + ' ' + def.blurb).toLowerCase(),
         onClick: () => onPick(type),
       },
-        el('span', { class: 'add-icon', icon: ICONS[type] || ICONS.erosion }),
+        el('span', { class: 'add-icon', icon: iconFor(type) }),
         el('span', { class: 'add-text' },
           el('span', { class: 'add-title', text: def.label }),
           el('span', { class: 'add-desc', text: def.blurb }),
         ),
-      ));
+      );
+      menu.append(item);
+      items.push(item);
     }
+    sections.push({ head, items });
   }
+  search.addEventListener('input', () => {
+    const q = search.value.trim().toLowerCase();
+    for (const { head, items } of sections) {
+      let any = false;
+      for (const item of items) {
+        const show = !q || item.dataset.search.includes(q);
+        item.hidden = !show;
+        if (show) any = true;
+      }
+      head.hidden = !any;
+    }
+  });
   return menu;
 }

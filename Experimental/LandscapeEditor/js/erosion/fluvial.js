@@ -8,7 +8,12 @@
 //
 // Updates are explicit and ordered from the highest cell to the lowest, so a cell always sees the
 // downstream height from the start of the step and can never cut below it.
-import { routeFlow, stepLength } from '../core/flow.js';
+import { routeFlow } from '../core/flow.js';
+
+// Drainage is re-routed every ROUTE_EVERY iterations. Routing is the expensive part (a full depression fill), and
+// the drainage area changes slowly, so the last routing is reused in between. Its downstream pointers stay valid:
+// a cell whose drop has become non-positive is skipped, and a cut never goes below its downstream height.
+export const ROUTE_EVERY = 3;
 
 export async function erodeFluvial(height, N, p, hooks = {}) {
   const h = height;
@@ -27,10 +32,16 @@ export async function erodeFluvial(height, N, p, hooks = {}) {
   let incised = 0;
   let uplifted = 0;
 
+  const every = Math.max(1, Math.round(p.routeEvery ?? ROUTE_EVERY));
+  let order = null;
+  let down = null;
   for (let it = 0; it < iters; it++) {
-    const routed = routeFlow(h, N);
-    area = routed.area;
-    const { order, down } = routed;
+    if (it % every === 0) {
+      const routed = routeFlow(h, N);
+      area = routed.area;
+      order = routed.order;
+      down = routed.down;
+    }
     for (let k = n - 1; k >= 0; k--) {
       const c = order[k];
       const d = down[c];
@@ -40,33 +51,33 @@ export async function erodeFluvial(height, N, p, hooks = {}) {
       if (cx === 0 || cy === 0 || cx === N - 1 || cy === N - 1) continue;
       const drop = h[c] - h[d];
       if (drop <= 0) continue;
-      const step = stepLength(c, d, N);
+      // Orthogonal steps differ by 1 or N in index, diagonal steps by N-1 or N+1.
+      const di = d > c ? d - c : c - d;
+      const step = di === 1 || di === N ? 1 : Math.SQRT2;
       const slope = (drop * heightM) / (step * cellM);
       const a = area[c] / n;
-      let e = dt * K * Math.pow(a, m) * Math.pow(slope, nExp);
+      const ap = m === 0.5 ? Math.sqrt(a) : Math.pow(a, m);
+      const sp = nExp === 1 ? slope : Math.pow(slope, nExp);
+      let e = dt * K * ap * sp;
       if (e > drop) e = drop;
       h[c] -= e;
       incised += e;
     }
 
-    // Hillslope diffusion on the interior, using the start-of-step field so the update is symmetric.
-    next.set(h);
-    for (let y = 1; y < N - 1; y++) {
-      for (let x = 1; x < N - 1; x++) {
+    // Hillslope diffusion on the interior, using the start-of-step field so the update is symmetric. Uplift is
+    // applied to every cell, border included: lifting only the interior would leave a step at the map edge.
+    // Uplift is capped at the top of the normalised range, so the height scale stays meaningful.
+    for (let y = 0; y < N; y++) {
+      for (let x = 0; x < N; x++) {
         const c = y * N + x;
-        const lap = h[c - 1] + h[c + 1] + h[c - N] + h[c + N] - 4 * h[c];
-        // Uplift is capped at the top of the normalised range, so the height scale stays meaningful.
+        const interior = x > 0 && y > 0 && x < N - 1 && y < N - 1;
+        const lap = interior ? h[c - 1] + h[c + 1] + h[c - N] + h[c + N] - 4 * h[c] : 0;
         const raised = h[c] + D * lap + U;
         next[c] = raised > 1 ? 1 : raised;
         uplifted += U;
       }
     }
-    for (let y = 1; y < N - 1; y++) {
-      for (let x = 1; x < N - 1; x++) {
-        const c = y * N + x;
-        h[c] = next[c];
-      }
-    }
+    h.set(next);
 
     if (hooks.progress) hooks.progress((it + 1) / iters);
     if (hooks.tick) await hooks.tick();

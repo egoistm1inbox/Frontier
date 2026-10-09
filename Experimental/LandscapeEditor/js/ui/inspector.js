@@ -128,15 +128,15 @@ function renderLayer(container, layer, m) {
   });
   container.append(header(eyebrow, name, def.blurb, actions));
 
-  // Output: blend (generators only) and opacity or strength.
+  // Output: blend (primitives and shapes only) and opacity or strength.
   const outputRows = [];
-  if (group.kind === 'height' && def.group === 'generator') {
+  if (group.kind === 'height' && (def.group === 'primitive' || def.group === 'shape')) {
     outputRows.push(selectRow({ key: 'blend', label: 'Blend', options: BLEND_OPTIONS, help: 'How this layer combines with the stack below it.' }, layer.blend, (v) => {
       h.edit(() => { layer.blend = v; }, { key: 'blend:' + layer.id, immediate: true });
       h.refreshInspector();
     }));
   }
-  const opacityLabel = isTexture ? 'Opacity' : def.group === 'generator' ? 'Opacity' : 'Strength';
+  const opacityLabel = isTexture ? 'Opacity' : def.group === 'primitive' || def.group === 'shape' ? 'Opacity' : 'Strength';
   outputRows.push(rangeRow({ key: 'opacity', label: opacityLabel, min: 0, max: 100, step: 1, digits: 0, unit: '%', help: 'Mix between the layer below and this layer.' }, layer.opacity * 100, {
     onInput: (v) => h.edit(() => { layer.opacity = v / 100; }, { key: 'op:' + layer.id }),
     onChange: () => h.schedule(0),

@@ -1,7 +1,7 @@
 // Landscape Editor controller: project state, undo history, worker scheduling, autosave, exports and the wiring
 // between the layer stack (left), the viewport (centre) and the inspector (right). Entry module of index.html.
 import {
-  createDefaultProject, normaliseProject, evaluationSnapshot, encodeR16, createLayer, newId, STORAGE_KEY,
+  createDefaultProject, normaliseProject, evaluationSnapshot, workingSize, createLayer, newId, STORAGE_KEY,
 } from './terrain/project.js';
 import { layerKind } from './terrain/layers.js';
 import { renderLayerList, buildAddMenu } from './ui/layers-panel.js';
@@ -35,6 +35,8 @@ const state = {
 };
 
 let worker = null;
+let exportJobId = 0;
+let exporting = null; // { job, kind } while a file is being made in the worker
 let jobId = 0;
 let scheduleTimer = 0;
 let saveTimer = 0;
@@ -129,6 +131,25 @@ function startJob() {
 
 function onWorkerMessage(event) {
   const m = event.data;
+  if (m.type === 'export-progress') {
+    if (exporting && m.job === exporting.job) {
+      state.status = { phase: 'computing', label: m.label, fraction: m.fraction, index: 1, total: 1, message: '', exportJob: m.job };
+      renderStatus();
+    }
+    return;
+  }
+  if (m.type === 'export-done') {
+    if (exporting && m.job === exporting.job) finishExport(m);
+    return;
+  }
+  if (m.type === 'export-error') {
+    if (exporting && m.job === exporting.job) {
+      exporting = null;
+      endExportStatus(m.job);
+      flashStatus('Export failed: ' + m.message);
+    }
+    return;
+  }
   if (m.job !== jobId) return;
   if (m.type === 'progress') {
     state.status = { phase: 'computing', label: m.label, fraction: m.fraction, index: m.index, total: m.total, message: '' };
@@ -188,24 +209,63 @@ function safeName(text) {
   return (text || 'landscape').replace(/[^a-z0-9_-]+/gi, '-').replace(/^-+|-+$/g, '').toLowerCase() || 'landscape';
 }
 
-function exportR16() {
-  if (!state.result) return;
-  const N = state.result.N;
-  download(`${safeName(state.project.name)}-${N}x${N}.r16`, new Blob([encodeR16(state.result.height, N)], { type: 'application/octet-stream' }));
+// Exports run in the worker. It evaluates the current stack (cached, so cheap when the preview is up to date),
+// makes the file at the full export size, and transfers the buffer back. The main thread only downloads it.
+function requestExport(kind, layerId = null) {
+  if (!worker || !state.project) return;
+  if (exporting) {
+    flashStatus('An export is already running.');
+    return;
+  }
+  exportJobId++;
+  exporting = { job: exportJobId, kind };
+  state.status = { phase: 'computing', label: kind === 'r16' ? 'Exporting heightmap' : 'Exporting satmap', fraction: 0, index: 1, total: 1, message: '', exportJob: exportJobId };
+  renderStatus();
+  worker.postMessage({ type: 'export', job: exportJobId, kind, layerId, project: evaluationSnapshot(state.project) });
 }
 
-function exportSatmap() {
-  const r = state.result;
-  if (!r?.colour) {
+function exportR16() {
+  requestExport('r16');
+}
+
+function exportSatmapFile() {
+  // The top-most enabled satmap layer is exported at its own export size.
+  const layers = state.project.layers.filter((l) => l.type === 'satmap' && l.enabled);
+  if (!layers.length) {
     flashStatus('Add a satmap layer to export a colour map.');
     return;
   }
-  const S = r.colourSize;
-  const canvas = document.createElement('canvas');
-  canvas.width = S;
-  canvas.height = S;
-  canvas.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(r.colour), S, S), 0, 0);
-  canvas.toBlob((blob) => blob && download(`${safeName(state.project.name)}-satmap-${S}.png`, blob), 'image/png');
+  requestExport('satmap', layers[layers.length - 1].id);
+}
+
+// Clears the export's own status line. A preview job that is still running keeps its status, because its
+// progress messages have replaced the export line by now.
+function endExportStatus(job) {
+  if (state.status.exportJob === job) state.status = { phase: 'idle', label: 'Ready', fraction: 0, index: 0, total: 0, message: '' };
+  renderStatus();
+}
+
+function finishExport(m) {
+  exporting = null;
+  endExportStatus(m.job);
+  const name = safeName(state.project.name);
+  if (m.kind === 'r16') {
+    download(`${name}-${m.size}x${m.size}.r16`, new Blob([m.buffer], { type: 'application/octet-stream' }));
+    return;
+  }
+  const S = m.size;
+  try {
+    const canvas = document.createElement('canvas');
+    canvas.width = S;
+    canvas.height = S;
+    canvas.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(m.buffer), S, S), 0, 0);
+    canvas.toBlob((blob) => {
+      if (blob) download(`${name}-satmap-${S}.png`, blob);
+      else flashStatus(`The ${S} px satmap could not be encoded.`);
+    }, 'image/png');
+  } catch {
+    flashStatus(`Could not make a ${S} px satmap: the browser does not have enough memory for it.`);
+  }
 }
 
 function saveJSON() {
@@ -448,8 +508,10 @@ function renderViewportHead() {
   $('#btn-water-toggle').setAttribute('aria-pressed', String(!!v.water));
   $('#btn-satmap-toggle').hidden = v.mode !== '3d';
   $('#vp-title').textContent = state.project.name;
-  const cellM = t.extentM / (t.size - 1);
-  $('#vp-sub').textContent = `${t.size}² · ${(t.extentM / 1000).toFixed(1)} km · ${cellM.toFixed(0)} m cells · ${fmtMetres(t.heightM)} range · sea ${fmtMetres(t.seaLevel * t.heightM)}`;
+  const work = workingSize(t.size);
+  const cellM = t.extentM / (work - 1);
+  const eroded = work < t.size ? ` · eroded at ${work}²` : '';
+  $('#vp-sub').textContent = `${t.size}²${eroded} · ${(t.extentM / 1000).toFixed(1)} km · ${cellM.toFixed(0)} m cells · ${fmtMetres(t.heightM)} range · sea ${fmtMetres(t.seaLevel * t.heightM)}`;
 }
 
 function renderSavePill() {
@@ -551,6 +613,7 @@ function openAddMenu() {
   if (host.firstElementChild) return closeAddMenu();
   host.append(buildAddMenu((type) => addLayer(type)));
   host.hidden = false;
+  host.querySelector('.add-filter')?.focus();
 }
 
 function closeAddMenu() {
@@ -622,7 +685,7 @@ function wireHeader() {
   });
   $('#btn-save').addEventListener('click', saveJSON);
   $('#btn-export-r16').addEventListener('click', exportR16);
-  $('#btn-export-png').addEventListener('click', exportSatmap);
+  $('#btn-export-png').addEventListener('click', exportSatmapFile);
   $('#btn-add').addEventListener('click', openAddMenu);
   $('#btn-satmap-toggle').addEventListener('click', () => setView('satmap', !state.project.view.satmap));
   $('#btn-water-toggle').addEventListener('click', () => setView('water', !state.project.view.water));

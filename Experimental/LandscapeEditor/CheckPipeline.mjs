@@ -2,8 +2,9 @@
 // the 16-bit export. Run: node CheckPipeline.mjs
 import assert from 'node:assert/strict';
 import { evaluateProject, blend, THUMB } from './js/terrain/pipeline.js';
-import { createDefaultProject, normaliseProject, encodeR16, createLayer, evaluationSnapshot } from './js/terrain/project.js';
-import { generateIsland, generateBase } from './js/terrain/generators.js';
+import { createDefaultProject, normaliseProject, encodeR16, createLayer, evaluationSnapshot, workingSize, WORKING_MAX } from './js/terrain/project.js';
+import { generateIsland } from './js/terrain/generators.js';
+import { generatePrimitive } from './js/terrain/primitives.js';
 import { applyTerrace, applyLevels, applySmooth } from './js/terrain/shaping.js';
 import { renderSatmap, PALETTES } from './js/terrain/satmap.js';
 import { layerKind, LAYER_TYPES, EROSION_TYPES } from './js/terrain/layers.js';
@@ -24,6 +25,8 @@ assert.ok(first.height.every((v) => Number.isFinite(v) && v >= 0 && v <= 1), 'he
 const heightLayers = project.layers.filter((l) => layerKind(l.type) === 'height');
 const textureLayers = project.layers.filter((l) => layerKind(l.type) === 'texture');
 assert.ok(heightLayers.length >= 5 && textureLayers.length === 1, 'default stack has height layers and one satmap');
+assert.deepEqual(createDefaultProject().layers.map((l) => l.type), ['fbm', 'ridged', 'billow', 'island', 'erosion', 'erosion', 'erosion', 'satmap'], 'default stack order');
+assert.equal(createDefaultProject().terrain.size, 1024, 'the default output is 1k');
 assert.ok(first.colour && first.colour.length === first.colourSize ** 2 * 4, 'satmap RGBA has the right length');
 assert.ok(first.colour.every((v, i) => i % 4 !== 3 || v === 255), 'satmap is opaque');
 assert.ok(first.summary.water > 0.05 && first.summary.water < 0.95, `water fraction ${first.summary.water}`);
@@ -87,7 +90,7 @@ console.log(`pipeline: stack of ${project.layers.length} layers evaluates to ${N
   const island = generateIsland(64, { radius: 1.2, falloff: 2.2, wobble: 0.45, seed: 5 }, 1337);
   assert.ok(island.every((v) => v >= 0 && v <= 1), 'island mask stays in [0, 1]');
   assert.ok(island[32 * 64 + 32] > island[0], 'island mask is highest at the centre');
-  assert.ok(generateBase(8, { level: 0.3 }).every((v) => Math.abs(v - 0.3) < 1e-6), 'base level is flat');
+  assert.ok(generatePrimitive('constant', 8, { value: 0.3 }, 1).every((v) => Math.abs(v - 0.3) < 1e-6), 'constant primitive is flat');
   const ramp = Float32Array.from({ length: 4096 }, (_, i) => i / 4095);
   const terraced = applyTerrace(ramp, 64, { steps: 4, sharpness: 0.9 });
   // Sharpness 0.9 leaves a narrow riser between plateaus. Most cells should sit exactly on a plateau level.
@@ -118,7 +121,7 @@ console.log(`pipeline: stack of ${project.layers.length} layers evaluates to ${N
     view: { mode: 'flow' },
   });
   assert.equal(messy.name, 'Untitled landscape', 'non-string names fall back');
-  assert.equal(messy.terrain.size, 256, 'unsupported grid sizes fall back');
+  assert.equal(messy.terrain.size, 1024, 'unsupported grid sizes fall back to the 1k default');
   assert.equal(messy.terrain.extentM, 16000, 'extent is clamped');
   assert.equal(messy.terrain.heightM, 1000, 'bad numbers fall back');
   assert.equal(messy.terrain.seed, 12, 'seed is a whole number');
@@ -126,12 +129,19 @@ console.log(`pipeline: stack of ${project.layers.length} layers evaluates to ${N
   assert.ok(!messy.layers.some((l) => l.type === 'nope'), 'unknown layer types are dropped');
   const kinds = messy.layers.map((l) => layerKind(l.type));
   assert.deepEqual(kinds, [...kinds].sort((a, b) => (a === 'texture') - (b === 'texture')), 'texture layers go last');
-  const noise = messy.layers.find((l) => l.type === 'noise');
-  assert.equal(noise.params.octaves, LAYER_TYPES.noise.defaults.octaves, 'missing parameters come from the defaults');
+  const noise = messy.layers.find((l) => l.type === 'fbm');
+  assert.ok(noise, 'the v1 noise type migrates to fbm');
+  assert.equal(noise.params.octaves, LAYER_TYPES.fbm.defaults.octaves, 'missing parameters come from the defaults');
   assert.equal(noise.params.frequency, 3, 'given parameters are kept');
   assert.equal(noise.opacity, 1, 'opacity is clamped');
   assert.equal(noise.blend, 'Normal', 'unknown blend modes fall back');
   assert.equal(messy.layers.find((l) => l.type === 'erosion').params.type, 'hydraulic', 'unknown erosion types fall back');
+  const legacy = normaliseProject({ version: 1, layers: [{ type: 'base', params: { level: 0.3 } }] });
+  assert.equal(legacy.layers[0].type, 'constant', 'the v1 base type migrates to constant');
+  assert.equal(legacy.layers[0].params.value, 0.3, 'the v1 level becomes the constant value');
+  assert.equal(legacy.version, 2, 'projects are written at the current version');
+  assert.equal(workingSize(16384), WORKING_MAX, 'the working grid is capped');
+  assert.equal(workingSize(1024), 1024, 'small outputs are their own working grid');
   assert.equal(messy.layers.find((l) => l.type === 'satmap').params.palette, 'arid');
   assert.equal(messy.view.mode, 'flow', 'view settings are kept');
   assert.ok(messy.layers.every((l) => l.id), 'every layer has an id');

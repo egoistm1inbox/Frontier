@@ -32,6 +32,8 @@ export const ICONS = {
 };
 
 export const GROUP_ICON = {
+  primitive: 'noise',
+  shape: 'island',
   generator: 'ridged',
   erosion: 'erosion',
   shaping: 'terrace',
