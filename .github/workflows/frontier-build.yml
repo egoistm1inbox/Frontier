@@ -1,0 +1,301 @@
+name: Frontier build
+
+# 📦 Builds the host, the three projects and SolidArc, and publishes the UI captures as artifacts.
+#
+#    linux-engine   Frontier, ProjectZero, ProjectDrive, Project-Dyno and SolidArc, through the root
+#                   CMake route. CMake is the Linux/IDE route only — Windows builds go through
+#                   Tools/Build/ToolchainSequence.ps1, which is what the windows-solidarc job runs.
+#    proofs         The dependency-free native proofs, including every editor UI capture. Download
+#                   the "frontier-ui-captures" artifact to look at the UI without building anything.
+#    replication    Project-Networking's replication sequence and its proof, plain and sanitized.
+#                   No EOS SDK and no Photon libs are needed for this; the Windows job in
+#                   networking-windows.yml is the one that links them.
+
+on:
+  push:
+    branches: ['arena/**', 'main']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: frontier-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ── Everything that needs no GPU SDK and no window ───────────────────────────────────────────────
+  proofs:
+    name: Native proofs and UI captures
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Materialise the locked proof dependencies
+        run: python3 Tools/Build/RunAnnounced.py "bootstrap proof" -- python3 Tools/Bootstrap.py --profile proof
+
+      - name: Bundle parity — the native ports against the built reference bundle
+        run: python3 Tools/Build/RunAnnounced.py "bundle parity" -- python3 Exhibits/Workbench/BundleParity.py
+
+      - name: Outliner row metadata
+        run: python3 Tools/Build/RunAnnounced.py "outliner metadata" -- python3 Exhibits/Workbench/OutlinerMetadata/RunNativeOutlinerMetadata.py
+
+      - name: Folder collection inspector
+        run: python3 Tools/Build/RunAnnounced.py "folder inspector" -- python3 Exhibits/Workbench/Folder/RunNativePanelProof.py
+
+      - name: Base meshes
+        run: python3 Tools/Build/RunAnnounced.py "base meshes" -- python3 Exhibits/Workbench/BaseMesh/RunNativeBaseMesh.py
+
+      - name: Fracture editor page
+        run: python3 Tools/Build/RunAnnounced.py "fracture editor" -- python3 Exhibits/Workbench/FractureEditor/RunNativeFractureEditor.py
+
+      - name: Fracture card
+        run: python3 Tools/Build/RunAnnounced.py "fracture card" -- python3 Exhibits/Workbench/Fracture/RunNativeFractureCard.py
+
+      - name: Gas presets — the transcription against presets.js
+        run: python3 Tools/Build/RunAnnounced.py "gas presets" -- python3 Tools/Build/GenerateGasPresets.py --check
+
+      - name: Gas scene codec — the generated crossing against presets.js
+        run: python3 Tools/Build/RunAnnounced.py "gas codec" -- python3 Tools/Build/GenerateGasSceneCodec.py --check
+
+      - name: Gas samples — the committed corpus against the authoring tool
+        run: python3 Tools/Build/RunAnnounced.py "gas samples" -- node Experimental/Fluid/ExportSamples.mjs --check
+
+      - name: Gas inspector — the card's cost readout against GasQualityAllowance.h
+        run: python3 Tools/Build/RunAnnounced.py "gas inspector" -- node Experimental/ProjectZeroEditor/CheckGasInspector.mjs
+
+      - name: Particle editor — the scene handoff the emitter card opens it through
+        run: python3 Tools/Build/RunAnnounced.py "particle handoff" -- node Experimental/ParticleEditor/CheckHandoff.mjs
+
+      - name: Force fields — the taxonomy wind, gravity and drag all have to fit
+        run: python3 Tools/Build/RunAnnounced.py "force fields" -- node Experimental/ParticleEditor/CheckForceFields.mjs
+
+      - name: Force field panel — the one list drawn into a real DOM
+        run: python3 Tools/Build/RunAnnounced.py "force panel" -- node Experimental/ParticleEditor/CheckForcePanel.mjs
+
+      - name: Spatial HUD shader — the WGSL port against the .slang it is generated from
+        run: python3 Tools/Build/RunAnnounced.py "hud shader" -- python3 Tools/Build/GenerateHudShader.py --check
+
+      - name: Spatial HUD — the tablet's graph, layout, values and submission order
+        run: python3 Tools/Build/RunAnnounced.py "spatial hud" -- node Experimental/SpatialHud/CheckHud.mjs
+
+      - name: Spatial HUD still — the panel rasterised on the CPU, so a blank screen fails the build
+        run: python3 Tools/Build/RunAnnounced.py "hud still" -- node Experimental/SpatialHud/RenderStill.mjs --check
+
+      - name: Spatial HUD host — app.js run headless, so a page that cannot boot fails the build
+        run: python3 Tools/Build/RunAnnounced.py "hud host" -- node Experimental/SpatialHud/CheckHost.mjs
+
+      - name: Force field parity — the native taxonomy against the browser it was ported from
+        run: python3 Tools/Build/RunAnnounced.py "force field parity" -- python3 Tools/Build/ForceFieldParity.py
+
+      - name: Force fields, natively — the same arithmetic, twice, byte for byte
+        run: python3 Tools/Build/RunAnnounced.py "native force fields" -- python3 Exhibits/Workbench/GasFluid/RunNativeForceFields.py
+
+      - name: Force field panel parity — the native panel against the browser panel, row for row
+        run: python3 Tools/Build/RunAnnounced.py "force panel parity" -- python3 Tools/Build/ForceFieldPanelParity.py
+
+      - name: Force field panel, natively — the ported panel, drawn and captured
+        run: python3 Tools/Build/RunAnnounced.py "native force panel" -- python3 Exhibits/Workbench/GasFluid/RunNativeForceCard.py
+
+      - name: Force field routing — the shipped inspector opening the panel, clicked not inspected
+        run: python3 Tools/Build/RunAnnounced.py "force field routing" -- python3 Exhibits/Workbench/GasFluid/RunNativeForceRoute.py
+
+      - name: Gas inspector parity — the native card against the HTML it was ported from
+        run: python3 Tools/Build/RunAnnounced.py "gas inspector parity" -- python3 Tools/Build/GasInspectorParity.py
+
+      - name: Gas inspector — the ported card drawn from real ImGui commands, and the one-shot lifecycle
+        run: python3 Tools/Build/RunAnnounced.py "gas card" -- python3 Exhibits/Workbench/GasFluid/RunNativeGasCard.py
+
+      - name: Gas routing — the shipped InspectorPanel selecting a gas entity, clicked for real
+        run: python3 Tools/Build/RunAnnounced.py "gas routing" -- python3 Exhibits/Workbench/GasFluid/RunNativeGasInspectorRoute.py
+
+      - name: Gas flipbook — the bottom rung's sheet, baked from the shipped solver
+        run: python3 Tools/Build/RunAnnounced.py "gas flipbook" -- python3 Exhibits/Workbench/GasFluid/RunNativeGasFlipbook.py
+
+      - name: Gas obstruction — the three collision levels against the engine's own distance field
+        run: python3 Tools/Build/RunAnnounced.py "gas obstruction" -- python3 Exhibits/Workbench/GasFluid/RunNativeGasObstruction.py
+
+      - name: Fluid editor controls — the generated table against SceneSpecification.js
+        run: python3 Tools/Build/RunAnnounced.py "fluid controls" -- python3 Tools/Build/GenerateFluidEditorControls.py --check
+
+      - name: Fluid editor — the whole expanded page, drawn from real ImGui commands
+        run: python3 Tools/Build/RunAnnounced.py "fluid editor" -- python3 Exhibits/Workbench/FluidEditor/RunNativeFluidEditor.py
+
+      - name: Gas field — reproducibility, budget, obstruction and the coupling switch
+        run: python3 Tools/Build/RunAnnounced.py "gas field" -- python3 Exhibits/Workbench/GasFluid/RunNativeGasFieldChecks.py
+
+      # The runner above compiles the standalone host with g++ directly, so that it runs on a machine with
+      # no CMake. This is the other half: that FRONTIER_GAS_ONLY configures, builds and passes its own tests
+      # through the build the user will actually type. ctest runs `cross` over every committed sample.
+      - name: Gas standalone host — FRONTIER_GAS_ONLY through CMake
+        run: |
+          python3 Tools/Build/RunAnnounced.py "gas host configure" -- \
+            cmake -S . -B Build/GasOnly -DFRONTIER_GAS_ONLY=ON -DCMAKE_BUILD_TYPE=Release
+          python3 Tools/Build/RunAnnounced.py "gas host build" -- \
+            cmake --build Build/GasOnly --parallel
+          python3 Tools/Build/RunAnnounced.py "gas host tests" -- \
+            ctest --test-dir Build/GasOnly --output-on-failure
+
+      - name: Publish the UI captures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontier-ui-captures
+          path: Exhibits/Gallery/**
+          if-no-files-found: error
+          retention-days: 30
+
+  # ── The host and the three projects ──────────────────────────────────────────────────────────────
+  linux-engine:
+    name: Frontier, Project-Zero, Project-Drive, Project-Dyno
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # Vulkan, X11 and Wayland development packages: GLFW is built from source out of
+      #    ExternalPackages and needs the platform headers, and the host links the Vulkan loader.
+      - name: Install the platform development packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            ninja-build cmake libvulkan-dev vulkan-validationlayers glslang-tools \
+            libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev \
+            libwayland-dev libxkbcommon-dev wayland-protocols pkg-config libgl1-mesa-dev
+
+      - name: Materialise the locked third-party dependencies
+        run: python3 Tools/Build/RunAnnounced.py "bootstrap all" -- python3 Tools/Bootstrap.py --profile all
+
+      - name: Lower the shaders to SPIR-V
+        run: python3 Tools/Build/RunAnnounced.py "shader lowering" -- python3 Tools/Build/CompileShaders.py --all
+
+      - name: Configure
+        run: python3 Tools/Build/RunAnnounced.py "cmake configure" -- cmake -S . -B .cache/cmake -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build the host and the project code images
+        run: python3 Tools/Build/RunAnnounced.py "build host and projects" -- cmake --build .cache/cmake --target Frontier ProjectZero ProjectDrive Project-Dyno --parallel
+
+      - name: SolidArc component-selection and gizmo regression
+        run: |
+          cmake -S Editor/AuthoringTools/Modelling/SolidArc -B .cache/solidarc-mode -G Ninja -DCMAKE_BUILD_TYPE=Release -DSOLIDARC_BUILD_MODE_TESTS=ON
+          cmake --build .cache/solidarc-mode --target SolidArcModeTransformVerification SolidArcConstructionWorkflowVerification --parallel 2
+          ctest --test-dir .cache/solidarc-mode --output-on-failure
+
+      - name: Publish the binaries
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontier-linux-binaries
+          path: |
+            Engine/Shaders/*.spv
+            Engine/Shaders/ShaderManifest.json
+            .cache/cmake/Frontier
+            .cache/cmake/*.so
+            Projects/Project-Drive/Build/*.so
+          if-no-files-found: warn
+          retention-days: 14
+
+  # ── Replication, which needs no SDK at all ───────────────────────────────────────────────────────
+  replication:
+    name: Project-Networking replication
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Build and run the replication proof, plain and sanitized
+        run: python3 Tools/Build/RunAnnounced.py "replication" -- python3 Exhibits/Workbench/Networking/RunReplicationChecks.py
+
+      - name: The rest of Project-Networking that needs no SDK
+        run: python3 Tools/Build/RunAnnounced.py "networking sdk-free" -- python3 Exhibits/Workbench/Networking/RunSdkFreeChecks.py
+
+      - name: Publish the replication evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: replication-evidence
+          path: |
+            Exhibits/Workbench/Networking/ReplicationChecks.log
+            Exhibits/Workbench/Networking/ReplicationEvidence.json
+          if-no-files-found: warn
+          retention-days: 14
+
+  # ── One Windows desktop bundle: host, project images, shaders and windowed SolidArc ──
+  windows-frontier:
+    name: Frontier and SolidArc Windows desktop bundle
+    runs-on: windows-2022
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Vulkan SDK (headers, import library and glslc)
+        shell: pwsh
+        run: |
+          if (-not (Get-ChildItem C:\VulkanSDK -Directory -ErrorAction SilentlyContinue)) {
+            choco install vulkan-sdk --yes --no-progress --limit-output
+            if ($LASTEXITCODE -ne 0) { throw 'Vulkan SDK installation failed' }
+          }
+          $Sdk = Get-ChildItem C:\VulkanSDK -Directory | Sort-Object Name -Descending | Select-Object -First 1
+          if (-not $Sdk -or -not (Test-Path (Join-Path $Sdk.FullName 'Bin/glslc.exe'))) { throw 'Vulkan SDK lacks glslc.exe' }
+          "VULKAN_SDK=$($Sdk.FullName)" >> $env:GITHUB_ENV
+
+      - name: Materialise the locked native dependencies
+        shell: pwsh
+        run: |
+          $Output = & python Tools/Bootstrap.py --profile all 2>&1
+          $Code = $LASTEXITCODE
+          $Output | ForEach-Object { Write-Host $_ }
+          if ($Code -ne 0) {
+            $Reason = (($Output | Select-Object -Last 16) -join '%0A').Replace('%','%25')
+            Write-Host "::error title=Dependency bootstrap failed::$Reason"
+            throw 'Native dependency bootstrap failed'
+          }
+
+      - name: Build the host, project code images, shaders and SolidArc GUI with MSVC
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $Transcript = Join-Path $env:RUNNER_TEMP 'frontier-windows-build.log'
+          Start-Transcript -Path $Transcript | Out-Null
+          try {
+            & ./Tools/Build/ToolchainSequence.ps1 -Configuration Release
+            if ($LASTEXITCODE -ne 0) { throw 'Windows desktop build failed' }
+            & ./Projects/Project-Dyno/Build/ToolchainSequence.ps1 -Configuration Release
+            if ($LASTEXITCODE -ne 0) { throw 'Project-Dyno build failed' }
+          }
+          catch {
+            $Failure = $_.Exception.Message
+            Stop-Transcript | Out-Null
+            $Tail = (Get-Content $Transcript -Tail 45) -join '%0A'
+            Write-Host "::error title=Windows MSVC build failed::$($Failure.Replace('%','%25'))%0A$Tail"
+            throw
+          }
+          Stop-Transcript | Out-Null
+
+      - name: Package the Windows desktop bundle
+        shell: pwsh
+        run: |
+          python Tools/Build/PackageWindows.py
+          if ($LASTEXITCODE -ne 0) { throw 'Windows bundle packaging failed' }
+
+      - name: Download the complete Windows desktop bundle here
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontier-windows-desktop
+          path: Build/Frontier-Windows-x64.zip
+          if-no-files-found: error
+          retention-days: 30

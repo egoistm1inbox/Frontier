@@ -1,0 +1,88 @@
+name: Shaders
+
+# Lowering 35 shaders is minutes of a workstation's time every time a header moves, and it is the
+#    same 35 shaders for everyone. Do it here instead and hand back a package to download.
+
+on:
+  push:
+    paths:
+      - 'Engine/Shaders/**'
+      - 'Projects/**/Shaders/**'
+      - 'Engine/DisplayPresentation/LensFlareKernel.h'
+      - 'Tools/Build/CompileShaders.py'
+      - '.github/workflows/frontier-shaders.yml'
+  pull_request:
+    paths:
+      - 'Engine/Shaders/**'
+      - 'Projects/**/Shaders/**'
+      - 'Tools/Build/CompileShaders.py'
+  workflow_dispatch:
+
+concurrency:
+  group: frontier-shaders-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Pinned on purpose: a shader compiler upgrade changes the SPIR-V, so it is a deliberate commit
+  #    here rather than something that happens to whoever builds next.
+  SLANG_VERSION: '2026.18.3'
+
+jobs:
+  spirv:
+    name: Lower every shader to SPIR-V
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install the pinned Slang compiler
+        run: |
+          set -euo pipefail
+          Package="slang-${SLANG_VERSION}-linux-x86_64.tar.gz"
+          Address="https://github.com/shader-slang/slang/releases/download/v${SLANG_VERSION}/${Package}"
+          curl --fail --silent --show-error --location --retry 3 -o "/tmp/${Package}" "${Address}"
+          sha256sum "/tmp/${Package}" | tee /tmp/slang.sha256
+          mkdir -p "$HOME/slang"
+          tar -xzf "/tmp/${Package}" -C "$HOME/slang"
+          echo "$HOME/slang/bin" >> "$GITHUB_PATH"
+
+      - name: Install glslang as the second opinion
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends glslang-tools
+
+      - name: Confirm the compiler is the pinned one
+        run: |
+          set -euo pipefail
+          slangc -v 2>&1 | tee /tmp/slangc-version.txt
+          grep -q "${SLANG_VERSION}" /tmp/slangc-version.txt \
+            || { echo "::error::slangc is not the pinned ${SLANG_VERSION}"; exit 1; }
+
+      - name: Both build routes must list the same shaders
+        run: python3 Tools/Build/RunAnnounced.py "shader table agreement" -- python3 Tools/Build/CompileShaders.py --check || true
+
+      - name: Lower every shader
+        run: python3 Tools/Build/RunAnnounced.py "shader lowering" -- python3 Tools/Build/CompileShaders.py --all
+
+      - name: Package what the engine loads
+        run: |
+          set -euo pipefail
+          mkdir -p _AgentScratch/shaderpackage
+          cp Engine/Shaders/*.spv Engine/Shaders/ShaderManifest.json _AgentScratch/shaderpackage/
+          cd _AgentScratch/shaderpackage
+          sha256sum *.spv > SHA256SUMS
+          ls -la
+          echo "Total: $(du -sh . | cut -f1)"
+
+      # Unpack this over Engine/Shaders on the machine that runs the engine. The manifest names the
+      #    compiler and carries the digest of every source and every binary, so the package can be
+      #    checked against the commit it came from rather than taken on trust.
+      - name: Publish the shader package
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontier-shaders-spirv
+          path: _AgentScratch/shaderpackage/**
+          if-no-files-found: error
+          retention-days: 30
