@@ -39,6 +39,12 @@ struct DriveSequence
     std::vector<Frontier::InstanceRecord> Poses{5u};
     uint32_t PreviousTransport = 0u;
     bool PreviousReset = false;
+    // F8 eject (Unreal-style): the car keeps its state and coasts to a stop under the handbrake, the driver's
+    //    throttle/steer are ignored, and the host's free camera takes over. A second F8 re-enters and re-seats the
+    //    chase camera behind the car.
+    bool Ejected = false;
+    bool PreviousEject = false;
+    bool ReseatCamera = false;
     uint64_t GeometryRevision = 0u;
     std::array<Frontier::Drive::TyreSequence, 4> Surfaces;
 
@@ -231,6 +237,11 @@ uint32_t FRONTIER_CODE_IMAGE_CALL AdvanceProject(
     const bool Reset = Reading->ResetPressed != 0u && !Sequence.PreviousReset && Reading->KeyboardCaptured == 0u;
     // Stop/new Play is a new editor session. Reset inside Play is a respawn, never a resurrection of a consumed point.
     if (Transport == 0u && Sequence.PreviousTransport != 0u) Sequence.RestoreDeployment();
+    // A new Play or a respawn always puts the driver back in the car.
+    if (Started || Reset) { Sequence.Ejected = false; Sequence.ReseatCamera = true; }
+    // F8 is edge-triggered and ignored while a text field or modal control owns the keyboard.
+    const bool EjectEdge = Reading->EjectPressed != 0u && !Sequence.PreviousEject && Reading->KeyboardCaptured == 0u;
+    Sequence.PreviousEject = Reading->EjectPressed != 0u;
     bool Deployed = false;
     if (Transport != 0u && (Started || Reset))
     {
@@ -247,16 +258,32 @@ uint32_t FRONTIER_CODE_IMAGE_CALL AdvanceProject(
     }
     Sequence.PreviousTransport = Transport;
     Sequence.PreviousReset = Reading->ResetPressed != 0u;
+    if (EjectEdge && Transport == 1u && Sequence.Vehicle)
+    {
+        Sequence.Ejected = !Sequence.Ejected;
+        if (!Sequence.Ejected) Sequence.ReseatCamera = true;
+        if (Sequence.Reception.ReceiveDiagnostic)
+        {
+            FrontierProjectDiagnostic Diagnostic{};
+            Diagnostic.StructureSize = sizeof(Diagnostic);
+            Diagnostic.SeverityNumber = 0u;
+            Diagnostic.SubjectName = "Vehicle";
+            Diagnostic.Explanation = Sequence.Ejected ? "Ejected from the car (F8). Free camera; the car brakes to rest."
+                                                      : "Back in the car (F8). Chase camera re-seated.";
+            Sequence.Reception.ReceiveDiagnostic(&Diagnostic, Sequence.Reception.ProjectReception);
+        }
+    }
     if (Transport == 0u || !Sequence.Vehicle) return 1u;
 
     const float Seconds = Reading->Paused ? (Reading->SimulationStep ? 1.0f / 60.0f : 0.0f)
                                          : std::clamp(ActiveCycle->CycleSeconds, 0.0f, 0.1f);
-    const bool Driving = Transport == 1u && Reading->KeyboardCaptured == 0u;
+    const bool Driving = Transport == 1u && Reading->KeyboardCaptured == 0u && !Sequence.Ejected;
     Sequence.Input.ForwardThrottleKey(Driving && Reading->MoveAxisY > 0.0f);
-    Sequence.Input.ForwardBrakeKey(Driving && Reading->MoveAxisY < 0.0f);
+    // An ejected car has no driver: it brakes to rest under the service brake and handbrake.
+    Sequence.Input.ForwardBrakeKey(Sequence.Ejected || (Driving && Reading->MoveAxisY < 0.0f));
     Sequence.Input.ForwardSteerLeftKey(Driving && Reading->MoveAxisX < 0.0f);
     Sequence.Input.ForwardSteerRightKey(Driving && Reading->MoveAxisX > 0.0f);
-    Sequence.Input.ForwardHandbrakeKey(Driving && Reading->HandbrakePressed != 0u);
+    Sequence.Input.ForwardHandbrakeKey(Sequence.Ejected || (Driving && Reading->HandbrakePressed != 0u));
     const auto Command = Sequence.Input.Advance(Seconds);
     if (Seconds > 0.0f || Deployed)
     {
@@ -264,7 +291,12 @@ uint32_t FRONTIER_CODE_IMAGE_CALL AdvanceProject(
         Sequence.CaptureSurfaces();
         Sequence.DeliverPoses();
     }
-    if (Transport == 1u) Sequence.DeliverCamera(Seconds, Deployed);
+    // While ejected the chase camera stops requesting the view, so the host's free camera owns it (from the last chase pose).
+    if (Transport == 1u && !Sequence.Ejected)
+    {
+        Sequence.DeliverCamera(Seconds, Deployed || Sequence.ReseatCamera);
+        Sequence.ReseatCamera = false;
+    }
     return 1u;
 }
 

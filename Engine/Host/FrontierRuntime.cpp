@@ -1781,6 +1781,7 @@ int Frontier::RunFrontierRuntime(
         ProjectInput.SimulationStep = Panel.TakeSimulationStep() ? 1u : 0u;
         ProjectInput.HandbrakePressed = Input.IsKeyPressed(Frontier::VirtualKeyCategory::KeySpace) ? 1u : 0u;
         ProjectInput.ResetPressed = Input.IsKeyPressed(Frontier::VirtualKeyCategory::KeyR) ? 1u : 0u;
+        ProjectInput.EjectPressed = Input.IsKeyPressed(Frontier::VirtualKeyCategory::KeyF8) ? 1u : 0u;
         ProjectInput.KeyboardCaptured = (TypingText || ControlCentre.CoversPointer() || Diagnostics.QueryPointerCaptured()) ? 1u : 0u;
         if (Transport != 0u && PreviousTransport == 0u)
         {

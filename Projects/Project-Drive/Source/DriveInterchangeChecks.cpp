@@ -127,6 +127,31 @@ int main()
     Advance(120u);
     assert(std::abs(Reception.Body[12]) < 0.2f);
     std::puts("PASS text-input capture suppresses driving");
+    // F8 eject: the car stops taking driver throttle and holds under the handbrake, the chase camera stops requesting
+    // the view so the host's free camera owns it, and a second F8 re-enters and re-seats the camera.
+    Input.KeyboardCaptured = 0u;
+    Input.MoveAxisY = 1.0f;
+    Advance(60u);
+    const float DrivenX = Reception.Body[12];
+    assert(DrivenX > 0.5f);
+    std::printf("Eject check: driven %.4f m before F8\n", DrivenX);
+    Input.KeyboardCaptured = 1u; Input.EjectPressed = 1u; Advance(1u); // typing must not eject
+    Input.KeyboardCaptured = 0u; Input.EjectPressed = 0u; Advance(1u);
+    Input.EjectPressed = 1u; Advance(1u); Input.EjectPressed = 0u; // F8 edge: eject
+    const uint32_t CamerasEjected = Reception.Cameras;
+    const float EjectedX = Reception.Body[12];
+    Advance(120u); // throttle still held: an ejected car has no driver
+    std::printf("Eject check: ejected coast moved %.4f m, cameras held at %u\n", Reception.Body[12] - EjectedX, Reception.Cameras - CamerasEjected);
+    assert(Reception.Cameras == CamerasEjected);
+    assert(std::abs(Reception.Body[12] - EjectedX) < 0.5f * DrivenX);
+    Input.EjectPressed = 1u; Advance(1u); Input.EjectPressed = 0u; // F8 again: re-enter
+    Advance(60u);
+    std::printf("Eject check: re-entered, displacement %.4f m, cameras %u\n", Reception.Body[12], Reception.Cameras);
+    assert(Reception.Cameras > CamerasEjected);
+    assert(Reception.Body[12] > EjectedX + 0.5f);
+    Input.MoveAxisY = 0.0f;
+    std::puts("PASS F8 ejects the driver (no throttle, camera hand-over) and re-enters on a second press");
+
     Project.RetireProject(Record);
     std::puts("PASS project retirement");
     // Exercise the actual project callback, not only the generic actor container.
