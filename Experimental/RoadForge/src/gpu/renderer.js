@@ -129,6 +129,15 @@ export class Renderer {
         maxBufferSize: Math.min(adapter.limits.maxBufferSize, 536870912),
       },
     });
+    device.addEventListener?.('uncapturederror', (ev) => {
+      console.error('[RoadForge] WebGPU error:', ev.error?.message || ev.error);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('roadforge-gpu-error', { detail: ev.error }));
+      }
+    });
+    device.lost?.then((info) => {
+      if (info.reason !== 'destroyed') console.error('[RoadForge] device lost:', info.message);
+    });
     const context = canvas.getContext('webgpu');
     // Non-sRGB target: the post pass applies the transfer function manually.
     const format = 'rgba8unorm';
@@ -174,6 +183,7 @@ export class Renderer {
     const line = d.createShaderModule({ code: lineModule(), label: 'line' });
     const post = d.createShaderModule({ code: postModule(), label: 'post' });
     this.modules = { surf, inst, sky, line, post };
+    checkShaders(this.modules);
 
     this.pipeSurface = d.createRenderPipeline({
       label: 'surface', layout: this.scenePL,
@@ -596,3 +606,19 @@ export class Renderer {
 }
 
 function align4(n) { return (n + 3) & ~3; }
+
+
+/** Surface WGSL compile diagnostics in the console (async, non-blocking). */
+async function checkShaders(mods) {
+  for (const [name, m] of Object.entries(mods)) {
+    if (!m.getCompilationInfo) continue;
+    try {
+      const info = await m.getCompilationInfo();
+      for (const msg of info.messages) {
+        const where = `${name}.wgsl:${msg.lineNum}:${msg.linePos}`;
+        if (msg.type === 'error') console.error(`[RoadForge] ${where} ${msg.message}`);
+        else console.warn(`[RoadForge] ${where} ${msg.message}`);
+      }
+    } catch { /* not supported */ }
+  }
+}

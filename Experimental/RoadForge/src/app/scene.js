@@ -214,6 +214,13 @@ export class Scene {
       ...TRAIN_TYPES.map((v) => ({ name: v.name, n: v.n })),
     ];
     this.packed = set.pack(reserve);
+    // bind each draw to its slice of the prop atlas index buffer
+    for (const d of this.packed.draws) {
+      const r = this.propAtlas.draws[d.name];
+      if (!r) { d.indexOffset = 0; d.indexCount = 0; d.instanceCount = 0; continue; }
+      d.indexOffset = r.indexOffset;
+      d.indexCount = r.indexCount;
+    }
     this.staticLights = s.lighting ? lights : lights.filter((l) => l.kind >= 3);
 
     this.traffic = new TrafficSim(this.net, this.build, { seed: s.seed, count: s.vehicles });

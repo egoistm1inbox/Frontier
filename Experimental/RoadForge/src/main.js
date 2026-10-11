@@ -407,6 +407,12 @@ async function boot() {
     }
   }
 
+  window.addEventListener('roadforge-gpu-error', (ev) => {
+    const msg = ev.detail?.message || String(ev.detail || 'unknown');
+    ui.el.perf.innerHTML = `<b style="color:#d08a8a">GPU error</b> · see console`;
+    console.error('[RoadForge]', msg);
+  });
+
   loader.classList.add('hide');
   setTimeout(() => { loader.style.display = 'none'; }, 400);
 

@@ -105,7 +105,10 @@ export function pickNode(net, build, ray, scale = 1) {
     }
     r *= scale;
     const hit = rayPointDist(ray, [n.x, n.y, n.z]);
-    if (hit.d < r && (!best || hit.t < best.t)) best = { node: n, t: hit.t, d: hit.d, r };
+    if (hit.d >= r) continue;
+    // prefer the junction the cursor is most centred on, not merely the nearest
+    const score = hit.d / r + hit.t * 1e-5;
+    if (!best || score < best.score) best = { node: n, t: hit.t, d: hit.d, r, score };
   }
   return best;
 }
