@@ -74,7 +74,7 @@ export class EditorUI {
     this.scene = scene;
     this.hooks = hooks;           // { rebuild, bake, bakeSlot, focus, setTool, setView, generate }
     this.stage = 'network';
-    this.selection = { kind: 'group', id: 'network' };
+    this.selection = { kind: 'group', id: 'generator' };
     this.filter = '';
     this.expanded = new Set(['asphalt']);
     this.el = {
@@ -112,7 +112,7 @@ export class EditorUI {
       this.stage = b.dataset.stage;
       [...e.currentTarget.children].forEach((c) => c.classList.toggle('on', c === b));
       this.selection = this.stage === 'network'
-        ? { kind: 'group', id: 'network' }
+        ? { kind: 'group', id: 'generator' }
         : { kind: 'stack', id: 'asphalt' };
       this.render();
     });
