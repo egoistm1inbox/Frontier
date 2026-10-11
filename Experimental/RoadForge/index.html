@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>RoadForge — procedural road network generator</title>
+<link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+<div class="shell">
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-symbol" aria-hidden="true">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M5 21 9 3"/><path d="M19 21 15 3"/><path d="M12 5.5v2.2"/><path d="M12 11v2.2"/><path d="M12 16.5v2.2"/>
+        </svg>
+      </span>
+      RoadForge<span class="brand-dot">.</span>
+    </div>
+    <span class="version">WEBGPU · v1.0</span>
+
+    <nav class="stage-tabs" id="stageTabs">
+      <button data-stage="network" class="on"><span class="stage-step">01</span> Network</button>
+      <button data-stage="texture"><span class="stage-step">02</span> Texture</button>
+    </nav>
+
+    <div class="topbar-spacer"></div>
+
+    <div class="top-stats" id="topStats"></div>
+    <div class="top-actions">
+      <button class="ghost-btn" id="btnRebake" title="Re-bake every surface texture">Bake textures</button>
+      <button class="ghost-btn primary" id="btnGenerate" title="Generate a new network">Generate</button>
+    </div>
+  </header>
+
+  <nav class="rail" id="rail">
+    <button data-tool="select" class="on" title="Select / move intersections (Q)"></button>
+    <button data-tool="pan" title="Pan camera (W)"></button>
+    <div class="rail-sep"></div>
+    <button data-view="wire" title="Quad topology overlay (T)"></button>
+    <button data-view="grid" title="Lane graph overlay (L)"></button>
+    <button data-view="markings" class="on" title="Road markings (M)"></button>
+    <div class="spacer"></div>
+    <button data-view="traffic" class="on" title="Traffic simulation (P)"></button>
+    <button data-view="focus" title="Frame the whole network (F)"></button>
+  </nav>
+
+  <main class="viewport" id="viewport">
+    <canvas id="gpu"></canvas>
+    <div class="viewport-overlay">
+      <div class="vp-top">
+        <div class="vp-chip" id="selChip"><span class="dot"></span><b>No selection</b></div>
+        <div class="vp-chip vp-hint">Drag&nbsp;orbit · Right-drag&nbsp;pan · Wheel&nbsp;zoom · Click an intersection to move it</div>
+      </div>
+      <div class="vp-bottom">
+        <div class="vp-toolbar" id="vpToolbar"></div>
+        <div class="vp-chip" id="perfChip">—</div>
+      </div>
+    </div>
+    <div class="loader" id="loader">
+      <div>
+        <h2>RoadForge</h2>
+        <p id="loaderMsg">Requesting GPU adapter</p>
+        <div class="bar"><i id="loaderBar"></i></div>
+      </div>
+    </div>
+  </main>
+
+  <aside class="dock">
+    <section class="stack">
+      <div class="stack-head">
+        <h2 id="stackTitle">Layer stack <span id="stackCount">00</span></h2>
+        <div class="stack-tools" id="stackTools"></div>
+      </div>
+      <div class="search">
+        <span id="searchIcon"></span>
+        <input id="stackSearch" placeholder="Filter layers" spellcheck="false" />
+      </div>
+      <div class="tree" id="tree"></div>
+    </section>
+
+    <section class="inspector">
+      <div class="inspector-top">
+        <div class="crumb">Inspector <span id="crumb">Network</span></div>
+        <div id="inspectorBadge" class="small-pill">—</div>
+      </div>
+      <div class="inspector-content" id="inspector"></div>
+    </section>
+  </aside>
+
+</div>
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
