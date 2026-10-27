@@ -6,7 +6,7 @@
  * each species preset fills the fields its habit reads. Metres / degrees.
  */
 
-export type Habit = 'palm' | 'paddle' | 'rosette' | 'branching' | 'grain' | 'vegetable';
+export type Habit = 'palm' | 'paddle' | 'rosette' | 'branching' | 'grain' | 'vegetable' | 'fruit' | 'carnivore';
 export type FrondType = 'pinnate' | 'palmate';
 
 export interface BotanyParams {
@@ -93,6 +93,8 @@ export interface BotanyParams {
   cropType: 'tomato' | 'strawberry' | 'pepper' | 'sunflower' | 'pumpkin' | 'cabbage';
   /** Length of the bristles/awns on each grain (wheat), metres. */
   awnLength: number;
+  fruitType: 'pineapple' | 'papaya' | 'citrus' | 'mango' | 'grape' | 'watermelon';
+  carnType: 'flytrap' | 'nepenthes' | 'sarracenia' | 'sundew' | 'cobra' | 'butterwort';
 
   // ── colour (flat colour, modulated procedurally per vertex) ───────────────
   leafColor: string;
@@ -150,6 +152,7 @@ function botany(o: Partial<BotanyParams>): BotanyParams {
     fruitStyle: 'nuts', nutCount: 0, nutSize: 0.16,
     branchStyle: 'lateral', branchLevels: 3, branchCount: 3, branchAngle: 42, branchTaper: 0.62, leavesPerTip: 6, compoundLeaf: 'simple',
     grainType: 'spike', cropType: 'tomato', awnLength: 0,
+    fruitType: 'citrus', carnType: 'flytrap',
     leafColor: '#3d7a26', leafColor2: '#86b43c', deadColor: '#9a7434', trunkColor: '#8a7a64', trunkColor2: '#6f6152', rachisColor: '#5c7031',
     nutColor: '#7a9a3a', nutColor2: '#c98a3a',
     ...o,
@@ -330,14 +333,14 @@ export const PRESETS: PlantParams[] = [
     trunkHeight: 0.95, trunkRadius: 0.005, trunkCurve: 0.03, ringFrequency: 0, stemCount: 7, phyllotaxis: 180,
     frondCount: 6, petioleRatio: 0.35,
     leafLength: 0.4, bladeWidth: 0.016, bladeArc: 0.9, bladePitch: 35, bladePeak: 0.3, bladeVee: 0.15, awnLength: 0.085,
-    nutCount: 26, nutSize: 0.012, nutColor: '#e0b154', nutColor2: '#c49a44',
+    nutCount: 42, nutSize: 0.012, nutColor: '#e0b154', nutColor2: '#c49a44',
     leafColor: '#a89a4d', leafColor2: '#cbbd6a', trunkColor: '#c2a45c', trunkColor2: '#d3b96e', rachisColor: '#c8ae60',
   }, { flare: 0.2 }, { trunkSides: 8 }),
   species('Rice', 'grain', {
     grainType: 'panicle',
     trunkHeight: 1.0, trunkRadius: 0.006, trunkCurve: 0.05, ringFrequency: 0, stemCount: 8, phyllotaxis: 180,
     frondCount: 7, petioleRatio: 0.3,
-    leafLength: 0.55, bladeWidth: 0.02, bladeArc: 1.35, bladePitch: 30, bladePeak: 0.3, bladeVee: 0.2, awnLength: 0,
+    leafLength: 0.55, bladeWidth: 0.02, bladeArc: 1.35, bladePitch: 30, bladePeak: 0.3, bladeVee: 0.2, awnLength: 0.008,
     nutCount: 46, nutSize: 0.009, nutColor: '#dcC26a', nutColor2: '#c2a452',
     leafColor: '#4d8c34', leafColor2: '#7fb84e', trunkColor: '#7d9a58', trunkColor2: '#93ad68', rachisColor: '#86a258',
   }, { flare: 0.2 }, { trunkSides: 8 }),
@@ -407,6 +410,106 @@ export const PRESETS: PlantParams[] = [
     nutCount: 1, nutSize: 0.125, nutColor: '#bcd4a2', nutColor2: '#9dbd84',
     leafColor: '#5d8a4e', leafColor2: '#83ac66', trunkColor: '#77a05e', rachisColor: '#83ac66',
   }, { flare: 0.2 }, { trunkSides: 12 }),
+  // ───────────────────────────────── Fruits ──────────────────────────────────
+  species('Pineapple', 'fruit', {
+    fruitType: 'pineapple',
+    trunkHeight: 0.18, trunkRadius: 0.05, ringFrequency: 0,
+    frondCount: 26, petioleRatio: 0.06,
+    leafLength: 0.82, bladeWidth: 0.055, bladeArc: 0.85, bladePitch: 30, bladePeak: 0.3, bladeVee: 0.45, bladeNotch: 0.18,
+    nutCount: 1, nutSize: 0.085, nutColor: '#d9ac34', nutColor2: '#7a8a3e',
+    leafColor: '#4d7a4a', leafColor2: '#84b06a', trunkColor: '#6d8a4c', rachisColor: '#74a04e',
+  }, { flare: 0.2 }, { trunkSides: 12 }),
+  species('Papaya', 'fruit', {
+    fruitType: 'papaya',
+    trunkHeight: 3.4, trunkRadius: 0.09, trunkCurve: 0.08, ringFrequency: 5, ringDepth: 0.5,
+    frondCount: 11, petioleRatio: 0.55,
+    leafLength: 1.5, bladeWidth: 0.85, bladeArc: 0.5, bladePitch: 48, bladeNotch: 0.8, bladeLobes: 0.4, bladePeak: 0.42,
+    nutCount: 9, nutSize: 0.09, nutColor: '#e09a2e', nutColor2: '#5d8a34',
+    leafColor: '#35702c', leafColor2: '#63a844', trunkColor: '#9aa578', trunkColor2: '#8a9468', rachisColor: '#8aa86a',
+  }, { flare: 0.5 }, { trunkSides: 16 }),
+  species('Orange (Citrus)', 'fruit', {
+    fruitType: 'citrus',
+    trunkHeight: 1.2, trunkRadius: 0.09, trunkCurve: 0.1, ringFrequency: 0,
+    branchStyle: 'lateral', branchLevels: 3, branchCount: 3, branchAngle: 45, branchTaper: 0.62, leavesPerTip: 5,
+    petioleRatio: 0.18, leafLength: 0.16, bladeWidth: 0.065, bladeArc: 0.3, bladePitch: 38, bladePeak: 0.42,
+    nutCount: 14, nutSize: 0.042, nutColor: '#f08a1e', nutColor2: '#7aa83e',
+    leafColor: '#256b2c', leafColor2: '#4d9a3e', trunkColor: '#7a6a55', trunkColor2: '#6b5c48', rachisColor: '#4d8a3e',
+  }, { flare: 0.5 }, { trunkSides: 14 }),
+  species('Mango', 'fruit', {
+    fruitType: 'mango',
+    trunkHeight: 2.2, trunkRadius: 0.16, trunkCurve: 0.1, ringFrequency: 0,
+    branchStyle: 'lateral', branchLevels: 3, branchCount: 3, branchAngle: 48, branchTaper: 0.62, leavesPerTip: 7,
+    petioleRatio: 0.22, leafLength: 0.3, bladeWidth: 0.07, bladeArc: 0.5, bladePitch: 34, bladePeak: 0.42,
+    nutCount: 7, nutSize: 0.05, nutColor: '#e8a63a', nutColor2: '#c45a3a',
+    leafColor: '#2b6b30', leafColor2: '#c07850', trunkColor: '#6e5c48', trunkColor2: '#5d4c3a', rachisColor: '#5d8a42',
+  }, { flare: 0.7 }, { trunkSides: 18 }),
+  species('Grape Vine', 'fruit', {
+    fruitType: 'grape',
+    trunkHeight: 0.9, trunkRadius: 0.05, trunkCurve: 0.55, ringFrequency: 4, ringDepth: 0.6,
+    branchStyle: 'lateral', branchLevels: 2, branchCount: 2, branchAngle: 55, branchTaper: 0.55, leavesPerTip: 4,
+    petioleRatio: 0.4, leafLength: 0.3, bladeWidth: 0.17, bladeArc: 0.45, bladePitch: 44, bladeLobes: 0.7, bladeNotch: 0.55, bladePeak: 0.4,
+    nutCount: 4, nutSize: 0.013, nutColor: '#5a3a72', nutColor2: '#9a86b8',
+    leafColor: '#3d7a2c', leafColor2: '#6fae44', trunkColor: '#7a6248', trunkColor2: '#68523c', rachisColor: '#6d9a48',
+  }, { flare: 0.5 }, { trunkSides: 12 }),
+  species('Watermelon', 'fruit', {
+    fruitType: 'watermelon',
+    trunkHeight: 0.15, trunkRadius: 0.025, ringFrequency: 0,
+    frondCount: 8, petioleRatio: 0.45,
+    leafLength: 0.55, bladeWidth: 0.2, bladeArc: 0.4, bladePitch: 50, bladeNotch: 0.75, bladeLobes: 0.5, bladePeak: 0.4,
+    nutCount: 2, nutSize: 0.14, nutColor: '#2e6b2c', nutColor2: '#a8c86a',
+    leafColor: '#5d8a4e', leafColor2: '#83ac66', trunkColor: '#6d8a4c', rachisColor: '#74a04e',
+  }, { flare: 0.2 }, { trunkSides: 12 }),
+
+  // ─────────────────────────── Carnivorous plants ────────────────────────────
+  species('Venus Flytrap', 'carnivore', {
+    carnType: 'flytrap',
+    trunkHeight: 0.04, trunkRadius: 0.03, ringFrequency: 0,
+    frondCount: 8, petioleRatio: 0.55,
+    leafLength: 0.11, bladeWidth: 0.05, bladeArc: 0.3, bladePitch: 40,
+    nutCount: 1, nutSize: 0.028, nutColor: '#c22a3a', nutColor2: '#f4f1e4',
+    leafColor: '#5da244', leafColor2: '#86c25e', trunkColor: '#6d5a3e', rachisColor: '#74a04e',
+  }, { flare: 0.1 }, { trunkSides: 12 }),
+  species('Tropical Pitcher (Nepenthes)', 'carnivore', {
+    carnType: 'nepenthes',
+    trunkHeight: 1.25, trunkRadius: 0.012, ringFrequency: 0, stemClimb: 1, phyllotaxis: 137.5,
+    frondCount: 12, petioleRatio: 0.12,
+    leafLength: 0.34, bladeWidth: 0.075, bladeArc: 0.5, bladePitch: 34, bladePeak: 0.4,
+    nutCount: 8, nutSize: 0.045, nutColor: '#a83a42', nutColor2: '#d8c89a',
+    leafColor: '#35702c', leafColor2: '#5da244', trunkColor: '#7a6a4e', rachisColor: '#8a7a42',
+  }, { flare: 0.2 }, { trunkSides: 10 }),
+  species('Trumpet Pitcher (Sarracenia)', 'carnivore', {
+    carnType: 'sarracenia',
+    trunkHeight: 0.6, trunkRadius: 0.045, ringFrequency: 0,
+    frondCount: 7, petioleRatio: 0.1,
+    leafLength: 0.3, bladeWidth: 0.06, bladeArc: 0.4, bladePitch: 40,
+    nutCount: 1, nutSize: 0.03, nutColor: '#a82e3a', nutColor2: '#e8e4d2',
+    leafColor: '#6da244', leafColor2: '#93c25e', trunkColor: '#6d5a3e', rachisColor: '#74a04e',
+  }, { flare: 0.2 }, { trunkSides: 12 }),
+  species('Cobra Lily', 'carnivore', {
+    carnType: 'cobra',
+    trunkHeight: 0.45, trunkRadius: 0.04, ringFrequency: 0,
+    frondCount: 6, petioleRatio: 0.1,
+    leafLength: 0.25, bladeWidth: 0.05, bladeArc: 0.4, bladePitch: 40,
+    nutCount: 0, nutSize: 0.034, nutColor: '#d8e4c8', nutColor2: '#a83a4a',
+    leafColor: '#5d9a44', leafColor2: '#86bc5e', trunkColor: '#6d5a3e', rachisColor: '#74a04e',
+  }, { flare: 0.2 }, { trunkSides: 12 }),
+  species('Cape Sundew', 'carnivore', {
+    carnType: 'sundew',
+    trunkHeight: 0.05, trunkRadius: 0.025, ringFrequency: 0,
+    frondCount: 11, petioleRatio: 0.35,
+    leafLength: 0.1, bladeWidth: 0.016, bladeArc: 0.75, bladePitch: 32, bladePeak: 0.4, bladeVee: 0.1,
+    nutCount: 1, nutSize: 0.006, nutColor: '#d84a5a', nutColor2: '#f2d8e2',
+    leafColor: '#7ab84a', leafColor2: '#c25a4a', trunkColor: '#6d5a3e', rachisColor: '#9ab86a',
+  }, { flare: 0.1 }, { trunkSides: 10 }),
+  species('Butterwort', 'carnivore', {
+    carnType: 'butterwort',
+    trunkHeight: 0.03, trunkRadius: 0.03, ringFrequency: 0,
+    frondCount: 9, petioleRatio: 0.08,
+    leafLength: 0.09, bladeWidth: 0.035, bladeArc: 0.25, bladePitch: 70, bladePeak: 0.45,
+    nutCount: 2, nutSize: 0.013, nutColor: '#8a6ac8', nutColor2: '#f2e6f2',
+    leafColor: '#a8c85a', leafColor2: '#c4dc7a', trunkColor: '#6d5a3e', rachisColor: '#9ab86a',
+  }, { flare: 0.1 }, { trunkSides: 10 }),
+
 ];
 
 export const PRESET_GROUPS: { label: string; icon: string; accent: string; names: string[] }[] = [
@@ -417,6 +520,8 @@ export const PRESET_GROUPS: { label: string; icon: string; accent: string; names
   { label: 'Tropical trees', icon: 'tree', accent: '#ffb454', names: ['Frangipani', 'Umbrella Tree', 'Fiddle-leaf Fig'] },
   { label: 'Grains & cereals', icon: 'wheat', accent: '#e0b83a', names: ['Corn (Maize)', 'Pearl Millet', 'Wheat', 'Rice', 'Sorghum', 'Sugarcane'] },
   { label: 'Vegetables', icon: 'carrot', accent: '#ff7847', names: ['Tomato', 'Strawberry', 'Chili Pepper', 'Sunflower', 'Pumpkin', 'Cabbage'] },
+  { label: 'Fruits', icon: 'apple', accent: '#ff5a5a', names: ['Pineapple', 'Papaya', 'Orange (Citrus)', 'Mango', 'Grape Vine', 'Watermelon'] },
+  { label: 'Carnivorous', icon: 'trap', accent: '#c86ae8', names: ['Venus Flytrap', 'Tropical Pitcher (Nepenthes)', 'Trumpet Pitcher (Sarracenia)', 'Cobra Lily', 'Cape Sundew', 'Butterwort'] },
 ];
 
 export function groupOf(name: string): string {
@@ -439,5 +544,9 @@ export function plantHeight(p: PlantParams): number {
       return b.trunkHeight * 1.12;
     case 'vegetable':
       return Math.max(b.trunkHeight * 1.35, b.leafLength * 0.8);
+    case 'fruit':
+      return b.trunkHeight + b.leafLength * 0.5;
+    case 'carnivore':
+      return Math.max(b.trunkHeight * 1.1, b.leafLength * 0.7);
   }
 }
