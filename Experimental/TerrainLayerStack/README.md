@@ -25,6 +25,13 @@ Run: `python3 -m http.server 8000 --bind 0.0.0.0` in this folder, open `http://l
 - Inspector rows are **generated from operation descriptors**, exactly like
   `StratumOperationRegistry` will drive the C++ panel. No parameter is hardcoded in UI code.
 - Field semantics match `Exhibits/TerrainDensityValidation`: ρ > 0 solid, outward normal = −∇ρ.
-- Simplifications (stated in the UI): Surface Nets instead of Dual Contouring; erosion writes back
-  by column shift instead of along ∇ρ; one uniform grid instead of sparse tiers. These are the
-  Phase 2/4 production upgrades and change none of the authoring semantics.
+- Extraction is true **Dual Contouring** (QEF vertex placement, mass-point fallback, cell clamp),
+  with Surface Nets selectable for comparison — cliffs stay sharp at grid resolution.
+- Detail split mirrors production: silhouette from the field, micro-detail per-pixel — GPU
+  **triplanar** procedural textures (rock/grass/sand/snow albedo + normal maps generated at load),
+  folded-strata rock banding in the shader, field ambient occlusion, and shadow mapping.
+  Raise *Field resolution* (World panel) for geometry detail; *Texture tile size* and
+  *Detail normal strength* (Surface materials layer) for surface grain — they apply instantly.
+- Remaining simplifications (stated in the UI): erosion writes back by column shift instead of
+  along ∇ρ; one uniform grid instead of sparse streaming tiers. These are the Phase 2/4
+  production upgrades and change none of the authoring semantics.

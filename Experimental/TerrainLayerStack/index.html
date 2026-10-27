@@ -24,17 +24,17 @@
   button:hover{background:var(--selected)}
   button.primary{background:var(--primary); color:var(--primaryink); border-color:transparent; font-weight:600}
   button.small{height:26px; padding:0 10px; font-size:12px}
-  button.icon{width:26px; height:26px; padding:0; display:inline-flex; align-items:center; justify-content:center; border-radius:8px}
+  button.icon{width:26px; height:26px; padding:0; display:inline-flex; align-items:center; justify-content:center; border-radius:8px; flex:none}
   button.icon.off{opacity:.38}
   button:disabled{opacity:.35; cursor:default}
   select{font:inherit; color:var(--text); background:var(--inset); border:1px solid var(--stroke);
-    border-radius:8px; height:28px; padding:0 6px; max-width:100%}
+    border-radius:8px; height:28px; padding:0 6px; max-width:100%; min-width:0}
   input[type=text]{font:inherit; color:var(--text); background:var(--field); border:1px solid var(--strokestrong);
-    border-radius:8px; height:28px; padding:0 8px; width:100%}
+    border-radius:8px; height:28px; padding:0 8px; width:100%; min-width:0}
   input[type=number]{font:inherit; color:var(--text); background:var(--field); border:1px solid var(--strokestrong);
-    border-radius:8px; height:26px; padding:0 6px; width:74px; text-align:right}
+    border-radius:8px; height:26px; padding:0 6px; width:62px; text-align:right; flex:none}
   input[type=range]{-webkit-appearance:none; appearance:none; height:4px; border-radius:2px;
-    background:var(--slidertrack); outline:none; flex:1; min-width:60px}
+    background:var(--slidertrack); outline:none; flex:1; min-width:40px}
   input[type=range]::-webkit-slider-thumb{-webkit-appearance:none; width:14px; height:14px; border-radius:50%;
     background:var(--sliderthumb); cursor:pointer; border:none}
   input[type=range]::-moz-range-thumb{width:14px; height:14px; border-radius:50%; background:var(--sliderthumb); border:none; cursor:pointer}
@@ -43,17 +43,19 @@
 
   #topbar{height:52px; display:flex; align-items:center; gap:10px; padding:0 12px;
     background:var(--panel); border-bottom:1px solid var(--divider)}
-  #topbar .docname{font-weight:600; font-size:14px}
-  #topbar .docmeta{color:var(--dim)}
+  #topbar .docname{font-weight:600; font-size:14px; white-space:nowrap}
+  #topbar .docmeta{color:var(--dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
   #topbar .spacer{flex:1}
+  @media (max-width:1100px){ #topbar .docmeta{display:none} }
   #workspace{display:flex; height:calc(100% - 52px - 30px)}
   .dock{display:flex; flex-direction:column; background:var(--panel); min-height:0}
-  #dock-layers{width:348px; border-right:1px solid var(--divider)}
-  #dock-inspector{width:324px; border-left:1px solid var(--divider)}
+  #dock-layers{width:348px; border-right:1px solid var(--divider); flex:none}
+  #dock-inspector{width:330px; border-left:1px solid var(--divider); flex:none}
   #dock-viewport{flex:1; position:relative; background:#0a0a0c; min-width:0}
   .dockhead{display:flex; align-items:center; gap:8px; padding:10px 12px 8px; border-bottom:1px solid var(--divider)}
-  .dockhead .cap{font-size:11px; letter-spacing:.14em; color:var(--dim); font-weight:600}
+  .dockhead .cap{font-size:11px; letter-spacing:.14em; color:var(--dim); font-weight:600; flex:none}
   .dockhead .spacer{flex:1}
+  .dockhead select{flex:1; min-width:0}
   .scroll{overflow-y:auto; flex:1; min-height:0; padding:10px}
   canvas#gl{position:absolute; inset:0; width:100%; height:100%; display:block; cursor:grab}
   canvas#gl:active{cursor:grabbing}
@@ -81,12 +83,12 @@
   .lrow{display:flex; align-items:center; gap:6px; min-height:26px}
   .lname{font-weight:600; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
   .chip{font-size:10px; letter-spacing:.08em; padding:2px 8px; border-radius:999px; background:var(--accentsoft);
-    color:#9CC2FF; border:1px solid rgba(59,130,246,.35); white-space:nowrap}
+    color:#9CC2FF; border:1px solid rgba(59,130,246,.35); white-space:nowrap; flex:none}
   .chip.sim{background:rgba(245,158,11,.12); color:#FBBF24; border-color:rgba(245,158,11,.35)}
   .chip.mat{background:rgba(34,197,94,.12); color:#4ADE80; border-color:rgba(34,197,94,.35)}
-  .chip.out{background:rgba(255,255,255,.06); color:var(--dim); border-color:var(--stroke)}
   .lsub{display:flex; align-items:center; gap:6px; margin-top:6px}
-  .lsub .lab{color:var(--faint); font-size:11px; width:52px; flex:none}
+  .lsub .lab{color:var(--faint); font-size:11px; width:42px; flex:none}
+  .lsub select{width:128px; flex:none}
   .grip{cursor:grab; color:var(--faint); flex:none; display:inline-flex}
   .maskbox{margin:8px 0 2px 14px; border-left:2px solid var(--strokestrong); padding-left:10px}
   .maskrow{display:flex; align-items:center; gap:6px; background:var(--inset); border:1px solid var(--stroke);
@@ -96,9 +98,9 @@
   .hint{color:var(--faint); font-size:11.5px; margin:2px 0 8px}
   .seclab{font-size:11px; letter-spacing:.14em; color:var(--dim); font-weight:600; margin:14px 0 6px}
   .seclab:first-child{margin-top:0}
-  .prow{display:flex; align-items:center; gap:8px; min-height:var(--row-h)}
-  .prow .plab{width:118px; flex:none; color:#CFCFCF}
-  .prow .unit{color:var(--faint); font-size:11px; width:38px; flex:none}
+  .prow{display:flex; align-items:center; gap:7px; min-height:var(--row-h)}
+  .prow .plab{width:104px; flex:none; color:#CFCFCF}
+  .prow .unit{color:var(--faint); font-size:11px; width:32px; flex:none}
   .cardbox{background:var(--card); border:1px solid var(--stroke); border-radius:var(--r-inset); padding:10px 12px; margin-bottom:10px}
   .kv{display:flex; justify-content:space-between; padding:2px 0; color:var(--dim)}
   .kv b{color:var(--text); font-weight:600}
@@ -120,12 +122,11 @@
 </div>
 
 <div id="workspace">
-  <!-- LEFT: layer stack -->
   <section class="dock" id="dock-layers">
     <div class="dockhead">
-      <span class="cap">LAYER STACK</span><span class="spacer"></span>
+      <span class="cap">LAYER STACK</span>
       <select id="addop" title="Add a stratum — the operation dropdown"></select>
-      <button class="small primary" id="addbtn">Add</button>
+      <button class="small primary" id="addbtn" style="flex:none">Add</button>
     </div>
     <div class="scroll">
       <p class="hint">Evaluates top → bottom into one density field ρ(x, y, z). ρ &gt; 0 is solid rock.
@@ -134,7 +135,6 @@
     </div>
   </section>
 
-  <!-- CENTRE: viewport -->
   <section class="dock" id="dock-viewport">
     <canvas id="gl"></canvas>
     <div id="viewtools">
@@ -151,7 +151,7 @@
     </div>
     <div id="slicebox">
       <div class="cap">CROSS-SECTION (REVEALS THE CAVE)</div>
-      <div class="prow"><span class="plab" style="width:84px">Slice Z</span>
+      <div class="prow"><span class="plab" style="width:64px">Slice Z</span>
         <input type="range" id="slice" min="0" max="100" value="100"><span class="unit" id="sliceval">off</span></div>
       <p class="hint" style="margin:0">Drag left to cut the mountain open along the mine tunnel.</p>
     </div>
@@ -161,7 +161,6 @@
     </div>
   </section>
 
-  <!-- RIGHT: world + inspector -->
   <section class="dock" id="dock-inspector">
     <div class="dockhead"><span class="cap">INSPECTOR</span><span class="spacer"></span><span id="insel" style="color:var(--faint);font-size:12px"></span></div>
     <div class="scroll">
@@ -172,9 +171,11 @@
         operation descriptor — the same descriptors that drive the dropdowns and the TOML document.</p></div>
       <div class="seclab">FIELD FACTS</div>
       <div class="cardbox" id="facts"></div>
-      <p class="hint">Prototype scope: field evaluation and Surface-Nets extraction run live in your
-        browser; erosion writes back by column shift (production writes along ∇ρ into bricks).
-        Production extraction is Dual Contouring + QEF. See Documentation/Plans + Exhibits.</p>
+      <p class="hint">Prototype scope: field evaluation + Dual Contouring run live in your browser;
+        detail comes from GPU triplanar texturing (procedural rock/grass/sand/snow + normal maps),
+        field ambient occlusion and shadows — the same split as production (geometry from the field,
+        micro-detail in the shader). Erosion writes back by column shift here; production writes
+        along ∇ρ into sparse bricks. See Documentation/Plans + Exhibits.</p>
     </div>
   </section>
 </div>
@@ -192,87 +193,126 @@ import * as THREE from 'three';
 /* ======================================================================
    Operation registry — mirrors Engine/Terrain/StratumOperationRegistry.h
    Dropdowns and the inspector are GENERATED from these descriptors.
+   Lengths are authored in reference cells (64 x 32 x 64) and scaled to
+   the live grid, so resolution changes never change the document.
+   (Production authors in metres; see TerrainWorldConfiguration.h.)
    ====================================================================== */
 const OPS = {
   ElevationProfile:{caption:'Elevation profile (fractal range)', cat:'Primitive', blends:['Replace','MaskedBlend','Add'], params:[
     {k:'seed',c:'Seed',min:0,max:999,def:7,step:1,u:'—'},
-    {k:'base',c:'Base height',min:0,max:24,def:5,step:.1,u:'cells'},
-    {k:'amp',c:'Range amplitude',min:2,max:26,def:15,step:.1,u:'cells'},
-    {k:'freq',c:'Feature frequency',min:.5,max:4,def:1.4,step:.05,u:'×'},
-    {k:'ridge',c:'Ridged mix',min:0,max:1,def:.62,step:.01,u:'0–1'}]},
+    {k:'base',c:'Base height',min:0,max:14,def:4,step:.1,u:'cells'},
+    {k:'amp',c:'Range amplitude',min:2,max:26,def:19,step:.1,u:'cells'},
+    {k:'freq',c:'Feature frequency',min:.5,max:3,def:1.25,step:.05,u:'×'},
+    {k:'ridge',c:'Ridged mix',min:0,max:1,def:.68,step:.01,u:'0–1'},
+    {k:'warp',c:'Range warp',min:0,max:14,def:6,step:.25,u:'cells'},
+    {k:'sharp',c:'Peak sharpness',min:.6,max:2.4,def:1.35,step:.05,u:'×'},
+    {k:'detail',c:'Slope detail',min:0,max:2,def:.8,step:.05,u:'cells'}]},
   FractalField3D:{caption:'Fractal field 3D (rugged detail)', cat:'Primitive', blends:['Add','MaskedBlend'], params:[
     {k:'seed',c:'Seed',min:0,max:999,def:21,step:1,u:'—'},
-    {k:'amp',c:'Amplitude',min:0,max:3,def:1.15,step:.05,u:'cells'},
-    {k:'freq',c:'Frequency',min:.5,max:6,def:2.6,step:.1,u:'×'},
+    {k:'amp',c:'Amplitude',min:0,max:3,def:1.05,step:.05,u:'cells'},
+    {k:'freq',c:'Frequency',min:.5,max:6,def:2.8,step:.1,u:'×'},
+    {k:'ridged',c:'Ridged mix',min:0,max:1,def:.45,step:.01,u:'0–1'},
     {k:'oct',c:'Octaves',min:1,max:4,def:3,step:1,u:'—'}]},
   DomainWarpCurve:{caption:'Domain warp — overhang lean', cat:'Warp', blends:['MaskedBlend'], params:[
-    {k:'lean',c:'Lean amplitude',min:-10,max:10,def:5.5,step:.1,u:'cells'},
-    {k:'h0',c:'Lean starts at',min:0,max:30,def:8,step:.5,u:'cells'},
-    {k:'h1',c:'Lean full at',min:2,max:32,def:22,step:.5,u:'cells'}]},
+    {k:'lean',c:'Lean amplitude',min:-10,max:10,def:5,step:.1,u:'cells'},
+    {k:'h0',c:'Lean starts at',min:0,max:30,def:7,step:.5,u:'cells'},
+    {k:'h1',c:'Lean full at',min:2,max:32,def:21,step:.5,u:'cells'}]},
   SplineTube:{caption:'Spline tube — cave / tunnel carve', cat:'Primitive', blends:['SmoothCarve','Minimum'], params:[
-    {k:'radius',c:'Tube radius',min:.8,max:6,def:2.3,step:.1,u:'cells'},
-    {k:'height',c:'Centreline height',min:2,max:26,def:9.5,step:.1,u:'cells'},
+    {k:'radius',c:'Tube radius',min:.8,max:6,def:2.2,step:.1,u:'cells'},
+    {k:'height',c:'Centreline height',min:2,max:26,def:9,step:.1,u:'cells'},
     {k:'arch',c:'Centreline arch',min:0,max:6,def:1.6,step:.1,u:'cells'},
     {k:'zo',c:'Z offset',min:-20,max:20,def:0,step:.5,u:'cells'},
-    {k:'smooth',c:'Smooth radius',min:0,max:4,def:1.1,step:.1,u:'cells'}]},
+    {k:'smooth',c:'Smooth radius',min:0,max:4,def:1,step:.1,u:'cells'}]},
   ArchPrimitive:{caption:'Arch — torus formation stamp', cat:'Primitive', blends:['SmoothUnion','Maximum'], params:[
     {k:'xo',c:'X offset',min:-26,max:26,def:-13,step:.5,u:'cells'},
     {k:'zo',c:'Z offset',min:-26,max:26,def:-12,step:.5,u:'cells'},
-    {k:'height',c:'Centre height',min:2,max:28,def:10,step:.5,u:'cells'},
-    {k:'ring',c:'Ring radius',min:2,max:12,def:5,step:.1,u:'cells'},
-    {k:'tube',c:'Rock thickness',min:.6,max:4,def:1.5,step:.1,u:'cells'}]},
+    {k:'height',c:'Centre height',min:2,max:28,def:9.5,step:.5,u:'cells'},
+    {k:'ring',c:'Ring radius',min:2,max:12,def:4.6,step:.1,u:'cells'},
+    {k:'tube',c:'Rock thickness',min:.6,max:4,def:1.4,step:.1,u:'cells'}]},
   SpirePrimitive:{caption:'Spire — tapered rock stamp', cat:'Primitive', blends:['SmoothUnion','Maximum'], params:[
     {k:'xo',c:'X offset',min:-26,max:26,def:13,step:.5,u:'cells'},
     {k:'zo',c:'Z offset',min:-26,max:26,def:12,step:.5,u:'cells'},
     {k:'height',c:'Spire height',min:2,max:24,def:11,step:.5,u:'cells'},
-    {k:'baseR',c:'Base radius',min:.6,max:6,def:2.3,step:.1,u:'cells'}]},
+    {k:'baseR',c:'Base radius',min:.6,max:6,def:2.1,step:.1,u:'cells'}]},
   HydraulicErosion:{caption:'Hydraulic erosion (shallow water)', cat:'Simulate', blends:['MaskedBlend'], sim:true, params:[
-    {k:'iters',c:'Iterations',min:0,max:400,def:130,step:5,u:'steps'},
-    {k:'rain',c:'Rain rate',min:0,max:.06,def:.022,step:.001,u:'m/s'},
-    {k:'kc',c:'Sediment capacity Kc',min:0,max:3,def:1.3,step:.05,u:'—'},
+    {k:'iters',c:'Iterations',min:0,max:400,def:140,step:5,u:'steps'},
+    {k:'rain',c:'Rain rate',min:0,max:.06,def:.02,step:.001,u:'m/s'},
+    {k:'kc',c:'Sediment capacity Kc',min:0,max:3,def:1.25,step:.05,u:'—'},
     {k:'ks',c:'Suspension rate Ks',min:0,max:1,def:.45,step:.01,u:'—'},
     {k:'kd',c:'Deposition rate Kd',min:0,max:1,def:.4,step:.01,u:'—'}]},
   ThermalWeathering:{caption:'Thermal weathering (talus)', cat:'Simulate', blends:['MaskedBlend'], sim:true, params:[
-    {k:'iters',c:'Iterations',min:0,max:200,def:46,step:2,u:'steps'},
-    {k:'talus',c:'Angle of repose',min:15,max:60,def:37,step:.5,u:'deg'}]},
+    {k:'iters',c:'Iterations',min:0,max:200,def:40,step:2,u:'steps'},
+    {k:'talus',c:'Angle of repose',min:15,max:60,def:38,step:.5,u:'deg'}]},
   WaterBodySolve:{caption:'Water bodies — lakes + ocean', cat:'Simulate', blends:['MaskedBlend'], sim:true, params:[
-    {k:'sea',c:'Sea level',min:0,max:26,def:4.2,step:.1,u:'cells'},
-    {k:'minlake',c:'Min lake depth',min:0,max:2,def:.12,step:.02,u:'cells'}]},
+    {k:'sea',c:'Sea level',min:0,max:16,def:2.6,step:.1,u:'cells'},
+    {k:'minlake',c:'Min lake depth',min:0,max:2,def:.22,step:.02,u:'cells'},
+    {k:'minarea',c:'Min lake area',min:1,max:400,def:22,step:1,u:'cells²'}]},
   SurfaceMaterials:{caption:'Surface materials (triplanar)', cat:'Material', blends:['MaskedBlend'], mat:true, params:[
-    {k:'rockSlope',c:'Rock slope threshold',min:0,max:90,def:52,step:1,u:'deg'},
-    {k:'snowH',c:'Snow line',min:0,max:32,def:21,step:.5,u:'cells'},
-    {k:'strata',c:'Strata thickness',min:.5,max:8,def:2.4,step:.1,u:'cells'},
-    {k:'fold',c:'Strata fold',min:0,max:6,def:2.2,step:.1,u:'cells'},
-    {k:'wetband',c:'Wet shore band',min:0,max:4,def:1.2,step:.1,u:'cells'}]},
+    {k:'rockSlope',c:'Rock slope threshold',min:0,max:90,def:46,step:1,u:'deg',stage:'surface'},
+    {k:'snowH',c:'Snow line',min:0,max:32,def:16,step:.5,u:'cells',stage:'surface'},
+    {k:'strata',c:'Strata thickness',min:.5,max:8,def:2.2,step:.1,u:'cells',stage:'surface'},
+    {k:'fold',c:'Strata fold',min:0,max:6,def:2.4,step:.1,u:'cells',stage:'surface'},
+    {k:'wetband',c:'Wet shore band',min:0,max:4,def:1.1,step:.1,u:'cells',stage:'surface'},
+    {k:'texScale',c:'Texture tile size',min:2,max:20,def:7,step:.25,u:'cells',stage:'uniform'},
+    {k:'nrm',c:'Detail normal strength',min:0,max:2.5,def:1.15,step:.05,u:'×',stage:'uniform'},
+    {k:'ao',c:'Field AO strength',min:0,max:1,def:.8,step:.02,u:'0–1',stage:'uniform'}]},
 };
 const MASKOPS = {
-  SlopeSelect:{caption:'Slope select', params:[{k:'lo',c:'Min slope',min:0,max:90,def:45,step:1,u:'deg'},{k:'soft',c:'Softness',min:0,max:40,def:12,step:1,u:'deg'}]},
+  SlopeSelect:{caption:'Slope select', params:[{k:'lo',c:'Min slope',min:0,max:90,def:38,step:1,u:'deg'},{k:'soft',c:'Softness',min:0,max:40,def:16,step:1,u:'deg'}]},
   ElevationSelect:{caption:'Elevation select', params:[{k:'lo',c:'Above height',min:0,max:32,def:10,step:.5,u:'cells'},{k:'soft',c:'Softness',min:0,max:10,def:3,step:.5,u:'cells'}]},
   NoiseMask:{caption:'Noise breakup', params:[{k:'freq',c:'Frequency',min:.5,max:8,def:3,step:.1,u:'×'},{k:'seed',c:'Seed',min:0,max:999,def:5,step:1,u:'—'}]},
 };
 const CATS = ['Primitive','Warp','Simulate','Material'];
 
-/* ============ deterministic noise (value noise; algebra is noise-agnostic) ============ */
+/* ============ fast tileable lattice noise (fields + textures) ============ */
+function mulberry(seed){ let a=seed>>>0||1; return ()=>{ a|=0; a=a+0x6D2B79F5|0; let t=Math.imul(a^a>>>15,1|a); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
+function makeLattice(freq, seed){
+  const rnd=mulberry(seed*7919+freq*104729+13); const g=new Float32Array(freq*freq);
+  for(let i=0;i<g.length;i++) g[i]=rnd()*2-1;
+  return {g, f:freq};
+}
+function sampleLattice(lat, u, v){ // u,v in [0,1), tileable, smoothstep interpolation
+  const f=lat.f; let x=u*f, y=v*f;
+  let ix=Math.floor(x), iy=Math.floor(y); const fx=x-ix, fy=y-iy;
+  const sx=fx*fx*(3-2*fx), sy=fy*fy*(3-2*fy);
+  ix=((ix%f)+f)%f; iy=((iy%f)+f)%f; const jx=(ix+1)%f, jy=(iy+1)%f, g=lat.g;
+  const a=g[iy*f+ix], b=g[iy*f+jx], c=g[jy*f+ix], d=g[jy*f+jx];
+  return a+(b-a)*sx+(c-a)*sy+(a-b-c+d)*sx*sy;
+}
+function fbmLat(lats, u, v, ridgedMix){
+  let sum=0, amp=1, norm=0;
+  for(const lat of lats){
+    let n=sampleLattice(lat,u,v);
+    if(ridgedMix>0){ const r=1-Math.abs(n); n=n*(1-ridgedMix)+(r*r*2-1)*ridgedMix; }
+    sum+=amp*n; norm+=amp; amp*=.5;
+  }
+  return sum/norm;
+}
+/* hash value noise 3D — used only on the narrow band, where it is cheap */
 function hashI(x,y,z,s){ let n=(x*374761393 + y*668265263 + z*1274126177 + s*2246822519)|0;
   n=Math.imul(n^(n>>>13),1274126177); return ((n^(n>>>16))>>>0)/4294967295; }
-const sm=t=>t*t*(3-2*t);
+const smf=t=>t*t*(3-2*t);
 function noise3(x,y,z,s){
   const ix=Math.floor(x),iy=Math.floor(y),iz=Math.floor(z),fx=x-ix,fy=y-iy,fz=z-iz;
-  const sx=sm(fx),sy=sm(fy),sz=sm(fz);
+  const sx=smf(fx),sy=smf(fy),sz=smf(fz);
   const L=(a,b,t)=>a+(b-a)*t;
   return L(L(L(hashI(ix,iy,iz,s),hashI(ix+1,iy,iz,s),sx),L(hashI(ix,iy+1,iz,s),hashI(ix+1,iy+1,iz,s),sx),sy),
            L(L(hashI(ix,iy,iz+1,s),hashI(ix+1,iy,iz+1,s),sx),L(hashI(ix,iy+1,iz+1,s),hashI(ix+1,iy+1,iz+1,s),sx),sy),sz)*2-1;
 }
-function fbm3(x,y,z,s,oct){ let a=1,f=1,sum=0,n=0; for(let o=0;o<oct;o++){sum+=a*noise3(x*f,y*f,z*f,s+o*17);n+=a;a*=.5;f*=2.07;} return sum/n; }
-function fbm2(x,z,s,oct){ return fbm3(x,0.0,z,s,oct); }
-function ridge2(x,z,s,oct){ let a=1,f=1,sum=0,n=0; for(let o=0;o<oct;o++){const v=1-Math.abs(noise3(x*f,3.7,z*f,s+o*31));sum+=a*v*v;n+=a;a*=.5;f*=2.11;} return sum/n; }
+function fbm3(x,y,z,s,oct,ridgedMix){
+  let a=1,f=1,sum=0,n=0;
+  for(let o=0;o<oct;o++){ let v=noise3(x*f,y*f,z*f,s+o*17);
+    if(ridgedMix>0){ const r=1-Math.abs(v); v=v*(1-ridgedMix)+(r*r*2-1)*ridgedMix; }
+    sum+=a*v; n+=a; a*=.5; f*=2.07; }
+  return sum/n;
+}
 const smin=(a,b,k)=>{ if(k<=1e-6) return Math.min(a,b); const h=Math.min(1,Math.max(0,.5+.5*(b-a)/k)); return b*(1-h)+a*h-k*h*(1-h); };
 const smax=(a,b,k)=>-smin(-a,-b,k);
 const lerp=(a,b,t)=>a+(b-a)*t, clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
 const sstep=(e0,e1,x)=>{ const t=clamp((x-e0)/(e1-e0),0,1); return t*t*(3-2*t); };
 
 /* ============ document state ============ */
-let WORLD = { res:64, height:32, metres:512 };
+let WORLD = { res:128, height:64, metres:1024, extraction:'dual' };
 let layers = [], selected = 0, uid = 1;
 function mkLayer(op, name, over={}){
   const d = OPS[op]; const params = {};
@@ -292,58 +332,56 @@ function preset(){
     mkLayer('WaterBodySolve','Lakes + ocean'),
     mkLayer('SurfaceMaterials','Surface materials'),
   ];
-  // one masked layer out of the box, so the mask stack is visible working
   layers[2].masks.push({op:'SlopeSelect', inverted:false, strength:1, params:{lo:38, soft:16}});
   selected = 3;
 }
 preset();
 
 /* ============ field evaluation ============ */
-let NX=64, NY=32, NZ=64, rho=null, bed=null, flowCh=null, wearCh=null, waterH=null, stats={};
+let NX=128, NY=64, NZ=128, SX=2, SY=2;
+let rho=null, bed=null, flowCh=null, wearCh=null, waterH=null, stats={};
 const IDX=(i,j,k)=>(k*NY+j)*NX+i;
 function sampleRho(r,x,y,z){
   x=clamp(x,0,NX-1.001); y=clamp(y,0,NY-1.001); z=clamp(z,0,NZ-1.001);
   const ix=x|0, iy=y|0, iz=z|0, fx=x-ix, fy=y-iy, fz=z-iz;
-  const c=(i,j,k)=>r[IDX(Math.min(i,NX-1),Math.min(j,NY-1),Math.min(k,NZ-1))];
-  return lerp(lerp(lerp(c(ix,iy,iz),c(ix+1,iy,iz),fx),lerp(c(ix,iy+1,iz),c(ix+1,iy+1,iz),fx),fy),
-              lerp(lerp(c(ix,iy,iz+1),c(ix+1,iy,iz+1),fx),lerp(c(ix,iy+1,iz+1),c(ix+1,iy+1,iz+1),fx),fy),fz);
+  const jx=Math.min(ix+1,NX-1), jy=Math.min(iy+1,NY-1), jz=Math.min(iz+1,NZ-1);
+  const c000=r[IDX(ix,iy,iz)], c100=r[IDX(jx,iy,iz)], c010=r[IDX(ix,jy,iz)], c110=r[IDX(jx,jy,iz)];
+  const c001=r[IDX(ix,iy,jz)], c101=r[IDX(jx,iy,jz)], c011=r[IDX(ix,jy,jz)], c111=r[IDX(jx,jy,jz)];
+  return lerp(lerp(lerp(c000,c100,fx),lerp(c010,c110,fx),fy), lerp(lerp(c001,c101,fx),lerp(c011,c111,fx),fy), fz);
 }
-function maskGrid(L){
-  if(!L.masks.length) return null;
-  const m=new Float32Array(NX*NY*NZ).fill(1);
+function maskValue(L, i, j, k, id){
+  let m=1;
   for(const mk of L.masks){
-    const p=mk.params;
-    for(let k=0;k<NZ;k++)for(let j=0;j<NY;j++)for(let i=0;i<NX;i++){
-      const id=IDX(i,j,k); let v=1;
-      if(mk.op==='ElevationSelect'){ v=sstep(p.lo-p.soft,p.lo+p.soft,j); }
-      else if(mk.op==='NoiseMask'){ v=clamp(.5+.5*fbm3(i/NX*p.freq*3,j/NY*p.freq*3,k/NZ*p.freq*3,p.seed,2)*1.6,0,1); }
-      else if(mk.op==='SlopeSelect'){
-        const gx=(rho[IDX(Math.min(i+1,NX-1),j,k)]-rho[IDX(Math.max(i-1,0),j,k)]);
-        const gy=(rho[IDX(i,Math.min(j+1,NY-1),k)]-rho[IDX(i,Math.max(j-1,0),k)]);
-        const gz=(rho[IDX(i,j,Math.min(k+1,NZ-1))]-rho[IDX(i,j,Math.max(k-1,0))]);
-        const gn=Math.sqrt(gx*gx+gy*gy+gz*gz)+1e-9;
-        const slopeDeg=Math.acos(clamp(Math.abs(gy)/gn,0,1))*180/Math.PI; // 0=flat top, 90=vertical
-        v=sstep(p.lo-p.soft,p.lo+p.soft,slopeDeg);
-      }
-      if(mk.inverted) v=1-v;
-      m[id]*=lerp(1,v,mk.strength);
+    const p=mk.params; let v=1;
+    if(mk.op==='ElevationSelect'){ v=sstep((p.lo-p.soft)*SY,(p.lo+p.soft)*SY,j); }
+    else if(mk.op==='NoiseMask'){ v=clamp(.5+.5*fbm3(i/NX*p.freq*3,j/NY*p.freq*3,k/NZ*p.freq*3,p.seed,2,0)*1.6,0,1); }
+    else if(mk.op==='SlopeSelect'){
+      const gx=rho[IDX(Math.min(i+1,NX-1),j,k)]-rho[IDX(Math.max(i-1,0),j,k)];
+      const gy=rho[IDX(i,Math.min(j+1,NY-1),k)]-rho[IDX(i,Math.max(j-1,0),k)];
+      const gz=rho[IDX(i,j,Math.min(k+1,NZ-1))]-rho[IDX(i,j,Math.max(k-1,0))];
+      const gn=Math.sqrt(gx*gx+gy*gy+gz*gz)+1e-9;
+      const slopeDeg=Math.acos(clamp(Math.abs(gy)/gn,0,1))*180/Math.PI;
+      v=sstep(p.lo-p.soft,p.lo+p.soft,slopeDeg);
     }
+    if(mk.inverted) v=1-v;
+    m*=lerp(1,v,mk.strength);
   }
   return m;
 }
 function combine(L, candFn, bbox){
-  const mask=maskGrid(L), p=L.params, op=L.opacity;
+  const p=L.params, hasMask=L.masks.length>0;
   const [x0,y0,z0,x1,y1,z1]=bbox||[0,0,0,NX,NY,NZ];
   for(let k=z0;k<z1;k++)for(let j=y0;j<y1;j++)for(let i=x0;i<x1;i++){
-    const id=IDX(i,j,k); const s=op*(mask?mask[id]:1); if(s<=0) continue;
+    const id=IDX(i,j,k);
+    const s=L.opacity*(hasMask?maskValue(L,i,j,k,id):1); if(s<=0) continue;
     const c=candFn(i,j,k,id); const r=rho[id]; let out=r;
     switch(L.blend){
       case 'Replace': case 'MaskedBlend': out=lerp(r,c,s); break;
       case 'Add': out=r+c*s; break;
       case 'Minimum': out=lerp(r,Math.min(r,c),s); break;
       case 'Maximum': out=lerp(r,Math.max(r,c),s); break;
-      case 'SmoothUnion': out=lerp(r,smax(r,c,p.smooth??1.2),s); break;
-      case 'SmoothCarve': out=lerp(r,smin(r,c,p.smooth??1.2),s); break;
+      case 'SmoothUnion': out=lerp(r,smax(r,c,(p.smooth??1.2)*SY),s); break;
+      case 'SmoothCarve': out=lerp(r,smin(r,c,(p.smooth??1.2)*SY),s); break;
     }
     rho[id]=out;
   }
@@ -352,12 +390,12 @@ function topBed(){
   bed=new Float32Array(NX*NZ);
   for(let k=0;k<NZ;k++)for(let i=0;i<NX;i++){
     let top=0;
-    for(let j=NY-1;j>=0;j--){ if(rho[IDX(i,j,k)]>0){ 
+    for(let j=NY-1;j>=0;j--){ if(rho[IDX(i,j,k)]>0){
       const a=rho[IDX(i,j,k)], b=j+1<NY?rho[IDX(i,j+1,k)]:-1; top=j+a/(a-b); break; } }
     bed[k*NX+i]=top;
   }
 }
-function shiftColumns(delta){ // prototype writeback: shift each column's field by bed delta
+function shiftColumns(delta){
   const src=rho.slice();
   for(let k=0;k<NZ;k++)for(let i=0;i<NX;i++){
     const d=delta[k*NX+i]; if(Math.abs(d)<1e-4) continue;
@@ -371,7 +409,6 @@ function erodeHydraulic(L){
   flowCh=new Float32Array(NX*NZ); wearCh=new Float32Array(NX*NZ);
   const dt=.1, cell=WORLD.metres/NX, gg=9.80665, A=1.0;
   let seed=12345; const rnd=()=>{ seed=(seed*1664525+1013904223)>>>0; return seed/4294967295; };
-  const B=(i,k)=>bed[k*NX+i];
   for(let step=0;step<p.iters;step++){
     for(let n=0;n<NX*NZ;n++) w[n]+=p.rain*dt*(.5+rnd());
     const fsum=new Float32Array(NX*NZ);
@@ -393,11 +430,12 @@ function erodeHydraulic(L){
       if(k>0)inflow+=fl[(n-NX)*4+3]; if(k<NZ-1)inflow+=fl[(n+NX)*4+2];
       w[n]=Math.max(0,w[n]+dt*(inflow-fsum[n])/((cell*8)**2));
       flowCh[n]+=fsum[n];
-      const gx=(B(Math.min(i+1,NX-1),k)-B(Math.max(i-1,0),k))/(2), gz=(B(i,Math.min(k+1,NZ-1))-B(i,Math.max(k-1,0)))/(2);
+      const gx=(bed[k*NX+Math.min(i+1,NX-1)]-bed[k*NX+Math.max(i-1,0)])/2;
+      const gz=(bed[Math.min(k+1,NZ-1)*NX+i]-bed[Math.max(k-1,0)*NX+i])/2;
       const slope=Math.sqrt(gx*gx+gz*gz)/cell, sinA=slope/Math.sqrt(1+slope*slope);
       const speed=Math.min(fsum[n]*dt/Math.max((cell*8)**2*Math.max(w[n],1e-3),1e-9),4);
       const cap=p.kc*Math.max(sinA,.01)*speed*clamp(w[n]*4,.15,2);
-      if(cap>s[n]){ const take=Math.min(p.ks*(cap-s[n]),.08); bed[n]-=take; s[n]+=take; wearCh[n]+=take; }
+      if(cap>s[n]){ const take=Math.min(p.ks*(cap-s[n]),.06*SY); bed[n]-=take; s[n]+=take; wearCh[n]+=take; }
       else { const drop=p.kd*(s[n]-cap); bed[n]+=drop; s[n]-=drop; }
     }
     for(let n=0;n<NX*NZ;n++) w[n]*=.996;
@@ -408,7 +446,7 @@ function erodeHydraulic(L){
 }
 function weatherThermal(L){
   const p=L.params; topBed(); const bed0=bed.slice();
-  const T=Math.tan(p.talus*Math.PI/180);
+  const T=Math.tan(p.talus*Math.PI/180)*SY;
   for(let step=0;step<p.iters;step++){
     const d=new Float32Array(NX*NZ);
     for(let k=0;k<NZ;k++)for(let i=0;i<NX;i++){
@@ -428,7 +466,6 @@ function weatherThermal(L){
 function solveWater(L){
   const p=L.params; topBed();
   waterH=new Float32Array(NX*NZ).fill(-1);
-  // priority-flood (min-heap on arrays)
   const filled=new Float32Array(NX*NZ).fill(Infinity), seen=new Uint8Array(NX*NZ);
   const heap=[]; const push=(h,n)=>{ heap.push([h,n]); let i=heap.length-1; while(i>0){const par=(i-1)>>1; if(heap[par][0]<=heap[i][0])break; [heap[par],heap[i]]=[heap[i],heap[par]]; i=par;} };
   const pop=()=>{ const top=heap[0], last=heap.pop(); if(heap.length){ heap[0]=last; let i=0; for(;;){ let l=2*i+1,r=l+1,m=i; if(l<heap.length&&heap[l][0]<heap[m][0])m=l; if(r<heap.length&&heap[r][0]<heap[m][0])m=r; if(m===i)break; [heap[m],heap[i]]=[heap[i],heap[m]]; i=m; } } return top; };
@@ -441,14 +478,62 @@ function solveWater(L){
       seen[nn]=1; const fh=Math.max(bed[nn],h); filled[nn]=fh; push(fh,nn);
     }
   }
+  const sea=p.sea*SY, minArea=p.minarea*SX*SX;
+  const lake=new Uint8Array(NX*NZ);
+  for(let n=0;n<NX*NZ;n++) if(bed[n]>=sea && filled[n]-bed[n]>p.minlake*SY) lake[n]=1;
+  const comp=new Int32Array(NX*NZ).fill(-1); let ncomp=0; const sizes=[];
   for(let n=0;n<NX*NZ;n++){
-    if(bed[n]<p.sea) waterH[n]=p.sea;                                  // ocean
-    else if(filled[n]-bed[n]>p.minlake) waterH[n]=filled[n];           // lake
+    if(!lake[n]||comp[n]>=0) continue;
+    const stack=[n]; comp[n]=ncomp; let sz=0;
+    while(stack.length){ const c=stack.pop(); sz++; const i=c%NX,k=(c/NX)|0;
+      for(const [ni,nk] of [[i+1,k],[i-1,k],[i,k+1],[i,k-1]]){
+        if(ni<0||ni>=NX||nk<0||nk>=NZ) continue; const nn=nk*NX+ni;
+        if(lake[nn]&&comp[nn]<0){ comp[nn]=ncomp; stack.push(nn); } } }
+    sizes.push(sz); ncomp++;
+  }
+  for(let n=0;n<NX*NZ;n++){
+    if(bed[n]<sea) waterH[n]=sea;
+    else if(lake[n] && sizes[comp[n]]>=minArea) waterH[n]=filled[n];
   }
 }
+function elevationHeights(p){
+  const H=new Float32Array(NX*NZ);
+  const fq=p.freq;
+  const latRidge=[3,6,12,24,48].map((f,o)=>makeLattice(Math.max(2,Math.round(f*fq)), p.seed+o*31));
+  const latRoll=[3,6,12,24].map((f,o)=>makeLattice(Math.max(2,Math.round(f*fq)), p.seed+100+o*17));
+  const latDet=[24,48,96].map((f,o)=>makeLattice(Math.max(4,Math.round(f*fq)), p.seed+200+o*13));
+  const latWarpA=makeLattice(3,p.seed+300), latWarpB=makeLattice(3,p.seed+301);
+  const cx=NX/2, cz=NZ/2, warpAmp=p.warp*SX/NX;
+  for(let k=0;k<NZ;k++)for(let i=0;i<NX;i++){
+    const u=i/NX, v=k/NZ;
+    const wu=u+warpAmp*sampleLattice(latWarpA,u,v)*1.4;
+    const wv=v+warpAmp*sampleLattice(latWarpB,u,v)*1.4;
+    const dx=(wu*NX-cx)/(NX*.36), dz=(wv*NZ-cz)/(NZ*.40);
+    const massif=Math.exp(-(dx*dx+dz*dz));
+    const ridge=.5+.5*fbmLat(latRidge,wu,wv,1);           // 0..1 ridged
+    const roll=.5+.5*fbmLat(latRoll,wu,wv,0);
+    const shape=p.ridge*ridge+(1-p.ridge)*roll;
+    let hh=p.base*SY + p.amp*SY*massif*Math.pow(shape,p.sharp)*1.55 + p.amp*SY*.16*roll + 2.2*SY*massif;
+    const edge=sstep(.35,.5,Math.max(Math.abs(u-.5),Math.abs(v-.5)));
+    H[k*NX+i]=lerp(hh,(p.base-2.4)*SY,edge); // island falloff so the ocean gets a shoreline
+  }
+  if(p.detail>0){ // high-frequency detail, damped on steep slopes so cliff faces stay planar
+    const det=new Float32Array(NX*NZ);
+    for(let k=0;k<NZ;k++)for(let i=0;i<NX;i++) det[k*NX+i]=fbmLat(latDet,i/NX,k/NZ,.35);
+    for(let k=0;k<NZ;k++)for(let i=0;i<NX;i++){
+      const n=k*NX+i;
+      const gx=H[k*NX+Math.min(i+1,NX-1)]-H[k*NX+Math.max(i-1,0)];
+      const gz=H[Math.min(k+1,NZ-1)*NX+i]-H[Math.max(k-1,0)*NX+i];
+      const slope=Math.sqrt(gx*gx+gz*gz)/(2*SY);
+      H[n]+=p.detail*SY*det[n]/(1+slope*2.2);
+    }
+  }
+  for(let n=0;n<H.length;n++) H[n]=clamp(H[n],.5,NY-2.5);
+  return H;
+}
 function evaluateField(){
-  NX=WORLD.res; NZ=WORLD.res; NY=WORLD.height;
-  rho=new Float32Array(NX*NY*NZ).fill(-2);
+  NX=WORLD.res; NZ=WORLD.res; NY=WORLD.height; SX=NX/64; SY=NY/32;
+  rho=new Float32Array(NX*NY*NZ).fill(-2*SY);
   flowCh=null; wearCh=null; waterH=null;
   const cx=NX/2, cz=NZ/2;
   for(const L of layers){
@@ -456,65 +541,65 @@ function evaluateField(){
     const p=L.params;
     switch(L.op){
       case 'ElevationProfile':{
-        const H=new Float32Array(NX*NZ);
-        for(let k=0;k<NZ;k++)for(let i=0;i<NX;i++){
-          const dx=(i-cx)/(NX*.34), dz=(k-cz)/(NZ*.38);
-          const massif=Math.exp(-(dx*dx+dz*dz));
-          const r=ridge2(i/NX*5*p.freq,k/NZ*5*p.freq,p.seed,4);
-          const f=fbm2(i/NX*4*p.freq,k/NZ*4*p.freq,p.seed+3,4);
-          H[k*NX+i]=clamp(p.base + p.amp*massif*((1-p.ridge)*(.5+.5*f)+p.ridge*r) + p.amp*.22*f + 3*massif, .5, NY-2);
-        }
-        combine(L,(i,j,k)=>H[k*NX+i]-j); break; }
+        const H=elevationHeights(p);
+        combine(L,(i,j,k)=>(H[k*NX+i]-j)); break; }
       case 'FractalField3D':{
-        combine(L,(i,j,k,id)=>{
-          if(Math.abs(rho[id])>p.amp*1.6+1) return 0; // narrow-band shortcut
-          return p.amp*fbm3(i/NX*p.freq*3,j/NY*p.freq*3,k/NZ*p.freq*3,p.seed,p.oct);
-        }); break; }
+        // narrow band only: collect candidate voxels first, then displace them
+        const band=[], bandLimit=(p.amp*1.7+1)*SY;
+        for(let n=0;n<rho.length;n++) if(Math.abs(rho[n])<bandLimit) band.push(n);
+        const hasMask=L.masks.length>0;
+        for(const id of band){
+          const i=id%NX, rest=(id-i)/NX, j=rest%NY, k=((rest-j)/NY)|0;
+          const s=L.opacity*(hasMask?maskValue(L,i,j,k,id):1); if(s<=0) continue;
+          const c=p.amp*SY*fbm3(i/NX*p.freq*3,j/NY*p.freq*3,k/NZ*p.freq*3,p.seed,p.oct,p.ridged);
+          rho[id]= L.blend==='Add' ? rho[id]+c*s : lerp(rho[id],rho[id]+c,s);
+        } break; }
       case 'DomainWarpCurve':{
-        const mask=maskGrid(L); const src=rho.slice();
+        const src=rho.slice(); const hasMask=L.masks.length>0;
         for(let k=0;k<NZ;k++)for(let j=0;j<NY;j++){
-          const lean=p.lean*sstep(p.h0,p.h1,j);
+          const lean=p.lean*SX*sstep(p.h0*SY,p.h1*SY,j);
           for(let i=0;i<NX;i++){
-            const id=IDX(i,j,k); const s=L.opacity*(mask?mask[id]:1);
+            const id=IDX(i,j,k); const s=L.opacity*(hasMask?maskValue(L,i,j,k,id):1);
+            if(s<=0) continue;
             rho[id]=lerp(src[id], sampleRho(src,i+lean,j,k), s);
           }
         } break; }
       case 'SplineTube':{
+        const hc=p.height*SY, rad=p.radius*SY, zc=cz+p.zo*SX, arc=p.arch*SY;
         combine(L,(i,j,k)=>{
-          const cy=p.height+p.arch*Math.sin(i/NX*Math.PI);
-          const dy=j-cy, dz=k-(cz+p.zo);
-          return Math.sqrt(dy*dy+dz*dz)-p.radius; // carve field: <0 inside tube
-        },[0,Math.max(0,Math.floor(p.height-p.radius-4)),Math.max(0,Math.floor(cz+p.zo-p.radius-4)),
-           NX,Math.min(NY,Math.ceil(p.height+p.arch+p.radius+4)),Math.min(NZ,Math.ceil(cz+p.zo+p.radius+4))]);
+          const cy=hc+arc*Math.sin(i/NX*Math.PI);
+          const dy=j-cy, dz=k-zc;
+          return Math.sqrt(dy*dy+dz*dz)-rad;
+        },[0,Math.max(0,Math.floor(hc-rad-4*SY)),Math.max(0,Math.floor(zc-rad-4*SX)),
+           NX,Math.min(NY,Math.ceil(hc+arc+rad+4*SY)),Math.min(NZ,Math.ceil(zc+rad+4*SX))]);
         break; }
       case 'ArchPrimitive':{
-        const ax=cx+p.xo, az=cz+p.zo;
-        const R=p.ring+p.tube+3;
+        const ax=cx+p.xo*SX, az=cz+p.zo*SX, hc=p.height*SY, ring=p.ring*SY, tube=p.tube*SY;
+        const R=ring+tube+3*SY;
         combine(L,(i,j,k)=>{
-          const q=Math.sqrt((j-p.height)**2+(k-az)**2)-p.ring;
-          return -(Math.sqrt(q*q+(i-ax)**2)-p.tube); // union field: >0 inside rock
-        },[Math.max(0,Math.floor(ax-R)),Math.max(0,Math.floor(p.height-R)),Math.max(0,Math.floor(az-R)),
-           Math.min(NX,Math.ceil(ax+R)),Math.min(NY,Math.ceil(p.height+R)),Math.min(NZ,Math.ceil(az+R))]);
+          const q=Math.sqrt((j-hc)**2+(k-az)**2)-ring;
+          return -(Math.sqrt(q*q+(i-ax)**2)-tube);
+        },[Math.max(0,Math.floor(ax-R)),Math.max(0,Math.floor(hc-R)),Math.max(0,Math.floor(az-R)),
+           Math.min(NX,Math.ceil(ax+R)),Math.min(NY,Math.ceil(hc+R)),Math.min(NZ,Math.ceil(az+R))]);
         break; }
       case 'SpirePrimitive':{
-        const sx=cx+p.xo, sz=cz+p.zo, R=p.baseR+4;
+        const sx=cx+p.xo*SX, sz=cz+p.zo*SX, base=3*SY, hgt=p.height*SY, br=p.baseR*SX, R=br+4*SX;
         combine(L,(i,j,k)=>{
-          const base=4, t=clamp((j-base)/p.height,0,1);
-          const rad=lerp(p.baseR,.35,t);
+          const t=clamp((j-base)/hgt,0,1);
+          const rad=lerp(br,.35*SX,t);
           let sd=Math.sqrt((i-sx)**2+(k-sz)**2)-rad;
-          sd=Math.max(sd, base-j); sd=Math.max(sd, j-(base+p.height));
+          sd=Math.max(sd, base-j); sd=Math.max(sd, j-(base+hgt));
           return -sd;
         },[Math.max(0,Math.floor(sx-R)),0,Math.max(0,Math.floor(sz-R)),
-           Math.min(NX,Math.ceil(sx+R)),Math.min(NY,Math.ceil(4+p.height+3)),Math.min(NZ,Math.ceil(sz+R))]);
+           Math.min(NX,Math.ceil(sx+R)),Math.min(NY,Math.ceil(base+hgt+3*SY)),Math.min(NZ,Math.ceil(sz+R))]);
         break; }
       case 'HydraulicErosion': erodeHydraulic(L); break;
       case 'ThermalWeathering': weatherThermal(L); break;
       case 'WaterBodySolve': solveWater(L); break;
-      case 'SurfaceMaterials': break; // consumed at extraction colouring
+      case 'SurfaceMaterials': break;
     }
   }
   topBed();
-  // census: columns with >1 solid interval (the heightfield impossibility proof, live)
   let multi=0, maxIv=0;
   for(let k=0;k<NZ;k++)for(let i=0;i<NX;i++){
     let iv=0, was=false;
@@ -524,28 +609,63 @@ function evaluateField(){
   stats.multi=multi; stats.maxIv=maxIv; stats.cols=NX*NZ;
 }
 
-/* ============ Surface Nets extraction (production: Dual Contouring) ============ */
+/* ============ extraction: Dual Contouring (QEF) / Surface Nets ============ */
+function computeGradients(){
+  const gx=new Float32Array(rho.length), gy=new Float32Array(rho.length), gz=new Float32Array(rho.length);
+  for(let k=0;k<NZ;k++)for(let j=0;j<NY;j++)for(let i=0;i<NX;i++){
+    const id=IDX(i,j,k);
+    gx[id]=(rho[IDX(Math.min(i+1,NX-1),j,k)]-rho[IDX(Math.max(i-1,0),j,k)])*.5;
+    gy[id]=(rho[IDX(i,Math.min(j+1,NY-1),k)]-rho[IDX(i,Math.max(j-1,0),k)])*.5;
+    gz[id]=(rho[IDX(i,j,Math.min(k+1,NZ-1))]-rho[IDX(i,j,Math.max(k-1,0))])*.5;
+  }
+  return {gx,gy,gz};
+}
 function extractSurface(matLayer){
-  const solid=new Uint8Array(NX*NY*NZ);
-  for(let n=0;n<rho.length;n++) solid[n]=rho[n]>0?1:0;
+  const {gx,gy,gz}=computeGradients();
   const C=[[0,0,0],[1,0,0],[0,1,0],[1,1,0],[0,0,1],[1,0,1],[0,1,1],[1,1,1]];
   const E=[[0,1],[2,3],[4,5],[6,7],[0,2],[1,3],[4,6],[5,7],[0,4],[1,5],[2,6],[3,7]];
   const vid=new Int32Array((NX-1)*(NY-1)*(NZ-1)).fill(-1);
   const CID=(i,j,k)=>(k*(NY-1)+j)*(NX-1)+i;
-  const pos=[], cells=[];
+  const pos=[];
+  const dual = WORLD.extraction==='dual';
   for(let k=0;k<NZ-1;k++)for(let j=0;j<NY-1;j++)for(let i=0;i<NX-1;i++){
-    let cnt=0; for(const c of C) cnt+=solid[IDX(i+c[0],j+c[1],k+c[2])];
+    let cnt=0; const cv=new Array(8);
+    for(let c=0;c<8;c++){ const v=rho[IDX(i+C[c][0],j+C[c][1],k+C[c][2])]; cv[c]=v; if(v>0)cnt++; }
     if(cnt===0||cnt===8) continue;
-    let px=0,py=0,pz=0,nc=0;
-    for(const [a,b] of E){
-      const ca=C[a],cb=C[b];
-      const ra=rho[IDX(i+ca[0],j+ca[1],k+ca[2])], rb=rho[IDX(i+cb[0],j+cb[1],k+cb[2])];
-      if((ra>0)!==(rb>0)){ const t=ra/(ra-rb);
-        px+=i+ca[0]+t*(cb[0]-ca[0]); py+=j+ca[1]+t*(cb[1]-ca[1]); pz+=k+ca[2]+t*(cb[2]-ca[2]); nc++; }
+    let mx=0,my=0,mz=0,nc=0;
+    let a00=0,a01=0,a02=0,a11=0,a12=0,a22=0,b0=0,b1=0,b2=0;
+    for(const [ea,eb] of E){
+      const ra=cv[ea], rb=cv[eb];
+      if((ra>0)===(rb>0)) continue;
+      const ca=C[ea], cb=C[eb], t=ra/(ra-rb);
+      const px=i+ca[0]+t*(cb[0]-ca[0]), py=j+ca[1]+t*(cb[1]-ca[1]), pz=k+ca[2]+t*(cb[2]-ca[2]);
+      mx+=px; my+=py; mz+=pz; nc++;
+      if(dual){
+        const ida=IDX(i+ca[0],j+ca[1],k+ca[2]), idb=IDX(i+cb[0],j+cb[1],k+cb[2]);
+        let nx=lerp(gx[ida],gx[idb],t), ny=lerp(gy[ida],gy[idb],t), nz=lerp(gz[ida],gz[idb],t);
+        const l=Math.sqrt(nx*nx+ny*ny+nz*nz)+1e-12; nx/=l; ny/=l; nz/=l;
+        a00+=nx*nx; a01+=nx*ny; a02+=nx*nz; a11+=ny*ny; a12+=ny*nz; a22+=nz*nz;
+        const d=nx*px+ny*py+nz*pz; b0+=nx*d; b1+=ny*d; b2+=nz*d;
+      }
     }
     if(!nc) continue;
+    mx/=nc; my/=nc; mz/=nc;
+    let vx=mx, vy=my, vz=mz;
+    if(dual){
+      const lam=.04*(a00+a11+a22)/3+1e-7; // regularise toward the mass point
+      const A00=a00+lam, A11=a11+lam, A22=a22+lam;
+      const B0=b0+lam*mx, B1=b1+lam*my, B2=b2+lam*mz;
+      const det=A00*(A11*A22-a12*a12)-a01*(a01*A22-a12*a02)+a02*(a01*a12-A11*a02);
+      if(Math.abs(det)>1e-12){
+        const ix=(B0*(A11*A22-a12*a12)-a01*(B1*A22-a12*B2)+a02*(B1*a12-A11*B2))/det;
+        const iy=(A00*(B1*A22-a12*B2)-B0*(a01*A22-a12*a02)+a02*(a01*B2-B1*a02))/det;
+        const iz=(A00*(A11*B2-B1*a12)-a01*(a01*B2-B1*a02)+B0*(a01*a12-A11*a02))/det;
+        if(isFinite(ix)&&isFinite(iy)&&isFinite(iz)){ vx=ix; vy=iy; vz=iz; }
+      }
+      vx=clamp(vx,i,i+1); vy=clamp(vy,j,j+1); vz=clamp(vz,k,k+1);
+    }
     vid[CID(i,j,k)]=pos.length/3;
-    pos.push(px/nc,py/nc,pz/nc); cells.push([i,j,k]);
+    pos.push(vx,vy,vz);
   }
   const idx=[];
   const quad=(cs,flip)=>{
@@ -554,47 +674,113 @@ function extractSurface(matLayer){
     if(flip) ids.reverse();
     idx.push(ids[0],ids[1],ids[2], ids[0],ids[2],ids[3]);
   };
+  const S=(i,j,k)=>rho[IDX(i,j,k)]>0;
   for(let k=0;k<NZ;k++)for(let j=0;j<NY;j++)for(let i=0;i<NX-1;i++)
-    if(solid[IDX(i,j,k)]!==solid[IDX(i+1,j,k)]) quad([[i,j-1,k-1],[i,j,k-1],[i,j,k],[i,j-1,k]], !solid[IDX(i,j,k)]);
+    if(S(i,j,k)!==S(i+1,j,k)) quad([[i,j-1,k-1],[i,j,k-1],[i,j,k],[i,j-1,k]], !S(i,j,k));
   for(let k=0;k<NZ;k++)for(let j=0;j<NY-1;j++)for(let i=0;i<NX;i++)
-    if(solid[IDX(i,j,k)]!==solid[IDX(i,j+1,k)]) quad([[i-1,j,k-1],[i-1,j,k],[i,j,k],[i,j,k-1]], !solid[IDX(i,j,k)]);
+    if(S(i,j,k)!==S(i,j+1,k)) quad([[i-1,j,k-1],[i-1,j,k],[i,j,k],[i,j,k-1]], !S(i,j,k));
   for(let k=0;k<NZ-1;k++)for(let j=0;j<NY;j++)for(let i=0;i<NX;i++)
-    if(solid[IDX(i,j,k)]!==solid[IDX(i,j,k+1)]) quad([[i-1,j-1,k],[i,j-1,k],[i,j,k],[i-1,j,k]], !solid[IDX(i,j,k)]);
-  // normals = -grad(rho) at the vertex (rho grows into the solid); colours from material layer
-  const nv=pos.length/3, nor=new Float32Array(pos.length);
-  const col={shaded:new Float32Array(pos.length), material:new Float32Array(pos.length), flow:new Float32Array(pos.length)};
-  const mp=matLayer?matLayer.params:{rockSlope:52,snowH:21,strata:2.4,fold:2.2,wetband:1.2};
-  const sea=(layers.find(l=>l.op==='WaterBodySolve'&&l.enabled)||{}).params?.sea ?? -99;
+    if(S(i,j,k)!==S(i,j,k+1)) quad([[i-1,j-1,k],[i,j-1,k],[i,j,k],[i-1,j,k]], !S(i,j,k));
+  // vertex normals (-grad rho), material weights, aux (strata, flow, wet, AO)
+  const nv=pos.length/3;
+  const nor=new Float32Array(pos.length), weights=new Float32Array(nv*4), aux=new Float32Array(nv*4);
+  const mp=matLayer?matLayer.params:{rockSlope:46,snowH:19,strata:2.2,fold:2.4,wetband:1.1};
+  const waterL=layers.find(l=>l.op==='WaterBodySolve'&&l.enabled);
+  const sea=(waterL?waterL.params.sea*SY:-1e3);
   let flowMax=1e-9; if(flowCh) for(let n=0;n<flowCh.length;n++) flowMax=Math.max(flowMax,flowCh[n]);
-  const hstep=1;
-  const grad=(x,y,z)=>{
-    const gx=sampleRho(rho,x+hstep,y,z)-sampleRho(rho,x-hstep,y,z);
-    const gy=sampleRho(rho,x,y+hstep,z)-sampleRho(rho,x,y-hstep,z);
-    const gz=sampleRho(rho,x,y,z+hstep)-sampleRho(rho,x,y,z-hstep);
-    const l=Math.sqrt(gx*gx+gy*gy+gz*gz)+1e-9; return [-gx/l,-gy/l,-gz/l];
+  const sampleGrad=(x,y,z)=>{
+    const s=(arr)=>sampleRho(arr,x,y,z);
+    const nx=-s(gx), ny=-s(gy), nz=-s(gz);
+    const l=Math.sqrt(nx*nx+ny*ny+nz*nz)+1e-12; return [nx/l,ny/l,nz/l];
   };
-  const rockA=[.42,.38,.36], rockB=[.55,.47,.40], grass=[.30,.50,.24], dirt=[.50,.40,.28], snow=[.93,.94,.96], sand=[.76,.68,.50];
   for(let v=0;v<nv;v++){
     const x=pos[v*3],y=pos[v*3+1],z=pos[v*3+2];
-    const [nx,ny,nz]=grad(x,y,z);
+    const [nx,ny,nz]=sampleGrad(x,y,z);
     nor[v*3]=nx; nor[v*3+1]=ny; nor[v*3+2]=nz;
     const slopeDeg=Math.acos(clamp(Math.abs(ny),0,1))*180/Math.PI;
-    const sCoord=(y + mp.fold*Math.sin(x*.11)*Math.cos(z*.09))/mp.strata;
-    const band=((sCoord%1)+1)%1;
-    const rock=band<.5?rockA:rockB;
-    let c;
-    const rockiness=sstep(mp.rockSlope-14,mp.rockSlope+10,slopeDeg);
-    const base=y<sea+mp.wetband&&y>sea-2.5?sand:(ny>.55?grass:dirt);
-    c=[lerp(base[0],rock[0],rockiness),lerp(base[1],rock[1],rockiness),lerp(base[2],rock[2],rockiness)];
-    if(y>mp.snowH&&ny>.45){ const t=sstep(mp.snowH,mp.snowH+3,y); c=[lerp(c[0],snow[0],t),lerp(c[1],snow[1],t),lerp(c[2],snow[2],t)]; }
-    if(y<sea+.2){ const t=.55; c=[c[0]*(1-t*.5),c[1]*(1-t*.45),c[2]*(1-t*.3)]; } // wet below waterline
-    col.shaded.set(c,v*3);
-    col.material.set(rockiness>.5?[.75,.25,.2]:(y>mp.snowH&&ny>.45?[.95,.95,.95]:(y<sea+mp.wetband?[.9,.8,.3]:[.25,.7,.3])),v*3);
-    let f=0; if(flowCh){ const fi=clamp(Math.round(x),0,NX-1), fk=clamp(Math.round(z),0,NZ-1); f=Math.pow(flowCh[fk*NX+fi]/flowMax,.35); }
-    const wv=wearCh?clamp(wearCh[clamp(Math.round(z),0,NZ-1)*NX+clamp(Math.round(x),0,NX-1)]*2,0,1):0;
-    col.flow.set([.15+.85*wv, .2+.5*f, .25+.75*f], v*3);
+    const fi=clamp(Math.round(x),0,NX-1), fk=clamp(Math.round(z),0,NZ-1), cn=fk*NX+fi;
+    const wLevel=(waterH&&waterH[cn]>=0)?waterH[cn]:sea;
+    const shoreDist=y-wLevel;
+    let rockW=sstep(mp.rockSlope-13,mp.rockSlope+9,slopeDeg);
+    let snowW=sstep(mp.snowH*SY,(mp.snowH+2.5)*SY,y)*(1-sstep(60,82,slopeDeg));
+    let sandW=(shoreDist>-1.6*SY)?(1-sstep(.15*SY,mp.wetband*SY,shoreDist)):0;
+    sandW*= (1-rockW*.55);
+    let grassW=clamp(1-rockW-snowW-sandW,0,1);
+    const sum=rockW+grassW+sandW+snowW+1e-6;
+    weights[v*4]=rockW/sum; weights[v*4+1]=grassW/sum; weights[v*4+2]=sandW/sum; weights[v*4+3]=snowW/sum;
+    const strataCoord=(y/SY + mp.fold*Math.sin(x/SX*.11)*Math.cos(z/SX*.09) + .35*fbm3(x/NX*4,y/NY*4,z/NZ*4,77,2,0))/mp.strata;
+    const flow01=flowCh?Math.pow(flowCh[cn]/flowMax,.35):0;
+    const wear01=wearCh?clamp(wearCh[cn]*1.6,0,1):0;
+    const wet=clamp(1-Math.max(shoreDist,0)/(1.4*SY),0,1)*(shoreDist>-3*SY?1:0);
+    // SDF-style AO: tap the field along the normal; solid ahead occludes
+    let ao=0; const taps=[[0.6,.45],[1.3,.32],[2.4,.23]];
+    for(const [d,w] of taps){ const r=sampleRho(rho,x+nx*d*SX,y+ny*d*SY,z+nz*d*SX); ao+=w*clamp(1-Math.max(r,0)/(d*SY),0,1); }
+    aux[v*4]=strataCoord; aux[v*4+1]=flow01; aux[v*4+2]=Math.max(wet,wear01*.0); aux[v*4+3]=clamp(ao,0,1);
+    // wear rides in flow view via aux.y replacement not needed; store wear in weights spare? use aux via flow01 max:
+    if(wearCh) aux[v*4+1]=Math.max(flow01, wear01*.85);
   }
-  return {pos:new Float32Array(pos), nor, col, idx:new Uint32Array(idx), tris:idx.length/3};
+  return {pos:new Float32Array(pos), nor, weights, aux, idx:new Uint32Array(idx), tris:idx.length/3};
+}
+
+/* ============ procedural triplanar textures (canvas generated) ============ */
+function heightCanvas(size, seed, octFreqs, ridgedMix, crack){
+  const lats=octFreqs.map((f,o)=>makeLattice(f,seed+o*41));
+  const h=new Float32Array(size*size);
+  let mn=1e9,mx=-1e9;
+  for(let y=0;y<size;y++)for(let x=0;x<size;x++){
+    let v=fbmLat(lats,x/size,y/size,ridgedMix);
+    if(crack>0){ const c=fbmLat(lats,(x/size+.37)%1,(y/size+.61)%1,0); v-=crack*Math.pow(Math.max(0,1-Math.abs(c)*2.4),3); }
+    h[y*size+x]=v; if(v<mn)mn=v; if(v>mx)mx=v;
+  }
+  for(let i=0;i<h.length;i++) h[i]=(h[i]-mn)/(mx-mn);
+  return h;
+}
+function albedoTexture(size, height, painter){
+  const cv=document.createElement('canvas'); cv.width=cv.height=size;
+  const ctx=cv.getContext('2d'); const img=ctx.createImageData(size,size);
+  const rnd=mulberry(size*31+7);
+  const grain=new Float32Array(size*size); for(let i=0;i<grain.length;i++) grain[i]=rnd();
+  for(let i=0;i<size*size;i++){
+    const [r,g,b]=painter(height[i], grain[i], i%size, (i/size)|0);
+    img.data[i*4]=clamp(r,0,255); img.data[i*4+1]=clamp(g,0,255); img.data[i*4+2]=clamp(b,0,255); img.data[i*4+3]=255;
+  }
+  ctx.putImageData(img,0,0);
+  const tex=new THREE.CanvasTexture(cv);
+  tex.wrapS=tex.wrapT=THREE.RepeatWrapping; tex.colorSpace=THREE.SRGBColorSpace; tex.anisotropy=4;
+  return tex;
+}
+function normalTexture(size, height, strength){
+  const cv=document.createElement('canvas'); cv.width=cv.height=size;
+  const ctx=cv.getContext('2d'); const img=ctx.createImageData(size,size);
+  const H=(x,y)=>height[(((y%size)+size)%size)*size+(((x%size)+size)%size)];
+  for(let y=0;y<size;y++)for(let x=0;x<size;x++){
+    const dx=(H(x-1,y)-H(x+1,y))*strength, dy=(H(x,y-1)-H(x,y+1))*strength;
+    const l=Math.sqrt(dx*dx+dy*dy+1);
+    const i=(y*size+x)*4;
+    img.data[i]=(dx/l*.5+.5)*255; img.data[i+1]=(dy/l*.5+.5)*255; img.data[i+2]=(1/l*.5+.5)*255; img.data[i+3]=255;
+  }
+  ctx.putImageData(img,0,0);
+  const tex=new THREE.CanvasTexture(cv);
+  tex.wrapS=tex.wrapT=THREE.RepeatWrapping; tex.anisotropy=4;
+  return tex;
+}
+function buildMaterialTextures(){
+  const S=512;
+  const rockH=heightCanvas(S,11,[4,8,16,32,64,128],.35,.5);
+  const grassH=heightCanvas(S,23,[8,16,32,64,128,256],0,0);
+  const sandH=heightCanvas(S,37,[8,16,32,64,128],0,0);
+  const snowH=heightCanvas(S,53,[4,8,16,32,64],0,0);
+  const mix3=(a,b,t)=>[lerp(a[0],b[0],t),lerp(a[1],b[1],t),lerp(a[2],b[2],t)];
+  return {
+    rock: albedoTexture(S,rockH,(h,g)=>{ const c=mix3([62,56,52],[148,134,120],h); const s=.92+g*.16; return [c[0]*s,c[1]*s,c[2]*s]; }),
+    rockN: normalTexture(S,rockH,2.6),
+    grass: albedoTexture(S,grassH,(h,g)=>{ const c=mix3([52,82,34],[116,152,74],h); const s=.85+g*.35; return [c[0]*s,c[1]*s,c[2]*s]; }),
+    grassN: normalTexture(S,grassH,1.4),
+    sand: albedoTexture(S,sandH,(h,g)=>{ const c=mix3([150,128,94],[204,182,142],h); const s=.9+g*.2; return [c[0]*s,c[1]*s,c[2]*s]; }),
+    sandN: normalTexture(S,sandH,1.1),
+    snow: albedoTexture(S,snowH,(h,g)=>{ const c=mix3([196,208,226],[248,250,253],h); const sp=g>.985?1.25:1; return [c[0]*sp,c[1]*sp,c[2]*sp]; }),
+    snowN: normalTexture(S,snowH,.7),
+  };
 }
 
 /* ============ three.js scene ============ */
@@ -602,42 +788,136 @@ const canvas=document.getElementById('gl');
 const renderer=new THREE.WebGLRenderer({canvas, antialias:true});
 renderer.setPixelRatio(Math.min(devicePixelRatio,2));
 renderer.localClippingEnabled=true;
+renderer.shadowMap.enabled=true;
+renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+renderer.toneMapping=THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure=1.06;
 const scene=new THREE.Scene();
-scene.background=new THREE.Color(0x0a0a0c);
-scene.fog=new THREE.Fog(0x0a0a0c, 140, 340);
-const camera=new THREE.PerspectiveCamera(46,1,.1,1000);
-let camTheta=-.7, camPhi=.95, camDist=105, camTarget=new THREE.Vector3(0,4,0);
+scene.background=new THREE.Color(0x0b0e13);
+scene.fog=new THREE.Fog(0x0b0e13, 190, 520);
+const camera=new THREE.PerspectiveCamera(46,1,.1,1200);
+let camTheta=-.75, camPhi=.92, camDist=150, camTarget=new THREE.Vector3(0,10,0);
 function placeCam(){
   const sp=Math.sin(camPhi), y=Math.cos(camPhi);
   camera.position.set(camTarget.x+camDist*sp*Math.sin(camTheta), camTarget.y+camDist*y, camTarget.z+camDist*sp*Math.cos(camTheta));
   camera.lookAt(camTarget);
 }
-scene.add(new THREE.HemisphereLight(0xbdd3ff,0x3a3226,.85));
-const sun=new THREE.DirectionalLight(0xfff2dd,2.2); sun.position.set(-40,70,25); scene.add(sun);
+scene.add(new THREE.HemisphereLight(0xbdd3ff,0x3a3226,.75));
+const sun=new THREE.DirectionalLight(0xfff2dd,2.6);
+sun.castShadow=true;
+sun.shadow.mapSize.set(2048,2048);
+sun.shadow.bias=-0.0004; sun.shadow.normalBias=.5;
+scene.add(sun); scene.add(sun.target);
+function frameSunAndGrid(){
+  const e=NX*.72;
+  sun.position.set(-NX*.55, NY*2.4, NX*.32);
+  Object.assign(sun.shadow.camera,{left:-e,right:e,top:e,bottom:-e,near:10,far:NX*4.2});
+  sun.shadow.camera.updateProjectionMatrix();
+  if(grid) { scene.remove(grid); grid.geometry.dispose(); }
+  grid=new THREE.GridHelper(NX*2.2, 44, 0x2a3242, 0x1a2030);
+  grid.material.transparent=true; grid.material.opacity=.35; grid.position.y=-.02;
+  scene.add(grid);
+}
+let grid=null;
 const clipPlane=new THREE.Plane(new THREE.Vector3(0,0,-1), 1e6);
-const terrainMat=new THREE.MeshStandardMaterial({vertexColors:true, roughness:.94, metalness:0, clippingPlanes:[clipPlane]});
-let terrainMesh=null, waterMesh=null, colourSets=null, viewMode='shaded', spinning=false;
+const TEX=buildMaterialTextures();
+const U={ uTexScale:{value:1/14}, uNrmStrength:{value:1.15}, uAoStrength:{value:.8}, uDebug:{value:0} };
+const terrainMat=new THREE.MeshStandardMaterial({roughness:.95, metalness:0, side:THREE.DoubleSide, clippingPlanes:[clipPlane]});
+terrainMat.shadowSide=THREE.FrontSide;
+terrainMat.onBeforeCompile=(sh)=>{
+  Object.assign(sh.uniforms, U, {
+    uRock:{value:TEX.rock}, uRockN:{value:TEX.rockN}, uGrass:{value:TEX.grass}, uGrassN:{value:TEX.grassN},
+    uSand:{value:TEX.sand}, uSandN:{value:TEX.sandN}, uSnow:{value:TEX.snow}, uSnowN:{value:TEX.snowN},
+  });
+  sh.vertexShader = sh.vertexShader
+    .replace('#include <common>', `#include <common>
+      attribute vec4 aWeights; attribute vec4 aAux;
+      varying vec3 vWPos; varying vec3 vWNormal; varying vec4 vWeights; varying vec4 vAux;`)
+    .replace('#include <begin_vertex>', `#include <begin_vertex>
+      vWPos = (modelMatrix * vec4(transformed,1.0)).xyz;
+      vWNormal = normalize(mat3(modelMatrix) * objectNormal);
+      vWeights = aWeights; vAux = aAux;`);
+  sh.fragmentShader = sh.fragmentShader
+    .replace('#include <common>', `#include <common>
+      uniform sampler2D uRock, uRockN, uGrass, uGrassN, uSand, uSandN, uSnow, uSnowN;
+      uniform float uTexScale, uNrmStrength, uAoStrength, uDebug;
+      varying vec3 vWPos; varying vec3 vWNormal; varying vec4 vWeights; varying vec4 vAux;
+      vec3 triW(vec3 wn){ vec3 w=pow(abs(wn),vec3(4.0)); return w/max(w.x+w.y+w.z,1e-4); }
+      vec3 triTex(sampler2D t, vec3 wp, vec3 w){
+        return texture2D(t,wp.zy*uTexScale).rgb*w.x + texture2D(t,wp.xz*uTexScale).rgb*w.y + texture2D(t,wp.xy*uTexScale).rgb*w.z; }
+      vec3 triNrm(sampler2D t, vec3 wp, vec3 w, vec3 wn){
+        vec3 tx=texture2D(t,wp.zy*uTexScale).rgb*2.0-1.0;
+        vec3 ty=texture2D(t,wp.xz*uTexScale).rgb*2.0-1.0;
+        vec3 tz=texture2D(t,wp.xy*uTexScale).rgb*2.0-1.0;
+        tx.xy*=uNrmStrength; ty.xy*=uNrmStrength; tz.xy*=uNrmStrength;
+        vec3 s=sign(wn);
+        vec3 nx=normalize(vec3(tx.z*s.x, tx.y, tx.x));
+        vec3 ny=normalize(vec3(ty.x, ty.z*s.y, ty.y));
+        vec3 nz=normalize(vec3(tz.x, tz.y, tz.z*s.z));
+        return normalize(nx*w.x+ny*w.y+nz*w.z); }`)
+    .replace('#include <map_fragment>', `
+      vec3 gWN = normalize(vWNormal) * (gl_FrontFacing ? 1.0 : -1.0);
+      vec3 gTW = triW(gWN);
+      vec4 gW = vWeights;
+      vec3 cRock = triTex(uRock, vWPos, gTW);
+      float sb = fract(vAux.x);
+      float strat = mix(0.74, 1.14, smoothstep(0.0,0.45,sb)*smoothstep(1.0,0.55,sb));
+      float seam = 1.0 - 0.35*smoothstep(0.10,0.0,min(sb,1.0-sb));
+      cRock *= strat*seam;
+      vec3 cGrass = triTex(uGrass, vWPos, gTW);
+      vec3 cSand = triTex(uSand, vWPos, gTW);
+      vec3 cSnow = triTex(uSnow, vWPos, gTW);
+      vec3 alb = cRock*gW.x + cGrass*gW.y + cSand*gW.z + cSnow*gW.w;
+      float wetF = vAux.z;
+      alb *= (1.0 - wetF*0.42);
+      alb *= mix(1.0, vAux.w, uAoStrength);
+      float gRough = mix(0.95, 0.6, gW.w) - wetF*0.45;
+      if(uDebug > 1.5){ alb = vec3(0.10+vAux.y*0.9, 0.18+vAux.y*0.45, 0.85-vAux.y*0.45); }
+      else if(uDebug > 0.5){ alb = gW.x*vec3(.8,.3,.25) + gW.y*vec3(.3,.75,.3) + gW.z*vec3(.9,.8,.35) + gW.w*vec3(.95); }
+      diffuseColor.rgb *= alb;`)
+    .replace('#include <roughnessmap_fragment>', `
+      float roughnessFactor = clamp(gRough, 0.08, 1.0);`)
+    .replace('#include <normal_fragment_maps>', `
+      if(uDebug < 0.5 && uNrmStrength > 0.001){
+        vec3 dn = triNrm(uRockN, vWPos, gTW, gWN)*gW.x
+                + triNrm(uGrassN, vWPos, gTW, gWN)*gW.y
+                + triNrm(uSandN, vWPos, gTW, gWN)*gW.z
+                + triNrm(uSnowN, vWPos, gTW, gWN)*gW.w;
+        dn = normalize(dn + gWN*0.35);
+        normal = normalize((viewMatrix * vec4(dn, 0.0)).xyz);
+      }`);
+};
+terrainMat.customProgramCacheKey=()=> 'terrain-triplanar-v2';
+let terrainMesh=null, waterMesh=null, viewMode='shaded', spinning=false;
 function buildWater(){
-  if(waterMesh){ scene.remove(waterMesh); waterMesh.geometry.dispose(); waterMesh=null; }
+  if(waterMesh){ scene.remove(waterMesh); waterMesh.geometry.dispose(); waterMesh.material.dispose(); waterMesh=null; }
   if(!waterH) return;
-  const pos=[], idx=[]; let vi=0;
-  const s=1; // cells are 1 unit in scene space
+  const pos=[], col=[], idx=[]; let vi=0;
+  const shallow=[.35,.75,.85], deep=[.05,.30,.62];
   for(let k=0;k<NZ;k++)for(let i=0;i<NX;i++){
     const h=waterH[k*NX+i]; if(h<0) continue;
-    const x=i-NX/2, z=k-NZ/2;
+    const x=i-NX/2, z=k-NZ/2, depth=clamp((h-bed[k*NX+i])/(4*SY),0,1);
+    const c=[lerp(shallow[0],deep[0],depth),lerp(shallow[1],deep[1],depth),lerp(shallow[2],deep[2],depth)];
     pos.push(x-.5,h,z-.5, x+.5,h,z-.5, x+.5,h,z+.5, x-.5,h,z+.5);
+    for(let q=0;q<4;q++) col.push(c[0],c[1],c[2]);
     idx.push(vi,vi+2,vi+1, vi,vi+3,vi+2); vi+=4;
   }
   if(!pos.length) return;
   const g=new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos,3));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(col,3));
   g.setIndex(idx); g.computeVertexNormals();
-  waterMesh=new THREE.Mesh(g, new THREE.MeshStandardMaterial({color:0x2f7fd6, transparent:true, opacity:.78, roughness:.15, metalness:.1, clippingPlanes:[clipPlane]}));
+  waterMesh=new THREE.Mesh(g, new THREE.MeshStandardMaterial({vertexColors:true, transparent:true, opacity:.82,
+    roughness:.12, metalness:.05, clippingPlanes:[clipPlane]}));
+  waterMesh.receiveShadow=true;
   scene.add(waterMesh);
 }
-function rebuild(){
-  const t0=performance.now();
-  evaluateField();
+const el=id=>document.getElementById(id);
+function applyMaterialUniforms(){
+  const m=layers.find(l=>l.op==='SurfaceMaterials');
+  if(m){ U.uTexScale.value=1/(m.params.texScale*SX); U.uNrmStrength.value=m.params.nrm; U.uAoStrength.value=m.params.ao; }
+}
+function rebuildSurface(){
   const t1=performance.now();
   const matL=layers.find(l=>l.op==='SurfaceMaterials'&&l.enabled);
   const surf=extractSurface(matL);
@@ -648,29 +928,37 @@ function rebuild(){
   for(let v=0;v<p.length;v+=3){ p[v]-=NX/2; p[v+2]-=NZ/2; }
   g.setAttribute('position', new THREE.BufferAttribute(p,3));
   g.setAttribute('normal', new THREE.BufferAttribute(surf.nor,3));
-  colourSets=surf.col;
-  g.setAttribute('color', new THREE.BufferAttribute(surf.col[viewMode]||surf.col.shaded,3));
+  g.setAttribute('aWeights', new THREE.BufferAttribute(surf.weights,4));
+  g.setAttribute('aAux', new THREE.BufferAttribute(surf.aux,4));
   g.setIndex(new THREE.BufferAttribute(surf.idx,1));
   terrainMesh=new THREE.Mesh(g, terrainMat);
+  terrainMesh.castShadow=true; terrainMesh.receiveShadow=true;
   scene.add(terrainMesh);
   buildWater();
-  // status + facts
-  const cellM=(WORLD.metres/NX);
-  el('st-eval').textContent=`evaluate ${(t1-t0).toFixed(0)} ms`;
-  el('st-mesh').textContent=`extract ${(t2-t1).toFixed(0)} ms`;
+  applyMaterialUniforms();
+  el('st-mesh').textContent=`extract ${(t2-t1).toFixed(0)} ms (${WORLD.extraction==='dual'?'Dual Contouring':'Surface Nets'})`;
   el('st-tri').textContent=`triangles ${surf.tris.toLocaleString()}`;
-  el('st-proof').innerHTML=`multi-interval columns <span class="ok">${stats.multi}</span> / ${stats.cols}`;
-  el('prooftext').innerHTML=
-    `<b>${stats.multi} columns</b> contain <b>2+ separate rock intervals</b> (cave roof + floor, arch, overhangs).<br>`+
-    `A heightfield stores one height per column and can only ever score <b>0</b>.`;
   el('facts').innerHTML=
     `<div class="kv"><span>Field resolution</span><b>${NX} × ${NY} × ${NZ}</b></div>`+
-    `<div class="kv"><span>World size</span><b>${WORLD.metres} m · cell ${cellM.toFixed(1)} m</b></div>`+
+    `<div class="kv"><span>World size</span><b>${WORLD.metres} m · cell ${(WORLD.metres/NX).toFixed(1)} m</b></div>`+
+    `<div class="kv"><span>Extraction</span><b>${WORLD.extraction==='dual'?'Dual Contouring (QEF)':'Surface Nets'}</b></div>`+
     `<div class="kv"><span>Triangles</span><b>${surf.tris.toLocaleString()}</b></div>`+
     `<div class="kv"><span>Multi-interval columns</span><b>${stats.multi} (${(100*stats.multi/stats.cols).toFixed(1)}%)</b></div>`+
     `<div class="kv"><span>Max intervals / column</span><b>${stats.maxIv}</b></div>`+
     `<div class="kv"><span>Active strata</span><b>${layers.filter(l=>l.enabled).length} / ${layers.length}</b></div>`;
-  el('docmeta').textContent=`density field document · ${layers.length} strata · ${NX}³-class grid`;
+}
+function rebuildField(){
+  const t0=performance.now();
+  evaluateField();
+  const t1=performance.now();
+  frameSunAndGrid();
+  el('st-eval').textContent=`evaluate ${(t1-t0).toFixed(0)} ms`;
+  el('st-proof').innerHTML=`multi-interval columns <span class="ok">${stats.multi}</span> / ${stats.cols}`;
+  el('prooftext').innerHTML=
+    `<b>${stats.multi} columns</b> contain <b>2+ separate rock intervals</b> (cave roof + floor, arch, overhangs).<br>`+
+    `A heightfield stores one height per column and can only ever score <b>0</b>.`;
+  el('docmeta').textContent=`density field document · ${layers.length} strata · ${NX}×${NY}×${NZ} grid`;
+  rebuildSurface();
 }
 function resize(){
   const host=canvas.parentElement, w=host.clientWidth, h=host.clientHeight;
@@ -679,7 +967,6 @@ function resize(){
 new ResizeObserver(resize).observe(canvas.parentElement);
 (function loop(){ requestAnimationFrame(loop); if(spinning){ camTheta+=.0035; placeCam(); } renderer.render(scene,camera); })();
 
-/* orbit input */
 let drag=null;
 canvas.addEventListener('pointerdown',e=>{ drag={x:e.clientX,y:e.clientY,b:e.button}; canvas.setPointerCapture(e.pointerId); });
 canvas.addEventListener('pointermove',e=>{
@@ -688,34 +975,39 @@ canvas.addEventListener('pointermove',e=>{
   if(drag.b===2){ const s=camDist*.0016;
     const fwd=new THREE.Vector3(); camera.getWorldDirection(fwd);
     const right=new THREE.Vector3().crossVectors(fwd,camera.up).normalize();
-    camTarget.addScaledVector(right,-dx*s).y+=dy*s;
+    camTarget.addScaledVector(right,-dx*s); camTarget.y+=dy*s;
   } else { camTheta-=dx*.005; camPhi=clamp(camPhi-dy*.005,.12,1.5); }
   placeCam();
 });
 canvas.addEventListener('pointerup',()=>drag=null);
-canvas.addEventListener('wheel',e=>{ e.preventDefault(); camDist=clamp(camDist*(1+Math.sign(e.deltaY)*.09),25,320); placeCam(); },{passive:false});
+canvas.addEventListener('wheel',e=>{ e.preventDefault(); camDist=clamp(camDist*(1+Math.sign(e.deltaY)*.09),18,600); placeCam(); },{passive:false});
 canvas.addEventListener('contextmenu',e=>e.preventDefault());
 
 /* ============ UI construction ============ */
-const el=id=>document.getElementById(id);
 const SVG={
   eye:'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6z"/><circle cx="12" cy="12" r="2.6"/></svg>',
   trash:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>',
   grip:'<svg width="10" height="16" viewBox="0 0 10 16" fill="currentColor"><circle cx="3" cy="3" r="1.4"/><circle cx="7" cy="3" r="1.4"/><circle cx="3" cy="8" r="1.4"/><circle cx="7" cy="8" r="1.4"/><circle cx="3" cy="13" r="1.4"/><circle cx="7" cy="13" r="1.4"/></svg>',
   mask:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="3"/><circle cx="12" cy="12" r="3.4" fill="currentColor" stroke="none" opacity=".65"/></svg>',
 };
-let rebuildTimer=null;
-function schedule(){ el('st-msg').textContent='rebuilding…'; el('st-msg').className='warn';
-  clearTimeout(rebuildTimer); rebuildTimer=setTimeout(()=>{ rebuild(); el('st-msg').textContent='ready'; el('st-msg').className='ok'; },110); }
-
-function paramRow(p, get, set){
+let fieldTimer=null, surfaceTimer=null;
+function markBusy(){ el('st-msg').textContent='rebuilding…'; el('st-msg').className='warn'; }
+function markReady(){ el('st-msg').textContent='ready'; el('st-msg').className='ok'; }
+function schedule(stage='field'){
+  if(stage==='uniform'){ applyMaterialUniforms(); return; }
+  markBusy();
+  if(stage==='surface'){ clearTimeout(surfaceTimer); surfaceTimer=setTimeout(()=>{ rebuildSurface(); markReady(); },90); return; }
+  clearTimeout(fieldTimer); clearTimeout(surfaceTimer);
+  fieldTimer=setTimeout(()=>{ rebuildField(); markReady(); },140);
+}
+function paramRow(p, get, set, stage){
   const row=document.createElement('div'); row.className='prow';
   row.innerHTML=`<span class="plab">${p.c}</span>`;
   const sl=document.createElement('input'); sl.type='range'; sl.min=p.min; sl.max=p.max; sl.step=p.step; sl.value=get();
   const num=document.createElement('input'); num.type='number'; num.min=p.min; num.max=p.max; num.step=p.step; num.value=get();
   const un=document.createElement('span'); un.className='unit'; un.textContent=p.u;
-  sl.oninput=()=>{ set(parseFloat(sl.value)); num.value=sl.value; schedule(); };
-  num.onchange=()=>{ set(parseFloat(num.value)); sl.value=num.value; schedule(); };
+  sl.oninput=()=>{ set(parseFloat(sl.value)); num.value=sl.value; schedule(stage||p.stage||'field'); };
+  num.onchange=()=>{ set(parseFloat(num.value)); sl.value=num.value; schedule(stage||p.stage||'field'); };
   row.append(sl,num,un); return row;
 }
 function renderInspector(){
@@ -737,12 +1029,12 @@ function renderInspector(){
     opSel.append(g); }
   opSel.value=L.op;
   opSel.onchange=()=>{ const fresh=mkLayer(opSel.value,L.name); fresh.id=L.id; fresh.enabled=L.enabled; fresh.opacity=L.opacity; fresh.masks=L.masks;
-    layers[selected]=fresh; renderLayers(); renderInspector(); schedule(); };
+    layers[selected]=fresh; renderLayers(); renderInspector(); schedule('field'); };
   opRow.append(opSel); host.append(opRow);
   for(const p of d.params) host.append(paramRow(p,()=>L.params[p.k],v=>L.params[p.k]=v));
   const note=document.createElement('p'); note.className='hint';
   note.textContent = d.sim ? 'Simulate stratum: runs iteratively over surface columns and bakes Δρ back into the field.'
-    : d.mat ? 'Material stratum: writes surface weights, textured triplanar (no UVs on extracted geometry).'
+    : d.mat ? 'Material stratum: per-vertex weights + GPU triplanar detail (no UVs on extracted geometry). Texture/AO sliders apply instantly.'
     : 'Field stratum: combines its candidate field into ρ through the blend mode × opacity × mask stack.';
   host.append(note);
 }
@@ -759,22 +1051,22 @@ function renderLayers(){
     card.ondragleave=()=>card.classList.remove('dragover');
     card.ondrop=e=>{ e.preventDefault(); card.classList.remove('dragover');
       const from=parseInt(e.dataTransfer.getData('text/plain')); if(isNaN(from)||from===li) return;
-      const [mv]=layers.splice(from,1); layers.splice(li,0,mv); selected=li; renderLayers(); renderInspector(); schedule(); };
+      const [mv]=layers.splice(from,1); layers.splice(li,0,mv); selected=li; renderLayers(); renderInspector(); schedule('field'); };
     card.onclick=()=>{ selected=li; renderLayers(); renderInspector(); };
 
     const r1=document.createElement('div'); r1.className='lrow';
     r1.innerHTML=`<span class="grip" title="Drag to reorder">${SVG.grip}</span>`;
     const eye=document.createElement('button'); eye.className='icon'+(L.enabled?'':' off'); eye.innerHTML=SVG.eye; eye.title='Enable / bypass';
-    eye.onclick=e=>{ e.stopPropagation(); L.enabled=!L.enabled; renderLayers(); schedule(); };
+    eye.onclick=e=>{ e.stopPropagation(); L.enabled=!L.enabled; renderLayers(); schedule('field'); };
     const nm=document.createElement('span'); nm.className='lname'; nm.textContent=L.name; nm.title=L.name;
     nm.ondblclick=e=>{ e.stopPropagation(); const inp=document.createElement('input'); inp.type='text'; inp.value=L.name;
       nm.replaceWith(inp); inp.focus(); inp.select();
       inp.onblur=()=>{ L.name=inp.value||L.name; renderLayers(); renderInspector(); };
       inp.onkeydown=ev=>{ if(ev.key==='Enter') inp.blur(); }; };
-    const chip=document.createElement('span'); chip.className='chip'+(d.sim?' sim':d.mat?' mat':d.cat==='Material'?' mat':'');
+    const chip=document.createElement('span'); chip.className='chip'+(d.sim?' sim':d.mat?' mat':'');
     chip.textContent=d.cat.toUpperCase();
     const del=document.createElement('button'); del.className='icon'; del.innerHTML=SVG.trash; del.title='Remove layer';
-    del.onclick=e=>{ e.stopPropagation(); layers.splice(li,1); selected=Math.max(0,Math.min(selected,layers.length-1)); renderLayers(); renderInspector(); schedule(); };
+    del.onclick=e=>{ e.stopPropagation(); layers.splice(li,1); selected=Math.max(0,Math.min(selected,layers.length-1)); renderLayers(); renderInspector(); schedule('field'); };
     r1.append(eye,nm,chip,del); card.append(r1);
 
     const r2=document.createElement('div'); r2.className='lsub';
@@ -782,13 +1074,12 @@ function renderLayers(){
     const bs=document.createElement('select');
     for(const b of d.blends){ const o=document.createElement('option'); o.value=b; o.textContent=b; bs.append(o); }
     bs.value=L.blend; bs.onclick=e=>e.stopPropagation();
-    bs.onchange=()=>{ L.blend=bs.value; schedule(); };
+    bs.onchange=()=>{ L.blend=bs.value; schedule('field'); };
     const op=document.createElement('input'); op.type='range'; op.min=0; op.max=1; op.step=.01; op.value=L.opacity; op.title='Opacity / strength';
     op.onclick=e=>e.stopPropagation();
-    op.oninput=()=>{ L.opacity=parseFloat(op.value); schedule(); };
+    op.oninput=()=>{ L.opacity=parseFloat(op.value); schedule(d.mat?'surface':'field'); };
     const maskBtn=document.createElement('button'); maskBtn.className='icon'+(L.masks.length?'':' off'); maskBtn.innerHTML=SVG.mask;
-    maskBtn.title='Mask stack'; maskBtn.onclick=e=>{ e.stopPropagation(); selected=li; renderLayers(); renderInspector();
-      const mb=card.querySelector('.maskbox'); if(mb) mb.scrollIntoView({block:'nearest'}); };
+    maskBtn.title='Mask stack'; maskBtn.onclick=e=>{ e.stopPropagation(); selected=li; renderLayers(); renderInspector(); };
     r2.append(bs,op,maskBtn); card.append(r2);
 
     if(li===selected){
@@ -799,11 +1090,11 @@ function renderLayers(){
         const ms=document.createElement('select');
         for(const [k,v] of Object.entries(MASKOPS)){ const o=document.createElement('option'); o.value=k; o.textContent=v.caption; ms.append(o); }
         ms.value=mk.op; ms.onclick=e=>e.stopPropagation();
-        ms.onchange=()=>{ mk.op=ms.value; mk.params={}; MASKOPS[mk.op].params.forEach(p=>mk.params[p.k]=p.def); renderLayers(); schedule(); };
+        ms.onchange=()=>{ mk.op=ms.value; mk.params={}; MASKOPS[mk.op].params.forEach(p=>mk.params[p.k]=p.def); renderLayers(); schedule('field'); };
         const inv=document.createElement('button'); inv.className='small'; inv.textContent=mk.inverted?'Inv ✓':'Inv'; inv.title='Invert mask';
-        inv.onclick=e=>{ e.stopPropagation(); mk.inverted=!mk.inverted; renderLayers(); schedule(); };
+        inv.onclick=e=>{ e.stopPropagation(); mk.inverted=!mk.inverted; renderLayers(); schedule('field'); };
         const dm=document.createElement('button'); dm.className='icon'; dm.innerHTML=SVG.trash;
-        dm.onclick=e=>{ e.stopPropagation(); L.masks.splice(mi,1); renderLayers(); schedule(); };
+        dm.onclick=e=>{ e.stopPropagation(); L.masks.splice(mi,1); renderLayers(); schedule('field'); };
         mr.append(ms,inv,dm); mb.append(mr);
         for(const p of MASKOPS[mk.op].params){
           const pr=paramRow(p,()=>mk.params[p.k],v=>mk.params[p.k]=v); pr.onclick=e=>e.stopPropagation(); mb.append(pr);
@@ -812,7 +1103,7 @@ function renderLayers(){
       const add=document.createElement('div'); add.className='addrow';
       const ab=document.createElement('button'); ab.className='small'; ab.textContent='+ Add mask';
       ab.onclick=e=>{ e.stopPropagation(); const mk={op:'SlopeSelect',inverted:false,strength:1,params:{}};
-        MASKOPS.SlopeSelect.params.forEach(p=>mk.params[p.k]=p.def); L.masks.push(mk); renderLayers(); schedule(); };
+        MASKOPS.SlopeSelect.params.forEach(p=>mk.params[p.k]=p.def); L.masks.push(mk); renderLayers(); schedule('field'); };
       add.append(ab); mb.append(add);
       if(!L.masks.length){ const h=document.createElement('p'); h.className='hint'; h.style.margin='4px 0 0';
         h.textContent='No masks — the layer applies everywhere at full opacity.'; mb.append(h); }
@@ -826,26 +1117,34 @@ function renderWorld(){
   const r1=document.createElement('div'); r1.className='prow';
   r1.innerHTML='<span class="plab">Field resolution</span>';
   const sel=document.createElement('select'); sel.style.flex='1';
-  for(const [v,t] of [[48,'48 × 24 × 48 — fast'],[64,'64 × 32 × 64 — balanced'],[96,'96 × 48 × 96 — high fidelity']]){
+  for(const [v,t] of [[64,'64 × 32 × 64 — fast draft'],[96,'96 × 48 × 96 — balanced'],[128,'128 × 64 × 128 — high fidelity'],[160,'160 × 80 × 160 — ultra (slow)']]){
     const o=document.createElement('option'); o.value=v; o.textContent=t; sel.append(o); }
   sel.value=WORLD.res;
-  sel.onchange=()=>{ WORLD.res=parseInt(sel.value); WORLD.height=WORLD.res/2; schedule(); };
+  sel.onchange=()=>{ WORLD.res=parseInt(sel.value); WORLD.height=WORLD.res/2;
+    camDist=NX*1.55; schedule('field'); };
   r1.append(sel); host.append(r1);
-  host.append(paramRow({k:'metres',c:'World size',min:128,max:8192,def:512,step:64,u:'m'},()=>WORLD.metres,v=>WORLD.metres=v));
+  const r2=document.createElement('div'); r2.className='prow';
+  r2.innerHTML='<span class="plab">Extraction</span>';
+  const ex=document.createElement('select'); ex.style.flex='1';
+  for(const [v,t] of [['dual','Dual Contouring (QEF, sharp)'],['nets','Surface Nets (smooth)']]){
+    const o=document.createElement('option'); o.value=v; o.textContent=t; ex.append(o); }
+  ex.value=WORLD.extraction;
+  ex.onchange=()=>{ WORLD.extraction=ex.value; schedule('surface'); };
+  r2.append(ex); host.append(r2);
+  host.append(paramRow({k:'metres',c:'World size',min:256,max:8192,def:1024,step:64,u:'m'},()=>WORLD.metres,v=>WORLD.metres=v));
   const h=document.createElement('p'); h.className='hint'; h.style.margin='4px 0 0';
-  h.textContent='Production tiers: 2 m bricks world-wide + 0.5 m camera ring (see research §3).';
+  h.textContent='Detail split: silhouette/cliffs/caves from the field (geometry), grain/strata from triplanar shader detail — raise resolution for geometry, texture tile size for surface grain.';
   host.append(h);
 }
-/* add-layer dropdown */
 (function(){
   const sel=el('addop');
   for(const c of CATS){ const g=document.createElement('optgroup'); g.label=c;
     for(const [k,v] of Object.entries(OPS)) if(v.cat===c){ const o=document.createElement('option'); o.value=k; o.textContent=v.caption; g.append(o); }
     sel.append(g); }
   el('addbtn').onclick=()=>{ const L=mkLayer(sel.value, OPS[sel.value].caption.split('—')[0].split('(')[0].trim());
-    layers.splice(selected+1,0,L); selected++; renderLayers(); renderInspector(); schedule(); };
+    layers.splice(selected+1,0,L); selected++; renderLayers(); renderInspector(); schedule('field'); };
 })();
-el('preset').onclick=()=>{ preset(); renderLayers(); renderInspector(); schedule(); };
+el('preset').onclick=()=>{ preset(); renderLayers(); renderInspector(); schedule('field'); };
 el('back').onclick=()=>{ el('st-msg').textContent='Project Browser lives in the C++ editor — this is the terrain workspace prototype'; };
 el('exportdoc').onclick=()=>{
   const doc={schema:'frontier.terrain/1 (prototype JSON mirror)', world:WORLD,
@@ -858,18 +1157,18 @@ el('viewmodes').addEventListener('click',e=>{
   document.querySelectorAll('#viewmodes button').forEach(x=>x.classList.toggle('active',x===b));
   viewMode=b.dataset.mode;
   terrainMat.wireframe = viewMode==='wire';
-  if(terrainMesh&&colourSets&&viewMode!=='wire')
-    terrainMesh.geometry.setAttribute('color', new THREE.BufferAttribute(colourSets[viewMode],3));
+  U.uDebug.value = viewMode==='material'?1:(viewMode==='flow'?2:0);
 });
 el('spin').onclick=()=>{ spinning=!spinning; el('spin').classList.toggle('active',spinning); };
-el('resetview').onclick=()=>{ camTheta=-.7; camPhi=.95; camDist=105; camTarget.set(0,4,0); placeCam(); };
+el('resetview').onclick=()=>{ camTheta=-.75; camPhi=.92; camDist=NX*1.55; camTarget.set(0,NY*.22,0); placeCam(); };
 el('slice').oninput=e=>{
   const v=parseFloat(e.target.value);
   if(v>=100){ clipPlane.constant=1e6; el('sliceval').textContent='off'; }
   else { const z=(v/100-.5)*NZ; clipPlane.constant=z; el('sliceval').textContent=z.toFixed(0); }
 };
 
-renderWorld(); renderLayers(); renderInspector(); resize(); placeCam(); rebuild();
+camDist=128*1.55; camTarget.set(0,14,0);
+renderWorld(); renderLayers(); renderInspector(); resize(); placeCam(); rebuildField();
 </script>
 </body>
 </html>
