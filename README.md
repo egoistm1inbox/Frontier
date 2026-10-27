@@ -20,13 +20,15 @@ from face". The **Topology** tab proves it on every generation: boundary
 edges, non-manifold edges, winding consistency, connected components, Euler
 characteristic, genus, valence histogram.
 
-## Species library (21)
+## Species library (33)
 
 - **Palms · feather** — Coconut, Royal, Date, Queen, Foxtail, Areca (clumping)
 - **Palms · fan** — Mexican Fan (with dead skirt), Chinese Fan, Bismarck (silver), Dwarf Palmetto
 - **Banana family** — Banana (with bunch & heart), Bird of Paradise (crane flowers), Traveler's Palm (two-ranked fan), Heliconia
 - **Big-leaf plants** — Elephant Ear, Monstera (climbing, split blades), Split-leaf Philodendron, Giant Taro
 - **Tropical trees** — Frangipani (with flowers), Umbrella Tree (palmate leaves), Fiddle-leaf Fig
+- **Grains & cereals** — Corn (tassel, husked ears, brace roots), Pearl Millet (dense candle spike), Wheat (awned golden ears), Rice (drooping panicles), Sorghum, Sugarcane (waxy joints, dead lower leaves)
+- **Vegetables** — Tomato (compound leaves, ripening trusses), Strawberry (trifoliate, runners, berries), Chili Pepper, Sunflower (seed disk + ray petals), Pumpkin (ribbed fruit on ground vines), Cabbage (wrapped head)
 
 ## Features
 
@@ -48,7 +50,7 @@ characteristic, genus, valence histogram.
 ```bash
 npm install
 npm run dev        # http://localhost:5173
-npm test           # topology proof for all 21 species + welder unit tests
+npm test           # topology proof for all 33 species + welder unit tests
 npm run typecheck
 npm run build
 ```

@@ -1,12 +1,12 @@
 /**
  * Plant parameters + species library.
  *
- * One superset of botanical parameters covers the four growth habits
- * (palm, paddle-leaf, rosette, branching tree); each species preset fills
- * the fields its habit reads. Everything is in metres / degrees.
+ * One superset of botanical parameters covers the growth habits
+ * (palm, paddle-leaf, rosette, branching tree, grain, vegetable crop);
+ * each species preset fills the fields its habit reads. Metres / degrees.
  */
 
-export type Habit = 'palm' | 'paddle' | 'rosette' | 'branching';
+export type Habit = 'palm' | 'paddle' | 'rosette' | 'branching' | 'grain' | 'vegetable';
 export type FrondType = 'pinnate' | 'palmate';
 
 export interface BotanyParams {
@@ -87,6 +87,13 @@ export interface BotanyParams {
   leavesPerTip: number;
   compoundLeaf: 'simple' | 'palmate';
 
+  // ── grains & vegetable crops ──────────────────────────────────────────────
+  /** corn = tassels + husked ears; spike = dense head; panicle = branched head; cane = jointed sugarcane. */
+  grainType: 'corn' | 'spike' | 'panicle' | 'cane';
+  cropType: 'tomato' | 'strawberry' | 'pepper' | 'sunflower' | 'pumpkin' | 'cabbage';
+  /** Length of the bristles/awns on each grain (wheat), metres. */
+  awnLength: number;
+
   // ── colour (flat colour, modulated procedurally per vertex) ───────────────
   leafColor: string;
   leafColor2: string;
@@ -142,6 +149,7 @@ function botany(o: Partial<BotanyParams>): BotanyParams {
     leafLength: 2.2, bladeWidth: 0.55, bladeArc: 0.8, bladePitch: 35, bladeNotch: 0, bladeLobes: 0, bladePeak: 0.38, bladeVee: 0.15, bladeTears: 0,
     fruitStyle: 'nuts', nutCount: 0, nutSize: 0.16,
     branchStyle: 'lateral', branchLevels: 3, branchCount: 3, branchAngle: 42, branchTaper: 0.62, leavesPerTip: 6, compoundLeaf: 'simple',
+    grainType: 'spike', cropType: 'tomato', awnLength: 0,
     leafColor: '#3d7a26', leafColor2: '#86b43c', deadColor: '#9a7434', trunkColor: '#8a7a64', trunkColor2: '#6f6152', rachisColor: '#5c7031',
     nutColor: '#7a9a3a', nutColor2: '#c98a3a',
     ...o,
@@ -300,6 +308,105 @@ export const PRESETS: PlantParams[] = [
     petioleRatio: 0.13, leafLength: 0.52, bladeWidth: 0.32, bladeArc: 0.4, bladePitch: 38, bladeLobes: 0.3, bladePeak: 0.68, bladeVee: 0.1,
     leafColor: '#245c2a', leafColor2: '#498a3a', trunkColor: '#7d6c55', rachisColor: '#5d8a42',
   }, { flare: 0.4 }, { trunkSides: 14 }),
+  // ───────────────────────────── Grains & cereals ────────────────────────────
+  species('Corn (Maize)', 'grain', {
+    grainType: 'corn',
+    trunkHeight: 2.3, trunkRadius: 0.022, trunkCurve: 0.04, ringFrequency: 0, stemCount: 1, phyllotaxis: 180,
+    frondCount: 14, petioleRatio: 0.3,
+    leafLength: 1.0, bladeWidth: 0.09, bladeArc: 1.05, bladePitch: 30, bladePeak: 0.35, bladeVee: 0.25,
+    nutCount: 2, nutSize: 0.055, nutColor: '#ecbe3c', nutColor2: '#c09a72',
+    leafColor: '#4c8c2c', leafColor2: '#81bd40', trunkColor: '#7d9a4a', trunkColor2: '#93b45e', rachisColor: '#86aa4e', deadColor: '#b39b5a',
+  }, { flare: 0.4, stiltCount: 6, stiltHeight: 0.06 }, { trunkSides: 12 }),
+  species('Pearl Millet', 'grain', {
+    grainType: 'spike',
+    trunkHeight: 2.0, trunkRadius: 0.013, trunkCurve: 0.05, ringFrequency: 0, stemCount: 4, phyllotaxis: 180,
+    frondCount: 10, petioleRatio: 0.32,
+    leafLength: 0.85, bladeWidth: 0.045, bladeArc: 1.0, bladePitch: 32, bladePeak: 0.32, bladeVee: 0.2, awnLength: 0.014,
+    nutCount: 60, nutSize: 0.011, nutColor: '#b3a284', nutColor2: '#8f8266',
+    leafColor: '#5d8a3e', leafColor2: '#8cb45e', trunkColor: '#7d9a58', trunkColor2: '#93ad68', rachisColor: '#86a258',
+  }, { flare: 0.3 }, { trunkSides: 10 }),
+  species('Wheat', 'grain', {
+    grainType: 'spike',
+    trunkHeight: 0.95, trunkRadius: 0.005, trunkCurve: 0.03, ringFrequency: 0, stemCount: 7, phyllotaxis: 180,
+    frondCount: 6, petioleRatio: 0.35,
+    leafLength: 0.4, bladeWidth: 0.016, bladeArc: 0.9, bladePitch: 35, bladePeak: 0.3, bladeVee: 0.15, awnLength: 0.085,
+    nutCount: 26, nutSize: 0.012, nutColor: '#e0b154', nutColor2: '#c49a44',
+    leafColor: '#a89a4d', leafColor2: '#cbbd6a', trunkColor: '#c2a45c', trunkColor2: '#d3b96e', rachisColor: '#c8ae60',
+  }, { flare: 0.2 }, { trunkSides: 8 }),
+  species('Rice', 'grain', {
+    grainType: 'panicle',
+    trunkHeight: 1.0, trunkRadius: 0.006, trunkCurve: 0.05, ringFrequency: 0, stemCount: 8, phyllotaxis: 180,
+    frondCount: 7, petioleRatio: 0.3,
+    leafLength: 0.55, bladeWidth: 0.02, bladeArc: 1.35, bladePitch: 30, bladePeak: 0.3, bladeVee: 0.2, awnLength: 0,
+    nutCount: 46, nutSize: 0.009, nutColor: '#dcC26a', nutColor2: '#c2a452',
+    leafColor: '#4d8c34', leafColor2: '#7fb84e', trunkColor: '#7d9a58', trunkColor2: '#93ad68', rachisColor: '#86a258',
+  }, { flare: 0.2 }, { trunkSides: 8 }),
+  species('Sorghum', 'grain', {
+    grainType: 'panicle',
+    trunkHeight: 2.2, trunkRadius: 0.017, trunkCurve: 0.04, ringFrequency: 0, stemCount: 2, phyllotaxis: 180,
+    frondCount: 11, petioleRatio: 0.3,
+    leafLength: 0.85, bladeWidth: 0.07, bladeArc: 1.0, bladePitch: 32, bladePeak: 0.34, bladeVee: 0.22, awnLength: 0.006,
+    nutCount: 64, nutSize: 0.011, nutColor: '#b04a2e', nutColor2: '#8a5a30',
+    leafColor: '#4d8a34', leafColor2: '#7fb54a', trunkColor: '#7d9a58', trunkColor2: '#93ad68', rachisColor: '#8a9a54',
+  }, { flare: 0.3 }, { trunkSides: 12 }),
+  species('Sugarcane', 'grain', {
+    grainType: 'cane',
+    trunkHeight: 3.0, trunkRadius: 0.028, trunkCurve: 0.06, ringFrequency: 0, stemCount: 5, phyllotaxis: 180,
+    frondCount: 12, petioleRatio: 0.24,
+    leafLength: 1.3, bladeWidth: 0.055, bladeArc: 1.15, bladePitch: 34, bladePeak: 0.3, bladeVee: 0.25,
+    nutCount: 0,
+    leafColor: '#4d8a34', leafColor2: '#82b84a', trunkColor: '#9a8aa8', trunkColor2: '#7d9a5e', rachisColor: '#86aa4e', deadColor: '#b39b5a',
+  }, { flare: 0.4 }, { trunkSides: 14 }),
+
+  // ─────────────────────────────── Vegetables ────────────────────────────────
+  species('Tomato', 'vegetable', {
+    cropType: 'tomato',
+    trunkHeight: 1.05, trunkRadius: 0.012, trunkCurve: 0.12, ringFrequency: 0,
+    branchStyle: 'lateral', branchLevels: 2, branchCount: 3, branchAngle: 48, branchTaper: 0.62, leavesPerTip: 3,
+    petioleRatio: 0.28, leafLength: 0.28, bladeWidth: 0.17, bladeArc: 0.55, bladePitch: 38,
+    nutCount: 4, nutSize: 0.036, nutColor: '#d83a26', nutColor2: '#86b83e',
+    leafColor: '#3a7a2e', leafColor2: '#63a844', trunkColor: '#6d8a4c', trunkColor2: '#7d9a58', rachisColor: '#74a04e',
+  }, { flare: 0.3 }, { trunkSides: 10 }),
+  species('Strawberry', 'vegetable', {
+    cropType: 'strawberry',
+    trunkHeight: 0.07, trunkRadius: 0.05, ringFrequency: 0,
+    frondCount: 9, petioleRatio: 0.62,
+    leafLength: 0.23, bladeWidth: 0.095, bladeArc: 0.35, bladePitch: 46, bladePeak: 0.5,
+    nutCount: 6, nutSize: 0.02, nutColor: '#d8263a', nutColor2: '#f4f1e4',
+    leafColor: '#2e7030', leafColor2: '#55a043', trunkColor: '#7a6a4e', rachisColor: '#6d9a48',
+  }, { flare: 0.2 }, { trunkSides: 12 }),
+  species('Chili Pepper', 'vegetable', {
+    cropType: 'pepper',
+    trunkHeight: 0.34, trunkRadius: 0.012, trunkCurve: 0.06, ringFrequency: 0,
+    branchStyle: 'lateral', branchLevels: 2, branchCount: 3, branchAngle: 44, branchTaper: 0.62, leavesPerTip: 5,
+    petioleRatio: 0.22, leafLength: 0.14, bladeWidth: 0.055, bladeArc: 0.45, bladePitch: 36, bladePeak: 0.42,
+    nutCount: 14, nutSize: 0.055, nutColor: '#d82626', nutColor2: '#4a9a2e',
+    leafColor: '#2e7030', leafColor2: '#55a043', trunkColor: '#6d8a4c', trunkColor2: '#7d9a58', rachisColor: '#5d8a42',
+  }, { flare: 0.3 }, { trunkSides: 10 }),
+  species('Sunflower', 'vegetable', {
+    cropType: 'sunflower',
+    trunkHeight: 1.9, trunkRadius: 0.024, trunkCurve: 0.05, ringFrequency: 0, phyllotaxis: 137.5,
+    frondCount: 11, petioleRatio: 0.38,
+    leafLength: 0.44, bladeWidth: 0.3, bladeArc: 0.55, bladePitch: 42, bladeLobes: 0.55, bladePeak: 0.34, bladeVee: 0.12,
+    nutCount: 1, nutSize: 0.13, nutColor: '#f4bc22', nutColor2: '#5a3a22',
+    leafColor: '#3d7a2c', leafColor2: '#68aa44', trunkColor: '#6d8a4c', trunkColor2: '#7d9a58', rachisColor: '#74a04e',
+  }, { flare: 0.4 }, { trunkSides: 14 }),
+  species('Pumpkin', 'vegetable', {
+    cropType: 'pumpkin',
+    trunkHeight: 0.28, trunkRadius: 0.03, ringFrequency: 0,
+    frondCount: 10, petioleRatio: 0.55,
+    leafLength: 0.85, bladeWidth: 0.34, bladeArc: 0.5, bladePitch: 52, bladeLobes: 0.8, bladeNotch: 0.35, bladePeak: 0.36,
+    nutCount: 2, nutSize: 0.17, nutColor: '#e07820', nutColor2: '#c45e16',
+    leafColor: '#35702a', leafColor2: '#64a843', trunkColor: '#6d8a4c', rachisColor: '#74a04e',
+  }, { flare: 0.3 }, { trunkSides: 12 }),
+  species('Cabbage', 'vegetable', {
+    cropType: 'cabbage',
+    trunkHeight: 0.12, trunkRadius: 0.045, ringFrequency: 0,
+    frondCount: 9, petioleRatio: 0.2,
+    leafLength: 0.52, bladeWidth: 0.34, bladeArc: 0.35, bladePitch: 58, bladeLobes: 0.3, bladePeak: 0.48, bladeVee: 0.08,
+    nutCount: 1, nutSize: 0.125, nutColor: '#bcd4a2', nutColor2: '#9dbd84',
+    leafColor: '#5d8a4e', leafColor2: '#83ac66', trunkColor: '#77a05e', rachisColor: '#83ac66',
+  }, { flare: 0.2 }, { trunkSides: 12 }),
 ];
 
 export const PRESET_GROUPS: { label: string; icon: string; accent: string; names: string[] }[] = [
@@ -308,6 +415,8 @@ export const PRESET_GROUPS: { label: string; icon: string; accent: string; names
   { label: 'Banana family', icon: 'banana', accent: '#e5d33a', names: ['Banana', 'Bird of Paradise', "Traveler's Palm", 'Heliconia'] },
   { label: 'Big-leaf plants', icon: 'leaf', accent: '#8fd15a', names: ['Elephant Ear', 'Monstera', 'Split-leaf Philodendron', 'Giant Taro'] },
   { label: 'Tropical trees', icon: 'tree', accent: '#ffb454', names: ['Frangipani', 'Umbrella Tree', 'Fiddle-leaf Fig'] },
+  { label: 'Grains & cereals', icon: 'wheat', accent: '#e0b83a', names: ['Corn (Maize)', 'Pearl Millet', 'Wheat', 'Rice', 'Sorghum', 'Sugarcane'] },
+  { label: 'Vegetables', icon: 'carrot', accent: '#ff7847', names: ['Tomato', 'Strawberry', 'Chili Pepper', 'Sunflower', 'Pumpkin', 'Cabbage'] },
 ];
 
 export function groupOf(name: string): string {
@@ -326,5 +435,9 @@ export function plantHeight(p: PlantParams): number {
       return Math.max(b.trunkHeight, b.leafLength * 0.72);
     case 'branching':
       return b.trunkHeight * (1 + b.branchLevels * 0.55);
+    case 'grain':
+      return b.trunkHeight * 1.12;
+    case 'vegetable':
+      return Math.max(b.trunkHeight * 1.35, b.leafLength * 0.8);
   }
 }

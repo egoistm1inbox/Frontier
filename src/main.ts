@@ -606,6 +606,10 @@ function speciesMeta(name: string): string {
       return `big-leaf · ${hm}`;
     case 'branching':
       return `tree · ${hm} · L${p.botany.branchLevels}`;
+    case 'grain':
+      return `${p.botany.grainType} · ${hm}${p.botany.stemCount > 1 ? ` · ${p.botany.stemCount} tillers` : ''}`;
+    case 'vegetable':
+      return `${p.botany.cropType} · ${hm}`;
   }
 }
 
@@ -742,7 +746,7 @@ function buildBotanyPage(): void {
   });
 
   // ── trunk ─────────────────────────────────────────────────────────────────
-  const sTrunk = section(params.habit === 'paddle' ? 'Stem' : params.habit === 'rosette' ? 'Crown & stem' : 'Trunk', page);
+  const sTrunk = section(params.habit === 'grain' ? 'Culm (stalk)' : params.habit === 'paddle' || params.habit === 'vegetable' ? 'Stem' : params.habit === 'rosette' ? 'Crown & stem' : 'Trunk', page);
   slider(sTrunk, 'Height', () => B().trunkHeight, (v) => (B().trunkHeight = v), { min: 0.1, max: 30, step: 0.1, unit: 'm' }, onChange);
   scaledSlider(sTrunk, 'Radius', () => B().trunkRadius, (v) => (B().trunkRadius = v), 100, { min: 1, max: 60, step: 0.5, unit: 'cm' });
   slider(sTrunk, 'Curve', () => B().trunkCurve, (v) => (B().trunkCurve = v), { min: 0, max: 1, step: 0.02, title: 'Lean and sweep of the trunk' }, onChange);
@@ -751,8 +755,8 @@ function buildBotanyPage(): void {
   if (params.habit === 'palm') {
     slider(sTrunk, 'Crownshaft', () => B().crownshaft, (v) => (B().crownshaft = v), { min: 0, max: 0.25, step: 0.005, title: 'Smooth green shaft under the crown (royal palm), fraction of height' }, onChange);
   }
-  if (params.habit === 'palm' || params.habit === 'paddle') {
-    refreshers.push(stepper(sTrunk, 'Stems (clump)', () => B().stemCount, (v) => (B().stemCount = v), { min: 1, max: 9, integer: true, title: 'Clustering stems, each welded into the shared root crown' }, onChange).refresh);
+  if (params.habit === 'palm' || params.habit === 'paddle' || params.habit === 'grain') {
+    refreshers.push(stepper(sTrunk, params.habit === 'grain' ? 'Tillers' : 'Stems (clump)', () => B().stemCount, (v) => (B().stemCount = v), { min: 1, max: 9, integer: true, title: 'Clustering stems, each welded into the shared root crown' }, onChange).refresh);
   }
   if (params.habit === 'rosette') {
     slider(sTrunk, 'Climbing stem', () => B().stemClimb, (v) => (B().stemClimb = v), { min: 0, max: 1, step: 0.05, title: 'Leaves spread along a winding stem (monstera) instead of a ground rosette' }, onChange);
@@ -793,6 +797,36 @@ function buildBotanyPage(): void {
     slider(sLeaf, 'Wind tears', () => B().bladeTears, (v) => (B().bladeTears = v), { min: 0, max: 1, step: 0.05, title: 'Perpendicular tears splitting the blade into strips (banana, traveler palm)' }, onChange);
     slider(sLeaf, 'Crown spread', () => B().crownSpread, (v) => (B().crownSpread = v), { min: 10, max: 130, step: 1, unit: '°' }, onChange);
     slider(sLeaf, 'Phyllotaxis', () => B().phyllotaxis, (v) => (B().phyllotaxis = v), { min: 60, max: 220, step: 0.5, unit: '°', title: '180° = two-ranked fan (bird of paradise, traveler palm)' }, onChange);
+  } else if (params.habit === 'grain') {
+    const sCulm = section('Culm & leaves', page);
+    select(sCulm, 'Grain head', [{ value: 'corn', label: 'Corn: tassel + ears' }, { value: 'spike', label: 'Spike (millet, wheat)' }, { value: 'panicle', label: 'Panicle (rice, sorghum)' }, { value: 'cane', label: 'Sugarcane (no head)' }], () => B().grainType, (v) => (B().grainType = v), onChange);
+    slider(sCulm, 'Leaves / culm', () => B().frondCount, (v) => (B().frondCount = Math.round(v)), { min: 3, max: 20, step: 1, title: 'One strap leaf per node, two-ranked up the stalk' }, onChange);
+    slider(sCulm, 'Leaf length', () => B().leafLength, (v) => (B().leafLength = v), { min: 0.2, max: 2, step: 0.05, unit: 'm', title: 'Sheath + blade' }, onChange);
+    scaledSlider(sCulm, 'Blade width', () => B().bladeWidth, (v) => (B().bladeWidth = v), 1000, { min: 8, max: 140, step: 1, unit: 'mm' });
+    slider(sCulm, 'Sheath ratio', () => B().petioleRatio, (v) => (B().petioleRatio = v), { min: 0.05, max: 0.6, step: 0.01, title: 'Fraction of the leaf that wraps the stalk before the blade bends out' }, onChange);
+    slider(sCulm, 'Blade arc', () => B().bladeArc, (v) => (B().bladeArc = v), { min: 0, max: 2, step: 0.05 }, onChange);
+    scaledSlider(sCulm, 'Awns / bristles', () => B().awnLength, (v) => (B().awnLength = v), 100, { min: 0, max: 15, step: 0.5, unit: 'cm' });
+    const sHead = section('Grain', page);
+    refreshers.push(stepper(sHead, 'Grains / ears', () => B().nutCount, (v) => (B().nutCount = v), { min: 0, max: 90, integer: true, title: 'Kernels per head — or ears per stalk for corn' }, onChange).refresh);
+    scaledSlider(sHead, 'Grain size', () => B().nutSize, (v) => (B().nutSize = v), 1000, { min: 4, max: 60, step: 1, unit: 'mm' });
+  } else if (params.habit === 'vegetable') {
+    const sCrop = section('Crop', page);
+    select(sCrop, 'Crop type', [{ value: 'tomato', label: 'Tomato vine' }, { value: 'strawberry', label: 'Strawberry' }, { value: 'pepper', label: 'Chili pepper' }, { value: 'sunflower', label: 'Sunflower' }, { value: 'pumpkin', label: 'Pumpkin' }, { value: 'cabbage', label: 'Cabbage' }], () => B().cropType, (v) => (B().cropType = v), onChange);
+    slider(sCrop, 'Leaves', () => B().frondCount, (v) => (B().frondCount = Math.round(v)), { min: 3, max: 20, step: 1 }, onChange);
+    refreshers.push(stepper(sCrop, 'Leaves / shoot', () => B().leavesPerTip, (v) => (B().leavesPerTip = v), { min: 1, max: 10, integer: true, title: 'Compound leaves on tomato/pepper shoots' }, onChange).refresh);
+    const sLeafV = section('Leaves', page);
+    slider(sLeafV, 'Leaf length', () => B().leafLength, (v) => (B().leafLength = v), { min: 0.05, max: 1.2, step: 0.02, unit: 'm' }, onChange);
+    slider(sLeafV, 'Blade width', () => B().bladeWidth, (v) => (B().bladeWidth = v), { min: 0.03, max: 0.6, step: 0.01, unit: 'm' }, onChange);
+    slider(sLeafV, 'Petiole ratio', () => B().petioleRatio, (v) => (B().petioleRatio = v), { min: 0.03, max: 0.75, step: 0.01 }, onChange);
+    slider(sLeafV, 'Blade arc', () => B().bladeArc, (v) => (B().bladeArc = v), { min: 0, max: 2, step: 0.05 }, onChange);
+    slider(sLeafV, 'Blade pitch', () => B().bladePitch, (v) => (B().bladePitch = v), { min: 0, max: 90, step: 1, unit: '°' }, onChange);
+    slider(sLeafV, 'Widest at', () => B().bladePeak, (v) => (B().bladePeak = v), { min: 0.15, max: 0.8, step: 0.01 }, onChange);
+    slider(sLeafV, 'Heart lobes', () => B().bladeLobes, (v) => (B().bladeLobes = v), { min: 0, max: 1, step: 0.05, title: 'Basal lobes (sunflower, pumpkin leaves)' }, onChange);
+    slider(sLeafV, 'Splits', () => B().bladeNotch, (v) => (B().bladeNotch = v), { min: 0, max: 1, step: 0.05, title: 'Lobed leaf margins (pumpkin)' }, onChange);
+    const sBranchV = section('Branching', page, { hint: 'tomato · pepper' });
+    refreshers.push(stepper(sBranchV, 'Levels', () => B().branchLevels, (v) => (B().branchLevels = v), { min: 1, max: 3, integer: true }, onChange).refresh);
+    slider(sBranchV, 'Branches / node', () => B().branchCount, (v) => (B().branchCount = v), { min: 2, max: 5, step: 0.1 }, onChange);
+    slider(sBranchV, 'Branch angle', () => B().branchAngle, (v) => (B().branchAngle = v), { min: 10, max: 85, step: 1, unit: '°' }, onChange);
   } else {
     const sBranch = section('Branching', page);
     select(sBranch, 'Architecture', [{ value: 'lateral', label: 'Lateral (umbrella)' }, { value: 'fork', label: 'Forking (frangipani)' }, { value: 'leader', label: 'Leader (fiddle-leaf)' }], () => B().branchStyle, (v) => (B().branchStyle = v), onChange);
@@ -813,10 +847,12 @@ function buildBotanyPage(): void {
   }
 
   // ── fruit ─────────────────────────────────────────────────────────────────
-  const sFruit = section('Fruit & flowers', page, { collapsed: params.botany.nutCount === 0 });
-  if (params.habit === 'palm') select(sFruit, 'Cluster style', [{ value: 'nuts', label: 'Single nuts' }, { value: 'dates', label: 'Date bunches' }], () => B().fruitStyle, (v) => (B().fruitStyle = v), onChange);
-  refreshers.push(stepper(sFruit, 'Count', () => B().nutCount, (v) => (B().nutCount = v), { min: 0, max: 24, integer: true, title: 'Nuts / inflorescences welded under the crown or at branch tips' }, onChange).refresh);
-  scaledSlider(sFruit, 'Size', () => B().nutSize, (v) => (B().nutSize = v), 100, { min: 1, max: 30, step: 0.5, unit: 'cm' });
+  if (params.habit !== 'grain') {
+    const sFruit = section('Fruit & flowers', page, { collapsed: params.botany.nutCount === 0 });
+    if (params.habit === 'palm') select(sFruit, 'Cluster style', [{ value: 'nuts', label: 'Single nuts' }, { value: 'dates', label: 'Date bunches' }], () => B().fruitStyle, (v) => (B().fruitStyle = v), onChange);
+    refreshers.push(stepper(sFruit, 'Count', () => B().nutCount, (v) => (B().nutCount = v), { min: 0, max: 24, integer: true, title: 'Nuts / inflorescences welded under the crown or at branch tips' }, onChange).refresh);
+    scaledSlider(sFruit, 'Size', () => B().nutSize, (v) => (B().nutSize = v), 100, { min: 1, max: 30, step: 0.5, unit: 'cm' });
+  }
 
   // ── colour ────────────────────────────────────────────────────────────────
   const sCol = section('Colour', page, { collapsed: true, hint: 'flat + procedural' });

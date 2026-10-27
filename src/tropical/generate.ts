@@ -1704,6 +1704,1149 @@ function buildUmbrellaLeaf(bd: PlantBuilder, p: PlantParams, rng: Random, branch
   }
 }
 
+
+
+// -----------------------------------------------------------------------------
+// Habit: vegetable crops
+//
+// Garden plants built from the same welded tubes: tomato vines with pinnate
+// compound leaves and fruit trusses, strawberry crowns with trifoliate
+// leaves, runners and berries, pepper bushes, a sunflower with a ray-petal
+// head, pumpkin vines and a headed cabbage.
+// -----------------------------------------------------------------------------
+
+function ripenColor(ripe: number, cGreen: RGB, cRipe: RGB): RGB {
+  const orange: RGB = [0.86, 0.46, 0.13];
+  return ripe < 0.5 ? mixRgb(cGreen, orange, ripe * 2) : mixRgb(orange, cRipe, (ripe - 0.5) * 2);
+}
+
+interface Shoot { grid: TubeGrid; level: number }
+
+/** Tomato/pepper style branching: collect every shoot for leaves + fruit. */
+function growShoots(bd: PlantBuilder, p: PlantParams, rng: Random, parent: TubeGrid, len: number, radius: number, level: number, shoots: Shoot[]): void {
+  const b = p.botany;
+  shoots.push({ grid: parent, level });
+  if (level >= b.branchLevels) return;
+  const count = Math.max(2, Math.round(b.branchCount * rng.range(0.8, 1.2)));
+  const baseAz = rng.range(0, TAU);
+  for (let i = 0; i < count; i++) {
+    const t = count === 1 ? 0.9 : lerp(0.42, 0.96, i / (count - 1)) + rng.bell() * 0.02;
+    const f = bd.frameAt(parent, clamp(t, 0.05, 0.99));
+    const az = baseAz + i * 137.5 * DEG + rng.bell() * 0.25;
+    const radial = normalize(addScaled(scale(f.U, Math.cos(az)), f.V, Math.sin(az)));
+    const spread = b.branchAngle * DEG * rng.range(0.85, 1.15);
+    const dir = normalize(addScaled(scale(f.T, Math.cos(spread)), radial, Math.sin(spread)));
+    const childLen = len * rng.range(0.6, 0.78);
+    const childRad = Math.max(0.004, radius * b.branchTaper * rng.range(0.9, 1.05));
+    const origin = addScaled(f.center, dir, f.radius * 0.85);
+    const child = buildBranch(bd, p, rng.fork(), parent, origin, dir, childLen, childRad, level + 1, t, false);
+    if (child) growShoots(bd, p, rng.fork(), child, childLen, childRad, level + 1, shoots);
+  }
+}
+
+/** Five-petal star flower on its own stalk (tomato, strawberry, pepper...). */
+function buildStarFlower(bd: PlantBuilder, p: PlantParams, rng: Random, parent: TubeGrid, attachT: number, dir: V3, origin: V3, size: number, stalkLen: number, petalColor: RGB, centerColor: RGB): void {
+  const b = p.botany;
+  const phase = rng.next();
+  const stalk = bd.weld(parent, attachT, dir, 1, 2, {
+    spine: bendSpine(origin, dir, stalkLen, 6, (s) => -(0.3 / stalkLen) * s),
+    ringTs: evenRings(9),
+    sides: 6,
+    profileAt: (t, out) => circleInto(out, 6, Math.max(0.0012, size * 0.09 * (1 - t * 0.3)), Math.max(0.0012, size * 0.09 * (1 - t * 0.3))),
+    colorAt: () => col(b.rachisColor),
+    upHint: UP,
+    tile: TILE.stem,
+    vPerMeter: 2,
+    organ: ORGAN.rachis,
+    wind: wind(origin, phase, 0.15, 0.4, 0.05, 0.25),
+    capEnd: true,
+  }, { collarRings: 0, collarScale: 0.5, margin: 0, search: 6 });
+  if (!stalk) return;
+  const tip = bd.frameAt(stalk, 0.97);
+  // Central cone of anthers.
+  bd.weld(stalk, 0.97, tip.T, 1, 2, {
+    spine: [tip.center, addScaled(tip.center, tip.T, size * 0.3), addScaled(tip.center, tip.T, size * 0.5)],
+    ringTs: evenRings(3),
+    sides: 6,
+    profileAt: (t, out) => circleInto(out, 6, Math.max(0.0008, size * 0.16 * Math.sin(Math.PI * (0.2 + 0.65 * t))), Math.max(0.0008, size * 0.16 * Math.sin(Math.PI * (0.2 + 0.65 * t)))),
+    colorAt: () => centerColor,
+    upHint: UP,
+    tile: TILE.stem,
+    vPerMeter: 3,
+    organ: ORGAN.fruit,
+    wind: wind(origin, phase, 0.4, 0.5, 0.1, 0.3),
+    capEnd: true,
+  }, { collarRings: 0, collarScale: 0.4, margin: 0 });
+  for (let k = 0; k < 5; k++) {
+    const a = (k / 5) * TAU + rng.bell() * 0.1;
+    const radial = normalize(addScaled(scale(tip.U, Math.cos(a)), tip.V, Math.sin(a)));
+    const pdir = normalize(addScaled(scale(radial, 1), tip.T, 0.35));
+    const sp = leafletSpec(tip.center, pdir, radial, {
+      len: size * rng.range(0.9, 1.1), width: size * 0.42, droop: 0.4, twistRad: 0.2,
+      colorA: tint(petalColor, 0.95), colorB: tint(petalColor, 1.08),
+      windPhase: phase, pivot: origin, limbBase: 0.4, rings: 5, fold: 0.22, organ: ORGAN.fruit, tile: TILE.leafLong,
+    }, rng.fork());
+    bd.weld(stalk, 0.94, pdir, 1, 2, sp, { collarRings: 0, collarScale: 0.4, margin: 0 });
+  }
+}
+
+/** Tomato compound leaf: rachis with paired leaflets, interstitials, terminal. */
+function buildCompoundLeaf(bd: PlantBuilder, p: PlantParams, rng: Random, parent: TubeGrid, attachT: number, dir: V3, origin: V3, sizeF: number): void {
+  const b = p.botany;
+  const len = b.leafLength * sizeF * rng.range(0.9, 1.1);
+  const phase = rng.next();
+  const rachis = bd.weld(parent, attachT, dir, 2, 2, {
+    spine: bendSpine(origin, dir, len, 8, (s) => -(0.55 / len) * s, () => rng.bell() * 0.02 / len),
+    ringTs: evenRings(22),
+    sides: 8,
+    profileAt: (t, out) => circleInto(out, 8, Math.max(0.0012, 0.0032 * (1 - t * 0.55)), Math.max(0.0012, 0.0032 * (1 - t * 0.55))),
+    colorAt: () => col(b.rachisColor),
+    upHint: UP,
+    tile: TILE.stem,
+    vPerMeter: 1.6,
+    organ: ORGAN.rachis,
+    wind: wind(origin, phase, 0.2, 0.5, 0.04, 0.2),
+    capEnd: true,
+  }, { collarRings: 0, collarScale: 0.5, margin: 0, search: 6 });
+  if (!rachis) return;
+  const cA = mixRgb(col(b.leafColor), col(b.leafColor2), rng.next() * 0.4);
+  const leafletAt = (t: number, sideSign: number, lf: number): void => {
+    const f = bd.frameAt(rachis, clamp(t, 0.05, 0.99));
+    const dir2 = sideSign === 0
+      ? normalize(addScaled(f.T, f.V, 0.25))
+      : normalize(addScaled(scale(f.T, 0.55), f.U, sideSign));
+    const sp = leafletSpec(f.center, dir2, f.V, {
+      len: len * 0.36 * lf, width: b.bladeWidth * 0.4 * lf, droop: 0.6, twistRad: 0.35,
+      colorA: cA, colorB: tint(cA, 1.1), windPhase: phase, pivot: origin, limbBase: 0.45,
+      rings: 7, fold: 0.32, organ: ORGAN.leaf, tile: TILE.leafLong,
+    }, rng.fork());
+    bd.weld(rachis, t, dir2, 1, 2, sp, { collarRings: 0, collarScale: 0.45, margin: 0 });
+  };
+  for (let pr = 0; pr < 3; pr++) {
+    const t = 0.42 + pr * 0.17;
+    leafletAt(t, 1, 0.85 + pr * 0.12);
+    leafletAt(t + 0.015, -1, 0.85 + pr * 0.12);
+    if (pr < 2) { leafletAt(t + 0.085, 1, 0.3); leafletAt(t + 0.1, -1, 0.3); } // interstitial leaflets
+  }
+  leafletAt(0.97, 0, 1.15);
+}
+
+/** Tomato truss: a hooked stalk carrying a cluster of ripening fruit. */
+function buildTomatoTruss(bd: PlantBuilder, p: PlantParams, rng: Random, parent: TubeGrid, attachT: number): void {
+  const b = p.botany;
+  const f0 = bd.frameAt(parent, attachT);
+  const az = rng.range(0, TAU);
+  const radial = normalize(addScaled(scale(f0.U, Math.cos(az)), f0.V, Math.sin(az)));
+  const dir0 = normalize(add(addScaled(radial, f0.T, 0.3), v3(0, -0.25, 0)));
+  const origin = addScaled(f0.center, dir0, f0.radius * 0.85);
+  const phase = rng.next();
+  const axis = bd.weld(parent, attachT, dir0, 1, 2, {
+    spine: bendSpine(origin, dir0, 0.11, 7, (s) => -(1.1 / 0.11) * s),
+    ringTs: evenRings(16),
+    sides: 6,
+    profileAt: (t, out) => circleInto(out, 6, Math.max(0.0012, 0.0028 * (1 - t * 0.4)), Math.max(0.0012, 0.0028 * (1 - t * 0.4))),
+    colorAt: () => col(b.rachisColor),
+    upHint: UP,
+    tile: TILE.stem,
+    vPerMeter: 2,
+    organ: ORGAN.rachis,
+    wind: wind(origin, phase, 0.25, 0.4, 0.04, 0.15),
+    capEnd: true,
+  }, { collarRings: 0, collarScale: 0.5, margin: 0, search: 6 });
+  if (!axis) return;
+  const fruits = 4 + Math.floor(rng.next() * 3);
+  const cRed = col(b.nutColor);
+  const cGreen = col(b.nutColor2);
+  for (let i = 0; i < fruits; i++) {
+    const t = 0.3 + (i / Math.max(1, fruits - 1)) * 0.66;
+    const f = bd.frameAt(axis, t);
+    const ang = i * 2.4 + rng.bell() * 0.3;
+    const fradial = normalize(addScaled(scale(f.U, Math.cos(ang)), f.V, Math.sin(ang)));
+    const dir = normalize(add(addScaled(f.T, fradial, 0.5), v3(0, -1, 0)));
+    const o = addScaled(f.center, dir, f.radius * 0.7);
+    const R = Math.max(0.014, b.nutSize) * rng.range(0.8, 1.15);
+    const ripe = clamp(0.25 + rng.next() * 0.85 - t * 0.15, 0, 1);
+    const cT = ripenColor(ripe, cGreen, cRed);
+    const tom = bd.weld(axis, t, dir, 2, 3, {
+      spine: [o, addScaled(o, dir, R * 0.95), addScaled(o, dir, R * 1.8)],
+      ringTs: evenRings(10),
+      sides: 10,
+      profileAt: (tt, out) => {
+        let r = R * Math.pow(Math.sin(Math.PI * (0.1 + 0.8 * tt)), 0.75) * (0.3 + 0.7 * smoothstep(0, 0.15, tt));
+        r *= 1 - 0.16 * Math.exp(-Math.pow((tt - 0.03) / 0.045, 2)); // stem dimple
+        for (let j = 0; j < 10; j++) {
+          const a = (j / 10) * TAU;
+          const rr = Math.max(0.002, r * (1 + 0.03 * Math.cos(a * 8)));
+          out[j].x = Math.cos(a) * rr; out[j].y = Math.sin(a) * rr; out[j].u = j / 10;
+        }
+      },
+      colorAt: (tt, j) => tint(mixRgb(cT, cGreen, Math.exp(-tt * 7) * 0.55), 0.94 + 0.07 * noise3(j * 2.2, tt * 8 + i * 5, i)),
+      upHint: UP,
+      tile: TILE.stem,
+      vPerMeter: 2.4,
+      organ: ORGAN.fruit,
+      wind: wind(origin, phase, 0.4, 0.5, 0.05, 0.15),
+      capEnd: true,
+      capScale: 0.45,
+    }, { collarRings: 0, collarScale: 0.5, margin: 0 });
+    if (!tom) continue;
+    // Star calyx hugging the top of each tomato.
+    const tf = bd.frameAt(tom, 0.1);
+    for (let k = 0; k < 5; k++) {
+      const a = (k / 5) * TAU;
+      const cradial = normalize(addScaled(scale(tf.U, Math.cos(a)), tf.V, Math.sin(a)));
+      const cdir = normalize(addScaled(scale(cradial, 1), tf.T, -0.55));
+      const sp = leafletSpec(tf.center, cdir, cradial, {
+        len: R * 0.85, width: R * 0.26, droop: 0.15, twistRad: 0,
+        colorA: col(b.rachisColor), colorB: tint(col(b.rachisColor), 1.1),
+        windPhase: phase, pivot: origin, limbBase: 0.45, rings: 4, fold: 0.4, organ: ORGAN.rachis, tile: TILE.leafLong,
+      }, rng.fork());
+      bd.weld(tom, 0.08, cdir, 1, 2, sp, { collarRings: 0, collarScale: 0.4, margin: 0 });
+    }
+  }
+}
+
+function buildTomato(bd: PlantBuilder, p: PlantParams, rng: Random): void {
+  const b = p.botany;
+  const trunk = buildTrunk(bd, p, rng, v3(0, 0, 0), rng.range(0, TAU), 1, Math.max(10, p.mesh.trunkSides), {
+    crownBand: 0.08, crownWindows: 6, branchBand: [0.3, 0.98],
+  });
+  const shoots: Shoot[] = [];
+  growShoots(bd, p, rng, trunk, b.trunkHeight * 0.7, b.trunkRadius, 0, shoots);
+  for (const sh of shoots) {
+    const leafCount = sh.level === 0 ? 4 : 3;
+    for (let i = 0; i < leafCount; i++) {
+      const t = lerp(0.3, 0.92, leafCount <= 1 ? 0.5 : i / (leafCount - 1)) + rng.bell() * 0.03;
+      const f = bd.frameAt(sh.grid, clamp(t, 0.05, 0.97));
+      const az = rng.range(0, TAU);
+      const radial = normalize(addScaled(scale(f.U, Math.cos(az)), f.V, Math.sin(az)));
+      const dir = normalize(addScaled(scale(f.T, 0.5), radial, 1));
+      buildCompoundLeaf(bd, p, rng.fork(), sh.grid, t, dir, addScaled(f.center, dir, f.radius * 0.85), sh.level === 0 ? 1 : 0.85);
+    }
+  }
+  const fruiting = shoots.filter((s) => s.level >= 1);
+  const trusses = clamp(Math.round(b.nutCount), 0, 10);
+  for (let i = 0; i < trusses && fruiting.length; i++) {
+    const sh = fruiting[i % fruiting.length];
+    buildTomatoTruss(bd, p, rng.fork(), sh.grid, rng.range(0.45, 0.8));
+  }
+  for (let i = 0; i < 3 && fruiting.length; i++) {
+    const sh = fruiting[Math.floor(rng.next() * fruiting.length)];
+    const t = rng.range(0.7, 0.95);
+    const f = bd.frameAt(sh.grid, t);
+    const dir = normalize(addScaled(scale(f.T, 0.6), f.U, 0.8));
+    buildStarFlower(bd, p, rng.fork(), sh.grid, t, dir, addScaled(f.center, dir, f.radius * 0.85), 0.014, 0.035, col('#f0c832'), col('#d8a41e'));
+  }
+  buildStiltRoots(bd, p, rng.fork(), trunk);
+}
+
+/** Strawberry trifoliate leaf: petiole ending in three broad leaflets. */
+function buildTrifoliate(bd: PlantBuilder, p: PlantParams, rng: Random, parent: TubeGrid, attachT: number, dir: V3, origin: V3, petLen: number, leafletLen: number, cA: RGB): void {
+  const b = p.botany;
+  const phase = rng.next();
+  const pet = bd.weld(parent, attachT, dir, 2, 2, {
+    spine: bendSpine(origin, dir, petLen, 6, (s) => -(0.3 / petLen) * s),
+    ringTs: evenRings(10),
+    sides: 8,
+    profileAt: (t, out) => circleInto(out, 8, Math.max(0.0012, 0.0032 * (1 - t * 0.35)), Math.max(0.0012, 0.0032 * (1 - t * 0.35))),
+    colorAt: () => col(b.rachisColor),
+    upHint: UP,
+    tile: TILE.stem,
+    vPerMeter: 2,
+    organ: ORGAN.rachis,
+    wind: wind(origin, phase, 0.05, 0.35, 0.03, 0.2),
+    capEnd: true,
+  }, { collarRings: 0, collarScale: 0.5, margin: 0, search: 6 });
+  if (!pet) return;
+  const tip = bd.frameAt(pet, 0.97);
+  for (let k = -1; k <= 1; k++) {
+    const dir2 = normalize(add(addScaled(tip.T, tip.U, k * 0.85), v3(0, 0.3, 0)));
+    const sp = leafletSpec(tip.center, dir2, tip.V, {
+      len: leafletLen * rng.range(0.9, 1.08), width: b.bladeWidth * 0.55, droop: 0.55, twistRad: 0.25,
+      colorA: cA, colorB: tint(cA, 1.1), windPhase: phase, pivot: origin, limbBase: 0.35,
+      rings: 7, fold: 0.42, organ: ORGAN.leaf, tile: TILE.leafLong,
+    }, rng.fork());
+    bd.weld(pet, k === 0 ? 0.97 : 0.9, dir2, 1, 2, sp, { collarRings: 0, collarScale: 0.45, margin: 0 });
+  }
+}
+
+function buildStrawberry(bd: PlantBuilder, p: PlantParams, rng: Random): void {
+  const b = p.botany;
+  const crown = buildCrownBlob(bd, p, rng, Math.max(0.04, b.trunkRadius * 1.2), Math.max(0.06, b.trunkHeight));
+  const cA = col(b.leafColor);
+  for (let i = 0; i < b.frondCount; i++) {
+    const age = b.frondCount <= 1 ? 0.5 : i / (b.frondCount - 1);
+    const az = i * 137.5 * DEG + rng.bell() * 0.15;
+    const t = rng.range(0.5, 0.72);
+    const dir = dirFromAzEl(az, lerp(0.55, 1.15, age));
+    const f = bd.frameAt(crown, t);
+    const origin = addScaled(f.center, dir, f.radius * 0.8);
+    const cL = mixRgb(cA, col(b.leafColor2), age * 0.45);
+    buildTrifoliate(bd, p, rng.fork(), crown, t, dir, origin,
+      b.leafLength * b.petioleRatio * rng.range(0.8, 1.2), b.leafLength * 0.45 * (1.1 - age * 0.25), cL);
+  }
+  // Berries dangle at the plant's edge on arched stalks; a few white flowers.
+  const cRed = col(b.nutColor);
+  const nFruit = clamp(Math.round(b.nutCount), 0, 12);
+  for (let i = 0; i < nFruit; i++) {
+    const az = rng.range(0, TAU);
+    const t = rng.range(0.42, 0.6);
+    const f = bd.frameAt(crown, t);
+    if (i >= nFruit - 2) {
+      const dir = dirFromAzEl(az, rng.range(0.7, 1.0));
+      buildStarFlower(bd, p, rng.fork(), crown, t, dir, addScaled(f.center, dir, f.radius * 0.8), 0.017, 0.13, col(b.nutColor2), col('#f0c832'));
+      continue;
+    }
+    const dir0 = dirFromAzEl(az, 0.55);
+    const so = addScaled(f.center, dir0, f.radius * 0.8);
+    const stalkLen = rng.range(0.13, 0.19);
+    const stalk = bd.weld(crown, t, dir0, 1, 2, {
+      spine: bendSpine(so, dir0, stalkLen, 7, (s) => -(1.5 / stalkLen) * smoothstep(0.3, 0.9, s)),
+      ringTs: evenRings(10),
+      sides: 6,
+      profileAt: (tt, out) => circleInto(out, 6, Math.max(0.001, 0.0022 * (1 - tt * 0.35)), Math.max(0.001, 0.0022 * (1 - tt * 0.35))),
+      colorAt: () => col(b.rachisColor),
+      upHint: UP,
+      tile: TILE.stem,
+      vPerMeter: 2,
+      organ: ORGAN.rachis,
+      wind: wind(so, rng.next(), 0.05, 0.3, 0.03, 0.15),
+      capEnd: true,
+    }, { collarRings: 0, collarScale: 0.5, margin: 0, search: 6 });
+    if (!stalk) continue;
+    const tip = bd.frameAt(stalk, 0.96);
+    const dir = normalize(add(tip.T, v3(0, -0.85, 0)));
+    const o = addScaled(tip.center, dir, tip.radius * 0.7);
+    const R = Math.max(0.008, b.nutSize) * rng.range(0.85, 1.2);
+    const ripe = clamp(0.2 + rng.next() * 0.95, 0, 1);
+    const cB = mixRgb(mixRgb([0.78, 0.84, 0.58], [0.92, 0.6, 0.55], clamp(ripe * 1.6 - 0.3, 0, 1)), cRed, clamp(ripe * 1.5 - 0.45, 0, 1));
+    const berry = bd.weld(stalk, 0.96, dir, 2, 3, {
+      spine: [o, addScaled(o, dir, R * 1.1), addScaled(o, dir, R * 2.05)],
+      ringTs: evenRings(11),
+      sides: 10,
+      profileAt: (tt, out) => {
+        // Plump shoulder under the calyx, tapering to the point.
+        const r = Math.max(0.0018, R * Math.pow(1 - tt, 0.5) * (0.28 + 0.72 * smoothstep(0, 0.16, tt)) * (1 - smoothstep(0.9, 1, tt) * 0.35));
+        circleInto(out, 10, r, r * 0.97);
+      },
+      colorAt: (tt, j) => {
+        // Achene speckle: tiny pale seeds in darker pits.
+        const pit = noise3(j * 3.7, tt * 34 + i * 7, j * 1.3 + i) > 0.32 ? 0.82 : 1.18;
+        return tint(mixRgb(cB, [0.9, 0.88, 0.7], Math.exp(-tt * 6) * 0.35), pit * (0.92 + 0.1 * tt));
+      },
+      upHint: UP,
+      tile: TILE.stem,
+      vPerMeter: 3,
+      organ: ORGAN.fruit,
+      wind: wind(so, rng.next(), 0.3, 0.45, 0.06, 0.2),
+      capEnd: true,
+      capScale: 0.6,
+    }, { collarRings: 0, collarScale: 0.5, margin: 0 });
+    if (!berry) continue;
+    const bf = bd.frameAt(berry, 0.08);
+    for (let k = 0; k < 5; k++) {
+      const a = (k / 5) * TAU;
+      const cradial = normalize(addScaled(scale(bf.U, Math.cos(a)), bf.V, Math.sin(a)));
+      const cdir = normalize(addScaled(scale(cradial, 1), bf.T, -0.7));
+      const sp = leafletSpec(bf.center, cdir, cradial, {
+        len: R * 0.95, width: R * 0.3, droop: 0.1, twistRad: 0,
+        colorA: col(b.rachisColor), colorB: tint(col(b.rachisColor), 1.1),
+        windPhase: rng.next(), pivot: so, limbBase: 0.4, rings: 4, fold: 0.4, organ: ORGAN.rachis, tile: TILE.leafLong,
+      }, rng.fork());
+      bd.weld(berry, 0.07, cdir, 1, 2, sp, { collarRings: 0, collarScale: 0.4, margin: 0 });
+    }
+  }
+  // Runners (stolons) creep out and root a daughter rosette.
+  for (let r = 0; r < 2; r++) {
+    const az = rng.range(0, TAU);
+    const t = rng.range(0.35, 0.5);
+    const f = bd.frameAt(crown, t);
+    const dir0 = dirFromAzEl(az, 0.3);
+    const so = addScaled(f.center, dir0, f.radius * 0.8);
+    const rLen = rng.range(0.32, 0.45);
+    const runner = bd.weld(crown, t, dir0, 1, 2, {
+      spine: bendSpine(so, dir0, rLen, 9, (s) => -(1.05 / rLen) * smoothstep(0.15, 0.75, s)),
+      ringTs: evenRings(12),
+      sides: 6,
+      profileAt: (tt, out) => circleInto(out, 6, Math.max(0.001, 0.0024 * (1 - tt * 0.3)), Math.max(0.001, 0.0024 * (1 - tt * 0.3))),
+      colorAt: (tt) => mixRgb(col(b.rachisColor), [0.72, 0.42, 0.32], 0.35 + 0.3 * tt),
+      upHint: UP,
+      tile: TILE.stem,
+      vPerMeter: 2,
+      organ: ORGAN.rachis,
+      wind: NO_WIND(so),
+      capEnd: true,
+    }, { collarRings: 0, collarScale: 0.5, margin: 0, search: 6 });
+    if (!runner) continue;
+    const tip = bd.frameAt(runner, 0.97);
+    buildTrifoliate(bd, p, rng.fork(), runner, 0.97, normalize(add(tip.T, v3(0, 0.9, 0))), tip.center, 0.05, b.leafLength * 0.26, tint(cA, 1.05));
+  }
+}
+
+function buildPepper(bd: PlantBuilder, p: PlantParams, rng: Random): void {
+  const b = p.botany;
+  const trunk = buildTrunk(bd, p, rng, v3(0, 0, 0), rng.range(0, TAU), 1, Math.max(10, p.mesh.trunkSides), {
+    crownBand: 0.08, crownWindows: 5, branchBand: [0.45, 0.98],
+  });
+  const shoots: Shoot[] = [];
+  growShoots(bd, p, rng, trunk, b.trunkHeight * 0.9, b.trunkRadius, 0, shoots);
+  for (const sh of shoots) {
+    const n = Math.round(b.leavesPerTip * (sh.level === 0 ? 0.7 : 1));
+    for (let i = 0; i < n; i++) placeOneLeaf(bd, p, rng.fork(), sh.grid, rng.range(0.35, 0.97), rng.range(0, TAU));
+  }
+  // Pendent pods at the branch nodes, ripening green -> orange -> red.
+  const cRed = col(b.nutColor);
+  const cGreen = col(b.nutColor2);
+  const fruiting = shoots.filter((s) => s.level >= 1);
+  const pods = clamp(Math.round(b.nutCount), 0, 40);
+  for (let i = 0; i < pods && fruiting.length; i++) {
+    const sh = fruiting[Math.floor(rng.next() * fruiting.length)];
+    const t = rng.range(0.3, 0.92);
+    const f = bd.frameAt(sh.grid, t);
+    const az = rng.range(0, TAU);
+    const radial = normalize(addScaled(scale(f.U, Math.cos(az)), f.V, Math.sin(az)));
+    const dir = normalize(add(addScaled(radial, f.T, 0.2), v3(0, -1.05, 0)));
+    const o = addScaled(f.center, dir, f.radius * 0.85);
+    const len = Math.max(0.03, b.nutSize) * rng.range(0.9, 1.5);
+    const R = len * 0.17;
+    const cP = ripenColor(clamp(rng.next() * 1.15 - 0.1, 0, 1), cGreen, cRed);
+    bd.weld(sh.grid, t, dir, 2, 2, {
+      spine: bendSpine(o, dir, len, 8, (s) => -(0.35 / len) * s, () => rng.bell() * 0.06 / len),
+      ringTs: evenRings(10),
+      sides: 8,
+      profileAt: (tt, out) => {
+        const r = Math.max(0.0012, R * Math.pow(1 - tt, 0.62) * (0.35 + 0.65 * smoothstep(0, 0.14, tt)));
+        circleInto(out, 8, r, r * 0.95);
+      },
+      colorAt: (tt, j) => tint(tt < 0.09 ? col(b.rachisColor) : cP, (0.9 + 0.12 * tt) * (1 + 0.06 * noise3(j * 2.4, tt * 9 + i, i))),
+      upHint: UP,
+      tile: TILE.stem,
+      vPerMeter: 2.4,
+      organ: ORGAN.fruit,
+      wind: wind(o, rng.next(), 0.3, 0.45, 0.06, 0.2),
+      capEnd: true,
+      capScale: 0.5,
+    }, { collarRings: 0, collarScale: 0.5, margin: 0, search: 6 });
+  }
+  for (let i = 0; i < 3 && fruiting.length; i++) {
+    const sh = fruiting[Math.floor(rng.next() * fruiting.length)];
+    const t = rng.range(0.6, 0.95);
+    const f = bd.frameAt(sh.grid, t);
+    const dir = normalize(addScaled(scale(f.T, 0.5), f.U, 0.9));
+    buildStarFlower(bd, p, rng.fork(), sh.grid, t, dir, addScaled(f.center, dir, f.radius * 0.85), 0.009, 0.025, col('#f4f1e4'), col('#e8d88a'));
+  }
+  buildStiltRoots(bd, p, rng.fork(), trunk);
+}
+
+/** Sunflower head: domed seed disk ringed with ray petals. */
+function buildSunflowerHead(bd: PlantBuilder, p: PlantParams, rng: Random, parent: TubeGrid, attachT: number, sizeF: number): void {
+  const b = p.botany;
+  const f0 = bd.frameAt(parent, attachT);
+  const az = rng.range(0, TAU);
+  const radial0 = normalize(addScaled(scale(f0.U, Math.cos(az)), f0.V, Math.sin(az)));
+  // Heads nod: the disk faces sideways and a little down.
+  const dir = normalize(add(addScaled(f0.T, radial0, 1.05), v3(0, -0.4, 0)));
+  const origin = addScaled(f0.center, dir, f0.radius * 0.8);
+  const R = Math.max(0.03, b.nutSize) * sizeF;
+  const thick = R * 0.42;
+  const phase = rng.next();
+  const cDisk = col(b.nutColor2);
+  const disk = bd.weld(parent, attachT, dir, 4, 4, {
+    spine: [origin, addScaled(origin, dir, thick * 0.55), addScaled(origin, dir, thick)],
+    ringTs: evenRings(9),
+    sides: 16,
+    profileAt: (t, out) => {
+      let r: number;
+      if (t < 0.3) r = R * lerp(0.35, 1, smoothstep(0, 0.3, t));
+      else r = R * Math.pow(Math.max(0.02, 1 - Math.pow((t - 0.3) / 0.75, 2)), 0.42); // domed face
+      circleInto(out, 16, Math.max(0.003, r), Math.max(0.003, r));
+    },
+    colorAt: (t, j) => {
+      if (t < 0.3) return tint(mixRgb(col(b.leafColor), cDisk, t / 0.3 * 0.4), 0.9);
+      // Ring of orange disk florets around the dark seed centre.
+      const ring = Math.exp(-Math.pow((t - 0.52) / 0.07, 2));
+      const chk = 0.88 + 0.22 * (0.5 + 0.5 * noise3(j * 4.1, Math.floor(t * 14) * 2.7, j));
+      return tint(mixRgb(cDisk, [0.8, 0.48, 0.12], ring * 0.8), chk);
+    },
+    upHint: Math.abs(dir.y) > 0.9 ? v3(1, 0, 0) : UP,
+    tile: TILE.stem,
+    vPerMeter: 2,
+    organ: ORGAN.fruit,
+    wind: wind(origin, phase, 0.18, 0.3, 0.02, 0.08),
+    capEnd: true,
+    capScale: 0.35,
+  }, { collarRings: 1, collarScale: 0.5, margin: 0, search: 8 });
+  if (!disk) return;
+  const cRay = col(b.nutColor);
+  const rays = 21;
+  for (let i = 0; i < rays; i++) {
+    const t = i % 2 === 0 ? 0.4 : 0.47;
+    const f = bd.frameAt(disk, t);
+    const a = (i / rays) * TAU + rng.bell() * 0.08;
+    const radial = normalize(addScaled(scale(f.U, Math.cos(a)), f.V, Math.sin(a)));
+    const pdir = normalize(addScaled(radial, f.T, rng.range(0.15, 0.4)));
+    const sp = leafletSpec(f.center, pdir, f.T, {
+      len: R * rng.range(0.8, 1.0), width: R * 0.34, droop: 0.3, twistRad: 0.2,
+      colorA: mixRgb(cRay, [0.85, 0.45, 0.1], 0.35), colorB: cRay,
+      windPhase: phase, pivot: origin, limbBase: 0.3, rings: 6, fold: 0.3, organ: ORGAN.fruit, tile: TILE.leafLong,
+    }, rng.fork());
+    bd.weld(disk, t, pdir, 1, 2, sp, { collarRings: 0, collarScale: 0.45, margin: 0 });
+  }
+}
+
+function buildSunflower(bd: PlantBuilder, p: PlantParams, rng: Random): void {
+  const b = p.botany;
+  const trunk = buildTrunk(bd, p, rng, v3(0, 0, 0), rng.range(0, TAU), 1, Math.max(12, p.mesh.trunkSides), {
+    crownBand: 0.05, crownWindows: 4, branchBand: [0.12, 0.92],
+  });
+  const n = Math.max(3, Math.round(b.frondCount));
+  for (let i = 0; i < n; i++) {
+    const h01 = i / Math.max(1, n - 1);
+    const t = lerp(0.16, 0.88, h01);
+    const sizeF = 0.55 + 0.6 * Math.sin(Math.PI * (0.12 + 0.7 * h01)); // biggest leaves low-mid stem
+    placeOneLeaf(bd, p, rng.fork(), trunk, t, i * b.phyllotaxis * DEG, sizeF);
+  }
+  buildSunflowerHead(bd, p, rng.fork(), trunk, 0.99, 1);
+  // Optional smaller side heads on short upper branches.
+  const extra = clamp(Math.round(b.nutCount) - 1, 0, 3);
+  for (let i = 0; i < extra; i++) {
+    const t = rng.range(0.72, 0.86);
+    const f = bd.frameAt(trunk, t);
+    const az = rng.range(0, TAU);
+    const radial = normalize(addScaled(scale(f.U, Math.cos(az)), f.V, Math.sin(az)));
+    const dir = normalize(addScaled(scale(f.T, 0.7), radial, 0.8));
+    const br = buildBranch(bd, p, rng.fork(), trunk, addScaled(f.center, dir, f.radius * 0.85), dir, 0.3, 0.009, 1, t, false);
+    if (br) buildSunflowerHead(bd, p, rng.fork(), br, 0.97, 0.55);
+  }
+  buildStiltRoots(bd, p, rng.fork(), trunk);
+}
+
+function buildPumpkin(bd: PlantBuilder, p: PlantParams, rng: Random): void {
+  const b = p.botany;
+  const crown = buildCrownBlob(bd, p, rng, Math.max(0.05, b.trunkRadius * 2), Math.max(0.12, b.trunkHeight * 0.65));
+  const cA = col(b.leafColor);
+  for (let i = 0; i < b.frondCount; i++) {
+    const age = b.frondCount <= 1 ? 0.5 : i / (b.frondCount - 1);
+    const az = i * 137.5 * DEG + rng.bell() * 0.15;
+    const t = rng.range(0.55, 0.82);
+    const dir = dirFromAzEl(az, lerp(0.45, 1.05, age));
+    const f = bd.frameAt(crown, t);
+    const origin = addScaled(f.center, dir, f.radius * 0.8);
+    const fresh = mixRgb(cA, col(b.leafColor2), age * 0.4);
+    const spec = bladeLeafSpec(origin, dir, {
+      len: b.leafLength * (0.65 + 0.45 * (1 - age)) * rng.range(0.9, 1.08),
+      width: b.bladeWidth * rng.range(0.9, 1.08),
+      petioleRatio: b.petioleRatio * rng.range(0.85, 1.15),
+      arc: b.bladeArc, bladeEl: (90 - b.bladePitch) * DEG + rng.bell() * 0.06,
+      notch: b.bladeNotch, notchCount: 5, lobes: b.bladeLobes, peak: b.bladePeak, vee: b.bladeVee,
+      unfurl: 1 - smoothstep(0.85, 1, age) * 0.7,
+      colorA: fresh, colorB: tint(fresh, 1.08), petioleColor: col(b.rachisColor),
+      pivot: origin, phase: rng.next(), limbBase: 0.05,
+      rings: Math.round(p.mesh.bladeRings * 1.1 * p.mesh.quality), petioleR: 0.015,
+    }, rng.fork());
+    spec.tile = TILE.leafLong;
+    bd.weld(crown, t, dir, 2, 3, spec, { collarRings: p.mesh.collarRings, collarScale: p.mesh.collarScale, margin: 0, search: 7 });
+  }
+  // Trailing vines along the ground, each swelling into a ribbed pumpkin.
+  const fruits = clamp(Math.round(b.nutCount), 0, 4);
+  const cSkin = col(b.nutColor);
+  const cSkin2 = col(b.nutColor2);
+  for (let i = 0; i < fruits; i++) {
+    const az = rng.range(0, TAU);
+    const t = rng.range(0.35, 0.5);
+    const f = bd.frameAt(crown, t);
+    const dirH = v3(Math.cos(az), 0, Math.sin(az));
+    const vo = addScaled(f.center, dirH, f.radius * 0.8);
+    const vineLen = rng.range(0.45, 0.75);
+    const vine = bd.weld(crown, t, dirFromAzEl(az, 0.1), 2, 2, {
+      spine: [vo, v3(vo.x + dirH.x * vineLen * 0.5, Math.max(0.03, vo.y - 0.05), vo.z + dirH.z * vineLen * 0.5), v3(vo.x + dirH.x * vineLen, 0.035, vo.z + dirH.z * vineLen)],
+      ringTs: evenRings(12),
+      sides: 8,
+      profileAt: (tt, out) => circleInto(out, 8, Math.max(0.004, 0.013 * (1 - tt * 0.35)), Math.max(0.004, 0.013 * (1 - tt * 0.35))),
+      colorAt: () => col(b.rachisColor),
+      upHint: UP,
+      tile: TILE.stem,
+      vPerMeter: 1.4,
+      organ: ORGAN.rachis,
+      wind: NO_WIND(vo),
+      capEnd: true,
+    }, { collarRings: 1, collarScale: 0.5, margin: 0, search: 7 });
+    if (!vine) continue;
+    const pf = bd.frameAt(vine, 0.78);
+    const R = Math.max(0.05, b.nutSize) * rng.range(0.9, 1.15);
+    const po = v3(pf.center.x, Math.max(0.015, pf.center.y - 0.01), pf.center.z);
+    bd.weld(vine, 0.78, UP, 3, 4, {
+      spine: [po, v3(po.x, po.y + R * 0.65, po.z), v3(po.x, po.y + R * 1.28, po.z)],
+      ringTs: evenRings(14),
+      sides: 14,
+      profileAt: (tt, out) => {
+        const env = Math.pow(Math.sin(Math.PI * (0.1 + 0.8 * tt)), 0.55) * (1 - 0.22 * smoothstep(0.92, 1, tt));
+        for (let j = 0; j < 14; j++) {
+          const a = (j / 14) * TAU;
+          const r = Math.max(0.004, R * env * (1 + 0.07 * Math.cos(a * 10)));
+          out[j].x = Math.cos(a) * r; out[j].y = Math.sin(a) * r; out[j].u = j / 14;
+        }
+      },
+      colorAt: (tt, j) => {
+        const a = (j / 14) * TAU;
+        let c = tint(mixRgb(cSkin, cSkin2, 0.3 + 0.3 * tt), 0.92 + 0.1 * Math.cos(a * 10));
+        if (tt > 0.93) c = mixRgb(c, [0.42, 0.46, 0.26], smoothstep(0.93, 1, tt)); // woody stem end
+        return c;
+      },
+      upHint: v3(1, 0, 0),
+      tile: TILE.stem,
+      vPerMeter: 1.6,
+      organ: ORGAN.fruit,
+      wind: NO_WIND(po),
+      capEnd: true,
+      capScale: 0.3,
+    }, { collarRings: 1, collarScale: 0.45, margin: 0, search: 6 });
+  }
+  // Golden trumpet flowers tucked among the leaves.
+  for (let i = 0; i < 2; i++) {
+    const t = rng.range(0.5, 0.7);
+    const f = bd.frameAt(crown, t);
+    const dir = dirFromAzEl(rng.range(0, TAU), 0.8);
+    buildStarFlower(bd, p, rng.fork(), crown, t, dir, addScaled(f.center, dir, f.radius * 0.8), 0.045, 0.13, col('#f4bc22'), col('#e08a1e'));
+  }
+}
+
+function buildCabbage(bd: PlantBuilder, p: PlantParams, rng: Random): void {
+  const b = p.botany;
+  const crown = buildCrownBlob(bd, p, rng, Math.max(0.045, b.trunkRadius * 1.3), Math.max(0.09, b.trunkHeight));
+  // The head: a tight pale ball of wrapped leaves in the centre.
+  const R = Math.max(0.04, b.nutSize);
+  const hf = bd.frameAt(crown, 0.7);
+  const ho = addScaled(hf.center, UP, hf.radius * 0.5);
+  const cHead = col(b.nutColor);
+  const cHead2 = col(b.nutColor2);
+  const hSeed = rng.range(0, 30);
+  bd.weld(crown, 0.7, UP, 4, 4, {
+    spine: [ho, v3(ho.x, ho.y + R * 0.85, ho.z), v3(ho.x, ho.y + R * 1.62, ho.z)],
+    ringTs: evenRings(14),
+    sides: 16,
+    profileAt: (t, out) => {
+      const r = Math.max(0.004, R * Math.pow(Math.sin(Math.PI * (0.05 + 0.9 * t)), 0.6) * (0.35 + 0.65 * smoothstep(0, 0.14, t)));
+      circleInto(out, 16, r, r);
+    },
+    colorAt: (t, j) => {
+      const a = (j / 16) * TAU;
+      // Overlapping wrap-leaf seams spiralling over the head.
+      const seam = 0.92 + 0.11 * Math.cos(a * 5 + t * 4 + hSeed) + 0.05 * noise3(Math.cos(a) * 2 + hSeed, t * 6, Math.sin(a) * 2);
+      return tint(mixRgb(cHead2, cHead, 0.35 + 0.55 * t), seam);
+    },
+    upHint: v3(1, 0, 0),
+    tile: TILE.leafCross,
+    vPerMeter: 1.6,
+    organ: ORGAN.leaf,
+    wind: NO_WIND(ho),
+    capEnd: true,
+    capScale: 0.4,
+  }, { collarRings: 1, collarScale: 0.45, margin: 0, search: 7 });
+  // Wrapper leaves: flat and open outside, cupping upright toward the head.
+  const cA = col(b.leafColor);
+  for (let i = 0; i < b.frondCount; i++) {
+    const age = b.frondCount <= 1 ? 0.5 : i / (b.frondCount - 1); // 0 outer .. 1 inner
+    const az = i * 137.5 * DEG + rng.bell() * 0.12;
+    const t = rng.range(0.42, 0.62);
+    const dir = dirFromAzEl(az, lerp(0.32, 1.02, age));
+    const f = bd.frameAt(crown, t);
+    const origin = addScaled(f.center, dir, f.radius * 0.8);
+    const cL = mixRgb(cA, cHead, age * 0.55);
+    const spec = bladeLeafSpec(origin, dir, {
+      len: b.leafLength * lerp(1.05, 0.55, age) * rng.range(0.92, 1.06),
+      width: b.bladeWidth * rng.range(0.9, 1.06),
+      petioleRatio: b.petioleRatio,
+      arc: b.bladeArc * (1 - age * 0.5),
+      bladeEl: (90 - b.bladePitch) * DEG + age * 0.45,
+      notch: 0, lobes: b.bladeLobes, peak: b.bladePeak, vee: b.bladeVee,
+      unfurl: 1,
+      colorA: cL, colorB: tint(cL, 1.06), petioleColor: mixRgb(col(b.rachisColor), cHead, 0.4),
+      pivot: origin, phase: rng.next(), limbBase: 0.03,
+      rings: Math.round(p.mesh.bladeRings * 0.9 * p.mesh.quality), petioleR: 0.011,
+    }, rng.fork());
+    spec.tile = TILE.leafLong;
+    bd.weld(crown, t, dir, 2, 3, spec, { collarRings: p.mesh.collarRings, collarScale: p.mesh.collarScale, margin: 0, search: 7 });
+  }
+}
+
+function buildVegetable(bd: PlantBuilder, p: PlantParams, rng: Random): void {
+  switch (p.botany.cropType) {
+    case 'tomato': buildTomato(bd, p, rng); break;
+    case 'strawberry': buildStrawberry(bd, p, rng); break;
+    case 'pepper': buildPepper(bd, p, rng); break;
+    case 'sunflower': buildSunflower(bd, p, rng); break;
+    case 'pumpkin': buildPumpkin(bd, p, rng); break;
+    case 'cabbage': buildCabbage(bd, p, rng); break;
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Habit: grain (cereals & sugarcane)
+//
+// A grass culm is a jointed stalk: swollen nodes carry two-ranked strap
+// leaves (sheath hugging the stem, then a long arching blade), and the top
+// ends in the inflorescence — corn tassel + husked ears, a dense millet /
+// wheat spike, or a branched rice / sorghum panicle. Tillers weld into a
+// shared crown like other clumping plants.
+// -----------------------------------------------------------------------------
+
+function windowForSides(sides: number): [number, number] {
+  if (sides <= 6) return [1, 2];
+  if (sides <= 8) return [2, 2];
+  if (sides <= 10) return [2, 3];
+  if (sides <= 12) return [3, 3];
+  if (sides <= 14) return [3, 4];
+  return [4, 4];
+}
+
+interface CulmResult { grid: TubeGrid; nodeTs: number[]; topY: number }
+
+function buildCulm(bd: PlantBuilder, p: PlantParams, rng: Random, parent: TubeGrid | null, base: V3, az: number, heightScale: number): CulmResult | null {
+  const b = p.botany;
+  const H = Math.max(0.25, b.trunkHeight * heightScale);
+  const sides = Math.max(8, p.mesh.trunkSides);
+  const lean = v3(Math.cos(az), 0, Math.sin(az));
+  const dir0 = normalize(v3(lean.x * (0.1 + b.trunkCurve * 0.25), 1, lean.z * (0.1 + b.trunkCurve * 0.25)));
+  const origin = parent ? v3(base.x, 0.1, base.z) : v3(base.x, -0.12, base.z);
+  const spine = bendSpine(origin, dir0, H, 14, (s) => (b.trunkCurve * 0.22 / H) * s, () => rng.bell() * 0.008 / H);
+  // Leaf nodes run up most of the culm; the head sits above the top node.
+  const nodes = Math.max(3, Math.round(b.frondCount));
+  const nodeTs: number[] = [];
+  for (let i = 0; i < nodes; i++) nodeTs.push(lerp(0.14, 0.9, nodes <= 1 ? 0.5 : i / (nodes - 1)));
+  const ringSet = new Set<number>(evenRings(16));
+  for (const t of nodeTs) { ringSet.add(t - 0.01); ringSet.add(t); ringSet.add(t + 0.01); }
+  for (let i = 0; i <= 5; i++) ringSet.add(0.93 + (i / 5) * 0.07);
+  const nodePulse = (t: number): number => {
+    let m = 0;
+    for (const tn of nodeTs) m = Math.max(m, Math.exp(-Math.pow((t - tn) / 0.011, 2)));
+    return m;
+  };
+  const cane = b.grainType === 'cane';
+  const cA = col(b.trunkColor);
+  const cB = col(b.trunkColor2);
+  const seed = rng.range(0, 30);
+  const spec: TubeSpec = {
+    spine,
+    ringTs: [...ringSet].sort((a, c) => a - c),
+    sides,
+    profileAt: (t, out) => {
+      let r = b.trunkRadius * (1 - 0.38 * smoothstep(0.08, 1, t)) * (1 + (cane ? 0.16 : 0.24) * nodePulse(t));
+      r *= 1 + 0.5 * Math.exp(-t * 9);
+      r *= 1 - smoothstep(0.985, 1, t) * 0.45;
+      circleInto(out, sides, Math.max(0.0025, r), Math.max(0.0025, r));
+    },
+    colorAt: (t, j) => {
+      let c = mixRgb(cA, cB, smoothstep(0.3, 1, t));
+      const pulse = nodePulse(t);
+      // Waxy pale bands at sugarcane joints; slightly dark nodes on cereals.
+      c = cane ? tint(mixRgb(c, [0.82, 0.84, 0.78], pulse * 0.45), 1 + pulse * 0.05) : tint(c, 1 - pulse * 0.16);
+      return tint(c, 1 + 0.1 * noise3(j * 1.5 + seed, t * H * 4, seed));
+    },
+    upHint: v3(1, 0, 0),
+    tile: TILE.stem,
+    vPerMeter: 0.7,
+    organ: ORGAN.trunk,
+    wind: wind(base, rng.next(), 0, 0.22, 0, 0.08),
+    capStart: !parent,
+    capEnd: true,
+    capScale: 0.5,
+  };
+  const topY = origin.y + H;
+  if (!parent) return { grid: bd.tube(spec), nodeTs, topY };
+  const [w, h] = windowForSides(sides);
+  const grid = bd.weld(parent, 0.6, dir0, w, h, spec, { collarRings: 1, collarScale: 0.5, margin: 0, search: 8 });
+  return grid ? { grid, nodeTs, topY } : null;
+}
+
+function buildCulmLeaves(bd: PlantBuilder, p: PlantParams, rng: Random, culm: CulmResult, scale: number): void {
+  const b = p.botany;
+  const cane = b.grainType === 'cane';
+  const baseAz = rng.range(0, TAU);
+  const n = culm.nodeTs.length;
+  for (let i = 0; i < n; i++) {
+    const t = culm.nodeTs[i];
+    const h01 = n <= 1 ? 0.5 : i / (n - 1);
+    const az = baseAz + i * b.phyllotaxis * DEG + rng.bell() * 0.06;
+    const f = bd.frameAt(culm.grid, t);
+    // Sugarcane sheds its lower leaves: they hang dead against the stalk.
+    const dead = cane && h01 < 0.52;
+    const el = dead ? rng.range(-0.5, -0.25) : lerp(0.55, 1.25, h01);
+    const dir0 = dirFromAzEl(az, el);
+    const origin = addScaled(f.center, dir0, f.radius * 0.8);
+    const lenFactor = 0.5 + 0.58 * Math.sin(Math.PI * (0.12 + 0.76 * h01));
+    const fresh = mixRgb(col(b.leafColor), col(b.leafColor2), 0.25 + 0.45 * h01);
+    const cA = dead ? col(b.deadColor) : fresh;
+    const spec = bladeLeafSpec(origin, dir0, {
+      len: b.leafLength * scale * lenFactor * rng.range(0.9, 1.08) * (dead ? 0.75 : 1),
+      width: b.bladeWidth * rng.range(0.9, 1.06),
+      petioleRatio: b.petioleRatio, // the sheath section
+      arc: b.bladeArc * (dead ? 0.4 : lerp(1.25, 0.65, h01)),
+      bladeEl: dead ? -1.25 : lerp(-0.2, 0.45, h01),
+      notch: 0, lobes: 0,
+      peak: b.bladePeak, vee: b.bladeVee,
+      unfurl: i === n - 1 && !dead ? 0.5 : 1,
+      colorA: cA,
+      colorB: dead ? tint(cA, 0.8) : mixRgb(fresh, [0.66, 0.58, 0.22], Math.pow(1 - h01, 2) * 0.35),
+      petioleColor: dead ? tint(col(b.deadColor), 0.9) : col(b.rachisColor),
+      pivot: origin, phase: rng.next(), limbBase: 0.22,
+      rings: Math.round(p.mesh.bladeRings * 0.8 * p.mesh.quality),
+      petioleR: Math.max(0.004, b.trunkRadius * 0.8),
+    }, rng.fork());
+    bd.weld(culm.grid, t, dir0, 2, 3, spec, { collarRings: Math.min(1, p.mesh.collarRings), collarScale: 0.55, margin: 0, search: 6 });
+  }
+}
+
+/** One grain (kernel) welded onto a head axis/branchlet, optionally awned. */
+function weldGrain(bd: PlantBuilder, p: PlantParams, rng: Random, parent: TubeGrid, t: number, dir: V3, origin: V3, pivot: V3, plump: number): void {
+  const b = p.botany;
+  const grainLen = Math.max(0.012, b.nutSize * 2.3) * rng.range(0.88, 1.12);
+  const awn = b.awnLength * rng.range(0.8, 1.2);
+  const totalLen = grainLen + awn;
+  const R = Math.max(0.002, b.nutSize * 0.5 * plump);
+  const cG = mixRgb(col(b.nutColor), col(b.nutColor2), rng.next());
+  const spine = bendSpine(origin, dir, totalLen, 6, (s) => (0.25 / totalLen) * s, () => rng.bell() * 0.02 / totalLen);
+  bd.weld(parent, t, dir, 1, 2, {
+    spine,
+    ringTs: evenRings(7),
+    sides: 6,
+    profileAt: (tt, out) => {
+      const d = tt * totalLen;
+      let r: number;
+      if (d < grainLen) {
+        const tg = d / grainLen;
+        r = R * Math.pow(Math.sin(Math.PI * (0.14 + 0.72 * tg)), 0.6) * (0.35 + 0.65 * smoothstep(0, 0.2, tg));
+      } else r = 0.00055; // hair awn / bristle
+      circleInto(out, 6, Math.max(0.0005, r), Math.max(0.0005, r));
+    },
+    colorAt: (tt) => tint(cG, 0.85 + 0.2 * tt),
+    upHint: UP,
+    tile: TILE.stem,
+    vPerMeter: 3,
+    organ: ORGAN.fruit,
+    wind: wind(pivot, rng.next(), 0.3, 0.5, 0.1, 0.35),
+    capEnd: true,
+    capScale: 0.4,
+  }, { collarRings: 0, collarScale: 0.45, margin: 0 });
+}
+
+/** Dense cylindrical head: pearl millet candle or wheat ear. */
+function buildSpikeHead(bd: PlantBuilder, p: PlantParams, rng: Random, culm: CulmResult, hs: number): void {
+  const b = p.botany;
+  const top = bd.frameAt(culm.grid, 0.985);
+  const origin = addScaled(top.center, top.T, top.radius * 0.5);
+  const headLen = clamp(0.09 + b.trunkRadius * 14, 0.1, 0.34) * hs;
+  const headRad = clamp(b.trunkRadius * 1.15 + 0.004, 0.008, 0.02) * hs;
+  const twoRanked = b.awnLength > 0.04; // wheat spikelets alternate in one plane
+  const spine = bendSpine(origin, top.T, headLen, 10, (s) => -(0.4 / headLen) * s * s);
+  const cAxis = tint(col(b.rachisColor), 1.1);
+  const axis = bd.weld(culm.grid, 0.97, top.T, 2, 2, {
+    spine,
+    ringTs: evenRings(28),
+    sides: 8,
+    profileAt: (t, out) => {
+      const env = Math.pow(Math.sin(Math.PI * (0.06 + 0.88 * t)), 0.35);
+      circleInto(out, 8, Math.max(0.002, headRad * 0.55 * env), Math.max(0.002, headRad * 0.55 * env));
+    },
+    colorAt: () => cAxis,
+    upHint: UP,
+    tile: TILE.stem,
+    vPerMeter: 1.5,
+    organ: ORGAN.rachis,
+    wind: wind(origin, rng.next(), 0.22, 0.4, 0.05, 0.15),
+    capEnd: true,
+    capScale: 0.6,
+  }, { collarRings: 1, collarScale: 0.5, margin: 0, search: 8 });
+  if (!axis) return;
+  const count = Math.max(8, Math.round(b.nutCount * clamp(p.mesh.quality, 0.7, 1.3)));
+  const az0 = rng.range(0, TAU);
+  for (let i = 0; i < count; i++) {
+    const t = 0.06 + (i / Math.max(1, count - 1)) * 0.9 + rng.bell() * 0.008;
+    const f = bd.frameAt(axis, clamp(t, 0.04, 0.98));
+    const ang = twoRanked ? az0 + (i % 2) * Math.PI + rng.bell() * 0.2 : az0 + i * 137.5 * DEG;
+    const radial = normalize(addScaled(scale(f.U, Math.cos(ang)), f.V, Math.sin(ang)));
+    const dir = normalize(addScaled(f.T, radial, twoRanked ? 0.55 : 0.8));
+    weldGrain(bd, p, rng.fork(), axis, t, dir, addScaled(f.center, dir, f.radius * 0.6), origin, twoRanked ? 1.15 : 0.95);
+  }
+}
+
+/** Branched head: drooping rice panicle or compact upright sorghum. */
+function buildPanicleHead(bd: PlantBuilder, p: PlantParams, rng: Random, culm: CulmResult, hs: number): void {
+  const b = p.botany;
+  const compact = b.trunkRadius > 0.011; // sorghum vs rice
+  const top = bd.frameAt(culm.grid, 0.985);
+  const origin = addScaled(top.center, top.T, top.radius * 0.5);
+  const headLen = clamp(0.14 + b.trunkRadius * 9, 0.18, 0.36) * hs;
+  const droop = compact ? 0.5 : 1.6;
+  const spine = bendSpine(origin, top.T, headLen, 12, (s) => -(droop / headLen) * smoothstep(0.15, 0.8, s));
+  const axis = bd.weld(culm.grid, 0.97, top.T, 2, 2, {
+    spine,
+    ringTs: evenRings(30),
+    sides: 8,
+    profileAt: (t, out) => circleInto(out, 8, Math.max(0.0015, 0.004 * hs * (1 - t * 0.6)), Math.max(0.0015, 0.004 * hs * (1 - t * 0.6))),
+    colorAt: () => tint(col(b.rachisColor), 1.08),
+    upHint: UP,
+    tile: TILE.stem,
+    vPerMeter: 1.5,
+    organ: ORGAN.rachis,
+    wind: wind(origin, rng.next(), 0.22, 0.42, 0.05, 0.18),
+    capEnd: true,
+    capScale: 0.6,
+  }, { collarRings: 1, collarScale: 0.5, margin: 0, search: 8 });
+  if (!axis) return;
+  const branchlets = clamp(Math.round(b.nutCount / 6), 6, 14);
+  const perBranch = Math.max(3, Math.round(b.nutCount / branchlets));
+  const az0 = rng.range(0, TAU);
+  for (let i = 0; i < branchlets; i++) {
+    const t = 0.12 + (i / Math.max(1, branchlets - 1)) * 0.83;
+    const f = bd.frameAt(axis, t);
+    const ang = az0 + i * 137.5 * DEG + rng.bell() * 0.15;
+    const radial = normalize(addScaled(scale(f.U, Math.cos(ang)), f.V, Math.sin(ang)));
+    const dir = normalize(addScaled(f.T, radial, compact ? 0.55 : 0.95));
+    const bOrigin = addScaled(f.center, dir, f.radius * 0.7);
+    const bLen = headLen * (compact ? 0.34 : 0.5) * (1 - t * 0.45) * rng.range(0.85, 1.15);
+    const bSpine = bendSpine(bOrigin, dir, bLen, 7, (s) => ((compact ? 0.3 : -0.5) / bLen) * s);
+    const br = bd.weld(axis, t, dir, 1, 2, {
+      spine: bSpine,
+      ringTs: evenRings(14),
+      sides: 6,
+      profileAt: (tt, out) => circleInto(out, 6, Math.max(0.0008, 0.0018 * (1 - tt * 0.5)), Math.max(0.0008, 0.0018 * (1 - tt * 0.5))),
+      colorAt: () => tint(col(b.rachisColor), 1.05),
+      upHint: UP,
+      tile: TILE.stem,
+      vPerMeter: 2,
+      organ: ORGAN.rachis,
+      wind: wind(origin, rng.next(), 0.4, 0.55, 0.08, 0.25),
+      capEnd: true,
+    }, { collarRings: 0, collarScale: 0.5, margin: 0 });
+    if (!br) continue;
+    for (let k = 0; k < perBranch; k++) {
+      const gt = 0.25 + (k / Math.max(1, perBranch - 1)) * 0.72 + rng.bell() * 0.02;
+      const gf = bd.frameAt(br, clamp(gt, 0.05, 0.98));
+      const gang = rng.range(0, TAU);
+      const gradial = normalize(addScaled(scale(gf.U, Math.cos(gang)), gf.V, Math.sin(gang)));
+      // Rice grains dangle; sorghum grains sit upright and round.
+      const gdir = compact
+        ? normalize(addScaled(gf.T, gradial, 0.7))
+        : normalize(add(addScaled(gf.T, gradial, 0.55), v3(0, -0.5, 0)));
+      weldGrain(bd, p, rng.fork(), br, gt, gdir, addScaled(gf.center, gdir, gf.radius * 0.7), origin, compact ? 1.25 : 0.9);
+    }
+  }
+}
+
+/** Corn: branched tassel on top, husked ears hugging the mid-stalk nodes. */
+function buildCornHead(bd: PlantBuilder, p: PlantParams, rng: Random, culm: CulmResult, hs: number): void {
+  const b = p.botany;
+  const top = bd.frameAt(culm.grid, 0.985);
+  const origin = addScaled(top.center, top.T, top.radius * 0.5);
+  const cTassel = mixRgb(col(b.nutColor2), col(b.rachisColor), 0.4);
+  const phase = rng.next();
+  // Tassel main axis + whorled branchlets with tiny spikelets.
+  const tLen = 0.32 * hs;
+  const tassel = bd.weld(culm.grid, 0.97, top.T, 2, 2, {
+    spine: bendSpine(origin, top.T, tLen, 8, (s) => -(0.18 / tLen) * s),
+    ringTs: evenRings(18),
+    sides: 8,
+    profileAt: (t, out) => circleInto(out, 8, Math.max(0.0012, 0.005 * hs * (1 - t * 0.75)), Math.max(0.0012, 0.005 * hs * (1 - t * 0.75))),
+    colorAt: () => cTassel,
+    upHint: UP,
+    tile: TILE.stem,
+    vPerMeter: 1.5,
+    organ: ORGAN.rachis,
+    wind: wind(origin, phase, 0.22, 0.45, 0.05, 0.2),
+    capEnd: true,
+  }, { collarRings: 1, collarScale: 0.5, margin: 0, search: 8 });
+  if (tassel) {
+    const spikelet = (parent: TubeGrid, t: number, dir: V3, o: V3): void => {
+      bd.weld(parent, t, dir, 1, 2, {
+        spine: [o, addScaled(o, dir, 0.011), addScaled(o, dir, 0.02)],
+        ringTs: evenRings(3),
+        sides: 6,
+        profileAt: (tt, out) => circleInto(out, 6, Math.max(0.0008, 0.0022 * Math.sin(Math.PI * (0.15 + 0.7 * tt))), Math.max(0.0008, 0.0022 * Math.sin(Math.PI * (0.15 + 0.7 * tt)))),
+        colorAt: () => tint(mixRgb(cTassel, [0.85, 0.68, 0.3], 0.5), rng.range(0.85, 1.1)),
+        upHint: UP,
+        tile: TILE.stem,
+        vPerMeter: 3,
+        organ: ORGAN.fruit,
+        wind: wind(origin, phase, 0.45, 0.6, 0.12, 0.35),
+        capEnd: true,
+      }, { collarRings: 0, collarScale: 0.4, margin: 0 });
+    };
+    for (let i = 0; i < 10; i++) {
+      const t = 0.4 + (i / 9) * 0.58;
+      const f = bd.frameAt(tassel, t);
+      const ang = rng.range(0, TAU);
+      const radial = normalize(addScaled(scale(f.U, Math.cos(ang)), f.V, Math.sin(ang)));
+      const dir = normalize(addScaled(f.T, radial, 0.65));
+      spikelet(tassel, t, dir, addScaled(f.center, dir, f.radius * 0.7));
+    }
+    const branches = 7 + Math.floor(rng.next() * 3);
+    for (let i = 0; i < branches; i++) {
+      const t = 0.06 + (i / branches) * 0.3;
+      const f = bd.frameAt(tassel, t);
+      const ang = i * 137.5 * DEG + rng.bell() * 0.2;
+      const radial = normalize(addScaled(scale(f.U, Math.cos(ang)), f.V, Math.sin(ang)));
+      const dir = normalize(addScaled(f.T, radial, 0.9));
+      const bo = addScaled(f.center, dir, f.radius * 0.7);
+      const bl = tLen * rng.range(0.4, 0.55);
+      const br = bd.weld(tassel, t, dir, 1, 2, {
+        spine: bendSpine(bo, dir, bl, 6, (s) => (0.35 / bl) * s),
+        ringTs: evenRings(10),
+        sides: 6,
+        profileAt: (tt, out) => circleInto(out, 6, Math.max(0.0007, 0.0016 * (1 - tt * 0.5)), Math.max(0.0007, 0.0016 * (1 - tt * 0.5))),
+        colorAt: () => cTassel,
+        upHint: UP,
+        tile: TILE.stem,
+        vPerMeter: 2,
+        organ: ORGAN.rachis,
+        wind: wind(origin, phase, 0.4, 0.55, 0.08, 0.25),
+        capEnd: true,
+      }, { collarRings: 0, collarScale: 0.5, margin: 0 });
+      if (!br) continue;
+      for (let k = 0; k < 3; k++) {
+        const gt = 0.35 + k * 0.28;
+        const gf = bd.frameAt(br, gt);
+        const gd = normalize(addScaled(gf.T, gf.U, 0.6));
+        spikelet(br, gt, gd, addScaled(gf.center, gd, gf.radius * 0.7));
+      }
+    }
+  }
+
+  // Ears at mid-stalk leaf axils.
+  const ears = clamp(Math.round(b.nutCount), 0, 3);
+  const midNodes = culm.nodeTs.filter((t) => t > 0.38 && t < 0.66);
+  const cKernel = col(b.nutColor);
+  const cHusk = mixRgb(col(b.leafColor), [0.72, 0.76, 0.52], 0.45);
+  for (let e = 0; e < ears && midNodes.length; e++) {
+    const nodeT = midNodes[Math.floor((e / Math.max(1, ears)) * midNodes.length)] ?? midNodes[0];
+    const nf = bd.frameAt(culm.grid, nodeT);
+    const eAz = rng.range(0, TAU);
+    const outDir = dirFromAzEl(eAz, 0.65);
+    const shankO = addScaled(nf.center, outDir, nf.radius * 0.8);
+    const shank = bd.weld(culm.grid, nodeT, outDir, 2, 2, {
+      spine: bendSpine(shankO, outDir, 0.07 * hs, 5, (s) => (0.5 / (0.07 * hs)) * s),
+      ringTs: evenRings(8),
+      sides: 8,
+      profileAt: (t, out) => circleInto(out, 8, Math.max(0.004, 0.011 * hs * (1 - t * 0.3)), Math.max(0.004, 0.011 * hs * (1 - t * 0.3))),
+      colorAt: () => tint(cHusk, 0.95),
+      upHint: UP,
+      tile: TILE.stem,
+      vPerMeter: 1.5,
+      organ: ORGAN.rachis,
+      wind: wind(shankO, phase, 0.15, 0.25, 0.02, 0.08),
+      capEnd: true,
+    }, { collarRings: 1, collarScale: 0.5, margin: 0, search: 8 });
+    if (!shank) continue;
+    const cf = bd.frameAt(shank, 0.92);
+    const cobDir = normalize(addScaled(UP, outDir, 0.35));
+    const cobO = addScaled(cf.center, cobDir, cf.radius * 0.6);
+    const cobLen = 0.19 * hs;
+    const cobRad = Math.max(0.014, b.nutSize * 0.42);
+    const kSeed = rng.range(0, 40);
+    const cob = bd.weld(shank, 0.92, cobDir, 3, 3, {
+      spine: bendSpine(cobO, cobDir, cobLen, 6, () => 0),
+      ringTs: evenRings(20),
+      sides: 12,
+      profileAt: (t, out) => {
+        const env = Math.pow(Math.sin(Math.PI * (0.07 + 0.86 * t)), 0.4) * (0.45 + 0.55 * smoothstep(0, 0.12, t));
+        for (let j = 0; j < 12; j++) {
+          const a = (j / 12) * TAU;
+          // Kernel rows: 14 files of bumps, staggered in a checkerboard.
+          const bump = 1 + 0.09 * Math.cos(a * 7 + Math.floor(t * 26) * 0.45) + 0.05 * Math.sin(t * 165);
+          const r = Math.max(0.003, cobRad * env * bump);
+          out[j].x = Math.cos(a) * r;
+          out[j].y = Math.sin(a) * r;
+          out[j].u = j / 12;
+        }
+      },
+      colorAt: (t, j) => {
+        // Per-kernel tint variation (quantised noise) + paler tip kernels.
+        const kx = Math.floor(j * 1.2), ky = Math.floor(t * 26);
+        const v = 0.88 + 0.2 * (0.5 + 0.5 * noise3(kx * 3.1 + kSeed, ky * 2.3, kSeed));
+        return tint(mixRgb(cKernel, [0.92, 0.85, 0.55], smoothstep(0.8, 1, t) * 0.5), v);
+      },
+      upHint: normalize(cross(cobDir, v3(1, 0, 0))),
+      tile: TILE.stem,
+      vPerMeter: 2,
+      organ: ORGAN.fruit,
+      wind: wind(shankO, phase, 0.2, 0.3, 0.02, 0.08),
+      capEnd: true,
+      capScale: 0.5,
+    }, { collarRings: 1, collarScale: 0.5, margin: 0, search: 6 });
+    if (!cob) continue;
+    // Husk leaves wrap the cob, one peeling open to show the kernels.
+    const husks = 5;
+    for (let hi = 0; hi < husks; hi++) {
+      const peeled = hi === 0;
+      const ht = rng.range(0.04, 0.22);
+      const hf = bd.frameAt(cob, ht);
+      const hang2 = (hi / husks) * TAU + rng.bell() * 0.2;
+      const hradial = normalize(addScaled(scale(hf.U, Math.cos(hang2)), hf.V, Math.sin(hang2)));
+      const hdir = normalize(addScaled(hf.T, hradial, peeled ? 0.65 : 0.18));
+      const ho = addScaled(hf.center, hdir, hf.radius * 0.75);
+      const spec = bladeLeafSpec(ho, hdir, {
+        len: cobLen * rng.range(0.95, 1.25), width: 0.05 * hs,
+        petioleRatio: 0.5, arc: peeled ? 1.5 : 0.55,
+        bladeEl: Math.asin(clamp(cobDir.y, -1, 1)),
+        notch: 0, lobes: 0.1, peak: 0.4, vee: 0.3,
+        unfurl: 1,
+        colorA: tint(cHusk, rng.range(0.9, 1.05)), colorB: mixRgb(cHusk, col(b.leafColor2), 0.4),
+        petioleColor: tint(cHusk, 0.92),
+        pivot: shankO, phase, limbBase: 0.25,
+        rings: 16, petioleR: 0.008,
+      }, rng.fork());
+      bd.weld(cob, ht, hdir, 2, 3, spec, { collarRings: 0, collarScale: 0.5, margin: 0, search: 6 });
+    }
+    // Silk strands spilling from the cob tip.
+    for (let si = 0; si < 5; si++) {
+      const sf = bd.frameAt(cob, 0.96);
+      const sang = rng.range(0, TAU);
+      const sradial = normalize(addScaled(scale(sf.U, Math.cos(sang)), sf.V, Math.sin(sang)));
+      const sdir = normalize(addScaled(sf.T, sradial, 0.5));
+      const so = addScaled(sf.center, sdir, sf.radius * 0.6);
+      const sl = rng.range(0.08, 0.15);
+      bd.weld(cob, 0.96, sdir, 1, 2, {
+        spine: bendSpine(so, sdir, sl, 6, (s) => -(1.6 / sl) * s),
+        ringTs: evenRings(6),
+        sides: 6,
+        profileAt: (tt, out) => circleInto(out, 6, 0.0011, 0.0011),
+        colorAt: (tt) => mixRgb(tint(col(b.nutColor2), 1.25), col(b.nutColor2), tt),
+        upHint: UP,
+        tile: TILE.stem,
+        vPerMeter: 3,
+        organ: ORGAN.fruit,
+        wind: wind(shankO, phase, 0.3, 0.5, 0.15, 0.45),
+        capEnd: true,
+      }, { collarRings: 0, collarScale: 0.4, margin: 0 });
+    }
+  }
+}
+
+function buildGrain(bd: PlantBuilder, p: PlantParams, rng: Random): void {
+  const b = p.botany;
+  const culms: { c: CulmResult; scale: number }[] = [];
+  if (b.stemCount > 1) {
+    const blob = buildCrownBlob(bd, p, rng, Math.max(0.03, b.trunkRadius * 5), 0.1);
+    for (let i = 0; i < b.stemCount; i++) {
+      const az = (i / b.stemCount) * TAU + rng.range(-0.3, 0.3);
+      const off = i === 0 ? 0 : rng.range(0.015, 0.05);
+      const scale = i === 0 ? 1 : rng.range(0.7, 0.95);
+      const c = buildCulm(bd, p, rng.fork(), blob, v3(Math.cos(az) * off, 0, Math.sin(az) * off), az, scale);
+      if (c) culms.push({ c, scale });
+    }
+  } else {
+    const c = buildCulm(bd, p, rng.fork(), null, v3(0, 0, 0), rng.range(0, TAU), 1);
+    if (c) culms.push({ c, scale: 1 });
+  }
+  for (const { c, scale } of culms) {
+    buildCulmLeaves(bd, p, rng.fork(), c, 0.6 + 0.4 * scale);
+    if (b.grainType === 'corn') buildCornHead(bd, p, rng.fork(), c, scale);
+    else if (b.grainType === 'spike') buildSpikeHead(bd, p, rng.fork(), c, scale);
+    else if (b.grainType === 'panicle') buildPanicleHead(bd, p, rng.fork(), c, scale);
+    buildStiltRoots(bd, p, rng.fork(), c.grid);
+  }
+}
+
 // -----------------------------------------------------------------------------
 // Entry point
 // -----------------------------------------------------------------------------
@@ -1724,6 +2867,12 @@ export function generatePlant(params: PlantParams): GenerateResult {
       break;
     case 'branching':
       buildBranching(bd, params, rng);
+      break;
+    case 'grain':
+      buildGrain(bd, params, rng);
+      break;
+    case 'vegetable':
+      buildVegetable(bd, params, rng);
       break;
   }
   const t1 = performance.now();
