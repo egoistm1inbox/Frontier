@@ -788,10 +788,14 @@ function buildBotanyPage(): void {
     slider(sLeaf, 'Blade pitch', () => B().bladePitch, (v) => (B().bladePitch = v), { min: 0, max: 90, step: 1, unit: '°', title: '90° = blade held flat to the sky, 0° = upright flag' }, onChange);
     slider(sLeaf, 'Splits', () => B().bladeNotch, (v) => (B().bladeNotch = v), { min: 0, max: 1, step: 0.05, title: 'Deep marginal splits (monstera) — cut into the blade, never through it' }, onChange);
     slider(sLeaf, 'Heart lobes', () => B().bladeLobes, (v) => (B().bladeLobes = v), { min: 0, max: 1, step: 0.05, title: 'Basal lobes of heart/arrow leaves (alocasia, taro)' }, onChange);
+    slider(sLeaf, 'Widest at', () => B().bladePeak, (v) => (B().bladePeak = v), { min: 0.15, max: 0.8, step: 0.01, title: 'Where along the blade it is widest (0 = base, 1 = tip)' }, onChange);
+    slider(sLeaf, 'Blade vee', () => B().bladeVee, (v) => (B().bladeVee = v), { min: 0, max: 1, step: 0.05, title: 'Blade halves hang down either side of the midrib (banana)' }, onChange);
+    slider(sLeaf, 'Wind tears', () => B().bladeTears, (v) => (B().bladeTears = v), { min: 0, max: 1, step: 0.05, title: 'Perpendicular tears splitting the blade into strips (banana, traveler palm)' }, onChange);
     slider(sLeaf, 'Crown spread', () => B().crownSpread, (v) => (B().crownSpread = v), { min: 10, max: 130, step: 1, unit: '°' }, onChange);
     slider(sLeaf, 'Phyllotaxis', () => B().phyllotaxis, (v) => (B().phyllotaxis = v), { min: 60, max: 220, step: 0.5, unit: '°', title: '180° = two-ranked fan (bird of paradise, traveler palm)' }, onChange);
   } else {
     const sBranch = section('Branching', page);
+    select(sBranch, 'Architecture', [{ value: 'lateral', label: 'Lateral (umbrella)' }, { value: 'fork', label: 'Forking (frangipani)' }, { value: 'leader', label: 'Leader (fiddle-leaf)' }], () => B().branchStyle, (v) => (B().branchStyle = v), onChange);
     refreshers.push(stepper(sBranch, 'Levels', () => B().branchLevels, (v) => (B().branchLevels = v), { min: 1, max: 4, integer: true, title: 'Recursion depth of the branch system' }, onChange).refresh);
     slider(sBranch, 'Branches / node', () => B().branchCount, (v) => (B().branchCount = v), { min: 2, max: 5, step: 0.1 }, onChange);
     slider(sBranch, 'Branch angle', () => B().branchAngle, (v) => (B().branchAngle = v), { min: 10, max: 85, step: 1, unit: '°' }, onChange);
@@ -805,10 +809,12 @@ function buildBotanyPage(): void {
     slider(sLeaf, 'Petiole ratio', () => B().petioleRatio, (v) => (B().petioleRatio = v), { min: 0.03, max: 0.7, step: 0.01 }, onChange);
     slider(sLeaf, 'Blade arc', () => B().bladeArc, (v) => (B().bladeArc = v), { min: 0, max: 2, step: 0.05 }, onChange);
     slider(sLeaf, 'Blade pitch', () => B().bladePitch, (v) => (B().bladePitch = v), { min: 0, max: 90, step: 1, unit: '°' }, onChange);
+    slider(sLeaf, 'Widest at', () => B().bladePeak, (v) => (B().bladePeak = v), { min: 0.15, max: 0.8, step: 0.01, title: 'Where along the blade it is widest (fiddle-leaf ≈ 0.68)' }, onChange);
   }
 
   // ── fruit ─────────────────────────────────────────────────────────────────
   const sFruit = section('Fruit & flowers', page, { collapsed: params.botany.nutCount === 0 });
+  if (params.habit === 'palm') select(sFruit, 'Cluster style', [{ value: 'nuts', label: 'Single nuts' }, { value: 'dates', label: 'Date bunches' }], () => B().fruitStyle, (v) => (B().fruitStyle = v), onChange);
   refreshers.push(stepper(sFruit, 'Count', () => B().nutCount, (v) => (B().nutCount = v), { min: 0, max: 24, integer: true, title: 'Nuts / inflorescences welded under the crown or at branch tips' }, onChange).refresh);
   scaledSlider(sFruit, 'Size', () => B().nutSize, (v) => (B().nutSize = v), 100, { min: 1, max: 30, step: 0.5, unit: 'cm' });
 

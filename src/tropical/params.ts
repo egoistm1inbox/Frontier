@@ -63,12 +63,22 @@ export interface BotanyParams {
   bladeNotch: number;
   /** Heart-shaped basal lobes, 0..1. */
   bladeLobes: number;
+  /** Where the blade is widest, 0 (at base) .. 1 (at tip): fiddle/obovate ≈ 0.65. */
+  bladePeak: number;
+  /** Blade halves hang down either side of the midrib (banana), 0..1. */
+  bladeVee: number;
+  /** Perpendicular wind-tears splitting the blade into strips (banana), 0..1. */
+  bladeTears: number;
 
   // ── fruit / flowers ───────────────────────────────────────────────────────
+  /** 'nuts' = individual fruits under the crown; 'dates' = hanging bunches of small fruit on strands. */
+  fruitStyle: 'nuts' | 'dates';
   nutCount: number;
   nutSize: number;
 
   // ── branching trees ───────────────────────────────────────────────────────
+  /** lateral = branches along the parent; fork = terminal dichotomy (frangipani); leader = upright trunk with sparse laterals (fiddle-leaf). */
+  branchStyle: 'lateral' | 'fork' | 'leader';
   branchLevels: number;
   branchCount: number;
   branchAngle: number;
@@ -129,9 +139,9 @@ function botany(o: Partial<BotanyParams>): BotanyParams {
     trunkHeight: 10, trunkRadius: 0.18, trunkCurve: 0.2, ringFrequency: 12, ringDepth: 0.35, crownshaft: 0, stemCount: 1, stemClimb: 0,
     frondType: 'pinnate', frondCount: 28, frondLength: 4.2, frondArc: 1, crownSpread: 95, phyllotaxis: 137.5, skirtFronds: 0, petioleRatio: 0.22,
     leafletsPerSide: 50, leafletLength: 0.85, leafletWidth: 0.032, leafletAngle: 48, leafletDroop: 0.7, leafletTwist: 35, plume: 0.15,
-    leafLength: 2.2, bladeWidth: 0.55, bladeArc: 0.8, bladePitch: 35, bladeNotch: 0, bladeLobes: 0,
-    nutCount: 0, nutSize: 0.16,
-    branchLevels: 3, branchCount: 3, branchAngle: 42, branchTaper: 0.62, leavesPerTip: 6, compoundLeaf: 'simple',
+    leafLength: 2.2, bladeWidth: 0.55, bladeArc: 0.8, bladePitch: 35, bladeNotch: 0, bladeLobes: 0, bladePeak: 0.38, bladeVee: 0.15, bladeTears: 0,
+    fruitStyle: 'nuts', nutCount: 0, nutSize: 0.16,
+    branchStyle: 'lateral', branchLevels: 3, branchCount: 3, branchAngle: 42, branchTaper: 0.62, leavesPerTip: 6, compoundLeaf: 'simple',
     leafColor: '#3d7a26', leafColor2: '#86b43c', deadColor: '#9a7434', trunkColor: '#8a7a64', trunkColor2: '#6f6152', rachisColor: '#5c7031',
     nutColor: '#7a9a3a', nutColor2: '#c98a3a',
     ...o,
@@ -161,21 +171,21 @@ export const PRESETS: PlantParams[] = [
     trunkHeight: 14, trunkRadius: 0.3, trunkCurve: 0.1, ringFrequency: 9, ringDepth: 0.85,
     frondCount: 38, frondLength: 4.2, frondArc: 0.55, crownSpread: 105, skirtFronds: 6,
     leafletsPerSide: 52, leafletLength: 0.55, leafletWidth: 0.028, leafletAngle: 55, leafletDroop: 0.25, leafletTwist: 15, plume: 0.1,
-    nutCount: 16, nutSize: 0.05, nutColor: '#d98a2e', nutColor2: '#a85a22',
+    fruitStyle: 'dates', nutCount: 5, nutSize: 0.045, nutColor: '#e09a2e', nutColor2: '#8a4a26',
     leafColor: '#54743c', leafColor2: '#8aa860', trunkColor: '#7d6448', trunkColor2: '#6b5138', rachisColor: '#7a6c3a',
   }, { flare: 0.8 }),
   species('Queen Palm', 'palm', {
     trunkHeight: 12, trunkRadius: 0.2, trunkCurve: 0.18, ringFrequency: 11, ringDepth: 0.4,
     frondCount: 26, frondLength: 4.6, frondArc: 1.25, crownSpread: 100,
     leafletsPerSide: 58, leafletLength: 0.75, leafletWidth: 0.026, leafletAngle: 50, leafletDroop: 1.0, leafletTwist: 60, plume: 0.95,
-    nutCount: 10, nutSize: 0.035, nutColor: '#e0a33c', nutColor2: '#c97e2e',
+    fruitStyle: 'dates', nutCount: 3, nutSize: 0.03, nutColor: '#e8a832', nutColor2: '#c46a26',
     leafColor: '#35732a', leafColor2: '#7fb53e',
   }),
   species('Foxtail Palm', 'palm', {
     trunkHeight: 10, trunkRadius: 0.16, trunkCurve: 0.08, ringFrequency: 12, ringDepth: 0.25, crownshaft: 0.06,
     frondCount: 11, frondLength: 3.4, frondArc: 0.75, crownSpread: 90,
     leafletsPerSide: 58, leafletLength: 0.55, leafletWidth: 0.038, leafletAngle: 58, leafletDroop: 0.35, leafletTwist: 85, plume: 1,
-    nutCount: 6, nutSize: 0.06, nutColor: '#c94f30', nutColor2: '#a83c22',
+    fruitStyle: 'dates', nutCount: 3, nutSize: 0.035, nutColor: '#d84f2c', nutColor2: '#93321e',
     leafColor: '#2e7026', leafColor2: '#6fae38', trunkColor: '#a99f8d', trunkColor2: '#5d8f3e',
   }),
   species('Areca Palm', 'palm', {
@@ -217,29 +227,29 @@ export const PRESETS: PlantParams[] = [
 
   // ───────────────────────────── Banana family ───────────────────────────────
   species('Banana', 'paddle', {
-    trunkHeight: 3.2, trunkRadius: 0.15, trunkCurve: 0.08, ringFrequency: 0, stemCount: 3,
-    frondCount: 9, petioleRatio: 0.22, crownSpread: 85,
-    leafLength: 3.1, bladeWidth: 0.72, bladeArc: 1.0, bladePitch: 32,
+    trunkHeight: 3.2, trunkRadius: 0.16, trunkCurve: 0.08, ringFrequency: 0, stemCount: 3,
+    frondCount: 10, petioleRatio: 0.15, crownSpread: 100,
+    leafLength: 3.2, bladeWidth: 0.75, bladeArc: 1.15, bladePitch: 30, bladePeak: 0.5, bladeVee: 0.85, bladeTears: 0.55,
     nutCount: 1, nutSize: 0.16, nutColor: '#e5c33c', nutColor2: '#7e3a5e',
     leafColor: '#3f8a2a', leafColor2: '#8cc63f', trunkColor: '#7d9a4a', trunkColor2: '#97b45e', rachisColor: '#86aa4e',
   }, { flare: 0.5 }, { trunkSides: 18 }),
   species('Bird of Paradise', 'paddle', {
     trunkHeight: 0.25, trunkRadius: 0.14, ringFrequency: 0, phyllotaxis: 180, stemCount: 1,
-    frondCount: 9, petioleRatio: 0.58, crownSpread: 55,
-    leafLength: 1.7, bladeWidth: 0.24, bladeArc: 0.35, bladePitch: 55,
+    frondCount: 11, petioleRatio: 0.58, crownSpread: 62,
+    leafLength: 1.85, bladeWidth: 0.26, bladeArc: 0.4, bladePitch: 50, bladePeak: 0.55, bladeVee: 0.5, bladeTears: 0.3,
     nutCount: 3, nutSize: 0.14, nutColor: '#e86a2a', nutColor2: '#3a5ea8',
     leafColor: '#2e6e34', leafColor2: '#5da24a', rachisColor: '#5d8a42',
   }, { flare: 0.3 }, { trunkSides: 16 }),
   species("Traveler's Palm", 'paddle', {
     trunkHeight: 7, trunkRadius: 0.2, trunkCurve: 0.05, ringFrequency: 6, ringDepth: 0.3, phyllotaxis: 180,
-    frondCount: 15, petioleRatio: 0.42, crownSpread: 78,
-    leafLength: 3.6, bladeWidth: 0.62, bladeArc: 0.7, bladePitch: 40,
+    frondCount: 16, petioleRatio: 0.44, crownSpread: 85,
+    leafLength: 3.8, bladeWidth: 0.6, bladeArc: 0.55, bladePitch: 38, bladePeak: 0.5, bladeVee: 0.65, bladeTears: 0.85,
     leafColor: '#35802c', leafColor2: '#7cb83e', trunkColor: '#8a7a5e', rachisColor: '#6d9440',
   }, { flare: 1.0 }, { trunkSides: 20 }),
   species('Heliconia', 'paddle', {
-    trunkHeight: 1.6, trunkRadius: 0.045, ringFrequency: 0, stemCount: 4, phyllotaxis: 180,
-    frondCount: 5, petioleRatio: 0.3, crownSpread: 70,
-    leafLength: 1.5, bladeWidth: 0.3, bladeArc: 0.8, bladePitch: 38,
+    trunkHeight: 1.7, trunkRadius: 0.05, ringFrequency: 0, stemCount: 5, phyllotaxis: 180,
+    frondCount: 6, petioleRatio: 0.28, crownSpread: 75,
+    leafLength: 1.6, bladeWidth: 0.3, bladeArc: 0.85, bladePitch: 36, bladePeak: 0.5, bladeVee: 0.7, bladeTears: 0.35,
     nutCount: 2, nutSize: 0.11, nutColor: '#d8402e', nutColor2: '#e8a02e',
     leafColor: '#357a28', leafColor2: '#7fbc3e', trunkColor: '#6d9448', rachisColor: '#77a04a',
   }, { flare: 0.3 }, { trunkSides: 12 }),
@@ -247,47 +257,47 @@ export const PRESETS: PlantParams[] = [
   // ───────────────────────────── Big-leaf plants ─────────────────────────────
   species('Elephant Ear', 'rosette', {
     trunkHeight: 0.3, trunkRadius: 0.16, ringFrequency: 0,
-    frondCount: 9, petioleRatio: 0.45,
-    leafLength: 1.9, bladeWidth: 0.78, bladeArc: 0.5, bladePitch: 62, bladeLobes: 0.85,
+    frondCount: 11, petioleRatio: 0.48,
+    leafLength: 2.0, bladeWidth: 0.82, bladeArc: 0.55, bladePitch: 68, bladeLobes: 0.9, bladePeak: 0.32, bladeVee: 0.1,
     leafColor: '#2e7030', leafColor2: '#63a844', trunkColor: '#6d8a4c', rachisColor: '#74a04e',
   }, { flare: 0.3 }, { trunkSides: 16 }),
   species('Monstera', 'rosette', {
     trunkHeight: 2.6, trunkRadius: 0.035, ringFrequency: 0, stemClimb: 1, phyllotaxis: 180,
-    frondCount: 13, petioleRatio: 0.48,
-    leafLength: 1.5, bladeWidth: 0.62, bladeArc: 0.45, bladePitch: 55, bladeNotch: 0.85, bladeLobes: 0.55,
+    frondCount: 14, petioleRatio: 0.48,
+    leafLength: 1.55, bladeWidth: 0.64, bladeArc: 0.5, bladePitch: 58, bladeNotch: 0.92, bladeLobes: 0.6, bladePeak: 0.38, bladeVee: 0.12,
     leafColor: '#256b2c', leafColor2: '#4d9a3e', trunkColor: '#5d8140', rachisColor: '#63904a',
   }, { flare: 0.2, stiltCount: 5, stiltHeight: 0.5 }, { trunkSides: 12 }),
   species('Split-leaf Philodendron', 'rosette', {
     trunkHeight: 0.55, trunkRadius: 0.09, ringFrequency: 3, ringDepth: 0.3,
-    frondCount: 10, petioleRatio: 0.48,
-    leafLength: 1.7, bladeWidth: 0.7, bladeArc: 0.6, bladePitch: 48, bladeNotch: 0.65, bladeLobes: 0.7,
+    frondCount: 12, petioleRatio: 0.48,
+    leafLength: 1.75, bladeWidth: 0.72, bladeArc: 0.65, bladePitch: 50, bladeNotch: 0.85, bladeLobes: 0.75, bladePeak: 0.4, bladeVee: 0.18,
     leafColor: '#2b7230', leafColor2: '#5aa843', trunkColor: '#7a6a4e', rachisColor: '#6d9a48',
   }, { flare: 0.4, stiltCount: 4, stiltHeight: 0.4 }, { trunkSides: 14 }),
   species('Giant Taro', 'rosette', {
     trunkHeight: 0.35, trunkRadius: 0.2, ringFrequency: 0,
-    frondCount: 8, petioleRatio: 0.5,
-    leafLength: 2.1, bladeWidth: 0.9, bladeArc: 0.45, bladePitch: 70, bladeLobes: 0.6,
+    frondCount: 9, petioleRatio: 0.5,
+    leafLength: 2.15, bladeWidth: 0.92, bladeArc: 0.5, bladePitch: 74, bladeLobes: 0.65, bladePeak: 0.34, bladeVee: 0.08,
     leafColor: '#3a7d52', leafColor2: '#74b06e', trunkColor: '#77a05e', rachisColor: '#83ac66',
   }, { flare: 0.3 }, { trunkSides: 16 }),
 
   // ───────────────────────────── Tropical trees ──────────────────────────────
   species('Frangipani', 'branching', {
-    trunkHeight: 1.4, trunkRadius: 0.13, trunkCurve: 0.15, ringFrequency: 0,
-    branchLevels: 3, branchCount: 3, branchAngle: 38, branchTaper: 0.78, leavesPerTip: 8, compoundLeaf: 'simple',
-    petioleRatio: 0.3, leafLength: 0.42, bladeWidth: 0.09, bladeArc: 0.5, bladePitch: 30,
+    trunkHeight: 1.3, trunkRadius: 0.14, trunkCurve: 0.15, ringFrequency: 0,
+    branchStyle: 'fork', branchLevels: 3, branchCount: 2.6, branchAngle: 36, branchTaper: 0.8, leavesPerTip: 8, compoundLeaf: 'simple',
+    petioleRatio: 0.32, leafLength: 0.46, bladeWidth: 0.1, bladeArc: 0.55, bladePitch: 32, bladePeak: 0.45, bladeVee: 0.25,
     nutCount: 5, nutSize: 0.05, nutColor: '#f2e6ee', nutColor2: '#e88bb0',
     leafColor: '#2f7030', leafColor2: '#5fa843', trunkColor: '#9a8d7a', trunkColor2: '#8a7d68', rachisColor: '#7d9a52',
   }, { flare: 0.6 }, { trunkSides: 18 }),
   species('Umbrella Tree', 'branching', {
-    trunkHeight: 2.8, trunkRadius: 0.07, trunkCurve: 0.1, ringFrequency: 0,
-    branchLevels: 3, branchCount: 3, branchAngle: 48, branchTaper: 0.6, leavesPerTip: 3, compoundLeaf: 'palmate',
-    petioleRatio: 0.55, leafLength: 0.75, bladeWidth: 0.36, bladeArc: 0.4, bladePitch: 42,
+    trunkHeight: 3.1, trunkRadius: 0.07, trunkCurve: 0.1, ringFrequency: 0,
+    branchStyle: 'lateral', branchLevels: 3, branchCount: 3, branchAngle: 50, branchTaper: 0.6, leavesPerTip: 3, compoundLeaf: 'palmate',
+    petioleRatio: 0.55, leafLength: 0.8, bladeWidth: 0.38, bladeArc: 0.45, bladePitch: 42,
     leafColor: '#2c7030', leafColor2: '#5dab44', trunkColor: '#8a7a5e', rachisColor: '#6d9a48',
   }, { flare: 0.5 }, { trunkSides: 16 }),
   species('Fiddle-leaf Fig', 'branching', {
-    trunkHeight: 2.4, trunkRadius: 0.06, trunkCurve: 0.12, ringFrequency: 0,
-    branchLevels: 2, branchCount: 2.4, branchAngle: 35, branchTaper: 0.65, leavesPerTip: 5, compoundLeaf: 'simple',
-    petioleRatio: 0.14, leafLength: 0.5, bladeWidth: 0.3, bladeArc: 0.35, bladePitch: 35, bladeLobes: 0.35,
+    trunkHeight: 2.6, trunkRadius: 0.06, trunkCurve: 0.12, ringFrequency: 0,
+    branchStyle: 'leader', branchLevels: 1, branchCount: 4, branchAngle: 38, branchTaper: 0.62, leavesPerTip: 7, compoundLeaf: 'simple',
+    petioleRatio: 0.13, leafLength: 0.52, bladeWidth: 0.32, bladeArc: 0.4, bladePitch: 38, bladeLobes: 0.3, bladePeak: 0.68, bladeVee: 0.1,
     leafColor: '#245c2a', leafColor2: '#498a3a', trunkColor: '#7d6c55', rachisColor: '#5d8a42',
   }, { flare: 0.4 }, { trunkSides: 14 }),
 ];
