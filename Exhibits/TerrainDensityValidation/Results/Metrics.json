@@ -1,0 +1,43 @@
+{
+  "grid": [
+    96,
+    48,
+    96
+  ],
+  "multi_interval_columns": 411,
+  "multi_interval_percent": 4.459635416666667,
+  "max_intervals_one_column": 2,
+  "vertical_cliff_samples": 930,
+  "surface_band_samples": 16333,
+  "vertices": 18622,
+  "triangles": 36832,
+  "extraction_seconds_python": 1.3398617419998118,
+  "erosion_steps": 900,
+  "erosion_seconds_python": 2.1391532249999727,
+  "eroded_cell_metres": 55471.43348974187,
+  "deposited_cell_metres": 31871.762743338928,
+  "suspended_cell_metres": 100.45038526456919,
+  "thermal_moved_cell_metres": 6817.206684813237,
+  "bed_change_min_m": -24.93075715690508,
+  "bed_change_max_m": 8.069041060801034,
+  "lake_cells": 3428,
+  "lake_max_depth_m": 26.09099123029296,
+  "river_cells": 410,
+  "memory_model": {
+    "dense_0.5m_TB": 1.024,
+    "dense_2m_GB": 16.0,
+    "heightfield_0.5m_MB": 512.0,
+    "heightfield_1m_MB": 128.0,
+    "narrowband_2m_MB": 288.0,
+    "punchin_0.5m_r512_MB": 100.663296
+  },
+  "checks": {
+    "multi_interval_columns_exist": true,
+    "vertical_cliff_samples_exist": true,
+    "extraction_produced_triangles": true,
+    "erosion_no_nan": true,
+    "erosion_carved_and_deposited": true,
+    "drainage_channel_exists": true,
+    "lakes_exist": true
+  }
+}
