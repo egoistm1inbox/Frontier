@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#071018">
+  <title>Frontier — Hydro Lab</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <svg class="svg-definitions" aria-hidden="true" focusable="false">
+    <symbol id="icon-wave" viewBox="0 0 24 24"><path d="M2 15c2.4 0 2.4-4 4.8-4s2.4 4 4.8 4 2.4-4 4.8-4 2.4 4 4.8 4"/><path d="M2 19c2.4 0 2.4-3 4.8-3s2.4 3 4.8 3 2.4-3 4.8-3 2.4 3 4.8 3"/></symbol>
+    <symbol id="icon-cube" viewBox="0 0 24 24"><path d="m12 3 8 4.5v9L12 21l-8-4.5v-9L12 3Z"/><path d="m4 7.5 8 4.5 8-4.5M12 12v9"/></symbol>
+    <symbol id="icon-grid" viewBox="0 0 24 24"><path d="M4 4h16v16H4zM4 10h16M4 16h16M10 4v16M16 4v16"/></symbol>
+    <symbol id="icon-spark" viewBox="0 0 24 24"><path d="m12 2 1.8 7.2L21 11l-7.2 1.8L12 20l-1.8-7.2L3 11l7.2-1.8L12 2Z"/><path d="m19 16 .7 2.3L22 19l-2.3.7L19 22l-.7-2.3L16 19l2.3-.7L19 16Z"/></symbol>
+    <symbol id="icon-play" viewBox="0 0 24 24"><path d="m8 5 11 7-11 7V5Z"/></symbol>
+    <symbol id="icon-pause" viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></symbol>
+    <symbol id="icon-reset" viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.3-5.7L4 8.5M4 4v4.5h4.5"/></symbol>
+    <symbol id="icon-rain" viewBox="0 0 24 24"><path d="M7 4a5 5 0 0 0-4.8 6.5A4 4 0 0 0 5.8 17h10.5a4.5 4.5 0 0 0 .7-8.9A5.7 5.7 0 0 0 7 4Z"/><path d="m8 19-1 3m5-3-1 3m5-3-1 3"/></symbol>
+    <symbol id="icon-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3"/></symbol>
+    <symbol id="icon-eye" viewBox="0 0 24 24"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"/><circle cx="12" cy="12" r="2.7"/></symbol>
+    <symbol id="icon-chevron" viewBox="0 0 24 24"><path d="m8 10 4 4 4-4"/></symbol>
+    <symbol id="icon-sliders" viewBox="0 0 24 24"><path d="M4 7h16M4 17h16M8 4v6m8 4v6"/></symbol>
+    <symbol id="icon-dots" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></symbol>
+  </svg>
+
+  <main class="application-shell">
+    <header class="application-header">
+      <div class="brand-lockup" aria-label="Frontier Hydro Lab">
+        <div class="brand-mark"><span></span><span></span><span></span></div>
+        <div><strong>FRONTIER</strong><span>HYDRO LAB / EXPERIMENTAL</span></div>
+      </div>
+      <div class="header-divider"></div>
+      <button class="workspace-switcher" type="button" aria-label="Current workspace">
+        <span class="workspace-dot"></span><span>Ocean / Hybrid Coupling</span><svg class="icon"><use href="#icon-chevron"/></svg>
+      </button>
+      <div class="header-spacer"></div>
+      <div class="runtime-status" title="Simulation update loop is active"><span class="status-light"></span><span id="runtimeState">LIVE</span><span class="runtime-fps" id="fpsReadout">60 FPS</span></div>
+      <button class="header-icon" id="presentationButton" type="button" aria-label="Toggle high contrast view" title="Toggle high contrast view"><svg class="icon"><use href="#icon-eye"/></svg></button>
+      <button class="header-icon" type="button" aria-label="More options" title="More options"><svg class="icon"><use href="#icon-dots"/></svg></button>
+    </header>
+
+    <section class="editor-layout">
+      <aside class="scene-rail" aria-label="Scene and systems">
+        <header class="pane-header">
+          <span>SCENE</span>
+          <button class="pane-options" type="button" aria-label="Scene options"><svg class="icon"><use href="#icon-dots"/></svg></button>
+        </header>
+        <div class="scene-scroll">
+          <div class="tree-root"><span class="caret">⌄</span><svg class="tree-icon"><use href="#icon-cube"/></svg><strong>Hybrid Ocean Basin</strong></div>
+          <button class="tree-row"><span class="tree-indent"></span><span class="tree-status world"></span><span>World</span></button>
+          <button class="tree-row selected" data-system-focus="surface"><span class="tree-indent"></span><span class="tree-status surface"></span><svg class="tree-icon"><use href="#icon-wave"/></svg><span>Ocean surface</span><small>2.5D</small></button>
+          <button class="tree-row" data-system-focus="volume"><span class="tree-indent"></span><span class="tree-status volume"></span><svg class="tree-icon"><use href="#icon-cube"/></svg><span>Splash volume</span><small>3D</small></button>
+          <button class="tree-row" data-system-focus="coupling"><span class="tree-indent"></span><span class="tree-status coupling"></span><svg class="tree-icon"><use href="#icon-spark"/></svg><span>Surface coupling</span></button>
+          <button class="tree-row"><span class="tree-indent"></span><span class="tree-status light"></span><span>Lighting / fog</span></button>
+
+          <div class="rail-section-label">ACTIVE GRIDS</div>
+          <div class="grid-card">
+            <div class="grid-card-icon teal"><svg class="icon"><use href="#icon-grid"/></svg></div>
+            <div><strong>Surface clipmaps</strong><span id="surfaceGridSummary">3 levels · 43 m near</span></div>
+          </div>
+          <div class="grid-card">
+            <div class="grid-card-icon blue"><svg class="icon"><use href="#icon-cube"/></svg></div>
+            <div><strong>Sparse splash chunks</strong><span id="chunkSummary">0 active chunks</span></div>
+          </div>
+
+          <div class="rail-section-label">VIEW LAYERS</div>
+          <label class="view-toggle"><input id="toggleFoam" type="checkbox" checked><span class="switch"></span><span>Foam transport</span></label>
+          <label class="view-toggle"><input id="toggleVolume" type="checkbox" checked><span class="switch"></span><span>Volume droplets</span></label>
+          <label class="view-toggle"><input id="toggleGrid" type="checkbox" checked><span class="switch"></span><span>Surface grid</span></label>
+        </div>
+        <footer class="scene-footer"><span class="cache-dot"></span><span>World-space cache</span><strong id="cacheStatus">resident</strong></footer>
+      </aside>
+
+      <section class="viewport-column" aria-label="Hydro simulation viewport">
+        <header class="viewport-toolbar pane-header">
+          <div class="viewport-breadcrumb"><svg class="icon"><use href="#icon-wave"/></svg><strong>Ocean Basin</strong><span>/</span><span>Hybrid Solver</span></div>
+          <div class="toolbar-divider"></div>
+          <button id="playButton" class="tool-button selected" type="button" title="Pause simulation (Space)"><svg class="icon"><use href="#icon-pause"/></svg><span>Pause</span></button>
+          <button id="impactButton" class="tool-button accent" type="button" title="Add an impact in front of the camera (I)"><svg class="icon"><use href="#icon-target"/></svg><span>Impact</span></button>
+          <button id="rainButton" class="tool-button" type="button" title="Create a rain burst"><svg class="icon"><use href="#icon-rain"/></svg><span>Rain ×8</span></button>
+          <button id="resetButton" class="tool-button" type="button" title="Reset simulation (R)"><svg class="icon"><use href="#icon-reset"/></svg><span>Reset</span></button>
+          <div class="toolbar-spacer"></div>
+          <label class="preset-select"><span>Preset</span><select id="presetSelect" aria-label="Simulation preset"><option value="open">Open swell</option><option value="calm">Calm water</option><option value="breaker">Breaking impact</option><option value="storm">Storm ocean</option></select></label>
+        </header>
+
+        <div class="viewport-stage">
+          <canvas id="hydroCanvas" aria-label="Interactive hybrid water and splash simulation. Click water to add an impact, drag with Shift or right mouse button to orbit."></canvas>
+          <div class="viewport-top-overlay">
+            <div class="mode-chip"><span class="mode-dot"></span>RUNNING <strong>HYBRID</strong></div>
+            <div class="coordinate-chip" id="coordinateReadout">WORLD 0.0 / 0.0 / 27.0 m</div>
+          </div>
+          <div class="viewport-guide" id="viewportGuide"><svg class="icon"><use href="#icon-target"/></svg><span><strong>Click water</strong> to emit a coupled splash</span><small>Shift + drag or right drag to orbit · wheel to dolly</small></div>
+          <div class="viewport-legend"><span><i class="legend-line surface"></i>2.5D water clipmap</span><span><i class="legend-line volume"></i>3D sparse droplets</span><span><i class="legend-line impact"></i>registered contact</span></div>
+        </div>
+
+        <footer class="timeline-panel">
+          <div class="timeline-title"><span class="pulse-dot"></span><strong>SIMULATION STREAM</strong><span id="timelineTime">00:00.00</span></div>
+          <div class="timeline-track" aria-hidden="true"><div id="timelineFill" class="timeline-fill"></div><div class="timeline-ticks"></div></div>
+          <div class="timeline-metrics"><span><b id="particleMetric">0</b> droplets</span><span><b id="cellMetric">0</b> cells</span><span><b id="contactMetric">0</b> contacts</span><span class="metric-right">fixed Δt <b>16.6 ms</b></span></div>
+        </footer>
+      </section>
+
+      <aside class="inspector-panel" aria-label="Hydro inspector">
+        <header class="pane-header inspector-header">
+          <div><span class="eyebrow">INSPECTOR</span><strong id="inspectorTitle">Hybrid coupling</strong></div>
+          <button class="pane-options" type="button" aria-label="Inspector options"><svg class="icon"><use href="#icon-dots"/></svg></button>
+        </header>
+        <nav class="inspector-tabs" role="tablist" aria-label="Inspector categories">
+          <button class="tab-button active" role="tab" aria-selected="true" data-tab="simulation">Simulation</button>
+          <button class="tab-button" role="tab" aria-selected="false" data-tab="render">Render</button>
+          <button class="tab-button" role="tab" aria-selected="false" data-tab="debug">Debug</button>
+        </nav>
+
+        <div class="inspector-scroll">
+          <section class="tab-panel active" data-panel="simulation">
+            <div class="system-banner">
+              <div class="banner-glyph"><svg class="icon"><use href="#icon-spark"/></svg></div>
+              <div><strong>Coupled water system</strong><p>Local 3D momentum and foam are registered in world space, then injected into the active 2.5D surface cascade.</p></div>
+            </div>
+
+            <details class="control-group" open>
+              <summary><span><svg class="mini-icon"><use href="#icon-wave"/></svg>Ocean / large area</span><svg class="chevron"><use href="#icon-chevron"/></svg></summary>
+              <div class="control-list">
+                <label class="range-control"><span><span>Wave amplitude</span><output data-output="waveAmplitude"></output></span><input data-param="waveAmplitude" type="range" min="0.10" max="2.20" step="0.01"></label>
+                <label class="range-control"><span><span>Wind speed</span><output data-output="windSpeed"></output></span><input data-param="windSpeed" type="range" min="0" max="28" step="0.5"></label>
+                <label class="range-control"><span><span>Surface response</span><output data-output="waveResponse"></output></span><input data-param="waveResponse" type="range" min="1.5" max="8.0" step="0.1"></label>
+                <label class="range-control"><span><span>Surface damping</span><output data-output="surfaceDamping"></output></span><input data-param="surfaceDamping" type="range" min="0.05" max="1.2" step="0.01"></label>
+                <label class="range-control"><span><span>Surface cell size</span><output data-output="surfaceCellSize"></output></span><input data-param="surfaceCellSize" type="range" min="0.22" max="1.10" step="0.01"></label>
+                <label class="range-control"><span><span>Clipmap cascades</span><output data-output="clipmapLevels"></output></span><input data-param="clipmapLevels" type="range" min="2" max="4" step="1"></label>
+              </div>
+            </details>
+
+            <details class="control-group" open>
+              <summary><span><svg class="mini-icon"><use href="#icon-cube"/></svg>Volumetric splash</span><svg class="chevron"><use href="#icon-chevron"/></svg></summary>
+              <div class="control-list">
+                <label class="range-control"><span><span>Splash intensity</span><output data-output="splashIntensity"></output></span><input data-param="splashIntensity" type="range" min="0.25" max="2.5" step="0.05"></label>
+                <label class="range-control"><span><span>Droplet budget</span><output data-output="dropletCount"></output></span><input data-param="dropletCount" type="range" min="24" max="180" step="1"></label>
+                <label class="range-control"><span><span>Volume cell size</span><output data-output="splashCellSize"></output></span><input data-param="splashCellSize" type="range" min="0.14" max="0.72" step="0.01"></label>
+                <label class="range-control"><span><span>Pressure passes</span><output data-output="solverIterations"></output></span><input data-param="solverIterations" type="range" min="1" max="8" step="1"></label>
+              </div>
+            </details>
+
+            <details class="control-group" open>
+              <summary><span><svg class="mini-icon"><use href="#icon-spark"/></svg>Exchange / foam</span><svg class="chevron"><use href="#icon-chevron"/></svg></summary>
+              <div class="control-list">
+                <label class="range-control"><span><span>Momentum transfer</span><output data-output="coupling"></output></span><input data-param="coupling" type="range" min="0.15" max="2.0" step="0.05"></label>
+                <label class="range-control"><span><span>Foam persistence</span><output data-output="foamPersistence"></output></span><input data-param="foamPersistence" type="range" min="1" max="16" step="0.25"></label>
+                <label class="range-control"><span><span>Foam generation</span><output data-output="foamGain"></output></span><input data-param="foamGain" type="range" min="0.05" max="1.8" step="0.05"></label>
+              </div>
+            </details>
+          </section>
+
+          <section class="tab-panel" data-panel="render">
+            <div class="system-banner blue-banner">
+              <div class="banner-glyph"><svg class="icon"><use href="#icon-eye"/></svg></div>
+              <div><strong>Reference viewport</strong><p>A canvas view of the same world-space simulation state; it is not a separate visual effect.</p></div>
+            </div>
+            <details class="control-group" open>
+              <summary><span>Viewport layers</span><svg class="chevron"><use href="#icon-chevron"/></svg></summary>
+              <div class="toggle-list">
+                <label class="property-toggle"><span><span>Surface grid</span><small>topology overlay</small></span><input id="renderGrid" type="checkbox" checked><span class="switch"></span></label>
+                <label class="property-toggle"><span><span>Foam field</span><small>surface transport</small></span><input id="renderFoam" type="checkbox" checked><span class="switch"></span></label>
+                <label class="property-toggle"><span><span>Splash volume</span><small>particle / grid hand-off</small></span><input id="renderVolume" type="checkbox" checked><span class="switch"></span></label>
+                <label class="property-toggle"><span><span>Impact locations</span><small>world-space registration</small></span><input id="renderContacts" type="checkbox" checked><span class="switch"></span></label>
+                <label class="property-toggle"><span><span>Clipmap bounds</span><small>residency diagnostics</small></span><input id="renderClipmaps" type="checkbox"><span class="switch"></span></label>
+              </div>
+            </details>
+            <details class="control-group" open>
+              <summary><span>Quality</span><svg class="chevron"><use href="#icon-chevron"/></svg></summary>
+              <div class="control-list">
+                <label class="range-control"><span><span>Mesh density</span><output id="qualityOutput"></output></span><input id="renderQuality" type="range" min="1" max="3" step="1" value="2"></label>
+                <label class="range-control"><span><span>Exposure</span><output id="exposureOutput"></output></span><input id="exposure" type="range" min="0.65" max="1.35" step="0.01" value="1"></label>
+              </div>
+            </details>
+            <div class="render-tip"><svg class="mini-icon"><use href="#icon-target"/></svg><span>Click on the water to create a splash. Shift/right drag orbits the camera.</span></div>
+          </section>
+
+          <section class="tab-panel" data-panel="debug">
+            <div class="debug-card">
+              <span>COUPLING CONTRACT</span>
+              <code>ImpactRecord → world x/z → clipmap cell + sparse voxel</code>
+              <p>Every falling particle records an address in both systems before transferring normal momentum and foam.</p>
+            </div>
+            <details class="control-group" open>
+              <summary><span>Grid residency</span><svg class="chevron"><use href="#icon-chevron"/></svg></summary>
+              <dl class="diagnostic-list">
+                <div><dt>Near cascade</dt><dd id="nearCoverage">—</dd></div>
+                <div><dt>Far cascade</dt><dd id="farCoverage">—</dd></div>
+                <div><dt>Volume cell</dt><dd id="volumeCellReadout">—</dd></div>
+                <div><dt>Occupied cells</dt><dd id="occupiedReadout">—</dd></div>
+              </dl>
+            </details>
+            <details class="control-group" open>
+              <summary><span>Recent registered contacts</span><svg class="chevron"><use href="#icon-chevron"/></svg></summary>
+              <ol id="contactList" class="contact-list"><li class="empty-contact">No contacts yet. Add an impact.</li></ol>
+            </details>
+            <button id="copyContract" class="wide-button" type="button"><svg class="icon"><use href="#icon-grid"/></svg><span>Copy impact payload</span></button>
+          </section>
+        </div>
+        <footer class="inspector-footer"><span>CPU reference</span><span>•</span><span>GPU-ready data contract</span></footer>
+      </aside>
+    </section>
+  </main>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>
