@@ -465,6 +465,10 @@ export class OceanSurface {
     this.parameters = parameters;
     this.center = [...center];
     this.levels = [];
+    // A bounded cache lets an impact be meaningful even when it lands well
+    // outside the camera's current rings. In a full engine this is a streamed
+    // surface-tile cache backed by the world partition.
+    this.remoteTiles = new Map();
     this.registrations = [];
     this.rebuild(parameters, center);
   }
@@ -481,6 +485,43 @@ export class OceanSurface {
       center,
       level,
     }));
+    this.remoteTiles.clear();
+  }
+
+  #remoteTileKey(x, z) {
+    const template = this.levels.at(-1);
+    const extent = template.extent;
+    return `${Math.floor(x / extent)}:${Math.floor(z / extent)}`;
+  }
+
+  #remoteTileFor(x, z) {
+    const key = this.#remoteTileKey(x, z);
+    let tile = this.remoteTiles.get(key);
+    if (!tile) {
+      const template = this.levels.at(-1);
+      const extent = template.extent;
+      const [tileX, tileZ] = key.split(':').map(Number);
+      tile = {
+        key,
+        age: 0,
+        level: new HeightFieldLevel({
+          resolution: template.resolution,
+          cellSize: template.cellSize,
+          center: [tileX * extent + extent / 2, tileZ * extent + extent / 2],
+          level: template.level,
+        }),
+      };
+      this.remoteTiles.set(key, tile);
+      // Keep a world-wide working set bounded. The oldest tiles are safe to
+      // evict because their long wavelength contribution is still represented
+      // by the unbounded procedural swell.
+      if (this.remoteTiles.size > 12) {
+        const oldest = [...this.remoteTiles.values()].sort((left, right) => right.age - left.age)[0];
+        if (oldest) this.remoteTiles.delete(oldest.key);
+      }
+    }
+    tile.age = 0;
+    return tile;
   }
 
   follow(centerX, centerZ) {
@@ -532,11 +573,13 @@ export class OceanSurface {
       local = level.sample(x, z);
       if (local) break;
     }
+    const remote = this.remoteTiles.get(this.#remoteTileKey(x, z))?.level.sample(x, z) || null;
+    const disturbance = (local?.height || 0) + (remote?.height || 0);
     return {
-      height: base.height + (local?.height || 0),
-      foam: clamp(base.foam + (local?.foam || 0), 0, 1.5),
+      height: base.height + disturbance,
+      foam: clamp(base.foam + (local?.foam || 0) + (remote?.foam || 0), 0, 1.5),
       baseHeight: base.height,
-      disturbance: local?.height || 0,
+      disturbance,
     };
   }
 
@@ -554,6 +597,23 @@ export class OceanSurface {
       });
       gridHits.push({
         level: level.level,
+        cell: [Math.round(gridX), Math.round(gridZ)],
+        cells,
+      });
+    }
+    // An emitter can live far outside the viewer's current clipmap rings.
+    // Route it into a sparse world tile rather than dropping its ripple.
+    if (gridHits.length === 0) {
+      const tile = this.#remoteTileFor(x, z);
+      const [gridX, gridZ] = tile.level.worldToCell(x, z);
+      const cells = tile.level.inject(x, z, {
+        momentum: energy,
+        radius: Math.max(radius, tile.level.cellSize * 1.5),
+        foam,
+        displacement: -energy * 0.018,
+      });
+      gridHits.push({
+        level: `tile:${tile.key}`,
         cell: [Math.round(gridX), Math.round(gridZ)],
         cells,
       });
@@ -577,7 +637,7 @@ export class OceanSurface {
   }
 
   update(deltaTime) {
-    for (const level of this.levels) {
+    const updateLevel = (level) => {
       // Coarser cascades evolve at a less stiff, more stable response rate.
       level.update(deltaTime, {
         waveResponse: this.parameters.waveResponse / Math.sqrt(1 + level.level * 0.45),
@@ -585,12 +645,22 @@ export class OceanSurface {
         foamPersistence: this.parameters.foamPersistence,
         foamGain: this.parameters.foamGain,
       });
+    };
+    for (const level of this.levels) updateLevel(level);
+    for (const [key, tile] of this.remoteTiles) {
+      updateLevel(tile.level);
+      tile.age += deltaTime;
+      if (tile.age > 20) this.remoteTiles.delete(key);
     }
     for (const registration of this.registrations) registration.age += deltaTime;
   }
 
   get coverage() {
     return this.levels.map((level) => level.extent);
+  }
+
+  get remoteTileCount() {
+    return this.remoteTiles.size;
   }
 }
 
@@ -669,6 +739,7 @@ export class HybridFluidSimulation {
   reset() {
     this.time = 0;
     this.frame = 0;
+    this.randomState = 0x6d2b79f5;
     this.particles = [];
     this.contacts = [];
     this.contactSerial = 0;
@@ -867,6 +938,7 @@ export class HybridFluidSimulation {
       registrations: this.ocean.registrations.length,
       nearCoverage: coverage[0] || 0,
       farCoverage: coverage.at(-1) || 0,
+      remoteSurfaceTiles: this.ocean.remoteTileCount,
     };
   }
 }

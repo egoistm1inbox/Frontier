@@ -31,7 +31,7 @@ Then open [http://localhost:4173](http://localhost:4173). In Arena's preview, us
 | Job | Representation | Why it scales |
 | --- | --- | --- |
 | Ocean, lakes, broad waves | Analytic world swell + 2.5D clipmap height fields | The swell has no finite edge. Only the nearby, interactive disturbance field is simulated at high resolution. |
-| Ripples / wake / foam sheet | `HeightFieldLevel` cascades | Each level has a different cell size, so the near field stays detailed while outer cascades cover a much larger area. |
+| Ripples / wake / foam sheet | `HeightFieldLevel` cascades + bounded remote tiles | Each level has a different cell size, so the near field stays detailed while outer cascades cover a much larger area. An impact outside the current rings is routed into a world-keyed remote tile instead of being dropped. |
 | Crowns, droplets, falling water | Sparse `SparseVolumeGrid` + particles | Chunks are allocated only around active droplets instead of filling the ocean with a 3D voxel texture. |
 | System boundary | `ImpactRecord` / `OceanSurface.registerImpact` | Positions are always world-space first, then mapped to the currently resident surface grids and the volume grid. |
 

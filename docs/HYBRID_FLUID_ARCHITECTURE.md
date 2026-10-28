@@ -51,7 +51,7 @@ This avoids baking an axis-aligned world origin into the fluid logic. A ship-loc
 
 The demo default is three `96 × 96` fields. At a 0.45 m near-cell size, the near interactive field covers about 43 m. The outer cascades scale cell size by `2^(1.5 * level)`, covering roughly 122 m and 345 m. Those values are sliders in the editor and represent a runtime quality/coverage decision rather than an ocean-world limit.
 
-For a production ocean, preserve more levels (for example 5–7), and stream only the needed clipmap rings. A remote impact routes to the tile belonging to its world coordinate; it does not require a unique full-ocean texture.
+For a production ocean, preserve more levels (for example 5–7), and stream only the needed clipmap rings. The reference also keeps a bounded set of coarse **remote surface tiles**: an impact outside the viewer's rings is routed by world coordinate into its tile instead of being dropped. A production world partition can back that same key with persistent streamed state; it does not require a unique full-ocean texture.
 
 ### 3. Sparse volumetric splash domain
 
@@ -100,7 +100,7 @@ Replace implementation details, not the public data contract:
 
 - The 3D solver is a CPU-readable particle/grid reference, not a full incompressible FLIP pressure projection.
 - The visible water surface uses Canvas 2D for portability. It visualizes data from the same simulation, but does not include refraction, caustics or mesh reconstruction.
-- A production implementation should store remote surface tiles in a streamed cache instead of keeping only the camera-following clipmaps resident.
+- The reference keeps a small, aging remote-tile cache. A production implementation should replace its bounded in-memory cache with persistent streamed world tiles.
 - Surface/volume time steps must use CFL-aware substepping in the GPU implementation, especially at very small volume cells or high impact speeds.
 
 Those limits are explicit so the editor and data path can be evaluated honestly while still providing a functional, interactive starting point.

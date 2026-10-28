@@ -57,6 +57,15 @@ test('HybridFluidSimulation registers an emitter in both fluid domains', () => {
   assert.equal(simulation.contacts[0].volumeCell.length, 3);
 });
 
+test('A remote world-space impact is retained in a sparse surface tile instead of being dropped', () => {
+  const simulation = new HybridFluidSimulation({ dropletCount: 12, maxParticles: 128 });
+  const impact = simulation.spawnImpact({ x: 2400, z: -1700, speed: 8, mass: 1, radius: 1, source: 'remote-test' });
+  assert.equal(impact.gridHits.length, 1);
+  assert.match(String(impact.gridHits[0].level), /^tile:/);
+  assert.equal(simulation.ocean.remoteTileCount, 1);
+  assert.notEqual(simulation.ocean.sample(2400, -1700, simulation.time).disturbance, 0);
+});
+
 test('Falling splash particles transfer back into the surface after stepping', () => {
   const simulation = new HybridFluidSimulation({ dropletCount: 12, maxParticles: 128 });
   simulation.spawnImpact({ x: 0, z: 22, speed: 7, mass: 0.5, radius: 0.7, source: 'test' });

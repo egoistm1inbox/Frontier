@@ -175,7 +175,7 @@ function updateMetrics() {
   element('#cellMetric').textContent = metrics.occupiedCells.toLocaleString();
   element('#contactMetric').textContent = metrics.contactCount.toLocaleString();
   element('#timelineTime').textContent = formatTime(metrics.time);
-  element('#surfaceGridSummary').textContent = `${simulation.ocean.levels.length} levels · ${metrics.nearCoverage.toFixed(0)} m near`;
+  element('#surfaceGridSummary').textContent = `${simulation.ocean.levels.length} rings${metrics.remoteSurfaceTiles ? ` + ${metrics.remoteSurfaceTiles} tile${metrics.remoteSurfaceTiles === 1 ? '' : 's'}` : ''} · ${metrics.nearCoverage.toFixed(0)} m near`;
   element('#chunkSummary').textContent = `${metrics.chunks} active chunk${metrics.chunks === 1 ? '' : 's'}`;
   element('#nearCoverage').textContent = `${metrics.nearCoverage.toFixed(1)} × ${metrics.nearCoverage.toFixed(1)} m`;
   element('#farCoverage').textContent = `${metrics.farCoverage.toFixed(0)} × ${metrics.farCoverage.toFixed(0)} m`;
