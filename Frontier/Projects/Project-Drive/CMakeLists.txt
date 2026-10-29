@@ -6,6 +6,15 @@ endif()
 get_filename_component(PROJECT_DRIVE_FRONTIER_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../.." ABSOLUTE)
 get_filename_component(PROJECT_DRIVE_REPO_ROOT "${PROJECT_DRIVE_FRONTIER_ROOT}/.." ABSOLUTE)
 
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+find_package(Threads REQUIRED)
+
+if(NOT TARGET FrontierAtmosphericOptics)
+    add_subdirectory(
+        "${PROJECT_DRIVE_FRONTIER_ROOT}/Engine/Rendering"
+        "${CMAKE_CURRENT_BINARY_DIR}/engine-rendering")
+endif()
+
 if(NOT TARGET FrontierRigidBodyPhysics)
     add_subdirectory(
         "${PROJECT_DRIVE_FRONTIER_ROOT}/Engine/Physics"
@@ -40,6 +49,25 @@ else()
     target_compile_options(ProjectDriveSimulation PRIVATE -Wall -Wextra -Werror)
 endif()
 target_link_libraries(ProjectDriveSimulation PUBLIC FrontierProjectDriveJolt)
+
+add_library(ProjectDriveVehicleHmiScene STATIC
+    Source/VehicleHmiScene.cpp)
+target_compile_features(ProjectDriveVehicleHmiScene PUBLIC cxx_std_20)
+target_include_directories(ProjectDriveVehicleHmiScene PUBLIC
+    "${PROJECT_DRIVE_FRONTIER_ROOT}"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Source")
+set_target_properties(ProjectDriveVehicleHmiScene PROPERTIES POSITION_INDEPENDENT_CODE ON)
+if(MSVC)
+    target_compile_options(ProjectDriveVehicleHmiScene PRIVATE /utf-8 /W4)
+else()
+    target_compile_options(ProjectDriveVehicleHmiScene PRIVATE -Wall -Wextra -Werror)
+endif()
+target_link_libraries(ProjectDriveVehicleHmiScene PUBLIC
+    ProjectDriveSimulation
+    FrontierAtmosphericOptics
+    FrontierPhotometricClustering
+    FrontierPlumeFluid
+    Threads::Threads)
 
 add_library(ProjectDrive SHARED
     Source/ProjectDriveInterchange.cpp)

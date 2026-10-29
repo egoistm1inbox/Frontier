@@ -1,0 +1,15 @@
+VehicleHMI + PlumeFluid + TyreContinuum + WeatherEffects validation; release
+Base 7b0d9d0
+Linux 6.1.158+ x86_64
+c++ (Debian 12.2.0-14+deb12u1) 12.2.0
+1b4c790325c0dde4b5e40a283cc610412cb8ed8fe65fc290ca4b99b27d5ecbd4  /home/user/Frontier/build/vehiclehmi-showcase-release/spv/AdvectPlumeThermoMacCormack.spv
+012b9ae7e770080a6436313f831d7c79770055ea03ef66a5711b48e8fc1fb5fb  /home/user/Frontier/build/vehiclehmi-showcase-release/spv/EvaluatePrecipitationRays.spv
+7b1f8fd74670f4c96e71318c5e1ab3ff891df611825a575f4f7b58e2d41402bf  /home/user/Frontier/build/vehiclehmi-showcase-release/spv/MarchPlumeFluidVolume.spv
+2046e2e84537bac3f45f98010ee2fd62fa483d1c7c62481f439b8828a2faf897  /home/user/Frontier/build/vehiclehmi-showcase-release/spv/MeasurePlumeFaceDivergence.spv
+30ded513a69e85257b2e7cd439ced76172e2ccdfab690ba3a1838d52cdd341eb  /home/user/Frontier/build/vehiclehmi-showcase-release/spv/ProjectPlumeVelocity.spv
+27c7915f5e99435d895334f197e63b93df20ae40ec81f0900fd0344ddb79dc58  /home/user/Frontier/build/vehiclehmi-showcase-release/spv/RelaxPlumePressure.spv
+PHASE_1_PLUME_FLUID_AB html_div=4.6609 upgr_div=0.3143 div_gain=14.83x html_trans=0.0025 upgr_trans=0.0071 html_tile_corr=1.0000 upgr_tile_corr=0.2641 html_flame_sharp=0.0060 upgr_flame_sharp=0.0143
+PHASE_2_TYRE_CONTINUUM_3MODE xpbd_fz=6120.8N solid_fz=6244.0N xpbd_react=4186.7N solid_react=47387.5N xpbd_patch=0.0445m2 solid_patch=0.0460m2 xpbd_bulge=32.78mm solid_bulge=34.87mm
+PHASE_3_PRECIPITATION_SPECIES vz_snow=1.78mps vz_rain=10.82mps vz_hail=19.05mps snow_cover=0.867 grip_clear=1.00 grip_rain=0.81 grip_hail=0.70 grip_snow=0.48
+PHASE_4_VEHICLEHMI_SCENE_DRIVING total_tris=34048 luminaires=15 cluster_assignments=3936 speed_mps=2.22
+VEHICLEHMI_FLUID_TYRE_WEATHER_SUMMARY checks=24 failed=0 status=PASS

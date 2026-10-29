@@ -42,6 +42,9 @@ public:
     const TyreContinuumPositions& QueryLocalPositions() const { return m_Local; }
     const TyreContinuumPositions& QueryWorldPositions() const { return m_World; }
     double QueryVerticalForce() const { return m_VerticalForce; }
+    double QueryIntegratedReactionForce() const { return m_IntegratedReactionForce; }
+    double QueryContactPatchArea() const { return m_ContactPatchArea; }
+    double QueryPeakSidewallBulge() const { return m_PeakSidewallBulge; }
 
 private:
     void SyncPositions(const TyreContinuumInput& Input);
@@ -50,6 +53,9 @@ private:
     std::vector<std::uint16_t> m_Pairs;
     std::vector<float> m_Lengths, m_Compliance;
     double m_VerticalForce = 0.0;
+    double m_IntegratedReactionForce = 0.0;
+    double m_ContactPatchArea = 0.0;
+    double m_PeakSidewallBulge = 0.0;
 };
 
 class TyreCarcassSolid
@@ -62,6 +68,9 @@ public:
     const TyreContinuumPositions& QueryLocalPositions() const { return m_Local; }
     const TyreContinuumPositions& QueryWorldPositions() const { return m_World; }
     double QueryVerticalForce() const { return m_VerticalForce; }
+    double QueryIntegratedReactionForce() const { return m_IntegratedReactionForce; }
+    double QueryContactPatchArea() const { return m_ContactPatchArea; }
+    double QueryPeakSidewallBulge() const { return m_PeakSidewallBulge; }
     double QueryMeanJacobian() const { return m_MeanJacobian; }
     double QueryMeanStress() const { return m_MeanStress; }
     int QueryContactCount() const { return m_ContactCount; }
@@ -78,6 +87,7 @@ private:
     std::array<float, TyreContinuumCellCount * 12> m_Gradient{};
     std::array<float, TyreContinuumCellCount> m_Volume{};
     double m_MeanJacobian = 1.0, m_MeanStress = 0.0, m_VerticalForce = 0.0;
+    double m_IntegratedReactionForce = 0.0, m_ContactPatchArea = 0.0, m_PeakSidewallBulge = 0.0;
     int m_ContactCount = 0;
 };
 

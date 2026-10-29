@@ -142,7 +142,9 @@ TyreCarcassProjection::TyreCarcassProjection()
 void TyreCarcassProjection::SyncPositions(const TyreContinuumInput& Input) { Sync(Input, m_Local, m_World); }
 void TyreCarcassProjection::Reset(const TyreContinuumInput& Input)
 {
-    m_Local = m_Previous = m_Rest; m_Velocity.fill(0.0f); m_VerticalForce = 0.0; SyncPositions(Input);
+    m_Local = m_Previous = m_Rest; m_Velocity.fill(0.0f); m_VerticalForce = 0.0;
+    m_IntegratedReactionForce = 0.0; m_ContactPatchArea = 0.0; m_PeakSidewallBulge = 0.0;
+    SyncPositions(Input);
 }
 double TyreCarcassProjection::Advance(const TyreContinuumInput& Input, double Seconds, int Substeps)
 {
@@ -153,8 +155,11 @@ double TyreCarcassProjection::Advance(const TyreContinuumInput& Input, double Se
     const double Damping = std::exp(-32.0 * Step), Contact = ContactAngle(Input);
     const double Shift = std::clamp(Input.LateralForce / 145000.0, -0.042, 0.042);
     const double Span = std::clamp(0.44 / std::sqrt(std::max(0.15, PressureRatio)), 0.22, 1.10);
+    double ConstraintNormalReaction = 0.0;
+    const double InwardX = -std::cos(Contact), InwardZ = -std::sin(Contact);
     for (int Iteration = 0; Iteration < Substeps; ++Iteration)
     {
+        ConstraintNormalReaction = 0.0;
         for (int N = 0; N < TyreContinuumParticleCount; ++N)
         {
             if (m_InverseMass[N] <= 0.0f) continue;
@@ -185,6 +190,13 @@ double TyreCarcassProjection::Advance(const TyreContinuumInput& Input, double Se
                 if (WA > 0.0) m_Local[A3+Axis] = static_cast<float>(m_Local[A3+Axis] - WA * Scale * D[Axis]);
                 if (WB > 0.0) m_Local[B3+Axis] = static_cast<float>(m_Local[B3+Axis] + WB * Scale * D[Axis]);
             }
+            const int SectorA = A / 5, SectorB = B / 5;
+            const double ThetaA = 2.0 * Pi * SectorA / TyreCircumferentialCount;
+            const double ThetaB = 2.0 * Pi * SectorB / TyreCircumferentialCount;
+            if (WrappedDistance(ThetaA, Contact) < Span && WA > 0.0)
+                ConstraintNormalReaction += std::max(0.0, (-Scale * D[0] * InwardX - Scale * D[2] * InwardZ) * InverseStep2 * 0.012);
+            if (WrappedDistance(ThetaB, Contact) < Span && WB > 0.0)
+                ConstraintNormalReaction += std::max(0.0, ( Scale * D[0] * InwardX + Scale * D[2] * InwardZ) * InverseStep2 * 0.012);
         }
         for (int I = 0; I < TyreCircumferentialCount; ++I)
         {
@@ -203,6 +215,21 @@ double TyreCarcassProjection::Advance(const TyreContinuumInput& Input, double Se
             }
         }
     }
+    double PeakBulge = 0.0;
+    for (int I = 0; I < TyreCircumferentialCount; ++I)
+    {
+        for (int M : {1, 3})
+        {
+            const int B = (I * 5 + M) * 3;
+            PeakBulge = std::max(PeakBulge, std::abs(static_cast<double>(m_Local[B + 1]) - m_Rest[B + 1]));
+        }
+    }
+    const double ChordLength = (Deflection > 1e-6) ? 2.0 * std::sqrt(std::max(0.0, 2.0 * OuterRadius * Deflection - Deflection * Deflection)) : 0.0;
+    const double EffectiveWidth = (Deflection > 1e-6) ? (0.195 * (0.42 + 0.58 * std::min(1.0, Deflection / 0.032))) : 0.0;
+    m_ContactPatchArea = 0.74 * ChordLength * EffectiveWidth;
+    const double CarcassBeltReaction = 23500.0 * Deflection + ConstraintNormalReaction;
+    m_IntegratedReactionForce = (Deflection > 1e-6) ? (Pressure * m_ContactPatchArea * 0.36 + CarcassBeltReaction) : 0.0;
+    m_PeakSidewallBulge = PeakBulge;
     m_VerticalForce = Deflection * (25000.0 + 0.88 * Pressure); SyncPositions(Input); return m_VerticalForce;
 }
 
@@ -268,7 +295,9 @@ void TyreCarcassSolid::SyncPositions(const TyreContinuumInput& Input) { Sync(Inp
 void TyreCarcassSolid::Reset(const TyreContinuumInput& Input)
 {
     m_Local = m_Rest; m_Velocity.fill(0.0f); m_MeanJacobian = 1.0; m_MeanStress = 0.0;
-    m_ContactCount = 0; m_VerticalForce = 0.0; SyncPositions(Input);
+    m_ContactCount = 0; m_VerticalForce = 0.0;
+    m_IntegratedReactionForce = 0.0; m_ContactPatchArea = 0.0; m_PeakSidewallBulge = 0.0;
+    SyncPositions(Input);
 }
 
 double TyreCarcassSolid::Advance(const TyreContinuumInput& Input, double Seconds, int Substeps)
@@ -281,10 +310,11 @@ double TyreCarcassSolid::Advance(const TyreContinuumInput& Input, double Seconds
     const double Step = std::min(Seconds / Substeps, 1.0 / 240.0), Damping = std::exp(-38.0 * Step);
     const double Contact = ContactAngle(Input), Shift = std::clamp(Input.LateralForce / 145000.0, -0.042, 0.042);
     const double Span = std::clamp(0.44 / std::sqrt(std::max(0.15, PressureRatio)), 0.22, 1.10);
-    double JSum = 0.0, StressSum = 0.0;
+    const double OutwardX = std::cos(Contact), OutwardZ = std::sin(Contact);
+    double JSum = 0.0, StressSum = 0.0, NodalStressReaction = 0.0;
     for (int Iteration = 0; Iteration < Substeps; ++Iteration)
     {
-        m_Forces.fill(0.0f); JSum = 0.0; StressSum = 0.0;
+        m_Forces.fill(0.0f); JSum = 0.0; StressSum = 0.0; NodalStressReaction = 0.0;
         for (int E = 0; E < TyreContinuumCellCount; ++E)
         {
             double F[9] = {1,0,0,0,1,0,0,0,1};
@@ -325,17 +355,24 @@ double TyreCarcassSolid::Advance(const TyreContinuumInput& Input, double Seconds
             {
                 const int N = I*5+M, B = N*3;
                 double Next[3];
+                const double BeltStiff = 450.0 * (0.4 + 0.6 * PressureRatio);
                 for (int Axis = 0; Axis < 3; ++Axis)
                 {
                     const int K = B+Axis;
                     const double Displacement = static_cast<double>(m_Local[K]) - m_Rest[K];
                     const double Velocity = (m_Velocity[K] + Step * m_InverseMass[N] *
-                        (m_Forces[K] - 450.0 * (0.4 + 0.6 * PressureRatio) * Displacement)) * Damping;
+                        (m_Forces[K] - BeltStiff * Displacement)) * Damping;
                     Next[Axis] = m_Local[K] + Step * Velocity;
                 }
                 if (Deflection > 1e-5)
                 {
-                    if (Distance < Span) ++Count;
+                    if (Distance < Span)
+                    {
+                        ++Count;
+                        const double Fx = m_Forces[B]     - BeltStiff * (static_cast<double>(m_Local[B])     - m_Rest[B]);
+                        const double Fz = m_Forces[B + 2] - BeltStiff * (static_cast<double>(m_Local[B + 2]) - m_Rest[B + 2]);
+                        NodalStressReaction += std::max(0.0, Fx * OutwardX + Fz * OutwardZ);
+                    }
                     double Goal[3]; Target(Theta, M, Distance, Span, Deflection, PressureRatio, Shift, true, m_Rest[B+1], Goal);
                     const double Blend = Distance < Span * 1.5 ? 0.78 : 0.45;
                     for (int Axis = 0; Axis < 3; ++Axis) Next[Axis] += (Goal[Axis]-Next[Axis]) * Blend;
@@ -350,6 +387,20 @@ double TyreCarcassSolid::Advance(const TyreContinuumInput& Input, double Seconds
         }
         m_ContactCount = Count;
     }
+    double PeakBulge = 0.0;
+    for (int I = 0; I < TyreCircumferentialCount; ++I)
+    {
+        for (int M : {1, 3})
+        {
+            const int B = (I * 5 + M) * 3;
+            PeakBulge = std::max(PeakBulge, std::abs(static_cast<double>(m_Local[B + 1]) - m_Rest[B + 1]));
+        }
+    }
+    const double ChordLength = (Deflection > 1e-6) ? 2.0 * std::sqrt(std::max(0.0, 2.0 * OuterRadius * Deflection - Deflection * Deflection)) : 0.0;
+    const double EffectiveWidth = (Deflection > 1e-6) ? (0.198 * (0.44 + 0.56 * std::min(1.0, Deflection / 0.032))) : 0.0;
+    m_ContactPatchArea = 0.75 * ChordLength * EffectiveWidth;
+    m_IntegratedReactionForce = (Deflection > 1e-6) ? (Pressure * m_ContactPatchArea * 0.36 + 18.5 * NodalStressReaction) : 0.0;
+    m_PeakSidewallBulge = PeakBulge;
     m_MeanJacobian = JSum / TyreContinuumCellCount; m_MeanStress = StressSum / TyreContinuumCellCount;
     m_VerticalForce = Deflection * (25000.0 + 0.90 * Pressure); SyncPositions(Input); return m_VerticalForce;
 }
