@@ -1,0 +1,106 @@
+ProductionReSTIR mode=release revision=9e3870e214b5e67d41e0e4b13a44bbcf18bdb7ff external_driver_sanitized=0
+c++ (Debian 12.2.0-14+deb12u1) 12.2.0
+2026.14.1
+d0a1c22eb9f3b9a07dfb0de3222a1a8221b92524d10664bc6ca9b7e6724967a6  Frontier/Engine/Rendering/CMakeLists.txt
+7cfd6b7403d4a98bdf3fe02becc66dc160aa7eb6a3a812bd8fa5d51772a43c37  Frontier/Engine/Rendering/SolarSkyEnvironmentPayload.h
+24797ad10fdc5607ca6ea08f71b27fce2e9bc8266056b9b0bb522853f60d63f6  Frontier/Engine/Rendering/SolarSkyEnvironmentPayload.cpp
+54c0ee1e9b7546cade165eddb6b44d3423c4bbf2cb9675f5e7c5a74e97ed8a0e  Frontier/Engine/Rendering/PathReplayVulkan.h
+b3ec17148d4536c4713f3162ed9a3c82bdb40fe23317f8dc68ded2e70e3c0079  Frontier/Engine/Rendering/PathReplayVulkan.cpp
+324c38c7a9d8987a92c9516b90d26cce4074107c096a1eeae6e9c1c89eddc92d  Frontier/Engine/Rendering/PathReplayDomain.h
+6602fad5698a04d3200578c247ce00bd7ff1d53c352280e79898b27d458bd0e2  Frontier/Engine/Rendering/PathReplayDomain.cpp
+cf0509e45067865cef061bbcc6fb9c9ed3e522b2fde40831c8e0638046f3cc10  Frontier/Engine/Rendering/PathReplaySubmissionSequence.cpp
+bff1cc6c9489ad790c5754ff8d7a44191ca5c0a5c08c8ec69137f1f38e79ac48  Frontier/Engine/Rendering/Shaders/SolarSkyEnvironment.slang
+ede0e6c69bba550f892849e0af81b9e0a7296138e08291a92e50317b25b77b19  Frontier/Engine/Rendering/Shaders/LightInfluence.slang
+828cb5b7cb5d0ed1b5fde2aa1589c15bdfc19f90f5ed267a6c67455d4c136b07  Frontier/Engine/Rendering/Shaders/PathReplayReservoir.slang
+1ff2b3cf9e64ff73fa08f9db115eed9f0f2ebd6c7600ee4ec41823aba2df61d8  Frontier/Engine/Rendering/Shaders/PathReplaySampleHistory.slang
+04d40bc4a5ab6d8b706a9c6f2d97f71c2882e4ac1388a5136dbc776ce04ccfd7  Frontier/Engine/Rendering/Shaders/PathReplayVarianceFilter.slang
+50c4b8ea2f128482a7b5b21d545090831ddf45362af435e6793c3d8e26d02ffd  Frontier/Engine/Rendering/Shaders/PathReplayRayQuery.slang
+27023c35065c49c826506cff7fccf785b3c403dc1f07192f490b44346af90429  Exhibits/LightCompute/CMakeLists.txt
+dfb907f483d5b915d047b3d7a32d317e10865dc01046b6a87e0fda8b3930fd3c  Exhibits/LightCompute/RunProductionReSTIR.sh
+1c3d301e94bd8f3788a12a0e9267e4e20b8410d5387dfac1421eecc2b91d72c2  Exhibits/LightCompute/Code/ProductionReSTIRContractValidation.cpp
+be54721085fe28ea265c683185cd624b1848bf7b8bed669356448eea2bd3962a  Exhibits/LightCompute/Code/ProductionReSTIRValidation.h
+364af58fd17ef7d469b2b78aa243700ed7ad33d6b7f2876a446a92c9446a084a  Exhibits/LightCompute/Code/ReplayRayAccelerationValidation.cpp
+61d0f4b7b0e0f0dd430641a27dee32d80024da48235eebdf1e45561a549db04e  Exhibits/LightCompute/Code/LightComputeValidation.cpp
+2f3ceffaaca7d031bc3943f8eacf398a5d9c42c5fe0d15d8840b9acfa630b58e  /home/user/Frontier/ExternalPackages/VulkanCompute/SwiftShader/libvk_swiftshader.so
+5cc0134d42cf414f0dcde8c31a813337801a6afdc5443033ef39e28b1262d336  /home/user/Frontier/ExternalPackages/VulkanCompute/Slang/slangtorch/bin/slangc
+00883ef201e811e90222d93c820524fcb3675ab455818c056b8c04336bbe0968  Automation/ReplayToolDependencies.json
+9cf037fda09f2e9f722d10426438c2bdd042d8d40fd297b7c09f2ed3c1e5ed7d  /home/user/Frontier/_ClaudeScratch/build/production-shaders/sw-shaders/Primary.spv
+3db238f0a8729ee0e13efdb06fa87a98b01e138754999d479b2509d0a38948cd  /home/user/Frontier/_ClaudeScratch/build/production-shaders/sw-shaders/ReplayFilterVarianceWavelet.spv
+4418df6dc685b9e12fb6c93f80f8f8627f4d853f67ea86c427f285d4c6f37851  /home/user/Frontier/_ClaudeScratch/build/production-shaders/sw-shaders/ReplayFinalizeSampleHistory.spv
+f280096447cd3210a6fa398901d9f6b75f2721855a21c00f699ef81216c5915b  /home/user/Frontier/_ClaudeScratch/build/production-shaders/sw-shaders/ReplayGatherSampleHistory.spv
+db81f885c303202ca5903a8f9539527d31db95853e8771e026431f4bf1a3da48  /home/user/Frontier/_ClaudeScratch/build/production-shaders/sw-shaders/ReplayGatherVarianceHistory.spv
+87b6f372de7634bd77e3ee155e56ac1131a08c1aa41ace11f41f90ef3d1c7b4e  /home/user/Frontier/_ClaudeScratch/build/production-shaders/sw-shaders/ReplayGenerate.spv
+c722ce42e132b077b92b23cb5188d05c5bca6247944b15759c903279eea1a384  /home/user/Frontier/_ClaudeScratch/build/production-shaders/sw-shaders/ReplayIntegrateVarianceMoments.spv
+6c543fe3e93f86857cd08d9a2699f98cf07ba9fd30d2242706e9c7ef6291d4f0  /home/user/Frontier/_ClaudeScratch/build/production-shaders/sw-shaders/ReplayResolve.spv
+d4dcfeb3d8318a3a7e9cbfdbdc103da83db88d21728605dcb6a23e4c8ad25f51  /home/user/Frontier/_ClaudeScratch/build/production-shaders/sw-shaders/ReplayResolveHybrid.spv
+65299cea17b6cac505ca7b997855851b7f62f433e0bfdf77b6e9472a6a7f6be7  /home/user/Frontier/_ClaudeScratch/build/production-shaders/hw-shaders/PrimaryHardwareRT.spv
+01dc29c1b0a3fcb386cd47e0be2ba740a29a76c8f6536dbaf72256439c2a522a  /home/user/Frontier/_ClaudeScratch/build/production-shaders/hw-shaders/ReplayFinalizeSampleHistoryHardwareRT.spv
+103bfa739b9d3c440391098c5904fd37bacb3b672276d9ddfda599c71c8f5047  /home/user/Frontier/_ClaudeScratch/build/production-shaders/hw-shaders/ReplayGenerateHardwareRT.spv
+aff397f2b461c8d864398f5b880a588c25987cbb4730745e6434036c6f867878  /home/user/Frontier/_ClaudeScratch/build/production-shaders/hw-shaders/ReplayResolveHardwareRT.spv
+8a7946e71f8e6ae9c1a44f7249a1e901d469f5f8018b794c34b076e45ab733e8  /home/user/Frontier/_ClaudeScratch/build/production-shaders/hw-shaders/ReplayResolveHybridHardwareRT.spv
+-- Configuring done (0.0s)
+-- Generating done (0.0s)
+-- Build files have been written to: /home/user/Frontier/_ClaudeScratch/build/unified-release
+ninja: no work to do.
+Test project /home/user/Frontier/_ClaudeScratch/build/unified-release
+      Start  1: PathReplayDomainValidation
+ 1/12 Test  #1: PathReplayDomainValidation ...........   Passed    0.00 sec
+      Start  2: PathReplayVulkanValidation
+ 2/12 Test  #2: PathReplayVulkanValidation ...........   Passed    0.00 sec
+      Start  3: RadiantFacetValidation
+ 3/12 Test  #3: RadiantFacetValidation ...............   Passed    0.00 sec
+      Start  4: MediumRadianceValidation
+ 4/12 Test  #4: MediumRadianceValidation .............   Passed    0.00 sec
+      Start  5: ReplaySeedCorrelationValidation
+ 5/12 Test  #5: ReplaySeedCorrelationValidation ......   Passed    1.11 sec
+      Start  6: ReplayVarianceFilterValidation
+ 6/12 Test  #6: ReplayVarianceFilterValidation .......   Passed    0.00 sec
+      Start  7: ReplayRayAccelerationValidation
+ 7/12 Test  #7: ReplayRayAccelerationValidation ......   Passed    0.09 sec
+      Start  8: ReplayPbrReflectionValidation
+ 8/12 Test  #8: ReplayPbrReflectionValidation ........   Passed    0.09 sec
+      Start  9: ReplaySubmissionSequenceValidation
+ 9/12 Test  #9: ReplaySubmissionSequenceValidation ...   Passed    0.00 sec
+      Start 10: ProductionReSTIRContractValidation
+10/12 Test #10: ProductionReSTIRContractValidation ...   Passed    0.01 sec
+      Start 11: PhotometricClusterValidation
+11/12 Test #11: PhotometricClusterValidation .........   Passed    0.02 sec
+      Start 12: PathReplayArchiveValidation
+12/12 Test #12: PathReplayArchiveValidation ..........   Passed    0.00 sec
+
+100% tests passed out of 12
+
+Total Test time (real) =   1.35 sec
+RAY_QUERY_ENGINE capability_cases=6 vertex_pack=1 instance_guard=1 blas_tlas_sequence=4 build_rejections=10
+ORDERED_SAH_PARITY facets=240 median_nodes=63 sah_nodes=223 legacy_boxes=388694 legacy_tris=814628 ordered_med_boxes=364854 ordered_med_tris=770977 ordered_sah_boxes=281702 ordered_sah_tris=35056 same_tree_tri_saved_pct=5.36 sah_ordered_tri_saved_pct=95.70 shadow_rays_verified=10000
+RAY_QUERY_SPIRV_VERIFIED files=5 version=1.4 capability_4472=1 accel_type_5341=1 init_4473=1 proceed_4477=1 confirm_endpoint_skip_4476=1
+PASS replay ray-query engine, BLAS/TLAS recorder, and ordered SAH BVH equivalence
+PRODUCTION_RESTIR_START phases=4
+PHASE1_MIS arm=webgpu_blind_1_over_z group=dim ref=0.4399150 mean=496.9443384 bias=496.5044234 se=1.9811923 rmse=504.1228564 max_pixel=758.982360 rays=2039
+PHASE1_MIS arm=webgpu_blind_1_over_z group=metal ref=0.6256572 mean=0.1295031 bias=0.4961540 se=0.0005230 rmse=0.4982273 max_pixel=0.325671 rays=2039
+PHASE1_MIS arm=uniform_1_over_m group=dim ref=0.4399150 mean=0.3619988 bias=0.0779162 se=0.0025954 rmse=0.1521658 max_pixel=0.874269 rays=5885
+PHASE1_MIS arm=uniform_1_over_m group=metal ref=0.6256572 mean=0.6211909 bias=0.0044662 se=0.0046695 rmse=0.2628366 max_pixel=2.809454 rays=5885
+PHASE1_MIS arm=fresh_donor_1_over_k group=dim ref=0.4399150 mean=0.4348570 bias=0.0050579 se=0.0027346 rmse=0.1783247 max_pixel=1.009723 rays=4845
+PHASE1_MIS arm=fresh_donor_1_over_k group=metal ref=0.6256572 mean=0.6269090 bias=0.0012519 se=0.0039036 rmse=0.1976461 max_pixel=1.023984 rays=4845
+PHASE1_MIS arm=pairwise_balance group=dim ref=0.4399150 mean=0.4377472 bias=0.0021678 se=0.0031242 rmse=0.1782976 max_pixel=1.299501 rays=9730
+PHASE1_MIS arm=pairwise_balance group=metal ref=0.6256572 mean=0.6256631 bias=0.0000059 se=0.0025673 rmse=0.1647792 max_pixel=1.009776 rays=9730
+PHASE1_MIS arm=pairwise_power group=dim ref=0.4399150 mean=0.4377833 bias=0.0021317 se=0.0031233 rmse=0.1753110 max_pixel=1.283907 rays=9730
+PHASE1_MIS arm=pairwise_power group=metal ref=0.6256572 mean=0.6256166 bias=0.0000406 se=0.0025885 rmse=0.1590279 max_pixel=1.011490 rays=9730
+PHASE2_SHIFT arm=fresh_temporal_only matte_ref=0.406502 matte_mean=0.404020 matte_rmse=0.195342 glossy_ref=0.752672 glossy_mean=0.758961 glossy_rmse=0.822213 bounce_rays=2529 shadow_rays=2847 total_rays=5376 aux_bytes_px=0
+PHASE2_SHIFT arm=pure_seed_replay matte_ref=0.406502 matte_mean=0.406119 matte_rmse=0.141775 glossy_ref=0.752672 glossy_mean=0.759086 glossy_rmse=0.564533 bounce_rays=11809 shadow_rays=13206 total_rays=25015 aux_bytes_px=0
+PHASE2_SHIFT arm=ungated_diffuse_blur matte_ref=0.406502 matte_mean=0.403725 matte_rmse=0.188446 glossy_ref=0.752672 glossy_mean=0.819109 glossy_rmse=1.102390 bounce_rays=9283 shadow_rays=9999 total_rays=19282 aux_bytes_px=32
+PHASE2_SHIFT arm=hybrid_reconnection matte_ref=0.406502 matte_mean=0.403725 matte_rmse=0.188446 glossy_ref=0.752672 glossy_mean=0.759086 glossy_rmse=0.564533 bounce_rays=9283 shadow_rays=9999 total_rays=19282 aux_bytes_px=32
+PHASE3_SKY_PARITY condition=noon_60deg mean_rel_error=0.018387 max_rel_error=0.026592
+PHASE3_SKY_PARITY condition=sunset_5deg mean_rel_error=0.028545 max_rel_error=0.225960
+PHASE3_SOLAR_MIS ref_matte=3.90544 ref_mirror=103937.94547 bsdf_matte_rmse=3.67775 coupled_matte_rmse=0.28873 bsdf_max_firefly=0.910 coupled_max_firefly=4.645 bsdf_mirror_rmse=104632.08548 coupled_mirror_rmse=24270.44838
+PHASE4_FILTER arm=unfiltered_restir shadow_step_rmse=0.116294 mirror_rmse=0.408378
+PHASE4_FILTER arm=static_variance_filter shadow_step_rmse=0.185202 mirror_rmse=0.448854
+PHASE4_FILTER arm=adaptive_variance_filter shadow_step_rmse=0.135533 mirror_rmse=0.365052
+PROVING_SCENE width=128 height=80 arm=legacy_1_over_m_1spp linear_rmse=0.25333 tonemapped_psnr_db=27.807 max_channel=26.624 secondary_rays=140633
+PROVING_SCENE width=128 height=80 arm=production_restir_raw linear_rmse=0.09160 tonemapped_psnr_db=31.917 max_channel=25.890 secondary_rays=298203
+PROVING_SCENE width=128 height=80 arm=production_restir_filtered linear_rmse=0.08305 tonemapped_psnr_db=35.362 max_channel=24.478 secondary_rays=298203
+PRODUCTION_RESTIR_DECISION phase1=pairwise_power phase2=hybrid_reconnection phase3=coupled_solar_sky_mis phase4=adaptive_variance_filter status=PASS
+ced8e65a25658578b0b71922a1495cb90dbcbca5f7c280ada902f7a7cce5de11  /home/user/Frontier/_ClaudeScratch/production-restir-capture-release/ProvingBaseline1Spp.f32
+61bbf94498864318f1ee4a5613a756c18a1bf6e9f0d456bde40e4f27f079dbdd  /home/user/Frontier/_ClaudeScratch/production-restir-capture-release/ProvingProductionFiltered.f32
+3c30121105fa337284f454a351c24513b65bde7f044f290154182d43339d942a  /home/user/Frontier/_ClaudeScratch/production-restir-capture-release/ProvingProductionRaw.f32
+599929aa6ebdca4f79aed6919cd44836ee94930243d7d66a9da1dd7df9b4696e  /home/user/Frontier/_ClaudeScratch/production-restir-capture-release/ProvingReference256Spp.f32

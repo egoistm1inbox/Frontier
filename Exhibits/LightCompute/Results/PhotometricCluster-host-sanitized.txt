@@ -1,0 +1,126 @@
+PhotometricCluster mode=host-sanitized revision=9e3870e214b5e67d41e0e4b13a44bbcf18bdb7ff external_driver_sanitized=0
+c++ (Debian 12.2.0-14+deb12u1) 12.2.0
+2026.14.1
+d0a1c22eb9f3b9a07dfb0de3222a1a8221b92524d10664bc6ca9b7e6724967a6  Frontier/Engine/Rendering/CMakeLists.txt
+0a0875950113fdf39fe5f90e473cff4c4c7165951378e49ac35277e8fcaef8c1  Frontier/Engine/Rendering/PhotometricClusterDivision.h
+736f8df718c96eeba562e155457d4f27168b06365c84b298704e9b19e88db21c  Frontier/Engine/Rendering/PhotometricClusterDivision.cpp
+258659c92a9b3b44b720fde44d225b1ec4f9431df341a340aad6d9c12a8ae2c4  Frontier/Engine/Rendering/AtmosphereModel.h
+9ae229103d759f76feda1c5570941517de35171214c7f9a97858fdbc566ad58c  Frontier/Engine/Rendering/AtmosphereModel.cpp
+85a5802c37dcffa168d594e680487455c35e00423cd2a85e7b9eff09f1825aeb  Frontier/Engine/Rendering/CelestialModel.h
+19fbb07268ff7421ffc0f104fac902ac04e70dda20dc403e0093f89787568146  Frontier/Engine/Rendering/CelestialModel.cpp
+569c694e52bb154582fe1bdc5a3f329b04077312382726e2981e4576d5eaad11  Frontier/Engine/Rendering/CloudField.h
+1a69546b34a9d273566c4e3f08f85efdb28673bb253ebe0bdfae2a333db7e290  Frontier/Engine/Rendering/CloudField.cpp
+2ab04c44c32f7a240f6db3c64ef1d98236077cf984ddbfb415533dc8217cd9d6  Frontier/Engine/Rendering/FogMedium.h
+84c1a6c21c94f0424701af68a94499f5a6025a62383e47d1eb45b5c2b3af8835  Frontier/Engine/Rendering/FogMedium.cpp
+bd96f7817884ec65c2fe64c44e4f3ba4abb5f6427772afcc862315443509cec6  Frontier/Engine/Rendering/LensFlareModel.h
+467df15bb88404d2cdc73a7170ae9acb1a451d19c0eaae7d06db5ad2d5a430d2  Frontier/Engine/Rendering/SolarOpticsPayload.h
+54c0ee1e9b7546cade165eddb6b44d3423c4bbf2cb9675f5e7c5a74e97ed8a0e  Frontier/Engine/Rendering/PathReplayVulkan.h
+b3ec17148d4536c4713f3162ed9a3c82bdb40fe23317f8dc68ded2e70e3c0079  Frontier/Engine/Rendering/PathReplayVulkan.cpp
+ef40b1b43bf7f0fc84ee1e475283d2bce64af26d7c40ae7be9b20940f8b97536  Frontier/Engine/Rendering/Shaders/PhotometricLuminaire.slang
+ede0e6c69bba550f892849e0af81b9e0a7296138e08291a92e50317b25b77b19  Frontier/Engine/Rendering/Shaders/LightInfluence.slang
+b8207bddf8ed7aa6c92d0cb80b621fd787903420767733a48775462b10de653e  Frontier/Engine/Rendering/Shaders/SolarOptics.slang
+828cb5b7cb5d0ed1b5fde2aa1589c15bdfc19f90f5ed267a6c67455d4c136b07  Frontier/Engine/Rendering/Shaders/PathReplayReservoir.slang
+27023c35065c49c826506cff7fccf785b3c403dc1f07192f490b44346af90429  Exhibits/LightCompute/CMakeLists.txt
+8748f374b2a59338040eae7a2fa9a6aae30a20aa0e859d0f28c9131646272e8f  Exhibits/LightCompute/RunPhotometricCluster.sh
+258a17d2c4c8eace90b3d9993021060aeec2cb6bc86747a7ec64e78290301225  Exhibits/LightCompute/Code/PhotometricClusterValidation.cpp
+3dd5fe46f564640cc4ea93b1d4f903373ca99ded3fc95fcc07b9b24e2b8e77f4  Exhibits/LightCompute/Code/PhotometricClusterGpuValidation.h
+b8b9e23910c6b1dff0b1d2e6a30b8b174a1f90c4893f0526ad2cf0d1e883068c  Exhibits/LightCompute/Code/LightComputeValidation.cpp
+c913e84a2e28305a7c8326d5056151f0a8ccacb2127b70ba862ee850009a9547  /home/user/Frontier/_ClaudeScratch/build/photometric-shaders/medium-shaders/Cells.spv
+9914cc2d2534e68ff5792bae4ed92a63d0c4b0c2c465e03ab93cc3ed3538bc47  /home/user/Frontier/_ClaudeScratch/build/photometric-shaders/medium-shaders/Clouds.spv
+836c9f203d93d64e8ece8dff9c39669adf58f841e0ec17ed540ddd6db54a8ec5  /home/user/Frontier/_ClaudeScratch/build/photometric-shaders/medium-shaders/Fog.spv
+6c4e9bc3d05deb7a54b83073238170c986e12cf443cc52431ee05c6bf884ae89  /home/user/Frontier/_ClaudeScratch/build/photometric-shaders/medium-shaders/Primary.spv
+24ebd1ed0a1a52022d142f675dc352afe1603086d0e29e8434c378c097b51993  /home/user/Frontier/_ClaudeScratch/build/photometric-shaders/medium-shaders/Receivers.spv
+a2b661849ddac24d27776cea361caec47e45007a8b5cec4d05f70d22669849b5  /home/user/Frontier/_ClaudeScratch/build/photometric-shaders/medium-shaders/SolarOptics.spv
+691752b882f6a0d96977b78270b5c5746fe504728b60eabab19888c89efca126  /home/user/Frontier/_ClaudeScratch/build/photometric-shaders/medium-shaders/SolarVisibility.spv
+6c4e9bc3d05deb7a54b83073238170c986e12cf443cc52431ee05c6bf884ae89  /home/user/Frontier/_ClaudeScratch/build/photometric-shaders/replay-shaders/Primary.spv
+d8288c6c41033eadef96d3ec707048727026fcdd1c816b423a03dc2b7de29306  /home/user/Frontier/_ClaudeScratch/build/photometric-shaders/replay-shaders/ReplayGenerate.spv
+d30d4d7a425163ed9188445b33ce6e7581608beaa70857df2a0f83d8ca804fc4  /home/user/Frontier/_ClaudeScratch/build/photometric-shaders/replay-shaders/ReplayResolve.spv
+-- The CXX compiler identification is GNU 12.2.0
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Check for working CXX compiler: /usr/bin/c++ - skipped
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD - Success
+-- Found Threads: TRUE
+-- Configuring done (0.4s)
+-- Generating done (0.0s)
+-- Build files have been written to: /home/user/Frontier/_ClaudeScratch/build/production-restir-sanitized
+[1/48] Building CXX object replay-engine/CMakeFiles/FrontierAtmosphericOptics.dir/AtmosphereModel.cpp.o
+[2/48] Building CXX object replay-engine/CMakeFiles/FrontierAtmosphericOptics.dir/CloudField.cpp.o
+[3/48] Building CXX object replay-engine/CMakeFiles/FrontierAtmosphericOptics.dir/FogMedium.cpp.o
+[4/48] Building CXX object replay-engine/CMakeFiles/FrontierAtmosphericOptics.dir/CelestialModel.cpp.o
+[5/48] Building CXX object replay-engine/CMakeFiles/FrontierAtmosphericOptics.dir/WeatherEffects.cpp.o
+[6/48] Linking CXX static library replay-engine/libFrontierAtmosphericOptics.a
+[7/48] Building CXX object replay-engine/CMakeFiles/FrontierRadiantFacetDistribution.dir/RadiantFacetDistribution.cpp.o
+[8/48] Linking CXX static library replay-engine/libFrontierRadiantFacetDistribution.a
+[9/48] Building CXX object replay-engine/CMakeFiles/FrontierSolarSkyEnvironmentPayload.dir/SolarSkyEnvironmentPayload.cpp.o
+[10/48] Linking CXX static library replay-engine/libFrontierSolarSkyEnvironmentPayload.a
+[11/48] Building CXX object replay-engine/CMakeFiles/FrontierPathReplayDomain.dir/PathReplayDomain.cpp.o
+[12/48] Building CXX object replay-engine/CMakeFiles/FrontierPathReplayVulkan.dir/PathReplayVulkan.cpp.o
+[13/48] Building CXX object replay-engine/CMakeFiles/FrontierPathReplayVulkan.dir/PathReplayRayQuery.cpp.o
+[14/48] Building CXX object replay-engine/CMakeFiles/FrontierMediumRadiancePayload.dir/MediumRadiancePayload.cpp.o
+[15/48] Linking CXX static library replay-engine/libFrontierPathReplayVulkan.a
+[16/48] Building CXX object replay-engine/CMakeFiles/FrontierPhotometricClustering.dir/PhotometricClusterDivision.cpp.o
+[17/48] Linking CXX static library replay-engine/libFrontierPhotometricClustering.a
+[18/48] Linking CXX static library replay-engine/libFrontierPathReplayDomain.a
+[19/48] Building CXX object replay-engine/CMakeFiles/FrontierPathReplaySubmission.dir/PathReplaySubmissionSequence.cpp.o
+[20/48] Building CXX object CMakeFiles/PathReplayDomainValidation.dir/Code/PathReplayDomainValidation.cpp.o
+[21/48] Building CXX object CMakeFiles/PathReplayVulkanValidation.dir/Code/PathReplayVulkanValidation.cpp.o
+[22/48] Building CXX object CMakeFiles/PathReplayArchiveValidation.dir/Code/PathReplayArchiveValidation.cpp.o
+[23/48] Building CXX object CMakeFiles/ReplayVarianceFilterValidation.dir/Code/ReplayVarianceFilterValidation.cpp.o
+[24/48] Building CXX object CMakeFiles/ReplaySeedCorrelationValidation.dir/Code/ReplaySeedCorrelationValidation.cpp.o
+[25/48] Building CXX object CMakeFiles/ReplayVarianceFilterValidation.dir/home/user/Frontier/Frontier/Engine/Rendering/VarianceFiltering.cpp.o
+[26/48] Building CXX object CMakeFiles/ReplayRayAccelerationValidation.dir/home/user/Frontier/Frontier/Engine/Rendering/ClusterNesting.cpp.o
+[27/48] Building CXX object CMakeFiles/ReplayRayAccelerationValidation.dir/Code/ReplayRayAccelerationValidation.cpp.o
+[28/48] Building CXX object CMakeFiles/ReplayPbrReflectionValidation.dir/Code/ReplayPbrReflectionValidation.cpp.o
+[29/48] Building CXX object CMakeFiles/ReplaySubmissionSequenceValidation.dir/Code/ReplaySubmissionSequenceValidation.cpp.o
+[30/48] Building CXX object CMakeFiles/ReplayPbrReflectionValidation.dir/home/user/Frontier/Frontier/Engine/Rendering/ClusterNesting.cpp.o
+[31/48] Building CXX object CMakeFiles/ProductionReSTIRContractValidation.dir/Code/ProductionReSTIRContractValidation.cpp.o
+[32/48] Building CXX object CMakeFiles/RadiantFacetValidation.dir/Code/RadiantFacetValidation.cpp.o
+[33/48] Building CXX object CMakeFiles/MediumRadianceValidation.dir/Code/MediumRadianceValidation.cpp.o
+[34/48] Linking CXX static library replay-engine/libFrontierMediumRadiancePayload.a
+[35/48] Linking CXX static library replay-engine/libFrontierPathReplaySubmission.a
+[36/48] Linking CXX executable PathReplayDomainValidation
+[37/48] Linking CXX executable PathReplayVulkanValidation
+[38/48] Linking CXX executable PathReplayArchiveValidation
+[39/48] Linking CXX executable ReplaySeedCorrelationValidation
+[40/48] Linking CXX executable ReplayVarianceFilterValidation
+[41/48] Linking CXX executable ReplayRayAccelerationValidation
+[42/48] Linking CXX executable ReplayPbrReflectionValidation
+[43/48] Linking CXX executable ReplaySubmissionSequenceValidation
+[44/48] Linking CXX executable ProductionReSTIRContractValidation
+[45/48] Linking CXX executable RadiantFacetValidation
+[46/48] Linking CXX executable MediumRadianceValidation
+[47/48] Building CXX object CMakeFiles/PhotometricClusterValidation.dir/Code/PhotometricClusterValidation.cpp.o
+[48/48] Linking CXX executable PhotometricClusterValidation
+Test project /home/user/Frontier/_ClaudeScratch/build/production-restir-sanitized
+      Start  1: PathReplayDomainValidation
+ 1/12 Test  #1: PathReplayDomainValidation ...........   Passed    0.01 sec
+      Start  2: PathReplayVulkanValidation
+ 2/12 Test  #2: PathReplayVulkanValidation ...........   Passed    0.01 sec
+      Start  3: RadiantFacetValidation
+ 3/12 Test  #3: RadiantFacetValidation ...............   Passed    0.02 sec
+      Start  4: MediumRadianceValidation
+ 4/12 Test  #4: MediumRadianceValidation .............   Passed    0.01 sec
+      Start  5: ReplaySeedCorrelationValidation
+ 5/12 Test  #5: ReplaySeedCorrelationValidation ......   Passed    1.84 sec
+      Start  6: ReplayVarianceFilterValidation
+ 6/12 Test  #6: ReplayVarianceFilterValidation .......   Passed    0.01 sec
+      Start  7: ReplayRayAccelerationValidation
+ 7/12 Test  #7: ReplayRayAccelerationValidation ......   Passed    0.54 sec
+      Start  8: ReplayPbrReflectionValidation
+ 8/12 Test  #8: ReplayPbrReflectionValidation ........   Passed    0.15 sec
+      Start  9: ReplaySubmissionSequenceValidation
+ 9/12 Test  #9: ReplaySubmissionSequenceValidation ...   Passed    0.01 sec
+      Start 10: ProductionReSTIRContractValidation
+10/12 Test #10: ProductionReSTIRContractValidation ...   Passed    0.02 sec
+      Start 11: PhotometricClusterValidation
+11/12 Test #11: PhotometricClusterValidation .........   Passed    0.08 sec
+      Start 12: PathReplayArchiveValidation
+12/12 Test #12: PathReplayArchiveValidation ..........   Passed    0.01 sec
+
+100% tests passed out of 12
+
+Total Test time (real) =   2.70 sec

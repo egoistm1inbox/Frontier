@@ -1,0 +1,122 @@
+ProductionReSTIR mode=host-sanitized revision=bf2c4c48c988783e318211382466b08f5d5571fb external_driver_sanitized=0
+c++ (Debian 12.2.0-14+deb12u1) 12.2.0
+2026.14.1
+e2707d6b2b3be0b4df50f21388160d39f173ace2db9e7f4fd1c786003ac23dc1  Frontier/Engine/Rendering/CMakeLists.txt
+7cfd6b7403d4a98bdf3fe02becc66dc160aa7eb6a3a812bd8fa5d51772a43c37  Frontier/Engine/Rendering/SolarSkyEnvironmentPayload.h
+24797ad10fdc5607ca6ea08f71b27fce2e9bc8266056b9b0bb522853f60d63f6  Frontier/Engine/Rendering/SolarSkyEnvironmentPayload.cpp
+b756b2aac975c484531bba6b66b2330f74680da7d4e21005c352c5ffef1019ff  Frontier/Engine/Rendering/PathReplayVulkan.h
+4d5ddb32fc1e498fcf62f66e21fd29f5f015722b9e903b9f19567eda8e189080  Frontier/Engine/Rendering/PathReplayVulkan.cpp
+324c38c7a9d8987a92c9516b90d26cce4074107c096a1eeae6e9c1c89eddc92d  Frontier/Engine/Rendering/PathReplayDomain.h
+6602fad5698a04d3200578c247ce00bd7ff1d53c352280e79898b27d458bd0e2  Frontier/Engine/Rendering/PathReplayDomain.cpp
+6aa4d0114b5e17938e9362a859dbf1aec6186e9c06a1873ee2624c50c9569043  Frontier/Engine/Rendering/PathReplaySubmissionSequence.cpp
+bff1cc6c9489ad790c5754ff8d7a44191ca5c0a5c08c8ec69137f1f38e79ac48  Frontier/Engine/Rendering/Shaders/SolarSkyEnvironment.slang
+f6aefa375e5bdf90369b8145710f92ca02070d5113d9e0266a41590b6bd42ffa  Frontier/Engine/Rendering/Shaders/LightInfluence.slang
+357fb9cea19a2b5c2405418b2631ca9d157348be09d228a23613daa97767cb79  Frontier/Engine/Rendering/Shaders/PathReplayReservoir.slang
+1ff2b3cf9e64ff73fa08f9db115eed9f0f2ebd6c7600ee4ec41823aba2df61d8  Frontier/Engine/Rendering/Shaders/PathReplaySampleHistory.slang
+04d40bc4a5ab6d8b706a9c6f2d97f71c2882e4ac1388a5136dbc776ce04ccfd7  Frontier/Engine/Rendering/Shaders/PathReplayVarianceFilter.slang
+50c4b8ea2f128482a7b5b21d545090831ddf45362af435e6793c3d8e26d02ffd  Frontier/Engine/Rendering/Shaders/PathReplayRayQuery.slang
+a3f1284a1c3d6b9f4b4573d7820ca1e28fd16f88e39c496a1f5e3fa6c215516e  Exhibits/LightCompute/CMakeLists.txt
+dfb907f483d5b915d047b3d7a32d317e10865dc01046b6a87e0fda8b3930fd3c  Exhibits/LightCompute/RunProductionReSTIR.sh
+1c3d301e94bd8f3788a12a0e9267e4e20b8410d5387dfac1421eecc2b91d72c2  Exhibits/LightCompute/Code/ProductionReSTIRContractValidation.cpp
+be54721085fe28ea265c683185cd624b1848bf7b8bed669356448eea2bd3962a  Exhibits/LightCompute/Code/ProductionReSTIRValidation.h
+364af58fd17ef7d469b2b78aa243700ed7ad33d6b7f2876a446a92c9446a084a  Exhibits/LightCompute/Code/ReplayRayAccelerationValidation.cpp
+61d0f4b7b0e0f0dd430641a27dee32d80024da48235eebdf1e45561a549db04e  Exhibits/LightCompute/Code/LightComputeValidation.cpp
+2f3ceffaaca7d031bc3943f8eacf398a5d9c42c5fe0d15d8840b9acfa630b58e  /home/user/Frontier/ExternalPackages/VulkanCompute/SwiftShader/libvk_swiftshader.so
+5cc0134d42cf414f0dcde8c31a813337801a6afdc5443033ef39e28b1262d336  /home/user/Frontier/ExternalPackages/VulkanCompute/Slang/slangtorch/bin/slangc
+00883ef201e811e90222d93c820524fcb3675ab455818c056b8c04336bbe0968  Automation/ReplayToolDependencies.json
+4bf3483d3088678e6da67a88444cb2d823eb1f431a1d6dd78549ca38d3762a3c  /home/user/Frontier/_ClaudeScratch/build/production-shaders/sw-shaders/Primary.spv
+3db238f0a8729ee0e13efdb06fa87a98b01e138754999d479b2509d0a38948cd  /home/user/Frontier/_ClaudeScratch/build/production-shaders/sw-shaders/ReplayFilterVarianceWavelet.spv
+06218a699bf420a3dad7dd27f91b7c1a587ac8badffafa4cb2b4bfc74bfa7fec  /home/user/Frontier/_ClaudeScratch/build/production-shaders/sw-shaders/ReplayFinalizeSampleHistory.spv
+f280096447cd3210a6fa398901d9f6b75f2721855a21c00f699ef81216c5915b  /home/user/Frontier/_ClaudeScratch/build/production-shaders/sw-shaders/ReplayGatherSampleHistory.spv
+db81f885c303202ca5903a8f9539527d31db95853e8771e026431f4bf1a3da48  /home/user/Frontier/_ClaudeScratch/build/production-shaders/sw-shaders/ReplayGatherVarianceHistory.spv
+7448d94b131724c8b10134e05f8871a9d8c2b3f693221ed077ed8f0c488ec130  /home/user/Frontier/_ClaudeScratch/build/production-shaders/sw-shaders/ReplayGenerate.spv
+c722ce42e132b077b92b23cb5188d05c5bca6247944b15759c903279eea1a384  /home/user/Frontier/_ClaudeScratch/build/production-shaders/sw-shaders/ReplayIntegrateVarianceMoments.spv
+645f74620fe547ef20fcde09e6d67c108df11b7a38b7d26061ffdb31861b9e25  /home/user/Frontier/_ClaudeScratch/build/production-shaders/sw-shaders/ReplayResolve.spv
+d66ca29096cf2da247cf6bcf69842af9b24c6d79a2169c90027b1427a48c874c  /home/user/Frontier/_ClaudeScratch/build/production-shaders/sw-shaders/ReplayResolveHybrid.spv
+b890c83127ae93b81a8fdd99a921b3ffd2ab91ad99bc422f18fd2cd6d4aab4ce  /home/user/Frontier/_ClaudeScratch/build/production-shaders/hw-shaders/PrimaryHardwareRT.spv
+e9fb50bf8614922286ff73c071eab31eafb01f29e25b74b8a3f3cf286d23e9c1  /home/user/Frontier/_ClaudeScratch/build/production-shaders/hw-shaders/ReplayFinalizeSampleHistoryHardwareRT.spv
+aea0c4adef9606c1277dc45e10b65adccb4eb4f194ca9be12921d660b8c2c9fa  /home/user/Frontier/_ClaudeScratch/build/production-shaders/hw-shaders/ReplayGenerateHardwareRT.spv
+f732eb2481edab06464e77e2b08c20c2b651abfcb693b81cead9a2cacdb44dbd  /home/user/Frontier/_ClaudeScratch/build/production-shaders/hw-shaders/ReplayResolveHardwareRT.spv
+57aff2046b2dcb15b4292af6a201fa2a3f8213ecf4f5a9e451317cb0ea5a1ca8  /home/user/Frontier/_ClaudeScratch/build/production-shaders/hw-shaders/ReplayResolveHybridHardwareRT.spv
+-- The CXX compiler identification is GNU 12.2.0
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Check for working CXX compiler: /usr/bin/c++ - skipped
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD - Success
+-- Found Threads: TRUE
+-- Configuring done (0.4s)
+-- Generating done (0.0s)
+-- Build files have been written to: /home/user/Frontier/_ClaudeScratch/build/production-restir-sanitized
+[1/39] Building CXX object replay-engine/CMakeFiles/FrontierSolarSkyEnvironmentPayload.dir/AtmosphereModel.cpp.o
+[2/39] Building CXX object replay-engine/CMakeFiles/FrontierSolarSkyEnvironmentPayload.dir/SolarSkyEnvironmentPayload.cpp.o
+[3/39] Linking CXX static library replay-engine/libFrontierSolarSkyEnvironmentPayload.a
+[4/39] Building CXX object replay-engine/CMakeFiles/FrontierPathReplayVulkan.dir/PathReplayVulkan.cpp.o
+[5/39] Building CXX object replay-engine/CMakeFiles/FrontierPathReplayVulkan.dir/PathReplayRayQuery.cpp.o
+[6/39] Building CXX object replay-engine/CMakeFiles/FrontierMediumRadiancePayload.dir/MediumRadiancePayload.cpp.o
+[7/39] Building CXX object replay-engine/CMakeFiles/FrontierRadiantFacetDistribution.dir/RadiantFacetDistribution.cpp.o
+[8/39] Linking CXX static library replay-engine/libFrontierPathReplayVulkan.a
+[9/39] Building CXX object replay-engine/CMakeFiles/FrontierPathReplayDomain.dir/PathReplayDomain.cpp.o
+[10/39] Linking CXX static library replay-engine/libFrontierPathReplayDomain.a
+[11/39] Building CXX object replay-engine/CMakeFiles/FrontierPathReplaySubmission.dir/PathReplaySubmissionSequence.cpp.o
+[12/39] Building CXX object CMakeFiles/PathReplayDomainValidation.dir/Code/PathReplayDomainValidation.cpp.o
+[13/39] Building CXX object CMakeFiles/PathReplayVulkanValidation.dir/Code/PathReplayVulkanValidation.cpp.o
+[14/39] Building CXX object CMakeFiles/PathReplayArchiveValidation.dir/Code/PathReplayArchiveValidation.cpp.o
+[15/39] Building CXX object CMakeFiles/ReplaySeedCorrelationValidation.dir/Code/ReplaySeedCorrelationValidation.cpp.o
+[16/39] Building CXX object CMakeFiles/ReplayVarianceFilterValidation.dir/Code/ReplayVarianceFilterValidation.cpp.o
+[17/39] Building CXX object CMakeFiles/ReplayVarianceFilterValidation.dir/home/user/Frontier/Frontier/Engine/Rendering/VarianceFiltering.cpp.o
+[18/39] Building CXX object CMakeFiles/ReplayRayAccelerationValidation.dir/home/user/Frontier/Frontier/Engine/Rendering/ClusterNesting.cpp.o
+[19/39] Building CXX object CMakeFiles/ReplayPbrReflectionValidation.dir/Code/ReplayPbrReflectionValidation.cpp.o
+[20/39] Building CXX object CMakeFiles/ReplayRayAccelerationValidation.dir/Code/ReplayRayAccelerationValidation.cpp.o
+[21/39] Building CXX object CMakeFiles/ReplaySubmissionSequenceValidation.dir/Code/ReplaySubmissionSequenceValidation.cpp.o
+[22/39] Building CXX object CMakeFiles/ReplayPbrReflectionValidation.dir/home/user/Frontier/Frontier/Engine/Rendering/ClusterNesting.cpp.o
+[23/39] Building CXX object CMakeFiles/ProductionReSTIRContractValidation.dir/Code/ProductionReSTIRContractValidation.cpp.o
+[24/39] Building CXX object CMakeFiles/RadiantFacetValidation.dir/Code/RadiantFacetValidation.cpp.o
+[25/39] Linking CXX static library replay-engine/libFrontierMediumRadiancePayload.a
+[26/39] Linking CXX static library replay-engine/libFrontierRadiantFacetDistribution.a
+[27/39] Linking CXX static library replay-engine/libFrontierPathReplaySubmission.a
+[28/39] Linking CXX executable PathReplayDomainValidation
+[29/39] Linking CXX executable PathReplayVulkanValidation
+[30/39] Linking CXX executable PathReplayArchiveValidation
+[31/39] Linking CXX executable ReplaySeedCorrelationValidation
+[32/39] Linking CXX executable ReplayVarianceFilterValidation
+[33/39] Building CXX object CMakeFiles/MediumRadianceValidation.dir/Code/MediumRadianceValidation.cpp.o
+[34/39] Linking CXX executable ReplayRayAccelerationValidation
+[35/39] Linking CXX executable ReplayPbrReflectionValidation
+[36/39] Linking CXX executable ReplaySubmissionSequenceValidation
+[37/39] Linking CXX executable ProductionReSTIRContractValidation
+[38/39] Linking CXX executable RadiantFacetValidation
+[39/39] Linking CXX executable MediumRadianceValidation
+Test project /home/user/Frontier/_ClaudeScratch/build/production-restir-sanitized
+      Start  1: PathReplayDomainValidation
+ 1/11 Test  #1: PathReplayDomainValidation ...........   Passed    0.01 sec
+      Start  2: PathReplayVulkanValidation
+ 2/11 Test  #2: PathReplayVulkanValidation ...........   Passed    0.01 sec
+      Start  3: RadiantFacetValidation
+ 3/11 Test  #3: RadiantFacetValidation ...............   Passed    0.01 sec
+      Start  4: MediumRadianceValidation
+ 4/11 Test  #4: MediumRadianceValidation .............   Passed    0.01 sec
+      Start  5: ReplaySeedCorrelationValidation
+ 5/11 Test  #5: ReplaySeedCorrelationValidation ......   Passed    1.82 sec
+      Start  6: ReplayVarianceFilterValidation
+ 6/11 Test  #6: ReplayVarianceFilterValidation .......   Passed    0.01 sec
+      Start  7: ReplayRayAccelerationValidation
+ 7/11 Test  #7: ReplayRayAccelerationValidation ......   Passed    0.55 sec
+      Start  8: ReplayPbrReflectionValidation
+ 8/11 Test  #8: ReplayPbrReflectionValidation ........   Passed    0.15 sec
+      Start  9: ReplaySubmissionSequenceValidation
+ 9/11 Test  #9: ReplaySubmissionSequenceValidation ...   Passed    0.01 sec
+      Start 10: ProductionReSTIRContractValidation
+10/11 Test #10: ProductionReSTIRContractValidation ...   Passed    0.02 sec
+      Start 11: PathReplayArchiveValidation
+11/11 Test #11: PathReplayArchiveValidation ..........   Passed    0.01 sec
+
+100% tests passed out of 11
+
+Total Test time (real) =   2.60 sec
+RAY_QUERY_ENGINE capability_cases=6 vertex_pack=1 instance_guard=1 blas_tlas_sequence=4 build_rejections=10
+ORDERED_SAH_PARITY facets=240 median_nodes=63 sah_nodes=223 legacy_boxes=388694 legacy_tris=814628 ordered_med_boxes=364854 ordered_med_tris=770977 ordered_sah_boxes=281702 ordered_sah_tris=35056 same_tree_tri_saved_pct=5.36 sah_ordered_tri_saved_pct=95.70 shadow_rays_verified=10000
+RAY_QUERY_SPIRV_VERIFIED files=5 version=1.4 capability_4472=1 accel_type_5341=1 init_4473=1 proceed_4477=1 confirm_endpoint_skip_4476=1
+PASS replay ray-query engine, BLAS/TLAS recorder, and ordered SAH BVH equivalence
