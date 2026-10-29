@@ -1,0 +1,2 @@
+# EngineContent-relative paths staged beside the executable at build time.
+Stage = []

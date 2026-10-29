@@ -1,0 +1,8 @@
+{
+  "repository": "https://github.com/SultanAladin/Frontier-.git",
+  "branch": "arena/215a6f39-frontier",
+  "inspected_revision": "f2cfc57dc8f50e0e0186f340e344792ec8553b95",
+  "layout": "Decoupled Project-Drive overlay; reusable Jolt Physics (RigidBodySolver, VehiclePhysicsThread) and VehiclePhysics components (VehicleSolver, Drivetrain, Aerodynamics, PacejkaMagicFormula, TyreSlipDynamics, VehicleGeometry, VehicleSpawnSolver, DriverInputIntegrator, ChaseCameraProjection, VehicleRigidBodyAssembly, TyreVisualBridge) live in Frontier/Engine/Physics, while DriveCourse, DriveSimulation, and ProjectDriveInterchange live in Frontier/Projects/Project-Drive.",
+  "code_interchange_number": 3,
+  "interface_fingerprint": "0xb6725f24d0869173"
+}

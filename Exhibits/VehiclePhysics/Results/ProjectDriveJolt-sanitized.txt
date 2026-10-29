@@ -1,0 +1,23 @@
+=== Frontier Project-Drive + Engine Jolt Physics (sanitized) ===
+g++ (Debian 12.2.0-14+deb12u1) 12.2.0
+Linux 6.1.158+ x86_64
+--- 1. ProjectDriveJoltValidation (Engine Jolt 5.6 + VehiclePhysics + Async Thread + dlopen ProjectDrive.dll) ---
+PHASE_1_JOLT_RIGID_BODY_SOLVER version="Jolt 5.6.0" freefall_z=15.0746 heightfield_z=1.9004 omega_z=1.0000 spring_z=9.5246
+PHASE_2_SPAWN_INPUT_CAMERA min_clearance_m=0.02000 fov_deg=69.00 eye_x=2.322
+PHASE_3A_REST_EQUILIBRIUM drift_m=0.00016 speed_mps=0.00006 load_N=12282.1 com_z=0.5177
+PHASE_3B_ACCEL_BRAKE peak_mps=28.88 gear=4 aero_fl_N=1159.8 tyre_solid_N=2380.6 braked_mps=-0.00 disc_K=338.1 abs=1
+PHASE_3C_RAMP_KERB_CONES peak_z=2.472 min_air_contacts=0 land_x=39.88 land_contacts=4 land_up_z=1.000 displaced_cones=1 post_respawn_cones=0
+PHASE_4A_ASYNC_AND_POSSESSION async_steps=44 speed_mps=0.91 coast_dx=0.046
+PHASE_4B_CODE_IMAGE diagnostics=3 construct_msg="Project-Drive constructed · Jolt 5.6.0 · bodies 13 · spawn CoM Z=0.550 m"
+PROJECT_DRIVE_JOLT_SUMMARY checks=364 failed=0 status=PASS
+--- 2. Frontier Project Browser Enumeration ---
+Frontier project browser (headless listing) · /home/user/Frontier/build/frontier-host-sanitized/../../Frontier/Projects
+  ProjectDrive · /home/user/Frontier/build/frontier-host-sanitized/../../Frontier/Projects/Project-Drive/ProjectDrive.frontier
+  ProjectNetworking · /home/user/Frontier/build/frontier-host-sanitized/../../Frontier/Projects/Project-Networking/ProjectNetworking.frontier
+  ProjectProvingGrounds · /home/user/Frontier/build/frontier-host-sanitized/../../Frontier/Projects/Project-ProvingGrounds/ProjectProvingGrounds.frontier
+  ProjectVehicleHmiDemo · /home/user/Frontier/build/frontier-host-sanitized/../../Frontier/Projects/Project-VehicleHmiDemo/ProjectVehicleHmiDemo.frontier
+  ProjectZero · /home/user/Frontier/build/frontier-host-sanitized/../../Frontier/Projects/Project-Zero/ProjectZero.frontier
+--- 3. Frontier Headless Session (ProjectDrive.frontier) ---
+Frontier headless · ProjectDrive
+  entries 65 · warnings 4 · errors 1 · visible 37 · categories 13 · dropped 0
+  session log: /home/user/Frontier/Frontier/Projects/Project-Drive/Saved/Logs/Frontier.log

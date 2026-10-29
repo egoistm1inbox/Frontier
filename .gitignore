@@ -3,7 +3,9 @@ ExternalPackages/
 
 # Build outputs and intermediates.
 Build/
+build/
 Binaries/
+.local/
 
 # Sample meshes / textures / assets — tracked separately.
 EngineContent/*

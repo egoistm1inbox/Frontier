@@ -1,0 +1,41 @@
+#============================================================================================================================================
+#                                                         PROJECTDRIVE.FRONTIER
+#============================================================================================================================================
+# 🧩 Project-Drive declarative descriptor decoded by Frontier prior to session and code-image initialization.
+
+[Project]
+ProjectName           = "ProjectDrive"
+ProjectFormatNumber   = 1
+ContentLocation       = "Content"
+OpeningScene          = "DriveCourse"
+CodeImage             = "Build/Output/ProjectDrive.dll"
+CodeInterchangeNumber = 3
+InterfaceFingerprint  = 0xb6725f24d0869173
+
+[DeploymentPoint]
+Name                  = "Player vehicle deployment"
+Archetype             = "ControlVehicle"
+PlayerIdentifier      = 1
+PlayerName            = "Player 1"
+Team                  = 0
+Loadout               = "Default"
+Position              = [0.0, 0.0, 0.55]
+Rotation              = [0.0, 0.0, 0.0, 1.0]
+Enabled               = true
+DeleteAfterSpawn      = false
+
+[[LogCategories]]
+Name   = "Drivetrain"
+Colour = "orange"
+
+[[LogCategories]]
+Name   = "Suspension"
+Colour = "blue"
+
+[[LogCategories]]
+Name   = "TyreContact"
+Colour = "green"
+
+[[LogCategories]]
+Name   = "Telemetry"
+Colour = "purple"
