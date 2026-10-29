@@ -35,6 +35,18 @@ bool VehicleRigidBodyAssembly::Construct(
     SolverConfiguration.Aero.Enabled            = true;
     SolverConfiguration.BrakeThermalEnabled     = Specification.EnableBrakeThermals;
     SolverConfiguration.TyreThermal.Enabled     = Specification.EnableTyreThermals;
+    // Calibrated SBR/BR outer-tread thermal mass, belt-to-carcass conduction, rotational convection & auto-ignition kinetics
+    // so VehicleHMI / Project-Drive tyres emit dense pyrolysis smoke before igniting only after >30 s of extreme burnout!
+    SolverConfiguration.TyreThermal.IgnitionEnabled           = Specification.EnableTyreThermals;
+    SolverConfiguration.TyreThermal.SurfaceHeatCapacity       = 3200.0;
+    SolverConfiguration.TyreThermal.CarcassHeatCapacity       = 15800.0;
+    SolverConfiguration.TyreThermal.SurfaceCarcassConductance = 88.0;
+    SolverConfiguration.TyreThermal.SurfaceAirConductance     = 42.0;
+    SolverConfiguration.TyreThermal.RoadConductance           = 54.0;
+    SolverConfiguration.TyreThermal.SlidingHeatShare          = 0.58;
+    SolverConfiguration.TyreThermal.IgnitionTemperature       = 683.15;
+    SolverConfiguration.TyreThermal.IgnitionExposureSeconds   = 14.0;
+    SolverConfiguration.TyreThermal.ExtinctionTemperature     = 505.15;
 
     ChassisState Requested{};
     Requested.Position    = Specification.RequestedPosition;

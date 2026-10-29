@@ -118,3 +118,34 @@ if(MSVC)
 else()
     target_compile_options(FrontierPlumeFluid PRIVATE -Wall -Wextra -Werror)
 endif()
+
+# 📝 Shared 3D Wind & Force-Field toroidal lattice + Cloud-Gated Vose-Alias budgeted weather/debris particle spawner.
+add_library(FrontierWindForceField STATIC WindForceFieldDivision.cpp)
+target_compile_features(FrontierWindForceField PUBLIC cxx_std_20)
+target_link_libraries(FrontierWindForceField PUBLIC FrontierAtmosphericOptics FrontierPlumeFluid)
+target_include_directories(FrontierWindForceField PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/../..")
+if(MSVC)
+    target_compile_options(FrontierWindForceField PRIVATE /utf-8 /W4)
+else()
+    target_compile_options(FrontierWindForceField PRIVATE -Wall -Wextra -Werror)
+endif()
+
+# 📝 Unified FrameGraph compiler (SubmissionOrder + BarrierDerivation + TransientTargetAtlas), parallel recorder & RenderThread.
+if(TARGET FrontierThreading)
+    add_library(FrontierFrameGraphRuntime STATIC
+        SubmissionOrder.cpp
+        BarrierDerivation.cpp
+        TransientTargetAtlas.cpp
+        FrameGraphExecution.cpp
+        ../Diagnostics/LogCategories.cpp
+        ../Diagnostics/LogRingStore.cpp
+        ../Diagnostics/LogStream.cpp)
+    target_compile_features(FrontierFrameGraphRuntime PUBLIC cxx_std_20)
+    target_link_libraries(FrontierFrameGraphRuntime PUBLIC FrontierThreading)
+    target_include_directories(FrontierFrameGraphRuntime PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/../..")
+    if(MSVC)
+        target_compile_options(FrontierFrameGraphRuntime PRIVATE /utf-8 /W4)
+    else()
+        target_compile_options(FrontierFrameGraphRuntime PRIVATE -Wall -Wextra -Werror)
+    endif()
+endif()

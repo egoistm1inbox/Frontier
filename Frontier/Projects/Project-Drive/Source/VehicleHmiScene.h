@@ -9,12 +9,16 @@
 
 #include "Engine/Physics/ProjectDrive/TyreVisualBridge.h"
 #include "Engine/Physics/TyreSurfaceProjection.h"
+#include "Engine/Physics/VehiclePropulsion/CalibratedTyreThermodynamics.h"
+#include "Engine/Physics/VehiclePropulsion/HybridElectricPropulsion.h"
+#include "Engine/Physics/VehiclePropulsion/PropulsionThermochemistry.h"
 #include "Engine/Rendering/AtmosphereModel.h"
 #include "Engine/Rendering/CloudField.h"
 #include "Engine/Rendering/FogMedium.h"
 #include "Engine/Rendering/PhotometricClusterDivision.h"
 #include "Engine/Rendering/PlumeFluidDivision.h"
 #include "Engine/Rendering/WeatherEffects.h"
+#include "Engine/Rendering/WindForceFieldDivision.h"
 
 #include <array>
 #include <cstdint>
@@ -139,10 +143,12 @@ struct ShowcaseEnvironmentSettings
     bool                     HeadlightsActive      = true;                     // [-]   analytic-IES low/high beam + roof LED bar
     bool                     StreetlampsActive     = true;                     // [-]   roadway batwing IES poles + hangar/tunnel lamps
     DemoTyreVisualMode       TyreDeformationMode   = DemoTyreVisualMode::Solid;// [-]   Spring / XPBD Projection / 3D Hex8 FEM Solid
-    PrecipitationSpecies     WeatherSpecies        = PrecipitationSpecies::Clear;
-    float                    WeatherIntensity      = 0.0f;                     // [0..1] precipitation rate
-    float                    SnowDepthMetres       = 0.0f;                     // [m]   accumulated ground/roof snow blanket
-    float                    ElapsedSeconds        = 0.0f;                     // [s]   animation clock
+    PrecipitationSpecies     WeatherSpecies              = PrecipitationSpecies::Clear;
+    float                    WeatherIntensity            = 0.0f;                     // [0..1] precipitation rate
+    float                    SnowDepthMetres             = 0.0f;                     // [m]   accumulated ground/roof snow blanket
+    std::array<float, 3>     WindVelocityTenMetres       = { 4.2f, 1.4f, 0.0f };     // [m/s] 10 m shared WindForceField vector
+    std::uint32_t            StrictWeatherParticleBudget = 1280u;                    // [-]   hard cap for CloudGatedWeatherSpawner
+    float                    ElapsedSeconds              = 0.0f;                     // [s]   animation clock
 };
 
 struct ShowcaseCameraPose

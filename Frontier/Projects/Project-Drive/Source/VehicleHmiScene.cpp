@@ -1307,23 +1307,29 @@ void RenderVehicleHmiShowcaseImage(
     const double DaylightFactor = std::clamp((std::sin(ElevRad) + 0.08) / 0.55, 0.04, 1.0);
     const SpectrumRgb SunIrradiance = { 5.4 * DaylightFactor, 4.9 * DaylightFactor, 4.3 * DaylightFactor };
 
+    WindFieldConfiguration WindCfg{};
+    WindCfg.AmbientReferenceWindMps = {
+        Environment.WindVelocityTenMetres[0],
+        Environment.WindVelocityTenMetres[1],
+        Environment.WindVelocityTenMetres[2]
+    };
+    WindForceFieldDivision WindField(WindCfg);
+    WindField.StepField({ Camera.Target[0], Camera.Target[1], 0.0 }, Environment.ElapsedSeconds);
+
     CloudParameters Clouds{};
-    Clouds.BaseHeightM    = 750.0;
-    Clouds.TopHeightM     = 1550.0;
-    Clouds.Coverage       = Environment.CloudCoverage;
-    Clouds.ExtinctionPerM = 0.014;
-    Clouds.WindTimeS      = Environment.ElapsedSeconds * 4.0;
+    Clouds.BaseHeightM     = 750.0;
+    Clouds.TopHeightM      = 1550.0;
+    Clouds.Coverage        = Environment.CloudCoverage;
+    Clouds.ExtinctionPerM  = 0.014;
     Clouds.AmbientRadiance = { 0.14 * DaylightFactor, 0.18 * DaylightFactor, 0.26 * DaylightFactor };
+    WindField.SynchronizeCloudAdvection(Clouds, Environment.ElapsedSeconds * 4.0);
 
     FogParameters Fog{};
     Fog.DensityAtBase  = Environment.FogBaseDensity;
     Fog.BaseHeightM    = 0.0;
     Fog.FalloffHeightM = 1.0 / std::max(Environment.FogHeightFalloff, 0.02f);
     Fog.Colour         = { 0.34 * DaylightFactor + 0.03, 0.42 * DaylightFactor + 0.04, 0.56 * DaylightFactor + 0.07 };
-
-    const PrecipitationParameters PrecipSpec = PresetPrecipitationParameters(
-        Environment.WeatherSpecies, Environment.WeatherIntensity, 0x9A17ull);
-    const PrecipitationField PrecipField(PrecipSpec);
+    (void)Fog;
 
     auto EvaluateSkyAndClouds = [&](const Float3& RayOrigin, const Float3& RayDir) noexcept -> Float3
     {
@@ -1594,7 +1600,8 @@ void RenderVehicleHmiShowcaseImage(
     const float  TanY    = std::tan(0.5f * Camera.VerticalFovDeg * DegToRadScalar);
     const float  TanX    = TanY * (static_cast<float>(Width) / static_cast<float>(Height));
 
-    // Pre-generate hydrometeor world samples for fast screen-space/ray streak overlay when weather is active.
+    // Budgeted, cloud-gated falling hydrometeors (Rain / Snow / Hail) coupled to WindForceFieldDivision!
+    // Spawns STRICTLY beneath verified cloud columns — zero wasted particles under clear sky!
     struct ScreenParticle
     {
         Float3 P0;
@@ -1605,19 +1612,29 @@ void RenderVehicleHmiShowcaseImage(
     std::vector<ScreenParticle> WeatherParticles;
     if (Environment.WeatherSpecies != PrecipitationSpecies::Clear && Environment.WeatherIntensity > 0.02f)
     {
-        const std::uint32_t Count = static_cast<std::uint32_t>(
-            (Environment.WeatherSpecies == PrecipitationSpecies::Snow) ? (950.0f * Environment.WeatherIntensity)
-                                                                       : (1250.0f * Environment.WeatherIntensity));
-        WeatherParticles.reserve(Count);
-        const Float3 Anchor = Add3(Camera.Eye, Mul3(Forward, 14.0f));
-        for (std::uint32_t I = 0u; I < Count; ++I)
+        const std::uint32_t ScaledBudget = static_cast<std::uint32_t>(
+            std::clamp(Environment.WeatherIntensity, 0.0f, 1.0f) * static_cast<float>(Environment.StrictWeatherParticleBudget));
+        if (ScaledBudget > 0u)
         {
-            const auto Sample = PrecipField.EvaluateHydrometeor(
-                I, Environment.ElapsedSeconds, { Anchor[0], Anchor[1], 0.0 }, Environment.WeatherSpecies, 1.0 / 55.0);
-            const Float3 P0 = { static_cast<float>(Sample.Position.X), static_cast<float>(Sample.Position.Y), static_cast<float>(Sample.Position.Z) };
-            const Float3 V  = { static_cast<float>(Sample.Velocity.X), static_cast<float>(Sample.Velocity.Y), static_cast<float>(Sample.Velocity.Z) };
-            const float  Dt = (Environment.WeatherSpecies == PrecipitationSpecies::Rain) ? 0.022f : 0.010f;
-            const Float3 P1 = Add3(P0, Mul3(V, Dt));
+            WeatherParticleBudgetConfig SpawnerCfg{};
+            SpawnerCfg.Category = (Environment.WeatherSpecies == PrecipitationSpecies::Snow)
+                ? FallingParticleCategory::SnowFlake
+                : (Environment.WeatherSpecies == PrecipitationSpecies::Hail)
+                    ? FallingParticleCategory::HailPellet
+                    : FallingParticleCategory::RainDrop;
+            SpawnerCfg.StrictParticleBudget      = ScaledBudget;
+            SpawnerCfg.SpawnVolumeHorizontalM    = 64.0;
+            SpawnerCfg.SpawnCeilingHeightM       = 24.0;
+            SpawnerCfg.WeatherIntensityZeroToOne = Environment.WeatherIntensity;
+
+            CloudGatedWeatherSpawner Spawner(SpawnerCfg);
+            const Float3 Anchor = Add3(Camera.Eye, Mul3(Forward, 14.0f));
+            for (int WarmStep = 0; WarmStep < 8; ++WarmStep)
+            {
+                (void)Spawner.StepParticles(Clouds, WindField, { Anchor[0], Anchor[1], 0.0 }, 1.0 / 30.0);
+            }
+
+            const float DtStreak = (Environment.WeatherSpecies == PrecipitationSpecies::Rain) ? 0.022f : 0.010f;
             const Float3 Col = (Environment.WeatherSpecies == PrecipitationSpecies::Snow)
                 ? Float3{ 0.90f, 0.94f, 1.00f }
                 : (Environment.WeatherSpecies == PrecipitationSpecies::Hail)
@@ -1626,7 +1643,19 @@ void RenderVehicleHmiShowcaseImage(
             const float Rad = (Environment.WeatherSpecies == PrecipitationSpecies::Snow) ? 1.85f
                             : (Environment.WeatherSpecies == PrecipitationSpecies::Hail) ? 1.65f
                                                                                          : 0.95f;
-            WeatherParticles.push_back(ScreenParticle{ P0, P1, Rad, Col });
+
+            WeatherParticles.reserve(Spawner.Particles().size());
+            for (const WeatherParticleRecord& P : Spawner.Particles())
+            {
+                if (!P.Alive)
+                {
+                    continue;
+                }
+                const Float3 P0 = { static_cast<float>(P.Position.X), static_cast<float>(P.Position.Y), static_cast<float>(P.Position.Z) };
+                const Float3 V  = { static_cast<float>(P.Velocity.X), static_cast<float>(P.Velocity.Y), static_cast<float>(P.Velocity.Z) };
+                const Float3 P1 = Add3(P0, Mul3(V, DtStreak));
+                WeatherParticles.push_back(ScreenParticle{ P0, P1, Rad, Col });
+            }
         }
     }
 
