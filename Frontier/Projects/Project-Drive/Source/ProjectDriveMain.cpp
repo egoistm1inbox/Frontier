@@ -34,15 +34,6 @@
     #include <stb_image_write.h>
 #endif
 
-#if defined(_WIN32) && (!defined(FRONTIER_SHIPPING_PROFILE) || !FRONTIER_SHIPPING_PROFILE)
-    #include <d3d11.h>
-    #include <dwmapi.h>
-    #include <dxgi.h>
-    #include <imgui_impl_dx11.h>
-    #include <imgui_impl_win32.h>
-extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
-#endif
-
 #if defined(__linux__)
     #include <arpa/inet.h>
     #include <csignal>
@@ -63,6 +54,16 @@ extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg
 #include <sstream>
 #include <string>
 #include <vector>
+
+#if defined(_WIN32) && (!defined(FRONTIER_SHIPPING_PROFILE) || !FRONTIER_SHIPPING_PROFILE)
+    #include <windows.h>
+    #include <d3d11.h>
+    #include <dwmapi.h>
+    #include <dxgi.h>
+    #include <imgui_impl_dx11.h>
+    #include <imgui_impl_win32.h>
+extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
+#endif
 
 namespace Frontier::Drive
 {

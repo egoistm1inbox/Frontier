@@ -15,13 +15,18 @@
 #include <utility>
 
 #if defined(_WIN32)
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
-#include <windows.h>
+extern "C"
+{
+    __declspec(dllimport) unsigned long __stdcall GetCurrentProcessId(void);
+    __declspec(dllimport) void *__stdcall CreateFileMappingA(
+        void *hFile, void *lpFileMappingAttributes, unsigned long flProtect,
+        unsigned long dwMaximumSizeHigh, unsigned long dwMaximumSizeLow, const char *lpName);
+    __declspec(dllimport) void *__stdcall MapViewOfFile(
+        void *hFileMappingObject, unsigned long dwDesiredAccess,
+        unsigned long dwFileOffsetHigh, unsigned long dwFileOffsetLow, size_t dwNumberOfBytesToMap);
+    __declspec(dllimport) int __stdcall UnmapViewOfFile(const void *lpBaseAddress);
+    __declspec(dllimport) int __stdcall CloseHandle(void *hObject);
+}
 #else
 #include <fcntl.h>
 #include <sys/mman.h>
@@ -53,18 +58,22 @@ class SharedEntityMemorySegment
         MappedBytes_ = ((sizeof(T) + 4095u) / 4096u) * 4096u;
 
 #if defined(_WIN32)
+        constexpr unsigned long kPageReadWrite    = 0x04UL;
+        constexpr unsigned long kFileMapAllAccess = 0x000F001FUL;
+        void *const             kInvalidHandle    = reinterpret_cast<void *>(static_cast< intptr_t >(-1));
+
         char MapName[128] = {};
         std::snprintf(MapName, sizeof(MapName), "Local\\FrontierSharedEntities_%s_%lu",
                       SegmentTag != nullptr ? SegmentTag : "Drive",
-                      static_cast<unsigned long>(::GetCurrentProcessId()));
+                      ::GetCurrentProcessId());
         MappingHandle_ = ::CreateFileMappingA(
-            INVALID_HANDLE_VALUE, nullptr, PAGE_READWRITE,
-            static_cast<DWORD>(( static_cast<uint64_t>(MappedBytes_) >> 32u ) & 0xFFFFFFFFu),
-            static_cast<DWORD>(MappedBytes_ & 0xFFFFFFFFu),
+            kInvalidHandle, nullptr, kPageReadWrite,
+            static_cast<unsigned long>((static_cast<uint64_t>(MappedBytes_) >> 32u) & 0xFFFFFFFFu),
+            static_cast<unsigned long>(MappedBytes_ & 0xFFFFFFFFu),
             MapName);
         if (MappingHandle_ != nullptr)
         {
-            RawView_ = ::MapViewOfFile(MappingHandle_, FILE_MAP_ALL_ACCESS, 0, 0, MappedBytes_);
+            RawView_ = ::MapViewOfFile(MappingHandle_, kFileMapAllAccess, 0UL, 0UL, MappedBytes_);
             if (RawView_ != nullptr)
             {
                 UsingOsSharedMapping_ = true;
@@ -79,7 +88,6 @@ class SharedEntityMemorySegment
         int Fd = ::shm_open(ShmPath, O_CREAT | O_RDWR | O_EXCL, 0600);
         if (Fd >= 0)
         {
-            // Unlink directory entry immediately so zero stale /dev/shm files ever persist after exit!
             ::shm_unlink(ShmPath);
             if (::ftruncate(Fd, static_cast<off_t>(MappedBytes_)) == 0)
             {
@@ -175,7 +183,7 @@ class SharedEntityMemorySegment
     bool        UsingOsSharedMapping_ = false;
     std::string SegmentName_{};
 #if defined(_WIN32)
-    HANDLE      MappingHandle_        = nullptr;
+    void       *MappingHandle_        = nullptr;
 #endif
 };
 

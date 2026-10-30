@@ -14,7 +14,7 @@ import zipfile
 
 def EmitError(Title: str, Text: str) -> None:
     Msg = Text.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
-    print(f"::error title={Title}::{Msg[:3500]}", flush=True)
+    print(f"::error title={Title}::{Msg[-3200:]}", flush=True)
 
 
 def Main() -> int:
@@ -46,7 +46,11 @@ def Main() -> int:
             if Proc.returncode != 0:
                 ErrLines = [
                     Ln for Ln in Proc.stdout.splitlines()
-                    if Ln.strip() and not Ln.startswith("[") and not Ln.startswith("C:\\PROGRA")
+                    if Ln.strip()
+                    and not Ln.startswith("[")
+                    and not Ln.startswith("C:\\PROGRA")
+                    and ": warning C" not in Ln
+                    and ": note: " not in Ln
                 ]
                 if not ErrLines:
                     ErrLines = [Ln for Ln in Proc.stdout.splitlines() if Ln.strip()]
