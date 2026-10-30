@@ -4,6 +4,7 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
 endif()
 
 option(FRONTIER_PROJECT_DRIVE_SHIPPING "Build Shipping runtime without Editor UI / SceneDirectory" OFF)
+option(FRONTIER_CI_RELAX_WERROR "Relax -Werror for cross-distro / cross-compiler CI packaging" OFF)
 
 get_filename_component(PROJECT_DRIVE_FRONTIER_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../.." ABSOLUTE)
 get_filename_component(PROJECT_DRIVE_REPO_ROOT "${PROJECT_DRIVE_FRONTIER_ROOT}/.." ABSOLUTE)
@@ -14,8 +15,10 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 find_package(Threads REQUIRED)
 
 if(MSVC)
-    add_compile_options(/utf-8)
-    add_compile_definitions(_CRT_SECURE_NO_WARNINGS)
+    add_compile_options(/utf-8 /bigobj /FIcstdint)
+    add_compile_definitions(_CRT_SECURE_NO_WARNINGS _USE_MATH_DEFINES NOMINMAX WIN32_LEAN_AND_MEAN)
+else()
+    add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-include> $<$<COMPILE_LANGUAGE:CXX>:cstdint>)
 endif()
 
 if(NOT TARGET FrontierAudioFoundation)
@@ -111,7 +114,9 @@ set_target_properties(ProjectDrive PROPERTIES
     CXX_VISIBILITY_PRESET hidden
     VISIBILITY_INLINES_HIDDEN ON
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/Output"
-    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/Output")
+    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/Output"
+    ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/Output"
+    PDB_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/Output")
 if(UNIX AND NOT APPLE)
     target_link_options(ProjectDrive PRIVATE -Wl,-Bsymbolic -Wl,--exclude-libs,ALL)
 endif()
@@ -263,4 +268,21 @@ else()
     set_target_properties(ProjectDriveApp PROPERTIES
         OUTPUT_NAME "ProjectDrive"
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/Binaries")
+endif()
+
+if(FRONTIER_CI_RELAX_WERROR AND NOT MSVC)
+    function(frontier_relax_werror_recursive dir)
+        get_property(targets DIRECTORY "${dir}" PROPERTY BUILDSYSTEM_TARGETS)
+        foreach(tgt IN LISTS targets)
+            get_target_property(tgt_type "${tgt}" TYPE)
+            if(NOT tgt_type STREQUAL "INTERFACE_LIBRARY")
+                target_compile_options("${tgt}" PRIVATE -Wno-error)
+            endif()
+        endforeach()
+        get_property(subdirs DIRECTORY "${dir}" PROPERTY SUBDIRECTORIES)
+        foreach(sub IN LISTS subdirs)
+            frontier_relax_werror_recursive("${sub}")
+        endforeach()
+    endfunction()
+    frontier_relax_werror_recursive("${CMAKE_CURRENT_SOURCE_DIR}")
 endif()

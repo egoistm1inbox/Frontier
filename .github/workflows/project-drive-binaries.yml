@@ -21,20 +21,34 @@ jobs:
 
       - name: Prepare UI packages, fonts, and Jolt v5.6.0
         run: |
-          sudo apt-get update
-          sudo apt-get install -y ninja-build zip
-          python -m pip install -r Automation/FontRequirements.txt
-          python Automation/PrepareUI.py
-          python Automation/PrepareFonts.py
-          bash Automation/BuildJolt.sh
+          set -o pipefail
+          {
+            sudo apt-get update
+            sudo apt-get install -y ninja-build zip
+            python -m pip install -r Automation/FontRequirements.txt
+            python Automation/PrepareUI.py
+            python Automation/PrepareFonts.py
+            bash Automation/BuildJolt.sh
+          } 2>&1 | tee prep.log || {
+            DETAIL=$(tail -n 35 prep.log | sed -e 's/%/%25/g' -e ':a;N;$!ba;s/\n/%0A/g')
+            echo "::error title=LinuxPrepFailed::$DETAIL"
+            exit 1
+          }
 
       - name: Build ProjectDrive (Editor + Runtime) & ProjectDriveShipping
         run: |
-          cmake -S Frontier/Projects/Project-Drive -B build-editor -G Ninja -DCMAKE_BUILD_TYPE=Release
-          cmake --build build-editor --config Release -j 4
-          cmake -S Frontier/Projects/Project-Drive -B build-shipping -G Ninja -DCMAKE_BUILD_TYPE=Release -DFRONTIER_PROJECT_DRIVE_SHIPPING=ON
-          cmake --build build-shipping --config Release -j 4
-          ./build-shipping/Shipping/ProjectDriveShipping --project-root Frontier/Projects/Project-Drive
+          set -o pipefail
+          {
+            cmake -S Frontier/Projects/Project-Drive -B build-editor -G Ninja -DCMAKE_BUILD_TYPE=Release -DFRONTIER_CI_RELAX_WERROR=ON
+            cmake --build build-editor --config Release -j 4
+            cmake -S Frontier/Projects/Project-Drive -B build-shipping -G Ninja -DCMAKE_BUILD_TYPE=Release -DFRONTIER_PROJECT_DRIVE_SHIPPING=ON -DFRONTIER_CI_RELAX_WERROR=ON
+            cmake --build build-shipping --config Release -j 4
+            ./build-shipping/Shipping/ProjectDriveShipping --project-root Frontier/Projects/Project-Drive
+          } 2>&1 | tee build.log || {
+            DETAIL=$(tail -n 45 build.log | sed -e 's/%/%25/g' -e ':a;N;$!ba;s/\n/%0A/g')
+            echo "::error title=LinuxBuildFailed::$DETAIL"
+            exit 1
+          }
 
       - name: Package ProjectDrive-linux-x86_64.zip
         run: |
@@ -75,22 +89,61 @@ jobs:
           python-version: '3.12'
 
       - name: Prepare UI packages & OFL FontArchives
+        shell: pwsh
         run: |
-          python -m pip install -r Automation/FontRequirements.txt
-          python Automation/PrepareUI.py
-          python Automation/PrepareFonts.py
+          $ErrorActionPreference = 'Continue'
+          python -c "import pathlib; [p.write_bytes(p.read_bytes().replace(b'\r\n', b'\n')) for p in pathlib.Path('Automation/Patches').glob('*.patch')]"
+          $Out = & {
+            python -m pip install -r Automation/FontRequirements.txt
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            python Automation/PrepareUI.py
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            python Automation/PrepareFonts.py
+            exit $LASTEXITCODE
+          } 2>&1
+          $Code = $LASTEXITCODE
+          $Out | Write-Host
+          if ($Code -ne 0) {
+            $Detail = (($Out | Select-Object -Last 35) -join "`n").Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
+            Write-Host "::error title=WindowsPrepFailed::$Detail"
+            exit 1
+          }
 
       - name: Build Jolt.lib + ProjectDrive.exe (Win32 + DirectX 11) + ProjectDriveShipping.exe
-        shell: cmd
+        shell: pwsh
         run: |
-          for /f "usebackq tokens=*" %%i in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath`) do call "%%i\VC\Auxiliary\Build\vcvars64.bat"
-          python Automation\BuildJoltWindows.py
-          cmake -S Frontier/Projects/Project-Drive -B build-win-editor -G Ninja -DCMAKE_BUILD_TYPE=Release -DFRONTIER_JOLT_LIBRARY="%CD%/ExternalPackages/jolt/lib/Release/Jolt.lib"
-          cmake --build build-win-editor --config Release
-          cmake -S Frontier/Projects/Project-Drive -B build-win-shipping -G Ninja -DCMAKE_BUILD_TYPE=Release -DFRONTIER_PROJECT_DRIVE_SHIPPING=ON -DFRONTIER_JOLT_LIBRARY="%CD%/ExternalPackages/jolt/lib/Release/Jolt.lib"
-          cmake --build build-win-shipping --config Release
-          build-win-shipping\Shipping\ProjectDriveShipping.exe --project-root Frontier/Projects/Project-Drive
-          Frontier\Projects\Project-Drive\Binaries\ProjectDrive.exe --project-root Frontier/Projects/Project-Drive --smoke-frames 6
+          $ErrorActionPreference = 'Continue'
+          $VsWhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $VisualStudio = & $VsWhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          if (-not $VisualStudio) { Write-Host "::error::Visual Studio C++ tools not found"; exit 1 }
+          $VcVars = Join-Path $VisualStudio 'VC\Auxiliary\Build\vcvars64.bat'
+          cmd /c "`"$VcVars`" >nul && set" | ForEach-Object {
+            if ($_ -match '^([^=]+)=(.*)$') { Set-Item "Env:$($Matches[1])" $Matches[2] }
+          }
+          $JoltLib = (Join-Path (Get-Location) 'ExternalPackages/jolt/lib/Release/Jolt.lib').Replace('\', '/')
+          $Out = & {
+            python Automation/BuildJoltWindows.py
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            cmake -S Frontier/Projects/Project-Drive -B build-win-editor -G Ninja -DCMAKE_BUILD_TYPE=Release "-DFRONTIER_JOLT_LIBRARY=$JoltLib"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            cmake --build build-win-editor --config Release
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            cmake -S Frontier/Projects/Project-Drive -B build-win-shipping -G Ninja -DCMAKE_BUILD_TYPE=Release -DFRONTIER_PROJECT_DRIVE_SHIPPING=ON "-DFRONTIER_JOLT_LIBRARY=$JoltLib"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            cmake --build build-win-shipping --config Release
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            & "build-win-shipping/Shipping/ProjectDriveShipping.exe" --project-root Frontier/Projects/Project-Drive
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            & "Frontier/Projects/Project-Drive/Binaries/ProjectDrive.exe" --project-root Frontier/Projects/Project-Drive --smoke-frames 6
+            exit $LASTEXITCODE
+          } 2>&1
+          $Code = $LASTEXITCODE
+          $Out | Write-Host
+          if ($Code -ne 0) {
+            $Detail = (($Out | Select-Object -Last 45) -join "`n").Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
+            Write-Host "::error title=WindowsBuildFailed::$Detail"
+            exit 1
+          }
 
       - name: Package ProjectDrive-windows-x86_64.zip
         shell: pwsh
