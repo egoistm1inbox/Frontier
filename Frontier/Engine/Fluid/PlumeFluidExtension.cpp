@@ -1,9 +1,9 @@
 /*==========================================================================================================================================
-                                                       PLUMEFLUIDDIVISION.CPP
+                                                       PLUMEFLUIDEXTENSION.CPP
 ==========================================================================================================================================*/
 // 🧩 Native C++/Vulkan 3D smoke-and-fire fluid division implementation.
 
-#include "Engine/Rendering/PlumeFluidDivision.h"
+#include "Engine/Fluid/PlumeFluidExtension.h"
 
 #include <algorithm>
 #include <cmath>
@@ -147,12 +147,12 @@ void GradeDimensions(
 //                                              CONSTRUCTION & CONFIGURATION
 //------------------------------------------------------------------------------------------------------------------------
 
-PlumeFluidDivision::PlumeFluidDivision(const PlumeFluidParameters& Parameters)
+PlumeFluidExtension::PlumeFluidExtension(const PlumeFluidParameters& Parameters)
 {
     Reconfigure(Parameters);
 }
 
-void PlumeFluidDivision::Reconfigure(const PlumeFluidParameters& Parameters)
+void PlumeFluidExtension::Reconfigure(const PlumeFluidParameters& Parameters)
 {
     Parameters_ = Parameters;
     GradeDimensions(Parameters_.Grade, ThermoExtent_, FineCellMetres_);
@@ -176,7 +176,7 @@ void PlumeFluidDivision::Reconfigure(const PlumeFluidParameters& Parameters)
     ClearState();
 }
 
-void PlumeFluidDivision::ClearState() noexcept
+void PlumeFluidExtension::ClearState() noexcept
 {
     std::fill(VelocityCurrent_.begin(), VelocityCurrent_.end(), 0.0f);
     std::fill(VelocityScratch_.begin(), VelocityScratch_.end(), 0.0f);
@@ -195,17 +195,86 @@ void PlumeFluidDivision::ClearState() noexcept
     Relocations_    = 0u;
     WheelOnsets_    = {};
     Sources_.clear();
+    Obstacles_.clear();
     FireLights_     = {};
     Diagnostics_    = {};
     CoverageLow_    = { 1, 1, 1 };
     CoverageHigh_   = { 0, 0, 0 };
 }
 
+void PlumeFluidExtension::ClearSolidObstacles() noexcept
+{
+    Obstacles_.clear();
+}
+
+void PlumeFluidExtension::RegisterSolidObstacle(const PlumeSolidObstacleBox& Obstacle) noexcept
+{
+    if (Obstacles_.size() < ObstacleLimit)
+    {
+        Obstacles_.push_back(Obstacle);
+    }
+}
+
+bool PlumeFluidExtension::PointInsideSolidObstacles(
+    float Px, float Py, float Pz,
+    std::array<float, 3>* OutNearWakeVelocity,
+    float*                OutWakeBlend) const noexcept
+{
+    if (OutWakeBlend)
+    {
+        *OutWakeBlend = 0.0f;
+    }
+    if (Obstacles_.empty())
+    {
+        return false;
+    }
+    for (const PlumeSolidObstacleBox& Box : Obstacles_)
+    {
+        const float Dx  = Px - Box.Centre[0];
+        const float Dy  = Py - Box.Centre[1];
+        const float Dz  = Pz - Box.Centre[2];
+        const float Cos = std::cos(-Box.YawRadians);
+        const float Sin = std::sin(-Box.YawRadians);
+        const float Lx  = std::abs(Dx * Cos - Dy * Sin);
+        const float Ly  = std::abs(Dx * Sin + Dy * Cos);
+        const float Lz  = std::abs(Dz);
+        if (Lx <= Box.HalfExtents[0] && Ly <= Box.HalfExtents[1] && Lz <= Box.HalfExtents[2])
+        {
+            return true;
+        }
+        // Moving-solid boundary-layer drag shell (e.g. driving vehicle deflecting & entraining smoke!).
+        if (OutNearWakeVelocity != nullptr && OutWakeBlend != nullptr)
+        {
+            const float SpeedSq = Box.LinearVelocity[0] * Box.LinearVelocity[0] +
+                                  Box.LinearVelocity[1] * Box.LinearVelocity[1] +
+                                  Box.LinearVelocity[2] * Box.LinearVelocity[2];
+            if (SpeedSq > 0.04f)
+            {
+                const float Ex = std::max(0.0f, Lx - Box.HalfExtents[0]);
+                const float Ey = std::max(0.0f, Ly - Box.HalfExtents[1]);
+                const float Ez = std::max(0.0f, Lz - Box.HalfExtents[2]);
+                const float ShellDistSq = Ex * Ex + Ey * Ey + Ez * Ez;
+                const float ShellReach  = 1.15f * CoarseCellMetres_;
+                if (ShellDistSq < ShellReach * ShellReach)
+                {
+                    const float Blend = 1.0f - std::sqrt(ShellDistSq) / ShellReach;
+                    if (Blend > *OutWakeBlend)
+                    {
+                        *OutWakeBlend        = Blend;
+                        *OutNearWakeVelocity = Box.LinearVelocity;
+                    }
+                }
+            }
+        }
+    }
+    return false;
+}
+
 //------------------------------------------------------------------------------------------------------------------------
 //                                           BLACKBODY & APERIODIC DETAIL OPTICS
 //------------------------------------------------------------------------------------------------------------------------
 
-std::array<float, 3> PlumeFluidDivision::EvaluateBlackbodyRadiance(float Kelvin) noexcept
+std::array<float, 3> PlumeFluidExtension::EvaluateBlackbodyRadiance(float Kelvin) noexcept
 {
     const float T = ClampScalar(Kelvin, 700.0f, 5500.0f);
     // Physically calibrated Planckian chromaticity + T^4 Stefan-Boltzmann scaling normalised at 1500 K.
@@ -224,7 +293,7 @@ std::array<float, 3> PlumeFluidDivision::EvaluateBlackbodyRadiance(float Kelvin)
     return { LinR * Power, LinG * Power, LinB * Power };
 }
 
-float PlumeFluidDivision::EvaluateDetailFieldSample(
+float PlumeFluidExtension::EvaluateDetailFieldSample(
     const std::array<float, 3>& WorldPosition,
     const std::array<float, 3>& LocalVelocity,
     float                       ElapsedSeconds,
@@ -290,7 +359,7 @@ float PlumeFluidDivision::EvaluateDetailFieldSample(
 //                                              VEHICLE TELEMETRY INTAKE
 //------------------------------------------------------------------------------------------------------------------------
 
-void PlumeFluidDivision::IngestVehicleTelemetry(
+void PlumeFluidExtension::IngestVehicleTelemetry(
     const std::array<float, 3>&               VehiclePosition,
     const std::array<PlumeWheelTelemetry, 4>& Wheels,
     float                                     StepSeconds) noexcept
@@ -303,7 +372,7 @@ void PlumeFluidDivision::IngestVehicleTelemetry(
     for (std::size_t W = 0u; W < 4u; ++W)
     {
         const PlumeWheelTelemetry& Wheel = Wheels[W];
-        WheelOnsetState&           Onset = WheelOnsets_[W];
+        WheelOnsetEnvelope&        Onset = WheelOnsets_[W];
 
         const bool SlipEligible = Wheel.Grounded && !Wheel.Shredded &&
                                   (std::fabs(Wheel.SurfaceSlipSpeed) >= MinimumSlipSpeed || Wheel.SlidingPowerWatts >= SourcePowerOnset);
@@ -407,7 +476,7 @@ void PlumeFluidDivision::IngestVehicleTelemetry(
     }
 }
 
-void PlumeFluidDivision::AppendTransientPlumeSource(
+void PlumeFluidExtension::AppendTransientPlumeSource(
     const std::array<float, 3>& Position,
     float                       Radius,
     const std::array<float, 3>& Velocity,
@@ -431,7 +500,7 @@ void PlumeFluidDivision::AppendTransientPlumeSource(
 //                                              SIMULATION TRANSPORT & PRESSURE
 //------------------------------------------------------------------------------------------------------------------------
 
-void PlumeFluidDivision::InjectVelocityFieldForTesting(const std::vector<float>& VelocityRgba)
+void PlumeFluidExtension::InjectVelocityFieldForTesting(const std::vector<float>& VelocityRgba)
 {
     if (VelocityRgba.size() == VelocityCurrent_.size())
     {
@@ -439,7 +508,7 @@ void PlumeFluidDivision::InjectVelocityFieldForTesting(const std::vector<float>&
     }
 }
 
-void PlumeFluidDivision::ProjectPressureOnlyForTesting(PlumeDiagnostics& OutMetrics)
+void PlumeFluidExtension::ProjectPressureOnlyForTesting(PlumeDiagnostics& OutMetrics)
 {
     const std::int32_t Nx = static_cast<std::int32_t>(VelocityExtent_[0]);
     const std::int32_t Ny = static_cast<std::int32_t>(VelocityExtent_[1]);
@@ -709,7 +778,7 @@ void PlumeFluidDivision::ProjectPressureOnlyForTesting(PlumeDiagnostics& OutMetr
     OutMetrics.RmsDivergenceAfter = MeasureCollocatedFaceFluxDivRms();
 }
 
-PlumeDiagnostics PlumeFluidDivision::AdvanceSimulation(
+PlumeDiagnostics PlumeFluidExtension::AdvanceSimulation(
     const std::array<float, 3>& AnchorPosition,
     const std::array<float, 3>& SunDirection,
     float                       StepSeconds)
@@ -886,7 +955,9 @@ PlumeDiagnostics PlumeFluidDivision::AdvanceSimulation(
             {
                 const float Px = WorldMinX + (static_cast<float>(X) + 0.5f) * CoarseCellMetres_;
                 const std::size_t I4 = CoarseIdx(X, Y, Z) * 4u;
-                if (Pz < 0.0f)
+                std::array<float, 3> WakeVel = { 0.0f, 0.0f, 0.0f };
+                float                WakeMix = 0.0f;
+                if (Pz < 0.0f || PointInsideSolidObstacles(Px, Py, Pz, &WakeVel, &WakeMix))
                 {
                     VelocityScratch_[I4 + 0u] = 0.0f;
                     VelocityScratch_[I4 + 1u] = 0.0f;
@@ -900,6 +971,13 @@ PlumeDiagnostics PlumeFluidDivision::AdvanceSimulation(
                 float Ux = Wind[0] + (Adv[0] - Wind[0]) * Footprint_.Retention[3];
                 float Uy = Wind[1] + (Adv[1] - Wind[1]) * Footprint_.Retention[3];
                 float Uz = Wind[2] + (Adv[2] - Wind[2]) * Footprint_.Retention[3];
+                if (WakeMix > 0.0f)
+                {
+                    const float Couple = ClampScalar(WakeMix * 0.72f, 0.0f, 1.0f);
+                    Ux += (WakeVel[0] - Ux) * Couple;
+                    Uy += (WakeVel[1] - Uy) * Couple;
+                    Uz += (WakeVel[2] - Uz) * Couple;
+                }
 
                 const auto Thermo = SampleTrilinear(ThermoCurrent_, Tx, Ty, Tz, PriorMinX, PriorMinY, FineCellMetres_, Px, Py, Pz);
                 const float Lift  = Footprint_.Forces[0] * Thermo[1] / (1.0f + 0.125f * Thermo[1]);
@@ -1034,7 +1112,7 @@ PlumeDiagnostics PlumeFluidDivision::AdvanceSimulation(
             {
                 const float Px = WorldMinX + (static_cast<float>(X) + 0.5f) * FineCellMetres_;
                 const std::size_t I4 = FineIdx(X, Y, Z) * 4u;
-                if (Pz < 0.0f)
+                if (Pz < 0.0f || PointInsideSolidObstacles(Px, Py, Pz))
                 {
                     ThermoScratch_[I4 + 0u] = ThermoScratch_[I4 + 1u] = ThermoScratch_[I4 + 2u] = ThermoScratch_[I4 + 3u] = 0.0f;
                     continue;
@@ -1206,7 +1284,7 @@ PlumeDiagnostics PlumeFluidDivision::AdvanceSimulation(
 //                                           SINGLE-RAY & VIEW VOLUME MARCHING
 //------------------------------------------------------------------------------------------------------------------------
 
-std::array<float, 4> PlumeFluidDivision::EvaluatePlumeRay(
+std::array<float, 4> PlumeFluidExtension::EvaluatePlumeRay(
     const std::array<float, 3>& Origin,
     const std::array<float, 3>& Direction,
     float                       MaxDistance,
@@ -1483,7 +1561,189 @@ std::array<float, 4> PlumeFluidDivision::EvaluatePlumeRay(
     return { Radiance[0], Radiance[1], Radiance[2], Transmittance };
 }
 
-void PlumeFluidDivision::MarchVolumeView(
+float PlumeFluidExtension::EvaluateShadowTransmittance(
+    const std::array<float, 3>& Origin,
+    const std::array<float, 3>& Direction,
+    float                       MaxDistance) const noexcept
+{
+    if (CoverageLow_[0] > CoverageHigh_[0] || MaxDistance <= 1.0e-4f)
+    {
+        return 1.0f;
+    }
+
+    const float WorldMinX = static_cast<float>(OriginXY_[0]) * CoarseCellMetres_;
+    const float WorldMinY = static_cast<float>(OriginXY_[1]) * CoarseCellMetres_;
+    const std::array<float, 3> BoxMin = {
+        WorldMinX + static_cast<float>(CoverageLow_[0]) * FineCellMetres_,
+        WorldMinY + static_cast<float>(CoverageLow_[1]) * FineCellMetres_,
+        FloorWorldZ + static_cast<float>(CoverageLow_[2]) * FineCellMetres_
+    };
+    const std::array<float, 3> BoxMax = {
+        WorldMinX + static_cast<float>(CoverageHigh_[0] + 1) * FineCellMetres_,
+        WorldMinY + static_cast<float>(CoverageHigh_[1] + 1) * FineCellMetres_,
+        FloorWorldZ + static_cast<float>(CoverageHigh_[2] + 1) * FineCellMetres_
+    };
+
+    float TEnter = 0.0f;
+    float TExit  = MaxDistance;
+    for (int Axis = 0; Axis < 3; ++Axis)
+    {
+        const float D = Direction[static_cast<std::size_t>(Axis)];
+        if (std::abs(D) < 1.0e-7f)
+        {
+            if (Origin[static_cast<std::size_t>(Axis)] < BoxMin[static_cast<std::size_t>(Axis)] ||
+                Origin[static_cast<std::size_t>(Axis)] > BoxMax[static_cast<std::size_t>(Axis)])
+            {
+                return 1.0f;
+            }
+        }
+        else
+        {
+            const float InvD = 1.0f / D;
+            float T0 = (BoxMin[static_cast<std::size_t>(Axis)] - Origin[static_cast<std::size_t>(Axis)]) * InvD;
+            float T1 = (BoxMax[static_cast<std::size_t>(Axis)] - Origin[static_cast<std::size_t>(Axis)]) * InvD;
+            if (T0 > T1) std::swap(T0, T1);
+            TEnter = std::max(TEnter, T0);
+            TExit  = std::min(TExit,  T1);
+            if (TExit <= TEnter)
+            {
+                return 1.0f;
+            }
+        }
+    }
+
+    const std::int32_t Tx = static_cast<std::int32_t>(ThermoExtent_[0]);
+    const std::int32_t Ty = static_cast<std::int32_t>(ThermoExtent_[1]);
+    const std::int32_t Tz = static_cast<std::int32_t>(ThermoExtent_[2]);
+    const float Span      = TExit - TEnter;
+    const int   Steps     = std::clamp(static_cast<int>(std::ceil(Span / (1.15f * FineCellMetres_))), 1, 32);
+    const float Dt        = Span / static_cast<float>(Steps);
+
+    float OpticalDepth = 0.0f;
+    for (int S = 0; S < Steps; ++S)
+    {
+        const float T  = TEnter + (static_cast<float>(S) + 0.5f) * Dt;
+        const float Px = Origin[0] + Direction[0] * T;
+        const float Py = Origin[1] + Direction[1] * T;
+        const float Pz = Origin[2] + Direction[2] * T;
+        const float Gx = (Px - WorldMinX) / FineCellMetres_ - 0.5f;
+        const float Gy = (Py - WorldMinY) / FineCellMetres_ - 0.5f;
+        const float Gz = (Pz - FloorWorldZ) / FineCellMetres_ - 0.5f;
+        const std::int32_t Ix = std::clamp(static_cast<std::int32_t>(std::lround(Gx)), 0, Tx - 1);
+        const std::int32_t Iy = std::clamp(static_cast<std::int32_t>(std::lround(Gy)), 0, Ty - 1);
+        const std::int32_t Iz = std::clamp(static_cast<std::int32_t>(std::lround(Gz)), 0, Tz - 1);
+        const std::size_t  I4 = ((static_cast<std::size_t>(Iz) * static_cast<std::size_t>(Ty) +
+                                  static_cast<std::size_t>(Iy)) * static_cast<std::size_t>(Tx) +
+                                  static_cast<std::size_t>(Ix)) * 4u;
+        const float Smoke = ThermoCurrent_[I4 + 0u];
+        const float Soot  = ThermoCurrent_[I4 + 3u];
+        OpticalDepth += (Smoke * Parameters_.SmokeExtinction + Soot * Parameters_.SootExtinction) * Dt;
+        if (OpticalDepth > 8.0f)
+        {
+            return 0.0f;
+        }
+    }
+    return std::exp(-OpticalDepth);
+}
+
+std::array<float, 3> PlumeFluidExtension::EvaluateSceneIllumination(
+    const std::array<float, 3>& ReceiverPosition,
+    const std::array<float, 3>& ReceiverNormal) const noexcept
+{
+    std::array<float, 3> Irradiance = { 0.0f, 0.0f, 0.0f };
+
+    // 1. Active PlumeFireLightRecord point lobes (windowed inverse-square + self-plume soot attenuation).
+    const std::uint32_t ActiveFires = std::min(FireLights_.Count[0], 4u);
+    for (std::uint32_t I = 0u; I < ActiveFires; ++I)
+    {
+        const float Dx    = FireLights_.PositionRadius[I][0] - ReceiverPosition[0];
+        const float Dy    = FireLights_.PositionRadius[I][1] - ReceiverPosition[1];
+        const float Dz    = FireLights_.PositionRadius[I][2] - ReceiverPosition[2];
+        const float Dist2 = Dx * Dx + Dy * Dy + Dz * Dz;
+        constexpr float Reach = 18.0f;
+        if (Dist2 >= Reach * Reach || Dist2 <= 1.0e-6f)
+        {
+            continue;
+        }
+        const float Dist  = std::sqrt(Dist2);
+        const std::array<float, 3> Dir = { Dx / Dist, Dy / Dist, Dz / Dist };
+        const float CosTheta = ReceiverNormal[0] * Dir[0] + ReceiverNormal[1] * Dir[1] + ReceiverNormal[2] * Dir[2];
+        if (CosTheta <= 0.0f)
+        {
+            continue;
+        }
+        const float SoftR  = std::max(FireLights_.PositionRadius[I][3], 0.28f);
+        const float Ratio2 = Dist2 / (Reach * Reach);
+        const float Window = (1.0f - Ratio2) * (1.0f - Ratio2);
+        const float PlumeT = (Dist > 1.2f)
+            ? (0.35f + 0.65f * EvaluateShadowTransmittance(ReceiverPosition, Dir, Dist - 0.6f))
+            : 1.0f;
+        const float Scale  = CosTheta * Window * PlumeT / (Dist2 + SoftR * SoftR);
+        Irradiance[0] += FireLights_.Radiance[I][0] * Scale;
+        Irradiance[1] += FireLights_.Radiance[I][1] * Scale;
+        Irradiance[2] += FireLights_.Radiance[I][2] * Scale;
+    }
+
+    // 2. Volumetric incandescent gas pockets (when transient explosions/flames burn in ThermoCurrent_ without wheel fire).
+    if (Diagnostics_.PeakFlameScalar > 0.04f && CoverageLow_[0] <= CoverageHigh_[0])
+    {
+        const float WorldMinX = static_cast<float>(OriginXY_[0]) * CoarseCellMetres_;
+        const float WorldMinY = static_cast<float>(OriginXY_[1]) * CoarseCellMetres_;
+        const std::int32_t Tx = static_cast<std::int32_t>(ThermoExtent_[0]);
+        const std::int32_t Ty = static_cast<std::int32_t>(ThermoExtent_[1]);
+        const float CellVol   = FineCellMetres_ * FineCellMetres_ * FineCellMetres_;
+
+        // Stride by 2 across active reaction bounds for bounded O(1)-fast hot-gas lighting!
+        for (std::int32_t Z = CoverageLow_[2]; Z <= CoverageHigh_[2]; Z += 2)
+        {
+            const float Pz = FloorWorldZ + (static_cast<float>(Z) + 0.5f) * FineCellMetres_;
+            for (std::int32_t Y = CoverageLow_[1]; Y <= CoverageHigh_[1]; Y += 2)
+            {
+                const float Py = WorldMinY + (static_cast<float>(Y) + 0.5f) * FineCellMetres_;
+                for (std::int32_t X = CoverageLow_[0]; X <= CoverageHigh_[0]; X += 2)
+                {
+                    const std::size_t I4 = ((static_cast<std::size_t>(Z) * static_cast<std::size_t>(Ty) +
+                                             static_cast<std::size_t>(Y)) * static_cast<std::size_t>(Tx) +
+                                             static_cast<std::size_t>(X)) * 4u;
+                    const float Flame = ThermoCurrent_[I4 + 2u];
+                    const float Heat  = ThermoCurrent_[I4 + 1u];
+                    if (Flame < 0.06f && Heat < 90.0f)
+                    {
+                        continue;
+                    }
+                    const float Px    = WorldMinX + (static_cast<float>(X) + 0.5f) * FineCellMetres_;
+                    const float Dx    = Px - ReceiverPosition[0];
+                    const float Dy    = Py - ReceiverPosition[1];
+                    const float Dz    = Pz - ReceiverPosition[2];
+                    const float Dist2 = Dx * Dx + Dy * Dy + Dz * Dz;
+                    if (Dist2 > 196.0f || Dist2 < 1.0e-5f)
+                    {
+                        continue;
+                    }
+                    const float Dist     = std::sqrt(Dist2);
+                    const float CosTheta = (ReceiverNormal[0] * Dx + ReceiverNormal[1] * Dy + ReceiverNormal[2] * Dz) / Dist;
+                    if (CosTheta <= 0.0f)
+                    {
+                        continue;
+                    }
+                    const float Kelvin = Parameters_.FlameTipKelvin +
+                                         (Parameters_.FlameCoreKelvin - Parameters_.FlameTipKelvin) *
+                                             ClampScalar(Flame, 0.0f, 1.0f);
+                    const auto Bb      = EvaluateBlackbodyRadiance(Kelvin);
+                    const float Weight = (8.0f * CellVol) * Parameters_.FlameRadianceScale * 0.14f *
+                                         ClampScalar(Flame + 0.002f * Heat, 0.0f, 2.0f) * CosTheta / (Dist2 + 0.35f);
+                    Irradiance[0] += Bb[0] * Weight;
+                    Irradiance[1] += Bb[1] * Weight;
+                    Irradiance[2] += Bb[2] * Weight;
+                }
+            }
+        }
+    }
+
+    return Irradiance;
+}
+
+void PlumeFluidExtension::MarchVolumeView(
     const PlumeCameraView& View,
     const float*           OpaqueDistanceMetres,
     std::vector<float>&    OutPremultipliedRgba) const

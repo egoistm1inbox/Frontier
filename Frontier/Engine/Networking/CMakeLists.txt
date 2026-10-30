@@ -4,7 +4,7 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
 endif()
 
 add_library(FrontierNetworking STATIC
-    ReplicationDivision.cpp)
+    ReplicationExtension.cpp)
 target_compile_features(FrontierNetworking PUBLIC cxx_std_17)
 target_include_directories(FrontierNetworking PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/../..")
 if(MSVC)

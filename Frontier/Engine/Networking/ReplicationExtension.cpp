@@ -1,9 +1,9 @@
 /*==========================================================================================================================================
-                                                    REPLICATIONDIVISION.CPP
+                                                    REPLICATIONEXTENSION.CPP
 ==========================================================================================================================================*/
 // 🧩 Engine-wide multiplayer replication implementation.
 
-#include "Engine/Networking/ReplicationDivision.h"
+#include "Engine/Networking/ReplicationExtension.h"
 
 #include <algorithm>
 #include <cmath>

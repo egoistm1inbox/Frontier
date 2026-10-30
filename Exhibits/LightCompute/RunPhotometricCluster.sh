@@ -44,7 +44,7 @@ mkdir -p "$BUILD" "$MED_OUT" "$REP_OUT" "$OUTPUT" "$(dirname "$RESULTS")"
     "$SLANG" -version
 
     sha256sum \
-        Frontier/Engine/Rendering/{CMakeLists.txt,PhotometricClusterDivision.h,PhotometricClusterDivision.cpp,AtmosphereModel.h,AtmosphereModel.cpp,CelestialModel.h,CelestialModel.cpp,CloudField.h,CloudField.cpp,FogMedium.h,FogMedium.cpp,LensFlareModel.h,SolarOpticsPayload.h,PathReplayVulkan.h,PathReplayVulkan.cpp} \
+        Frontier/Engine/Rendering/{CMakeLists.txt,PhotometricClusterExtension.h,PhotometricClusterExtension.cpp,AtmosphereModel.h,AtmosphereModel.cpp,CelestialModel.h,CelestialModel.cpp,CloudField.h,CloudField.cpp,FogMedium.h,FogMedium.cpp,LensFlareModel.h,SolarOpticsPayload.h,PathReplayVulkan.h,PathReplayVulkan.cpp} \
         Frontier/Engine/Rendering/Shaders/{PhotometricLuminaire.slang,LightInfluence.slang,SolarOptics.slang,PathReplayReservoir.slang} \
         Exhibits/LightCompute/{CMakeLists.txt,RunPhotometricCluster.sh} \
         Exhibits/LightCompute/Code/{PhotometricClusterValidation.cpp,PhotometricClusterGpuValidation.h,LightComputeValidation.cpp}

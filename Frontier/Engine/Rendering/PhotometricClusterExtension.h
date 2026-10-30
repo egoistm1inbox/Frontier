@@ -1,5 +1,5 @@
 /*==========================================================================================================================================
-                                                 PHOTOMETRICCLUSTERDIVISION.H
+                                                 PHOTOMETRICCLUSTEREXTENSION.H
 ==========================================================================================================================================*/
 // 🧩 Conservative cone-sphere-box analytic luminaire clustering and O(1) alias-accelerated radiant facet importance grids.
 
@@ -120,7 +120,7 @@ struct CompiledPhotometricAtlas
 // 📝 Extracts exact active polar cosine bound from Spot cutoff and Type-C LM-63 non-zero candela support.
 [[nodiscard]] double ExtractActivePolarCosineBound(const AnalyticLuminaireSpecification& Specification);
 
-class PhotometricClusterDivision
+class PhotometricClusterExtension
 {
   public:
     void Partition(const std::vector<AnalyticLuminaireSpecification>& AnalyticLuminaires,

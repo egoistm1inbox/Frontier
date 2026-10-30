@@ -1,0 +1,31 @@
+cmake_minimum_required(VERSION 3.20)
+
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+
+# 📝 Shared 3D Wind & Force-Field toroidal lattice + Cloud-Gated Vose-Alias budgeted weather/debris particle spawner.
+if(NOT TARGET FrontierWindForceField)
+    add_library(FrontierWindForceField STATIC WindForceFieldExtension.cpp)
+    target_compile_features(FrontierWindForceField PUBLIC cxx_std_20)
+    target_link_libraries(FrontierWindForceField PUBLIC FrontierAtmosphericOptics FrontierPlumeFluid)
+    target_include_directories(FrontierWindForceField PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/../..")
+    if(MSVC)
+        target_compile_options(FrontierWindForceField PRIVATE /utf-8 /W4)
+    else()
+        target_compile_options(FrontierWindForceField PRIVATE -Wall -Wextra -Werror)
+    endif()
+endif()
+
+# 📝 Single-PolygonSurface snowpack & hail accumulation, Snow Pit rut carving, Stefan melt, and Lightning & Thunder.
+if(NOT TARGET FrontierSnowLightningEnvironment)
+    add_library(FrontierSnowLightningEnvironment STATIC
+        SnowpackAccumulationExtension.cpp
+        LightningThunderExtension.cpp)
+    target_compile_features(FrontierSnowLightningEnvironment PUBLIC cxx_std_20)
+    target_link_libraries(FrontierSnowLightningEnvironment PUBLIC FrontierWindForceField FrontierShallowWaterMud)
+    target_include_directories(FrontierSnowLightningEnvironment PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/../..")
+    if(MSVC)
+        target_compile_options(FrontierSnowLightningEnvironment PRIVATE /utf-8 /W4)
+    else()
+        target_compile_options(FrontierSnowLightningEnvironment PRIVATE -Wall -Wextra -Werror)
+    endif()
+endif()

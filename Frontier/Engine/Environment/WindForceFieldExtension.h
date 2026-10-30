@@ -1,5 +1,5 @@
 /*==========================================================================================================================================
-                                                    WINDFORCEFIELDDIVISION.H
+                                                    WINDFORCEFIELDEXTENSION.H
 ==========================================================================================================================================*/
 // 🧩 Shared 3D Wind & Force-Field toroidal lattice driving Clouds, Fog, PlumeFluid, Vehicle Aero, and Cloud-Gated Weather Particles.
 
@@ -7,7 +7,7 @@
 
 #include "Engine/Rendering/CloudField.h"
 #include "Engine/Rendering/FogMedium.h"
-#include "Engine/Rendering/PlumeFluidDivision.h"
+#include "Engine/Fluid/PlumeFluidExtension.h"
 #include "Engine/Rendering/WeatherEffects.h"
 
 #include <array>
@@ -54,7 +54,7 @@ struct WindFieldConfiguration
     double        CurlSpatialScaleM       = 14.0;              // [m]
 };
 
-class WindForceFieldDivision
+class WindForceFieldExtension
 {
 public:
     static constexpr std::uint32_t LatticeDimX        = 32u;
@@ -62,7 +62,7 @@ public:
     static constexpr std::uint32_t LatticeDimZ        = 16u;
     static constexpr std::size_t   MaxForcePrimitives = 16u;
 
-    explicit WindForceFieldDivision(const WindFieldConfiguration& Config = {});
+    explicit WindForceFieldExtension(const WindFieldConfiguration& Config = {});
 
     void Reconfigure(const WindFieldConfiguration& Config);
     void ClearForcePrimitives() noexcept;
@@ -155,32 +155,46 @@ public:
     void Reconfigure(const WeatherParticleBudgetConfig& Config);
 
     // Rebuilds 32x32 wind-slanted overhead CloudField column weights + Vose O(1) Alias Table, then advances
-    // all active particles under WindForceFieldDivision drag, turbulence, and ballistic ground rebound!
+    // all active particles under WindForceFieldExtension drag, turbulence, and ballistic ground rebound!
     CloudGatedSpawnerTelemetry StepParticles(
         const CloudParameters&        Clouds,
-        const WindForceFieldDivision& WindField,
+        const WindForceFieldExtension& WindField,
         SpatialVector                 AnchorPosition,
         double                        StepSeconds);
 
     // Evaluates exact overhead cloud optical depth at the wind-slanted source above WorldPoint (used for verification!).
     [[nodiscard]] double MeasureSlantedCloudOpticalDepth(
         const CloudParameters&        Clouds,
-        const WindForceFieldDivision& WindField,
+        const WindForceFieldExtension& WindField,
         SpatialVector                 WorldPoint) const noexcept;
 
+    [[nodiscard]] const WeatherParticleBudgetConfig&        Configuration() const noexcept { return Config_; }
     [[nodiscard]] const std::vector<WeatherParticleRecord>& Particles() const noexcept { return Pool_; }
     [[nodiscard]] const CloudGatedSpawnerTelemetry&         Telemetry() const noexcept { return Telemetry_; }
     [[nodiscard]] const std::array<float, ColumnCellCount>& ColumnOpticalDepths() const noexcept { return ColumnOpticalDepth_; }
 
+    // Retires an airborne flake or settled hail pellet immediately once fused into a contiguous PolygonSurface.
+    void RetireParticleSlot(std::size_t SlotIndex) noexcept
+    {
+        if (SlotIndex < Pool_.size() && Pool_[SlotIndex].Alive)
+        {
+            Pool_[SlotIndex].Alive = false;
+            if (Telemetry_.CurrentAliveParticles > 0u)
+            {
+                --Telemetry_.CurrentAliveParticles;
+            }
+        }
+    }
+
 private:
     void RebuildCloudColumnAliasTable(
         const CloudParameters&        Clouds,
-        const WindForceFieldDivision& WindField,
+        const WindForceFieldExtension& WindField,
         SpatialVector                 AnchorPosition) noexcept;
 
     bool RespawnParticleFromCloudAlias(
         WeatherParticleRecord&        Particle,
-        const WindForceFieldDivision& WindField,
+        const WindForceFieldExtension& WindField,
         SpatialVector                 AnchorPosition) noexcept;
 
     [[nodiscard]] double NextUniform01() noexcept;

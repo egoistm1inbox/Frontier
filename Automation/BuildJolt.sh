@@ -27,7 +27,7 @@ done
 ScriptRoot="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 RepositoryRoot="$(cd "$ScriptRoot/.." && pwd)"
 JoltVersion='5.6.0'
-JoltRoot="$RepositoryRoot/ExternalPackages/jolt"
+JoltRoot="${FRONTIER_JOLT_ROOT:-$RepositoryRoot/ExternalPackages/jolt}"
 BuildRoot="$JoltRoot/_build/$Configuration"
 OutputRoot="$JoltRoot/lib/$Configuration"
 Archive="$OutputRoot/libJolt.a"
@@ -135,15 +135,18 @@ export CXX BuildRoot
 FlagsSerialised="$(printf '%q ' "${Flags[@]}")"
 export FlagsSerialised
 
-printf '%s\0' "${Stale[@]}" | xargs -0 -n 1 -P "$JOBS" bash -c '
-    eval "Flags=($FlagsSerialised)"
-    Stem="$(basename "$0" .cpp)"
-    if ! "$CXX" "${Flags[@]}" -o "$BuildRoot/$Stem.o" "$0"
-    then
-        echo "[FAILED]   $0" >&2
-        exit 255
-    fi
-'
+if [ "${#Stale[@]}" -gt 0 ]
+then
+    printf '%s\0' "${Stale[@]}" | xargs -0 -n 1 -P "$JOBS" bash -c '
+        eval "Flags=($FlagsSerialised)"
+        Stem="$(basename "$0" .cpp)"
+        if ! "$CXX" "${Flags[@]}" -o "$BuildRoot/$Stem.o" "$0"
+        then
+            echo "[FAILED]   $0" >&2
+            exit 255
+        fi
+    '
+fi
 
 #------------------------------------------------------------------------------------------------------------------------
 #                                                       ARCHIVING

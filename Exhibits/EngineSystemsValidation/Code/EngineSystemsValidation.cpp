@@ -5,15 +5,15 @@
 //    Turbo/Supercharger/BEV/Hybrid Propulsion, Cloud-Gated Budgeted Weather + Wind Force-Field, FP1 Networking, FrameGraph/TaskGraph & Audio.
 
 #include "Engine/Audio/AudioFoundation.h"
-#include "Engine/Networking/ReplicationDivision.h"
+#include "Engine/Networking/ReplicationExtension.h"
 #include "Engine/Physics/TyreThermalSolver.h"
 #include "Engine/Physics/VehiclePropulsion/CalibratedTyreThermodynamics.h"
 #include "Engine/Physics/VehiclePropulsion/HybridElectricPropulsion.h"
 #include "Engine/Physics/VehiclePropulsion/PropulsionThermochemistry.h"
 #include "Engine/Rendering/FrameGraphExecution.h"
-#include "Engine/Rendering/PlumeFluidDivision.h"
-#include "Engine/Rendering/WindForceFieldDivision.h"
-#include "Engine/Threading/TaskGraphDivision.h"
+#include "Engine/Fluid/PlumeFluidExtension.h"
+#include "Engine/Environment/WindForceFieldExtension.h"
+#include "Engine/Threading/TaskGraphExtension.h"
 
 #include "Projects/Project-Drive/Source/DriveSimulation.h"
 #include "TransportCodec.h" // Project-Networking wire codec parity check!
@@ -63,12 +63,12 @@ void VerifyPlumeAndSmokePhysics()
     MassParams.WindSpeed        = 0.5f;
     MassParams.Buoyancy         = 0.8f;
 
-    PlumeFluidDivision MassPlume(MassParams);
+    PlumeFluidExtension MassPlume(MassParams);
     const std::array<float, 3> SunDir = { 0.45f, -0.35f, 0.82f };
     MassPlume.AppendTransientPlumeSource({ 0.0f, 0.0f, 1.8f }, 0.85f, { 0.2f, 0.0f, 0.5f }, 40.0f, 12.0f, 0.0f, 0.0f);
     (void)MassPlume.AdvanceSimulation({ 0.0f, 0.0f, 0.0f }, SunDir, 1.0f / 60.0f);
 
-    auto IntegrateSmokeMassAndMin = [](const PlumeFluidDivision& Plume, double& OutMinVal, double& OutCentroidZ) -> double
+    auto IntegrateSmokeMassAndMin = [](const PlumeFluidExtension& Plume, double& OutMinVal, double& OutCentroidZ) -> double
     {
         const auto& Thermo = Plume.ThermoData();
         const auto  Ext    = Plume.ThermoExtent();
@@ -125,8 +125,8 @@ void VerifyPlumeAndSmokePhysics()
     BuoyParams.Buoyancy        = 2.60f;
     BuoyParams.ParticulateFall = 0.35f;
 
-    PlumeFluidDivision ColdPlume(BuoyParams);
-    PlumeFluidDivision HotPlume(BuoyParams);
+    PlumeFluidExtension ColdPlume(BuoyParams);
+    PlumeFluidExtension HotPlume(BuoyParams);
     for (int Step = 0; Step < 30; ++Step)
     {
         ColdPlume.AppendTransientPlumeSource({ 0.0f, 0.0f, 1.6f }, 0.65f, { 0.0f, 0.0f, 0.0f }, 25.0f,   0.0f, 0.0f, 0.0f);
@@ -148,8 +148,8 @@ void VerifyPlumeAndSmokePhysics()
     PlumeFluidParameters MacAdv    = LegacyAdv;
     MacAdv.Variant      = PlumeSolverVariant::ProductionUpgraded;
 
-    PlumeFluidDivision LegacySim(LegacyAdv);
-    PlumeFluidDivision MacSim(MacAdv);
+    PlumeFluidExtension LegacySim(LegacyAdv);
+    PlumeFluidExtension MacSim(MacAdv);
     LegacySim.AppendTransientPlumeSource({ -2.0f, 0.0f, 2.0f }, 0.55f, { 0.0f, 0.0f, 0.0f }, 55.0f, 0.0f, 0.0f, 0.0f);
     MacSim.AppendTransientPlumeSource   ({ -2.0f, 0.0f, 2.0f }, 0.55f, { 0.0f, 0.0f, 0.0f }, 55.0f, 0.0f, 0.0f, 0.0f);
     for (int Step = 0; Step < 20; ++Step)
@@ -489,7 +489,7 @@ void VerifyCloudGatedWeatherAndWindField()
 
     WindFieldConfiguration WindCfg{};
     WindCfg.AmbientReferenceWindMps = { 6.5, 2.2, 0.0 };
-    WindForceFieldDivision WindField(WindCfg);
+    WindForceFieldExtension WindField(WindCfg);
 
     ForceFieldPrimitive Vortex{};
     Vortex.Form             = ForcePrimitiveForm::VortexColumnUpdraft;
@@ -785,7 +785,7 @@ void VerifyTaskGraphFrameGraphAndAudio()
 
     std::vector<RecordedCommandPacket> Packets;
     std::atomic<std::uint64_t> RenderThreadRecordedUnits{ 0u };
-    DedicatedRenderThreadDivision RenderThread;
+    DedicatedRenderThreadExtension RenderThread;
     const bool RtStarted = RenderThread.Start([&](const RenderFrameEnvelope& Env)
     {
         std::vector<RecordedCommandPacket> LocalPackets;

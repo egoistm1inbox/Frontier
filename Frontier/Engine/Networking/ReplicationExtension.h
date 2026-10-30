@@ -1,5 +1,5 @@
 /*==========================================================================================================================================
-                                                     REPLICATIONDIVISION.H
+                                                     REPLICATIONEXTENSION.H
 ==========================================================================================================================================*/
 // 🧩 Engine-wide multiplayer replication: FP1 wire framing, 32-bit ack bitfields, smallest-three quaternions, generic delta snapshots,
 //    GRIT 48-byte vehicle quantization, cubic Hermite jitter interpolation, and client-side prediction/reconciliation.

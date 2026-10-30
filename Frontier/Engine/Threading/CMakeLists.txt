@@ -7,7 +7,7 @@ find_package(Threads REQUIRED)
 
 add_library(FrontierThreading STATIC
     WorkerPool.cpp
-    TaskGraphDivision.cpp)
+    TaskGraphExtension.cpp)
 target_compile_features(FrontierThreading PUBLIC cxx_std_17)
 target_include_directories(FrontierThreading PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/../..")
 target_link_libraries(FrontierThreading PUBLIC Threads::Threads)

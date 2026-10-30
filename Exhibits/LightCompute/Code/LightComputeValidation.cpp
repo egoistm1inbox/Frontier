@@ -14,7 +14,7 @@
 #include "Engine/Rendering/MediumRadiancePayload.h"
 #include "Engine/Rendering/SolarOpticsPayload.h"
 #include "Engine/Rendering/SolarSkyEnvironmentPayload.h"
-#include "Engine/Rendering/PhotometricClusterDivision.h"
+#include "Engine/Rendering/PhotometricClusterExtension.h"
 #include "Engine/Rendering/SolarDiscFilter.h"
 #include "Engine/Render/MaterialPreviewGeometry.h"
 #include "Engine/Render/ScatteringSequence.h"

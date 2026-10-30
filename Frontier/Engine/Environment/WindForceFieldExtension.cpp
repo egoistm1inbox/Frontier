@@ -1,9 +1,9 @@
 /*==========================================================================================================================================
-                                                   WINDFORCEFIELDDIVISION.CPP
+                                                   WINDFORCEFIELDEXTENSION.CPP
 ==========================================================================================================================================*/
 // 🧩 Shared 3D Wind & Force-Field toroidal lattice driving Clouds, Fog, PlumeFluid, Vehicle Aero, and Cloud-Gated Weather Particles.
 
-#include "Engine/Rendering/WindForceFieldDivision.h"
+#include "Engine/Environment/WindForceFieldExtension.h"
 
 #include <algorithm>
 #include <cmath>
@@ -78,12 +78,12 @@ SpatialVector EvaluateDivergenceFreeCurlEddy(SpatialVector Point, double TimeSec
 //                                            SHARED 3D WIND & FORCE-FIELD LATTICE
 //------------------------------------------------------------------------------------------------------------------------
 
-WindForceFieldDivision::WindForceFieldDivision(const WindFieldConfiguration& Config)
+WindForceFieldExtension::WindForceFieldExtension(const WindFieldConfiguration& Config)
 {
     Reconfigure(Config);
 }
 
-void WindForceFieldDivision::Reconfigure(const WindFieldConfiguration& Config)
+void WindForceFieldExtension::Reconfigure(const WindFieldConfiguration& Config)
 {
     Config_ = Config;
     Config_.HorizontalDomainExtentM = std::max(16.0, Config_.HorizontalDomainExtentM);
@@ -97,12 +97,12 @@ void WindForceFieldDivision::Reconfigure(const WindFieldConfiguration& Config)
     StepField(Anchor_, 0.0);
 }
 
-void WindForceFieldDivision::ClearForcePrimitives() noexcept
+void WindForceFieldExtension::ClearForcePrimitives() noexcept
 {
     Primitives_.clear();
 }
 
-void WindForceFieldDivision::AppendForcePrimitive(const ForceFieldPrimitive& Primitive) noexcept
+void WindForceFieldExtension::AppendForcePrimitive(const ForceFieldPrimitive& Primitive) noexcept
 {
     if (Primitives_.size() < MaxForcePrimitives)
     {
@@ -110,7 +110,7 @@ void WindForceFieldDivision::AppendForcePrimitive(const ForceFieldPrimitive& Pri
     }
 }
 
-void WindForceFieldDivision::RegisterVehicleWake(
+void WindForceFieldExtension::RegisterVehicleWake(
     SpatialVector ChassisPosition,
     SpatialVector ChassisVelocity,
     double        WakeRadiusM) noexcept
@@ -132,7 +132,7 @@ void WindForceFieldDivision::RegisterVehicleWake(
     AppendForcePrimitive(Wake);
 }
 
-SpatialVector WindForceFieldDivision::EvaluateAnalyticVelocity(SpatialVector WorldPoint) const noexcept
+SpatialVector WindForceFieldExtension::EvaluateAnalyticVelocity(SpatialVector WorldPoint) const noexcept
 {
     const double HeightAboveGround = std::max(0.05, WorldPoint.Z - Config_.GroundElevationM);
     const double Z0                = Config_.SurfaceRoughnessLengthM;
@@ -244,7 +244,7 @@ SpatialVector WindForceFieldDivision::EvaluateAnalyticVelocity(SpatialVector Wor
     return Total;
 }
 
-void WindForceFieldDivision::StepField(SpatialVector AnchorPosition, double StepSeconds) noexcept
+void WindForceFieldExtension::StepField(SpatialVector AnchorPosition, double StepSeconds) noexcept
 {
     Anchor_         = AnchorPosition;
     ElapsedSeconds_ += std::max(0.0, StepSeconds);
@@ -284,7 +284,7 @@ void WindForceFieldDivision::StepField(SpatialVector AnchorPosition, double Step
     }
 }
 
-SpatialVector WindForceFieldDivision::SampleWindVelocity(SpatialVector WorldPoint) const noexcept
+SpatialVector WindForceFieldExtension::SampleWindVelocity(SpatialVector WorldPoint) const noexcept
 {
     const double HalfSpan = 0.5 * Config_.HorizontalDomainExtentM;
     const double Ux = (WorldPoint.X - (Anchor_.X - HalfSpan)) / Config_.HorizontalDomainExtentM * static_cast<double>(LatticeDimX - 1u);
@@ -333,7 +333,7 @@ SpatialVector WindForceFieldDivision::SampleWindVelocity(SpatialVector WorldPoin
     return { Out[0], Out[1], Out[2] };
 }
 
-void WindForceFieldDivision::SynchronizeCloudAdvection(CloudParameters& InOutClouds, double StepSeconds) const noexcept
+void WindForceFieldExtension::SynchronizeCloudAdvection(CloudParameters& InOutClouds, double StepSeconds) const noexcept
 {
     const double MidCloudZ = 0.5 * (InOutClouds.BaseHeightM + InOutClouds.TopHeightM);
     const SpatialVector UpperWind = EvaluateAnalyticVelocity({ Anchor_.X, Anchor_.Y, MidCloudZ });
@@ -342,7 +342,7 @@ void WindForceFieldDivision::SynchronizeCloudAdvection(CloudParameters& InOutClo
     InOutClouds.WindTimeS += std::max(0.0, StepSeconds);
 }
 
-SpatialVector WindForceFieldDivision::EvaluateAdvectedFogSamplePoint(SpatialVector WorldPoint) const noexcept
+SpatialVector WindForceFieldExtension::EvaluateAdvectedFogSamplePoint(SpatialVector WorldPoint) const noexcept
 {
     const SpatialVector LocalWind = SampleWindVelocity(WorldPoint);
     // Bounded dual-phase advection offset keeps FogMedium density coherent while streaming around wakes!
@@ -354,7 +354,7 @@ SpatialVector WindForceFieldDivision::EvaluateAdvectedFogSamplePoint(SpatialVect
     };
 }
 
-void WindForceFieldDivision::SynchronizePlumeParameters(
+void WindForceFieldExtension::SynchronizePlumeParameters(
     PlumeFluidParameters& InOutPlume,
     SpatialVector         PlumeAnchor) const noexcept
 {
@@ -366,7 +366,7 @@ void WindForceFieldDivision::SynchronizePlumeParameters(
         : 0.0f;
 }
 
-SpatialVector WindForceFieldDivision::EvaluateRelativeVehicleAirflow(
+SpatialVector WindForceFieldExtension::EvaluateRelativeVehicleAirflow(
     SpatialVector ChassisPosition,
     SpatialVector ChassisVelocity) const noexcept
 {
@@ -421,7 +421,7 @@ double CloudGatedWeatherSpawner::NextUniform01() noexcept
 
 double CloudGatedWeatherSpawner::MeasureSlantedCloudOpticalDepth(
     const CloudParameters&        Clouds,
-    const WindForceFieldDivision& WindField,
+    const WindForceFieldExtension& WindField,
     SpatialVector                 WorldPoint) const noexcept
 {
     if (Clouds.Coverage <= 1.0e-5 && Clouds.UniformDensityOverride < 0.0)
@@ -462,7 +462,7 @@ double CloudGatedWeatherSpawner::MeasureSlantedCloudOpticalDepth(
 
 void CloudGatedWeatherSpawner::RebuildCloudColumnAliasTable(
     const CloudParameters&        Clouds,
-    const WindForceFieldDivision& WindField,
+    const WindForceFieldExtension& WindField,
     SpatialVector                 AnchorPosition) noexcept
 {
     const double HalfSpan  = 0.5 * Config_.SpawnVolumeHorizontalM;
@@ -585,7 +585,7 @@ void CloudGatedWeatherSpawner::RebuildCloudColumnAliasTable(
 
 bool CloudGatedWeatherSpawner::RespawnParticleFromCloudAlias(
     WeatherParticleRecord&        Particle,
-    const WindForceFieldDivision& WindField,
+    const WindForceFieldExtension& WindField,
     SpatialVector                 AnchorPosition) noexcept
 {
     if (!AliasValid_)
@@ -650,7 +650,7 @@ bool CloudGatedWeatherSpawner::RespawnParticleFromCloudAlias(
 
 CloudGatedSpawnerTelemetry CloudGatedWeatherSpawner::StepParticles(
     const CloudParameters&        Clouds,
-    const WindForceFieldDivision& WindField,
+    const WindForceFieldExtension& WindField,
     SpatialVector                 AnchorPosition,
     double                        StepSeconds)
 {

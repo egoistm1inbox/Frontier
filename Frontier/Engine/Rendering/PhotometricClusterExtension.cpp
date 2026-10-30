@@ -1,9 +1,9 @@
 /*==========================================================================================================================================
-                                                PHOTOMETRICCLUSTERDIVISION.CPP
+                                                PHOTOMETRICCLUSTEREXTENSION.CPP
 ==========================================================================================================================================*/
 // 🧩 Conservative cone-sphere-box analytic luminaire clustering and O(1) alias-accelerated radiant facet importance grids.
 
-#include "PhotometricClusterDivision.h"
+#include "PhotometricClusterExtension.h"
 #include "RadiantFacetDistribution.h"
 
 #include <algorithm>
@@ -419,7 +419,7 @@ bool EvaluatePolarConeBoxIntersection(SpatialVector ConeApex, double ReachRadius
 //                                           ANALYTIC CLUSTER DIVISION METHODS
 //------------------------------------------------------------------------------------------------------------------------
 
-void PhotometricClusterDivision::Partition(const std::vector<AnalyticLuminaireSpecification>& AnalyticLuminaires,
+void PhotometricClusterExtension::Partition(const std::vector<AnalyticLuminaireSpecification>& AnalyticLuminaires,
                                            const PhotometricClusterSpecification&             ClusterSpecification)
 {
     std::size_t CellCount = 0u;
@@ -462,7 +462,7 @@ void PhotometricClusterDivision::Partition(const std::vector<AnalyticLuminaireSp
                  : true);
     }
 
-    PhotometricClusterDivision Replacement;
+    PhotometricClusterExtension Replacement;
     Replacement.MinimumBoundary_ = ClusterSpecification.MinimumBoundary;
     Replacement.MaximumBoundary_ = ClusterSpecification.MaximumBoundary;
     Replacement.GridResolution_  = ClusterSpecification.GridResolution;
@@ -551,7 +551,7 @@ void PhotometricClusterDivision::Partition(const std::vector<AnalyticLuminaireSp
     *this = std::move(Replacement);
 }
 
-const std::vector<std::uint32_t>& PhotometricClusterDivision::RetrieveCandidates(SpatialVector QueryPoint,
+const std::vector<std::uint32_t>& PhotometricClusterExtension::RetrieveCandidates(SpatialVector QueryPoint,
                                                                                  bool* FallbackActivated) const
 {
     if (FallbackActivated != nullptr)
@@ -729,7 +729,7 @@ CompiledPhotometricAtlas CompilePhotometricClusterAtlas(
     AngleAtlas.insert(AngleAtlas.end(), GlobalDistribution.begin(), GlobalDistribution.end());
 
     // 2. Analytic luminaire footprints + deduplicated uniform candela grids + 3D cluster cell partition.
-    PhotometricClusterDivision Division;
+    PhotometricClusterExtension Division;
     Division.Partition(AnalyticLuminaires, ClusterSpecification);
     Compiled.ActiveCellAssignments = Division.TotalCellAssignments();
     Compiled.OverflowCellCount     = Division.OverflowCellTotal();

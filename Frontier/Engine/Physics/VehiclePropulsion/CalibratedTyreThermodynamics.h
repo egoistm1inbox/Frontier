@@ -99,7 +99,7 @@ struct CalibratedTyreWheelTelemetry
     double ForcedConvectionConductWK   = 14.0;    // [W/K]   instantaneous convective conductance to air
     double RadiativeCoolingWatts       = 0.0;     // [W]     Stefan-Boltzmann grey-body infrared loss
     double PyrolysisCoolingWatts       = 0.0;     // [W]     endothermic smoke vaporization cooling
-    double SmokeVaporReleaseKgPerSec   = 0.0;     // [kg/s]  physical rubber vapor rate feeding PlumeFluidDivision!
+    double SmokeVaporReleaseKgPerSec   = 0.0;     // [kg/s]  physical rubber vapor rate feeding PlumeFluidExtension!
     double ThermalGripMultiplier       = 1.0;     // [-]     viscoelastic temperature * pressure grip factor
     double AquaplaningGripMultiplier   = 1.0;     // [-]     [0.08..1.0] wet hydroplaning lift attenuation
     double CombinedGripMultiplier      = 1.0;     // [-]     ThermalGripMultiplier * AquaplaningGripMultiplier

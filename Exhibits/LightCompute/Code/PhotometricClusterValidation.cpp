@@ -10,7 +10,7 @@
 #include "Engine/Rendering/LensFlareModel.h"
 #include "Engine/Rendering/PathReplaySubmissionSequence.h"
 #include "Engine/Rendering/PathReplayVulkan.h"
-#include "Engine/Rendering/PhotometricClusterDivision.h"
+#include "Engine/Rendering/PhotometricClusterExtension.h"
 #include "Engine/Rendering/SolarOpticsPayload.h"
 #include "Engine/Rendering/WeatherEffects.h"
 
@@ -194,8 +194,8 @@ void ValidateAnalyticTightConeClustering()
     PhotometricClusterSpecification TightSpec = LegacySpec;
     TightSpec.CullingMode                     = ClusterCullingMode::TightPolarCone;
 
-    PhotometricClusterDivision LegacyDivision;
-    PhotometricClusterDivision TightDivision;
+    PhotometricClusterExtension LegacyDivision;
+    PhotometricClusterExtension TightDivision;
     LegacyDivision.Partition(Luminaires, LegacySpec);
     TightDivision.Partition(Luminaires, TightSpec);
 

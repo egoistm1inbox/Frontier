@@ -1,7 +1,7 @@
 /*==========================================================================================================================================
                                                      FRAMEGRAPHEXECUTION.H
 ==========================================================================================================================================*/
-// 🧩 Unified FrameGraph compiler, parallel multi-threaded unit recorder, and DedicatedRenderThreadDivision over SnapshotExchange.
+// 🧩 Unified FrameGraph compiler, parallel multi-threaded unit recorder, and DedicatedRenderThreadExtension over SnapshotExchange.
 
 #pragma once
 
@@ -9,7 +9,7 @@
 #include "Engine/Rendering/SubmissionOrder.h"
 #include "Engine/Rendering/TransientTargetAtlas.h"
 #include "Engine/Threading/SnapshotExchange.h"
-#include "Engine/Threading/TaskGraphDivision.h"
+#include "Engine/Threading/TaskGraphExtension.h"
 
 #include <atomic>
 #include <condition_variable>
@@ -109,19 +109,19 @@ struct RenderThreadDiagnostics
     double        LastFrameRecordMillis   = 0.0;
 };
 
-class DedicatedRenderThreadDivision
+class DedicatedRenderThreadExtension
 {
 public:
     using RenderFrameCallback = std::function<void(const RenderFrameEnvelope& Frame)>;
 
-    DedicatedRenderThreadDivision() = default;
-    ~DedicatedRenderThreadDivision() noexcept
+    DedicatedRenderThreadExtension() = default;
+    ~DedicatedRenderThreadExtension() noexcept
     {
         Retire();
     }
 
-    DedicatedRenderThreadDivision(const DedicatedRenderThreadDivision&)            = delete;
-    DedicatedRenderThreadDivision& operator=(const DedicatedRenderThreadDivision&) = delete;
+    DedicatedRenderThreadExtension(const DedicatedRenderThreadExtension&)            = delete;
+    DedicatedRenderThreadExtension& operator=(const DedicatedRenderThreadExtension&) = delete;
 
     [[nodiscard]] bool Start(RenderFrameCallback Callback);
     void               PublishSimulationFrame(const RenderFrameEnvelope& Envelope) noexcept;

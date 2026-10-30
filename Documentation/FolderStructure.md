@@ -19,9 +19,19 @@ Frontier/
 │       ├── Completed/
 │       └── References/        # Retained reference documents (InheritedEngine/)
 ├── Engine/                    # Shared production code
-│   ├── Interface/             # Selectively ported UI foundations
+│   ├── Audio/                 # Spatial acoustics, Doppler kinematics, and mix-bus routing
+│   ├── Diagnostics/           # Structured log categories, ring stores, and streams
+│   ├── Environment/           # 3D wind/force-fields, cloud-gated weather, snowpack, and lightning/thunder
+│   ├── Fluid/                 # 3D smoke/fire plumes and 2.5D shallow-water & Bingham-plastic mud
+│   ├── Foundation/            # Math, deterministic RNG, and memory/value primitives
+│   ├── Interface/             # Selectively ported UI foundations and native Vehicle Cabin/HUD HMI
 │   ├── Lifecycle/             # Shared activation sequence
-│   └── Render/                # Blank; Git retention marker only
+│   ├── Networking/            # Deterministic bitpacking, delta snapshots, and vehicle replication
+│   ├── Physics/               # ProjectDrive, Propulsion, SolidFracture, and BallisticSparks
+│   ├── Render/                # Blank; Git retention marker only
+│   ├── Rendering/             # Pure optical/GPU rendering (SDF & RTX ReSTIR, Portals, Mirrors, Atmosphere)
+│   ├── Scene/                 # Scene records and spatial organization
+│   └── Threading/             # Work-stealing task DAGs and lock-free snapshot exchanges
 ├── UI/
 │   └── Editor/                # Lifecycle-owned production editor UI
 ├── EngineContent/             # Shared content archives (icons, fonts, materials, environments)

@@ -1164,7 +1164,7 @@ void PopulateProvingGroundPhotometricLights(
     const DriveSnapshot&                         Snapshot,
     const ShowcaseEnvironmentSettings&           Settings,
     std::vector<AnalyticLuminaireSpecification>& OutLuminaires,
-    PhotometricClusterDivision&                  OutClusters)
+    PhotometricClusterExtension&                  OutClusters)
 {
     OutLuminaires.clear();
 
@@ -1278,8 +1278,8 @@ void PopulateProvingGroundPhotometricLights(
 void RenderVehicleHmiShowcaseImage(
     const std::vector<WorldFacetTriangle>&             Triangles,
     const std::vector<AnalyticLuminaireSpecification>& Luminaires,
-    const PhotometricClusterDivision&                  LightClusters,
-    const PlumeFluidDivision*                          PlumeFluid,
+    const PhotometricClusterExtension&                  LightClusters,
+    const PlumeFluidExtension*                          PlumeFluid,
     const ShowcaseCameraPose&                          Camera,
     const ShowcaseEnvironmentSettings&                 Environment,
     std::uint32_t                                      Width,
@@ -1313,7 +1313,7 @@ void RenderVehicleHmiShowcaseImage(
         Environment.WindVelocityTenMetres[1],
         Environment.WindVelocityTenMetres[2]
     };
-    WindForceFieldDivision WindField(WindCfg);
+    WindForceFieldExtension WindField(WindCfg);
     WindField.StepField({ Camera.Target[0], Camera.Target[1], 0.0 }, Environment.ElapsedSeconds);
 
     CloudParameters Clouds{};
@@ -1600,7 +1600,7 @@ void RenderVehicleHmiShowcaseImage(
     const float  TanY    = std::tan(0.5f * Camera.VerticalFovDeg * DegToRadScalar);
     const float  TanX    = TanY * (static_cast<float>(Width) / static_cast<float>(Height));
 
-    // Budgeted, cloud-gated falling hydrometeors (Rain / Snow / Hail) coupled to WindForceFieldDivision!
+    // Budgeted, cloud-gated falling hydrometeors (Rain / Snow / Hail) coupled to WindForceFieldExtension!
     // Spawns STRICTLY beneath verified cloud columns — zero wasted particles under clear sky!
     struct ScreenParticle
     {

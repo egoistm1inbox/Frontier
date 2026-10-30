@@ -1,9 +1,9 @@
 /*==========================================================================================================================================
-                                                     TASKGRAPHDIVISION.CPP
+                                                     TASKGRAPHEXTENSION.CPP
 ==========================================================================================================================================*/
 // 🧩 Directed acyclic task-graph scheduler & parallel-for dispatcher built atop Frontier::WorkerPool.
 
-#include "Engine/Threading/TaskGraphDivision.h"
+#include "Engine/Threading/TaskGraphExtension.h"
 
 #include <algorithm>
 #include <atomic>

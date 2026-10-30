@@ -15,10 +15,10 @@
 #include "Engine/Rendering/AtmosphereModel.h"
 #include "Engine/Rendering/CloudField.h"
 #include "Engine/Rendering/FogMedium.h"
-#include "Engine/Rendering/PhotometricClusterDivision.h"
-#include "Engine/Rendering/PlumeFluidDivision.h"
+#include "Engine/Rendering/PhotometricClusterExtension.h"
+#include "Engine/Fluid/PlumeFluidExtension.h"
 #include "Engine/Rendering/WeatherEffects.h"
-#include "Engine/Rendering/WindForceFieldDivision.h"
+#include "Engine/Environment/WindForceFieldExtension.h"
 
 #include <array>
 #include <cstdint>
@@ -188,15 +188,15 @@ void PopulateProvingGroundPhotometricLights(
     const DriveSnapshot&                         Snapshot,
     const ShowcaseEnvironmentSettings&           Settings,
     std::vector<AnalyticLuminaireSpecification>& OutLuminaires,
-    PhotometricClusterDivision&                  OutClusters);
+    PhotometricClusterExtension&                  OutClusters);
 
 // Renders an anti-aliased HDR->ACES tone-mapped RGB8 frame of the complete scene (with BVH reflections/shadows,
-// Atmosphere + CloudField + clustered FogMedium + PlumeFluidDivision smoke/fire + WeatherEffects snow/hail/rain).
+// Atmosphere + CloudField + clustered FogMedium + PlumeFluidExtension smoke/fire + WeatherEffects snow/hail/rain).
 void RenderVehicleHmiShowcaseImage(
     const std::vector<WorldFacetTriangle>&              Triangles,
     const std::vector<AnalyticLuminaireSpecification>&  Luminaires,
-    const PhotometricClusterDivision&                   LightClusters,
-    const PlumeFluidDivision*                           PlumeFluid,
+    const PhotometricClusterExtension&                   LightClusters,
+    const PlumeFluidExtension*                           PlumeFluid,
     const ShowcaseCameraPose&                           Camera,
     const ShowcaseEnvironmentSettings&                  Environment,
     std::uint32_t                                       Width,

@@ -3,7 +3,7 @@
 Retained quantitative verification across Frontier's fluid/plume physics, calibrated `.tyrx` tyre thermodynamics,
 thermochemical fuels & additives, forced induction (`Turbocharger` + `Supercharger`), `BEV` & Hybrid propulsion,
 cloud-gated weather particles & 3D wind/force-field coupling, reusable Engine Networking (`FP1` + GRIT 48-byte P2P),
-multi-threaded `TaskGraphSchedule`, `CompiledFrameGraphPlan` + `DedicatedRenderThreadDivision`, and `AudioFoundation`.
+multi-threaded `TaskGraphSchedule`, `CompiledFrameGraphPlan` + `DedicatedRenderThreadExtension`, and `AudioFoundation`.
 
 Run command:
 
@@ -76,9 +76,9 @@ in **`14.0 s`** (`~11 s` at peak torque).
 
 ## 4. Cloud-Gated Budgeted Weather Particles & Shared 3D Wind / Force-Field
 
-- **`WindForceFieldDivision`**: `32x32x16` (`192 KB` L2-resident) 3D atmospheric boundary-layer log-profile + 3D curl
+- **`WindForceFieldExtension`**: `32x32x16` (`192 KB` L2-resident) 3D atmospheric boundary-layer log-profile + 3D curl
   turbulence + force primitives (`VortexColumnUpdraft` `vy = 10.30 m/s`, `VehicleSlipstreamWake`, `RadialImpulseWave`,
-  `DirectionalGustCorridor`) synchronously driving `CloudField`, `FogMedium`, `PlumeFluidDivision`, Vehicle Aero, and
+  `DirectionalGustCorridor`) synchronously driving `CloudField`, `FogMedium`, `PlumeFluidExtension`, Vehicle Aero, and
   falling weather/debris particles.
 - **`CloudGatedWeatherSpawner`**: Evaluates wind-slanted `CloudDensity` optical depth across a `32x32` overhead grid and
   builds an $O(1)$ **Vose Alias Table**:
@@ -90,19 +90,19 @@ in **`14.0 s`** (`~11 s` at peak torque).
 
 ## 5. Engine Networking, TaskGraph, FrameGraph, RenderThread & Audio Foundation
 
-- **`FrontierNetworking` (`ReplicationDivision`)**:
+- **`FrontierNetworking` (`ReplicationExtension`)**:
   - Byte-exact `'FP1'` (`0x315046`) big-endian wire compatibility with `Project-Networking` / upstream `Slate`.
   - `SequenceAckTracker` (`AckSequence + 32-bit AckBitfield`), per-peer baseline delta compression (`40` objects:
     `2107 B` keyframe -> **`183 B` delta = `91.3%` bandwidth reduction**), `HermitePoseInterpolator`, and
     `ClientPredictionReconciler` deterministic input replay.
   - GRIT P2P **`48-byte` `CompactVehicleWireRecord`** (`sizeof == 48`: `50` cars @ `30 Hz` = **`72.0 KB/s`**) with
     `32-bit` smallest-three quaternion (`0.0000 deg` identity error, `< 0.08 deg` arbitrary orientation error).
-- **`FrontierThreading` (`TaskGraphDivision`)**: Multi-threaded Kahn topological wavefront scheduler over `WorkerPool`
+- **`FrontierThreading` (`TaskGraphExtension`)**: Multi-threaded Kahn topological wavefront scheduler over `WorkerPool`
   with deterministic cycle rejection (`cycle_rejected = 1`) and zero-leak dynamic dependency unlocking (verified under
   `ASan + LSan + UBSan`).
 - **`FrontierFrameGraphRuntime` (`FrameGraphExecution`)**: Unifies `SubmissionOrder`, `BarrierDerivation` (`12` barriers
   across `5` units), `TransientTargetAtlas` (**`22.2%` VRAM saved** via lifetime-disjoint aliasing), parallel command
-  recording, and `DedicatedRenderThreadDivision` (`12` frames over lock-free `SnapshotExchange`).
+  recording, and `DedicatedRenderThreadExtension` (`12` frames over lock-free `SnapshotExchange`).
 - **`FrontierAudioFoundation` (`AudioFoundation.h`)**: Headless spatial acoustic emitter/listener substrate (`Doppler`
   approaching `1.127x` vs receding `0.899x`, stereo pan `+0.51`, air HF rolloff, occlusion LP filter, and lock-free
   `SnapshotExchange<AcousticFrameSnapshot>` bridge).

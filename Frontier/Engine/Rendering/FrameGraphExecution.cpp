@@ -1,7 +1,7 @@
 /*==========================================================================================================================================
                                                     FRAMEGRAPHEXECUTION.CPP
 ==========================================================================================================================================*/
-// 🧩 Unified FrameGraph compiler, parallel multi-threaded unit recorder, and DedicatedRenderThreadDivision implementation.
+// 🧩 Unified FrameGraph compiler, parallel multi-threaded unit recorder, and DedicatedRenderThreadExtension implementation.
 
 #include "Engine/Rendering/FrameGraphExecution.h"
 
@@ -129,7 +129,7 @@ bool CompiledFrameGraphPlan::ExecuteParallelRecording(
 //                                  DEDICATED RENDER THREAD DIVISION (TRIPLE-BUFFERED)
 //------------------------------------------------------------------------------------------------------------------------
 
-bool DedicatedRenderThreadDivision::Start(RenderFrameCallback Callback)
+bool DedicatedRenderThreadExtension::Start(RenderFrameCallback Callback)
 {
     Retire();
     if (!Callback)
@@ -139,11 +139,11 @@ bool DedicatedRenderThreadDivision::Start(RenderFrameCallback Callback)
     Callback_ = std::move(Callback);
     Stopping_.store(false, std::memory_order_release);
     Running_.store(true, std::memory_order_release);
-    Thread_ = std::thread(&DedicatedRenderThreadDivision::ThreadLoop, this);
+    Thread_ = std::thread(&DedicatedRenderThreadExtension::ThreadLoop, this);
     return true;
 }
 
-void DedicatedRenderThreadDivision::PublishSimulationFrame(const RenderFrameEnvelope& Envelope) noexcept
+void DedicatedRenderThreadExtension::PublishSimulationFrame(const RenderFrameEnvelope& Envelope) noexcept
 {
     Exchange_.Publish(Envelope);
     PublishedFrames_.fetch_add(1u, std::memory_order_acq_rel);
@@ -151,7 +151,7 @@ void DedicatedRenderThreadDivision::PublishSimulationFrame(const RenderFrameEnve
     WakeCv_.notify_one();
 }
 
-void DedicatedRenderThreadDivision::WaitUntilOrdinalRendered(std::uint64_t TargetOrdinal) noexcept
+void DedicatedRenderThreadExtension::WaitUntilOrdinalRendered(std::uint64_t TargetOrdinal) noexcept
 {
     if (!Running_.load(std::memory_order_acquire))
     {
@@ -164,7 +164,7 @@ void DedicatedRenderThreadDivision::WaitUntilOrdinalRendered(std::uint64_t Targe
     });
 }
 
-void DedicatedRenderThreadDivision::Retire() noexcept
+void DedicatedRenderThreadExtension::Retire() noexcept
 {
     if (!Running_.load(std::memory_order_acquire))
     {
@@ -182,7 +182,7 @@ void DedicatedRenderThreadDivision::Retire() noexcept
     Running_.store(false, std::memory_order_release);
 }
 
-RenderThreadDiagnostics DedicatedRenderThreadDivision::QueryDiagnostics() const noexcept
+RenderThreadDiagnostics DedicatedRenderThreadExtension::QueryDiagnostics() const noexcept
 {
     RenderThreadDiagnostics D{};
     D.PublishedFrames       = PublishedFrames_.load(std::memory_order_acquire);
@@ -192,7 +192,7 @@ RenderThreadDiagnostics DedicatedRenderThreadDivision::QueryDiagnostics() const 
     return D;
 }
 
-void DedicatedRenderThreadDivision::ThreadLoop()
+void DedicatedRenderThreadExtension::ThreadLoop()
 {
     for (;;)
     {

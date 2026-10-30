@@ -6,26 +6,38 @@ endif()
 get_filename_component(FRONTIER_PHYSICS_REPO_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../../.." ABSOLUTE)
 
 # 📝 Standalone visual projection and Hex8 deformation; no vehicle dynamics or Jolt dependency.
-add_library(FrontierTyreContinuum STATIC TyreContinuum.cpp TyreProjectionDevice.cpp TyreSolidDevice.cpp)
-target_compile_features(FrontierTyreContinuum PUBLIC cxx_std_17)
-target_include_directories(FrontierTyreContinuum PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/../..")
-if(MSVC)
-    target_compile_options(FrontierTyreContinuum PRIVATE /utf-8 /W4)
-else()
-    target_compile_options(FrontierTyreContinuum PRIVATE -Wall -Wextra -Werror)
+if(NOT TARGET FrontierTyreContinuum)
+    add_library(FrontierTyreContinuum STATIC TyreContinuum.cpp TyreProjectionDevice.cpp TyreSolidDevice.cpp)
+    target_compile_features(FrontierTyreContinuum PUBLIC cxx_std_17)
+    target_include_directories(FrontierTyreContinuum PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/../..")
+    if(MSVC)
+        target_compile_options(FrontierTyreContinuum PRIVATE /utf-8 /W4)
+    else()
+        target_compile_options(FrontierTyreContinuum PRIVATE -Wall -Wextra -Werror)
+    endif()
 endif()
 
 # 📝 Fuel/Mixture/Additive thermochemistry, Forced Induction, BEV/Hybrid propulsion, and calibrated .tyrx tyre thermodynamics.
-add_library(FrontierVehiclePropulsion STATIC
-    VehiclePropulsion/PropulsionThermochemistry.cpp
-    VehiclePropulsion/HybridElectricPropulsion.cpp
-    VehiclePropulsion/CalibratedTyreThermodynamics.cpp)
-target_compile_features(FrontierVehiclePropulsion PUBLIC cxx_std_17)
-target_include_directories(FrontierVehiclePropulsion PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/../..")
-if(MSVC)
-    target_compile_options(FrontierVehiclePropulsion PRIVATE /utf-8 /W4)
-else()
-    target_compile_options(FrontierVehiclePropulsion PRIVATE -Wall -Wextra -Werror)
+if(NOT TARGET FrontierVehiclePropulsion)
+    add_library(FrontierVehiclePropulsion STATIC
+        VehiclePropulsion/PropulsionThermochemistry.cpp
+        VehiclePropulsion/HybridElectricPropulsion.cpp
+        VehiclePropulsion/CalibratedTyreThermodynamics.cpp)
+    target_compile_features(FrontierVehiclePropulsion PUBLIC cxx_std_17)
+    target_include_directories(FrontierVehiclePropulsion PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/../..")
+    if(MSVC)
+        target_compile_options(FrontierVehiclePropulsion PRIVATE /utf-8 /W4)
+    else()
+        target_compile_options(FrontierVehiclePropulsion PRIVATE -Wall -Wextra -Werror)
+    endif()
+endif()
+
+# 📝 Griffith convex polyhedron fracture & swept scene-lighting ballistic sparks.
+if(NOT TARGET FrontierSolidFracture)
+    add_subdirectory(Fracture)
+endif()
+if(NOT TARGET FrontierBallisticSparks)
+    add_subdirectory(Sparks)
 endif()
 
 # 📝 Optional caller-owned Vulkan command recorder; the CPU tyre library has no Vulkan dependency.

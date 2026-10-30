@@ -39,7 +39,7 @@ else()
 endif()
 
 # 📝 Cone-sphere-box analytic luminaire clustering, Type-C LM-63 Emissive-IES, and 3D radiant facet importance grids.
-add_library(FrontierPhotometricClustering STATIC PhotometricClusterDivision.cpp)
+add_library(FrontierPhotometricClustering STATIC PhotometricClusterExtension.cpp)
 target_compile_features(FrontierPhotometricClustering PUBLIC cxx_std_20)
 target_link_libraries(FrontierPhotometricClustering PUBLIC FrontierRadiantFacetDistribution)
 target_include_directories(FrontierPhotometricClustering PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/../..")
@@ -108,26 +108,39 @@ else()
     target_compile_options(FrontierPlumeLatticeFootprint PRIVATE -Wall -Wextra -Werror)
 endif()
 
-# 📝 Native 3D smoke-and-fire fluid division: MacCormack transport, compatible pressure, aperiodic detail & fire march.
-add_library(FrontierPlumeFluid STATIC PlumeFluidDivision.cpp)
-target_compile_features(FrontierPlumeFluid PUBLIC cxx_std_20)
-target_link_libraries(FrontierPlumeFluid PUBLIC FrontierPlumeLatticeFootprint)
-target_include_directories(FrontierPlumeFluid PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/../..")
-if(MSVC)
-    target_compile_options(FrontierPlumeFluid PRIVATE /utf-8 /W4)
-else()
-    target_compile_options(FrontierPlumeFluid PRIVATE -Wall -Wextra -Werror)
+# 📝 Domain simulation modules live in Frontier/Engine/Fluid, Environment, and Physics (never inside Rendering).
+if(NOT TARGET FrontierPlumeFluid)
+    add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../Fluid" "${CMAKE_CURRENT_BINARY_DIR}/FrontierFluid")
+endif()
+if(NOT TARGET FrontierWindForceField)
+    add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../Environment" "${CMAKE_CURRENT_BINARY_DIR}/FrontierEnvironment")
+endif()
+if(NOT TARGET FrontierSolidFracture)
+    add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../Physics/Fracture" "${CMAKE_CURRENT_BINARY_DIR}/FrontierFracture")
+endif()
+if(NOT TARGET FrontierBallisticSparks)
+    add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../Physics/Sparks" "${CMAKE_CURRENT_BINARY_DIR}/FrontierSparks")
 endif()
 
-# 📝 Shared 3D Wind & Force-Field toroidal lattice + Cloud-Gated Vose-Alias budgeted weather/debris particle spawner.
-add_library(FrontierWindForceField STATIC WindForceFieldDivision.cpp)
-target_compile_features(FrontierWindForceField PUBLIC cxx_std_20)
-target_link_libraries(FrontierWindForceField PUBLIC FrontierAtmosphericOptics FrontierPlumeFluid)
-target_include_directories(FrontierWindForceField PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/../..")
-if(MSVC)
-    target_compile_options(FrontierWindForceField PRIVATE /utf-8 /W4)
-else()
-    target_compile_options(FrontierWindForceField PRIVATE -Wall -Wextra -Werror)
+# 📝 Dual-tier GTX SDF + SurfaceCards and RTX BVH ReSTIR extension with Portals, Mirrors & full volumetric reflections.
+if(NOT TARGET FrontierSdfRestirPortal)
+    add_library(FrontierSdfRestirPortal STATIC
+        DiscrepancySequence.cpp
+        DistanceField.cpp
+        SdfRestirPortalExtension.cpp)
+    target_compile_features(FrontierSdfRestirPortal PUBLIC cxx_std_20)
+    target_link_libraries(FrontierSdfRestirPortal PUBLIC
+        FrontierAtmosphericOptics
+        FrontierPlumeFluid
+        FrontierShallowWaterMud
+        FrontierSnowLightningEnvironment
+        FrontierBallisticSparks)
+    target_include_directories(FrontierSdfRestirPortal PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/../..")
+    if(MSVC)
+        target_compile_options(FrontierSdfRestirPortal PRIVATE /utf-8 /W4)
+    else()
+        target_compile_options(FrontierSdfRestirPortal PRIVATE -Wall -Wextra -Werror)
+    endif()
 endif()
 
 # 📝 Unified FrameGraph compiler (SubmissionOrder + BarrierDerivation + TransientTargetAtlas), parallel recorder & RenderThread.

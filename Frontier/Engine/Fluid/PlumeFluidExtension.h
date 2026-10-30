@@ -1,5 +1,5 @@
 /*==========================================================================================================================================
-                                                        PLUMEFLUIDDIVISION.H
+                                                        PLUMEFLUIDEXTENSION.H
 ==========================================================================================================================================*/
 // 🧩 Native C++/Vulkan 3D smoke-and-fire fluid division: toroidal window, MacCormack transport, compatible pressure, aperiodic march.
 
@@ -130,19 +130,32 @@ struct PlumeCameraView
     std::uint32_t        SequenceOrdinal   = 0u;                       // [-]   temporal jitter index
 };
 
+struct PlumeSolidObstacleBox
+{
+    std::array<float, 3> Centre         = { 0.0f, 0.0f, 0.0f };   // [m]     world obstacle centre
+    std::array<float, 3> HalfExtents    = { 1.0f, 1.0f, 1.0f };   // [m]     local half-sizes along X, Y, Z
+    std::array<float, 3> LinearVelocity = { 0.0f, 0.0f, 0.0f };   // [m/s]   moving solid velocity (0 for static walls)
+    float                YawRadians     = 0.0f;                   // [rad]   heading rotation around +Z
+};
+
 //------------------------------------------------------------------------------------------------------------------------
-//                                                  PLUME FLUID DIVISION
+//                                                 PLUME FLUID EXTENSION
 //------------------------------------------------------------------------------------------------------------------------
 
-class PlumeFluidDivision
+class PlumeFluidExtension
 {
 public:
-    static constexpr std::size_t SourceLimit = 24u;
+    static constexpr std::size_t SourceLimit   = 24u;
+    static constexpr std::size_t ObstacleLimit = 64u;
 
-    explicit PlumeFluidDivision(const PlumeFluidParameters& Parameters = {});
+    explicit PlumeFluidExtension(const PlumeFluidParameters& Parameters = {});
 
     void Reconfigure(const PlumeFluidParameters& Parameters);
     void ClearState() noexcept;
+
+    // Registers solid obstacles (walls, tunnel ceilings, cones, vehicle chassis) for Neumann collision deflection.
+    void ClearSolidObstacles() noexcept;
+    void RegisterSolidObstacle(const PlumeSolidObstacleBox& Obstacle) noexcept;
 
     // Projects 4-wheel slip/thermal telemetry + optional transient bursts into bounded Gaussian sources & fire lights.
     void IngestVehicleTelemetry(
@@ -181,6 +194,17 @@ public:
         const std::array<float, 3>& SunIlluminance,
         const std::array<float, 3>& SkyRadiance) const noexcept;
 
+    // Evaluates volumetric Beer-Lambert shadow transmittance T in [0, 1] cast by smoke & soot onto scene receivers.
+    [[nodiscard]] float EvaluateShadowTransmittance(
+        const std::array<float, 3>& Origin,
+        const std::array<float, 3>& Direction,
+        float                       MaxDistance) const noexcept;
+
+    // Evaluates direct scene irradiance [rgb] from active plume fire seats & incandescent gas pockets onto a surface.
+    [[nodiscard]] std::array<float, 3> EvaluateSceneIllumination(
+        const std::array<float, 3>& ReceiverPosition,
+        const std::array<float, 3>& ReceiverNormal) const noexcept;
+
     // Exposes GPU-ready std140/std430 buffers matching Shaders/PlumeFluidTransport.slang & Shaders/PlumeFluidMarch.slang.
     [[nodiscard]] const PlumeLatticeFootprint&              Footprint() const noexcept      { return Footprint_; }
     [[nodiscard]] const std::vector<PlumeSourceFootprint>&  Sources() const noexcept        { return Sources_; }
@@ -205,7 +229,12 @@ public:
     [[nodiscard]] static std::array<float, 3> EvaluateBlackbodyRadiance(float Kelvin) noexcept;
 
 private:
-    struct WheelOnsetState
+    [[nodiscard]] bool PointInsideSolidObstacles(
+        float Px, float Py, float Pz,
+        std::array<float, 3>* OutNearWakeVelocity = nullptr,
+        float*                OutWakeBlend        = nullptr) const noexcept;
+
+    struct WheelOnsetEnvelope
     {
         float RequestSeconds = 0.0f;
         float QuietSeconds   = 0.0f;
@@ -222,8 +251,9 @@ private:
     std::array<std::int32_t, 2>        PriorOriginXY_      = { 1 << 20, 1 << 20 };
     float                              ElapsedSeconds_     = 0.0f;
     std::uint32_t                      Relocations_        = 0u;
-    std::array<WheelOnsetState, 4>     WheelOnsets_{};
+    std::array<WheelOnsetEnvelope, 4>  WheelOnsets_{};
     std::vector<PlumeSourceFootprint>  Sources_;
+    std::vector<PlumeSolidObstacleBox> Obstacles_;
     PlumeFireLightRecord               FireLights_{};
     PlumeDiagnostics                   Diagnostics_{};
     std::array<std::int32_t, 3>        CoverageLow_        = { 1, 1, 1 };
