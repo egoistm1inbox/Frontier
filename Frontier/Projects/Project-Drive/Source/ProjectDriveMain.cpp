@@ -33,6 +33,7 @@
 
 #if defined(__linux__)
     #include <arpa/inet.h>
+    #include <csignal>
     #include <netinet/in.h>
     #include <sys/socket.h>
     #include <unistd.h>
@@ -757,12 +758,35 @@ int RunInteractiveHttpPreviewServer(const std::filesystem::path &RepoRoot,
                                     const std::filesystem::path &ProjectRoot,
                                     uint16_t Port)
 {
+    std::signal(SIGPIPE, SIG_IGN);
+
     ProjectDriveApplicationHost App(RepoRoot, ProjectRoot, 1440u, 860u);
-    App.World().Records().RenderPipeline.ViewportScalePercent = 35; // Crisp interactive frame rate
+    App.World().Records().RenderPipeline.ViewportScalePercent = 30;
+    App.World().Records().RenderPipeline.TracingTier          = 0; // Responsive GTX SDF+BVH default; RTX/Blinn 1-click in header
     if (!App.Initialize())
     {
         return 1;
     }
+
+    std::mutex           FrameMutex;
+    std::vector<uint8_t> CachedPng;
+
+    auto RenderFreshPng = [&]() {
+        App.StepAndRenderGuiFrame(1.0 / 30.0, {});
+        std::vector<uint8_t> Rgba;
+        App.RasterizeFrameToRgba8(Rgba);
+        int Len = 0;
+        unsigned char *Mem = stbi_write_png_to_mem(
+            Rgba.data(), static_cast<int>(App.WindowWidth() * 4u),
+            static_cast<int>(App.WindowWidth()), static_cast<int>(App.WindowHeight()), 4, &Len);
+        if (Mem != nullptr && Len > 0)
+        {
+            CachedPng.assign(Mem, Mem + Len);
+            STBIW_FREE(Mem);
+        }
+    };
+    RenderFreshPng();
+    App.World().SetTransportMode(ShowcaseTransportMode::Pause); // Responsive UI until user clicks Play/Simulate/Step
 
     const int ServerFd = ::socket(AF_INET, SOCK_STREAM, 0);
     if (ServerFd < 0)
@@ -785,25 +809,6 @@ int RunInteractiveHttpPreviewServer(const std::filesystem::path &RepoRoot,
     }
 
     std::cout << "[ProjectDrive] Interactive Live Preview listening on http://0.0.0.0:" << Port << "/\n" << std::flush;
-
-    std::mutex           FrameMutex;
-    std::vector<uint8_t> CachedPng;
-
-    auto RenderFreshPng = [&]() {
-        App.StepAndRenderGuiFrame(1.0 / 30.0, {});
-        std::vector<uint8_t> Rgba;
-        App.RasterizeFrameToRgba8(Rgba);
-        int Len = 0;
-        unsigned char *Mem = stbi_write_png_to_mem(
-            Rgba.data(), static_cast<int>(App.WindowWidth() * 4u),
-            static_cast<int>(App.WindowWidth()), static_cast<int>(App.WindowHeight()), 4, &Len);
-        if (Mem != nullptr && Len > 0)
-        {
-            CachedPng.assign(Mem, Mem + Len);
-            STBIW_FREE(Mem);
-        }
-    };
-    RenderFreshPng();
 
     static const char *const kIndexHtml = R"HTML(<!doctype html>
 <html lang="en">
@@ -919,8 +924,8 @@ setInterval(() => { sendInput('tick=1'); }, 420);
                 << "Access-Control-Allow-Origin: *\r\n"
                 << "Content-Length: " << CachedPng.size() << "\r\n\r\n";
             const std::string HdrStr = Hdr.str();
-            (void)::send(Fd, HdrStr.data(), HdrStr.size(), 0);
-            (void)::send(Fd, CachedPng.data(), CachedPng.size(), 0);
+            (void)::send(Fd, HdrStr.data(), HdrStr.size(), MSG_NOSIGNAL);
+            (void)::send(Fd, CachedPng.data(), CachedPng.size(), MSG_NOSIGNAL);
         }
         else
         {
@@ -931,8 +936,8 @@ setInterval(() => { sendInput('tick=1'); }, 420);
                 << "Cache-Control: no-store\r\n"
                 << "Content-Length: " << HtmlLen << "\r\n\r\n";
             const std::string HdrStr = Hdr.str();
-            (void)::send(Fd, HdrStr.data(), HdrStr.size(), 0);
-            (void)::send(Fd, kIndexHtml, HtmlLen, 0);
+            (void)::send(Fd, HdrStr.data(), HdrStr.size(), MSG_NOSIGNAL);
+            (void)::send(Fd, kIndexHtml, HtmlLen, MSG_NOSIGNAL);
         }
         ::close(Fd);
     }
