@@ -32,6 +32,8 @@
 #include "Engine/VisualEffects/WindField.h"
 
 #include <cstdint>
+#include <functional>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -65,7 +67,11 @@ class DriveShowcaseWorld
     DriveShowcaseWorld(const DriveShowcaseWorld &)            = delete;
     DriveShowcaseWorld &operator=(const DriveShowcaseWorld &) = delete;
 
-    [[nodiscard]] bool Initialize(const std::string &ProjectRootPath);
+    [[nodiscard]] bool Initialize(const std::string &ProjectRootPath, bool DeferHeavyWarmup = false);
+    void RunDeferredWarmup(const std::function<void(uint32_t StepIndex, uint32_t TotalSteps, const char *StageText)> &OnStage);
+    [[nodiscard]] std::mutex &SolverAccessMutex() const noexcept { return SolverMutex_; }
+    void SetNonBlockingStudioPreviews(bool Enabled) noexcept { NonBlockingStudioPreviews_ = Enabled; }
+    [[nodiscard]] bool NonBlockingStudioPreviews() const noexcept { return NonBlockingStudioPreviews_; }
 
     void SetTransportMode(ShowcaseTransportMode Mode) noexcept;
     [[nodiscard]] ShowcaseTransportMode GetTransportMode() const noexcept { return TransportMode_; }
@@ -113,8 +119,14 @@ class DriveShowcaseWorld
                                       float OrbitYawRad, float OrbitPitchRad, float OrbitDistanceScale,
                                       uint8_t PreviewInspectionMode,
                                       std::vector<uint8_t> &OutRgba8) const;
+    bool TryRenderDedicatedEntityPreview(const std::string &StableId,
+                                         uint32_t Width, uint32_t Height,
+                                         float OrbitYawRad, float OrbitPitchRad, float OrbitDistanceScale,
+                                         uint8_t PreviewInspectionMode,
+                                         std::vector<uint8_t> &OutRgba8) const;
 
   private:
+    void ResetAllSystemsUnlocked();
     void WarmupSnowMoundAndPuddles();
     void RebuildFractureMonolith();
     void AdvanceCoupledSubsystems(float DtSeconds);
@@ -168,9 +180,12 @@ class DriveShowcaseWorld
     double                                  NetSendAccumulator_    = 0.0;
 
     // Interactive Camera Orbit Offsets
-    float                                   OrbitYawOffsetRad_     = 0.0f;
-    float                                   OrbitPitchOffsetRad_   = 0.0f;
-    float                                   OrbitZoomOffsetM_      = 0.0f;
+    float                                   OrbitYawOffsetRad_         = 0.0f;
+    float                                   OrbitPitchOffsetRad_       = 0.0f;
+    float                                   OrbitZoomOffsetM_          = 0.0f;
+    bool                                    DeferredWarmupPending_     = false;
+    bool                                    NonBlockingStudioPreviews_ = false;
+    mutable std::mutex                      SolverMutex_{};
 };
 
 } // namespace Frontier::Drive

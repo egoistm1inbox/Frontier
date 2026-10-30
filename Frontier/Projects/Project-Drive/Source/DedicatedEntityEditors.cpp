@@ -11,6 +11,12 @@
 #include "Engine/Scene/SceneDirectory.h"
 
 #include <imgui_internal.h>
+#if defined(FRONTIER_UI_VULKAN) && FRONTIER_UI_VULKAN
+#ifndef VK_NO_PROTOTYPES
+#define VK_NO_PROTOTYPES
+#endif
+#include <imgui_impl_vulkan.h>
+#endif
 
 #include <algorithm>
 #include <cmath>
@@ -107,18 +113,75 @@ bool WriteFieldScalar(const RecordEditorScalarField &Field, double Next) noexcep
 
 DedicatedEntityEditorHost::~DedicatedEntityEditorHost()
 {
-    CloseAllEditors();
+    CloseAllEditors(true);
 }
 
-void DedicatedEntityEditorHost::DestroyWindowTexture(OpenStudioWindow &Win) noexcept
+void DedicatedEntityEditorHost::ReclaimCompletedRetiredTextures(bool ForceImmediate) noexcept
 {
-    if (Win.TextureRegistered)
+    for (size_t I = 0u; I < RetiredTextures_.size();)
     {
+        ImTextureData *Tex = RetiredTextures_[I].get();
+        if (Tex == nullptr)
+        {
+            RetiredTextures_.erase(RetiredTextures_.begin() + static_cast<std::ptrdiff_t>(I));
+            continue;
+        }
+        const bool CanReclaim = ForceImmediate || (Tex->BackendUserData == nullptr) ||
+                                (Tex->Status == ImTextureStatus_Destroyed) || (Tex->UnusedFrames >= 4);
+        if (!CanReclaim)
+        {
+            ++I;
+            continue;
+        }
         if (ImGui::GetCurrentContext() != nullptr)
         {
-            ImGui::UnregisterUserTexture(&Win.PreviewTexture);
+#if defined(FRONTIER_UI_VULKAN) && FRONTIER_UI_VULKAN
+            if (Tex->BackendUserData != nullptr && ImGui::GetIO().BackendRendererUserData != nullptr)
+            {
+                Tex->SetStatus(ImTextureStatus_WantDestroy);
+                Tex->UnusedFrames = 16;
+                ImGui_ImplVulkan_UpdateTexture(Tex);
+            }
+#endif
+            if (Tex->RefCount > 0)
+            {
+                ImGui::UnregisterUserTexture(Tex);
+            }
         }
-        Win.PreviewTexture.DestroyPixels();
+        Tex->DestroyPixels();
+        RetiredTextures_.erase(RetiredTextures_.begin() + static_cast<std::ptrdiff_t>(I));
+    }
+}
+
+void DedicatedEntityEditorHost::RetireWindowTexture(OpenStudioWindow &Win, bool GpuConfirmedIdle) noexcept
+{
+    if (Win.TextureRegistered && Win.PreviewTexture)
+    {
+        if (GpuConfirmedIdle || ImGui::GetCurrentContext() == nullptr || ImGui::GetIO().BackendRendererUserData == nullptr)
+        {
+            if (ImGui::GetCurrentContext() != nullptr)
+            {
+#if defined(FRONTIER_UI_VULKAN) && FRONTIER_UI_VULKAN
+                if (Win.PreviewTexture->BackendUserData != nullptr && ImGui::GetIO().BackendRendererUserData != nullptr)
+                {
+                    Win.PreviewTexture->SetStatus(ImTextureStatus_WantDestroy);
+                    Win.PreviewTexture->UnusedFrames = 16;
+                    ImGui_ImplVulkan_UpdateTexture(Win.PreviewTexture.get());
+                }
+#endif
+                if (Win.PreviewTexture->RefCount > 0)
+                {
+                    ImGui::UnregisterUserTexture(Win.PreviewTexture.get());
+                }
+            }
+            Win.PreviewTexture->DestroyPixels();
+        }
+        else
+        {
+            Win.PreviewTexture->WantDestroyNextFrame = true;
+            RetiredTextures_.push_back(std::move(Win.PreviewTexture));
+            Win.PreviewTexture = std::make_unique<ImTextureData>();
+        }
         Win.TextureRegistered = false;
     }
 }
@@ -148,7 +211,7 @@ void DedicatedEntityEditorHost::OpenEditorForEntity(const std::string &StableId,
     // Cap open floating studios to 3 at a time so CPU/VRAM stays lean while supporting multi-window editing
     if (Windows_.size() >= 3u)
     {
-        DestroyWindowTexture(Windows_.front());
+        RetireWindowTexture(Windows_.front(), false);
         Windows_.erase(Windows_.begin());
     }
 
@@ -169,20 +232,24 @@ void DedicatedEntityEditorHost::CloseEditorForEntity(const std::string &StableId
     {
         if (Windows_[I].StableId == StableId)
         {
-            DestroyWindowTexture(Windows_[I]);
+            RetireWindowTexture(Windows_[I], false);
             Windows_.erase(Windows_.begin() + static_cast<std::ptrdiff_t>(I));
             return;
         }
     }
 }
 
-void DedicatedEntityEditorHost::CloseAllEditors()
+void DedicatedEntityEditorHost::CloseAllEditors(bool GpuConfirmedIdle)
 {
     for (OpenStudioWindow &Win : Windows_)
     {
-        DestroyWindowTexture(Win);
+        RetireWindowTexture(Win, GpuConfirmedIdle);
     }
     Windows_.clear();
+    if (GpuConfirmedIdle)
+    {
+        ReclaimCompletedRetiredTextures(true);
+    }
 }
 
 size_t DedicatedEntityEditorHost::OpenWindowCount() const noexcept
@@ -473,22 +540,35 @@ void DedicatedEntityEditorHost::DrawSingleStudioWindow(OpenStudioWindow &Win, Dr
         ++Win.FrameThrottle;
         const uint64_t CurWorldRev = World.SceneDirtyRevision();
         const bool NeedsPreviewUpdate = !Win.TextureRegistered || Win.AutoTurntable ||
-                                        (Win.LastRenderedWorldRev != CurWorldRev) || (Win.FrameThrottle % 4u == 1u);
+                                        (Win.LastRenderedWorldRev != CurWorldRev) ||
+                                        (!World.NonBlockingStudioPreviews() && (Win.FrameThrottle % 4u == 1u));
         if (NeedsPreviewUpdate)
         {
-            Win.LastRenderedWorldRev = CurWorldRev;
-            World.RenderDedicatedEntityPreview(Win.StableId, PrevW, PrevH,
-                                               Win.OrbitYawRad, Win.OrbitPitchRad, Win.OrbitDistanceScale,
-                                               Win.PreviewInspectMode, Win.PreviewRgba);
-            if (!Win.TextureRegistered)
+            if (World.TryRenderDedicatedEntityPreview(Win.StableId, PrevW, PrevH,
+                                                      Win.OrbitYawRad, Win.OrbitPitchRad, Win.OrbitDistanceScale,
+                                                      Win.PreviewInspectMode, Win.PreviewRgba))
             {
-                Win.PreviewTexture = ImTextureData();
-                Win.PreviewTexture.Create(ImTextureFormat_RGBA32, static_cast<int>(PrevW), static_cast<int>(PrevH));
-                ImGui::RegisterUserTexture(&Win.PreviewTexture);
-                Win.TextureRegistered = true;
+                Win.LastRenderedWorldRev = CurWorldRev;
+                if (!Win.TextureRegistered)
+                {
+                    Win.PreviewTexture = std::make_unique<ImTextureData>();
+                    Win.PreviewTexture->Create(ImTextureFormat_RGBA32, static_cast<int>(PrevW), static_cast<int>(PrevH));
+                    std::memcpy(Win.PreviewTexture->GetPixels(), Win.PreviewRgba.data(), PrevW * PrevH * 4u);
+                    ImGui::RegisterUserTexture(Win.PreviewTexture.get());
+                    Win.TextureRegistered = true;
+                }
+                else
+                {
+                    std::memcpy(Win.PreviewTexture->GetPixels(), Win.PreviewRgba.data(), PrevW * PrevH * 4u);
+                    Win.PreviewTexture->UpdateRect = ImTextureRect{
+                        0u, 0u, static_cast<unsigned short>(PrevW), static_cast<unsigned short>(PrevH)};
+                    Win.PreviewTexture->UsedRect = Win.PreviewTexture->UpdateRect;
+                    if (Win.PreviewTexture->Status == ImTextureStatus_OK)
+                    {
+                        Win.PreviewTexture->SetStatus(ImTextureStatus_WantUpdates);
+                    }
+                }
             }
-            std::memcpy(Win.PreviewTexture.GetPixels(), Win.PreviewRgba.data(), PrevW * PrevH * 4u);
-            Win.PreviewTexture.SetStatus(ImTextureStatus_WantUpdates);
         }
 
         ImGui::BeginChild("##StudioLeft3D", ImVec2(LeftW, BodyH), false);
@@ -498,10 +578,10 @@ void DedicatedEntityEditorHost::DrawSingleStudioWindow(OpenStudioWindow &Win, Dr
             const float  VH  = std::max(140.0f, BodyH - 72.0f);
 
             KitPillSurface(LInk, VP, ImVec2(VP.x + LeftW, VP.y + VH), KitInkHex(0x0a0a0a), KitInkHex(0x2c2c2c), 12.0f);
-            if (Win.TextureRegistered)
+            if (Win.TextureRegistered && Win.PreviewTexture)
             {
                 ImGui::SetCursorScreenPos(ImVec2(VP.x + 2.0f, VP.y + 2.0f));
-                ImGui::Image(Win.PreviewTexture.GetTexRef(), ImVec2(LeftW - 4.0f, VH - 4.0f));
+                ImGui::Image(Win.PreviewTexture->GetTexRef(), ImVec2(LeftW - 4.0f, VH - 4.0f));
                 if (ImGui::IsItemHovered())
                 {
                     ImGuiIO &IO = ImGui::GetIO();
@@ -657,11 +737,12 @@ void DedicatedEntityEditorHost::DrawSingleStudioWindow(OpenStudioWindow &Win, Dr
 
 void DedicatedEntityEditorHost::RenderOpenEditorWindows(DriveShowcaseWorld &World)
 {
+    ReclaimCompletedRetiredTextures(false);
     for (size_t I = 0; I < Windows_.size();)
     {
         if (!Windows_[I].Open)
         {
-            DestroyWindowTexture(Windows_[I]);
+            RetireWindowTexture(Windows_[I], false);
             Windows_.erase(Windows_.begin() + static_cast<std::ptrdiff_t>(I));
             continue;
         }
@@ -679,7 +760,7 @@ namespace Frontier::Drive
 DedicatedEntityEditorHost::~DedicatedEntityEditorHost() = default;
 void DedicatedEntityEditorHost::OpenEditorForEntity(const std::string &, DriveShowcaseWorld &) {}
 void DedicatedEntityEditorHost::CloseEditorForEntity(const std::string &) {}
-void DedicatedEntityEditorHost::CloseAllEditors() {}
+void DedicatedEntityEditorHost::CloseAllEditors(bool) {}
 void DedicatedEntityEditorHost::RenderOpenEditorWindows(DriveShowcaseWorld &) {}
 size_t DedicatedEntityEditorHost::OpenWindowCount() const noexcept { return 0u; }
 bool DedicatedEntityEditorHost::IsEditorOpen(const std::string &) const noexcept { return false; }

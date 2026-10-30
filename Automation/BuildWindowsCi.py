@@ -1,7 +1,7 @@
 #============================================================================================================================================
 #                                                        BUILDWINDOWSCI.PY
 #============================================================================================================================================
-# 🧩 Runs the Windows x64 MSVC build, Shipping + Win32 DirectX 11 smoke checks, and ProjectDrive-windows-x86_64.zip
+# 🧩 Runs the Windows x64 MSVC build, Shipping + Native Vulkan smoke checks, and ProjectDrive-windows-x86_64.zip
 #    packaging with GitHub Actions ::error:: annotation reporting on any non-zero step exit.
 
 import pathlib
@@ -78,11 +78,13 @@ def Main() -> int:
         shutil.copytree("EngineContent/Icons", Dist / "EngineContent/Icons")
 
         (Dist / "README.txt").write_text(
-            "Frontier Engine - Project-Drive (Windows 10/11 x64, DirectX 11, Zero External DLLs)\n"
-            "====================================================================================\n"
+            "Frontier Engine - Project-Drive (Windows 10/11 x64, Native Vulkan RHI)\n"
+            "=======================================================================\n"
             "1. Extract all files keeping the ProjectDrive/ and EngineContent/ folders side-by-side.\n"
-            "2. Double-click ProjectDrive\\Binaries\\ProjectDrive.exe to launch the 1:1 Dark OLED\n"
-            "   VehicleHMI Proving Grounds + ReSTIR GI + Dedicated Entity Studios desktop app!\n"
+            "2. Double-click ProjectDrive\\Binaries\\ProjectDrive.exe to launch the Native Vulkan\n"
+            "   1:1 Dark OLED VehicleHMI Proving Grounds + ReSTIR GI + Dedicated Studios desktop app!\n"
+            "   - Live SPIR-V shader compilation progress ([1/16]..[16/16]) and Graphics Driver\n"
+            "     Compatibility diagnostics stream immediately in the bottom Logs panel with 0 UI freeze.\n"
             "3. Double-click (or click the popup icon on) any entity in the Outliner to open its\n"
             "   zero-copy Shared-Memory Dedicated Studio window (Pyro Plume, Fracture, 3D Object, etc.).\n",
             encoding="utf-8",

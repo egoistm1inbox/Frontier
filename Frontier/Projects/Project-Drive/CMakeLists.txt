@@ -27,6 +27,7 @@ if(NOT TARGET FrontierAudioFoundation)
         "${CMAKE_CURRENT_BINARY_DIR}/engine-audio")
 endif()
 
+set(FRONTIER_RENDERING_VULKAN_HEADERS "${PROJECT_DRIVE_REPO_ROOT}/ExternalPackages/vulkan-headers/include")
 if(NOT TARGET FrontierAtmosphericOptics)
     add_subdirectory(
         "${PROJECT_DRIVE_FRONTIER_ROOT}/Engine/Rendering"
@@ -124,7 +125,7 @@ elseif(UNIX AND NOT APPLE)
 endif()
 
 #------------------------------------------------------------------------------------------------------------------------
-#             UNIFIED PROJECT-DRIVE APPLICATION BINARY (EDITOR UI + RUNTIME OR SHIPPING PROFILE)
+#       UNIFIED PROJECT-DRIVE APPLICATION BINARY (NATIVE VULKAN EDITOR + RUNTIME OR SHIPPING PROFILE)
 #------------------------------------------------------------------------------------------------------------------------
 
 set(PROJECT_DRIVE_CORE_SCENE_SOURCES
@@ -170,24 +171,52 @@ else()
         set(CMAKE_SOURCE_DIR "${CMAKE_SOURCE_DIR_SAVED}")
     endif()
 
+    # Native GLFW + Vulkan presentation (VK_NO_PROTOTYPES; zero DirectX 11 dependencies!)
+    if(NOT TARGET glfw)
+        set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
+        set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+        set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+        set(GLFW_INSTALL OFF CACHE BOOL "" FORCE)
+        set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+        set(GLFW_BUILD_WAYLAND OFF CACHE BOOL "" FORCE)
+        if(UNIX AND NOT APPLE)
+            find_package(X11 QUIET)
+            if(X11_FOUND AND X11_Xrandr_INCLUDE_PATH AND X11_Xinerama_INCLUDE_PATH AND
+               X11_Xkb_INCLUDE_PATH AND X11_Xcursor_INCLUDE_PATH AND X11_Xi_INCLUDE_PATH AND X11_Xshape_INCLUDE_PATH)
+                set(GLFW_BUILD_X11 ON CACHE BOOL "" FORCE)
+            else()
+                set(GLFW_BUILD_X11 OFF CACHE BOOL "" FORCE)
+            endif()
+        endif()
+        add_subdirectory(
+            "${PROJECT_DRIVE_REPO_ROOT}/ExternalPackages/glfw"
+            "${CMAKE_CURRENT_BINARY_DIR}/glfw"
+            EXCLUDE_FROM_ALL)
+    endif()
+
     set(PROJECT_DRIVE_IMGUI_ROOT "${PROJECT_DRIVE_REPO_ROOT}/ExternalPackages/imgui")
+    set(PROJECT_DRIVE_VULKAN_HEADERS "${PROJECT_DRIVE_REPO_ROOT}/ExternalPackages/vulkan-headers/include")
     set(PROJECT_DRIVE_IMGUI_SOURCES
         "${PROJECT_DRIVE_IMGUI_ROOT}/imgui.cpp"
         "${PROJECT_DRIVE_IMGUI_ROOT}/imgui_draw.cpp"
         "${PROJECT_DRIVE_IMGUI_ROOT}/imgui_tables.cpp"
-        "${PROJECT_DRIVE_IMGUI_ROOT}/imgui_widgets.cpp")
-    if(WIN32)
-        list(APPEND PROJECT_DRIVE_IMGUI_SOURCES
-            "${PROJECT_DRIVE_IMGUI_ROOT}/backends/imgui_impl_win32.cpp"
-            "${PROJECT_DRIVE_IMGUI_ROOT}/backends/imgui_impl_dx11.cpp")
-    endif()
+        "${PROJECT_DRIVE_IMGUI_ROOT}/imgui_widgets.cpp"
+        "${PROJECT_DRIVE_IMGUI_ROOT}/backends/imgui_impl_glfw.cpp"
+        "${PROJECT_DRIVE_IMGUI_ROOT}/backends/imgui_impl_vulkan.cpp")
     add_library(ProjectDriveImGui STATIC ${PROJECT_DRIVE_IMGUI_SOURCES})
     target_include_directories(ProjectDriveImGui PUBLIC
         "${PROJECT_DRIVE_IMGUI_ROOT}"
-        "${PROJECT_DRIVE_IMGUI_ROOT}/backends")
-    target_compile_definitions(ProjectDriveImGui PUBLIC "ImDrawIdx=unsigned int")
+        "${PROJECT_DRIVE_IMGUI_ROOT}/backends"
+        "${PROJECT_DRIVE_VULKAN_HEADERS}")
+    target_compile_definitions(ProjectDriveImGui PUBLIC
+        "ImDrawIdx=unsigned int"
+        FRONTIER_UI_VULKAN=1
+        VK_NO_PROTOTYPES
+        GLFW_INCLUDE_NONE)
+    target_link_libraries(ProjectDriveImGui PUBLIC glfw)
 
     add_library(ProjectDriveUiSdk STATIC
+        "${PROJECT_DRIVE_REPO_ROOT}/Engine/Interface/VulkanPresentation.cpp"
         "${PROJECT_DRIVE_REPO_ROOT}/Engine/Interface/TextFileReplacement.cpp"
         "${PROJECT_DRIVE_REPO_ROOT}/Engine/Interface/ThumbnailAtlasCache.cpp"
         "${PROJECT_DRIVE_REPO_ROOT}/Engine/Interface/IconArt.cpp"
@@ -227,32 +256,42 @@ else()
     target_include_directories(ProjectDriveUiSdk PUBLIC
         "${PROJECT_DRIVE_FRONTIER_ROOT}"
         "${PROJECT_DRIVE_REPO_ROOT}"
-        "${PROJECT_DRIVE_REPO_ROOT}/ExternalPackages/tomlpp/include")
+        "${PROJECT_DRIVE_REPO_ROOT}/ExternalPackages/tomlpp/include"
+        "${PROJECT_DRIVE_VULKAN_HEADERS}")
     target_compile_definitions(ProjectDriveUiSdk PUBLIC
         FRONTIER_EDITOR=1
         FRONTIER_EDITOR_PROFILE=1
-        FRONTIER_WITH_INTERFACE_SDK=1)
+        FRONTIER_WITH_INTERFACE_SDK=1
+        FRONTIER_UI_VULKAN=1
+        VK_NO_PROTOTYPES
+        GLFW_INCLUDE_NONE)
     target_link_libraries(ProjectDriveUiSdk PUBLIC ProjectDriveImGui thorvg_static)
 
     add_executable(ProjectDriveApp
         Source/InfographicWidgets.cpp
         Source/DedicatedEntityEditors.cpp
+        Source/VulkanShaderCompiler.cpp
         ${PROJECT_DRIVE_CORE_SCENE_SOURCES})
     target_include_directories(ProjectDriveApp PRIVATE
         "${PROJECT_DRIVE_FRONTIER_ROOT}"
         "${PROJECT_DRIVE_REPO_ROOT}"
         "${PROJECT_DRIVE_REPO_ROOT}/Exhibits/ControlCentre/Code"
         "${PROJECT_DRIVE_REPO_ROOT}/ExternalPackages/stb"
+        "${PROJECT_DRIVE_VULKAN_HEADERS}"
         "${CMAKE_CURRENT_SOURCE_DIR}/Source")
     target_compile_definitions(ProjectDriveApp PRIVATE
         FRONTIER_EDITOR=1
         FRONTIER_EDITOR_PROFILE=1
-        FRONTIER_WITH_INTERFACE_SDK=1)
+        FRONTIER_WITH_INTERFACE_SDK=1
+        FRONTIER_UI_VULKAN=1
+        VK_NO_PROTOTYPES
+        GLFW_INCLUDE_NONE)
     target_link_libraries(ProjectDriveApp PRIVATE
         ProjectDriveUiSdk
         ProjectDriveSimulation
         ProjectDriveVehicleHmiScene
         FrontierSceneRenderer
+        FrontierPathReplayVulkan
         FrontierGameMechanics
         FrontierGeometryProcessing
         FrontierPlumeFluid
@@ -263,9 +302,10 @@ else()
         FrontierCelestialSky
         FrontierWindField
         FrontierNetworking
-        Threads::Threads)
+        Threads::Threads
+        ${CMAKE_DL_LIBS})
     if(WIN32)
-        target_link_libraries(ProjectDriveApp PRIVATE d3d11 dxgi d3dcompiler dwmapi imm32 user32 gdi32 shell32)
+        target_link_libraries(ProjectDriveApp PRIVATE dwmapi imm32 user32 gdi32 shell32)
     endif()
     set_target_properties(ProjectDriveApp PROPERTIES
         OUTPUT_NAME "ProjectDrive"
@@ -277,7 +317,9 @@ if(FRONTIER_CI_RELAX_WERROR AND NOT MSVC)
         get_property(targets DIRECTORY "${dir}" PROPERTY BUILDSYSTEM_TARGETS)
         foreach(tgt IN LISTS targets)
             get_target_property(tgt_type "${tgt}" TYPE)
-            if(NOT tgt_type STREQUAL "INTERFACE_LIBRARY")
+            if(tgt_type STREQUAL "STATIC_LIBRARY" OR tgt_type STREQUAL "SHARED_LIBRARY" OR
+               tgt_type STREQUAL "MODULE_LIBRARY" OR tgt_type STREQUAL "OBJECT_LIBRARY" OR
+               tgt_type STREQUAL "EXECUTABLE")
                 target_compile_options("${tgt}" PRIVATE -Wno-error)
             endif()
         endforeach()

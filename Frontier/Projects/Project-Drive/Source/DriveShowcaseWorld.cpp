@@ -184,7 +184,7 @@ DriveShowcaseWorld::DriveShowcaseWorld()
 {
 }
 
-bool DriveShowcaseWorld::Initialize(const std::string &ProjectRootPath)
+bool DriveShowcaseWorld::Initialize(const std::string &ProjectRootPath, bool DeferHeavyWarmup)
 {
     ProjectRoot_ = ProjectRootPath;
     GeometryDir_ = ProjectRoot_ + "/Content/Geometry";
@@ -266,11 +266,6 @@ bool DriveShowcaseWorld::Initialize(const std::string &ProjectRootPath)
     PortalFilter_.AllowObjectThroughPortals(1u);
     PortalFilter_.BlockObjectFromPortals(2u);
 
-    // 5. Warm up Snowfall-Deposited Single-Mesh Snow Mound (CC == 1), Smooth 2.5D Puddles (0 foam/0 splash),
-    //    Griffith Fractured Monolith (~28 hulls, 100.00% volume), Sparks, and 5.13x Pyro Plume!
-    WarmupSnowMoundAndPuddles();
-    RebuildFractureMonolith();
-
     SparkSceneColliderBox GroundCol{};
     GroundCol.CentreWorld = {0.0f, 0.0f, -0.25f};
     GroundCol.HalfExtents = {40.0f, 40.0f, 0.25f};
@@ -278,13 +273,54 @@ bool DriveShowcaseWorld::Initialize(const std::string &ProjectRootPath)
     GroundCol.Friction    = 0.25f;
     SparkSolver_.RegisterSceneCollider(GroundCol);
 
-    // Warm up 18 frames so velocity/RPM/pyro sparklines and smoke column are immediately rich at frame 0!
-    for (int Warm = 0; Warm < 18; ++Warm)
+    LatestDriveSnap_       = DriveSim_.TakeSnapshot(1280u, 720u);
+    DeferredWarmupPending_ = DeferHeavyWarmup;
+    if (!DeferHeavyWarmup)
     {
-        AdvanceCoupledSubsystems(1.0f / 30.0f);
+        RunDeferredWarmup({});
     }
     ++SceneDirtyRevision_;
     return true;
+}
+
+void DriveShowcaseWorld::RunDeferredWarmup(
+    const std::function<void(uint32_t StepIndex, uint32_t TotalSteps, const char *StageText)> &OnStage)
+{
+    std::lock_guard<std::mutex> Lock(SolverMutex_);
+    constexpr uint32_t kTotalWarmupStages = 4u;
+
+    if (OnStage)
+    {
+        OnStage(1u, kTotalWarmupStages, "Cleaving Griffith 3D Voronoi Fracture Monolith (28 convex hulls)");
+    }
+    RebuildFractureMonolith();
+
+    if (OnStage)
+    {
+        OnStage(2u, kTotalWarmupStages, "Depositing Single-Mesh Snowpack Drift (CC == 1) & 2.5D ShallowWater");
+    }
+    WarmupSnowMoundAndPuddles();
+
+    if (OnStage)
+    {
+        OnStage(3u, kTotalWarmupStages, "Advancing Jolt v5.6.0 + GRIT 4-Wheel Vehicle & Weather Coupling");
+    }
+    for (int Warm = 0; Warm < 9; ++Warm)
+    {
+        AdvanceCoupledSubsystems(1.0f / 30.0f);
+    }
+
+    if (OnStage)
+    {
+        OnStage(4u, kTotalWarmupStages, "Stabilizing 5.13x Pyro PlumeFluid Column & Exposure Histogram");
+    }
+    for (int Warm = 9; Warm < 18; ++Warm)
+    {
+        AdvanceCoupledSubsystems(1.0f / 30.0f);
+    }
+
+    DeferredWarmupPending_ = false;
+    ++SceneDirtyRevision_;
 }
 
 void DriveShowcaseWorld::WarmupSnowMoundAndPuddles()
@@ -411,7 +447,7 @@ std::string DriveShowcaseWorld::ActivateNextSpawnedObject() noexcept
     return "spawned_3d_object_1";
 }
 
-void DriveShowcaseWorld::ResetAllSystems()
+void DriveShowcaseWorld::ResetAllSystemsUnlocked()
 {
     DriveSim_.RequestRespawn();
     DriveSim_.Advance(1.0 / 60.0);
@@ -423,14 +459,30 @@ void DriveShowcaseWorld::ResetAllSystems()
     ++SceneDirtyRevision_;
 }
 
+void DriveShowcaseWorld::ResetAllSystems()
+{
+    std::lock_guard<std::mutex> Lock(SolverMutex_);
+    ResetAllSystemsUnlocked();
+}
+
 void DriveShowcaseWorld::StepSingleTick(double DtSeconds)
 {
+    std::lock_guard<std::mutex> Lock(SolverMutex_);
+    if (DeferredWarmupPending_)
+    {
+        return;
+    }
     AdvanceCoupledSubsystems(static_cast<float>(std::clamp(DtSeconds, 1.0 / 240.0, 0.05)));
     ++SceneDirtyRevision_;
 }
 
 void DriveShowcaseWorld::TickFrame(double DtSeconds, const DriveControlReadings &Controls)
 {
+    std::lock_guard<std::mutex> Lock(SolverMutex_);
+    if (DeferredWarmupPending_)
+    {
+        return;
+    }
     // Service one-shot Inspector action triggers even while Paused!
     if (Records_.ControlVehicle.TriggerRespawn)
     {
@@ -443,7 +495,7 @@ void DriveShowcaseWorld::TickFrame(double DtSeconds, const DriveControlReadings 
     if (Records_.GravitySolver.RequestCourseReset)
     {
         Records_.GravitySolver.RequestCourseReset = false;
-        ResetAllSystems();
+        ResetAllSystemsUnlocked();
     }
     if (Records_.SnowMound.RebuildWarmupDrift)
     {
@@ -764,6 +816,11 @@ bool DriveShowcaseWorld::RenderViewportIfNeeded(
     uint32_t TargetPanelWidth, uint32_t TargetPanelHeight,
     std::vector<uint8_t> &OutRgba8, uint32_t &OutRenderW, uint32_t &OutRenderH)
 {
+    std::lock_guard<std::mutex> Lock(SolverMutex_);
+    if (DeferredWarmupPending_)
+    {
+        return false;
+    }
     const float Scale = std::clamp(static_cast<float>(Records_.RenderPipeline.ViewportScalePercent) * 0.01f, 0.25f, 1.0f);
     const uint32_t RW = std::clamp(static_cast<uint32_t>(std::round(static_cast<float>(TargetPanelWidth) * Scale)), 160u, 960u);
     const uint32_t RH = std::clamp(static_cast<uint32_t>(std::round(static_cast<float>(TargetPanelHeight) * Scale)), 96u, 560u);
@@ -1301,6 +1358,31 @@ void DriveShowcaseWorld::RenderDedicatedEntityPreview(
         Dist * std::cos(Pitch) * std::sin(OrbitYawRad),
         Dist * std::sin(Pitch)};
     Studio.RenderViewportRgba8(GpuTracingTier::HardwareRayTracingRtx, Width, Height, Eye, Focus, 0.82f, Ctx, OutRgba8);
+}
+
+bool DriveShowcaseWorld::TryRenderDedicatedEntityPreview(
+    const std::string &StableId,
+    uint32_t Width, uint32_t Height,
+    float OrbitYawRad, float OrbitPitchRad, float OrbitDistanceScale,
+    uint8_t PreviewInspectionMode,
+    std::vector<uint8_t> &OutRgba8) const
+{
+    if (NonBlockingStudioPreviews_)
+    {
+        std::unique_lock<std::mutex> TryLock(SolverMutex_, std::try_to_lock);
+        if (!TryLock.owns_lock())
+        {
+            return false;
+        }
+        RenderDedicatedEntityPreview(StableId, Width, Height, OrbitYawRad, OrbitPitchRad,
+                                     OrbitDistanceScale, PreviewInspectionMode, OutRgba8);
+        return true;
+    }
+
+    std::lock_guard<std::mutex> Lock(SolverMutex_);
+    RenderDedicatedEntityPreview(StableId, Width, Height, OrbitYawRad, OrbitPitchRad,
+                                 OrbitDistanceScale, PreviewInspectionMode, OutRgba8);
+    return true;
 }
 
 } // namespace Frontier::Drive

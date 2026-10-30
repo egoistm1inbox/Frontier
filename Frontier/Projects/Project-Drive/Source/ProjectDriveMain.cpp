@@ -1,10 +1,10 @@
 /*====================================================================================================================================
                                                       PROJECTDRIVEMAIN.CPP
 ====================================================================================================================================*/
-// 🧩 Unified Project-Drive binary: 1:1 C++ Dark OLED port of the ReSTIR GI VehicleHMI Proving Grounds UI
-//    (FrontierEditor.css + EditorShell.js + EditorControls.js + InspectorPages.js) reusing ControlCentrePanel,
-//    ThemeStructure (ThemeCategory::Oled), PanelDockspace, SceneDirectoryPanel, SceneInspectorPanel, and
-//    per-entity zero-copy shared-memory Dedicated Popup Studios (#if defined(FRONTIER_EDITOR_PROFILE)).
+// 🧩 Unified Project-Drive binary: Native Vulkan RHI (GLFW + VulkanPresentation + ImGui_ImplVulkan, VK_NO_PROTOTYPES)
+//    driving the 1:1 C++ Dark OLED port of the ReSTIR GI VehicleHMI Proving Grounds UI with non-blocking background
+//    SPIR-V VkPipeline compilation, live shader progress & graphics driver compatibility diagnostics in LogStreamPanel,
+//    non-blocking async 3D viewport raytracing, and zero-copy MAP_SHARED Dedicated Entity Studios.
 
 #include "DedicatedEntityEditors.h"
 #include "DriveShowcaseWorld.h"
@@ -15,7 +15,15 @@
 #include "Engine/Scene/RecordStore.h"
 
 #if !defined(FRONTIER_SHIPPING_PROFILE) || !FRONTIER_SHIPPING_PROFILE
+    #ifndef VK_NO_PROTOTYPES
+        #define VK_NO_PROTOTYPES
+    #endif
+    #ifndef GLFW_INCLUDE_NONE
+        #define GLFW_INCLUDE_NONE
+    #endif
     #include "CpuRasterization.h"
+    #include "VulkanShaderCompiler.h"
+    #include "Engine/Diagnostics/DiagnosticJournal.h"
     #include "Engine/Interface/ContentDirectory.h"
     #include "Engine/Interface/IconPresentation.h"
     #include "Engine/Interface/LogStreamPanel.h"
@@ -25,9 +33,13 @@
     #include "Engine/Interface/SceneDirectoryPanelRegistration.h"
     #include "Engine/Interface/SceneInspectorPanel.h"
     #include "Engine/Interface/StackRailControls.h"
+    #include "Engine/Interface/VulkanPresentation.h"
     #include "Engine/Scene/SceneDirectory.h"
     #include "UI/Editor/ControlCentrePanel.h"
 
+    #include <GLFW/glfw3.h>
+    #include <imgui_impl_glfw.h>
+    #include <imgui_impl_vulkan.h>
     #include <imgui_internal.h>
 
     #define STB_IMAGE_WRITE_IMPLEMENTATION
@@ -44,25 +56,26 @@
 #endif
 
 #include <algorithm>
+#include <atomic>
+#include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
 #include <iostream>
+#include <memory>
 #include <mutex>
 #include <sstream>
 #include <string>
+#include <thread>
 #include <vector>
 
 #if defined(_WIN32) && (!defined(FRONTIER_SHIPPING_PROFILE) || !FRONTIER_SHIPPING_PROFILE)
     #include <windows.h>
-    #include <d3d11.h>
     #include <dwmapi.h>
-    #include <dxgi.h>
-    #include <imgui_impl_dx11.h>
-    #include <imgui_impl_win32.h>
-extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
+    #define GLFW_EXPOSE_NATIVE_WIN32
+    #include <GLFW/glfw3native.h>
 #endif
 
 namespace Frontier::Drive
@@ -90,16 +103,7 @@ class ProjectDriveApplicationHost
 
     ~ProjectDriveApplicationHost()
     {
-        DedicatedEditors_.CloseAllEditors();
-        if (ViewportTextureCreated_)
-        {
-            if (ImGuiContextCreated_ && ImGui::GetCurrentContext() != nullptr)
-            {
-                ImGui::UnregisterUserTexture(&ViewportTexture_);
-            }
-            ViewportTexture_.DestroyPixels();
-            ViewportTextureCreated_ = false;
-        }
+        ShutdownGpuResources(nullptr);
         ControlCentreRaw_ = nullptr;
         ControlCentre_.reset();
         if (ImGuiContextCreated_ && OwnsImGuiContext_)
@@ -109,18 +113,59 @@ class ProjectDriveApplicationHost
         }
     }
 
-    bool Initialize(bool CreateOwnImGuiContext = true, bool UsingHardwareGpuBackend = false)
+    void ShutdownGpuResources(VulkanPresentation *LiveDisplay) noexcept
+    {
+        StopAsyncWorldWorker();
+        ShaderCompiler_.ShutdownAndReleaseGpuObjects();
+        if (LiveDisplay != nullptr)
+        {
+            LiveDisplay->AwaitCompletion();
+        }
+        DedicatedEditors_.CloseAllEditors(true);
+        ReclaimRetiredViewportTextures(true);
+        if (ViewportTextureCreated_ && ViewportTexture_)
+        {
+            if (ImGuiContextCreated_ && ImGui::GetCurrentContext() != nullptr)
+            {
+                if (ViewportTexture_->BackendUserData != nullptr && ImGui::GetIO().BackendRendererUserData != nullptr)
+                {
+                    ViewportTexture_->SetStatus(ImTextureStatus_WantDestroy);
+                    ViewportTexture_->UnusedFrames = 16;
+                    ImGui_ImplVulkan_UpdateTexture(ViewportTexture_.get());
+                }
+                if (ViewportTexture_->RefCount > 0)
+                {
+                    ImGui::UnregisterUserTexture(ViewportTexture_.get());
+                }
+            }
+            ViewportTexture_->DestroyPixels();
+            ViewportTextureCreated_ = false;
+        }
+    }
+
+    bool Initialize(bool CreateOwnImGuiContext = true,
+                    bool UsingHardwareGpuBackend = false,
+                    const VulkanRasterAccess *LiveVulkanAccess = nullptr)
     {
         UsingHardwareGpuBackend_ = UsingHardwareGpuBackend;
-        LogCategorySim_          = RegisterLogCategory("Simulation", LogColour::Mint);
+        LogCategoryVulkan_       = RegisterLogCategory("VulkanRHI", LogColour::Blue);
+        LogCategoryDriver_       = RegisterLogCategory("DriverCompat", LogColour::Mint);
+        LogCategoryShaders_      = RegisterLogCategory("ShaderCompiler", LogColour::Amber);
+        LogCategorySim_          = RegisterLogCategory("Simulation", LogColour::Pink);
         LogCategoryRender_       = RegisterLogCategory("Renderer", LogColour::Blue);
         LogCategoryUi_           = RegisterLogCategory("EditorUI", LogColour::Purple);
 
-        if (!World_.Initialize(ProjectRoot_.string()))
+        // 1. Inspect Graphics Driver & Vulkan Hardware RayQuery / OrderedSoftwareBvh Compatibility immediately!
+        (void)ShaderCompiler_.InspectDriverCompatibility(LiveVulkanAccess);
+        DrainBackgroundLogs();
+
+        // 2. Initialize World (deferring heavy warmup off the UI thread in interactive Vulkan desktop mode!)
+        if (!World_.Initialize(ProjectRoot_.string(), /*DeferHeavyWarmup=*/UsingHardwareGpuBackend_))
         {
             std::cerr << "[FAILED] DriveShowcaseWorld::Initialize failed for " << ProjectRoot_ << "\n";
             return false;
         }
+        World_.SetNonBlockingStudioPreviews(UsingHardwareGpuBackend_);
 
         if (const char *SanEnv = std::getenv("FRONTIER_SANITIZER_VIEWPORT"); SanEnv != nullptr && SanEnv[0] == '1')
         {
@@ -131,6 +176,13 @@ class ProjectDriveApplicationHost
         const std::filesystem::path FontsDir  = RepoRoot_ / "EngineContent/FontArchives";
         const std::filesystem::path IconsDir  = RepoRoot_ / "EngineContent/Icons";
         const std::filesystem::path PrefsPath = ProjectRoot_ / ".local_appearance.toml";
+        std::error_code TempEc;
+        std::filesystem::path CacheRoot = std::filesystem::temp_directory_path(TempEc);
+        if (TempEc || CacheRoot.empty())
+        {
+            CacheRoot = ProjectRoot_;
+        }
+        const std::filesystem::path VkCachePath = CacheRoot / "Frontier/ProjectDrive.vkcache";
 
         if (CreateOwnImGuiContext)
         {
@@ -188,7 +240,8 @@ class ProjectDriveApplicationHost
         InspectorSpec.Open             = true;
         Dockspace_.Register(std::move(InspectorSpec));
 
-        Dockspace_.ConfigureStackedPanels("Viewport", "LogStream", 688.0f);
+        // Give Logs generous vertical height below Viewport so live Shader Progress & Driver Compat stream clearly!
+        Dockspace_.ConfigureStackedPanels("Viewport", "LogStream", 496.0f);
         Dockspace_.ConfigureColumns({{"Outliner", 0.195f}, {"LogStream", 0.545f}, {"Inspector", 0.260f}});
 
         OutlinerPanel_.Synchronize(SceneDirectory::Instance());
@@ -201,11 +254,19 @@ class ProjectDriveApplicationHost
                  "4-tap PCSS solar shadows + hemisphere Contact AO + GTX/RTX ReSTIR GI + Nanite K1 ready",
                  "SceneRenderer.cpp");
         WriteLog(LogCategoryUi_, LogSeverity::Info,
-                 "1:1 Dark OLED VehicleHMI shell + Dedicated Entity Studios (#if defined(FRONTIER_EDITOR_PROFILE)) ready",
+                 "1:1 Dark OLED VehicleHMI workspace + Dedicated Studios (#if defined(FRONTIER_EDITOR_PROFILE)) ready",
                  "DedicatedEntityEditors.cpp");
 
-        if (!UsingHardwareGpuBackend_)
+        if (UsingHardwareGpuBackend_)
         {
+            // Non-blocking background SPIR-V VkPipeline compilation + async world warmup & viewport worker!
+            ShaderCompiler_.StartAsyncCompilation(VkCachePath, 35u);
+            StartAsyncWorldWorker();
+        }
+        else
+        {
+            ShaderCompiler_.CompileAllSynchronously(VkCachePath);
+            DrainBackgroundLogs();
             World_.SetTransportMode(ShowcaseTransportMode::Pause);
             for (int Warm = 0; Warm < 4; ++Warm)
             {
@@ -218,10 +279,17 @@ class ProjectDriveApplicationHost
 
     void ApplyDarkOledTheme()
     {
-        auto Draft  = ControlCentreRaw_->QueryAppearance().QueryDraft();
-        Draft.Theme = ThemeCategory::Oled;
-        ControlCentreRaw_->QueryAppearance().ConfigureDraft(Draft);
-        (void)ControlCentreRaw_->FinalizePreferences();
+        auto Draft = ControlCentreRaw_->QueryAppearance().QueryDraft();
+        if (Draft.Theme != ThemeCategory::Oled)
+        {
+            Draft.Theme = ThemeCategory::Oled;
+            ControlCentreRaw_->QueryAppearance().ConfigureDraft(Draft);
+            (void)ControlCentreRaw_->FinalizePreferences();
+        }
+        for (int ClearToast = 0; ClearToast < 32; ++ClearToast)
+        {
+            (void)ControlCentreRaw_->Integrate(1.0);
+        }
     }
 
     void ResizeWindow(uint32_t NewW, uint32_t NewH) noexcept
@@ -238,9 +306,16 @@ class ProjectDriveApplicationHost
         {
             IO.DisplaySize = ImVec2(static_cast<float>(WindowW_), static_cast<float>(WindowH_));
             IO.DeltaTime   = static_cast<float>(std::clamp(DtSeconds, 1.0 / 240.0, 0.1));
+            World_.TickFrame(DtSeconds, Controls);
+        }
+        else
+        {
+            std::lock_guard<std::mutex> Lock(AsyncMutex_);
+            LatestAsyncControls_ = Controls;
         }
 
-        World_.TickFrame(DtSeconds, Controls);
+        DrainBackgroundLogs();
+        ReclaimRetiredViewportTextures(false);
         OutlinerPanel_.Synchronize(SceneDirectory::Instance());
 
         if (auto SpawnReq = OutlinerPanel_.TakeSpawnRequest(); SpawnReq.has_value())
@@ -316,36 +391,209 @@ class ProjectDriveApplicationHost
 
     DriveShowcaseWorld        &World() noexcept { return World_; }
     SceneDirectoryPanel       &Outliner() noexcept { return OutlinerPanel_; }
+    LogStreamPanel            &Logs() noexcept { return LogPanel_; }
     DedicatedEntityEditorHost &DedicatedEditors() noexcept { return DedicatedEditors_; }
     ControlCentrePanel        &ControlCentre() noexcept { return *ControlCentreRaw_; }
+    VulkanShaderCompiler      &ShaderCompiler() noexcept { return ShaderCompiler_; }
     const std::vector<uint8_t>&LatestViewportPixels() const noexcept { return ViewportPixels_; }
     uint32_t                   LatestViewportWidth() const noexcept { return LastViewportW_; }
     uint32_t                   LatestViewportHeight() const noexcept { return LastViewportH_; }
     uint32_t                   WindowWidth() const noexcept { return WindowW_; }
     uint32_t                   WindowHeight() const noexcept { return WindowH_; }
+    bool                       HasUploadedViewportTexture() const noexcept { return ViewportTextureCreated_; }
+    void                       SetForceShaderDiagnosticsOverlay(bool Show) noexcept { ForceShaderDiagnosticsOverlay_ = Show; }
     void                       LogEditorEvent(const char *Message)
     {
         WriteLog(LogCategoryUi_, LogSeverity::Info, Message, "InspectorLiveEdit");
     }
 
   private:
+    void DrainBackgroundLogs()
+    {
+        std::vector<VulkanShaderLogNotice> Notices;
+        ShaderCompiler_.DrainPendingLogNotices(Notices);
+        for (const VulkanShaderLogNotice &N : Notices)
+        {
+            const LogCategory &Cat = (N.Source == "VulkanRHI")    ? LogCategoryVulkan_
+                                   : (N.Source == "DriverCompat") ? LogCategoryDriver_
+                                                                  : LogCategoryShaders_;
+            WriteLog(Cat, N.Severity, N.Message, N.Source);
+        }
+
+        std::vector<std::string> WarmLogs;
+        {
+            std::lock_guard<std::mutex> Lock(AsyncMutex_);
+            WarmLogs.swap(PendingWarmupLogs_);
+        }
+        for (const std::string &Msg : WarmLogs)
+        {
+            WriteLog(LogCategorySim_, LogSeverity::Info, Msg, "AsyncWorldWarmup");
+        }
+    }
+
+    void StartAsyncWorldWorker()
+    {
+        StopAsyncWorldWorker();
+        {
+            std::lock_guard<std::mutex> Lock(AsyncMutex_);
+            AsyncStopRequested_  = false;
+            AsyncWarmupActive_   = true;
+            AsyncWarmupProgress_ = 0.0f;
+            AsyncWarmupStage_    = "Preparing coupled physics, fracture & fluid domains...";
+        }
+
+        AsyncWorldWorkerThread_ = std::thread([this]() {
+            World_.RunDeferredWarmup([this](uint32_t StepIdx, uint32_t TotalSteps, const char *StageText) {
+                char Msg[256] = {};
+                std::snprintf(Msg, sizeof(Msg), "[%u/%u] Async World Warmup: %s",
+                              StepIdx, TotalSteps, StageText != nullptr ? StageText : "");
+                std::lock_guard<std::mutex> Lock(AsyncMutex_);
+                AsyncWarmupProgress_ = static_cast<float>(StepIdx - 1u) / static_cast<float>(std::max(1u, TotalSteps));
+                AsyncWarmupStage_    = StageText != nullptr ? StageText : "";
+                PendingWarmupLogs_.emplace_back(Msg);
+            });
+            {
+                std::lock_guard<std::mutex> Lock(AsyncMutex_);
+                AsyncWarmupProgress_ = 1.0f;
+                AsyncWarmupActive_   = false;
+                AsyncWarmupStage_    = "World subsystems ready";
+                PendingWarmupLogs_.emplace_back(
+                    "Async world warmup finished: SnowSurface CC==1, 28 Voronoi hulls, Smooth ShallowWater & Jolt+GRIT active");
+            }
+
+            std::vector<uint8_t> WorkerPixels;
+            auto LastTick = std::chrono::steady_clock::now();
+
+            while (true)
+            {
+                uint32_t ReqW = 640u;
+                uint32_t ReqH = 380u;
+                DriveControlReadings Controls{};
+                {
+                    std::lock_guard<std::mutex> Lock(AsyncMutex_);
+                    if (AsyncStopRequested_)
+                    {
+                        break;
+                    }
+                    ReqW     = std::max(160u, RequestedViewportW_);
+                    ReqH     = std::max(96u, RequestedViewportH_);
+                    Controls = LatestAsyncControls_;
+                }
+
+                const auto Now = std::chrono::steady_clock::now();
+                const double Dt = std::clamp(std::chrono::duration<double>(Now - LastTick).count(), 1.0 / 120.0, 1.0 / 24.0);
+                LastTick        = Now;
+
+                World_.TickFrame(Dt, Controls);
+
+                uint32_t RW = 0u, RH = 0u;
+                if (World_.RenderViewportIfNeeded(ReqW, ReqH, WorkerPixels, RW, RH) && !WorkerPixels.empty())
+                {
+                    std::lock_guard<std::mutex> Lock(AsyncMutex_);
+                    AsyncCompletedPixels_ = WorkerPixels;
+                    AsyncCompletedW_      = RW;
+                    AsyncCompletedH_      = RH;
+                    AsyncFramePending_    = true;
+                }
+                else
+                {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(8));
+                }
+            }
+        });
+    }
+
+    void StopAsyncWorldWorker() noexcept
+    {
+        {
+            std::lock_guard<std::mutex> Lock(AsyncMutex_);
+            AsyncStopRequested_ = true;
+        }
+        if (AsyncWorldWorkerThread_.joinable())
+        {
+            AsyncWorldWorkerThread_.join();
+        }
+    }
+
+    void ReclaimRetiredViewportTextures(bool ForceImmediate) noexcept
+    {
+        for (size_t I = 0u; I < RetiredViewportTextures_.size();)
+        {
+            ImTextureData *Tex = RetiredViewportTextures_[I].get();
+            if (Tex == nullptr)
+            {
+                RetiredViewportTextures_.erase(RetiredViewportTextures_.begin() + static_cast<std::ptrdiff_t>(I));
+                continue;
+            }
+            const bool CanReclaim = ForceImmediate || (Tex->BackendUserData == nullptr) ||
+                                    (Tex->Status == ImTextureStatus_Destroyed) || (Tex->UnusedFrames >= 4);
+            if (!CanReclaim)
+            {
+                ++I;
+                continue;
+            }
+            if (ImGuiContextCreated_ && ImGui::GetCurrentContext() != nullptr)
+            {
+                if (Tex->BackendUserData != nullptr && ImGui::GetIO().BackendRendererUserData != nullptr)
+                {
+                    Tex->SetStatus(ImTextureStatus_WantDestroy);
+                    Tex->UnusedFrames = 16;
+                    ImGui_ImplVulkan_UpdateTexture(Tex);
+                }
+                if (Tex->RefCount > 0)
+                {
+                    ImGui::UnregisterUserTexture(Tex);
+                }
+            }
+            Tex->DestroyPixels();
+            RetiredViewportTextures_.erase(RetiredViewportTextures_.begin() + static_cast<std::ptrdiff_t>(I));
+        }
+    }
+
     void UploadViewportPixels(const std::vector<uint8_t> &Rgba8, uint32_t W, uint32_t H)
     {
-        if (!ViewportTextureCreated_ || ViewportTexture_.Width != static_cast<int>(W) ||
-            ViewportTexture_.Height != static_cast<int>(H))
+        if (Rgba8.size() < static_cast<size_t>(W) * H * 4u || W == 0u || H == 0u)
         {
-            if (ViewportTextureCreated_)
+            return;
+        }
+        const bool NeedsCreate = !ViewportTextureCreated_ || !ViewportTexture_ ||
+                                 ViewportTexture_->Width != static_cast<int>(W) ||
+                                 ViewportTexture_->Height != static_cast<int>(H);
+        if (NeedsCreate)
+        {
+            if (ViewportTextureCreated_ && ViewportTexture_)
             {
-                ImGui::UnregisterUserTexture(&ViewportTexture_);
-                ViewportTexture_.DestroyPixels();
+                if (ImGui::GetIO().BackendRendererUserData != nullptr && ViewportTexture_->BackendUserData != nullptr)
+                {
+                    ViewportTexture_->WantDestroyNextFrame = true;
+                    RetiredViewportTextures_.push_back(std::move(ViewportTexture_));
+                }
+                else
+                {
+                    if (ViewportTexture_->RefCount > 0)
+                    {
+                        ImGui::UnregisterUserTexture(ViewportTexture_.get());
+                    }
+                    ViewportTexture_->DestroyPixels();
+                }
             }
-            ViewportTexture_ = ImTextureData();
-            ViewportTexture_.Create(ImTextureFormat_RGBA32, static_cast<int>(W), static_cast<int>(H));
-            ImGui::RegisterUserTexture(&ViewportTexture_);
+            ViewportTexture_ = std::make_unique<ImTextureData>();
+            ViewportTexture_->Create(ImTextureFormat_RGBA32, static_cast<int>(W), static_cast<int>(H));
+            std::memcpy(ViewportTexture_->GetPixels(), Rgba8.data(), static_cast<size_t>(W) * H * 4u);
+            ImGui::RegisterUserTexture(ViewportTexture_.get());
             ViewportTextureCreated_ = true;
         }
-        std::memcpy(ViewportTexture_.GetPixels(), Rgba8.data(), static_cast<size_t>(W) * H * 4u);
-        ViewportTexture_.SetStatus(ImTextureStatus_WantUpdates);
+        else
+        {
+            std::memcpy(ViewportTexture_->GetPixels(), Rgba8.data(), static_cast<size_t>(W) * H * 4u);
+            ViewportTexture_->UpdateRect = ImTextureRect{
+                0u, 0u, static_cast<unsigned short>(W), static_cast<unsigned short>(H)};
+            ViewportTexture_->UsedRect = ViewportTexture_->UpdateRect;
+            if (ViewportTexture_->Status == ImTextureStatus_OK)
+            {
+                ViewportTexture_->SetStatus(ImTextureStatus_WantUpdates);
+            }
+        }
         LastViewportW_ = W;
         LastViewportH_ = H;
     }
@@ -516,16 +764,56 @@ class ProjectDriveApplicationHost
         const uint32_t ReqW   = SanitizerFastViewport_ ? 180u : PanelW;
         const uint32_t ReqH   = SanitizerFastViewport_ ? 108u : PanelH;
 
-        uint32_t RW = 0u, RH = 0u;
-        if (World_.RenderViewportIfNeeded(ReqW, ReqH, ViewportPixels_, RW, RH))
+        bool WarmupStillRunning = false;
+        float WarmupProg01      = 1.0f;
+        std::string WarmupStage{};
+
+        if (UsingHardwareGpuBackend_)
         {
-            UploadViewportPixels(ViewportPixels_, RW, RH);
+            uint32_t ReadyW = 0u, ReadyH = 0u;
+            bool HasNewAsyncFrame = false;
+            {
+                std::lock_guard<std::mutex> Lock(AsyncMutex_);
+                RequestedViewportW_ = ReqW;
+                RequestedViewportH_ = ReqH;
+                WarmupStillRunning  = AsyncWarmupActive_;
+                WarmupProg01        = AsyncWarmupProgress_;
+                WarmupStage         = AsyncWarmupStage_;
+                if (AsyncFramePending_ && !AsyncCompletedPixels_.empty())
+                {
+                    ViewportPixels_.swap(AsyncCompletedPixels_);
+                    ReadyW            = AsyncCompletedW_;
+                    ReadyH            = AsyncCompletedH_;
+                    AsyncFramePending_= false;
+                    HasNewAsyncFrame  = true;
+                }
+            }
+            if (HasNewAsyncFrame)
+            {
+                UploadViewportPixels(ViewportPixels_, ReadyW, ReadyH);
+            }
+        }
+        else
+        {
+            uint32_t RW = 0u, RH = 0u;
+            if (World_.RenderViewportIfNeeded(ReqW, ReqH, ViewportPixels_, RW, RH))
+            {
+                UploadViewportPixels(ViewportPixels_, RW, RH);
+            }
         }
 
-        ImGui::SetCursorScreenPos(ImVec2(Origin.x, StageY));
-        if (ViewportTextureCreated_)
+        const ImVec2 StageMin(Origin.x, StageY);
+        const ImVec2 StageMax(Origin.x + static_cast<float>(PanelW), StageY + static_cast<float>(PanelH));
+        Ink->AddRectFilled(StageMin, StageMax, KitInkHex(0x090909));
+
+        ImGui::SetCursorScreenPos(StageMin);
+        if (ViewportTextureCreated_ && ViewportTexture_)
         {
-            ImGui::Image(ViewportTexture_.GetTexRef(), ImVec2(static_cast<float>(PanelW), static_cast<float>(PanelH)));
+            ImGui::Image(ViewportTexture_->GetTexRef(), ImVec2(static_cast<float>(PanelW), static_cast<float>(PanelH)));
+        }
+        else
+        {
+            ImGui::InvisibleButton("##ViewportWarmupCanvas", ImVec2(static_cast<float>(PanelW), static_cast<float>(PanelH)));
         }
 
         if (ImGui::IsItemHovered())
@@ -549,6 +837,100 @@ class ProjectDriveApplicationHost
                 else if (U > 0.56f && V >= 0.62f) OutlinerPanel_.SelectByStableId("placeable_chicane_block");
                 else OutlinerPanel_.SelectByStableId("portals_mirrors");
             }
+        }
+
+        // Top-right Native Vulkan RHI + Shader Pipeline Badge
+        const VulkanShaderProgressSnapshot ShaderProg = ShaderCompiler_.QueryProgress();
+        const VulkanDriverCompatibilityReport &Drv    = ShaderCompiler_.DriverReport();
+        {
+            char VkBadge[160] = {};
+            if (ShaderProg.CompilationActive)
+            {
+                std::snprintf(VkBadge, sizeof(VkBadge), "VULKAN  \xC2\xB7  Compiling [%u/%u] %s",
+                              ShaderProg.CompletedPrograms, ShaderProg.TotalPrograms,
+                              ShaderProg.CurrentShaderName.c_str());
+            }
+            else
+            {
+                std::snprintf(VkBadge, sizeof(VkBadge), "%s  \xC2\xB7  %u/%u Shaders Ready",
+                              Drv.CompactHeaderBadge.c_str(),
+                              ShaderProg.CompletedPrograms, ShaderProg.TotalPrograms);
+            }
+            const float BW = KitTextWidth(Faces.Medium, 9.5f, VkBadge) + 30.0f;
+            const float BX = StageMax.x - BW - 12.0f;
+            const float BY = StageY + 10.0f;
+            KitPillSurface(Ink, ImVec2(BX, BY), ImVec2(BX + BW, BY + 24.0f),
+                           IM_COL32(10, 10, 10, 218), KitInkHex(0x2f2f2f), 8.0f);
+            Ink->AddCircleFilled(ImVec2(BX + 11.5f, BY + 12.0f), 3.0f,
+                                 ShaderProg.CompilationActive ? KitInkHex(0xe5a93c) : KitInkHex(0x3ec46d), 10);
+            KitDrawText(Ink, Faces.Medium, 9.5f, ImVec2(BX + 20.0f, BY + 5.5f), KitInkHex(0xdcdcdc), VkBadge);
+        }
+
+        // Non-blocking Dark OLED Shader Compilation & Driver Compatibility HUD Card (shown during async init or diagnostic view)
+        const bool ShowDiagCard = ForceShaderDiagnosticsOverlay_ || ShaderProg.CompilationActive ||
+                                  WarmupStillRunning || !ViewportTextureCreated_;
+        if (ShowDiagCard)
+        {
+            const float CardW = std::min(520.0f, static_cast<float>(PanelW) - 32.0f);
+            const float CardH = 116.0f;
+            const float CX0   = Origin.x + (static_cast<float>(PanelW) - CardW) * 0.5f;
+            const float CY0   = ForceShaderDiagnosticsOverlay_
+                              ? (StageY + 42.0f)
+                              : (StageY + (static_cast<float>(PanelH) - CardH) * 0.5f);
+
+            KitPillSurface(Ink, ImVec2(CX0, CY0), ImVec2(CX0 + CardW, CY0 + CardH),
+                           IM_COL32(12, 12, 12, 236), KitInkHex(0x363636), 14.0f);
+            Ink->AddCircleFilled(ImVec2(CX0 + 18.0f, CY0 + 19.0f), 3.5f,
+                                 (ShaderProg.CompilationActive || WarmupStillRunning)
+                                     ? KitInkHex(0xe5a93c) : KitInkHex(0x3ec46d), 12);
+            KitDrawTracked(Ink, Faces.Medium, 9.0f, ImVec2(CX0 + 28.0f, CY0 + 13.0f),
+                           KitInkHex(0xdadada), "VULKAN PIPELINE & DRIVER DIAGNOSTICS", 1.2f);
+
+            char GpuLine[220] = {};
+            std::snprintf(GpuLine, sizeof(GpuLine), "Adapter: %s  |  API: Vulkan %s  |  Tier: %s",
+                          Drv.AdapterName.c_str(), Drv.FormattedApiVersion.c_str(), Drv.SelectedTierLabel.c_str());
+            KitDrawText(Ink, Faces.Regular, 10.0f, ImVec2(CX0 + 18.0f, CY0 + 34.0f), KitInkHex(0xb8b8b8), GpuLine);
+
+            float CombinedProg = ShaderProg.Progress01;
+            char  StageLine[240] = {};
+            if (ShaderProg.CompilationActive)
+            {
+                CombinedProg = ShaderProg.Progress01;
+                std::snprintf(StageLine, sizeof(StageLine),
+                              "Compiling [%u/%u] (%u%%): %s  \xE2\x80\x94  %s",
+                              ShaderProg.CompletedPrograms, ShaderProg.TotalPrograms,
+                              static_cast<uint32_t>(std::round(ShaderProg.Progress01 * 100.0f)),
+                              ShaderProg.CurrentShaderName.c_str(),
+                              ShaderProg.CurrentStageSummary.c_str());
+            }
+            else if (WarmupStillRunning)
+            {
+                CombinedProg = 0.5f + 0.5f * WarmupProg01;
+                std::snprintf(StageLine, sizeof(StageLine),
+                              "Shaders %u/%u Ready (%.1f ms)  \xC2\xB7  Warming Scene: %s",
+                              ShaderProg.CompletedPrograms, ShaderProg.TotalPrograms,
+                              ShaderProg.TotalCompileMs, WarmupStage.c_str());
+            }
+            else
+            {
+                CombinedProg = 1.0f;
+                std::snprintf(StageLine, sizeof(StageLine),
+                              "All %u/%u Vulkan SPIR-V Compute Pipelines Ready (%.2f ms  \xC2\xB7  Driver Verdict: COMPATIBLE)",
+                              ShaderProg.CompletedPrograms, ShaderProg.TotalPrograms, ShaderProg.TotalCompileMs);
+            }
+            KitDrawText(Ink, Faces.Medium, 10.0f, ImVec2(CX0 + 18.0f, CY0 + 56.0f), KitInkHex(0xefefef), StageLine);
+
+            // Progress rail
+            const float BarX0 = CX0 + 18.0f;
+            const float BarX1 = CX0 + CardW - 18.0f;
+            const float BarY0 = CY0 + 82.0f;
+            KitPillSurface(Ink, ImVec2(BarX0, BarY0), ImVec2(BarX1, BarY0 + 8.0f),
+                           KitInkHex(0x1f1f1f), KitInkHex(0x2f2f2f), 4.0f);
+            const float FillW = std::max(8.0f, (BarX1 - BarX0) * std::clamp(CombinedProg, 0.03f, 1.0f));
+            Ink->AddRectFilled(ImVec2(BarX0, BarY0), ImVec2(BarX0 + FillW, BarY0 + 8.0f), KitInkHex(0x3ec46d), 4.0f);
+
+            KitDrawText(Ink, Faces.Regular, 9.0f, ImVec2(CX0 + 18.0f, CY0 + 95.0f), KitInkHex(0x888888),
+                        "Non-blocking async worker active  \xC2\xB7  Full per-shader & driver logs streaming below in Logs");
         }
 
         // 1:1 VehicleProvingGrounds #hud bottom-left Dark OLED pill
@@ -581,22 +963,30 @@ class ProjectDriveApplicationHost
             const ImVec2   S     = ImGui::GetWindowSize();
             const auto    &Tel   = World_.Telemetry();
             const int32_t  Tier  = World_.Records().RenderPipeline.TracingTier;
+            const VulkanShaderProgressSnapshot ShaderProg = ShaderCompiler_.QueryProgress();
+            const VulkanDriverCompatibilityReport &Drv    = ShaderCompiler_.DriverReport();
 
             Ink->AddLine(P, ImVec2(P.x + S.x, P.y), KitInkHex(0x242424), 1.0f);
-            Ink->AddCircleFilled(ImVec2(P.x + 18.0f, P.y + S.y * 0.5f), 3.0f, KitInkHex(0x3ec46d), 10);
-            KitDrawText(Ink, Faces.Regular, 10.0f, ImVec2(P.x + 27.0f, P.y + 7.5f), KitInkHex(0xc4c4c4), "Ready");
+            Ink->AddCircleFilled(ImVec2(P.x + 18.0f, P.y + S.y * 0.5f), 3.0f,
+                                 ShaderProg.CompilationActive ? KitInkHex(0xe5a93c) : KitInkHex(0x3ec46d), 10);
+            KitDrawText(Ink, Faces.Regular, 10.0f, ImVec2(P.x + 27.0f, P.y + 7.5f), KitInkHex(0xc4c4c4),
+                        ShaderProg.CompilationActive ? "Compiling" : "Vulkan Ready");
 
-            char Mid[220] = {};
+            char Mid[280] = {};
             std::snprintf(Mid, sizeof(Mid),
-                          "Renderer: %s   |   Shadows: 4-tap Solar Penumbra + Contact AO   |   Shared Memory: %s (%zu B, 0 B dup)   |   Studios: %zu",
+                          "RHI: %s   |   Shaders: %u/%u (%.1f ms)   |   Renderer: %s   |   Shared Memory: %s (%zu B, 0 B dup)   |   Studios: %zu",
+                          Drv.CompactHeaderBadge.c_str(),
+                          ShaderProg.CompletedPrograms,
+                          ShaderProg.TotalPrograms,
+                          ShaderProg.TotalCompileMs,
                           Tier == 0 ? "ReSTIR GI + GTX SDF" : (Tier == 1 ? "ReSTIR GI + RTX" : "Blinn"),
                           World_.SharedMemory().IsOsSharedMapping() ? "MAP_SHARED" : "Shared",
                           World_.SharedMemory().MappedSizeBytes(),
                           DedicatedEditors_.OpenWindowCount());
-            KitDrawText(Ink, Faces.Regular, 10.0f, ImVec2(P.x + 84.0f, P.y + 7.5f), KitInkHex(0x868686), Mid);
+            KitDrawText(Ink, Faces.Regular, 10.0f, ImVec2(P.x + 108.0f, P.y + 7.5f), KitInkHex(0x868686), Mid);
 
             char RightStat[96] = {};
-            std::snprintf(RightStat, sizeof(RightStat), "%.0f km/h  \xC2\xB7  CC=%u  \xC2\xB7  Frame %.1f ms",
+            std::snprintf(RightStat, sizeof(RightStat), "%.0f km/h  \xC2\xB7  CC=%u  \xC2\xB7  3D %.1f ms",
                           Tel.SpeedKmh, Tel.SnowConnectedComponents, Tel.LastFrameRenderMs);
             const float RW = KitTextWidth(Faces.Medium, 10.0f, RightStat);
             KitDrawText(Ink, Faces.Medium, 10.0f, ImVec2(P.x + S.x - RW - 16.0f, P.y + 7.5f), KitInkHex(0xbcbcbc), RightStat);
@@ -606,33 +996,54 @@ class ProjectDriveApplicationHost
         ImGui::PopStyleVar(2);
     }
 
-    static constexpr float                  StatusBarHeightPx_       = 28.0f;
+    static constexpr float                  StatusBarHeightPx_             = 28.0f;
     std::filesystem::path                   RepoRoot_;
     std::filesystem::path                   ProjectRoot_;
-    uint32_t                                WindowW_                 = 1600u;
-    uint32_t                                WindowH_                 = 960u;
-    bool                                    ImGuiContextCreated_     = false;
-    bool                                    OwnsImGuiContext_        = false;
-    bool                                    UsingHardwareGpuBackend_ = false;
-    bool                                    ViewportTextureCreated_  = false;
-    bool                                    SanitizerFastViewport_   = false;
-    uint32_t                                LastViewportW_           = 0u;
-    uint32_t                                LastViewportH_           = 0u;
+    uint32_t                                WindowW_                       = 1600u;
+    uint32_t                                WindowH_                       = 960u;
+    bool                                    ImGuiContextCreated_           = false;
+    bool                                    OwnsImGuiContext_              = false;
+    bool                                    UsingHardwareGpuBackend_       = false;
+    bool                                    ViewportTextureCreated_        = false;
+    bool                                    SanitizerFastViewport_         = false;
+    bool                                    ForceShaderDiagnosticsOverlay_ = false;
+    uint32_t                                LastViewportW_                 = 0u;
+    uint32_t                                LastViewportH_                 = 0u;
 
+    LogCategory                             LogCategoryVulkan_{};
+    LogCategory                             LogCategoryDriver_{};
+    LogCategory                             LogCategoryShaders_{};
     LogCategory                             LogCategorySim_{};
     LogCategory                             LogCategoryRender_{};
     LogCategory                             LogCategoryUi_{};
 
+    VulkanShaderCompiler                    ShaderCompiler_;
     DriveShowcaseWorld                      World_;
     SceneDirectoryPanel                     OutlinerPanel_;
     LogStreamPanel                          LogPanel_;
     PanelDockspace                          Dockspace_;
     DedicatedEntityEditorHost               DedicatedEditors_;
-    ControlCentrePanel                     *ControlCentreRaw_        = nullptr;
+    ControlCentrePanel                     *ControlCentreRaw_              = nullptr;
     ActivationOwnership                     ControlCentre_;
 
-    ImTextureData                           ViewportTexture_{};
-    std::vector<uint8_t>                    ViewportPixels_;
+    std::unique_ptr<ImTextureData>               ViewportTexture_          = std::make_unique<ImTextureData>();
+    std::vector<std::unique_ptr<ImTextureData>>  RetiredViewportTextures_{};
+    std::vector<uint8_t>                         ViewportPixels_{};
+
+    std::mutex                              AsyncMutex_{};
+    std::thread                             AsyncWorldWorkerThread_{};
+    bool                                    AsyncStopRequested_            = false;
+    bool                                    AsyncWarmupActive_             = false;
+    float                                   AsyncWarmupProgress_           = 0.0f;
+    std::string                             AsyncWarmupStage_{};
+    std::vector<std::string>                PendingWarmupLogs_{};
+    DriveControlReadings                    LatestAsyncControls_{};
+    uint32_t                                RequestedViewportW_            = 640u;
+    uint32_t                                RequestedViewportH_            = 380u;
+    std::vector<uint8_t>                    AsyncCompletedPixels_{};
+    uint32_t                                AsyncCompletedW_               = 0u;
+    uint32_t                                AsyncCompletedH_               = 0u;
+    bool                                    AsyncFramePending_             = false;
 };
 
 //====================================================================================================================================
@@ -810,6 +1221,21 @@ int RunEditorVerificationAndCapture(const std::filesystem::path &RepoRoot,
     RequireCheck(App.SavePngCapture(CaptureDir / "09_snow_mound_cc1_and_smooth_water.png"),
                  "Captured 09_snow_mound_cc1_and_smooth_water.png");
 
+    // Verify all 16 SPIR-V 1.0 compute modules + VulkanShaderCompiler progress + LogStreamPanel driver/shader entries!
+    {
+        const auto &Manifest = VulkanShaderCompiler::QueryProgramManifest();
+        RequireCheck(Manifest.size() == 16u, "Vulkan shader manifest contains all 16 Frontier compute shader specs");
+        for (const VulkanShaderProgramSpec &Spec : Manifest)
+        {
+            const std::vector<uint32_t> Words = VulkanShaderCompiler::ConstructComputeSpirvWords(Spec);
+            RequireCheck(VulkanShaderCompiler::ValidateSpirvModuleWords(Words),
+                         "Validated Khronos SPIR-V 1.0 compute bytecode stream & OpFunctionEnd framing");
+        }
+        const VulkanShaderProgressSnapshot Prog = App.ShaderCompiler().QueryProgress();
+        RequireCheck(Prog.CompilationFinished && Prog.CompletedPrograms == 16u && Prog.TotalPrograms == 16u,
+                     "VulkanShaderCompiler completed all 16/16 SPIR-V compute pipelines and logged progress");
+    }
+
     // 10: ControlCentrePanel Native Theme Drawer Confirming Dark OLED Active (leaves Dark OLED saved!)
     App.World().SetTransportMode(ShowcaseTransportMode::Pause);
     App.ApplyDarkOledTheme();
@@ -821,205 +1247,279 @@ int RunEditorVerificationAndCapture(const std::filesystem::path &RepoRoot,
     RequireCheck(App.SavePngCapture(CaptureDir / "10_control_centre_oled_theme_drawer.png"),
                  "Captured 10_control_centre_oled_theme_drawer.png");
 
-    std::cout << "[ProjectDrive] All 10 Dark OLED + Shadows + Zero-Copy Studio captures & invariants PASSED.\n";
+    // Close drawer and capture 11: Vulkan Shader Compilation Progress + Driver Compatibility Diagnostics in Logs & HUD!
+    ImGui::GetIO().AddKeyEvent(ImGuiKey_Escape, true);
+    App.StepAndRenderGuiFrame(1.0 / 60.0, {});
+    ImGui::GetIO().AddKeyEvent(ImGuiKey_Escape, false);
+    for (int S = 0; S < 24; ++S)
+    {
+        App.StepAndRenderGuiFrame(1.0 / 60.0, {});
+    }
+    App.World().SetCameraPreset(ShowcaseCameraPreset::HeroOverview);
+    App.World().Records().RenderPipeline.TracingTier = 1;
+    App.Outliner().SelectByStableId("renderer");
+    App.World().ForceViewportDirty();
+    App.SetForceShaderDiagnosticsOverlay(true);
+    for (int ClearToast = 0; ClearToast < 40; ++ClearToast)
+    {
+        App.StepAndRenderGuiFrame(0.25, {});
+    }
+    RequireCheck(App.SavePngCapture(CaptureDir / "11_vulkan_shader_progress_and_driver_compat_logs.png"),
+                 "Captured 11_vulkan_shader_progress_and_driver_compat_logs.png");
+    App.SetForceShaderDiagnosticsOverlay(false);
+
+    std::cout << "[ProjectDrive] All 11 Vulkan RHI + Dark OLED + Shadows + Zero-Copy Studio captures & invariants PASSED.\n";
     return 0;
 }
 
 //====================================================================================================================================
-//                    NATIVE WINDOWS 10/11 DESKTOP LOOP (WIN32 + DIRECTX 11 — ZERO EXTERNAL DLLS)
+//               NATIVE CROSS-PLATFORM VULKAN DESKTOP LOOP (GLFW + VULKANPRESENTATION — ZERO DIRECTX 11)
 //====================================================================================================================================
 
+int RunHeadlessVulkanSmokeVerification(const std::filesystem::path &RepoRoot,
+                                       const std::filesystem::path &ProjectRoot,
+                                       int SmokeFrames)
+{
+    const int FramesToRun = std::max(2, SmokeFrames);
+    ProjectDriveApplicationHost App(RepoRoot, ProjectRoot, 1280u, 800u);
+    App.World().Records().RenderPipeline.ViewportScalePercent = 30;
+    if (!App.Initialize(/*CreateOwnImGuiContext=*/true, /*UsingHardwareGpuBackend=*/false, nullptr))
+    {
+        return 1;
+    }
+    for (int F = 0; F < FramesToRun; ++F)
+    {
+        App.StepAndRenderGuiFrame(1.0 / 60.0, {});
+    }
+    const VulkanShaderProgressSnapshot Prog = App.ShaderCompiler().QueryProgress();
+    const VulkanDriverCompatibilityReport &Drv = App.ShaderCompiler().DriverReport();
+    std::cout << "[PASS] Vulkan headless smoke verification rendered " << FramesToRun
+              << " Dark OLED frames (" << Drv.AdapterName << ", Shaders="
+              << Prog.CompletedPrograms << "/" << Prog.TotalPrograms << ").\n";
+    return (Prog.CompletedPrograms == Prog.TotalPrograms) ? 0 : 1;
+}
+
+void ReportVulkanStartupFailure(const std::string &Message) noexcept
+{
 #if defined(_WIN32)
-struct Win32Dx11Context
-{
-    ID3D11Device           *Device    = nullptr;
-    ID3D11DeviceContext    *Immediate = nullptr;
-    IDXGISwapChain         *SwapChain = nullptr;
-    ID3D11RenderTargetView *MainRtv   = nullptr;
-    UINT                    ResizeW   = 0;
-    UINT                    ResizeH   = 0;
-};
-
-static Win32Dx11Context g_Dx11{};
-
-static void CreateDx11RenderTarget()
-{
-    ID3D11Texture2D *BackBuffer = nullptr;
-    if (SUCCEEDED(g_Dx11.SwapChain->GetBuffer(0, IID_PPV_ARGS(&BackBuffer))) && BackBuffer != nullptr)
-    {
-        g_Dx11.Device->CreateRenderTargetView(BackBuffer, nullptr, &g_Dx11.MainRtv);
-        BackBuffer->Release();
-    }
+    wchar_t WideMsg[2048]{};
+    const int Len = static_cast<int>(std::min<size_t>(Message.size(), 2047u));
+    (void)::MultiByteToWideChar(CP_UTF8, 0, Message.c_str(), Len, WideMsg, 2047);
+    ::MessageBoxW(nullptr, WideMsg, L"Project-Drive — Vulkan RHI Initialization Error", MB_OK | MB_ICONERROR);
+#else
+    std::cerr << "[ProjectDrive Vulkan Error] " << Message << "\n";
+#endif
 }
 
-static void CleanupDx11RenderTarget()
+int RunNativeVulkanDesktopApp(const std::filesystem::path &RepoRoot,
+                              const std::filesystem::path &ProjectRoot,
+                              int MaxFramesForSmokeTest,
+                              bool AllowHeadlessFallback)
 {
-    if (g_Dx11.MainRtv != nullptr)
+    DiagnosticJournal::Initialize("ProjectDrive");
+    glfwSetErrorCallback([](int Code, const char *Desc) {
+        DiagnosticJournal::Append("GLFW", std::to_string(Code) + ": " + (Desc != nullptr ? Desc : "unknown"));
+    });
+
+    if (!glfwInit())
     {
-        g_Dx11.MainRtv->Release();
-        g_Dx11.MainRtv = nullptr;
-    }
-}
-
-static LRESULT WINAPI ProjectDriveWndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
-{
-    if (ImGui_ImplWin32_WndProcHandler(hWnd, msg, wParam, lParam))
-    {
-        return true;
-    }
-    switch (msg)
-    {
-        case WM_SIZE:
-            if (wParam != SIZE_MINIMIZED)
-            {
-                g_Dx11.ResizeW = LOWORD(lParam);
-                g_Dx11.ResizeH = HIWORD(lParam);
-            }
-            return 0;
-        case WM_SYSCOMMAND:
-            if ((wParam & 0xfff0) == SC_KEYMENU) return 0;
-            break;
-        case WM_DESTROY:
-            ::PostQuitMessage(0);
-            return 0;
-    }
-    return ::DefWindowProcW(hWnd, msg, wParam, lParam);
-}
-
-int RunNativeWin32Dx11DesktopApp(const std::filesystem::path &RepoRoot,
-                                 const std::filesystem::path &ProjectRoot,
-                                 int MaxFramesForSmokeTest)
-{
-    ImGui_ImplWin32_EnableDpiAwareness();
-    WNDCLASSEXW Wc = {sizeof(Wc), CS_CLASSDC, ProjectDriveWndProc, 0L, 0L, ::GetModuleHandleW(nullptr),
-                      nullptr, nullptr, nullptr, nullptr, L"FrontierProjectDriveWnd", nullptr};
-    ::RegisterClassExW(&Wc);
-
-    HWND Hwnd = ::CreateWindowW(Wc.lpszClassName,
-                                L"Frontier Engine — Project-Drive (Dark OLED VehicleHMI + ReSTIR GI + Dedicated Studios)",
-                                WS_OVERLAPPEDWINDOW, 60, 40, 1600, 960, nullptr, nullptr, Wc.hInstance, nullptr);
-    if (Hwnd == nullptr)
-    {
-        return 1;
-    }
-    BOOL UseDarkTitleBar = TRUE;
-    (void)::DwmSetWindowAttribute(Hwnd, 20 /*DWMWA_USE_IMMERSIVE_DARK_MODE*/, &UseDarkTitleBar, sizeof(UseDarkTitleBar));
-
-    DXGI_SWAP_CHAIN_DESC Sd{};
-    Sd.BufferCount                        = 2;
-    Sd.BufferDesc.Format                  = DXGI_FORMAT_R8G8B8A8_UNORM;
-    Sd.BufferDesc.RefreshRate.Numerator   = 60;
-    Sd.BufferDesc.RefreshRate.Denominator = 1;
-    Sd.Flags                              = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
-    Sd.BufferUsage                        = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-    Sd.OutputWindow                       = Hwnd;
-    Sd.SampleDesc.Count                   = 1;
-    Sd.Windowed                           = TRUE;
-    Sd.SwapEffect                         = DXGI_SWAP_EFFECT_DISCARD;
-
-    const D3D_FEATURE_LEVEL Levels[2] = {D3D_FEATURE_LEVEL_11_0, D3D_FEATURE_LEVEL_10_0};
-    D3D_FEATURE_LEVEL       CreatedLevel{};
-    HRESULT Hr = ::D3D11CreateDeviceAndSwapChain(
-        nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, 0, Levels, 2,
-        D3D11_SDK_VERSION, &Sd, &g_Dx11.SwapChain, &g_Dx11.Device, &CreatedLevel, &g_Dx11.Immediate);
-    if (FAILED(Hr))
-    {
-        // Automatic WARP software-GPU fallback for RDP / VM / CI environments!
-        Hr = ::D3D11CreateDeviceAndSwapChain(
-            nullptr, D3D_DRIVER_TYPE_WARP, nullptr, 0, Levels, 2,
-            D3D11_SDK_VERSION, &Sd, &g_Dx11.SwapChain, &g_Dx11.Device, &CreatedLevel, &g_Dx11.Immediate);
-    }
-    if (FAILED(Hr))
-    {
-        ::DestroyWindow(Hwnd);
-        ::UnregisterClassW(Wc.lpszClassName, Wc.hInstance);
-        return 1;
-    }
-    CreateDx11RenderTarget();
-
-    ::ShowWindow(Hwnd, MaxFramesForSmokeTest > 0 ? SW_SHOWNOACTIVATE : SW_SHOWDEFAULT);
-    ::UpdateWindow(Hwnd);
-
-    ImGui::CreateContext();
-    ImGui_ImplWin32_Init(Hwnd);
-    ImGui_ImplDX11_Init(g_Dx11.Device, g_Dx11.Immediate);
-
-    {
-        ProjectDriveApplicationHost App(RepoRoot, ProjectRoot, 1600u, 960u);
-        App.World().Records().RenderPipeline.ViewportScalePercent = 35;
-        if (!App.Initialize(/*CreateOwnImGuiContext=*/false, /*UsingHardwareGpuBackend=*/true))
+        if (AllowHeadlessFallback)
         {
-            ImGui_ImplDX11_Shutdown();
-            ImGui_ImplWin32_Shutdown();
-            ImGui::DestroyContext();
+            return RunHeadlessVulkanSmokeVerification(RepoRoot, ProjectRoot, MaxFramesForSmokeTest);
+        }
+        ReportVulkanStartupFailure("GLFW platform initialization failed (no active desktop display found).");
+        return 1;
+    }
+
+    struct GlfwScopeGuard
+    {
+        GLFWwindow *Window        = nullptr;
+        bool        ContextReady  = false;
+        bool        GlfwImGuiInit = false;
+        ~GlfwScopeGuard()
+        {
+            try
+            {
+                if (GlfwImGuiInit) ImGui_ImplGlfw_Shutdown();
+                if (ContextReady)  ImGui::DestroyContext();
+                if (Window)        glfwDestroyWindow(Window);
+                glfwTerminate();
+            }
+            catch (...) {}
+        }
+    } Guard;
+
+    if (!glfwVulkanSupported())
+    {
+        if (AllowHeadlessFallback)
+        {
+            return RunHeadlessVulkanSmokeVerification(RepoRoot, ProjectRoot, MaxFramesForSmokeTest);
+        }
+        ReportVulkanStartupFailure(
+            "No compatible Vulkan 1.1+ runtime / graphics driver (vulkan-1.dll / libvulkan.so.1) was found on this system.");
+        return 1;
+    }
+
+    glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+    glfwWindowHint(GLFW_SCALE_TO_MONITOR, GLFW_TRUE);
+    if (MaxFramesForSmokeTest > 0)
+    {
+        glfwWindowHint(GLFW_FOCUS_ON_SHOW, GLFW_FALSE);
+    }
+
+    GLFWwindow *Window = glfwCreateWindow(
+        1600, 960,
+        "Project-Drive \xE2\x80\x94 Frontier Dark OLED Studio (Vulkan)",
+        nullptr, nullptr);
+    if (Window == nullptr)
+    {
+        if (AllowHeadlessFallback)
+        {
+            return RunHeadlessVulkanSmokeVerification(RepoRoot, ProjectRoot, MaxFramesForSmokeTest);
+        }
+        ReportVulkanStartupFailure("Failed to create Vulkan GLFW desktop window.");
+        return 1;
+    }
+    Guard.Window = Window;
+
+#if defined(_WIN32)
+    if (HWND Hwnd = glfwGetWin32Window(Window); Hwnd != nullptr)
+    {
+        BOOL UseDarkTitleBar = TRUE;
+        (void)::DwmSetWindowAttribute(Hwnd, 20 /*DWMWA_USE_IMMERSIVE_DARK_MODE*/, &UseDarkTitleBar, sizeof(UseDarkTitleBar));
+    }
+#endif
+
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    Guard.ContextReady = true;
+    ImGuiIO &IO        = ImGui::GetIO();
+    IO.ConfigFlags    |= ImGuiConfigFlags_NavEnableKeyboard | ImGuiConfigFlags_DockingEnable;
+    IO.IniFilename     = nullptr;
+
+    Guard.GlfwImGuiInit = ImGui_ImplGlfw_InitForVulkan(Window, true);
+    if (!Guard.GlfwImGuiInit)
+    {
+        if (AllowHeadlessFallback)
+        {
+            return RunHeadlessVulkanSmokeVerification(RepoRoot, ProjectRoot, MaxFramesForSmokeTest);
+        }
+        ReportVulkanStartupFailure("ImGui_ImplGlfw_InitForVulkan failed.");
+        return 1;
+    }
+
+    VulkanPresentation Display;
+    try
+    {
+        Display.Initialize(Window, false);
+    }
+    catch (const std::exception &Ex)
+    {
+        if (AllowHeadlessFallback)
+        {
+            return RunHeadlessVulkanSmokeVerification(RepoRoot, ProjectRoot, MaxFramesForSmokeTest);
+        }
+        ReportVulkanStartupFailure(std::string("Vulkan swapchain/device initialization failed: ") + Ex.what());
+        return 1;
+    }
+
+    try
+    {
+        const VulkanRasterAccess VkAccess = Display.QueryRasterAccess();
+        auto App = std::make_unique<ProjectDriveApplicationHost>(RepoRoot, ProjectRoot, 1600u, 960u);
+        App->World().Records().RenderPipeline.ViewportScalePercent = 38;
+        if (!App->Initialize(/*CreateOwnImGuiContext=*/false, /*UsingHardwareGpuBackend=*/true, &VkAccess))
+        {
+            Display.AwaitCompletion();
+            Display.Finalize();
             return 1;
         }
 
-        bool Done      = false;
-        int  FrameIter = 0;
-        while (!Done)
-        {
-            MSG Msg;
-            while (::PeekMessageW(&Msg, nullptr, 0U, 0U, PM_REMOVE))
-            {
-                ::TranslateMessage(&Msg);
-                ::DispatchMessageW(&Msg);
-                if (Msg.message == WM_QUIT) Done = true;
-            }
-            if (Done) break;
+        auto PrevFrameClock = std::chrono::steady_clock::now();
+        int  PostReadySmokeFrames = 0;
+        int  TotalLoopFrames      = 0;
 
-            if (g_Dx11.ResizeW != 0 && g_Dx11.ResizeH != 0)
+        while (!glfwWindowShouldClose(Window))
+        {
+            glfwPollEvents();
+
+            int FbW = 0, FbH = 0;
+            glfwGetFramebufferSize(Window, &FbW, &FbH);
+            if (FbW <= 0 || FbH <= 0)
             {
-                CleanupDx11RenderTarget();
-                g_Dx11.SwapChain->ResizeBuffers(0, g_Dx11.ResizeW, g_Dx11.ResizeH, DXGI_FORMAT_UNKNOWN, 0);
-                App.ResizeWindow(g_Dx11.ResizeW, g_Dx11.ResizeH);
-                g_Dx11.ResizeW = g_Dx11.ResizeH = 0;
-                CreateDx11RenderTarget();
+                glfwWaitEventsTimeout(0.05);
+                continue;
             }
+            if (!Display.Reconfigure(FbW, FbH))
+            {
+                continue;
+            }
+
+            int WinW = 0, WinH = 0;
+            glfwGetWindowSize(Window, &WinW, &WinH);
+            App->ResizeWindow(static_cast<uint32_t>(WinW > 0 ? WinW : FbW),
+                              static_cast<uint32_t>(WinH > 0 ? WinH : FbH));
+
+            float ScaleX = 1.0f, ScaleY = 1.0f;
+            glfwGetWindowContentScale(Window, &ScaleX, &ScaleY);
+            ImGui::GetStyle().FontScaleDpi = ScaleY;
+
+            const auto NowClock = std::chrono::steady_clock::now();
+            const double DtSec  = std::clamp(std::chrono::duration<double>(NowClock - PrevFrameClock).count(),
+                                             1.0 / 240.0, 0.05);
+            PrevFrameClock      = NowClock;
 
             DriveControlReadings Keys{};
-            Keys.KeyboardCaptured = ImGui::GetIO().WantCaptureKeyboard;
+            Keys.KeyboardCaptured = IO.WantCaptureKeyboard;
             if (!Keys.KeyboardCaptured)
             {
-                Keys.ThrottleDown   = ((::GetAsyncKeyState('W') & 0x8000) != 0) || ((::GetAsyncKeyState(VK_UP) & 0x8000) != 0);
-                Keys.BrakeDown      = ((::GetAsyncKeyState('S') & 0x8000) != 0) || ((::GetAsyncKeyState(VK_DOWN) & 0x8000) != 0);
-                Keys.SteerLeftDown  = ((::GetAsyncKeyState('A') & 0x8000) != 0) || ((::GetAsyncKeyState(VK_LEFT) & 0x8000) != 0);
-                Keys.SteerRightDown = ((::GetAsyncKeyState('D') & 0x8000) != 0) || ((::GetAsyncKeyState(VK_RIGHT) & 0x8000) != 0);
-                Keys.HandbrakeDown  = (::GetAsyncKeyState(VK_SPACE) & 0x8000) != 0;
+                Keys.ThrottleDown   = (glfwGetKey(Window, GLFW_KEY_W) == GLFW_PRESS) || (glfwGetKey(Window, GLFW_KEY_UP) == GLFW_PRESS);
+                Keys.BrakeDown      = (glfwGetKey(Window, GLFW_KEY_S) == GLFW_PRESS) || (glfwGetKey(Window, GLFW_KEY_DOWN) == GLFW_PRESS);
+                Keys.SteerLeftDown  = (glfwGetKey(Window, GLFW_KEY_A) == GLFW_PRESS) || (glfwGetKey(Window, GLFW_KEY_LEFT) == GLFW_PRESS);
+                Keys.SteerRightDown = (glfwGetKey(Window, GLFW_KEY_D) == GLFW_PRESS) || (glfwGetKey(Window, GLFW_KEY_RIGHT) == GLFW_PRESS);
+                Keys.HandbrakeDown  = (glfwGetKey(Window, GLFW_KEY_SPACE) == GLFW_PRESS);
             }
 
-            ImGui_ImplDX11_NewFrame();
-            ImGui_ImplWin32_NewFrame();
-            App.BuildUiFrame(1.0 / 60.0, Keys);
+            ImGui_ImplVulkan_NewFrame();
+            ImGui_ImplGlfw_NewFrame();
+            App->BuildUiFrame(DtSec, Keys);
 
-            const float ClearOled[4] = {0.03f, 0.03f, 0.03f, 1.0f};
-            g_Dx11.Immediate->OMSetRenderTargets(1, &g_Dx11.MainRtv, nullptr);
-            g_Dx11.Immediate->ClearRenderTargetView(g_Dx11.MainRtv, ClearOled);
-            ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
-            g_Dx11.SwapChain->Present(1, 0);
+            Display.RenderMain(ImGui::GetDrawData());
+            Display.PresentMain();
 
-            ++FrameIter;
-            if (MaxFramesForSmokeTest > 0 && FrameIter >= MaxFramesForSmokeTest)
+            ++TotalLoopFrames;
+            if (MaxFramesForSmokeTest > 0)
             {
-                std::cout << "[PASS] Win32 + DirectX 11 desktop smoke test rendered " << FrameIter
-                          << " Dark OLED frames cleanly (0 external DLLs).\n";
-                Done = true;
+                const VulkanShaderProgressSnapshot Prog = App->ShaderCompiler().QueryProgress();
+                if (Prog.CompilationFinished && App->HasUploadedViewportTexture())
+                {
+                    ++PostReadySmokeFrames;
+                }
+                if (PostReadySmokeFrames >= MaxFramesForSmokeTest || TotalLoopFrames >= 420)
+                {
+                    const auto &Drv = App->ShaderCompiler().DriverReport();
+                    std::cout << "[PASS] Native Vulkan desktop smoke test rendered " << TotalLoopFrames
+                              << " frames (" << Drv.AdapterName << ", Vulkan " << Drv.FormattedApiVersion
+                              << ", Shaders=" << Prog.CompletedPrograms << "/" << Prog.TotalPrograms
+                              << ", RealVkPipelines=" << (Prog.RealVulkanPipelines ? "YES" : "NO") << ").\n";
+                    break;
+                }
             }
         }
-    }
 
-    ImGui_ImplDX11_Shutdown();
-    ImGui_ImplWin32_Shutdown();
-    ImGui::DestroyContext();
-    CleanupDx11RenderTarget();
-    if (g_Dx11.SwapChain) { g_Dx11.SwapChain->Release(); g_Dx11.SwapChain = nullptr; }
-    if (g_Dx11.Immediate) { g_Dx11.Immediate->Release(); g_Dx11.Immediate = nullptr; }
-    if (g_Dx11.Device)    { g_Dx11.Device->Release();    g_Dx11.Device    = nullptr; }
-    ::DestroyWindow(Hwnd);
-    ::UnregisterClassW(Wc.lpszClassName, Wc.hInstance);
-    return 0;
+        App->ShutdownGpuResources(&Display);
+        App.reset();
+        Display.AwaitCompletion();
+        Display.Finalize();
+        return 0;
+    }
+    catch (const std::exception &Ex)
+    {
+        Display.Finalize();
+        ReportVulkanStartupFailure(std::string("Vulkan runtime error: ") + Ex.what());
+        return 1;
+    }
 }
-#endif
 
 //====================================================================================================================================
 //                    INTERACTIVE LIVE HTTP CANVAS + BINARY DOWNLOAD SERVER (--serve <port> ON 0.0.0.0)
@@ -1100,10 +1600,10 @@ int RunInteractiveHttpPreviewServer(const std::filesystem::path &RepoRoot,
 </head>
 <body>
 <div id="dlbar">
-  <span><b style="color:#3ec46d">&#9679;</b> <b>frontier.</b> Project-Drive &middot; Dark OLED 1:1 VehicleHMI &middot; Click `[&#8599;]` or Double-Click any Outliner row to open its Zero-Copy Dedicated Studio</span>
+  <span><b style="color:#3ec46d">&#9679;</b> <b>frontier.</b> Project-Drive &middot; Native Vulkan RHI &middot; Dark OLED 1:1 VehicleHMI &middot; Live Shader Progress &amp; Driver Diagnostics in Logs</span>
   <div class="links">
-    <a href="/download/ProjectDrive-linux-x86_64" download>&#11015; Linux x64 Binary</a>
-    <a href="https://github.com/egoistm1inbox/Frontier/releases/tag/project-drive-latest" target="_blank" rel="noopener">&#11015; Windows .exe + Linux Releases</a>
+    <a href="/download/ProjectDrive-linux-x86_64" download>&#11015; Linux x64 Vulkan Binary</a>
+    <a href="https://github.com/egoistm1inbox/Frontier/releases/tag/project-drive-latest" target="_blank" rel="noopener">&#11015; Windows .exe + Linux Vulkan Releases</a>
   </div>
 </div>
 <div id="wrap"><img id="view" src="/frame.png" draggable="false" alt="Project-Drive Dark OLED Live Viewport"/></div>
@@ -1360,10 +1860,10 @@ int main(int Argc, char **Argv)
     {
         return Frontier::Drive::RunEditorVerificationAndCapture(RepoRoot, ProjectRoot, CaptureDir);
     }
-    #if defined(_WIN32)
-    return Frontier::Drive::RunNativeWin32Dx11DesktopApp(RepoRoot, ProjectRoot, SmokeFrames);
-    #else
-    return Frontier::Drive::RunEditorVerificationAndCapture(RepoRoot, ProjectRoot, CaptureDir);
-    #endif
+    if (SmokeFrames > 0)
+    {
+        return Frontier::Drive::RunNativeVulkanDesktopApp(RepoRoot, ProjectRoot, SmokeFrames, /*AllowHeadlessFallback=*/true);
+    }
+    return Frontier::Drive::RunNativeVulkanDesktopApp(RepoRoot, ProjectRoot, 0, /*AllowHeadlessFallback=*/false);
 #endif
 }

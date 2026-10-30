@@ -50,6 +50,10 @@ def Main() -> int:
             ],
             ["cmake", "--build", "build-shipping", "--config", "Release", "-j", "4"],
             ["./build-shipping/Shipping/ProjectDriveShipping", "--project-root", "Frontier/Projects/Project-Drive"],
+            [
+                "xvfb-run", "-a", "./Frontier/Projects/Project-Drive/Binaries/ProjectDrive",
+                "--project-root", "Frontier/Projects/Project-Drive", "--smoke-frames", "6",
+            ],
         ]
         for Cmd in Steps:
             RunStep(Cmd)
@@ -71,14 +75,18 @@ def Main() -> int:
         shutil.copytree("EngineContent/Icons", Dist / "EngineContent/Icons")
 
         (Dist / "README.txt").write_text(
-            "Frontier Engine - Project-Drive (Linux x86_64)\n"
-            "==============================================\n"
-            "1. Interactive Browser UI + Live 3D Viewport:\n"
+            "Frontier Engine - Project-Drive (Linux x86_64, Native Vulkan RHI)\n"
+            "==================================================================\n"
+            "1. Native Vulkan Desktop Window (X11 + Vulkan 1.1+):\n"
+            "   ./ProjectDrive/Binaries/ProjectDrive\n"
+            "   - Streams live SPIR-V shader compilation progress ([1/16]..[16/16]) and Vulkan\n"
+            "     Graphics Driver Compatibility diagnostics in the Logs panel with 0 UI freeze.\n\n"
+            "2. Interactive Browser UI + Live 3D Viewport:\n"
             "   ./ProjectDrive/Binaries/ProjectDrive --serve 5174\n"
             "   Then open http://127.0.0.1:5174 in any browser.\n\n"
-            "2. Automated 10-Shot Verification & Captures:\n"
+            "3. Automated 11-Shot Verification & Captures:\n"
             "   ./ProjectDrive/Binaries/ProjectDrive --verify-and-capture ./Captures\n\n"
-            "3. Zero-Editor Shipping Runtime:\n"
+            "4. Zero-Editor Shipping Runtime:\n"
             "   ./ProjectDrive/Binaries/ProjectDriveShipping\n",
             encoding="utf-8",
         )

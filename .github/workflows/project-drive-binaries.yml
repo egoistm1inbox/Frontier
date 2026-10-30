@@ -25,7 +25,7 @@ jobs:
       - name: Build, verify, and package ProjectDrive-linux-x86_64.zip
         run: |
           sudo apt-get update
-          sudo apt-get install -y ninja-build
+          sudo apt-get install -y ninja-build libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev libvulkan1 mesa-vulkan-drivers xvfb
           python Automation/BuildLinuxCi.py
 
       - uses: actions/upload-artifact@v4
@@ -74,11 +74,14 @@ jobs:
       - name: Publish project-drive-latest GitHub Release
         run: |
           ls -lh release-assets/
+          TITLE="Project-Drive Unified Binary (Native Vulkan RHI — Windows x64 + Linux x64)"
+          NOTES="Native Vulkan RHI (GLFW + ImGui_ImplVulkan, zero DX11) + Non-Blocking Async SPIR-V VkPipeline Shader Compilation & Graphics Driver Compatibility Diagnostics in Logs + 1:1 Dark OLED VehicleHMI Proving Grounds + Visible Solar/Contact Shadows + Zero-Copy Shared-Memory Dedicated Entity Studios."
           if gh release view project-drive-latest >/dev/null 2>&1; then
+            gh release edit project-drive-latest --title "$TITLE" --notes "$NOTES"
             gh release upload project-drive-latest release-assets/ProjectDrive-windows-x86_64.zip release-assets/ProjectDrive-linux-x86_64.zip --clobber
           else
             gh release create project-drive-latest release-assets/ProjectDrive-windows-x86_64.zip release-assets/ProjectDrive-linux-x86_64.zip \
               --target "${{ github.sha }}" \
-              --title "Project-Drive Unified Binary (Windows x64 DirectX 11 + Linux x64)" \
-              --notes "1:1 Dark OLED VehicleHMI Proving Grounds + ReSTIR GI + Visible Solar/Contact Shadows + Zero-Copy Shared-Memory Dedicated Entity Studios."
+              --title "$TITLE" \
+              --notes "$NOTES"
           fi

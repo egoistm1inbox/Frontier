@@ -13,6 +13,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -34,7 +35,7 @@ class DedicatedEntityEditorHost
 
     void OpenEditorForEntity(const std::string &StableId, DriveShowcaseWorld &World);
     void CloseEditorForEntity(const std::string &StableId);
-    void CloseAllEditors();
+    void CloseAllEditors(bool GpuConfirmedIdle = false);
 
     void RenderOpenEditorWindows(DriveShowcaseWorld &World);
 
@@ -59,16 +60,18 @@ class DedicatedEntityEditorHost
         uint8_t              PreviewInspectMode   = 0u; // 0=Lit, 1=Shadows, 2=GI, 5=Normals
         uint64_t             LastRenderedWorldRev = 0u;
         uint32_t             FrameThrottle        = 0u;
-        bool                 TextureRegistered    = false;
-        ImTextureData        PreviewTexture{};
-        std::vector<uint8_t> PreviewRgba{};
+        bool                           TextureRegistered    = false;
+        std::unique_ptr<ImTextureData> PreviewTexture       = std::make_unique<ImTextureData>();
+        std::vector<uint8_t>           PreviewRgba{};
     };
 
-    void DestroyWindowTexture(OpenStudioWindow &Win) noexcept;
+    void RetireWindowTexture(OpenStudioWindow &Win, bool GpuConfirmedIdle) noexcept;
+    void ReclaimCompletedRetiredTextures(bool ForceImmediate) noexcept;
     void DrawSingleStudioWindow(OpenStudioWindow &Win, DriveShowcaseWorld &World, size_t WindowIndex);
     void DrawStudioPresetBank(const std::string &StableId, DriveShowcaseWorld &World);
 
-    std::vector<OpenStudioWindow> Windows_;
+    std::vector<OpenStudioWindow>               Windows_;
+    std::vector<std::unique_ptr<ImTextureData>> RetiredTextures_;
 #endif
 };
 
