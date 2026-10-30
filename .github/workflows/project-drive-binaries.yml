@@ -9,6 +9,9 @@ on:
 permissions:
   contents: write
 
+env:
+  GH_TOKEN: ${{ github.token }}
+
 jobs:
   linux-x64:
     runs-on: ubuntu-24.04
@@ -38,14 +41,6 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-
-      - name: Prepare UI packages & OFL FontArchives
-        shell: pwsh
-        run: |
-          python -c "import pathlib; [p.write_bytes(p.read_bytes().replace(b'\r\n', b'\n')) for p in pathlib.Path('Automation/Patches').glob('*.patch')]"
-          python -m pip install -r Automation/FontRequirements.txt
-          python Automation/PrepareUI.py
-          python Automation/PrepareFonts.py
 
       - name: Build, smoke-test, and package ProjectDrive-windows-x86_64.zip
         shell: pwsh
@@ -77,8 +72,6 @@ jobs:
           merge-multiple: true
 
       - name: Publish project-drive-latest GitHub Release
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           ls -lh release-assets/
           if gh release view project-drive-latest >/dev/null 2>&1; then

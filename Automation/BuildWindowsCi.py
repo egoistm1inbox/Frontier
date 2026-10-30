@@ -19,8 +19,14 @@ def EmitError(Title: str, Text: str) -> None:
 
 def Main() -> int:
     try:
+        for PatchFile in pathlib.Path("Automation/Patches").glob("*.patch"):
+            PatchFile.write_bytes(PatchFile.read_bytes().replace(b"\r\n", b"\n"))
+
         JoltLib = (pathlib.Path.cwd() / "ExternalPackages/jolt/lib/Release/Jolt.lib").as_posix()
         Steps = [
+            [sys.executable, "-m", "pip", "install", "-r", "Automation/FontRequirements.txt"],
+            [sys.executable, "Automation/PrepareUI.py"],
+            [sys.executable, "Automation/PrepareFonts.py"],
             [sys.executable, "Automation/BuildJoltWindows.py"],
             [
                 "cmake", "-S", "Frontier/Projects/Project-Drive", "-B", "build-win-editor",
