@@ -66,6 +66,8 @@ struct PlumeFluidParameters
     float              FlameHalfHeat        = 34.0f;                               // [K]   temperature ramp half-saturation
     float              FlameRadianceScale   = 92.0f;                               // [-]   blackbody radiance gain
     float              FlameSheetSharpness  = 1.85f;                               // [-]   reaction-sheet edge contrast exponent
+    float              CombustionExpansion  = 1.65f;                               // [1/s] reaction-front gas dilatation source
+    float              BaroclinicStrength   = 2.15f;                               // [-]   grad(T) x grad(rho) mushroom-cap torque gain
     std::uint32_t      PressureSweeps       = 16u;                                 // [-]   warm-started pressure relaxation sweeps
     std::uint32_t      MarchSampleLimit     = 64u;                                 // [-]   upper bound on ray quadrature steps
 };
@@ -279,6 +281,9 @@ private:
     std::vector<float>                 ThermoScratch_;
     std::vector<float>                 ThermoBackward_;
     std::vector<float>                 LightTransmittance_;
+    std::vector<float>                 FaceFluxScratch_;
+    std::array<std::uint32_t, 3>       MacroBrickExtent_   = { 16u, 16u, 4u };
+    std::vector<std::uint8_t>          MacroOccupancy_;
 };
 
 } // namespace Frontier

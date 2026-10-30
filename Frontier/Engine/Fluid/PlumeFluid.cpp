@@ -172,6 +172,15 @@ void PlumeFluid::Reconfigure(const PlumeFluidParameters& Parameters)
     ThermoScratch_.assign(FineCount * 4u, 0.0f);
     ThermoBackward_.assign(FineCount * 4u, 0.0f);
     LightTransmittance_.assign(CoarseCount * 2u, 1.0f);
+    FaceFluxScratch_.assign(CoarseCount * 4u, 0.0f);
+    MacroBrickExtent_ = {
+        (ThermoExtent_[0] + 7u) / 8u,
+        (ThermoExtent_[1] + 7u) / 8u,
+        (ThermoExtent_[2] + 7u) / 8u
+    };
+    MacroOccupancy_.assign(
+        static_cast<std::size_t>(MacroBrickExtent_[0]) * MacroBrickExtent_[1] * MacroBrickExtent_[2],
+        0u);
 
     ClearState();
 }
@@ -188,6 +197,8 @@ void PlumeFluid::ClearState() noexcept
     std::fill(ThermoScratch_.begin(), ThermoScratch_.end(), 0.0f);
     std::fill(ThermoBackward_.begin(), ThermoBackward_.end(), 0.0f);
     std::fill(LightTransmittance_.begin(), LightTransmittance_.end(), 1.0f);
+    std::fill(FaceFluxScratch_.begin(), FaceFluxScratch_.end(), 0.0f);
+    std::fill(MacroOccupancy_.begin(), MacroOccupancy_.end(), 0u);
 
     OriginXY_       = { 0, 0 };
     PriorOriginXY_  = { 1 << 20, 1 << 20 };
@@ -350,6 +361,14 @@ float PlumeFluid::EvaluateDetailFieldSample(
         return 0.52f * O0 + 0.31f * O1 + 0.17f * O2;
     };
 
+    const float WarpDispSq = FlowWarpStrength * FlowWarpStrength *
+                             (LocalVelocity[0] * LocalVelocity[0] +
+                              LocalVelocity[1] * LocalVelocity[1] +
+                              LocalVelocity[2] * LocalVelocity[2]);
+    if (WarpDispSq < 1.0e-5f)
+    {
+        return EvalWarped(PhaseA);
+    }
     const float SampleA = EvalWarped(PhaseA);
     const float SampleB = EvalWarped(PhaseB);
     return SampleB + WeightA * (SampleA - SampleB);
@@ -615,6 +634,13 @@ void PlumeFluid::InjectDetonationBlast(
                 CoverageHigh_[0] = std::max(CoverageHigh_[0], X);
                 CoverageHigh_[1] = std::max(CoverageHigh_[1], Y);
                 CoverageHigh_[2] = std::max(CoverageHigh_[2], Z);
+                const std::size_t BIdx = ((static_cast<std::size_t>(Z / 8) * MacroBrickExtent_[1] +
+                                           static_cast<std::size_t>(Y / 8)) * MacroBrickExtent_[0] +
+                                          static_cast<std::size_t>(X / 8));
+                if (BIdx < MacroOccupancy_.size())
+                {
+                    MacroOccupancy_[BIdx] = 1u;
+                }
             }
         }
     }
@@ -770,9 +796,17 @@ void PlumeFluid::ProjectPressureOnlyForTesting(PlumeDiagnostics& OutMetrics)
     }
     else
     {
-        // Production matched MAC face-flux projection + Rhie-Chow checkerboard filter:
+        // Production matched MAC face-flux projection + Rhie-Chow checkerboard filter (0 heap allocations per step):
         // 1) Convert collocated velocity to staggered positive-face fluxes F_{i+1/2}, zeroing floor/solid faces.
-        std::vector<float> FaceU(VelocityCurrent_.size(), 0.0f);
+        if (FaceFluxScratch_.size() != VelocityCurrent_.size())
+        {
+            FaceFluxScratch_.assign(VelocityCurrent_.size(), 0.0f);
+        }
+        else
+        {
+            std::fill(FaceFluxScratch_.begin(), FaceFluxScratch_.end(), 0.0f);
+        }
+        std::vector<float>& FaceU = FaceFluxScratch_;
         auto IsFluid = [&](std::int32_t X, std::int32_t Y, std::int32_t Z) noexcept -> bool
         {
             if (Z < 0) return false;
@@ -1211,16 +1245,134 @@ PlumeDiagnostics PlumeFluid::AdvanceSimulation(
         }
     }
 
+    // 3b. Baroclinic vorticity torque (grad(T) x grad(rho)) on ProductionUpgraded:
+    //     Curls rising hot fireballs against denser outer soot shells into authentic Kelvin-Helmholtz mushroom rings!
+    if (Parameters_.Variant == PlumeSolverVariant::ProductionUpgraded && Parameters_.BaroclinicStrength > 0.0f &&
+        CoverageLow_[0] <= CoverageHigh_[0])
+    {
+        const float Inv2C = 0.5f / CoarseCellMetres_;
+        const std::int32_t BMinX = std::max(1, CoverageLow_[0] / 2 - 2);
+        const std::int32_t BMaxX = std::min(Vx - 2, CoverageHigh_[0] / 2 + 2);
+        const std::int32_t BMinY = std::max(1, CoverageLow_[1] / 2 - 2);
+        const std::int32_t BMaxY = std::min(Vy - 2, CoverageHigh_[1] / 2 + 2);
+        const std::int32_t BMinZ = std::max(1, CoverageLow_[2] / 2 - 2);
+        const std::int32_t BMaxZ = std::min(Vz - 2, CoverageHigh_[2] / 2 + 2);
+        auto SampleFineAtCoarse = [&](std::int32_t Cx, std::int32_t Cy, std::int32_t Cz) noexcept -> std::array<float, 2>
+        {
+            const std::int32_t Fx = std::clamp(Cx * 2, 0, Tx - 1);
+            const std::int32_t Fy = std::clamp(Cy * 2, 0, Ty - 1);
+            const std::int32_t Fz = std::clamp(Cz * 2, 0, Tz - 1);
+            const std::size_t  F4 = FineIdx(Fx, Fy, Fz) * 4u;
+            return { ThermoCurrent_[F4 + 1u], ThermoCurrent_[F4 + 0u] + ThermoCurrent_[F4 + 3u] };
+        };
+        for (std::int32_t Z = BMinZ; Z <= BMaxZ; ++Z)
+        {
+            for (std::int32_t Y = BMinY; Y <= BMaxY; ++Y)
+            {
+                for (std::int32_t X = BMinX; X <= BMaxX; ++X)
+                {
+                    const std::size_t I4 = CoarseIdx(X, Y, Z) * 4u;
+                    if (VelocityCurrent_[I4 + 3u] > 0.5f) continue;
+                    const auto Xp = SampleFineAtCoarse(X + 1, Y, Z), Xm = SampleFineAtCoarse(X - 1, Y, Z);
+                    const auto Yp = SampleFineAtCoarse(X, Y + 1, Z), Ym = SampleFineAtCoarse(X, Y - 1, Z);
+                    const auto Zp = SampleFineAtCoarse(X, Y, Z + 1), Zm = SampleFineAtCoarse(X, Y, Z - 1);
+                    const float GtX = (Xp[0] - Xm[0]) * Inv2C, GtY = (Yp[0] - Ym[0]) * Inv2C, GtZ = (Zp[0] - Zm[0]) * Inv2C;
+                    const float GrX = (Xp[1] - Xm[1]) * Inv2C, GrY = (Yp[1] - Ym[1]) * Inv2C, GrZ = (Zp[1] - Zm[1]) * Inv2C;
+                    const float Bx = GtY * GrZ - GtZ * GrY;
+                    const float By = GtZ * GrX - GtX * GrZ;
+                    const float Bz = GtX * GrY - GtY * GrX;
+                    const float BMag = std::sqrt(Bx * Bx + By * By + Bz * Bz);
+                    if (BMag > 1.0e-3f)
+                    {
+                        const float Scale = std::min(2.6f, Parameters_.BaroclinicStrength * 0.0045f * BMag) * Dt / BMag;
+                        VelocityCurrent_[I4 + 0u] += Bx * Scale;
+                        VelocityCurrent_[I4 + 1u] += By * Scale;
+                        VelocityCurrent_[I4 + 2u] += Bz * Scale;
+                    }
+                }
+            }
+        }
+    }
+
     // 4. Compatible pressure projection.
     Diagnostics_               = {};
     Diagnostics_.ActiveSources = static_cast<std::uint32_t>(Sources_.size());
     Diagnostics_.Relocations   = Relocations_;
     ProjectPressureOnlyForTesting(Diagnostics_);
 
-    // 5. Fine thermo transport (1st-order trilinear in LegacyHtmlReference vs Clamped MacCormack in ProductionUpgraded).
+    // 4b. Combustion reaction-front gas expansion impulse on ProductionUpgraded (billowing outward pyro lobes):
+    if (Parameters_.Variant == PlumeSolverVariant::ProductionUpgraded && Parameters_.CombustionExpansion > 0.0f &&
+        CoverageLow_[0] <= CoverageHigh_[0])
+    {
+        const float Inv2C = 0.5f / CoarseCellMetres_;
+        const std::int32_t EMinX = std::max(1, CoverageLow_[0] / 2 - 2);
+        const std::int32_t EMaxX = std::min(Vx - 2, CoverageHigh_[0] / 2 + 2);
+        const std::int32_t EMinY = std::max(1, CoverageLow_[1] / 2 - 2);
+        const std::int32_t EMaxY = std::min(Vy - 2, CoverageHigh_[1] / 2 + 2);
+        const std::int32_t EMinZ = std::max(1, CoverageLow_[2] / 2 - 1);
+        const std::int32_t EMaxZ = std::min(Vz - 2, CoverageHigh_[2] / 2 + 2);
+        auto FlameAt = [&](std::int32_t Cx, std::int32_t Cy, std::int32_t Cz) noexcept -> float
+        {
+            const std::size_t F4 = FineIdx(std::clamp(Cx * 2, 0, Tx - 1), std::clamp(Cy * 2, 0, Ty - 1), std::clamp(Cz * 2, 0, Tz - 1)) * 4u;
+            return ThermoCurrent_[F4 + 2u];
+        };
+        for (std::int32_t Z = EMinZ; Z <= EMaxZ; ++Z)
+        {
+            for (std::int32_t Y = EMinY; Y <= EMaxY; ++Y)
+            {
+                for (std::int32_t X = EMinX; X <= EMaxX; ++X)
+                {
+                    const std::size_t I4 = CoarseIdx(X, Y, Z) * 4u;
+                    if (VelocityCurrent_[I4 + 3u] > 0.5f) continue;
+                    // Outward expansion down negative reaction gradient (-grad(Flame))!
+                    const float Ex = -(FlameAt(X + 1, Y, Z) - FlameAt(X - 1, Y, Z)) * Inv2C;
+                    const float Ey = -(FlameAt(X, Y + 1, Z) - FlameAt(X, Y - 1, Z)) * Inv2C;
+                    const float Ez = -(FlameAt(X, Y, Z + 1) - FlameAt(X, Y, Z - 1)) * Inv2C;
+                    const float Gain = Parameters_.CombustionExpansion * 0.45f * Dt;
+                    VelocityCurrent_[I4 + 0u] = ClampScalar(VelocityCurrent_[I4 + 0u] + Ex * Gain, -SpeedCeiling, SpeedCeiling);
+                    VelocityCurrent_[I4 + 1u] = ClampScalar(VelocityCurrent_[I4 + 1u] + Ey * Gain, -SpeedCeiling, SpeedCeiling);
+                    VelocityCurrent_[I4 + 2u] = ClampScalar(VelocityCurrent_[I4 + 2u] + std::max(0.0f, Ez) * Gain, -SpeedCeiling, SpeedCeiling);
+                }
+            }
+        }
+    }
+
+    // 5. Fine thermo transport with Dilated Active-Region Narrow-Band Execution:
+    //    Compute conservative active fine window [ActMin..ActMax] enclosing prior active plume + advection apron + all sources!
+    std::array<std::int32_t, 3> ActMin = { Tx, Ty, Tz };
+    std::array<std::int32_t, 3> ActMax = { -1, -1, -1 };
+    const std::int32_t ShiftFineX = (OriginXY_[0] - PriorOriginXY_[0]) * 2;
+    const std::int32_t ShiftFineY = (OriginXY_[1] - PriorOriginXY_[1]) * 2;
+    const std::int32_t ApronCells = static_cast<std::int32_t>(std::ceil((SpeedCeiling * Dt) / FineCellMetres_)) + 5;
+    if (CoverageLow_[0] <= CoverageHigh_[0])
+    {
+        ActMin[0] = std::max(0, CoverageLow_[0] - ShiftFineX - ApronCells);
+        ActMin[1] = std::max(0, CoverageLow_[1] - ShiftFineY - ApronCells);
+        ActMin[2] = std::max(0, CoverageLow_[2] - ApronCells);
+        ActMax[0] = std::min(Tx - 1, CoverageHigh_[0] - ShiftFineX + ApronCells);
+        ActMax[1] = std::min(Ty - 1, CoverageHigh_[1] - ShiftFineY + ApronCells);
+        ActMax[2] = std::min(Tz - 1, CoverageHigh_[2] + ApronCells + 3);
+    }
+    for (const PlumeSourceFootprint& Src : Sources_)
+    {
+        const float R = 3.2f * std::max(Src.PositionRadius[3], FineCellMetres_);
+        const std::int32_t Sx0 = std::max(0, static_cast<std::int32_t>(std::floor((Src.PositionRadius[0] - R - WorldMinX) / FineCellMetres_)) - 2);
+        const std::int32_t Sy0 = std::max(0, static_cast<std::int32_t>(std::floor((Src.PositionRadius[1] - R - WorldMinY) / FineCellMetres_)) - 2);
+        const std::int32_t Sz0 = std::max(0, static_cast<std::int32_t>(std::floor((Src.PositionRadius[2] - R - FloorWorldZ) / FineCellMetres_)) - 2);
+        const std::int32_t Sx1 = std::min(Tx - 1, static_cast<std::int32_t>(std::ceil((Src.PositionRadius[0] + R - WorldMinX) / FineCellMetres_)) + 2);
+        const std::int32_t Sy1 = std::min(Ty - 1, static_cast<std::int32_t>(std::ceil((Src.PositionRadius[1] + R - WorldMinY) / FineCellMetres_)) + 2);
+        const std::int32_t Sz1 = std::min(Tz - 1, static_cast<std::int32_t>(std::ceil((Src.PositionRadius[2] + R - FloorWorldZ) / FineCellMetres_)) + 2);
+        ActMin[0] = std::min(ActMin[0], Sx0); ActMin[1] = std::min(ActMin[1], Sy0); ActMin[2] = std::min(ActMin[2], Sz0);
+        ActMax[0] = std::max(ActMax[0], Sx1); ActMax[1] = std::max(ActMax[1], Sy1); ActMax[2] = std::max(ActMax[2], Sz1);
+    }
+
     auto SampleFineVelocity = [&](float Px, float Py, float Pz, float Activity) noexcept -> std::array<float, 3>
     {
         const auto Base = SampleTrilinear(VelocityCurrent_, Vx, Vy, Vz, WorldMinX, WorldMinY, CoarseCellMetres_, Px, Py, Pz);
+        if (Parameters_.SubgridTurbulence <= 1.0e-5f)
+        {
+            return { Base[0], Base[1], Base[2] };
+        }
         const float Fq  = Parameters_.TurbulenceFrequency;
         const float T   = ElapsedSeconds_;
         const float A1x = Px * Fq + 0.43f * T, A1y = Py * Fq - 0.31f * T, A1z = Pz * Fq + 0.27f * T;
@@ -1234,20 +1386,23 @@ PlumeDiagnostics PlumeFluid::AdvanceSimulation(
         return { Base[0] + Gain * Sx, Base[1] + Gain * Sy, Base[2] + Gain * Sz };
     };
 
-    // Pass 5a: Forward semi-Lagrangian predictor into ThermoScratch_.
-    for (std::int32_t Z = 0; Z < Tz; ++Z)
+    std::fill(ThermoScratch_.begin(), ThermoScratch_.end(), 0.0f);
+    std::fill(ThermoBackward_.begin(), ThermoBackward_.end(), 0.0f);
+    std::fill(MacroOccupancy_.begin(), MacroOccupancy_.end(), 0u);
+
+    // Pass 5a: Forward semi-Lagrangian predictor restricted to conservative active narrow-band [ActMin..ActMax]!
+    for (std::int32_t Z = ActMin[2]; Z <= ActMax[2]; ++Z)
     {
         const float Pz = FloorWorldZ + (static_cast<float>(Z) + 0.5f) * FineCellMetres_;
-        for (std::int32_t Y = 0; Y < Ty; ++Y)
+        for (std::int32_t Y = ActMin[1]; Y <= ActMax[1]; ++Y)
         {
             const float Py = WorldMinY + (static_cast<float>(Y) + 0.5f) * FineCellMetres_;
-            for (std::int32_t X = 0; X < Tx; ++X)
+            for (std::int32_t X = ActMin[0]; X <= ActMax[0]; ++X)
             {
                 const float Px = WorldMinX + (static_cast<float>(X) + 0.5f) * FineCellMetres_;
                 const std::size_t I4 = FineIdx(X, Y, Z) * 4u;
                 if (Pz < 0.0f || PointInsideSolidObstacles(Px, Py, Pz))
                 {
-                    ThermoScratch_[I4 + 0u] = ThermoScratch_[I4 + 1u] = ThermoScratch_[I4 + 2u] = ThermoScratch_[I4 + 3u] = 0.0f;
                     continue;
                 }
                 const auto Here     = SampleTrilinear(ThermoCurrent_, Tx, Ty, Tz, PriorMinX, PriorMinY, FineCellMetres_, Px, Py, Pz);
@@ -1268,24 +1423,23 @@ PlumeDiagnostics PlumeFluid::AdvanceSimulation(
         }
     }
 
-    // Pass 5b: Clamped MacCormack corrector (ProductionUpgraded) + combustion + retention + Gaussian sources + coverage.
+    // Pass 5b: Clamped MacCormack corrector (ProductionUpgraded) + combustion + retention + Gaussian sources + macro-bricks!
     CoverageLow_  = { Tx, Ty, Tz };
     CoverageHigh_ = { -1, -1, -1 };
     std::size_t ActiveCells = 0u;
 
-    for (std::int32_t Z = 0; Z < Tz; ++Z)
+    for (std::int32_t Z = ActMin[2]; Z <= ActMax[2]; ++Z)
     {
         const float Pz = FloorWorldZ + (static_cast<float>(Z) + 0.5f) * FineCellMetres_;
-        for (std::int32_t Y = 0; Y < Ty; ++Y)
+        for (std::int32_t Y = ActMin[1]; Y <= ActMax[1]; ++Y)
         {
             const float Py = WorldMinY + (static_cast<float>(Y) + 0.5f) * FineCellMetres_;
-            for (std::int32_t X = 0; X < Tx; ++X)
+            for (std::int32_t X = ActMin[0]; X <= ActMax[0]; ++X)
             {
                 const float Px = WorldMinX + (static_cast<float>(X) + 0.5f) * FineCellMetres_;
                 const std::size_t I4 = FineIdx(X, Y, Z) * 4u;
                 if (Pz < 0.0f)
                 {
-                    ThermoBackward_[I4 + 0u] = ThermoBackward_[I4 + 1u] = ThermoBackward_[I4 + 2u] = ThermoBackward_[I4 + 3u] = 0.0f;
                     continue;
                 }
 
@@ -1296,7 +1450,8 @@ PlumeDiagnostics PlumeFluid::AdvanceSimulation(
                     ThermoScratch_[I4 + 3u]
                 };
 
-                if (Parameters_.Variant == PlumeSolverVariant::ProductionUpgraded)
+                if (Parameters_.Variant == PlumeSolverVariant::ProductionUpgraded &&
+                    (Val[0] > 1.0e-5f || Val[1] > 1.0e-3f || Val[2] > 1.0e-5f || Val[3] > 1.0e-5f))
                 {
                     const auto Here   = SampleTrilinear(ThermoCurrent_, Tx, Ty, Tz, PriorMinX, PriorMinY, FineCellMetres_, Px, Py, Pz);
                     const float Act   = ClampScalar(0.6f * (Here[0] + Here[3]) + 0.02f * Here[1] + Here[2], 0.0f, 1.0f);
@@ -1367,6 +1522,13 @@ PlumeDiagnostics PlumeFluid::AdvanceSimulation(
                     CoverageHigh_[0] = std::max(CoverageHigh_[0], X);
                     CoverageHigh_[1] = std::max(CoverageHigh_[1], Y);
                     CoverageHigh_[2] = std::max(CoverageHigh_[2], Z);
+                    const std::size_t BIdx = ((static_cast<std::size_t>(Z / 8) * MacroBrickExtent_[1] +
+                                               static_cast<std::size_t>(Y / 8)) * MacroBrickExtent_[0] +
+                                              static_cast<std::size_t>(X / 8));
+                    if (BIdx < MacroOccupancy_.size())
+                    {
+                        MacroOccupancy_[BIdx] = 1u;
+                    }
                     ++ActiveCells;
                 }
             }
@@ -1375,7 +1537,7 @@ PlumeDiagnostics PlumeFluid::AdvanceSimulation(
     ThermoCurrent_.swap(ThermoBackward_);
     Diagnostics_.ActiveVolumeCubicM = static_cast<float>(ActiveCells) * FineCellMetres_ * FineCellMetres_ * FineCellMetres_;
 
-    // 6. Sun & zenith self-shadow transmittance on coarse lattice.
+    // 6. Sun & zenith self-shadow transmittance restricted to active coarse envelope!
     const std::array<float, 3> SunDir = { Footprint_.Sun[0], Footprint_.Sun[1], Footprint_.Sun[2] };
     auto OpticalDepth = [&](float Px, float Py, float Pz, float Dx, float Dy, float Dz) noexcept -> float
     {
@@ -1394,18 +1556,28 @@ PlumeDiagnostics PlumeFluid::AdvanceSimulation(
         return Depth;
     };
 
-    for (std::int32_t Z = 0; Z < Vz; ++Z)
+    std::fill(LightTransmittance_.begin(), LightTransmittance_.end(), 1.0f);
+    if (CoverageLow_[0] <= CoverageHigh_[0])
     {
-        const float Pz = FloorWorldZ + (static_cast<float>(Z) + 0.5f) * CoarseCellMetres_;
-        for (std::int32_t Y = 0; Y < Vy; ++Y)
+        const std::int32_t LMinX = std::max(0, CoverageLow_[0] / 2 - 2);
+        const std::int32_t LMaxX = std::min(Vx - 1, CoverageHigh_[0] / 2 + 2);
+        const std::int32_t LMinY = std::max(0, CoverageLow_[1] / 2 - 2);
+        const std::int32_t LMaxY = std::min(Vy - 1, CoverageHigh_[1] / 2 + 2);
+        const std::int32_t LMinZ = std::max(0, CoverageLow_[2] / 2 - 2);
+        const std::int32_t LMaxZ = std::min(Vz - 1, CoverageHigh_[2] / 2 + 2);
+        for (std::int32_t Z = LMinZ; Z <= LMaxZ; ++Z)
         {
-            const float Py = WorldMinY + (static_cast<float>(Y) + 0.5f) * CoarseCellMetres_;
-            for (std::int32_t X = 0; X < Vx; ++X)
+            const float Pz = FloorWorldZ + (static_cast<float>(Z) + 0.5f) * CoarseCellMetres_;
+            for (std::int32_t Y = LMinY; Y <= LMaxY; ++Y)
             {
-                const float Px = WorldMinX + (static_cast<float>(X) + 0.5f) * CoarseCellMetres_;
-                const std::size_t I2 = CoarseIdx(X, Y, Z) * 2u;
-                LightTransmittance_[I2 + 0u] = std::exp(-0.65f * OpticalDepth(Px, Py, Pz, SunDir[0], SunDir[1], SunDir[2]));
-                LightTransmittance_[I2 + 1u] = std::exp(-0.50f * OpticalDepth(Px, Py, Pz, 0.0f, 0.0f, 1.0f));
+                const float Py = WorldMinY + (static_cast<float>(Y) + 0.5f) * CoarseCellMetres_;
+                for (std::int32_t X = LMinX; X <= LMaxX; ++X)
+                {
+                    const float Px = WorldMinX + (static_cast<float>(X) + 0.5f) * CoarseCellMetres_;
+                    const std::size_t I2 = CoarseIdx(X, Y, Z) * 2u;
+                    LightTransmittance_[I2 + 0u] = std::exp(-0.65f * OpticalDepth(Px, Py, Pz, SunDir[0], SunDir[1], SunDir[2]));
+                    LightTransmittance_[I2 + 1u] = std::exp(-0.50f * OpticalDepth(Px, Py, Pz, 0.0f, 0.0f, 1.0f));
+                }
             }
         }
     }
@@ -1583,6 +1755,29 @@ std::array<float, 4> PlumeFluid::EvaluatePlumeRay(
             Origin[2] + Direction[2] * T
         };
 
+        // Fast O(1) 8x8x8 macro-occupancy brick skip before any 8-corner trilinear lookup!
+        if (!MacroOccupancy_.empty())
+        {
+            const std::int32_t Bx = static_cast<std::int32_t>(std::floor((Pos[0] - WorldMinX) / FineCellMetres_)) / 8;
+            const std::int32_t By = static_cast<std::int32_t>(std::floor((Pos[1] - WorldMinY) / FineCellMetres_)) / 8;
+            const std::int32_t Bz = static_cast<std::int32_t>(std::floor((Pos[2] - FloorWorldZ) / FineCellMetres_)) / 8;
+            if (Bx < 0 || By < 0 || Bz < 0 ||
+                Bx >= static_cast<std::int32_t>(MacroBrickExtent_[0]) ||
+                By >= static_cast<std::int32_t>(MacroBrickExtent_[1]) ||
+                Bz >= static_cast<std::int32_t>(MacroBrickExtent_[2]))
+            {
+                continue;
+            }
+            const std::size_t BIdx = ((static_cast<std::size_t>(Bz) * MacroBrickExtent_[1] +
+                                       static_cast<std::size_t>(By)) * MacroBrickExtent_[0] +
+                                      static_cast<std::size_t>(Bx));
+            if (MacroOccupancy_[BIdx] == 0u)
+            {
+                ++Index; // Double-step across empty 8x8x8 macro-bricks!
+                continue;
+            }
+        }
+
         auto Thermo = SampleThermoPoint(Pos[0], Pos[1], Pos[2]);
         if (Thermo[0] < 1.0e-3f && Thermo[3] < 1.0e-3f && Thermo[2] < 1.0e-3f)
         {
@@ -1592,15 +1787,18 @@ std::array<float, 4> PlumeFluid::EvaluatePlumeRay(
         std::array<float, 2> SelfShadow = { 1.0f, 1.0f };
         const auto LocalVel = SampleCoarseVelocityAndLight(Pos[0], Pos[1], Pos[2], SelfShadow);
 
-        const float Noise = EvaluateDetailFieldSample(
-            Pos, LocalVel, ElapsedSeconds_, Parameters_.DetailFrequency, Parameters_.FlowWarpStrength, Parameters_.Variant);
+        // Skip expensive high-frequency erosion deep inside already-opaque soot cores (Transmittance < 0.14)
+        const float Noise = (Transmittance > 0.14f || Thermo[2] > 0.015f)
+            ? EvaluateDetailFieldSample(
+                  Pos, LocalVel, ElapsedSeconds_, Parameters_.DetailFrequency, Parameters_.FlowWarpStrength, Parameters_.Variant)
+            : 0.50f;
 
         auto ErodeDensity = [&](float Density) noexcept -> float
         {
             const float Thin = 1.0f - ClampScalar(Density * 0.65f, 0.0f, 1.0f);
             return std::max(0.0f,
-                Density * (1.0f + Parameters_.DetailStrength * (Noise - 0.5f) * 1.55f) -
-                Parameters_.DetailStrength * Thin * (1.0f - Noise) * 0.42f * std::min(Density, 1.2f));
+                Density * (1.0f + Parameters_.DetailStrength * (Noise - 0.5f) * 1.68f) -
+                Parameters_.DetailStrength * Thin * (1.0f - Noise) * 0.48f * std::min(Density, 1.3f));
         };
 
         const float SmokeDensity = ErodeDensity(Thermo[0]);
@@ -1624,7 +1822,7 @@ std::array<float, 4> PlumeFluid::EvaluatePlumeRay(
             // Production crisp premixed reaction-sheet level-set sharpening:
             // High-frequency turbulent wrinkling erodes the outer reaction contour cleanly to zero instead of leaving a blurry halo,
             // while core reaction zones reach incandescent 3100 K white-yellow surrounded by vivid orange tongues and dark soot tips.
-            const float Wrinkle     = (Noise - 0.46f) * 0.52f + (Flicker - 0.5f) * 0.12f;
+            const float Wrinkle     = (Noise - 0.46f) * 0.56f + (Flicker - 0.5f) * 0.12f;
             const float ErodedFuel  = std::max(0.0f, Thermo[2] + Wrinkle * std::min(Thermo[2] * 1.6f, 0.85f));
             const float SheetMask   = SmoothStepScalar(0.16f, 0.88f, ErodedFuel);
             const float CrispFlame  = std::pow(SheetMask, Parameters_.FlameSheetSharpness);
@@ -1649,15 +1847,34 @@ std::array<float, 4> PlumeFluid::EvaluatePlumeRay(
             : 0.0f;
         const float Share    = (Extinction > 1.0e-5f) ? (Particulate / Extinction) : 0.0f;
 
-        // Beers-Powder dark-edge / bright-silver-lining relief (eliminates flat grey voxel appearance).
-        const float Powder = (Parameters_.Variant == PlumeSolverVariant::ProductionUpgraded)
-            ? (1.0f - 0.52f * std::exp(-2.4f * Extinction * Step))
-            : 1.0f;
+        // Beers-Powder dark-edge / bright-silver-lining + O(1) single-voxel sun-gradient billowing lobe relief!
+        float Powder = 1.0f;
+        if (Parameters_.Variant == PlumeSolverVariant::ProductionUpgraded)
+        {
+            Powder = 1.0f - 0.54f * std::exp(-2.4f * Extinction * Step);
+            if (Transmittance > 0.22f && Particulate > 0.12f)
+            {
+                const float ProbeH = 1.35f * FineCellMetres_;
+                const std::int32_t Sx = std::clamp(static_cast<std::int32_t>((Pos[0] + SunDirection[0] * ProbeH - WorldMinX) / FineCellMetres_), 0, Tx - 1);
+                const std::int32_t Sy = std::clamp(static_cast<std::int32_t>((Pos[1] + SunDirection[1] * ProbeH - WorldMinY) / FineCellMetres_), 0, Ty - 1);
+                const std::int32_t Sz = std::clamp(static_cast<std::int32_t>((Pos[2] + SunDirection[2] * ProbeH - FloorWorldZ) / FineCellMetres_), 0, Tz - 1);
+                const std::size_t  S4 = ((static_cast<std::size_t>(Sz) * static_cast<std::size_t>(Ty) + static_cast<std::size_t>(Sy)) *
+                                             static_cast<std::size_t>(Tx) +
+                                         static_cast<std::size_t>(Sx)) * 4u;
+                const float RhoHere    = Thermo[0] + Thermo[3];
+                const float RhoSun     = ThermoCurrent_[S4 + 0u] + ThermoCurrent_[S4 + 3u];
+                const float LobeRelief = ClampScalar((RhoHere - RhoSun) / std::max(0.25f, RhoHere), -0.60f, 0.85f);
+                Powder *= (1.0f + 0.62f * LobeRelief);
+            }
+        }
 
+        const float ShadowSqrt  = std::sqrt(std::max(0.0f, SelfShadow[0]));
+        const float ShadowQuart = std::sqrt(ShadowSqrt);
+        const float Shadow16th  = std::sqrt(std::sqrt(ShadowQuart));
         const float MultiOctave = Phase0 * SelfShadow[0] +
                                   Parameters_.MultiScatterGain * Albedo *
-                                      (0.60f * Phase1 * std::pow(SelfShadow[0], 0.25f) +
-                                       0.36f * Phase2 * std::pow(SelfShadow[0], 0.0625f));
+                                      (0.60f * Phase1 * ShadowQuart +
+                                       0.36f * Phase2 * Shadow16th);
 
         std::array<float, 3> FireIrradiance = { 0.0f, 0.0f, 0.0f };
         for (std::uint32_t L = 0u; L < std::min(FireLights_.Count[0], 4u); ++L)

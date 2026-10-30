@@ -526,23 +526,334 @@ SnowWheelRutResponse SnowSurface::CarveWheelRutAndEvaluateResistance(const SnowW
 }
 
 /*------------------------------------------------------------------------------------------------------------------------------------------
+                         COUPLED FALLING-SNOW TOUCHDOWN, ANGLE-OF-REPOSE SLUMPING & SINGLE-MESH TOPOLOGY
+------------------------------------------------------------------------------------------------------------------------------------------*/
+void SnowSurface::DepositSnowflakeTouchdown(
+    Vec3  HitWorld,
+    Vec3  ImpactVelocityMps,
+    float SnowPacketMassKg,
+    float DriftSpreadRadiusMetres) noexcept
+{
+    if (SnowPacketMassKg <= 0.0f)
+    {
+        return;
+    }
+
+    // Wind saltation bounce-drift on touchdown: horizontal wind carries fresh dendritic crystals slightly downwind!
+    const float DriftX = ImpactVelocityMps.X * 0.045f;
+    const float DriftY = ImpactVelocityMps.Y * 0.045f;
+    const float Cx     = HitWorld.X + DriftX;
+    const float Cy     = HitWorld.Y + DriftY;
+    const float Sigma  = std::max(1.35f * Spec_.CellSizeMetres, DriftSpreadRadiusMetres);
+    const float RMax   = 2.65f * Sigma;
+
+    const int MinI = std::max(0, static_cast<int>(std::floor((Cx - RMax - Spec_.OriginX) / Spec_.CellSizeMetres)));
+    const int MaxI = std::min(static_cast<int>(Spec_.CellsX) - 1, static_cast<int>(std::ceil((Cx + RMax - Spec_.OriginX) / Spec_.CellSizeMetres)));
+    const int MinJ = std::max(0, static_cast<int>(std::floor((Cy - RMax - Spec_.OriginY) / Spec_.CellSizeMetres)));
+    const int MaxJ = std::min(static_cast<int>(Spec_.CellsY) - 1, static_cast<int>(std::ceil((Cy + RMax - Spec_.OriginY) / Spec_.CellSizeMetres)));
+    if (MinI > MaxI || MinJ > MaxJ)
+    {
+        return;
+    }
+
+    const float CellArea = Spec_.CellSizeMetres * Spec_.CellSizeMetres;
+    const float Inv2Sig2 = 0.5f / (Sigma * Sigma);
+
+    struct KernelTap
+    {
+        std::size_t Idx;
+        float       Weight;
+    };
+    std::vector<KernelTap> Taps;
+    Taps.reserve(static_cast<std::size_t>((MaxI - MinI + 1) * (MaxJ - MinJ + 1)));
+    float WeightSum = 0.0f;
+
+    for (int J = MinJ; J <= MaxJ; ++J)
+    {
+        const float Wy = Spec_.OriginY + (static_cast<float>(J) + 0.5f) * Spec_.CellSizeMetres;
+        const float Dy = Wy - Cy;
+        for (int I = MinI; I <= MaxI; ++I)
+        {
+            const float Wx = Spec_.OriginX + (static_cast<float>(I) + 0.5f) * Spec_.CellSizeMetres;
+            const float Dx = Wx - Cx;
+            const float D2 = Dx * Dx + Dy * Dy;
+            if (D2 <= RMax * RMax)
+            {
+                const float W = std::exp(-D2 * Inv2Sig2);
+                Taps.push_back({CellIndex(static_cast<uint32_t>(I), static_cast<uint32_t>(J)), W});
+                WeightSum += W;
+            }
+        }
+    }
+
+    if (WeightSum <= 1.0e-7f)
+    {
+        return;
+    }
+
+    const float FreshRho = Spec_.FreshSnowDensityKgM3;
+    for (const KernelTap& Tap : Taps)
+    {
+        const float AddMass = SnowPacketMassKg * (Tap.Weight / WeightSum);
+        const float OldMass = SnowDepthMetres_[Tap.Idx] * SnowDensityKgM3_[Tap.Idx] * CellArea;
+        const float NewMass = OldMass + AddMass;
+        const float NewRho  = (OldMass > 1.0e-6f)
+                                  ? ((OldMass * SnowDensityKgM3_[Tap.Idx] + AddMass * FreshRho) / NewMass)
+                                  : FreshRho;
+        SnowDepthMetres_[Tap.Idx]   = NewMass / (NewRho * CellArea);
+        SnowDensityKgM3_[Tap.Idx]   = NewRho;
+    }
+
+    Telemetry_.GroundSolidMassKg += static_cast<double>(SnowPacketMassKg);
+    ++Telemetry_.RetiredSnowflakesFused;
+}
+
+void SnowSurface::DepositHailstoneTouchdown(
+    Vec3  HitWorld,
+    float HailPacketMassKg,
+    float SpreadRadiusMetres) noexcept
+{
+    if (HailPacketMassKg <= 0.0f)
+    {
+        return;
+    }
+
+    const float Sigma = std::max(1.15f * Spec_.CellSizeMetres, SpreadRadiusMetres);
+    const float RMax  = 2.4f * Sigma;
+    const int   MinI  = std::max(0, static_cast<int>(std::floor((HitWorld.X - RMax - Spec_.OriginX) / Spec_.CellSizeMetres)));
+    const int   MaxI  = std::min(static_cast<int>(Spec_.CellsX) - 1, static_cast<int>(std::ceil((HitWorld.X + RMax - Spec_.OriginX) / Spec_.CellSizeMetres)));
+    const int   MinJ  = std::max(0, static_cast<int>(std::floor((HitWorld.Y - RMax - Spec_.OriginY) / Spec_.CellSizeMetres)));
+    const int   MaxJ  = std::min(static_cast<int>(Spec_.CellsY) - 1, static_cast<int>(std::ceil((HitWorld.Y + RMax - Spec_.OriginY) / Spec_.CellSizeMetres)));
+    if (MinI > MaxI || MinJ > MaxJ)
+    {
+        return;
+    }
+
+    const float CellArea = Spec_.CellSizeMetres * Spec_.CellSizeMetres;
+    const float Inv2Sig2 = 0.5f / (Sigma * Sigma);
+    float       WSum     = 0.0f;
+    for (int J = MinJ; J <= MaxJ; ++J)
+    {
+        const float Dy = (Spec_.OriginY + (static_cast<float>(J) + 0.5f) * Spec_.CellSizeMetres) - HitWorld.Y;
+        for (int I = MinI; I <= MaxI; ++I)
+        {
+            const float Dx = (Spec_.OriginX + (static_cast<float>(I) + 0.5f) * Spec_.CellSizeMetres) - HitWorld.X;
+            const float D2 = Dx * Dx + Dy * Dy;
+            if (D2 <= RMax * RMax)
+            {
+                WSum += std::exp(-D2 * Inv2Sig2);
+            }
+        }
+    }
+    if (WSum <= 1.0e-7f)
+    {
+        return;
+    }
+
+    for (int J = MinJ; J <= MaxJ; ++J)
+    {
+        const float Dy = (Spec_.OriginY + (static_cast<float>(J) + 0.5f) * Spec_.CellSizeMetres) - HitWorld.Y;
+        for (int I = MinI; I <= MaxI; ++I)
+        {
+            const float Dx = (Spec_.OriginX + (static_cast<float>(I) + 0.5f) * Spec_.CellSizeMetres) - HitWorld.X;
+            const float D2 = Dx * Dx + Dy * Dy;
+            if (D2 <= RMax * RMax)
+            {
+                const float W   = std::exp(-D2 * Inv2Sig2) / WSum;
+                const auto  Idx = CellIndex(static_cast<uint32_t>(I), static_cast<uint32_t>(J));
+                HailDepthMetres_[Idx] += (HailPacketMassKg * W) / (Spec_.HailBulkDensityKgM3 * CellArea);
+            }
+        }
+    }
+
+    Telemetry_.GroundSolidMassKg += static_cast<double>(HailPacketMassKg);
+    ++Telemetry_.RetiredHailPelletsFused;
+}
+
+void SnowSurface::RelaxAngleOfReposeAndWindDrift(
+    Vec3     PrevailingWindMps,
+    float    DtSeconds,
+    uint32_t SubIterations) noexcept
+{
+    if (DtSeconds <= 0.0f || Spec_.CellsX < 3u || Spec_.CellsY < 3u)
+    {
+        return;
+    }
+
+    const uint32_t Nx       = Spec_.CellsX;
+    const uint32_t Ny       = Spec_.CellsY;
+    const float    Dx       = Spec_.CellSizeMetres;
+    const float    CritTan  = std::tan(std::clamp(Spec_.AngleOfReposeDegrees, 20.0f, 52.0f) * (3.1415926535f / 180.0f));
+    const float    SubDt    = DtSeconds / static_cast<float>(std::max(1u, SubIterations));
+    const float    WindMag  = std::sqrt(PrevailingWindMps.X * PrevailingWindMps.X + PrevailingWindMps.Y * PrevailingWindMps.Y);
+    const Vec3     WindUnit = (WindMag > 1.0e-3f)
+                                  ? Vec3{PrevailingWindMps.X / WindMag, PrevailingWindMps.Y / WindMag, 0.0f}
+                                  : Vec3{1.0f, 0.0f, 0.0f};
+
+    std::vector<float> DeltaSnow(static_cast<std::size_t>(Nx) * Ny, 0.0f);
+
+    constexpr int   OffI[8]  = {1, -1, 0, 0, 1, 1, -1, -1};
+    constexpr int   OffJ[8]  = {0, 0, 1, -1, 1, -1, 1, -1};
+    constexpr float DistS[8] = {1.0f, 1.0f, 1.0f, 1.0f, 1.41421356f, 1.41421356f, 1.41421356f, 1.41421356f};
+
+    for (uint32_t Iter = 0u; Iter < std::max(1u, SubIterations); ++Iter)
+    {
+        std::fill(DeltaSnow.begin(), DeltaSnow.end(), 0.0f);
+
+        for (uint32_t J = 1u; J + 1u < Ny; ++J)
+        {
+            for (uint32_t I = 1u; I + 1u < Nx; ++I)
+            {
+                const std::size_t CIdx = CellIndex(I, J);
+                const float       SnowHere = SnowDepthMetres_[CIdx];
+                if (SnowHere <= 1.0e-4f)
+                {
+                    continue;
+                }
+                const float TopHere = TerrainElevation_[CIdx] + SnowHere + HailDepthMetres_[CIdx];
+
+                // 1) Dry-powder angle-of-repose avalanche slumping across all 8 cardinal + diagonal neighbours!
+                float ExcessSum = 0.0f;
+                float ExcessArr[8]{};
+                for (int K = 0; K < 8; ++K)
+                {
+                    const std::size_t NIdx    = CellIndex(static_cast<uint32_t>(static_cast<int>(I) + OffI[K]),
+                                                          static_cast<uint32_t>(static_cast<int>(J) + OffJ[K]));
+                    const float       TopNbr  = TerrainElevation_[NIdx] + SnowDepthMetres_[NIdx] + HailDepthMetres_[NIdx];
+                    const float       MaxDrop = CritTan * Dx * DistS[K];
+                    const float       Excess  = (TopHere - TopNbr) - MaxDrop;
+                    if (Excess > 0.0f)
+                    {
+                        ExcessArr[K] = Excess / DistS[K];
+                        ExcessSum += ExcessArr[K];
+                    }
+                }
+                if (ExcessSum > 1.0e-5f)
+                {
+                    const float MaxTransfer = std::min(SnowHere * 0.38f, ExcessSum * 0.24f);
+                    for (int K = 0; K < 8; ++K)
+                    {
+                        if (ExcessArr[K] > 0.0f)
+                        {
+                            const std::size_t NIdx = CellIndex(static_cast<uint32_t>(static_cast<int>(I) + OffI[K]),
+                                                               static_cast<uint32_t>(static_cast<int>(J) + OffJ[K]));
+                            const float Move = MaxTransfer * (ExcessArr[K] / ExcessSum);
+                            DeltaSnow[CIdx] -= Move;
+                            DeltaSnow[NIdx] += Move;
+                        }
+                    }
+                }
+
+                // 2) Windward-to-leeward saltation transport: erodes wind-facing ramp & deposits onto leeward slip-face!
+                if (WindMag > 0.6f && SnowHere > 0.008f)
+                {
+                    const float GradX = ((TerrainElevation_[CellIndex(I + 1u, J)] + SnowDepthMetres_[CellIndex(I + 1u, J)]) -
+                                         (TerrainElevation_[CellIndex(I - 1u, J)] + SnowDepthMetres_[CellIndex(I - 1u, J)])) / (2.0f * Dx);
+                    const float GradY = ((TerrainElevation_[CellIndex(I, J + 1u)] + SnowDepthMetres_[CellIndex(I, J + 1u)]) -
+                                         (TerrainElevation_[CellIndex(I, J - 1u)] + SnowDepthMetres_[CellIndex(I, J - 1u)])) / (2.0f * Dx);
+                    // Positive WindFacing when wind climbs up the windward flank (Grad dot Wind > 0)!
+                    const float WindFacing = GradX * WindUnit.X + GradY * WindUnit.Y;
+                    if (WindFacing > -0.05f)
+                    {
+                        const int   StepI = (WindUnit.X >= 0.25f) ? 1 : ((WindUnit.X <= -0.25f) ? -1 : 0);
+                        const int   StepJ = (WindUnit.Y >= 0.25f) ? 1 : ((WindUnit.Y <= -0.25f) ? -1 : 0);
+                        if (StepI != 0 || StepJ != 0)
+                        {
+                            const std::size_t LeeIdx = CellIndex(static_cast<uint32_t>(static_cast<int>(I) + StepI),
+                                                                 static_cast<uint32_t>(static_cast<int>(J) + StepJ));
+                            const float Saltate = std::min(SnowHere * 0.04f,
+                                                           0.0018f * WindMag * (0.25f + std::max(0.0f, WindFacing)) * SubDt);
+                            DeltaSnow[CIdx]   -= Saltate;
+                            DeltaSnow[LeeIdx] += Saltate;
+                        }
+                    }
+                }
+            }
+        }
+
+        for (std::size_t Idx = 0u; Idx < DeltaSnow.size(); ++Idx)
+        {
+            SnowDepthMetres_[Idx] = std::max(0.0f, SnowDepthMetres_[Idx] + DeltaSnow[Idx]);
+        }
+    }
+}
+
+uint32_t SnowSurface::CountConnectedMeshComponents(const SnowpackPolygonSurface& Surface)
+{
+    const size_t TriCount = Surface.Indices.size() / 3u;
+    if (TriCount == 0u || Surface.Vertices.empty())
+    {
+        return 0u;
+    }
+
+    std::vector<std::vector<uint32_t>> VertToTris(Surface.Vertices.size());
+    for (size_t T = 0u; T < TriCount; ++T)
+    {
+        for (size_t C = 0u; C < 3u; ++C)
+        {
+            const uint32_t V = Surface.Indices[T * 3u + C];
+            if (V < VertToTris.size())
+            {
+                VertToTris[V].push_back(static_cast<uint32_t>(T));
+            }
+        }
+    }
+
+    std::vector<uint8_t>  Visited(TriCount, 0u);
+    std::vector<uint32_t> Queue;
+    Queue.reserve(TriCount);
+    uint32_t Components = 0u;
+
+    for (size_t StartT = 0u; StartT < TriCount; ++StartT)
+    {
+        if (Visited[StartT] != 0u)
+        {
+            continue;
+        }
+        ++Components;
+        Visited[StartT] = 1u;
+        Queue.clear();
+        Queue.push_back(static_cast<uint32_t>(StartT));
+
+        size_t Head = 0u;
+        while (Head < Queue.size())
+        {
+            const uint32_t CurT = Queue[Head++];
+            for (size_t C = 0u; C < 3u; ++C)
+            {
+                const uint32_t V = Surface.Indices[static_cast<size_t>(CurT) * 3u + C];
+                for (uint32_t NbrT : VertToTris[V])
+                {
+                    if (Visited[NbrT] == 0u)
+                    {
+                        Visited[NbrT] = 1u;
+                        Queue.push_back(NbrT);
+                    }
+                }
+            }
+        }
+    }
+    return Components;
+}
+
+/*------------------------------------------------------------------------------------------------------------------------------------------
                                         SINGLE CONTIGUOUS POLYGON SURFACE SYNTHESIS
 ------------------------------------------------------------------------------------------------------------------------------------------*/
 void SnowSurface::RebuildContiguousPolygonSurfaces(const VehicleSnowEnvelope& VehicleEnvelope)
 {
     GroundSurface_.Vertices.clear();
     GroundSurface_.Indices.clear();
-    GroundSurface_.ActiveQuadCount  = 0u;
-    GroundSurface_.PeakThicknessM   = 0.0f;
-    GroundSurface_.TotalSolidMassKg = Telemetry_.GroundSolidMassKg;
+    GroundSurface_.ActiveQuadCount         = 0u;
+    GroundSurface_.ConnectedComponentCount = 0u;
+    GroundSurface_.PeakThicknessM          = 0.0f;
+    GroundSurface_.TotalSolidMassKg        = Telemetry_.GroundSolidMassKg;
 
     const uint32_t VxCount = Spec_.CellsX;
     const uint32_t VyCount = Spec_.CellsY;
     const size_t   NCells  = static_cast<size_t>(VxCount) * VyCount;
 
-    // 1. Build 3-pass Gaussian-binomial smoothed snow/hail/compaction fields for C^1 continuous surface synthesis
-    //    (eliminating both isolated single-cell powder blocks AND diagonal staircase edges along carved tyre ruts,
-    //    while leaving underlying SnowDepthMetres_ / SnowDensityKgM3_ physics arrays 100% untouched!).
+    // 1. Volume-preserving Taubin (lambda / mu) smoothing on snow/hail/compaction fields:
+    //    Eliminates grid faceting & isolated noisy spikes WITHOUT shrinking peak snow-mound elevation!
     std::vector<float> SmoothSnow = SnowDepthMetres_;
     std::vector<float> SmoothHail = HailDepthMetres_;
     std::vector<float> SmoothPack(NCells, 0.0f);
@@ -560,7 +871,7 @@ void SnowSurface::RebuildContiguousPolygonSurfaces(const VehicleSnowEnvelope& Ve
     std::vector<float> TmpHail(NCells, 0.0f);
     std::vector<float> TmpPack(NCells, 0.0f);
 
-    for (int Iter = 0; Iter < 3; ++Iter)
+    auto ApplyTaubinStep = [&](float StepWeight)
     {
         for (uint32_t J = 0u; J < VyCount; ++J)
         {
@@ -574,6 +885,10 @@ void SnowSurface::RebuildContiguousPolygonSurfaces(const VehicleSnowEnvelope& Ve
                     const float WyK = (Dj == 0) ? 2.0f : 1.0f;
                     for (int Di = -1; Di <= 1; ++Di)
                     {
+                        if (Di == 0 && Dj == 0)
+                        {
+                            continue;
+                        }
                         const int   Ni   = std::clamp(static_cast<int>(I) + Di, 0, static_cast<int>(VxCount) - 1);
                         const float W    = WyK * ((Di == 0) ? 2.0f : 1.0f);
                         const auto  NIdx = CellIndex(static_cast<uint32_t>(Ni), static_cast<uint32_t>(Nj));
@@ -583,15 +898,44 @@ void SnowSurface::RebuildContiguousPolygonSurfaces(const VehicleSnowEnvelope& Ve
                         WSum += W;
                     }
                 }
-                TmpSnow[CIdx] = SumS / WSum;
-                TmpHail[CIdx] = SumH / WSum;
-                TmpPack[CIdx] = SumP / WSum;
+                const float AvgS = SumS / WSum;
+                const float AvgH = SumH / WSum;
+                const float AvgP = SumP / WSum;
+                TmpSnow[CIdx] = std::max(0.0f, SmoothSnow[CIdx] + StepWeight * (AvgS - SmoothSnow[CIdx]));
+                TmpHail[CIdx] = std::max(0.0f, SmoothHail[CIdx] + StepWeight * (AvgH - SmoothHail[CIdx]));
+                TmpPack[CIdx] = std::clamp(SmoothPack[CIdx] + 0.5f * std::abs(StepWeight) * (AvgP - SmoothPack[CIdx]), 0.0f, 1.0f);
             }
         }
         SmoothSnow.swap(TmpSnow);
         SmoothHail.swap(TmpHail);
         SmoothPack.swap(TmpPack);
+    };
+
+    for (int Iter = 0; Iter < 2; ++Iter)
+    {
+        ApplyTaubinStep(+0.46f); // Low-pass smoothing pass
+        ApplyTaubinStep(-0.48f); // Volume-restoring un-shrinking pass!
     }
+    ApplyTaubinStep(+0.28f);
+
+    // Subtle wind-carved sastrugi & natural powder undulation (zero at thin skirt perimeter, rich on deep snow flanks!)
+    const Vec3 WindDir = Normalise(Vec3{Spec_.PrevailingWindDirection.X, Spec_.PrevailingWindDirection.Y, 0.0f});
+    const Vec3 WindLat{-WindDir.Y, WindDir.X, 0.0f};
+    auto EvaluateSastrugiRelief = [&](float Wx, float Wy, float SnowThick, float Pack) noexcept -> float
+    {
+        if (Spec_.SastrugiAmplitudeMetres <= 1.0e-5f || SnowThick <= 0.015f)
+        {
+            return 0.0f;
+        }
+        const float DepthMask = std::clamp((SnowThick - 0.015f) / 0.14f, 0.0f, 1.0f) * (1.0f - 0.65f * Pack);
+        const float AlongW    = Wx * WindDir.X + Wy * WindDir.Y;
+        const float CrossW    = Wx * WindLat.X + Wy * WindLat.Y;
+        // Elongated wind-aligned sastrugi ripples + secondary multi-scale snow grain!
+        const float R0 = std::sin(AlongW * 2.15f + 0.65f * std::sin(CrossW * 1.85f));
+        const float R1 = std::sin(CrossW * 5.40f + 1.15f * std::cos(AlongW * 1.35f));
+        const float R2 = 1.0f - std::abs(std::sin(CrossW * 2.95f - AlongW * 0.85f));
+        return Spec_.SastrugiAmplitudeMetres * DepthMask * (0.48f * R0 + 0.24f * R1 + 0.28f * (R2 - 0.5f));
+    };
 
     auto TotalSmoothThickness = [&](uint32_t I, uint32_t J) noexcept -> float
     {
@@ -599,8 +943,8 @@ void SnowSurface::RebuildContiguousPolygonSurfaces(const VehicleSnowEnvelope& Ve
         return SmoothSnow[Idx] + SmoothHail[Idx];
     };
 
-    const float IsoThreshold = std::max(0.0015f, Spec_.SurfaceInclusionThreshold);
-    constexpr float SkirtLiftM = 0.0035f; // [m] - Smooth bevelled lip above terrain prevents ground Z-fighting!
+    const float     IsoThreshold = std::max(0.0015f, Spec_.SurfaceInclusionThreshold);
+    constexpr float SkirtLiftM   = 0.0028f; // [m] - Feathered powder contact lip on terrain
 
     std::vector<int32_t> GridVertRemap(NCells, -1);
     std::vector<int32_t> HorizEdgeRemap(NCells, -1);
@@ -614,21 +958,23 @@ void SnowSurface::RebuildContiguousPolygonSurfaces(const VehicleSnowEnvelope& Ve
             return static_cast<uint32_t>(GridVertRemap[Key]);
         }
 
-        const auto  Idx   = CellIndex(I, J);
-        const float SnowH = SmoothSnow[Idx];
-        const float HailH = SmoothHail[Idx];
-        const float Thick = SnowH + HailH;
-        const float Wx    = Spec_.OriginX + (static_cast<float>(I) + 0.5f) * Spec_.CellSizeMetres;
-        const float Wy    = Spec_.OriginY + (static_cast<float>(J) + 0.5f) * Spec_.CellSizeMetres;
+        const auto  Idx    = CellIndex(I, J);
+        const float SnowH  = SmoothSnow[Idx];
+        const float HailH  = SmoothHail[Idx];
+        const float Thick  = SnowH + HailH;
+        const float Wx     = Spec_.OriginX + (static_cast<float>(I) + 0.5f) * Spec_.CellSizeMetres;
+        const float Wy     = Spec_.OriginY + (static_cast<float>(J) + 0.5f) * Spec_.CellSizeMetres;
+        const float Relief = EvaluateSastrugiRelief(Wx, Wy, SnowH, SmoothPack[Idx]);
+        const float FinalH = std::max(Thick + Relief, SkirtLiftM);
 
         SnowpackPolygonVertex V{};
-        V.Position        = Vec3{Wx, Wy, TerrainElevation_[Idx] + std::max(Thick, SkirtLiftM)};
+        V.Position        = Vec3{Wx, Wy, TerrainElevation_[Idx] + FinalH};
         V.Normal          = Vec3{0.0f, 0.0f, 1.0f};
-        V.SnowThicknessM  = Thick;
+        V.SnowThicknessM  = FinalH;
         V.HailIceFraction = (Thick > 1.0e-5f) ? std::clamp(HailH / Thick, 0.0f, 1.0f) : 0.0f;
         V.CompactionRatio = SmoothPack[Idx];
 
-        GroundSurface_.PeakThicknessM = std::max(GroundSurface_.PeakThicknessM, SnowDepthMetres_[Idx] + HailDepthMetres_[Idx]);
+        GroundSurface_.PeakThicknessM = std::max(GroundSurface_.PeakThicknessM, std::max(FinalH, SnowDepthMetres_[Idx] + HailDepthMetres_[Idx]));
         const uint32_t OutIdx         = static_cast<uint32_t>(GroundSurface_.Vertices.size());
         GroundSurface_.Vertices.push_back(V);
         GridVertRemap[Key] = static_cast<int32_t>(OutIdx);
@@ -755,6 +1101,82 @@ void SnowSurface::RebuildContiguousPolygonSurfaces(const VehicleSnowEnvelope& Ve
         }
     }
 
+    // Enforce strictly ONE single connected 3D snow-mound mesh when requested, and record exact topological component count!
+    if (Spec_.EnforceSingleConnectedMesh && GroundSurface_.Indices.size() >= 6u)
+    {
+        const size_t TriCount = GroundSurface_.Indices.size() / 3u;
+        std::vector<std::vector<uint32_t>> VertToTris(GroundSurface_.Vertices.size());
+        for (size_t T = 0u; T < TriCount; ++T)
+        {
+            for (size_t C = 0u; C < 3u; ++C)
+            {
+                VertToTris[GroundSurface_.Indices[T * 3u + C]].push_back(static_cast<uint32_t>(T));
+            }
+        }
+        std::vector<int32_t> CompId(TriCount, -1);
+        std::vector<size_t>  CompSizes;
+        std::vector<uint32_t> Queue;
+        for (size_t StartT = 0u; StartT < TriCount; ++StartT)
+        {
+            if (CompId[StartT] >= 0) continue;
+            const int32_t Cid = static_cast<int32_t>(CompSizes.size());
+            CompId[StartT]    = Cid;
+            Queue.clear();
+            Queue.push_back(static_cast<uint32_t>(StartT));
+            size_t Head = 0u;
+            while (Head < Queue.size())
+            {
+                const uint32_t CurT = Queue[Head++];
+                for (size_t C = 0u; C < 3u; ++C)
+                {
+                    for (uint32_t NbrT : VertToTris[GroundSurface_.Indices[static_cast<size_t>(CurT) * 3u + C]])
+                    {
+                        if (CompId[NbrT] < 0)
+                        {
+                            CompId[NbrT] = Cid;
+                            Queue.push_back(NbrT);
+                        }
+                    }
+                }
+            }
+            CompSizes.push_back(Queue.size());
+        }
+
+        if (CompSizes.size() > 1u)
+        {
+            int32_t LargestCid = 0;
+            for (size_t K = 1u; K < CompSizes.size(); ++K)
+            {
+                if (CompSizes[K] > CompSizes[static_cast<size_t>(LargestCid)])
+                {
+                    LargestCid = static_cast<int32_t>(K);
+                }
+            }
+            std::vector<int32_t>              VertCompact(GroundSurface_.Vertices.size(), -1);
+            std::vector<SnowpackPolygonVertex> CompactVerts;
+            std::vector<uint32_t>              CompactIndices;
+            CompactVerts.reserve(GroundSurface_.Vertices.size());
+            CompactIndices.reserve(GroundSurface_.Indices.size());
+
+            for (size_t T = 0u; T < TriCount; ++T)
+            {
+                if (CompId[T] != LargestCid) continue;
+                for (size_t C = 0u; C < 3u; ++C)
+                {
+                    const uint32_t OldV = GroundSurface_.Indices[T * 3u + C];
+                    if (VertCompact[OldV] < 0)
+                    {
+                        VertCompact[OldV] = static_cast<int32_t>(CompactVerts.size());
+                        CompactVerts.push_back(GroundSurface_.Vertices[OldV]);
+                    }
+                    CompactIndices.push_back(static_cast<uint32_t>(VertCompact[OldV]));
+                }
+            }
+            GroundSurface_.Vertices.swap(CompactVerts);
+            GroundSurface_.Indices.swap(CompactIndices);
+        }
+    }
+
     // Compute smooth area-weighted per-vertex normals across the contiguous snow PolygonSurface!
     std::vector<Vec3> AccumNormals(GroundSurface_.Vertices.size(), Vec3{0.0f, 0.0f, 0.0f});
     for (size_t T = 0u; T + 2u < GroundSurface_.Indices.size(); T += 3u)
@@ -778,6 +1200,8 @@ void SnowSurface::RebuildContiguousPolygonSurfaces(const VehicleSnowEnvelope& Ve
         const float Len = Length(AccumNormals[VIdx]);
         GroundSurface_.Vertices[VIdx].Normal = (Len > 1.0e-7f) ? (AccumNormals[VIdx] * (1.0f / Len)) : Vec3{0.0f, 0.0f, 1.0f};
     }
+
+    GroundSurface_.ConnectedComponentCount = CountConnectedMeshComponents(GroundSurface_);
 
     for (size_t CIdx = 0u; CIdx < NCells; ++CIdx)
     {
@@ -864,6 +1288,28 @@ void SnowSurface::RebuildContiguousPolygonSurfaces(const VehicleSnowEnvelope& Ve
 /*------------------------------------------------------------------------------------------------------------------------------------------
                                                              SAMPLERS
 ------------------------------------------------------------------------------------------------------------------------------------------*/
+float SnowSurface::SampleGroundSurfaceElevation(float WorldX, float WorldY) const noexcept
+{
+    const float Fx = (WorldX - Spec_.OriginX) / Spec_.CellSizeMetres - 0.5f;
+    const float Fy = (WorldY - Spec_.OriginY) / Spec_.CellSizeMetres - 0.5f;
+    if (Fx < 0.0f || Fy < 0.0f || Fx >= static_cast<float>(Spec_.CellsX - 1u) || Fy >= static_cast<float>(Spec_.CellsY - 1u))
+    {
+        return 0.0f;
+    }
+    const uint32_t I0 = static_cast<uint32_t>(Fx);
+    const uint32_t J0 = static_cast<uint32_t>(Fy);
+    const float    Tx = Fx - static_cast<float>(I0);
+    const float    Ty = Fy - static_cast<float>(J0);
+    auto TopAt = [&](uint32_t I, uint32_t J) noexcept -> float
+    {
+        const auto Idx = CellIndex(I, J);
+        return TerrainElevation_[Idx] + SnowDepthMetres_[Idx] + HailDepthMetres_[Idx];
+    };
+    const float A = TopAt(I0, J0) * (1.0f - Tx) + TopAt(I0 + 1u, J0) * Tx;
+    const float B = TopAt(I0, J0 + 1u) * (1.0f - Tx) + TopAt(I0 + 1u, J0 + 1u) * Tx;
+    return A * (1.0f - Ty) + B * Ty;
+}
+
 float SnowSurface::SampleGroundSnowThickness(float WorldX, float WorldY) const noexcept
 {
     const float Fx = (WorldX - Spec_.OriginX) / Spec_.CellSizeMetres - 0.5f;

@@ -35,6 +35,10 @@ struct SnowpackDomainSpec
     float    SurfaceInclusionThreshold = 1.0e-3f; // [m] - Minimum snow+hail thickness to weld into PolygonSurface
     float    AmbientTemperatureKelvin  = 271.15f; // [K] - Ambient air temperature governing Stefan melt (> 273.15 K)
     float    ConvectiveHeatCoeffWm2K   = 28.0f;   // [W/(m^2*K)] - Air-to-ice convective heat transfer coefficient
+    float    AngleOfReposeDegrees      = 36.5f;   // [deg] - Dry powder snow critical avalanche slump angle
+    float    SastrugiAmplitudeMetres   = 0.0085f; // [m] - Wind-carved snow sastrugi & natural powder micro-relief
+    Vec3     PrevailingWindDirection   = {0.88f, 0.47f, 0.0f}; // [unit] - Aligns wind-rippled sastrugi & drift kernels
+    bool     EnforceSingleConnectedMesh = false;  // [-] - Retains strictly 1 contiguous coalesced 3D mesh component
 };
 
 struct SnowpackPolygonVertex
@@ -49,11 +53,12 @@ struct SnowpackPolygonVertex
 // Contiguous single welded triangle surface (strictly NO per-flake particles once landed, and NO floor texture whitening!).
 struct SnowpackPolygonSurface
 {
-    std::vector<SnowpackPolygonVertex> Vertices;              // [records] - Welded contiguous surface vertices
-    std::vector<uint32_t>              Indices;               // [indices] - Triangle index buffer (3 per triangle)
-    uint32_t                           ActiveQuadCount  = 0u; // [count] - Active snow-covered grid quads welded into surface
-    float                              PeakThicknessM   = 0.0f;// [m] - Deepest snow/hail thickness across the surface
-    double                             TotalSolidMassKg = 0.0;// [kg] - Total conserved snow + hail solid mass in this surface
+    std::vector<SnowpackPolygonVertex> Vertices;                      // [records] - Welded contiguous surface vertices
+    std::vector<uint32_t>              Indices;                       // [indices] - Triangle index buffer (3 per triangle)
+    uint32_t                           ActiveQuadCount         = 0u;  // [count] - Active snow-covered grid quads welded into surface
+    uint32_t                           ConnectedComponentCount = 0u;  // [count] - Topological connected mesh components (1 = single mesh!)
+    float                              PeakThicknessM          = 0.0f;// [m] - Deepest snow/hail thickness across the surface
+    double                             TotalSolidMassKg        = 0.0; // [kg] - Total conserved snow + hail solid mass in this surface
 };
 
 struct VehicleSnowEnvelope
@@ -134,12 +139,36 @@ public:
         float                      DtSeconds,
         float                      AmbientTemperatureKelvin);
 
+    // Physically fuses an individual landing sky snowflake (from SkyPrecipitation) into the continuum snowfield
+    // using a wind-drifted Gaussian crystal-packet footprint so falling snowflakes organically build a 3D snow mound!
+    void DepositSnowflakeTouchdown(
+        Vec3  HitWorld,
+        Vec3  ImpactVelocityMps,
+        float SnowPacketMassKg,
+        float DriftSpreadRadiusMetres = 0.32f) noexcept;
+
+    // Physically fuses a settled post-bounce hailstone into the granular hail-ice continuum layer.
+    void DepositHailstoneTouchdown(
+        Vec3  HitWorld,
+        float HailPacketMassKg,
+        float SpreadRadiusMetres = 0.20f) noexcept;
+
+    // Mass-conserving dry-powder angle-of-repose avalanche slumping + wind saltation transport (windward ramp -> leeward crest).
+    void RelaxAngleOfReposeAndWindDrift(
+        Vec3     PrevailingWindMps,
+        float    DtSeconds,
+        uint32_t SubIterations = 3u) noexcept;
+
+    // Exact topological BFS over shared triangle vertices: returns the number of disconnected triangle islands (1 = single mesh!).
+    [[nodiscard]] static uint32_t CountConnectedMeshComponents(const SnowpackPolygonSurface& Surface);
+
     // Wong-Bekker snow compaction + mass-conserving lateral berm extrusion when a wheel drives through snow or the Snow Pit!
     SnowWheelRutResponse CarveWheelRutAndEvaluateResistance(const SnowWheelRutInput& Wheel) noexcept;
 
     // Rebuilds ONE single welded contiguous SnowpackPolygonSurface for the ground and ONE for the vehicle exterior!
     void RebuildContiguousPolygonSurfaces(const VehicleSnowEnvelope& VehicleEnvelope);
 
+    [[nodiscard]] float SampleGroundSurfaceElevation(float WorldX, float WorldY) const noexcept;
     [[nodiscard]] float SampleGroundSnowThickness(float WorldX, float WorldY) const noexcept;
     [[nodiscard]] float SampleGroundHailThickness(float WorldX, float WorldY) const noexcept;
     [[nodiscard]] float SampleGroundSnowDensity(float WorldX, float WorldY) const noexcept;

@@ -428,9 +428,10 @@ void EvaluateMineralGroundDetail(
     float FluidDepthMetres,
     float MudFraction,
     float RayDistanceM,
-    float RippleStrength) noexcept
+    float RippleStrength,
+    float RainRingIntensity = 0.0f) noexcept
 {
-    if (RippleStrength <= 1.0e-5f)
+    if (RippleStrength <= 1.0e-5f && RainRingIntensity <= 1.0e-5f)
     {
         return BaseHydroNormal;
     }
@@ -438,10 +439,6 @@ void EvaluateMineralGroundDetail(
     const float ViscDamp  = 1.0f - 0.78f * std::clamp(MudFraction, 0.0f, 1.0f);
     const float DistDamp  = 1.0f / (1.0f + 0.055f * RayDistanceM);
     const float Amp       = RippleStrength * ShoreDamp * ViscDamp * DistDamp;
-    if (Amp <= 1.0e-5f)
-    {
-        return BaseHydroNormal;
-    }
 
     const float X = WaterWorldPoint.X;
     const float Y = WaterWorldPoint.Y;
@@ -451,8 +448,46 @@ void EvaluateMineralGroundDetail(
     const float P2 = 13.6f * X - 6.3f * Y + 4.3f;
     const float P3 = 3.2f * X + 16.8f * Y + 1.4f;
 
-    const float SlopeX = Amp * (0.42f * std::cos(P0) - 0.31f * std::cos(P1) + 0.16f * std::cos(P2) + 0.11f * std::cos(P3));
-    const float SlopeY = Amp * (0.19f * std::cos(P0) + 0.52f * std::cos(P1) - 0.08f * std::cos(P2) + 0.24f * std::cos(P3));
+    float SlopeX = Amp * (0.42f * std::cos(P0) - 0.31f * std::cos(P1) + 0.16f * std::cos(P2) + 0.11f * std::cos(P3));
+    float SlopeY = Amp * (0.19f * std::cos(P0) + 0.52f * std::cos(P1) - 0.08f * std::cos(P2) + 0.24f * std::cos(P3));
+
+    // Concentric expanding capillary raindrop impact rings on puddles (normal perturbation ONLY — ZERO foam, ZERO splash!):
+    if (RainRingIntensity > 1.0e-4f && ShoreDamp > 0.02f)
+    {
+        const float RingAmp = 0.048f * RainRingIntensity * ShoreDamp * ViscDamp / (1.0f + 0.08f * RayDistanceM);
+        constexpr float CellScale = 1.65f; // ~0.60 m stochastic raindrop ring cells
+        const float Gx = X * CellScale;
+        const float Gy = Y * CellScale;
+        const float BaseIx = std::floor(Gx);
+        const float BaseIy = std::floor(Gy);
+        for (int Dj = -1; Dj <= 1; ++Dj)
+        {
+            for (int Di = -1; Di <= 1; ++Di)
+            {
+                const float Cx = BaseIx + static_cast<float>(Di);
+                const float Cy = BaseIy + static_cast<float>(Dj);
+                const float H1 = std::sin(Cx * 127.1f + Cy * 311.7f) * 43758.5453f;
+                const float H2 = std::sin(Cx * 269.5f + Cy * 183.3f) * 24634.6345f;
+                const float H3 = std::sin(Cx * 419.2f + Cy * 371.9f) * 19283.7465f;
+                const float Ox = H1 - std::floor(H1);
+                const float Oy = H2 - std::floor(H2);
+                const float Age = H3 - std::floor(H3); // Ring expansion age [0..1]
+                const float Rx  = (Gx - (Cx + 0.15f + 0.70f * Ox)) / CellScale;
+                const float Ry  = (Gy - (Cy + 0.15f + 0.70f * Oy)) / CellScale;
+                const float R   = std::sqrt(Rx * Rx + Ry * Ry);
+                const float WaveFront = 0.04f + 0.34f * Age;
+                const float Band      = R - WaveFront;
+                if (R > 0.008f && std::abs(Band) < 0.11f)
+                {
+                    const float Envelope = std::exp(-210.0f * Band * Band) * (1.0f - Age) * std::exp(-3.2f * R);
+                    const float dWave    = std::sin(Band * 88.0f) * Envelope * RingAmp / R;
+                    SlopeX += Rx * dWave;
+                    SlopeY += Ry * dWave;
+                }
+            }
+        }
+    }
+
     return Normalise(Vec3{BaseHydroNormal.X - SlopeX, BaseHydroNormal.Y - SlopeY, BaseHydroNormal.Z});
 }
 
@@ -682,16 +717,22 @@ void SceneRenderer::RegisterSmoothSnowSurface(const SnowpackPolygonSurface& Surf
         Tri.V1Normal            = Normalise(SV1.Normal);
         Tri.V2Normal            = Normalise(SV2.Normal);
 
-        const float AvgPack = std::clamp((SV0.CompactionRatio + SV1.CompactionRatio + SV2.CompactionRatio) / 3.0f, 0.0f, 1.0f);
-        const float AvgHail = std::clamp((SV0.HailIceFraction + SV1.HailIceFraction + SV2.HailIceFraction) / 3.0f, 0.0f, 1.0f);
-        // Fresh powder is bright soft matte white (roughness ~0.68); compacted tyre ruts glaze into slightly cooler dense snow/ice!
-        Tri.AlbedoRgb = Vec3{
+        const float AvgPack  = std::clamp((SV0.CompactionRatio + SV1.CompactionRatio + SV2.CompactionRatio) / 3.0f, 0.0f, 1.0f);
+        const float AvgHail  = std::clamp((SV0.HailIceFraction + SV1.HailIceFraction + SV2.HailIceFraction) / 3.0f, 0.0f, 1.0f);
+        const float AvgThick = (SV0.SnowThicknessM + SV1.SnowThicknessM + SV2.SnowThicknessM) / 3.0f;
+        // Natural powder apron edge feathering: thin outer snow (< 4.8 cm) lets dark frost-dusted rock grain peek through
+        // so the single-mesh snow mound transitions organically into the terrain with ZERO sticker-cutout silhouette!
+        const float CoverT   = std::clamp((AvgThick - 0.003f) / 0.048f, 0.0f, 1.0f);
+        const float Cover01  = CoverT * CoverT * (3.0f - 2.0f * CoverT);
+        const Vec3  FullSnowAlbedo{
             0.91f - 0.14f * AvgPack - 0.05f * AvgHail,
             0.94f - 0.10f * AvgPack - 0.03f * AvgHail,
             0.98f - 0.04f * AvgPack};
-        Tri.Roughness             = std::clamp(0.68f - 0.42f * AvgPack - 0.18f * AvgHail, 0.18f, 0.78f);
+        const Vec3  FrostApronBed{0.18f, 0.20f, 0.24f};
+        Tri.AlbedoRgb             = FrostApronBed * (1.0f - Cover01) + FullSnowAlbedo * Cover01;
+        Tri.Roughness             = std::clamp((0.56f * (1.0f - Cover01)) + Cover01 * (0.68f - 0.42f * AvgPack - 0.18f * AvgHail), 0.18f, 0.78f);
         Tri.Metallic              = 0.0f;
-        Tri.SnowSubsurfaceScatter = true;
+        Tri.SnowSubsurfaceScatter = (Cover01 > 0.25f);
         Tri.CardOrMaterialIndex   = CardIdx;
         Triangles_.push_back(Tri);
     }
@@ -1864,15 +1905,41 @@ Vec3 SceneRenderer::EvaluateDirectSurfaceLighting(
             if (NdotSun > 0.0f)
             {
                 Outgoing = Outgoing + AddCookTorranceContribution(SunDir, Context.SunIrradianceRgb * (NdotSun * VolumetricTrans), Alpha);
+                if (SnowSubsurface)
+                {
+                    // Oren-Nayar rough alpine powder retro-reflection + discrete hexagonal ice-crystal sun sparkles!
+                    const float NdotV       = std::max(0.05f, Dot(Normal, ViewDirUnit));
+                    const float PowderBoost = 0.22f * Roughness * (1.0f - NdotSun * NdotV) * NdotSun * VolumetricTrans;
+                    Outgoing = Outgoing + Vec3{
+                        DiffuseBase.X * Context.SunIrradianceRgb.X * PowderBoost,
+                        DiffuseBase.Y * Context.SunIrradianceRgb.Y * PowderBoost,
+                        DiffuseBase.Z * Context.SunIrradianceRgb.Z * PowderBoost};
+
+                    // Sub-centimetre deterministic crystal facet hash -> tiny sunlit diamond sparkles on fresh snow!
+                    const float CellX = std::floor(Point.X * 145.0f);
+                    const float CellY = std::floor(Point.Y * 145.0f);
+                    const float CellZ = std::floor(Point.Z * 145.0f);
+                    const float H0    = std::sin(CellX * 127.1f + CellY * 311.7f + CellZ * 74.7f) * 43758.5453f;
+                    const float H1    = std::sin(CellX * 269.5f + CellY * 183.3f + CellZ * 246.1f) * 28461.9173f;
+                    const float F0    = H0 - std::floor(H0);
+                    const float F1    = H1 - std::floor(H1);
+                    if (F0 > 0.935f && Roughness > 0.38f)
+                    {
+                        const Vec3  HalfVec   = Normalise(SunDir + ViewDirUnit);
+                        const float Align     = std::max(0.0f, Dot(Normal, HalfVec));
+                        const float Sparkle   = std::pow(Align, 18.0f) * (0.45f + 0.55f * F1) * VolumetricTrans;
+                        Outgoing              = Outgoing + Context.SunIrradianceRgb * (0.42f * Sparkle);
+                    }
+                }
             }
             if (SnowSubsurface && SnowWrapSun > NdotSun)
             {
-                // Multiple-scattering subsurface diffuse wrap inside snowpack + faint cold cyan scatter!
-                const float SubDiff = (SnowWrapSun - NdotSun) * 0.72f * VolumetricTrans;
+                // Deep glacier-cyan / ice-blue multiple-scattering subsurface wrap across snow mound crests & shadow terminators!
+                const float SubDiff = (SnowWrapSun - NdotSun) * 0.86f * VolumetricTrans;
                 Outgoing            = Outgoing + Vec3{
-                    DiffuseBase.X * Context.SunIrradianceRgb.X * SubDiff * 0.88f,
-                    DiffuseBase.Y * Context.SunIrradianceRgb.Y * SubDiff * 0.96f,
-                    DiffuseBase.Z * Context.SunIrradianceRgb.Z * SubDiff * 1.06f};
+                    DiffuseBase.X * Context.SunIrradianceRgb.X * SubDiff * 0.76f,
+                    DiffuseBase.Y * Context.SunIrradianceRgb.Y * SubDiff * 0.95f,
+                    DiffuseBase.Z * Context.SunIrradianceRgb.Z * SubDiff * 1.18f};
             }
         }
     }
@@ -2421,13 +2488,18 @@ TracedRayDiagnostics SceneRenderer::TraceCoupledRadianceRay(
             const float WetT     = std::clamp((DepthM - 0.0012f) / 0.018f, 0.0f, 1.0f);
             const float WetAlpha = WetT * WetT * (3.0f - 2.0f * WetT);
             const float MudC     = std::clamp(WaterSample.MudConcentration, 0.0f, 1.0f) * WetAlpha;
+            const float RainRings = (Context.Precipitation != nullptr &&
+                                     Context.Precipitation->Configuration().Phase == SkyPrecipitationPhase::Rainfall)
+                                        ? Context.Precipitation->Configuration().Intensity01
+                                        : 0.0f;
             const Vec3  WaterN   = EvaluateCapillaryWaterNormal(
                 HydroN,
                 WaterHitPt,
                 DepthM,
                 MudC,
                 BestDistance,
-                Context.WaterCapillaryRippleStrength);
+                Context.WaterCapillaryRippleStrength,
+                RainRings);
             const float CosV     = std::clamp(Dot(-CurrDir, WaterN), 0.0f, 1.0f);
             const float F0       = 0.02f + 0.015f * MudC;
             const float Fresnel  = (F0 + (1.0f - F0) * std::pow(1.0f - CosV, 5.0f)) * (0.18f + 0.82f * WetAlpha);
@@ -3019,8 +3091,12 @@ void SceneRenderer::RenderViewportRgba8(
                             if (TerminalHit.Roughness > 0.08f)
                             {
                                 // Rough surfaces already integrate spark irradiance analytically in EvaluateDirectSurfaceLighting;
-                                // skipping sub-millimetre spark capsules on stochastic rough rays prevents 1-pixel fireflies!
+                                // skipping sub-millimetre spark/precipitation capsules on stochastic rough rays prevents 1-px fireflies!
                                 ReflCtx.Sparks = nullptr;
+                            }
+                            if (TerminalHit.Roughness > 0.14f)
+                            {
+                                ReflCtx.Precipitation = nullptr;
                             }
                             const TracedRayDiagnostics RDiag = TraceCoupledRadianceRay(
                                 Tier,

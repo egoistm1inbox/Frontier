@@ -895,24 +895,39 @@ float sdObstacle(vec3 uvw) {
   return 1e5;
 }
 
-float marchSunTransmittance(vec3 startUVW, float quantize) {
-  int steps = uShadowSteps;
-  float stepLen = 0.065;
+float subvoxelWispyNoise(vec3 uvw) {
+  vec3 p = uvw * 26.0;
+  vec3 i = floor(p);
+  vec3 f = fract(p);
+  vec3 u = f * f * (3.0 - 2.0 * f);
+  float h0 = fract(sin(dot(i, vec3(127.1, 311.7, 74.7))) * 43758.5453);
+  float h1 = fract(sin(dot(i + vec3(1.0), vec3(127.1, 311.7, 74.7))) * 43758.5453);
+  return mix(h0, h1, (u.x + u.y + u.z) * 0.3333);
+}
+
+vec2 marchSunTransmittanceAndProbe(vec3 startUVW, float quantize, int maxSteps) {
+  float stepLen = 0.055;
   float opticalDepth = 0.0;
   vec3 pos = startUVW;
+  float firstDensity = 0.0;
 
   for (int i = 0; i < 12; i++) {
-    if (i >= steps) break;
+    if (i >= maxSteps) break;
     pos += uSunDir * stepLen;
     if (any(lessThan(pos, vec3(0.0))) || any(greaterThan(pos, vec3(1.0)))) break;
-    float d = sampleVolumeQuantized(uThermoTex, pos, quantize).r;
-    opticalDepth += max(0.0, d) * stepLen * uShadowDensity;
+    float d = max(0.0, sampleVolumeQuantized(uThermoTex, pos, quantize).r);
+    if (i == 0) firstDensity = d;
+    opticalDepth += d * stepLen * uShadowDensity;
     stepLen *= 1.25;
   }
 
   float primary = exp(-opticalDepth);
   float secondary = exp(-opticalDepth * 0.28) * 0.65;
-  return mix(primary, max(primary, secondary), 0.48);
+  return vec2(mix(primary, max(primary, secondary), 0.48), firstDensity);
+}
+
+float marchSunTransmittance(vec3 startUVW, float quantize) {
+  return marchSunTransmittanceAndProbe(startUVW, quantize, uShadowSteps).x;
 }
 
 vec3 acesToneMap(vec3 x) {
@@ -1258,13 +1273,22 @@ void main() {
       }
     } else {
       if (smoke > 0.004 || temp > 0.015) {
+        if (uVoxelQuantization < 0.5 && transmittance > 0.14) {
+          float wisp = subvoxelWispyNoise(uvw) - 0.48;
+          float edgeMask = 1.0 - clamp(smoke * 0.85, 0.0, 1.0);
+          smoke = max(0.0, smoke * (1.0 + 0.42 * wisp * edgeMask));
+          temp  = max(0.0, temp  * (1.0 + 0.28 * wisp));
+        }
         float effStep = baseStepSize * opticalScale;
         float extinction = max(0.001, smoke * uDensityExtinction + temp * 0.65);
         float stepTrans = exp(-extinction * effStep);
 
-        float sunTrans = marchSunTransmittance(uvw, uVoxelQuantization);
-        float powder = 1.0 - 0.45 * exp(-smoke * uDensityExtinction * 2.2);
-        vec3 directSunScatter = sunLightColor * sunTrans * phaseVal * powder * 2.4;
+        int activeShadowSteps = transmittance > 0.24 ? uShadowSteps : max(2, uShadowSteps / 2);
+        vec2 sunProbe = marchSunTransmittanceAndProbe(uvw, uVoxelQuantization, activeShadowSteps);
+        float sunTrans = sunProbe.x;
+        float lobeRelief = clamp((smoke - sunProbe.y) / max(0.20, smoke), -0.55, 0.85);
+        float powder = (1.0 - 0.48 * exp(-smoke * uDensityExtinction * 2.4)) * (1.0 + 0.48 * lobeRelief);
+        vec3 directSunScatter = sunLightColor * sunTrans * phaseVal * powder * 2.45;
 
         float heightAO = mix(0.45, 1.15, uvw.y);
         vec3 ambientScatter = skyAmbientColor * heightAO;
