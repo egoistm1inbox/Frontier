@@ -14,6 +14,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <thread>
 
 namespace Frontier
 {
@@ -2805,7 +2806,7 @@ void SceneRenderer::RenderViewportRgba8(
     std::vector<PixelFrameSample> Samples(PixelCount);
 
     // 1. Primary + Portal/Mirror/Glass Hop Unrolling + Reservoir Generation (denoises primary, portal, mirror & glass views)!
-    for (uint32_t Py = 0u; Py < Height; ++Py)
+    auto RenderRow = [&](uint32_t Py)
     {
         const float NdcY = 1.0f - 2.0f * (static_cast<float>(Py) + 0.5f) / static_cast<float>(Height);
         for (uint32_t Px = 0u; Px < Width; ++Px)
@@ -3169,6 +3170,35 @@ void SceneRenderer::RenderViewportRgba8(
                 Samples[PIdx].ValidSurface = false;
                 Samples[PIdx].BaseHdr      = AaSum * 0.25f;
             }
+        }
+    };
+
+    const uint32_t WorkerCount = (Height >= 32u)
+        ? std::clamp(std::thread::hardware_concurrency(), 1u, 12u)
+        : 1u;
+    if (WorkerCount <= 1u)
+    {
+        for (uint32_t Py = 0u; Py < Height; ++Py)
+        {
+            RenderRow(Py);
+        }
+    }
+    else
+    {
+        std::vector<std::thread> Workers;
+        Workers.reserve(WorkerCount);
+        for (uint32_t W = 0u; W < WorkerCount; ++W)
+        {
+            Workers.emplace_back([&, W, WorkerCount]() {
+                for (uint32_t Py = W; Py < Height; Py += WorkerCount)
+                {
+                    RenderRow(Py);
+                }
+            });
+        }
+        for (std::thread& Th : Workers)
+        {
+            Th.join();
         }
     }
 

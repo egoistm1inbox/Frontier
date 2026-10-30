@@ -153,6 +153,7 @@ public:
     explicit PlumeFluid(const PlumeFluidParameters& Parameters = {});
 
     void Reconfigure(const PlumeFluidParameters& Parameters);
+    void UpdatePhysicalParameters(const PlumeFluidParameters& Parameters);
     void ClearState() noexcept;
 
     // Registers solid obstacles (walls, tunnel ceilings, cones, vehicle chassis) for Neumann collision deflection.

@@ -15,8 +15,6 @@ namespace Frontier
 namespace
 {
 
-// Directory parenting is cycle-free by construction (ConfigureParent refuses cycles); the cap only guards
-// against corrupted state turning a projection into unbounded recursion.
 constexpr uint32_t MaximumDepthTier = 128;   // [tiers]
 
 void AppendSubtree(const SceneDirectory& Directory, RecordToken Token, uint32_t DepthTier,
@@ -28,22 +26,27 @@ void AppendSubtree(const SceneDirectory& Directory, RecordToken Token, uint32_t 
     Row.Token          = Token;
     Row.Name           = Directory.QueryName(Token);
     Row.Classification = Directory.QueryClassification(Token);
+    Row.Visible        = Directory.QueryVisible(Token);
+    Row.Enabled        = Row.Visible;
 #if defined(FRONTIER_EDITOR_PROFILE)
     if (const RecordEditorDescription* Description = Directory.QueryEditorDescription(Token))
     {
-        Row.Group    = Description->Group;
-        Row.Colour   = Description->Colour;
-        Row.StableId = Description->StableId;
-        if (Description->DisplayName[0] != '\0' && Directory.QueryName(Token).find(" (spawned)") == std::string::npos)
+        Row.Group    = Description->Group != nullptr ? Description->Group : "";
+        Row.Colour   = Description->Colour != nullptr ? Description->Colour : "";
+        Row.StableId = Description->StableId != nullptr ? Description->StableId : "";
+        if (Description->Enabled != nullptr)
         {
-            // Directory names win once configured; the description name is the construction default.
+            Row.Enabled = *Description->Enabled;
+        }
+        if (Description->QueryLiveMeta)
+        {
+            Row.Meta = Description->QueryLiveMeta();
         }
     }
 #endif
-    Row.DepthTier      = DepthTier;
-    Row.ChildCount     = Directory.QueryChildCount(Token);
-    Row.Visible        = Directory.QueryVisible(Token);
-    Row.Collapsed      = CollapsedTokens.find(Token.Value) != CollapsedTokens.end();
+    Row.DepthTier  = DepthTier;
+    Row.ChildCount = Directory.QueryChildCount(Token);
+    Row.Collapsed  = CollapsedTokens.find(Token.Value) != CollapsedTokens.end();
     Out.push_back(Row);
 
     if (DepthTier >= MaximumDepthTier)
@@ -128,10 +131,8 @@ void SceneDirectoryPanel::Synchronize(const SceneDirectory& Directory)
         Selected = RecordToken{};
     }
 
-    // 📝 HTML group sections (EditorShell.js GroupOrder at 6afb6f0). Rows without an editor
-    //    description fall back to their classification's group so development builds still group.
-    static const char* const GroupOrder[] = {"Render", "Environment", "Forcefield", "Objects",
-                                             "Vehicle", "Effects", "Destruction", "Level"};
+    static const char* const GroupOrder[] = {
+        "Render", "Environment", "Forcefield", "Objects", "Vehicle", "Effects", "Destruction", "Level", "Networking"};
     const auto FallbackGroup = [](RecordClassification Classification) {
         switch (Classification)
         {
@@ -149,6 +150,7 @@ void SceneDirectoryPanel::Synchronize(const SceneDirectory& Directory)
         }
         return "Objects";
     };
+
     Groups.clear();
     EnabledCounts = SceneDirectoryEnabledCounts{};
     for (SceneDirectoryRow& Row : Rows)
@@ -161,14 +163,27 @@ void SceneDirectoryPanel::Synchronize(const SceneDirectory& Directory)
 #if defined(FRONTIER_EDITOR_PROFILE)
         if (const RecordEditorDescription* Description = Directory.QueryEditorDescription(Row.Token))
         {
-            Enabled = Description->Enabled == nullptr || *Description->Enabled;
+            Enabled = (Description->Enabled == nullptr || *Description->Enabled) && Row.Visible;
         }
 #endif
-        if (Enabled) { EnabledCounts.Enabled += 1; } else { EnabledCounts.Disabled += 1; }
+        Row.Enabled = Enabled;
+        if (Enabled)
+        {
+            EnabledCounts.Enabled += 1;
+        }
+        else
+        {
+            EnabledCounts.Disabled += 1;
+        }
+
         SceneDirectoryGroupSection* Section = nullptr;
         for (SceneDirectoryGroupSection& Candidate : Groups)
         {
-            if (Candidate.Group == Row.Group) { Section = &Candidate; break; }
+            if (Candidate.Group == Row.Group)
+            {
+                Section = &Candidate;
+                break;
+            }
         }
         if (Section == nullptr)
         {
@@ -176,13 +191,32 @@ void SceneDirectoryPanel::Synchronize(const SceneDirectory& Directory)
             Section = &Groups.back();
         }
         Section->Count += 1;
-        Section->Rows.push_back(Row);
+        if (!TextFilter.empty())
+        {
+            std::string Lower = Row.Name + " " + Row.Group + " " + Row.Meta;
+            std::transform(Lower.begin(), Lower.end(), Lower.begin(),
+                           [](unsigned char Glyph) { return static_cast<char>(std::tolower(Glyph)); });
+            if (Lower.find(TextFilter) == std::string::npos)
+            {
+                continue;
+            }
+        }
+        if (!ClassificationFilter.has_value() || Row.Classification == *ClassificationFilter)
+        {
+            Section->Rows.push_back(Row);
+        }
     }
+
     std::stable_sort(Groups.begin(), Groups.end(), [&](const SceneDirectoryGroupSection& A,
                                                        const SceneDirectoryGroupSection& B) {
         const auto Rank = [&](const std::string& Group) {
             for (size_t Index = 0; Index < std::size(GroupOrder); ++Index)
-                if (Group == GroupOrder[Index]) return Index;
+            {
+                if (Group == GroupOrder[Index])
+                {
+                    return Index;
+                }
+            }
             return std::size(GroupOrder);
         };
         return Rank(A.Group) < Rank(B.Group);
@@ -195,20 +229,27 @@ void SceneDirectoryPanel::Synchronize(const SceneDirectory& Directory)
         if (const RecordEditorDescription* Description = Directory.QueryEditorDescription(Selected))
         {
             InspectorModel.HasSelection = true;
-            InspectorModel.Group        = Description->Group;
-            InspectorModel.Category     = Description->Category;
+            InspectorModel.Group        = Description->Group != nullptr ? Description->Group : "";
+            InspectorModel.Category     = Description->Category != nullptr ? Description->Category : "";
+            InspectorModel.Colour       = Description->Colour != nullptr ? Description->Colour : "";
             InspectorModel.Name         = Directory.QueryName(Selected);
             const std::string DefaultName = std::string(RecordClassificationName(Inspector.Classification)) +
                                             " " + std::to_string(Selected.Value);
-            if (InspectorModel.Name == DefaultName)
+            if (InspectorModel.Name == DefaultName && Description->DisplayName != nullptr &&
+                Description->DisplayName[0] != '\0')
             {
-                InspectorModel.Name = Description->DisplayName;   // Unconfigured name: use the record's own
+                InspectorModel.Name = Description->DisplayName;
             }
-            InspectorModel.Description  = Description->Description;
-            InspectorModel.HasEnabled   = Description->Enabled != nullptr;
-            InspectorModel.Enabled      = Description->Enabled == nullptr || *Description->Enabled;
-            InspectorModel.ScalarFields = Description->ScalarFields;
-            InspectorModel.Switches     = Description->Switches;
+            InspectorModel.Description          = Description->Description != nullptr ? Description->Description : "";
+            InspectorModel.HasEnabled           = Description->Enabled != nullptr;
+            InspectorModel.Enabled              = Description->Enabled == nullptr || *Description->Enabled;
+            InspectorModel.EnabledPtr           = Description->Enabled;
+            InspectorModel.RevisionPtr          = Description->Revision;
+            InspectorModel.ScalarFields         = Description->ScalarFields;
+            InspectorModel.Switches             = Description->Switches;
+            InspectorModel.ChoiceFields         = Description->ChoiceFields;
+            InspectorModel.Actions              = Description->Actions;
+            InspectorModel.ConstructInfographic = Description->ConstructInfographic;
         }
     }
 #endif
@@ -255,6 +296,23 @@ bool SceneDirectoryPanel::QueryCollapsed(RecordToken Token) const
     return CollapsedTokens.find(Token.Value) != CollapsedTokens.end();
 }
 
+void SceneDirectoryPanel::ConfigureGroupCollapsed(const std::string& Group, bool Collapsed)
+{
+    if (Collapsed)
+    {
+        CollapsedGroups.insert(Group);
+    }
+    else
+    {
+        CollapsedGroups.erase(Group);
+    }
+}
+
+bool SceneDirectoryPanel::QueryGroupCollapsed(const std::string& Group) const
+{
+    return CollapsedGroups.find(Group) != CollapsedGroups.end();
+}
+
 void SceneDirectoryPanel::RequestSpawn(RecordClassification Classification)
 {
     PendingSpawn = Classification;
@@ -272,6 +330,20 @@ void SceneDirectoryPanel::Select(RecordToken Token)
     Selected = Token;
 }
 
+bool SceneDirectoryPanel::SelectByStableId(const std::string& StableId)
+{
+    for (const SceneDirectoryRow& Row : Rows)
+    {
+        if (Row.StableId == StableId)
+        {
+            Selected = Row.Token;
+            Synchronize(SceneDirectory::Instance());
+            return true;
+        }
+    }
+    return false;
+}
+
 void SceneDirectoryPanel::ClearSelection()
 {
     Selected  = RecordToken{};
@@ -282,8 +354,8 @@ void SceneDirectoryPanel::RebuildVisible()
 {
     Visible.clear();
     const bool Searching = !TextFilter.empty();
-    bool       Folding   = false;   // Inside a collapsed subtree (suppressed while searching)
-    uint32_t   FoldDepth = 0;       // [tiers]
+    bool       Folding   = false;
+    uint32_t   FoldDepth = 0;
     for (const SceneDirectoryRow& Row : Rows)
     {
         const bool ClassOk = !ClassificationFilter.has_value() || Row.Classification == *ClassificationFilter;
@@ -294,7 +366,7 @@ void SceneDirectoryPanel::RebuildVisible()
                            [](unsigned char Glyph) { return static_cast<char>(std::tolower(Glyph)); });
             if (ClassOk && Lower.find(TextFilter) != std::string::npos)
             {
-                Visible.push_back(Row);   // Search reveals through folds
+                Visible.push_back(Row);
             }
             continue;
         }

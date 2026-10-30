@@ -37,10 +37,12 @@ struct SceneDirectoryRow
     uint32_t             DepthTier      = 0;                               // [tiers] - Nesting depth; 0 is a root row
     uint32_t             ChildCount     = 0;                               // [records] - Direct children in the directory
     bool                 Visible        = true;                            // [-] - Directory eye toggle (dimmed when off)
+    bool                 Enabled        = true;                            // [-] - Component enabled state
     bool                 Collapsed      = false;                           // [-] - Panel-side: subtree folded away
-    std::string          Group;                                            // [text] - HTML outliner group (editor profile; classification fallback otherwise)
-    std::string          Colour;                                           // [text] - Row accent "#rrggbb" from the record's editor description
-    std::string          StableId;                                         // [text] - Pinned HTML entity id from the record's editor description
+    std::string          Group;                                            // [text] - HTML outliner group
+    std::string          Colour;                                           // [text] - Row accent "#rrggbb"
+    std::string          StableId;                                         // [text] - Pinned HTML entity id
+    std::string          Meta;                                             // [text] - Live right-hand readout badge
 };
 
 struct SceneClassificationTab
@@ -49,42 +51,41 @@ struct SceneClassificationTab
     uint32_t             Count          = 0;   // [records] - Live records in this classification
 };
 
-// 📝 One outliner section in the pinned HTML group order (EditorShell.js GroupOrder at 6afb6f0).
-//    Groups carry the HTML spelling; classification tabs remain available separately below.
 struct SceneDirectoryGroupSection
 {
-    std::string              Group;      // [text] - Render, Environment, Forcefield, Objects, ...
-    uint32_t                 Count = 0;  // [records] - Members before the text filter
-    std::vector<SceneDirectoryRow> Rows; // [-] - Visible members in registration order
+    std::string                    Group;      // [text] - Render, Environment, Forcefield, Vehicle, ...
+    uint32_t                       Count = 0;  // [records] - Members before the text filter
+    std::vector<SceneDirectoryRow> Rows;       // [-] - Visible members in registration order
 };
 
-// 📝 Enabled/disabled tiles above the HTML outliner tree: a record counts as enabled when its own
-//    editor description reports an enabled setting, and as enabled by default when it has none.
 struct SceneDirectoryEnabledCounts
 {
     uint32_t Enabled  = 0;   // [records]
     uint32_t Disabled = 0;   // [records]
 };
 
-// 📝 The inspector the selected record built for itself (editor profile). Scalar and switch entries
-//    point into the record's live settings through its description, so an edit edits the scene.
 struct SceneInspectorModel
 {
     bool        HasSelection = false;
-    bool        HasEnabled   = false;   // [-] - The record exposes an enabled setting
-    bool        Enabled      = true;    // [-] - Current enabled setting
-    std::string Group;                  // [text] - Crumb group
-    std::string Category;               // [text] - Eyebrow type
-    std::string Name;                   // [text] - Object header
-    std::string Description;            // [text] - Header description
+    bool        HasEnabled   = false;          // [-] - The record exposes an enabled setting
+    bool        Enabled      = true;           // [-] - Current enabled setting
+    bool       *EnabledPtr   = nullptr;        // [-] - Direct live enabled bool pointer
+    uint64_t   *RevisionPtr  = nullptr;        // [-] - Optional dirty revision counter
+    std::string Group;                         // [text] - Crumb group
+    std::string Category;                      // [text] - Eyebrow type
+    std::string Name;                          // [text] - Object header
+    std::string Colour;                        // [text] - Accent "#rrggbb"
+    std::string Description;                   // [text] - Header description
 
 #if defined(FRONTIER_EDITOR_PROFILE)
-    std::vector<RecordEditorScalarField> ScalarFields;   // [-] - Live-bound sliders, in display order
-    std::vector<RecordEditorSwitch>      Switches;       // [-] - Live-bound switches, in display order
+    std::vector<RecordEditorScalarField> ScalarFields;
+    std::vector<RecordEditorSwitch>      Switches;
+    std::vector<RecordEditorChoiceField> ChoiceFields;
+    std::vector<RecordEditorAction>      Actions;
+    std::function<void()>                ConstructInfographic;
 #endif
 };
 
-// What the inspector shows for the current selection ("empty inspector" = HasSelection false).
 struct SceneInspectorSummary
 {
     bool                 HasSelection   = false;
@@ -100,62 +101,59 @@ struct SceneInspectorSummary
 //                                                  SCENE DIRECTORY PANEL
 //------------------------------------------------------------------------------------------------------------------------
 
-// 📝 Same split as the Log Stream: this portable view-model owns projection, filtering and selection; the native
-//    drawing (dock panel + inspector) joins it at the SDK phase against the upstream kit. Synchronize() snapshots
-//    the directory into a flattened tree: roots in registration order, children directly beneath their parent in
-//    registration order. In Shipping nothing ever registers, so every projection stays empty by construction.
 class SceneDirectoryPanel
 {
   public:
     void Synchronize(const SceneDirectory& Directory);
 
-    [[nodiscard]] const std::vector<SceneDirectoryRow>&      QueryRows() const { return Rows; }       // Flattened tree, unfiltered
-    [[nodiscard]] const std::vector<SceneDirectoryRow>&      QueryVisible() const { return Visible; } // After the classification filter
-    [[nodiscard]] const std::vector<SceneClassificationTab>& QueryTabs() const { return Tabs; }       // Every classification, with live counts
-    [[nodiscard]] uint32_t                                   QueryTotal() const { return Total; }     // [records]
-    [[nodiscard]] const SceneInspectorSummary&               QueryInspector() const { return Inspector; }
+    [[nodiscard]] const std::vector<SceneDirectoryRow>&          QueryRows() const { return Rows; }
+    [[nodiscard]] const std::vector<SceneDirectoryRow>&          QueryVisible() const { return Visible; }
+    [[nodiscard]] const std::vector<SceneClassificationTab>&     QueryTabs() const { return Tabs; }
+    [[nodiscard]] uint32_t                                       QueryTotal() const { return Total; }
+    [[nodiscard]] const SceneInspectorSummary&                   QueryInspector() const { return Inspector; }
     [[nodiscard]] const std::vector<SceneDirectoryGroupSection>& QueryGroups() const { return Groups; }
-    [[nodiscard]] const SceneInspectorModel&                 QueryInspectorModel() const { return InspectorModel; }
-    [[nodiscard]] SceneDirectoryEnabledCounts                QueryEnabledCounts() const { return EnabledCounts; }
+    [[nodiscard]] const SceneInspectorModel&                     QueryInspectorModel() const { return InspectorModel; }
+    [[nodiscard]] SceneDirectoryEnabledCounts                    QueryEnabledCounts() const { return EnabledCounts; }
 
-    void ConfigureClassificationFilter(std::optional<RecordClassification> Filter);   // nullopt = All
+    void ConfigureClassificationFilter(std::optional<RecordClassification> Filter);
     [[nodiscard]] std::optional<RecordClassification> QueryClassificationFilter() const { return ClassificationFilter; }
 
-    void ConfigureTextFilter(std::string Text);   // Case-insensitive substring over row names; empty clears.
+    void ConfigureTextFilter(std::string Text);
     [[nodiscard]] const std::string& QueryTextFilter() const { return TextFilter; }
 
     void ConfigureCollapsed(RecordToken Token, bool Collapsed);
     [[nodiscard]] bool QueryCollapsed(RecordToken Token) const;
 
-    // Spawn flow: the presentation's add menu records a request; the host services it (records are engine
-    // objects — the panel never invents them) and the new record appears by construction.
+    void ConfigureGroupCollapsed(const std::string& Group, bool Collapsed);
+    [[nodiscard]] bool QueryGroupCollapsed(const std::string& Group) const;
+
     void RequestSpawn(RecordClassification Classification);
     [[nodiscard]] std::optional<RecordClassification> TakeSpawnRequest();
 
-    // Native drawing (interface-SDK builds; an empty stub without the SDK, so portable builds keep linking).
-    // The host calls Synchronize() each frame first, then services TakeSpawnRequest().
     void ConstructInterface();
 
-    void Select(RecordToken Token);   // Unknown/stale tokens clear the selection on the next Synchronize
+    void Select(RecordToken Token);
+    bool SelectByStableId(const std::string& StableId);
     void ClearSelection();
     [[nodiscard]] RecordToken QuerySelected() const { return Selected; }
 
   private:
     void RebuildVisible();
 
-    std::vector<SceneDirectoryRow>      Rows;
+    std::vector<SceneDirectoryRow>          Rows;
     std::vector<SceneDirectoryGroupSection> Groups;
-    SceneDirectoryEnabledCounts         EnabledCounts;
-    SceneInspectorModel                 InspectorModel;
-    std::vector<SceneDirectoryRow>      Visible;
-    std::vector<SceneClassificationTab> Tabs;
-    uint32_t                            Total = 0;   // [records]
-    std::optional<RecordClassification> ClassificationFilter;
-    std::string                         TextFilter;            // [text] - Lower-cased on configure
-    std::unordered_set<uint64_t>        CollapsedTokens;       // [-] - Panel-side fold state
-    std::optional<RecordClassification> PendingSpawn;
-    RecordToken                         Selected;
-    SceneInspectorSummary               Inspector;
+    SceneDirectoryEnabledCounts             EnabledCounts;
+    SceneInspectorModel                     InspectorModel;
+    std::vector<SceneDirectoryRow>          Visible;
+    std::vector<SceneClassificationTab>     Tabs;
+    uint32_t                                Total = 0;
+    std::optional<RecordClassification>     ClassificationFilter;
+    std::string                             TextFilter;
+    std::unordered_set<uint64_t>            CollapsedTokens;
+    std::unordered_set<std::string>         CollapsedGroups;
+    std::optional<RecordClassification>     PendingSpawn;
+    RecordToken                             Selected;
+    SceneInspectorSummary                   Inspector;
 };
 
 } // namespace Frontier

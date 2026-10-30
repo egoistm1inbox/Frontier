@@ -1,13 +1,23 @@
 cmake_minimum_required(VERSION 3.20)
 if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
-    project(ProjectDrive LANGUAGES CXX)
+    project(ProjectDrive LANGUAGES C CXX)
 endif()
+
+option(FRONTIER_PROJECT_DRIVE_SHIPPING "Build Shipping runtime without Editor UI / SceneDirectory" OFF)
 
 get_filename_component(PROJECT_DRIVE_FRONTIER_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../.." ABSOLUTE)
 get_filename_component(PROJECT_DRIVE_REPO_ROOT "${PROJECT_DRIVE_FRONTIER_ROOT}/.." ABSOLUTE)
 
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 find_package(Threads REQUIRED)
+
+if(NOT TARGET FrontierAudioFoundation)
+    add_subdirectory(
+        "${PROJECT_DRIVE_FRONTIER_ROOT}/Engine/Audio"
+        "${CMAKE_CURRENT_BINARY_DIR}/engine-audio")
+endif()
 
 if(NOT TARGET FrontierAtmosphericOptics)
     add_subdirectory(
@@ -19,6 +29,12 @@ if(NOT TARGET FrontierRigidBodyPhysics)
     add_subdirectory(
         "${PROJECT_DRIVE_FRONTIER_ROOT}/Engine/Physics"
         "${CMAKE_CURRENT_BINARY_DIR}/engine-physics")
+endif()
+
+if(NOT TARGET FrontierNetworking)
+    add_subdirectory(
+        "${PROJECT_DRIVE_FRONTIER_ROOT}/Engine/Networking"
+        "${CMAKE_CURRENT_BINARY_DIR}/engine-networking")
 endif()
 
 if(NOT TARGET FrontierProjectDriveJolt)
@@ -93,4 +109,141 @@ set_target_properties(ProjectDrive PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/Output")
 if(UNIX AND NOT APPLE)
     target_link_options(ProjectDrive PRIVATE -Wl,-Bsymbolic -Wl,--exclude-libs,ALL)
+endif()
+
+#------------------------------------------------------------------------------------------------------------------------
+#             UNIFIED PROJECT-DRIVE APPLICATION BINARY (EDITOR UI + RUNTIME OR SHIPPING PROFILE)
+#------------------------------------------------------------------------------------------------------------------------
+
+set(PROJECT_DRIVE_CORE_SCENE_SOURCES
+    Source/DriveShowcaseRecords.cpp
+    Source/DriveShowcaseWorld.cpp
+    Source/ProjectDriveMain.cpp
+    "${PROJECT_DRIVE_FRONTIER_ROOT}/Engine/Diagnostics/LogRingStore.cpp"
+    "${PROJECT_DRIVE_FRONTIER_ROOT}/Engine/Diagnostics/LogCategories.cpp"
+    "${PROJECT_DRIVE_FRONTIER_ROOT}/Engine/Diagnostics/LogStream.cpp"
+    "${PROJECT_DRIVE_FRONTIER_ROOT}/Engine/Scene/RecordStore.cpp"
+    "${PROJECT_DRIVE_FRONTIER_ROOT}/Engine/Scene/RecordEntry.cpp")
+
+if(FRONTIER_PROJECT_DRIVE_SHIPPING)
+    add_executable(ProjectDriveShipping
+        ${PROJECT_DRIVE_CORE_SCENE_SOURCES})
+    target_include_directories(ProjectDriveShipping PRIVATE
+        "${PROJECT_DRIVE_FRONTIER_ROOT}"
+        "${PROJECT_DRIVE_REPO_ROOT}"
+        "${CMAKE_CURRENT_SOURCE_DIR}/Source")
+    target_compile_definitions(ProjectDriveShipping PRIVATE FRONTIER_SHIPPING_PROFILE=1)
+    target_link_libraries(ProjectDriveShipping PRIVATE
+        ProjectDriveSimulation
+        ProjectDriveVehicleHmiScene
+        FrontierSceneRenderer
+        FrontierGameMechanics
+        FrontierGeometryProcessing
+        FrontierPlumeFluid
+        FrontierShallowWater
+        FrontierParticles
+        FrontierSolidFracture
+        FrontierSnowLightning
+        FrontierCelestialSky
+        FrontierWindField
+        FrontierNetworking
+        Threads::Threads)
+    set_target_properties(ProjectDriveShipping PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/Shipping")
+else()
+    if(NOT TARGET thorvg_static)
+        set(CMAKE_SOURCE_DIR_SAVED "${CMAKE_SOURCE_DIR}")
+        set(CMAKE_SOURCE_DIR "${PROJECT_DRIVE_REPO_ROOT}")
+        include("${PROJECT_DRIVE_REPO_ROOT}/Automation/ThorVGSoftware.cmake")
+        set(CMAKE_SOURCE_DIR "${CMAKE_SOURCE_DIR_SAVED}")
+    endif()
+
+    set(PROJECT_DRIVE_IMGUI_ROOT "${PROJECT_DRIVE_REPO_ROOT}/ExternalPackages/imgui")
+    add_library(ProjectDriveImGui STATIC
+        "${PROJECT_DRIVE_IMGUI_ROOT}/imgui.cpp"
+        "${PROJECT_DRIVE_IMGUI_ROOT}/imgui_draw.cpp"
+        "${PROJECT_DRIVE_IMGUI_ROOT}/imgui_tables.cpp"
+        "${PROJECT_DRIVE_IMGUI_ROOT}/imgui_widgets.cpp")
+    target_include_directories(ProjectDriveImGui PUBLIC "${PROJECT_DRIVE_IMGUI_ROOT}")
+    target_compile_definitions(ProjectDriveImGui PUBLIC "ImDrawIdx=unsigned int")
+
+    add_library(ProjectDriveUiSdk STATIC
+        "${PROJECT_DRIVE_REPO_ROOT}/Engine/Interface/TextFileReplacement.cpp"
+        "${PROJECT_DRIVE_REPO_ROOT}/Engine/Interface/ThumbnailAtlasCache.cpp"
+        "${PROJECT_DRIVE_REPO_ROOT}/Engine/Interface/IconArt.cpp"
+        "${PROJECT_DRIVE_REPO_ROOT}/Engine/Interface/IconPresentation.cpp"
+        "${PROJECT_DRIVE_REPO_ROOT}/Engine/Interface/PixelSpace.cpp"
+        "${PROJECT_DRIVE_REPO_ROOT}/Engine/Interface/GlyphSpace.cpp"
+        "${PROJECT_DRIVE_REPO_ROOT}/Engine/Interface/ControlKit.cpp"
+        "${PROJECT_DRIVE_REPO_ROOT}/Engine/Interface/TextEntryState.cpp"
+        "${PROJECT_DRIVE_REPO_ROOT}/Engine/Interface/ThemeStructure.cpp"
+        "${PROJECT_DRIVE_REPO_ROOT}/Engine/Interface/VectorCodec.cpp"
+        "${PROJECT_DRIVE_REPO_ROOT}/Engine/Interface/ContentDirectory.cpp"
+        "${PROJECT_DRIVE_REPO_ROOT}/Engine/Interface/FontCodec.cpp"
+        "${PROJECT_DRIVE_REPO_ROOT}/Engine/Interface/TypefaceRegistry.cpp"
+        "${PROJECT_DRIVE_REPO_ROOT}/Engine/Interface/AppearanceInspector.cpp"
+        "${PROJECT_DRIVE_REPO_ROOT}/Engine/Interface/AppearanceCodec.cpp"
+        "${PROJECT_DRIVE_REPO_ROOT}/Engine/Interface/MotionIntegrator.cpp"
+        "${PROJECT_DRIVE_REPO_ROOT}/Engine/Interface/PanelExpansionTab.cpp"
+        "${PROJECT_DRIVE_REPO_ROOT}/Engine/Interface/ConfigurationInspector.cpp"
+        "${PROJECT_DRIVE_REPO_ROOT}/Engine/Interface/ConfigurationStructure.cpp"
+        "${PROJECT_DRIVE_REPO_ROOT}/Engine/Interface/InputPreferencesCodec.cpp"
+        "${PROJECT_DRIVE_REPO_ROOT}/Engine/Interface/MonitorPlacement.cpp"
+        "${PROJECT_DRIVE_REPO_ROOT}/Engine/Interface/PanelDockspaceMonitor.cpp"
+        "${PROJECT_DRIVE_REPO_ROOT}/Engine/Interface/PanelDockspace.cpp"
+        "${PROJECT_DRIVE_REPO_ROOT}/Engine/Interface/PanelDockspaceLayout.cpp"
+        "${PROJECT_DRIVE_REPO_ROOT}/Engine/Interface/NotificationSequence.cpp"
+        "${PROJECT_DRIVE_REPO_ROOT}/Engine/Interface/ConfirmationDialogue.cpp"
+        "${PROJECT_DRIVE_REPO_ROOT}/Engine/ContentInterchange/ProjectSpaceCodec.cpp"
+        "${PROJECT_DRIVE_REPO_ROOT}/UI/Editor/ContentBrowserPanel.cpp"
+        "${PROJECT_DRIVE_REPO_ROOT}/UI/Editor/ControlCentrePanel.cpp"
+        "${PROJECT_DRIVE_FRONTIER_ROOT}/Engine/Scene/SceneDirectory.cpp"
+        "${PROJECT_DRIVE_FRONTIER_ROOT}/Engine/Interface/StackRailControls.cpp"
+        "${PROJECT_DRIVE_FRONTIER_ROOT}/Engine/Interface/SceneDirectoryPanel.cpp"
+        "${PROJECT_DRIVE_FRONTIER_ROOT}/Engine/Interface/SceneDirectoryPanelPresentation.cpp"
+        "${PROJECT_DRIVE_FRONTIER_ROOT}/Engine/Interface/SceneInspectorPanel.cpp"
+        "${PROJECT_DRIVE_FRONTIER_ROOT}/Engine/Interface/LogStreamPanel.cpp"
+        "${PROJECT_DRIVE_FRONTIER_ROOT}/Engine/Interface/LogStreamPanelPresentation.cpp")
+    target_include_directories(ProjectDriveUiSdk PUBLIC
+        "${PROJECT_DRIVE_FRONTIER_ROOT}"
+        "${PROJECT_DRIVE_REPO_ROOT}"
+        "${PROJECT_DRIVE_REPO_ROOT}/ExternalPackages/tomlpp/include")
+    target_compile_definitions(ProjectDriveUiSdk PUBLIC
+        FRONTIER_EDITOR=1
+        FRONTIER_EDITOR_PROFILE=1
+        FRONTIER_WITH_INTERFACE_SDK=1)
+    target_link_libraries(ProjectDriveUiSdk PUBLIC ProjectDriveImGui thorvg_static)
+
+    add_executable(ProjectDriveApp
+        Source/InfographicWidgets.cpp
+        ${PROJECT_DRIVE_CORE_SCENE_SOURCES})
+    target_include_directories(ProjectDriveApp PRIVATE
+        "${PROJECT_DRIVE_FRONTIER_ROOT}"
+        "${PROJECT_DRIVE_REPO_ROOT}"
+        "${PROJECT_DRIVE_REPO_ROOT}/Exhibits/ControlCentre/Code"
+        "${PROJECT_DRIVE_REPO_ROOT}/ExternalPackages/stb"
+        "${CMAKE_CURRENT_SOURCE_DIR}/Source")
+    target_compile_definitions(ProjectDriveApp PRIVATE
+        FRONTIER_EDITOR=1
+        FRONTIER_EDITOR_PROFILE=1
+        FRONTIER_WITH_INTERFACE_SDK=1)
+    target_link_libraries(ProjectDriveApp PRIVATE
+        ProjectDriveUiSdk
+        ProjectDriveSimulation
+        ProjectDriveVehicleHmiScene
+        FrontierSceneRenderer
+        FrontierGameMechanics
+        FrontierGeometryProcessing
+        FrontierPlumeFluid
+        FrontierShallowWater
+        FrontierParticles
+        FrontierSolidFracture
+        FrontierSnowLightning
+        FrontierCelestialSky
+        FrontierWindField
+        FrontierNetworking
+        Threads::Threads)
+    set_target_properties(ProjectDriveApp PROPERTIES
+        OUTPUT_NAME "ProjectDrive"
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/Binaries")
 endif()

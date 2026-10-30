@@ -791,7 +791,7 @@ MountedControlVehicleCockpitRig VehicleCabinHmi::MountControlVehicle3DCockpit(
                 }
                 const uint32_t MatId = (T < Mesh.MaterialIds.size()) ? Mesh.MaterialIds[T] : 0u;
                 BlinnMaterialProperties Style = BlinnRenderer::ResolveVehicleMaterial(MatId);
-                if (AllowPaint && MatId == 0u)
+                if (AllowPaint && (MatId == 0u || MatId == 6u))
                 {
                     Style.LinearAlbedo = Paint;
                 }

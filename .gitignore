@@ -60,3 +60,6 @@ _AgentScratch/
 
 Delivery/
 
+
+# Local runtime UI appearance scratch
+.local_appearance.toml

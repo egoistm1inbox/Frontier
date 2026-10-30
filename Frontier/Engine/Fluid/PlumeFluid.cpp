@@ -185,6 +185,16 @@ void PlumeFluid::Reconfigure(const PlumeFluidParameters& Parameters)
     ClearState();
 }
 
+void PlumeFluid::UpdatePhysicalParameters(const PlumeFluidParameters& Parameters)
+{
+    if (ThermoCurrent_.empty() || VelocityCurrent_.empty() || Parameters.Grade != Parameters_.Grade)
+    {
+        Reconfigure(Parameters);
+        return;
+    }
+    Parameters_ = Parameters;
+}
+
 void PlumeFluid::ClearState() noexcept
 {
     std::fill(VelocityCurrent_.begin(), VelocityCurrent_.end(), 0.0f);
