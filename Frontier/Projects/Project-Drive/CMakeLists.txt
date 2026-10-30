@@ -117,7 +117,9 @@ set_target_properties(ProjectDrive PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/Output"
     ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/Output"
     PDB_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/Output")
-if(UNIX AND NOT APPLE)
+if(MSVC)
+    target_link_options(ProjectDrive PRIVATE /EXPORT:ConstructProjectInterchange)
+elseif(UNIX AND NOT APPLE)
     target_link_options(ProjectDrive PRIVATE -Wl,-Bsymbolic -Wl,--exclude-libs,ALL)
 endif()
 

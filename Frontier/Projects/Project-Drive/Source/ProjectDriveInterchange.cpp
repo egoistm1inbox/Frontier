@@ -116,7 +116,7 @@ void FRONTIER_CODE_IMAGE_CALL RetireProject()
 } // namespace
 
 #if defined(_WIN32)
-    #define FRONTIER_DRIVE_EXPORT __declspec(dllexport)
+    #define FRONTIER_DRIVE_EXPORT
 #else
     #define FRONTIER_DRIVE_EXPORT __attribute__((visibility("default")))
 #endif
