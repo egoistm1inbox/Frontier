@@ -108,12 +108,15 @@ else()
     target_compile_options(FrontierPlumeLatticeFootprint PRIVATE -Wall -Wextra -Werror)
 endif()
 
-# 📝 Domain simulation modules live in Frontier/Engine/Fluid, Environment, and Physics (never inside Rendering).
+# 📝 Domain simulation & geometry modules live in Frontier/Engine/Fluid, Environment, Geometry, and Physics.
 if(NOT TARGET FrontierPlumeFluid)
     add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../Fluid" "${CMAKE_CURRENT_BINARY_DIR}/FrontierFluid")
 endif()
 if(NOT TARGET FrontierWindForceField)
     add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../Environment" "${CMAKE_CURRENT_BINARY_DIR}/FrontierEnvironment")
+endif()
+if(NOT TARGET FrontierClusteredGeometry)
+    add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../Geometry" "${CMAKE_CURRENT_BINARY_DIR}/FrontierGeometry")
 endif()
 if(NOT TARGET FrontierSolidFracture)
     add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../Physics/Fracture" "${CMAKE_CURRENT_BINARY_DIR}/FrontierFracture")
@@ -122,7 +125,7 @@ if(NOT TARGET FrontierBallisticSparks)
     add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../Physics/Sparks" "${CMAKE_CURRENT_BINARY_DIR}/FrontierSparks")
 endif()
 
-# 📝 Dual-tier GTX SDF + SurfaceCards and RTX BVH ReSTIR extension with Portals, Mirrors & full volumetric reflections.
+# 📝 Dual-tier GTX (SDF GI + BVH Triangle Reflections) and RTX (Full Raytracing) ReSTIR extension with Portals & Mirrors.
 if(NOT TARGET FrontierSdfRestirPortal)
     add_library(FrontierSdfRestirPortal STATIC
         DiscrepancySequence.cpp
@@ -131,6 +134,8 @@ if(NOT TARGET FrontierSdfRestirPortal)
     target_compile_features(FrontierSdfRestirPortal PUBLIC cxx_std_20)
     target_link_libraries(FrontierSdfRestirPortal PUBLIC
         FrontierAtmosphericOptics
+        FrontierCelestialPlanetary
+        FrontierClusteredGeometry
         FrontierPlumeFluid
         FrontierShallowWaterMud
         FrontierSnowLightningEnvironment

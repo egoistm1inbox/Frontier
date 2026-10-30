@@ -21,15 +21,16 @@ Frontier/
 ├── Engine/                    # Shared production code
 │   ├── Audio/                 # Spatial acoustics, Doppler kinematics, and mix-bus routing
 │   ├── Diagnostics/           # Structured log categories, ring stores, and streams
-│   ├── Environment/           # 3D wind/force-fields, cloud-gated weather, snowpack, and lightning/thunder
+│   ├── Environment/           # 3D wind, snowpack, lightning/thunder, stars, moons, ringed planets & atmospheres
 │   ├── Fluid/                 # 3D smoke/fire plumes and 2.5D shallow-water & Bingham-plastic mud
 │   ├── Foundation/            # Math, deterministic RNG, and memory/value primitives
+│   ├── Geometry/              # Glass-aware virtualized cluster DAG, quadric tiers, Hi-Z, and 64 KB pages
 │   ├── Interface/             # Selectively ported UI foundations and native Vehicle Cabin/HUD HMI
 │   ├── Lifecycle/             # Shared activation sequence
 │   ├── Networking/            # Deterministic bitpacking, delta snapshots, and vehicle replication
 │   ├── Physics/               # ProjectDrive, Propulsion, SolidFracture, and BallisticSparks
 │   ├── Render/                # Blank; Git retention marker only
-│   ├── Rendering/             # Pure optical/GPU rendering (SDF & RTX ReSTIR, Portals, Mirrors, Atmosphere)
+│   ├── Rendering/             # Pure optical/GPU rendering (GTX SDF GI + BVH Refl, RTX Full RT, Portals, Mirrors)
 │   ├── Scene/                 # Scene records and spatial organization
 │   └── Threading/             # Work-stealing task DAGs and lock-free snapshot exchanges
 ├── UI/
@@ -135,3 +136,22 @@ The font catalogue has a native TOML form; JSON remains only an automation/repor
 - `Experimental/VehicleHmiReference/`: selected immutable full-demo sources, blob manifest and original tyre tests.
 - `EngineContent/CelestialMaps/`: retained demo lunar JPEG and provenance; generated runtime PPM stays ignored.
 - `Exhibits/VehiclePhysics/Continuation.md`: source audit, renderer comparison, validation and remaining scope.
+
+## Glass-aware cluster geometry, celestial sky, and dual-tier GI — 2026-10-30
+
+- `Frontier/Engine/Geometry/` (`FrontierClusteredGeometry`): owns `FacetTierBuild`, `QuadricTierBuild`,
+  `GlassAwareClusterExtension`, and `Shaders/GlassAwareClusterCull.slang` for class-pure `<= 128`-triangle
+  clusters, monotonic quadric simplification DAGs, optical IOR error magnification, two-phase non-opaque Hi-Z
+  culling, `64 KB` streaming pages, and two-layer dielectric glass peeling.
+- `Frontier/Engine/Environment/CelestialPlanetaryExtension.{h,cpp}` (`FrontierCelestialPlanetary`): owns the
+  41,360-star `Hipparcos8.csv` `32x32` octahedral index, custom user-defined stars with Kelvin chromaticity and
+  6-blade diffraction spikes, `2048x1024` textured Moon + 6 lunar presets, and 3D ringed planets with simulated
+  spherical Rayleigh/Mie/absorption atmospheres and mutual planet/ring shadows.
+- `Frontier/Engine/Rendering/SdfRestirPortalExtension.{h,cpp}` & `Shaders/SdfRestirPortalMirror.slang`: enforces
+  the exact dual-tier split where `SignedDistanceFieldGtx` pairs SDF + `OrientedSurfaceCard` ReSTIR GI with
+  software triangle-BVH reflections, while `HardwareRayTracingRtx` uses full triangle raytracing for both GI and
+  reflections, coupled with solid-angle area luminaires, closed-dielectric glass, portals, mirrors, spatial reuse,
+  and 3-step edge-stopping À-Trous denoising.
+- `Exhibits/CelestialGlassLightingShowcase/`: owns the 13-suite validation executable and 5 rendered `960x540`
+  visual showcase PNGs under `Images/`.
+

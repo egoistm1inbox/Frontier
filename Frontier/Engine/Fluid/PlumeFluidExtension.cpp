@@ -1629,14 +1629,40 @@ float PlumeFluidExtension::EvaluateShadowTransmittance(
         const float Gx = (Px - WorldMinX) / FineCellMetres_ - 0.5f;
         const float Gy = (Py - WorldMinY) / FineCellMetres_ - 0.5f;
         const float Gz = (Pz - FloorWorldZ) / FineCellMetres_ - 0.5f;
-        const std::int32_t Ix = std::clamp(static_cast<std::int32_t>(std::lround(Gx)), 0, Tx - 1);
-        const std::int32_t Iy = std::clamp(static_cast<std::int32_t>(std::lround(Gy)), 0, Ty - 1);
-        const std::int32_t Iz = std::clamp(static_cast<std::int32_t>(std::lround(Gz)), 0, Tz - 1);
-        const std::size_t  I4 = ((static_cast<std::size_t>(Iz) * static_cast<std::size_t>(Ty) +
-                                  static_cast<std::size_t>(Iy)) * static_cast<std::size_t>(Tx) +
-                                  static_cast<std::size_t>(Ix)) * 4u;
-        const float Smoke = ThermoCurrent_[I4 + 0u];
-        const float Soot  = ThermoCurrent_[I4 + 3u];
+        if (Gx < 0.0f || Gy < 0.0f || Gz < 0.0f ||
+            Gx >= static_cast<float>(Tx - 1) || Gy >= static_cast<float>(Ty - 1) || Gz >= static_cast<float>(Tz - 1))
+        {
+            continue;
+        }
+        const std::int32_t X0 = static_cast<std::int32_t>(Gx);
+        const std::int32_t Y0 = static_cast<std::int32_t>(Gy);
+        const std::int32_t Z0 = static_cast<std::int32_t>(Gz);
+        const float Fx = Gx - static_cast<float>(X0);
+        const float Fy = Gy - static_cast<float>(Y0);
+        const float Fz = Gz - static_cast<float>(Z0);
+
+        auto At4 = [&](std::int32_t X, std::int32_t Y, std::int32_t Z) noexcept -> const float*
+        {
+            const std::size_t Idx = ((static_cast<std::size_t>(Z) * static_cast<std::size_t>(Ty) +
+                                      static_cast<std::size_t>(Y)) * static_cast<std::size_t>(Tx) +
+                                     static_cast<std::size_t>(X)) * 4u;
+            return &ThermoCurrent_[Idx];
+        };
+        const float* P000 = At4(X0, Y0, Z0);         const float* P100 = At4(X0 + 1, Y0, Z0);
+        const float* P010 = At4(X0, Y0 + 1, Z0);     const float* P110 = At4(X0 + 1, Y0 + 1, Z0);
+        const float* P001 = At4(X0, Y0, Z0 + 1);     const float* P101 = At4(X0 + 1, Y0, Z0 + 1);
+        const float* P011 = At4(X0, Y0 + 1, Z0 + 1); const float* P111 = At4(X0 + 1, Y0 + 1, Z0 + 1);
+
+        auto TrilerpComp = [&](int C) noexcept -> float
+        {
+            const float C00 = P000[C] + (P100[C] - P000[C]) * Fx;
+            const float C10 = P010[C] + (P110[C] - P010[C]) * Fx;
+            const float C01 = P001[C] + (P101[C] - P001[C]) * Fx;
+            const float C11 = P011[C] + (P111[C] - P011[C]) * Fx;
+            return std::max(0.0f, (C00 + (C10 - C00) * Fy) * (1.0f - Fz) + (C01 + (C11 - C01) * Fy) * Fz);
+        };
+        const float Smoke = TrilerpComp(0);
+        const float Soot  = TrilerpComp(3);
         OpticalDepth += (Smoke * Parameters_.SmokeExtinction + Soot * Parameters_.SootExtinction) * Dt;
         if (OpticalDepth > 8.0f)
         {
