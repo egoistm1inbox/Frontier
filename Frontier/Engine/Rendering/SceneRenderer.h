@@ -206,6 +206,7 @@ struct CoupledWorldOpticalContext
     FlareOpticsProfile                 LensFlareOptics{};
     float                              HdrBloomStrength             = 0.24f;
     float                              ExposureScale                = 0.82f;
+    uint8_t                            InspectionMode               = 0u; // 0=Final, 1=DirectSun&Shadows, 2=IndirectGi, 3=GlossyRefl, 4=GlobalSdf, 5=Normals, 6=Albedo
 };
 
 struct TracedRayDiagnostics

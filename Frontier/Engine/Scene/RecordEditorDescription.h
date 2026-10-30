@@ -35,6 +35,8 @@ struct RecordEditorScalarField
     double     *Target      = nullptr;  // [-] - Live double setting in the owning record; never owned here
     const char *Section     = "";       // [text] - Optional section card title
     float      *FloatTarget = nullptr;  // [-] - Optional live float setting in the owning record
+    const char *MinCaption  = "";       // [text] - Optional left range caption (EditorControls.js Labels[0])
+    const char *MaxCaption  = "";       // [text] - Optional right range caption (EditorControls.js Labels[1])
 };
 
 // 📝 One inspector property switch, bound directly to a live setting in the owning record.
@@ -92,6 +94,8 @@ struct RecordEditorDescription
 
     std::function<std::string()> QueryLiveMeta;          // [-] - Right-aligned live Outliner row readout
     std::function<void()>        ConstructInfographic;   // [-] - Custom 1:1 VehicleHMI / General UI infographic
+    const char                  *DedicatedEditorTitle = ""; // [text] - Dedicated popup editor window title
+    std::function<void()>        OpenDedicatedEditor;    // [-] - Launches dedicated zero-copy popup editor window
 };
 
 } // namespace Frontier

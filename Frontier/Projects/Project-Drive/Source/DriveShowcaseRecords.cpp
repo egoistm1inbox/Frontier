@@ -10,7 +10,9 @@
 
 #include "Engine/Scene/SceneDirectory.h"
 
+#include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstdio>
 #include <string>
 
@@ -83,6 +85,7 @@ ShowcaseRenderPipelineRecord::ShowcaseRenderPipelineRecord(const ShowcaseTelemet
         Infographics::DrawSegmentedDistributionCard("FRAME STAGE BUDGET", FrameBuf, Slices, 4);
     };
     Desc.ChoiceFields.push_back({"GPU Tracing Tier", {{"GTX SDF+BVH", 0}, {"RTX Full RT", 1}, {"Blinn Low-Res", 2}}, &TracingTier, true});
+    Desc.ChoiceFields.push_back({"Display Inspection", {{"Final", 0}, {"Shadows", 1}, {"GI", 2}, {"Refl", 3}, {"SDF", 4}, {"Nrm", 5}}, &InspectionMode, true});
     Desc.ChoiceFields.push_back({"Viewport Resolution Scale", {{"35%", 35}, {"50%", 50}, {"75%", 75}, {"100%", 100}}, &ViewportScalePercent, true});
     Desc.Switches.push_back({"Screen-Space ReSTIR Spatial Reuse", &EnableSpatialRestir});
     Desc.Switches.push_back({"3-Step Edge-Stopping A-Trous Denoiser", &EnableAtrousDenoiser});
@@ -963,6 +966,77 @@ ShowcaseSeamlessPortalsRecord::ShowcaseSeamlessPortalsRecord(const ShowcaseTelem
 #endif
 }
 
+ShowcasePlaceableObjectRecord::ShowcasePlaceableObjectRecord(
+    const char *StableIdStr, const char *DisplayLabel,
+    int32_t InitialShape, int32_t InitialMaterial,
+    double InitialX, double InitialY, double InitialZ,
+    double HalfX, double HalfY, double HalfZ,
+    bool InitiallyEnabled,
+    const ShowcaseTelemetrySnapshot *Telemetry, uint64_t *DirtyRevision)
+    : RecordEntry(RecordClassification::Geometry)
+    , Enabled(InitiallyEnabled)
+    , ShapePreset(InitialShape)
+    , MaterialPreset(InitialMaterial)
+    , PosX(InitialX)
+    , PosY(InitialY)
+    , PosZ(InitialZ)
+    , HalfExtentX(HalfX)
+    , HalfExtentY(HalfY)
+    , HalfExtentZ(HalfZ)
+{
+    (void)StableIdStr;
+    (void)DisplayLabel;
+    (void)Telemetry;
+    (void)DirtyRevision;
+#if defined(FRONTIER_EDITOR_PROFILE)
+    RecordEditorDescription Desc;
+    Desc.StableId             = StableIdStr;
+    Desc.Group                = "Level";
+    Desc.DisplayName          = DisplayLabel;
+    Desc.Category             = "Placeable 3D Static Mesh & Nanite Asset";
+    Desc.Glyph                = "box";
+    Desc.Colour               = "#8fb3a4";
+    Desc.DedicatedEditorTitle = "3D Object & Nanite LOD Studio";
+    Desc.Description          = "Placeable 3D scene object backed by OS zero-copy shared memory. Edit transform, half-extents, "
+                                "Nanite cluster shape, and PBR material live in both its Dedicated 3D Studio and the main viewport.";
+    Desc.Enabled              = &Enabled;
+    Desc.Revision             = DirtyRevision;
+    Desc.QueryLiveMeta        = [this]() -> std::string {
+        char Buf[48] = {};
+        std::snprintf(Buf, sizeof(Buf), "(%.1f, %.1f) m", PosX, PosY);
+        return Buf;
+    };
+    Desc.ConstructInfographic = [this]() {
+        char PosBuf[32] = {}, ExtBuf[32] = {};
+        std::snprintf(PosBuf, sizeof(PosBuf), "%.1f, %.1f, %.1f", PosX, PosY, PosZ);
+        std::snprintf(ExtBuf, sizeof(ExtBuf), "%.2fx%.2fx%.2f", HalfExtentX * 2.0, HalfExtentY * 2.0, HalfExtentZ * 2.0);
+        static const char *const MatNames[5] = {"Concrete", "Orange", "Copper", "Obsidian", "Glass"};
+        const Infographics::KpiBadgeItem Kpis[3] = {
+            {"WORLD POS", PosBuf, "Shared RAM 0-copy", 0x8fb3a4u},
+            {"DIMENSIONS", ExtBuf, "Dual-tier SDF+BVH", 0x38bdf8u},
+            {"MATERIAL", MatNames[std::clamp(MaterialPreset, 0, 4)], "Cast sun shadow", 0xe8c27au},
+        };
+        Infographics::DrawKpiRow(Kpis, 3);
+    };
+    Desc.Actions.push_back({"Snap To Ground", 0, "", [this]() { PosZ = HalfExtentZ; }});
+    Desc.Actions.push_back({"Rotate +45 deg", 0, "", [this]() {
+        YawDeg = std::fmod(YawDeg + 45.0, 360.0);
+    }});
+    Desc.ChoiceFields.push_back({"3D Mesh Topology", {{"Chicane", 0}, {"Pedestal", 1}, {"Arch", 2}, {"Prism", 3}}, &ShapePreset, true});
+    Desc.ChoiceFields.push_back({"Surface Material", {{"Concrete", 0}, {"Orange", 1}, {"Copper", 2}, {"Obsidian", 3}, {"Glass", 4}}, &MaterialPreset, true});
+    Desc.ScalarFields.push_back({"World Position X", "m", -24.0, 28.0, 0.1, 2, &PosX, "3D TRANSFORM"});
+    Desc.ScalarFields.push_back({"World Position Y", "m", -24.0, 24.0, 0.1, 2, &PosY, "3D TRANSFORM"});
+    Desc.ScalarFields.push_back({"World Position Z", "m", 0.05, 8.0, 0.05, 2, &PosZ, "3D TRANSFORM"});
+    Desc.ScalarFields.push_back({"Yaw Orientation", "deg", -180.0, 180.0, 1.0, 0, &YawDeg, "3D TRANSFORM"});
+    Desc.ScalarFields.push_back({"Half-Extent X", "m", 0.15, 4.5, 0.05, 2, &HalfExtentX, "DIMENSIONS & PBR"});
+    Desc.ScalarFields.push_back({"Half-Extent Y", "m", 0.15, 4.5, 0.05, 2, &HalfExtentY, "DIMENSIONS & PBR"});
+    Desc.ScalarFields.push_back({"Half-Extent Z", "m", 0.15, 4.5, 0.05, 2, &HalfExtentZ, "DIMENSIONS & PBR"});
+    Desc.ScalarFields.push_back({"Surface Roughness", "-", 0.04, 0.98, 0.02, 2, &Roughness, "DIMENSIONS & PBR"});
+    Desc.ScalarFields.push_back({"Metallic Factor", "-", 0.0, 1.0, 0.02, 2, &Metallic, "DIMENSIONS & PBR"});
+    RegisterShowcaseEditorRecord(Token(), Desc.DisplayName, std::move(Desc));
+#endif
+}
+
 //====================================================================================================================================
 //                                      GROUP 8: NETWORKING (1 COMPONENT)
 //====================================================================================================================================
@@ -1043,6 +1117,16 @@ ShowcaseRecordBundle::ShowcaseRecordBundle(const ShowcaseTelemetrySnapshot *Tele
     , SolidFracture(Telemetry, DirtyRevision)
     , ProvingGroundsCourse(Telemetry, DirtyRevision)
     , SeamlessPortals(Telemetry, DirtyRevision)
+    , PlaceableChicaneBlock("placeable_chicane_block", "Chicane Barrier 3D Object",
+                            0, 1, -1.6, -2.9, 0.55, 0.72, 0.34, 0.55, true, Telemetry, DirtyRevision)
+    , PlaceableNanitePedestal("placeable_nanite_pedestal", "Calibration Pedestal 3D Object",
+                              1, 2, 1.2, 2.7, 0.78, 0.52, 0.52, 0.78, true, Telemetry, DirtyRevision)
+    , PlaceableOpticalArch("placeable_optical_arch", "Acoustic Archway 3D Object",
+                           2, 0, 8.8, -3.4, 1.35, 0.48, 1.25, 1.35, true, Telemetry, DirtyRevision)
+    , SpawnedObjectSlot0("spawned_3d_object_0", "Placed Custom 3D Object A",
+                         3, 3, -0.4, 1.9, 0.65, 0.55, 0.55, 0.65, false, Telemetry, DirtyRevision)
+    , SpawnedObjectSlot1("spawned_3d_object_1", "Placed Custom 3D Object B",
+                         0, 4, 3.2, -4.4, 0.70, 0.60, 0.45, 0.70, false, Telemetry, DirtyRevision)
     , StateReplication(Telemetry, DirtyRevision)
 {
 }

@@ -241,6 +241,8 @@ void SceneDirectoryPanel::Synchronize(const SceneDirectory& Directory)
                 InspectorModel.Name = Description->DisplayName;
             }
             InspectorModel.Description          = Description->Description != nullptr ? Description->Description : "";
+            InspectorModel.StableId             = Description->StableId != nullptr ? Description->StableId : "";
+            InspectorModel.DedicatedEditorTitle = Description->DedicatedEditorTitle != nullptr ? Description->DedicatedEditorTitle : "";
             InspectorModel.HasEnabled           = Description->Enabled != nullptr;
             InspectorModel.Enabled              = Description->Enabled == nullptr || *Description->Enabled;
             InspectorModel.EnabledPtr           = Description->Enabled;
@@ -250,6 +252,7 @@ void SceneDirectoryPanel::Synchronize(const SceneDirectory& Directory)
             InspectorModel.ChoiceFields         = Description->ChoiceFields;
             InspectorModel.Actions              = Description->Actions;
             InspectorModel.ConstructInfographic = Description->ConstructInfographic;
+            InspectorModel.OpenDedicatedEditor  = Description->OpenDedicatedEditor;
         }
     }
 #endif
@@ -323,6 +326,21 @@ std::optional<RecordClassification> SceneDirectoryPanel::TakeSpawnRequest()
     std::optional<RecordClassification> Request = PendingSpawn;
     PendingSpawn.reset();
     return Request;
+}
+
+void SceneDirectoryPanel::RequestOpenDedicatedEditor(const std::string& StableId)
+{
+    if (!StableId.empty())
+    {
+        PendingDedicatedEditorId = StableId;
+    }
+}
+
+std::optional<std::string> SceneDirectoryPanel::TakeDedicatedEditorRequest()
+{
+    std::optional<std::string> Req = PendingDedicatedEditorId;
+    PendingDedicatedEditorId.reset();
+    return Req;
 }
 
 void SceneDirectoryPanel::Select(RecordToken Token)

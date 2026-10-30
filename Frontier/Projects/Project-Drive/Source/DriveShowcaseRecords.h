@@ -93,6 +93,7 @@ class ShowcaseRenderPipelineRecord final : public RecordEntry
 
     bool    Enabled              = true;
     int32_t TracingTier          = 1;      // 0 = GTX (SDF GI + BVH RT), 1 = RTX (Full RayQuery), 2 = Blinn Low-Res
+    int32_t InspectionMode       = 0;      // 0 = Final, 1 = Direct Sun & Shadows, 2 = ReSTIR GI, 3 = Reflections, 4 = SDF, 5 = Normals, 6 = Albedo
     int32_t ViewportScalePercent = 50;     // 35 / 50 / 75 / 100 %
     double  GiBounceGain         = 1.10;   // [-]
     double  ReflectionSharpness  = 0.92;   // [-]
@@ -126,9 +127,9 @@ class ShowcaseAreaLightRigRecord final : public RecordEntry
     explicit ShowcaseAreaLightRigRecord(const ShowcaseTelemetrySnapshot *Telemetry, uint64_t *DirtyRevision);
 
     bool   Enabled              = true;
-    double GantryLuminanceNits  = 2400.0; // [cd/m^2]
+    double GantryLuminanceNits  = 420.0;  // [cd/m^2] - Balanced so sunlit directional shadows stay razor-crisp!
     double GantryTempKelvin     = 5200.0; // [K]
-    double PortalArchGlowNits   = 1850.0; // [cd/m^2]
+    double PortalArchGlowNits   = 1450.0; // [cd/m^2]
     double AtrousPhiNormal      = 32.0;   // [-]
     double AtrousPhiDepth       = 0.12;   // [m]
     bool   SolidAngleNee        = true;
@@ -145,11 +146,11 @@ class ShowcaseDirectionalSunRecord final : public RecordEntry
     explicit ShowcaseDirectionalSunRecord(const ShowcaseTelemetrySnapshot *Telemetry, uint64_t *DirtyRevision);
 
     bool   Enabled            = true;
-    double AzimuthDeg         = 212.0;   // [deg]
-    double ElevationDeg       = 21.5;    // [deg]
-    double IlluminanceKlx     = 96.0;    // [klx]
+    double AzimuthDeg         = 118.0;   // [deg] - Side-lit across proving grounds for crisp foreground shadows!
+    double ElevationDeg       = 28.5;    // [deg]
+    double IlluminanceKlx     = 98.0;    // [klx]
     double AngularDiameterDeg = 0.545;   // [deg]
-    double WarmTint           = 0.18;    // [0..1]
+    double WarmTint           = 0.14;    // [0..1]
     bool   CastCloudShadows   = true;
     bool   CastPlumeShadows   = true;
 };
@@ -176,8 +177,8 @@ class ShowcaseVolumetricCloudsRecord final : public RecordEntry
     explicit ShowcaseVolumetricCloudsRecord(const ShowcaseTelemetrySnapshot *Telemetry, uint64_t *DirtyRevision);
 
     bool   Enabled            = true;
-    double Coverage           = 0.54;    // [0..1]
-    double ExtinctionDensity  = 0.068;   // [1/m]
+    double Coverage           = 0.28;    // [0..1] - Sunlit cumulus with crisp solar transmittance!
+    double ExtinctionDensity  = 0.052;   // [1/m]
     double CloudBaseKm        = 1.45;    // [km]
     double CloudTopKm         = 4.20;    // [km]
     double AnvilAmount        = 0.32;    // [0..1]
@@ -191,7 +192,7 @@ class ShowcaseHeightFogRecord final : public RecordEntry
     explicit ShowcaseHeightFogRecord(const ShowcaseTelemetrySnapshot *Telemetry, uint64_t *DirtyRevision);
 
     bool   Enabled            = true;
-    double BaseDensity        = 0.0085;  // [1/m]
+    double BaseDensity        = 0.00045; // [1/m] - Crisp foreground visibility + distant atmospheric depth!
     double HeightFalloff      = 0.14;    // [1/m]
     double StartDistanceM     = 12.0;    // [m]
     double AnisotropyG        = 0.62;    // [-0.9..0.9]
@@ -458,6 +459,30 @@ class ShowcaseSeamlessPortalsRecord final : public RecordEntry
     bool    EnablePlanarMirror    = true;
 };
 
+class ShowcasePlaceableObjectRecord final : public RecordEntry
+{
+  public:
+    ShowcasePlaceableObjectRecord(const char *StableIdStr, const char *DisplayLabel,
+                                  int32_t InitialShape, int32_t InitialMaterial,
+                                  double InitialX, double InitialY, double InitialZ,
+                                  double HalfX, double HalfY, double HalfZ,
+                                  bool InitiallyEnabled,
+                                  const ShowcaseTelemetrySnapshot *Telemetry, uint64_t *DirtyRevision);
+
+    bool    Enabled        = true;
+    int32_t ShapePreset    = 0;    // 0 = Chicane Block, 1 = Stepped Pedestal, 2 = Calibration Arch, 3 = Nanite Prism
+    int32_t MaterialPreset = 0;    // 0 = Concrete, 1 = Signal Orange, 2 = Anodized Copper, 3 = Obsidian, 4 = Crown Glass
+    double  PosX           = 0.0;  // [m]
+    double  PosY           = 0.0;  // [m]
+    double  PosZ           = 0.65; // [m]
+    double  HalfExtentX    = 0.85; // [m]
+    double  HalfExtentY    = 0.55; // [m]
+    double  HalfExtentZ    = 0.65; // [m]
+    double  YawDeg         = 0.0;  // [deg]
+    double  Roughness      = 0.42; // [0..1]
+    double  Metallic       = 0.08; // [0..1]
+};
+
 //------------------------------------------------------------------------------------------------------------------------
 //                                      GROUP 8: NETWORKING (1 COMPONENT)
 //------------------------------------------------------------------------------------------------------------------------
@@ -511,6 +536,11 @@ struct ShowcaseRecordBundle
 
     ShowcaseProvingGroundsCourseRecord  ProvingGroundsCourse;
     ShowcaseSeamlessPortalsRecord       SeamlessPortals;
+    ShowcasePlaceableObjectRecord       PlaceableChicaneBlock;
+    ShowcasePlaceableObjectRecord       PlaceableNanitePedestal;
+    ShowcasePlaceableObjectRecord       PlaceableOpticalArch;
+    ShowcasePlaceableObjectRecord       SpawnedObjectSlot0;
+    ShowcasePlaceableObjectRecord       SpawnedObjectSlot1;
 
     ShowcaseStateReplicationRecord      StateReplication;
 

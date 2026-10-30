@@ -111,10 +111,70 @@ Vec3 Mat4Col(const Mat4 &M, int Col) noexcept
     return Normalise(Vec3{M.Columns[Col][0], M.Columns[Col][1], M.Columns[Col][2]});
 }
 
+void SubmitPlaceableObjectToScene(const ShowcasePlaceableObjectRecord &Obj, SceneRenderer &Scene, bool ForceRender = false)
+{
+    if (!Obj.Enabled && !ForceRender)
+    {
+        return;
+    }
+    Vec3  Albedo{0.58f, 0.60f, 0.64f};
+    float Rough = static_cast<float>(std::clamp(Obj.Roughness, 0.04, 0.98));
+    float Metal = static_cast<float>(std::clamp(Obj.Metallic, 0.0, 1.0));
+    switch (Obj.MaterialPreset)
+    {
+        case 1: Albedo = {0.92f, 0.34f, 0.09f}; break;                         // Safety Signal Orange
+        case 2: Albedo = {0.88f, 0.52f, 0.32f}; Metal = std::max(Metal, 0.82f); Rough = std::min(Rough, 0.24f); break; // Copper
+        case 3: Albedo = {0.10f, 0.11f, 0.13f}; Rough = std::min(Rough, 0.14f); break;                                 // Obsidian
+        case 4: Albedo = {0.86f, 0.92f, 0.98f}; Rough = 0.05f; break;          // Crown Glass tint
+        default: break;                                                        // Brushed Concrete
+    }
+
+    const Vec3  C{static_cast<float>(Obj.PosX), static_cast<float>(Obj.PosY), static_cast<float>(Obj.PosZ)};
+    const float Hx = static_cast<float>(std::max(0.12, Obj.HalfExtentX));
+    const float Hy = static_cast<float>(std::max(0.12, Obj.HalfExtentY));
+    const float Hz = static_cast<float>(std::max(0.12, Obj.HalfExtentZ));
+
+    if (Obj.MaterialPreset == 4)
+    {
+        Scene.RegisterSmoothSphere(C, std::max({Hx, Hy, Hz}), Albedo, Rough, 0.0f, true, 1.52f);
+        return;
+    }
+
+    if (Obj.ShapePreset == 1)
+    {
+        // Stepped Calibration Pedestal (3 tiers)
+        Scene.RegisterDualTierSolidBox({C.X, C.Y, C.Z - Hz * 0.62f}, {Hx * 1.18f, Hy * 1.18f, Hz * 0.38f}, Albedo * 0.84f, Rough, {}, Metal);
+        Scene.RegisterDualTierSolidBox({C.X, C.Y, C.Z + Hz * 0.05f}, {Hx * 0.82f, Hy * 0.82f, Hz * 0.35f}, Albedo, Rough, {}, Metal);
+        Scene.RegisterDualTierSolidBox({C.X, C.Y, C.Z + Hz * 0.65f}, {Hx * 0.48f, Hy * 0.48f, Hz * 0.35f}, Albedo * 1.08f, Rough * 0.8f, {}, Metal);
+    }
+    else if (Obj.ShapePreset == 2)
+    {
+        // Acoustic Calibration Archway (twin pillars + lintel)
+        const float Span = std::max(0.45f, Hy * 0.78f);
+        const float PilW = std::max(0.14f, Hy * 0.24f);
+        Scene.RegisterDualTierSolidBox({C.X, C.Y - Span, C.Z}, {Hx, PilW, Hz}, Albedo, Rough, {}, Metal);
+        Scene.RegisterDualTierSolidBox({C.X, C.Y + Span, C.Z}, {Hx, PilW, Hz}, Albedo, Rough, {}, Metal);
+        Scene.RegisterDualTierSolidBox({C.X, C.Y, C.Z + Hz * 0.86f}, {Hx * 1.06f, Span + PilW, Hz * 0.20f}, Albedo * 1.06f, Rough, {}, Metal);
+    }
+    else if (Obj.ShapePreset == 3)
+    {
+        // Nanite Faceted Compound Prism
+        Scene.RegisterDualTierSolidBox(C, {Hx, Hy * 0.68f, Hz}, Albedo, Rough, {}, Metal);
+        Scene.RegisterDualTierSolidBox(C, {Hx * 0.68f, Hy, Hz * 0.76f}, Albedo * 0.92f, Rough * 0.85f, {}, Metal);
+    }
+    else
+    {
+        // Chamfered Chicane Barrier Block (base + crown)
+        Scene.RegisterDualTierSolidBox({C.X, C.Y, C.Z - Hz * 0.32f}, {Hx, Hy, Hz * 0.68f}, Albedo, Rough, {}, Metal);
+        Scene.RegisterDualTierSolidBox({C.X, C.Y, C.Z + Hz * 0.56f}, {Hx * 0.82f, Hy * 0.76f, Hz * 0.26f}, Albedo * 1.08f, Rough, {}, Metal);
+    }
+}
+
 } // namespace
 
 DriveShowcaseWorld::DriveShowcaseWorld()
-    : Records_(&Telemetry_, &SceneDirtyRevision_)
+    : SharedRecords_()
+    , Records_(*SharedRecords_.ConstructInSharedMemory("project_drive_entities", &Telemetry_, &SceneDirtyRevision_))
     , PyroSolver_(MakeInitialPyroParams())
     , WaterPuddles_(MakeInitialWaterConfig())
     , SnowMound_(MakeInitialSnowSpec())
@@ -336,6 +396,19 @@ void DriveShowcaseWorld::OrbitFreeCamera(float DeltaYawRad, float DeltaPitchRad,
     OrbitPitchOffsetRad_  = std::clamp(OrbitPitchOffsetRad_ + DeltaPitchRad, -0.65f, 0.75f);
     OrbitZoomOffsetM_     = std::clamp(OrbitZoomOffsetM_ + DeltaZoomM, -5.5f, 14.0f);
     ++SceneDirtyRevision_;
+}
+
+std::string DriveShowcaseWorld::ActivateNextSpawnedObject() noexcept
+{
+    if (!Records_.SpawnedObjectSlot0.Enabled)
+    {
+        Records_.SpawnedObjectSlot0.Enabled = true;
+        ++SceneDirtyRevision_;
+        return "spawned_3d_object_0";
+    }
+    Records_.SpawnedObjectSlot1.Enabled = true;
+    ++SceneDirtyRevision_;
+    return "spawned_3d_object_1";
 }
 
 void DriveShowcaseWorld::ResetAllSystems()
@@ -734,9 +807,41 @@ void DriveShowcaseWorld::RebuildAndRender3DViewport(uint32_t RenderW, uint32_t R
         : Vec3{0.02f, 0.03f, 0.06f};
 
     // Resolve camera viewpoint (7 showcase presets + free mouse orbit)
-    Vec3 CamEye{-7.8f, -5.6f, 2.75f};
-    Vec3 CamAim{2.6f, -0.2f, 0.95f};
+    Vec3 CamEye{-7.6f, -6.2f, 2.85f};
+    Vec3 CamAim{3.8f, -0.4f, 1.05f};
     float FovRad = static_cast<float>(Records_.ExposureCamera.VerticalFovDeg * (kPi / 180.0));
+    switch (GetCameraPreset())
+    {
+        case ShowcaseCameraPreset::HeroOverview:
+            CamEye = {-7.6f, -6.2f, 2.85f};
+            CamAim = {3.8f, -0.4f, 1.05f};
+            break;
+        case ShowcaseCameraPreset::CabinCockpitHmi:
+            CamEye = CarPos + Vec3{-0.25f, 0.28f, 1.12f};
+            CamAim = CarPos + CarFwd * 1.25f + Vec3{0.0f, 0.0f, 0.92f};
+            FovRad = 0.92f;
+            break;
+        case ShowcaseCameraPreset::CircularPortals:
+            CamEye = {-2.2f, 1.8f, 1.95f};
+            CamAim = {3.2f, 4.2f, 1.85f};
+            break;
+        case ShowcaseCameraPreset::SnowMoundAndWater:
+            CamEye = {0.4f, -6.8f, 2.15f};
+            CamAim = {5.4f, -1.2f, 0.35f};
+            break;
+        case ShowcaseCameraPreset::PyroAndFracture:
+            CamEye = {1.8f, -4.8f, 2.35f};
+            CamAim = {7.8f, 1.1f, 1.35f};
+            break;
+        case ShowcaseCameraPreset::DynamicChase:
+            CamEye = CarPos - CarFwd * 6.4f + Vec3{0.0f, 0.0f, 2.25f};
+            CamAim = CarPos + CarFwd * 3.0f + Vec3{0.0f, 0.0f, 0.85f};
+            break;
+        case ShowcaseCameraPreset::TopCalibration:
+            CamEye = {3.5f, -0.5f, 15.5f};
+            CamAim = {3.5f, 0.0f, 0.0f};
+            break;
+    }
 
     // Low-Res Blinn-Phong Tier (TracingTier == 2)
     if (Records_.RenderPipeline.TracingTier == 2)
@@ -825,6 +930,13 @@ void DriveShowcaseWorld::RebuildAndRender3DViewport(uint32_t RenderW, uint32_t R
                                            {0.94f, 0.36f, 0.08f}, 0.46f);
         }
     }
+
+    // Placeable 3D Scene Objects (living inside OS MAP_SHARED SharedRecords_ — 0 RAM duplication!)
+    SubmitPlaceableObjectToScene(Records_.PlaceableChicaneBlock, Scene);
+    SubmitPlaceableObjectToScene(Records_.PlaceableNanitePedestal, Scene);
+    SubmitPlaceableObjectToScene(Records_.PlaceableOpticalArch, Scene);
+    SubmitPlaceableObjectToScene(Records_.SpawnedObjectSlot0, Scene);
+    SubmitPlaceableObjectToScene(Records_.SpawnedObjectSlot1, Scene);
 
     // Remote Sanctuary Beacon (seen clearly through the Seamless Portals!)
     Scene.RegisterDualTierSolidBox({26.0f, 0.0f, 1.75f}, {1.05f, 1.05f, 1.75f},
@@ -915,9 +1027,10 @@ void DriveShowcaseWorld::RebuildAndRender3DViewport(uint32_t RenderW, uint32_t R
                             : nullptr;
 
     OptCtx.Clouds.Coverage       = Records_.VolumetricClouds.Enabled ? Records_.VolumetricClouds.Coverage : 0.0;
-    OptCtx.Clouds.ExtinctionPerM = Records_.VolumetricClouds.ExtinctionDensity * 0.22;
+    OptCtx.Clouds.ExtinctionPerM = Records_.VolumetricClouds.ExtinctionDensity * 0.0085;
     OptCtx.Fog.DensityAtBase     = Records_.HeightFog.Enabled ? Records_.HeightFog.BaseDensity : 0.0;
     OptCtx.Fog.FalloffHeightM    = 1.0 / std::max(0.01, Records_.HeightFog.HeightFalloff);
+    OptCtx.InspectionMode        = static_cast<uint8_t>(std::clamp(Records_.RenderPipeline.InspectionMode, 0, 6));
 
     OptCtx.PlumeFluid    = Records_.PyroPlume.Enabled ? &PyroSolver_ : nullptr;
     OptCtx.ShallowWater  = Records_.ShallowWater.Enabled ? &WaterPuddles_ : nullptr;
@@ -962,42 +1075,16 @@ void DriveShowcaseWorld::RebuildAndRender3DViewport(uint32_t RenderW, uint32_t R
         HmiTel.HailImpactWarning    = Telemetry_.ActiveHailStones > 0u;
 
         LatestCockpitRig_ = CabinHmi_.MountControlVehicle3DCockpit(CarPos, CarYaw, HmiTel, Scene, OptCtx);
+        Scene.RegisterSdfOnlyCardProxyBox(CarPos + Vec3{0.0f, 0.0f, 0.68f}, {2.15f, 0.94f, 0.56f}, PaintRgb, 0.24f);
     }
 
     Scene.FinalizeSceneAndBakeSurfaceCards(OptCtx);
 
-    // Select active camera preset
-    switch (GetCameraPreset())
+    if (GetCameraPreset() == ShowcaseCameraPreset::CabinCockpitHmi && Records_.ControlVehicle.Enabled)
     {
-        case ShowcaseCameraPreset::HeroOverview:
-            CamEye = {-7.6f, -6.2f, 2.85f};
-            CamAim = {3.8f, -0.4f, 1.05f};
-            break;
-        case ShowcaseCameraPreset::CabinCockpitHmi:
-            CamEye = LatestCockpitRig_.HmiFocusEyeWorld;
-            CamAim = LatestCockpitRig_.HmiFocusTargetWorld;
-            FovRad = 0.92f;
-            break;
-        case ShowcaseCameraPreset::CircularPortals:
-            CamEye = {-2.2f, 1.8f, 1.95f};
-            CamAim = CircPortal.EntryCentreWorld;
-            break;
-        case ShowcaseCameraPreset::SnowMoundAndWater:
-            CamEye = {0.4f, -6.8f, 2.15f};
-            CamAim = {5.4f, -1.2f, 0.35f};
-            break;
-        case ShowcaseCameraPreset::PyroAndFracture:
-            CamEye = {1.8f, -4.8f, 2.35f};
-            CamAim = {7.8f, 1.1f, 1.35f};
-            break;
-        case ShowcaseCameraPreset::DynamicChase:
-            CamEye = CarPos - CarFwd * 6.4f + Vec3{0.0f, 0.0f, 2.25f};
-            CamAim = CarPos + CarFwd * 3.0f + Vec3{0.0f, 0.0f, 0.85f};
-            break;
-        case ShowcaseCameraPreset::TopCalibration:
-            CamEye = {3.5f, -0.5f, 15.5f};
-            CamAim = {3.5f, 0.0f, 0.0f};
-            break;
+        CamEye = LatestCockpitRig_.HmiFocusEyeWorld;
+        CamAim = LatestCockpitRig_.HmiFocusTargetWorld;
+        FovRad = 0.92f;
     }
 
     if (GetCameraPreset() != ShowcaseCameraPreset::CabinCockpitHmi &&
@@ -1020,6 +1107,200 @@ void DriveShowcaseWorld::RebuildAndRender3DViewport(uint32_t RenderW, uint32_t R
 
     Telemetry_.CabinProtectedGain = AutoExposureState_.CurrentExposureGain;
     Telemetry_.AdaptedSceneEv100  = 12.4f - std::log2(std::max(0.05f, AutoExposureState_.CurrentExposureGain));
+}
+
+void DriveShowcaseWorld::RenderDedicatedEntityPreview(
+    const std::string &StableId,
+    uint32_t Width, uint32_t Height,
+    float OrbitYawRad, float OrbitPitchRad, float OrbitDistanceScale,
+    uint8_t PreviewInspectionMode,
+    std::vector<uint8_t> &OutRgba8) const
+{
+    SceneRenderer Studio{};
+    CoupledWorldOpticalContext Ctx{};
+    Ctx.Atmosphere       = AtmosParams_;
+    Ctx.AtmosphereLut    = &SkyLut_;
+    const float ElRad    = static_cast<float>((Records_.AtmosphereSky.SkyTimePreset == 2 ? -14.0 : Records_.DirectionalSun.ElevationDeg) * (kPi / 180.0));
+    const float AzRad    = static_cast<float>(Records_.DirectionalSun.AzimuthDeg * (kPi / 180.0));
+    Ctx.SunDirectionUnit = Normalise(Vec3{std::cos(ElRad) * std::cos(AzRad), std::cos(ElRad) * std::sin(AzRad), std::sin(ElRad)});
+    const float SunKlx   = Records_.DirectionalSun.Enabled ? static_cast<float>(Records_.DirectionalSun.IlluminanceKlx) : 85.0f;
+    Ctx.SunIrradianceRgb = (ElRad > -0.04f) ? Vec3{SunKlx * 0.138f, SunKlx * 0.126f, SunKlx * 0.114f} : Vec3{0.08f, 0.10f, 0.16f};
+    Ctx.CelestialSky     = (Records_.AtmosphereSky.SkyTimePreset == 2) ? &CelestialDome_ : nullptr;
+    Ctx.Clouds.Coverage       = Records_.VolumetricClouds.Enabled ? Records_.VolumetricClouds.Coverage : 0.0;
+    Ctx.Clouds.ExtinctionPerM = Records_.VolumetricClouds.ExtinctionDensity * 0.0085;
+    Ctx.Fog.DensityAtBase     = Records_.HeightFog.Enabled ? Records_.HeightFog.BaseDensity * 0.5 : 0.0;
+    Ctx.Fog.FalloffHeightM    = 12.0;
+    Ctx.RestirCandidateK      = 4u;
+    Ctx.EnableSpatialReuse    = true;
+    Ctx.EnableWaveletFilter   = true;
+    Ctx.InspectionMode        = PreviewInspectionMode;
+    Ctx.ExposureScale         = 0.86f;
+
+    Vec3  Focus{0.0f, 0.0f, 0.9f};
+    float BaseDist = 4.2f;
+
+    // Studio calibration floor slab (receives crisp entity directional sun shadow!)
+    auto AddStudioFloorAt = [&](Vec3 CentreXY) {
+        Studio.RegisterTexturedGroundSlab({CentreXY.X, CentreXY.Y, -0.15f}, {16.0f, 16.0f, 0.15f},
+                                          {0.19f, 0.20f, 0.23f}, 0.42f, 0.04f);
+    };
+
+    auto FindPlaceable = [&](const std::string &Id) -> const ShowcasePlaceableObjectRecord * {
+        if (Id == "placeable_chicane_block")   return &Records_.PlaceableChicaneBlock;
+        if (Id == "placeable_nanite_pedestal") return &Records_.PlaceableNanitePedestal;
+        if (Id == "placeable_optical_arch")    return &Records_.PlaceableOpticalArch;
+        if (Id == "spawned_3d_object_0")       return &Records_.SpawnedObjectSlot0;
+        if (Id == "spawned_3d_object_1")       return &Records_.SpawnedObjectSlot1;
+        return nullptr;
+    };
+
+    if (const ShowcasePlaceableObjectRecord *Obj = FindPlaceable(StableId))
+    {
+        Focus = Vec3{static_cast<float>(Obj->PosX), static_cast<float>(Obj->PosY), static_cast<float>(Obj->PosZ)};
+        AddStudioFloorAt(Focus);
+        SubmitPlaceableObjectToScene(*Obj, Studio, true);
+        BaseDist = std::max(2.6f, static_cast<float>(std::max({Obj->HalfExtentX, Obj->HalfExtentY, Obj->HalfExtentZ})) * 4.2f);
+    }
+    else if (StableId == "pyro_plume")
+    {
+        // Zero-copy live PyroSolver_ 3D raymarch!
+        Focus          = Vec3{8.2f, -1.6f, 2.05f};
+        AddStudioFloorAt(Focus);
+        Ctx.PlumeFluid = &PyroSolver_;
+        BaseDist       = 7.2f;
+    }
+    else if (StableId == "shallow_water")
+    {
+        Focus = Vec3{0.0f, 0.0f, 0.25f};
+        AddStudioFloorAt(Focus);
+        Studio.RegisterDualTierSolidBox({0.0f, 0.0f, 0.45f}, {0.55f, 0.55f, 0.45f}, {0.82f, 0.48f, 0.18f}, 0.28f);
+        Ctx.ShallowWater = &WaterPuddles_;
+        BaseDist         = 5.6f;
+    }
+    else if (StableId == "solid_fracture")
+    {
+        // Zero-copy live FractureFragments_ 3D Voronoi hull shards!
+        const Vec3 MonoCenter{7.4f, 3.8f, 1.05f};
+        Focus = MonoCenter;
+        AddStudioFloorAt(MonoCenter);
+        const float Gap = Records_.SolidFracture.CleavedState ? static_cast<float>(Records_.SolidFracture.RadialShardGapM) : 0.0f;
+        for (const ConvexSolidFragment &Frag : FractureFragments_)
+        {
+            const Vec3 Offset = (Frag.CentroidWorld - MonoCenter) * Gap;
+            const auto &Surf  = Frag.PolygonSurface;
+            for (size_t T = 0; T + 2 < Surf.Indices.size(); T += 3)
+            {
+                RtxSceneTriangle Tri{};
+                Tri.V0        = Surf.Vertices[Surf.Indices[T + 0]] + Offset;
+                Tri.V1        = Surf.Vertices[Surf.Indices[T + 1]] + Offset;
+                Tri.V2        = Surf.Vertices[Surf.Indices[T + 2]] + Offset;
+                Tri.Normal    = (T / 3 < Surf.Normals.size()) ? Surf.Normals[T / 3] : Normalise(Cross(Tri.V1 - Tri.V0, Tri.V2 - Tri.V0));
+                Tri.AlbedoRgb = {0.66f, 0.64f, 0.72f};
+                Tri.Roughness = 0.52f;
+                Studio.RegisterPolygonTriangle(Tri);
+            }
+        }
+        BaseDist = 4.6f;
+    }
+    else if (StableId == "sparks" || StableId == "precipitation" || StableId == "snow_mound" || StableId == "lightning")
+    {
+        if (StableId == "snow_mound" && !SnowMound_.GroundPolygonSurface().Indices.empty())
+        {
+            Focus = Vec3{5.8f, -3.6f, 0.35f};
+            AddStudioFloorAt(Focus);
+            Studio.RegisterSmoothSnowSurface(SnowMound_.GroundPolygonSurface());
+            BaseDist = 5.4f;
+        }
+        else if (StableId == "sparks")
+        {
+            const Vec3 CarPos = Mat4Translation(LatestDriveSnap_.ChassisWorld);
+            Focus             = CarPos + Vec3{0.0f, 0.0f, 0.55f};
+            AddStudioFloorAt(Focus);
+            Studio.RegisterDualTierSolidBox(Focus, {0.42f, 0.42f, 0.42f}, {0.32f, 0.34f, 0.38f}, 0.32f, {}, 0.65f);
+            Ctx.Sparks = &SparkSolver_;
+            BaseDist   = 4.2f;
+        }
+        else
+        {
+            Focus = Vec3{2.0f, 1.0f, 1.4f};
+            AddStudioFloorAt(Focus);
+            Studio.RegisterDualTierSolidBox({2.0f, 1.0f, 0.65f}, {0.65f, 0.65f, 0.65f}, {0.45f, 0.48f, 0.54f}, 0.35f);
+            Ctx.Precipitation = (Records_.SkyPrecipitation.WeatherMode == 1) ? &RainfallSolver_
+                              : (Records_.SkyPrecipitation.WeatherMode == 2) ? &SnowfallSolver_
+                                                                             : &HailstormSolver_;
+            Ctx.Lightning = &LightningSolver_;
+            BaseDist      = 5.2f;
+        }
+    }
+    else if (StableId == "vehicle" || StableId == "propulsion" ||
+             StableId == "suspension" || StableId == "tyres" ||
+             StableId == "cabin_hmi" || StableId == "headlamps")
+    {
+        const Vec3  CarPos  = Mat4Translation(LatestDriveSnap_.ChassisWorld);
+        const Vec3  CarFwd  = Mat4Col(LatestDriveSnap_.ChassisWorld, 0);
+        const float CarYaw  = std::atan2(CarFwd.Y, CarFwd.X);
+        Focus               = CarPos + Vec3{0.0f, 0.0f, 0.78f};
+        AddStudioFloorAt(CarPos);
+        VehicleCabinHmi StudioHmi = CabinHmi_;
+        VehicleCabinTelemetryFrame HmiTel{};
+        HmiTel.VehicleSpeedMps  = Telemetry_.SpeedKmh / 3.6f;
+        HmiTel.EngineOrMotorRpm = Telemetry_.EngineRpm;
+        HmiTel.RedlineRpm       = static_cast<float>(Records_.PropulsionDrivetrain.RedlineRpm);
+        HmiTel.EngagedGear      = std::max(1, Telemetry_.CurrentGear);
+        const auto Rig          = StudioHmi.MountControlVehicle3DCockpit(CarPos, CarYaw, HmiTel, Studio, Ctx);
+        if (StableId == "cabin_hmi")
+        {
+            Studio.FinalizeSceneAndBakeSurfaceCards(Ctx);
+            Studio.RenderViewportRgba8(GpuTracingTier::HardwareRayTracingRtx, Width, Height,
+                                       Rig.HmiFocusEyeWorld, Rig.HmiFocusTargetWorld, 0.90f, Ctx, OutRgba8);
+            return;
+        }
+        BaseDist = 5.4f;
+    }
+    else if (StableId == "portals_mirrors")
+    {
+        Focus = Vec3{3.2f, 4.2f, 1.85f};
+        AddStudioFloorAt(Focus);
+        SeamlessPortalAperture P{};
+        P.Shape            = Records_.SeamlessPortals.PrimaryApertureShape == 1 ? PortalApertureShape::Circular : PortalApertureShape::Rectangular;
+        P.RadiusMetres     = static_cast<float>(Records_.SeamlessPortals.CircularPortalRadiusM);
+        P.HalfWidthMetres  = P.RadiusMetres;
+        P.HalfHeightMetres = P.RadiusMetres * 0.88f;
+        P.EntryCentreWorld = Focus;
+        P.EntryRightAxis   = {0.0f, -1.0f, 0.0f};
+        P.EntryUpAxis      = {0.0f, 0.0f, 1.0f};
+        P.EntryFrontNormal = {-1.0f, 0.0f, 0.0f};
+        P.ExitCentreWorld  = {20.5f, 0.0f, 1.85f};
+        P.ExitRightAxis    = {0.0f, -1.0f, 0.0f};
+        P.ExitUpAxis       = {0.0f, 0.0f, 1.0f};
+        P.ExitFrontNormal  = {1.0f, 0.0f, 0.0f};
+        Studio.RegisterDualTierSolidBox({26.0f, 0.0f, 1.75f}, {1.05f, 1.05f, 1.75f}, {0.16f, 0.82f, 0.52f}, 0.35f);
+        Studio.RegisterSeamlessPortal(P);
+        if (P.Shape == PortalApertureShape::Circular)
+        {
+            PortalMechanics::RegisterCircularPortalFrameRings(P, 0.09f, 36u, Studio);
+        }
+        BaseDist = 5.2f;
+    }
+    else
+    {
+        // Illumination, Sky, Course, Forcefield & Render Material Calibration Studio (matte + metallic + refractive glass spheres!)
+        Focus = Vec3{0.0f, 0.0f, 0.72f};
+        AddStudioFloorAt(Focus);
+        Studio.RegisterSmoothSphere({0.0f, -1.05f, 0.62f}, 0.62f, {0.82f, 0.82f, 0.84f}, 0.36f, 0.04f, false);
+        Studio.RegisterSmoothSphere({0.0f, +1.05f, 0.62f}, 0.62f, {0.88f, 0.62f, 0.32f}, 0.12f, 0.92f, false);
+        Studio.RegisterSmoothSphere({0.98f, 0.0f, 0.52f}, 0.52f, {0.92f, 0.96f, 1.00f}, 0.04f, 0.0f, true, 1.52f);
+        BaseDist = 4.6f;
+    }
+
+    Studio.FinalizeSceneAndBakeSurfaceCards(Ctx);
+    const float Dist  = std::max(1.8f, BaseDist * std::clamp(OrbitDistanceScale, 0.45f, 2.5f));
+    const float Pitch = std::clamp(OrbitPitchRad, 0.06f, 1.25f);
+    const Vec3  Eye   = Focus + Vec3{
+        Dist * std::cos(Pitch) * std::cos(OrbitYawRad),
+        Dist * std::cos(Pitch) * std::sin(OrbitYawRad),
+        Dist * std::sin(Pitch)};
+    Studio.RenderViewportRgba8(GpuTracingTier::HardwareRayTracingRtx, Width, Height, Eye, Focus, 0.82f, Ctx, OutRgba8);
 }
 
 } // namespace Frontier::Drive

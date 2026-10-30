@@ -10,6 +10,7 @@
 
 #include "DriveShowcaseRecords.h"
 #include "DriveSimulation.h"
+#include "SharedEntityMemory.h"
 #include "VehicleHmiScene.h"
 
 #include "Engine/Fluid/PlumeFluid.h"
@@ -83,11 +84,35 @@ class DriveShowcaseWorld
                                 uint32_t &OutRenderW, uint32_t &OutRenderH);
 
     void ForceViewportDirty() noexcept { ++SceneDirtyRevision_; }
+    std::string ActivateNextSpawnedObject() noexcept;
 
     [[nodiscard]] ShowcaseRecordBundle            &Records() noexcept { return Records_; }
     [[nodiscard]] const ShowcaseRecordBundle      &Records() const noexcept { return Records_; }
+    [[nodiscard]] const SharedEntityMemorySegment<ShowcaseRecordBundle> &SharedMemory() const noexcept { return SharedRecords_; }
+    [[nodiscard]] uint64_t                         SceneDirtyRevision() const noexcept { return SceneDirtyRevision_; }
     [[nodiscard]] const ShowcaseTelemetrySnapshot &Telemetry() const noexcept { return Telemetry_; }
     [[nodiscard]] double                           SimulatedTimeSeconds() const noexcept { return WorldClockSeconds_; }
+
+    // Non-owning zero-copy solver accessors for Dedicated Entity Editor 3D Studio Previews (0 RAM duplication!)
+    [[nodiscard]] const PlumeFluid                      &PyroSolver() const noexcept { return PyroSolver_; }
+    [[nodiscard]] PlumeFluid                            &PyroSolverMutable() noexcept { return PyroSolver_; }
+    [[nodiscard]] const ShallowWaterSimulation          &WaterPuddles() const noexcept { return WaterPuddles_; }
+    [[nodiscard]] const SnowSurface                     &SnowMound() const noexcept { return SnowMound_; }
+    [[nodiscard]] const SparkParticles                  &SparkSolver() const noexcept { return SparkSolver_; }
+    [[nodiscard]] const SkyPrecipitation                &RainfallSolver() const noexcept { return RainfallSolver_; }
+    [[nodiscard]] const SkyPrecipitation                &SnowfallSolver() const noexcept { return SnowfallSolver_; }
+    [[nodiscard]] const SkyPrecipitation                &HailstormSolver() const noexcept { return HailstormSolver_; }
+    [[nodiscard]] const std::vector<ConvexSolidFragment> &FractureFragments() const noexcept { return FractureFragments_; }
+    [[nodiscard]] const AtmosphereParameters            &Atmosphere() const noexcept { return AtmosParams_; }
+    [[nodiscard]] const TransmittanceLut                &SkyTransmittanceLut() const noexcept { return SkyLut_; }
+    [[nodiscard]] const CelestialSky                    &CelestialDome() const noexcept { return CelestialDome_; }
+
+    // Renders a zero-copy isolated 3D preview of any live entity directly from SharedRecords_ + live solvers!
+    void RenderDedicatedEntityPreview(const std::string &StableId,
+                                      uint32_t Width, uint32_t Height,
+                                      float OrbitYawRad, float OrbitPitchRad, float OrbitDistanceScale,
+                                      uint8_t PreviewInspectionMode,
+                                      std::vector<uint8_t> &OutRgba8) const;
 
   private:
     void WarmupSnowMoundAndPuddles();
@@ -100,7 +125,8 @@ class DriveShowcaseWorld
     uint64_t                                RenderedRevision_      = 0u;
     uint32_t                                LastRenderW_           = 0u;
     uint32_t                                LastRenderH_           = 0u;
-    ShowcaseRecordBundle                    Records_;
+    SharedEntityMemorySegment<ShowcaseRecordBundle> SharedRecords_{};
+    ShowcaseRecordBundle                   &Records_;
 
     ShowcaseTransportMode                   TransportMode_         = ShowcaseTransportMode::Play;
     std::string                             ProjectRoot_;

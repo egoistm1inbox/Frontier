@@ -76,6 +76,8 @@ struct SceneInspectorModel
     std::string Name;                          // [text] - Object header
     std::string Colour;                        // [text] - Accent "#rrggbb"
     std::string Description;                   // [text] - Header description
+    std::string StableId;                      // [text] - Pinned entity id
+    std::string DedicatedEditorTitle;          // [text] - Dedicated popup editor window title
 
 #if defined(FRONTIER_EDITOR_PROFILE)
     std::vector<RecordEditorScalarField> ScalarFields;
@@ -83,6 +85,7 @@ struct SceneInspectorModel
     std::vector<RecordEditorChoiceField> ChoiceFields;
     std::vector<RecordEditorAction>      Actions;
     std::function<void()>                ConstructInfographic;
+    std::function<void()>                OpenDedicatedEditor;
 #endif
 };
 
@@ -130,6 +133,9 @@ class SceneDirectoryPanel
     void RequestSpawn(RecordClassification Classification);
     [[nodiscard]] std::optional<RecordClassification> TakeSpawnRequest();
 
+    void RequestOpenDedicatedEditor(const std::string& StableId);
+    [[nodiscard]] std::optional<std::string> TakeDedicatedEditorRequest();
+
     void ConstructInterface();
 
     void Select(RecordToken Token);
@@ -152,6 +158,7 @@ class SceneDirectoryPanel
     std::unordered_set<uint64_t>            CollapsedTokens;
     std::unordered_set<std::string>         CollapsedGroups;
     std::optional<RecordClassification>     PendingSpawn;
+    std::optional<std::string>              PendingDedicatedEditorId;
     RecordToken                             Selected;
     SceneInspectorSummary                   Inspector;
 };

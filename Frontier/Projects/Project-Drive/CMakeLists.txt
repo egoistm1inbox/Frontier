@@ -13,6 +13,11 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 find_package(Threads REQUIRED)
 
+if(MSVC)
+    add_compile_options(/utf-8)
+    add_compile_definitions(_CRT_SECURE_NO_WARNINGS)
+endif()
+
 if(NOT TARGET FrontierAudioFoundation)
     add_subdirectory(
         "${PROJECT_DRIVE_FRONTIER_ROOT}/Engine/Audio"
@@ -159,12 +164,20 @@ else()
     endif()
 
     set(PROJECT_DRIVE_IMGUI_ROOT "${PROJECT_DRIVE_REPO_ROOT}/ExternalPackages/imgui")
-    add_library(ProjectDriveImGui STATIC
+    set(PROJECT_DRIVE_IMGUI_SOURCES
         "${PROJECT_DRIVE_IMGUI_ROOT}/imgui.cpp"
         "${PROJECT_DRIVE_IMGUI_ROOT}/imgui_draw.cpp"
         "${PROJECT_DRIVE_IMGUI_ROOT}/imgui_tables.cpp"
         "${PROJECT_DRIVE_IMGUI_ROOT}/imgui_widgets.cpp")
-    target_include_directories(ProjectDriveImGui PUBLIC "${PROJECT_DRIVE_IMGUI_ROOT}")
+    if(WIN32)
+        list(APPEND PROJECT_DRIVE_IMGUI_SOURCES
+            "${PROJECT_DRIVE_IMGUI_ROOT}/backends/imgui_impl_win32.cpp"
+            "${PROJECT_DRIVE_IMGUI_ROOT}/backends/imgui_impl_dx11.cpp")
+    endif()
+    add_library(ProjectDriveImGui STATIC ${PROJECT_DRIVE_IMGUI_SOURCES})
+    target_include_directories(ProjectDriveImGui PUBLIC
+        "${PROJECT_DRIVE_IMGUI_ROOT}"
+        "${PROJECT_DRIVE_IMGUI_ROOT}/backends")
     target_compile_definitions(ProjectDriveImGui PUBLIC "ImDrawIdx=unsigned int")
 
     add_library(ProjectDriveUiSdk STATIC
@@ -216,6 +229,7 @@ else()
 
     add_executable(ProjectDriveApp
         Source/InfographicWidgets.cpp
+        Source/DedicatedEntityEditors.cpp
         ${PROJECT_DRIVE_CORE_SCENE_SOURCES})
     target_include_directories(ProjectDriveApp PRIVATE
         "${PROJECT_DRIVE_FRONTIER_ROOT}"
@@ -243,6 +257,9 @@ else()
         FrontierWindField
         FrontierNetworking
         Threads::Threads)
+    if(WIN32)
+        target_link_libraries(ProjectDriveApp PRIVATE d3d11 dxgi dwmapi)
+    endif()
     set_target_properties(ProjectDriveApp PROPERTIES
         OUTPUT_NAME "ProjectDrive"
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/Binaries")

@@ -24,13 +24,38 @@ namespace
 
 float InspectorCardWidth() noexcept
 {
-    // BeginChild("##InspectorScroll", ..., false) leaves right margin = 16 px; subtract 16 px to align with Right.
-    return std::max(140.0f, ImGui::GetContentRegionAvail().x - 16.0f);
+    // Respect both docked InspectorScroll (right margin 16px) and Dedicated Popup Editor panels.
+    const float Avail = ImGui::GetContentRegionAvail().x;
+    return std::max(140.0f, ImGui::GetStyle().WindowPadding.x > 12.0f ? (Avail - 16.0f) : (Avail - 4.0f));
 }
 
 ImU32 HexAlpha(uint32_t Hex, uint8_t Alpha) noexcept
 {
     return IM_COL32((Hex >> 16) & 0xFFu, (Hex >> 8) & 0xFFu, Hex & 0xFFu, Alpha);
+}
+
+bool IsDarkSurface(const ImGuiStyle &Style) noexcept
+{
+    const ImVec4 Bg = Style.Colors[ImGuiCol_WindowBg];
+    return (0.2126f * Bg.x + 0.7152f * Bg.y + 0.0722f * Bg.z) < 0.35f;
+}
+
+void ResolveOledCardPalette(const ImGuiStyle &Style, ImU32 &Bg, ImU32 &Edge, ImU32 &Text, ImU32 &Mute) noexcept
+{
+    if (IsDarkSurface(Style))
+    {
+        Bg   = KitInkHex(0x1c1c1c);
+        Edge = KitInkHex(0x2e2e2e);
+        Text = KitInkHex(0xdfdfdf);
+        Mute = KitInkHex(0x7d7d7d);
+    }
+    else
+    {
+        Bg   = ImGui::ColorConvertFloat4ToU32(Style.Colors[ImGuiCol_FrameBg]);
+        Edge = ImGui::ColorConvertFloat4ToU32(Style.Colors[ImGuiCol_Border]);
+        Text = ImGui::ColorConvertFloat4ToU32(Style.Colors[ImGuiCol_Text]);
+        Mute = ImGui::ColorConvertFloat4ToU32(Style.Colors[ImGuiCol_TextDisabled]);
+    }
 }
 
 } // namespace
@@ -51,10 +76,8 @@ void DrawKpiRow(const KpiBadgeItem *Items, size_t Count)
     const float CardH  = 58.0f;
     const ImVec2 Start = ImGui::GetCursorScreenPos();
 
-    const ImU32 BgCol   = ImGui::ColorConvertFloat4ToU32(Style.Colors[ImGuiCol_FrameBg]);
-    const ImU32 EdgeCol = ImGui::ColorConvertFloat4ToU32(Style.Colors[ImGuiCol_Border]);
-    const ImU32 TextCol = ImGui::ColorConvertFloat4ToU32(Style.Colors[ImGuiCol_Text]);
-    const ImU32 MuteCol = ImGui::ColorConvertFloat4ToU32(Style.Colors[ImGuiCol_TextDisabled]);
+    ImU32 BgCol = 0, EdgeCol = 0, TextCol = 0, MuteCol = 0;
+    ResolveOledCardPalette(Style, BgCol, EdgeCol, TextCol, MuteCol);
 
     for (size_t I = 0; I < Count; ++I)
     {
@@ -86,10 +109,8 @@ void DrawSegmentedDistributionCard(const char *Title, const char *RightSummary,
     const float       CardH  = 78.0f;
     const ImVec2      P      = ImGui::GetCursorScreenPos();
 
-    const ImU32 BgCol   = ImGui::ColorConvertFloat4ToU32(Style.Colors[ImGuiCol_FrameBg]);
-    const ImU32 EdgeCol = ImGui::ColorConvertFloat4ToU32(Style.Colors[ImGuiCol_Border]);
-    const ImU32 TextCol = ImGui::ColorConvertFloat4ToU32(Style.Colors[ImGuiCol_Text]);
-    const ImU32 MuteCol = ImGui::ColorConvertFloat4ToU32(Style.Colors[ImGuiCol_TextDisabled]);
+    ImU32 BgCol = 0, EdgeCol = 0, TextCol = 0, MuteCol = 0;
+    ResolveOledCardPalette(Style, BgCol, EdgeCol, TextCol, MuteCol);
 
     KitPillSurface(Ink, P, ImVec2(P.x + TotalW, P.y + CardH), BgCol, EdgeCol, 10.0f);
     KitDrawTracked(Ink, Faces.SemiBold, 9.5f, ImVec2(P.x + 12.0f, P.y + 8.5f), MuteCol, Title, 0.85f);
@@ -110,7 +131,7 @@ void DrawSegmentedDistributionCard(const char *Title, const char *RightSummary,
     }
     Sum = std::max(Sum, 1e-5f);
 
-    Ink->AddRectFilled(ImVec2(BarX, BarY), ImVec2(BarX + BarW, BarY + BarH), IM_COL32(15, 23, 42, 130), 6.0f);
+    Ink->AddRectFilled(ImVec2(BarX, BarY), ImVec2(BarX + BarW, BarY + BarH), IM_COL32(14, 14, 14, 210), 6.0f);
     float CursorX = BarX;
     for (size_t I = 0; I < SliceCount; ++I)
     {
@@ -158,10 +179,8 @@ void DrawSparklineCard(const char *Title, const char *LiveReadout,
     const float       CardH  = 86.0f;
     const ImVec2      P      = ImGui::GetCursorScreenPos();
 
-    const ImU32 BgCol   = ImGui::ColorConvertFloat4ToU32(Style.Colors[ImGuiCol_FrameBg]);
-    const ImU32 EdgeCol = ImGui::ColorConvertFloat4ToU32(Style.Colors[ImGuiCol_Border]);
-    const ImU32 TextCol = ImGui::ColorConvertFloat4ToU32(Style.Colors[ImGuiCol_Text]);
-    const ImU32 MuteCol = ImGui::ColorConvertFloat4ToU32(Style.Colors[ImGuiCol_TextDisabled]);
+    ImU32 BgCol = 0, EdgeCol = 0, TextCol = 0, MuteCol = 0;
+    ResolveOledCardPalette(Style, BgCol, EdgeCol, TextCol, MuteCol);
     const ImU32 Accent  = KitInkHex(static_cast<int>(AccentHex));
 
     ImGui::InvisibleButton(Title, ImVec2(TotalW, CardH));
@@ -180,7 +199,7 @@ void DrawSparklineCard(const char *Title, const char *LiveReadout,
     for (int G = 0; G <= 2; ++G)
     {
         const float LY = GY + GH * (static_cast<float>(G) * 0.5f);
-        Ink->AddLine(ImVec2(GX, LY), ImVec2(GX + GW, LY), IM_COL32(120, 135, 155, 34), 1.0f);
+        Ink->AddLine(ImVec2(GX, LY), ImVec2(GX + GW, LY), IM_COL32(58, 58, 58, 120), 1.0f);
     }
 
     ImVec2 PrevPt{};
@@ -230,10 +249,8 @@ void DrawTwinRadialGauges(const char *LeftTitle, float LeftVal, float LeftMin, f
     const float       CardH  = 104.0f;
     const ImVec2      P      = ImGui::GetCursorScreenPos();
 
-    const ImU32 BgCol   = ImGui::ColorConvertFloat4ToU32(Style.Colors[ImGuiCol_FrameBg]);
-    const ImU32 EdgeCol = ImGui::ColorConvertFloat4ToU32(Style.Colors[ImGuiCol_Border]);
-    const ImU32 TextCol = ImGui::ColorConvertFloat4ToU32(Style.Colors[ImGuiCol_Text]);
-    const ImU32 MuteCol = ImGui::ColorConvertFloat4ToU32(Style.Colors[ImGuiCol_TextDisabled]);
+    ImU32 BgCol = 0, EdgeCol = 0, TextCol = 0, MuteCol = 0;
+    ResolveOledCardPalette(Style, BgCol, EdgeCol, TextCol, MuteCol);
 
     KitPillSurface(Ink, P, ImVec2(P.x + TotalW, P.y + CardH), BgCol, EdgeCol, 10.0f);
 
@@ -245,7 +262,7 @@ void DrawTwinRadialGauges(const char *LeftTitle, float LeftVal, float LeftMin, f
         const float  Norm = std::clamp((Val - Mn) / std::max(1e-4f, Mx - Mn), 0.0f, 1.0f);
 
         Ink->PathArcTo(C, R, A0, A1, 28);
-        Ink->PathStroke(IM_COL32(100, 116, 139, 80), 0, 5.5f);
+        Ink->PathStroke(IM_COL32(62, 62, 62, 180), 0, 5.5f);
         if (Norm > 0.005f)
         {
             Ink->PathArcTo(C, R, A0, A0 + (A1 - A0) * Norm, 28);
@@ -287,10 +304,8 @@ void DrawPolarVectorCompass(const char *Title, float AzimuthDeg, float SpeedMps,
     const float       CardH  = 96.0f;
     const ImVec2      P      = ImGui::GetCursorScreenPos();
 
-    const ImU32 BgCol   = ImGui::ColorConvertFloat4ToU32(Style.Colors[ImGuiCol_FrameBg]);
-    const ImU32 EdgeCol = ImGui::ColorConvertFloat4ToU32(Style.Colors[ImGuiCol_Border]);
-    const ImU32 TextCol = ImGui::ColorConvertFloat4ToU32(Style.Colors[ImGuiCol_Text]);
-    const ImU32 MuteCol = ImGui::ColorConvertFloat4ToU32(Style.Colors[ImGuiCol_TextDisabled]);
+    ImU32 BgCol = 0, EdgeCol = 0, TextCol = 0, MuteCol = 0;
+    ResolveOledCardPalette(Style, BgCol, EdgeCol, TextCol, MuteCol);
     const ImU32 Accent  = KitInkHex(static_cast<int>(AccentHex));
 
     KitPillSurface(Ink, P, ImVec2(P.x + TotalW, P.y + CardH), BgCol, EdgeCol, 10.0f);
@@ -304,9 +319,9 @@ void DrawPolarVectorCompass(const char *Title, float AzimuthDeg, float SpeedMps,
     const ImVec2 C(P.x + 54.0f, P.y + 57.0f);
     const float  R = 29.0f;
     Ink->AddCircle(C, R, EdgeCol, 32, 1.2f);
-    Ink->AddCircle(C, R * 0.55f, IM_COL32(120, 135, 155, 45), 24, 1.0f);
-    Ink->AddLine(ImVec2(C.x - R, C.y), ImVec2(C.x + R, C.y), IM_COL32(120, 135, 155, 45), 1.0f);
-    Ink->AddLine(ImVec2(C.x, C.y - R), ImVec2(C.x, C.y + R), IM_COL32(120, 135, 155, 45), 1.0f);
+    Ink->AddCircle(C, R * 0.55f, IM_COL32(62, 62, 62, 130), 24, 1.0f);
+    Ink->AddLine(ImVec2(C.x - R, C.y), ImVec2(C.x + R, C.y), IM_COL32(62, 62, 62, 130), 1.0f);
+    Ink->AddLine(ImVec2(C.x, C.y - R), ImVec2(C.x, C.y + R), IM_COL32(62, 62, 62, 130), 1.0f);
 
     const float Rad  = (AzimuthDeg - 90.0f) * (3.14159265f / 180.0f);
     const float Len  = R * std::clamp(SpeedMps / 28.0f, 0.18f, 0.96f);
@@ -336,10 +351,8 @@ void DrawBlackbodyRampCard(const char *Title, float PeakKelvin, float ActiveVoxe
     const float       CardH  = 74.0f;
     const ImVec2      P      = ImGui::GetCursorScreenPos();
 
-    const ImU32 BgCol   = ImGui::ColorConvertFloat4ToU32(Style.Colors[ImGuiCol_FrameBg]);
-    const ImU32 EdgeCol = ImGui::ColorConvertFloat4ToU32(Style.Colors[ImGuiCol_Border]);
-    const ImU32 TextCol = ImGui::ColorConvertFloat4ToU32(Style.Colors[ImGuiCol_Text]);
-    const ImU32 MuteCol = ImGui::ColorConvertFloat4ToU32(Style.Colors[ImGuiCol_TextDisabled]);
+    ImU32 BgCol = 0, EdgeCol = 0, TextCol = 0, MuteCol = 0;
+    ResolveOledCardPalette(Style, BgCol, EdgeCol, TextCol, MuteCol);
 
     KitPillSurface(Ink, P, ImVec2(P.x + TotalW, P.y + CardH), BgCol, EdgeCol, 10.0f);
     KitDrawTracked(Ink, Faces.SemiBold, 9.5f, ImVec2(P.x + 12.0f, P.y + 8.0f), MuteCol, Title, 0.85f);
@@ -349,7 +362,7 @@ void DrawBlackbodyRampCard(const char *Title, float PeakKelvin, float ActiveVoxe
     const float RW = KitTextWidth(Faces.SemiBold, 10.5f, RightCap);
     KitDrawText(Ink, Faces.SemiBold, 10.5f, ImVec2(P.x + TotalW - RW - 12.0f, P.y + 8.0f), TextCol, RightCap);
 
-    const std::array<uint32_t, 6> Stops = {0x1e293bu, 0x7f1d1du, 0xdc2626u, 0xf97316u, 0xfacc15u, 0xfef9c3u};
+    const std::array<uint32_t, 6> Stops = {0x141414u, 0x7f1d1du, 0xdc2626u, 0xf97316u, 0xfacc15u, 0xfef9c3u};
     const float BX = P.x + 12.0f;
     const float BY = P.y + 29.0f;
     const float BW = TotalW - 24.0f;
@@ -388,10 +401,8 @@ void DrawProfileCrossSectionCard(const char *Title, const char *RightBadge,
     const float       CardH  = 82.0f;
     const ImVec2      P      = ImGui::GetCursorScreenPos();
 
-    const ImU32 BgCol   = ImGui::ColorConvertFloat4ToU32(Style.Colors[ImGuiCol_FrameBg]);
-    const ImU32 EdgeCol = ImGui::ColorConvertFloat4ToU32(Style.Colors[ImGuiCol_Border]);
-    const ImU32 TextCol = ImGui::ColorConvertFloat4ToU32(Style.Colors[ImGuiCol_Text]);
-    const ImU32 MuteCol = ImGui::ColorConvertFloat4ToU32(Style.Colors[ImGuiCol_TextDisabled]);
+    ImU32 BgCol = 0, EdgeCol = 0, TextCol = 0, MuteCol = 0;
+    ResolveOledCardPalette(Style, BgCol, EdgeCol, TextCol, MuteCol);
     const ImU32 Accent  = KitInkHex(static_cast<int>(FillHex));
 
     KitPillSurface(Ink, P, ImVec2(P.x + TotalW, P.y + CardH), BgCol, EdgeCol, 10.0f);
@@ -435,10 +446,8 @@ void DrawQuadWheelMatrixCard(const float TempCelsius[4], const float LoadKn[4], 
     const float       CardH  = 112.0f;
     const ImVec2      P      = ImGui::GetCursorScreenPos();
 
-    const ImU32 BgCol   = ImGui::ColorConvertFloat4ToU32(Style.Colors[ImGuiCol_FrameBg]);
-    const ImU32 EdgeCol = ImGui::ColorConvertFloat4ToU32(Style.Colors[ImGuiCol_Border]);
-    const ImU32 TextCol = ImGui::ColorConvertFloat4ToU32(Style.Colors[ImGuiCol_Text]);
-    const ImU32 MuteCol = ImGui::ColorConvertFloat4ToU32(Style.Colors[ImGuiCol_TextDisabled]);
+    ImU32 BgCol = 0, EdgeCol = 0, TextCol = 0, MuteCol = 0;
+    ResolveOledCardPalette(Style, BgCol, EdgeCol, TextCol, MuteCol);
 
     KitPillSurface(Ink, P, ImVec2(P.x + TotalW, P.y + CardH), BgCol, EdgeCol, 10.0f);
     KitDrawTracked(Ink, Faces.SemiBold, 9.5f, ImVec2(P.x + 12.0f, P.y + 8.0f), MuteCol,

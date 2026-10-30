@@ -1883,9 +1883,27 @@ Vec3 SceneRenderer::EvaluateDirectSurfaceLighting(
     const float SnowWrapSun = SnowSubsurface ? std::clamp((RawDotSun + 0.36f) / 1.36f, 0.0f, 1.0f) : NdotSun;
     if ((NdotSun > 0.0f || SnowWrapSun > 0.0f) && LuminanceRec709(Context.SunIrradianceRgb) > 1.0e-4f)
     {
-        if (TraceShadowUnoccluded(Tier, Point + Normal * 0.015f, SunDir, 160.0f))
+        // 2-tap IGN-rotated solar-disc soft shadow (~0.62 deg solar penumbra cone) -> denoised to 16-tap quality by A-Trous!
+        const Vec3  RefUp      = (std::abs(SunDir.Z) < 0.92f) ? Vec3{0.0f, 0.0f, 1.0f} : Vec3{1.0f, 0.0f, 0.0f};
+        const Vec3  SunTanU    = Normalise(Cross(RefUp, SunDir));
+        const Vec3  SunTanV    = Cross(SunDir, SunTanU);
+        const float JitterAng  = ComputeRayPhaseJitter01(Point, SunDir) * 6.2831853f;
+        const float CosJ       = std::cos(JitterAng) * 0.0108f;
+        const float SinJ       = std::sin(JitterAng) * 0.0108f;
+        const Vec3  ShadowOrigin = Point + Normal * 0.015f;
+        float       SolarVis     = 0.0f;
+        if (TraceShadowUnoccluded(Tier, ShadowOrigin, Normalise(SunDir + SunTanU * CosJ + SunTanV * SinJ), 160.0f))
         {
-            float VolumetricTrans = 1.0f;
+            SolarVis += 0.5f;
+        }
+        if (TraceShadowUnoccluded(Tier, ShadowOrigin, Normalise(SunDir - SunTanU * CosJ - SunTanV * SinJ), 160.0f))
+        {
+            SolarVis += 0.5f;
+        }
+
+        if (SolarVis > 0.0f)
+        {
+            float VolumetricTrans = SolarVis;
             if (SunDir.Z > 0.05f)
             {
                 const CloudMarchResult SunCloud = MarchClouds(
@@ -2795,8 +2813,11 @@ void SceneRenderer::RenderViewportRgba8(
         uint32_t            ApertureTag   = 0u; // 0 = primary, 100+P = portal, 200+M = mirror, 300 = glass
         Vec3                Position{};
         Vec3                Normal{};
+        Vec3                AlbedoRgb{};
+        Vec3                DirectHdr{};
+        float               ContactAo     = 1.0f;
         float               LinearDepth   = 1.0e6f;
-        Vec3                DiffuseScale{};  // Throughput * Albedo * (1 - Metallic) / pi
+        Vec3                DiffuseScale{};  // Throughput * Albedo * (1 - Metallic) / pi * ContactAo
         Vec3                GlossyScale{};   // Throughput * SpecWeight (when Roughness >= 0.045)
         Vec3                RawGlossyRad{};  // Unfiltered stochastic GGX reflection radiance
         Vec3                BaseHdr{};       // Throughput * (Media + Emissive + Direct + SharpMirrorSpec)
@@ -3124,17 +3145,33 @@ void SceneRenderer::RenderViewportRgba8(
                     }
                 }
 
+                // Short-range 2-tap IGN-rotated hemisphere Contact Ambient Occlusion (anchors tyres, chassis & block creases!)
+                const Vec3  AoRefUp = (std::abs(TerminalHit.Normal.Z) < 0.92f) ? Vec3{0.0f, 0.0f, 1.0f} : Vec3{1.0f, 0.0f, 0.0f};
+                const Vec3  AoTanU  = Normalise(Cross(AoRefUp, TerminalHit.Normal));
+                const Vec3  AoTanV  = Cross(TerminalHit.Normal, AoTanU);
+                const Vec3  AoOrg   = TerminalHit.Position + TerminalHit.Normal * 0.02f;
+                const float AoAng   = static_cast<float>((Seed >> 17u) & 0xFFFFu) * (6.2831853f / 65536.0f);
+                const Vec3  AoPlanar = AoTanU * (std::cos(AoAng) * 0.69f) + AoTanV * (std::sin(AoAng) * 0.69f);
+                const InternalSurfaceHit AoH0 = TraceTriangleBvh(AoOrg, Normalise(TerminalHit.Normal * 0.72f + AoPlanar), 1.45f, true);
+                const InternalSurfaceHit AoH1 = TraceTriangleBvh(AoOrg, Normalise(TerminalHit.Normal * 0.72f - AoPlanar), 1.45f, true);
+                const float Ao0 = AoH0.Hit ? std::clamp(AoH0.DistanceM / 1.45f, 0.12f, 1.0f) : 1.0f;
+                const float Ao1 = AoH1.Hit ? std::clamp(AoH1.DistanceM / 1.45f, 0.12f, 1.0f) : 1.0f;
+                const float ContactAo = std::clamp(0.22f + 0.78f * (0.5f * (Ao0 + Ao1)), 0.28f, 1.0f);
+
                 const Vec3 SurfHdr        = TerminalHit.EmissiveRgb + DirectRad + GlossyRefl;
                 Samples[PIdx].ValidSurface = true;
                 Samples[PIdx].ApertureTag  = ApertureTag;
                 Samples[PIdx].Position     = TerminalHit.Position;
                 Samples[PIdx].Normal       = TerminalHit.Normal;
+                Samples[PIdx].AlbedoRgb    = TerminalHit.AlbedoRgb;
+                Samples[PIdx].DirectHdr    = Vec3{TotalTrans.X * DirectRad.X, TotalTrans.Y * DirectRad.Y, TotalTrans.Z * DirectRad.Z};
+                Samples[PIdx].ContactAo    = ContactAo;
                 Samples[PIdx].LinearDepth  = CumulativeDist + TerminalHit.DistanceM;
                 Samples[PIdx].DiffuseScale = Vec3{
                     TotalTrans.X * TerminalHit.AlbedoRgb.X,
                     TotalTrans.Y * TerminalHit.AlbedoRgb.Y,
                     TotalTrans.Z * TerminalHit.AlbedoRgb.Z} *
-                    ((1.0f - std::clamp(TerminalHit.Metallic, 0.0f, 1.0f)) * (1.0f / PiFloat));
+                    ((1.0f - std::clamp(TerminalHit.Metallic, 0.0f, 1.0f)) * ContactAo * (1.0f / PiFloat));
                 Samples[PIdx].BaseHdr = HopAccumMedia +
                                         Vec3{HopThroughput.X * SegMedia.X, HopThroughput.Y * SegMedia.Y, HopThroughput.Z * SegMedia.Z} +
                                         Vec3{TotalTrans.X * SurfHdr.X, TotalTrans.Y * SurfHdr.Y, TotalTrans.Z * SurfHdr.Z};
@@ -3392,24 +3429,92 @@ void SceneRenderer::RenderViewportRgba8(
     }
 
     // 4. Recombine Albedo-Modulated Denoised GI + Filtered Glossy + Direct + Glass + Portals + Volumetrics into Linear HDR!
+    if (Context.InspectionMode >= 4u && Context.InspectionMode <= 6u)
+    {
+        // Diagnostic non-tonemapped inspection modes: 4 = Global SDF, 5 = Normals, 6 = Albedo
+        for (uint32_t Py = 0u; Py < Height; ++Py)
+        {
+            const float NdcY = 1.0f - 2.0f * (static_cast<float>(Py) + 0.5f) / static_cast<float>(Height);
+            for (uint32_t Px = 0u; Px < Width; ++Px)
+            {
+                const size_t PIdx = static_cast<size_t>(Py) * Width + Px;
+                Vec3         Vis{0.05f, 0.05f, 0.06f};
+                if (Context.InspectionMode == 4u)
+                {
+                    const float NdcX = (2.0f * (static_cast<float>(Px) + 0.5f) / static_cast<float>(Width) - 1.0f) * Aspect;
+                    const Vec3  Dir  = Normalise(Forward + Right * (NdcX * TanHalf) + Up * (NdcY * TanHalf));
+                    const InternalSurfaceHit SdfHit = TraceSdfSurfaceCards(CameraOriginWorld, Dir, 140.0f);
+                    if (SdfHit.Hit)
+                    {
+                        const float Band = 0.5f + 0.5f * std::sin(SdfHit.DistanceM * 3.14159265f * 1.5f);
+                        const float Prox = std::exp(-SdfHit.DistanceM * 0.028f);
+                        Vis = Vec3{
+                            (0.25f + 0.55f * (0.5f + 0.5f * SdfHit.Normal.X)) * Prox + 0.14f * Band,
+                            (0.32f + 0.52f * (0.5f + 0.5f * SdfHit.Normal.Y)) * Prox + 0.18f * Band,
+                            (0.42f + 0.52f * (0.5f + 0.5f * SdfHit.Normal.Z)) * Prox + 0.22f * Band};
+                    }
+                }
+                else if (Samples[PIdx].ValidSurface)
+                {
+                    if (Context.InspectionMode == 5u)
+                    {
+                        Vis = Vec3{
+                            0.5f + 0.5f * Samples[PIdx].Normal.X,
+                            0.5f + 0.5f * Samples[PIdx].Normal.Y,
+                            0.5f + 0.5f * Samples[PIdx].Normal.Z};
+                    }
+                    else
+                    {
+                        Vis = Samples[PIdx].AlbedoRgb * Samples[PIdx].ContactAo;
+                    }
+                }
+                auto ToByte = [](float C) -> uint8_t {
+                    const float Clamped = std::clamp(C, 0.0f, 1.0f);
+                    const float S = (Clamped <= 0.0031308f) ? (12.92f * Clamped) : (1.055f * std::pow(Clamped, 1.0f / 2.4f) - 0.055f);
+                    return static_cast<uint8_t>(std::clamp(std::lround(S * 255.0f), 0L, 255L));
+                };
+                OutRgba8Pixels[PIdx * 4u + 0u] = ToByte(Vis.X);
+                OutRgba8Pixels[PIdx * 4u + 1u] = ToByte(Vis.Y);
+                OutRgba8Pixels[PIdx * 4u + 2u] = ToByte(Vis.Z);
+                OutRgba8Pixels[PIdx * 4u + 3u] = 255u;
+            }
+        }
+        return;
+    }
+
     std::vector<Vec3> LinearHdr(PixelCount, Vec3{0.0f, 0.0f, 0.0f});
     for (size_t I = 0u; I < PixelCount; ++I)
     {
         if (Samples[I].ValidSurface)
         {
-            LinearHdr[I] = Samples[I].BaseHdr +
-                           Vec3{
-                               Samples[I].DiffuseScale.X * DemodulatedGi[I].X,
-                               Samples[I].DiffuseScale.Y * DemodulatedGi[I].Y,
-                               Samples[I].DiffuseScale.Z * DemodulatedGi[I].Z} +
-                           Vec3{
-                               Samples[I].GlossyScale.X * FilteredGlossy[I].X,
-                               Samples[I].GlossyScale.Y * FilteredGlossy[I].Y,
-                               Samples[I].GlossyScale.Z * FilteredGlossy[I].Z};
+            const Vec3 GiTerm{
+                Samples[I].DiffuseScale.X * DemodulatedGi[I].X,
+                Samples[I].DiffuseScale.Y * DemodulatedGi[I].Y,
+                Samples[I].DiffuseScale.Z * DemodulatedGi[I].Z};
+            const Vec3 SpecTerm{
+                Samples[I].GlossyScale.X * FilteredGlossy[I].X,
+                Samples[I].GlossyScale.Y * FilteredGlossy[I].Y,
+                Samples[I].GlossyScale.Z * FilteredGlossy[I].Z};
+            if (Context.InspectionMode == 1u)
+            {
+                LinearHdr[I] = Samples[I].DirectHdr + Samples[I].AlbedoRgb * (0.04f * Samples[I].ContactAo);
+            }
+            else if (Context.InspectionMode == 2u)
+            {
+                LinearHdr[I] = GiTerm * 2.2f;
+            }
+            else if (Context.InspectionMode == 3u)
+            {
+                LinearHdr[I] = SpecTerm * 2.0f;
+            }
+            else
+            {
+                LinearHdr[I] = Samples[I].BaseHdr + GiTerm + SpecTerm;
+            }
         }
         else
         {
-            LinearHdr[I] = Samples[I].BaseHdr;
+            LinearHdr[I] = (Context.InspectionMode == 0u) ? Samples[I].BaseHdr : (Samples[I].BaseHdr * 0.25f);
         }
     }
 
