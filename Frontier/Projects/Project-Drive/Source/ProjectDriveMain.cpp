@@ -978,13 +978,14 @@ int RunNativeWin32Dx11DesktopApp(const std::filesystem::path &RepoRoot,
             }
 
             DriveControlReadings Keys{};
-            if (!ImGui::GetIO().WantCaptureKeyboard)
+            Keys.KeyboardCaptured = ImGui::GetIO().WantCaptureKeyboard;
+            if (!Keys.KeyboardCaptured)
             {
-                if ((::GetAsyncKeyState('W') & 0x8000) || (::GetAsyncKeyState(VK_UP) & 0x8000))    Keys.Throttle = 1.0f;
-                if ((::GetAsyncKeyState('S') & 0x8000) || (::GetAsyncKeyState(VK_DOWN) & 0x8000))  Keys.Brake    = 1.0f;
-                if ((::GetAsyncKeyState('A') & 0x8000) || (::GetAsyncKeyState(VK_LEFT) & 0x8000))  Keys.Steer   -= 1.0f;
-                if ((::GetAsyncKeyState('D') & 0x8000) || (::GetAsyncKeyState(VK_RIGHT) & 0x8000)) Keys.Steer   += 1.0f;
-                if (::GetAsyncKeyState(VK_SPACE) & 0x8000) Keys.Handbrake = 1.0f;
+                Keys.ThrottleDown   = ((::GetAsyncKeyState('W') & 0x8000) != 0) || ((::GetAsyncKeyState(VK_UP) & 0x8000) != 0);
+                Keys.BrakeDown      = ((::GetAsyncKeyState('S') & 0x8000) != 0) || ((::GetAsyncKeyState(VK_DOWN) & 0x8000) != 0);
+                Keys.SteerLeftDown  = ((::GetAsyncKeyState('A') & 0x8000) != 0) || ((::GetAsyncKeyState(VK_LEFT) & 0x8000) != 0);
+                Keys.SteerRightDown = ((::GetAsyncKeyState('D') & 0x8000) != 0) || ((::GetAsyncKeyState(VK_RIGHT) & 0x8000) != 0);
+                Keys.HandbrakeDown  = (::GetAsyncKeyState(VK_SPACE) & 0x8000) != 0;
             }
 
             ImGui_ImplDX11_NewFrame();

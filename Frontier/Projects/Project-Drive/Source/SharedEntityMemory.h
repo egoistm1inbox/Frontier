@@ -15,18 +15,13 @@
 #include <utility>
 
 #if defined(_WIN32)
-extern "C"
-{
-    __declspec(dllimport) unsigned long __stdcall GetCurrentProcessId(void);
-    __declspec(dllimport) void *__stdcall CreateFileMappingA(
-        void *hFile, void *lpFileMappingAttributes, unsigned long flProtect,
-        unsigned long dwMaximumSizeHigh, unsigned long dwMaximumSizeLow, const char *lpName);
-    __declspec(dllimport) void *__stdcall MapViewOfFile(
-        void *hFileMappingObject, unsigned long dwDesiredAccess,
-        unsigned long dwFileOffsetHigh, unsigned long dwFileOffsetLow, size_t dwNumberOfBytesToMap);
-    __declspec(dllimport) int __stdcall UnmapViewOfFile(const void *lpBaseAddress);
-    __declspec(dllimport) int __stdcall CloseHandle(void *hObject);
-}
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
 #else
 #include <fcntl.h>
 #include <sys/mman.h>
