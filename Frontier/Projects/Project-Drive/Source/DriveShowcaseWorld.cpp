@@ -305,18 +305,18 @@ void DriveShowcaseWorld::RunDeferredWarmup(
     {
         OnStage(3u, kTotalWarmupStages, "Advancing Jolt v5.6.0 + GRIT 4-Wheel Vehicle & Weather Coupling");
     }
-    for (int Warm = 0; Warm < 9; ++Warm)
+    for (int Warm = 0; Warm < 18; ++Warm)
     {
-        AdvanceCoupledSubsystems(1.0f / 30.0f);
+        AdvanceCoupledSubsystems(1.0f / 60.0f);
     }
 
     if (OnStage)
     {
         OnStage(4u, kTotalWarmupStages, "Stabilizing 5.13x Pyro PlumeFluid Column & Exposure Histogram");
     }
-    for (int Warm = 9; Warm < 18; ++Warm)
+    for (int Warm = 18; Warm < 36; ++Warm)
     {
-        AdvanceCoupledSubsystems(1.0f / 30.0f);
+        AdvanceCoupledSubsystems(1.0f / 60.0f);
     }
 
     DeferredWarmupPending_ = false;
@@ -472,7 +472,7 @@ void DriveShowcaseWorld::StepSingleTick(double DtSeconds)
     {
         return;
     }
-    AdvanceCoupledSubsystems(static_cast<float>(std::clamp(DtSeconds, 1.0 / 240.0, 0.05)));
+    AdvanceCoupledSubsystems(static_cast<float>(std::clamp(DtSeconds, 1.0 / 240.0, 0.03125)));
     ++SceneDirtyRevision_;
 }
 
@@ -567,12 +567,13 @@ void DriveShowcaseWorld::TickFrame(double DtSeconds, const DriveControlReadings 
         DriveSim_.ForwardControls(Controls);
     }
 
-    AdvanceCoupledSubsystems(static_cast<float>(std::clamp(DtSeconds, 1.0 / 240.0, 0.05)));
+    AdvanceCoupledSubsystems(static_cast<float>(std::clamp(DtSeconds, 1.0 / 240.0, 0.03125)));
     ++SceneDirtyRevision_;
 }
 
 void DriveShowcaseWorld::AdvanceCoupledSubsystems(float DtSeconds)
 {
+    DtSeconds = std::clamp(DtSeconds, 1.0f / 240.0f, 0.03125f);
     WorldClockSeconds_ += static_cast<double>(DtSeconds);
 
     // 1. Advance Jolt v5.6.0 + GRIT Vehicle & Course Physics
@@ -609,7 +610,8 @@ void DriveShowcaseWorld::AdvanceCoupledSubsystems(float DtSeconds)
         PyroSolver_.AppendTransientPlumeSource(
             {8.2f, -1.6f, 0.55f}, 0.68f, {WindVec.X * 0.25f, WindVec.Y * 0.25f, Lift},
             32.0f * FuelScale, std::max(25.0f, HeatScale), 5.6f * FuelScale, 3.8f);
-        (void)PyroSolver_.AdvanceSimulation({8.2f, -1.6f, 0.0f}, {0.42f, -0.48f, 0.77f}, DtSeconds);
+        const float PlumeDt = std::clamp(DtSeconds, 0.001f, 0.03125f);
+        (void)PyroSolver_.AdvanceSimulation({8.2f, -1.6f, 0.0f}, {0.42f, -0.48f, 0.77f}, PlumeDt);
         const auto T1 = std::chrono::steady_clock::now();
         Telemetry_.PyroStepMs     = static_cast<float>(std::chrono::duration<double, std::milli>(T1 - T0).count());
         Telemetry_.PyroPeakKelvin = static_cast<float>(Records_.PyroPlume.BurnTemperatureK);

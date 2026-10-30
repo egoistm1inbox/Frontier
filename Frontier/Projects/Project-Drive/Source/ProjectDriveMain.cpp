@@ -481,23 +481,32 @@ class ProjectDriveApplicationHost
                 }
 
                 const auto Now = std::chrono::steady_clock::now();
-                const double Dt = std::clamp(std::chrono::duration<double>(Now - LastTick).count(), 1.0 / 120.0, 1.0 / 24.0);
+                const double Dt = std::clamp(std::chrono::duration<double>(Now - LastTick).count(), 1.0 / 120.0, 0.03125);
                 LastTick        = Now;
 
-                World_.TickFrame(Dt, Controls);
+                try
+                {
+                    World_.TickFrame(Dt, Controls);
 
-                uint32_t RW = 0u, RH = 0u;
-                if (World_.RenderViewportIfNeeded(ReqW, ReqH, WorkerPixels, RW, RH) && !WorkerPixels.empty())
+                    uint32_t RW = 0u, RH = 0u;
+                    if (World_.RenderViewportIfNeeded(ReqW, ReqH, WorkerPixels, RW, RH) && !WorkerPixels.empty())
+                    {
+                        std::lock_guard<std::mutex> Lock(AsyncMutex_);
+                        AsyncCompletedPixels_ = WorkerPixels;
+                        AsyncCompletedW_      = RW;
+                        AsyncCompletedH_      = RH;
+                        AsyncFramePending_    = true;
+                    }
+                    else
+                    {
+                        std::this_thread::sleep_for(std::chrono::milliseconds(8));
+                    }
+                }
+                catch (const std::exception &Ex)
                 {
                     std::lock_guard<std::mutex> Lock(AsyncMutex_);
-                    AsyncCompletedPixels_ = WorkerPixels;
-                    AsyncCompletedW_      = RW;
-                    AsyncCompletedH_      = RH;
-                    AsyncFramePending_    = true;
-                }
-                else
-                {
-                    std::this_thread::sleep_for(std::chrono::milliseconds(8));
+                    PendingWarmupLogs_.emplace_back(std::string("Async world worker warning: ") + Ex.what());
+                    std::this_thread::sleep_for(std::chrono::milliseconds(16));
                 }
             }
         });
