@@ -791,20 +791,45 @@ SurfaceFluidSample ShallowWaterMudExtension::SampleSurface(std::array<float, 2> 
     Out.VelocityXY[0]         = Bilerp(VelocityUV_[K00 * 2u], VelocityUV_[K10 * 2u], VelocityUV_[K01 * 2u], VelocityUV_[K11 * 2u]);
     Out.VelocityXY[1]         = Bilerp(VelocityUV_[K00 * 2u + 1u], VelocityUV_[K10 * 2u + 1u], VelocityUV_[K01 * 2u + 1u], VelocityUV_[K11 * 2u + 1u]);
 
-    // Central-difference free-surface gradient for physically refracted/reflected puddle & ford ripples!
-    const std::uint32_t Im = (I0 > 0u) ? (I0 - 1u) : 0u;
-    const std::uint32_t Ip = std::min(I0 + 1u, Config_.CellsX - 1u);
-    const std::uint32_t Jm = (J0 > 0u) ? (J0 - 1u) : 0u;
-    const std::uint32_t Jp = std::min(J0 + 1u, Config_.CellsY - 1u);
-    const float EtaXm = Bed_[CellK(Im, J0)] + DepthMud_[CellK(Im, J0) * 2u];
-    const float EtaXp = Bed_[CellK(Ip, J0)] + DepthMud_[CellK(Ip, J0) * 2u];
-    const float EtaYm = Bed_[CellK(I0, Jm)] + DepthMud_[CellK(I0, Jm) * 2u];
-    const float EtaYp = Bed_[CellK(I0, Jp)] + DepthMud_[CellK(I0, Jp) * 2u];
+    // Bilinearly interpolated wet-domain free-surface gradient (zero dry-bank slope leakage, zero integer-cell normal squares)!
     const float Inv2Dx = 0.5f / Config_.CellSizeMetres;
-    const float DetaDx = (EtaXp - EtaXm) * Inv2Dx;
-    const float DetaDy = (EtaYp - EtaYm) * Inv2Dx;
-    const float NLen   = std::sqrt(DetaDx * DetaDx + DetaDy * DetaDy + 1.0f);
-    Out.SurfaceNormal  = { -DetaDx / NLen, -DetaDy / NLen, 1.0f / NLen };
+    auto CornerSlope = [&](std::uint32_t Ci, std::uint32_t Cj, float& OutGx, float& OutGy) noexcept
+    {
+        const std::size_t Kc = CellK(Ci, Cj);
+        const float       Hc = DepthMud_[Kc * 2u];
+        if (Hc <= Config_.DryThresholdMetres)
+        {
+            OutGx = 0.0f;
+            OutGy = 0.0f;
+            return;
+        }
+        const float         EtaC = Bed_[Kc] + Hc;
+        const std::uint32_t Im   = (Ci > 0u) ? (Ci - 1u) : 0u;
+        const std::uint32_t Ip   = std::min(Ci + 1u, Config_.CellsX - 1u);
+        const std::uint32_t Jm   = (Cj > 0u) ? (Cj - 1u) : 0u;
+        const std::uint32_t Jp   = std::min(Cj + 1u, Config_.CellsY - 1u);
+
+        auto WetEta = [&](std::uint32_t Ni, std::uint32_t Nj) noexcept -> float
+        {
+            const std::size_t Kn = CellK(Ni, Nj);
+            return (DepthMud_[Kn * 2u] > Config_.DryThresholdMetres) ? (Bed_[Kn] + DepthMud_[Kn * 2u]) : EtaC;
+        };
+        OutGx = (WetEta(Ip, Cj) - WetEta(Im, Cj)) * Inv2Dx;
+        OutGy = (WetEta(Ci, Jp) - WetEta(Ci, Jm)) * Inv2Dx;
+    };
+
+    float Gx00 = 0.0f, Gy00 = 0.0f, Gx10 = 0.0f, Gy10 = 0.0f;
+    float Gx01 = 0.0f, Gy01 = 0.0f, Gx11 = 0.0f, Gy11 = 0.0f;
+    CornerSlope(I0, J0, Gx00, Gy00);
+    CornerSlope(I1, J0, Gx10, Gy10);
+    CornerSlope(I0, J1, Gx01, Gy01);
+    CornerSlope(I1, J1, Gx11, Gy11);
+
+    const float WetFeather = ClampF((Out.FluidDepthMetres - Config_.DryThresholdMetres) / 0.008f, 0.0f, 1.0f);
+    const float DetaDx     = Bilerp(Gx00, Gx10, Gx01, Gx11) * WetFeather;
+    const float DetaDy     = Bilerp(Gy00, Gy10, Gy01, Gy11) * WetFeather;
+    const float NLen       = std::sqrt(DetaDx * DetaDx + DetaDy * DetaDy + 1.0f);
+    Out.SurfaceNormal      = { -DetaDx / NLen, -DetaDy / NLen, 1.0f / NLen };
     return Out;
 }
 

@@ -315,6 +315,121 @@ struct SplitMix64Restir
     return Dot(Delta, Delta);
 }
 
+[[nodiscard]] float HashGrid2D(int Ix, int Iy, uint32_t Seed) noexcept
+{
+    uint32_t H = static_cast<uint32_t>(Ix) * 374761393u + static_cast<uint32_t>(Iy) * 668265263u + Seed * 2246822519u;
+    H          = (H ^ (H >> 13u)) * 1274126177u;
+    H ^= (H >> 16u);
+    return static_cast<float>(H & 0x00FFFFFFu) * (1.0f / 16777215.0f);
+}
+
+[[nodiscard]] float QuinticSmoothNoise2D(float X, float Y, uint32_t Seed) noexcept
+{
+    const float Fx = std::floor(X);
+    const float Fy = std::floor(Y);
+    const int   Ix = static_cast<int>(Fx);
+    const int   Iy = static_cast<int>(Fy);
+    const float Tx = X - Fx;
+    const float Ty = Y - Fy;
+    const float Ux = Tx * Tx * Tx * (Tx * (Tx * 6.0f - 15.0f) + 10.0f);
+    const float Uy = Ty * Ty * Ty * (Ty * (Ty * 6.0f - 15.0f) + 10.0f);
+
+    const float N00 = HashGrid2D(Ix, Iy, Seed);
+    const float N10 = HashGrid2D(Ix + 1, Iy, Seed);
+    const float N01 = HashGrid2D(Ix, Iy + 1, Seed);
+    const float N11 = HashGrid2D(Ix + 1, Iy + 1, Seed);
+    const float Nx0 = N00 + (N10 - N00) * Ux;
+    const float Nx1 = N01 + (N11 - N01) * Ux;
+    return Nx0 + (Nx1 - Nx0) * Uy;
+}
+
+// Band-limited multi-octave mineral stone/asphalt aggregate detail so dry floors and submerged puddle beds
+// exhibit crisp architectural micro-texture with zero distant aliasing!
+void EvaluateMineralGroundDetail(
+    Vec3   WorldPoint,
+    float  RayDistanceM,
+    Vec3&  InOutAlbedo,
+    float& InOutRoughness,
+    Vec3&  InOutNormal) noexcept
+{
+    const float MipCoarse = 1.0f / (1.0f + 0.03f * RayDistanceM);
+    const float MipFine   = 1.0f / (1.0f + 0.14f * RayDistanceM * RayDistanceM);
+
+    const float MacroVar  = QuinticSmoothNoise2D(WorldPoint.X * 0.55f, WorldPoint.Y * 0.55f, 11u) - 0.5f;
+    const float MesoVar   = QuinticSmoothNoise2D(WorldPoint.X * 2.40f, WorldPoint.Y * 2.40f, 37u) - 0.5f;
+    const float FineGrain = QuinticSmoothNoise2D(WorldPoint.X * 11.5f, WorldPoint.Y * 11.5f, 73u) - 0.5f;
+    const float Quartz    = QuinticSmoothNoise2D(WorldPoint.X * 29.0f, WorldPoint.Y * 29.0f, 131u) - 0.5f;
+
+    // Subtle 3.5 m architectural expansion-joint grid lines (smoothly filtered out at grazing/far distances).
+    const float TilePhaseX = std::abs(WorldPoint.X * (1.0f / 3.5f) - std::round(WorldPoint.X * (1.0f / 3.5f))) * 3.5f;
+    const float TilePhaseY = std::abs(WorldPoint.Y * (1.0f / 3.5f) - std::round(WorldPoint.Y * (1.0f / 3.5f))) * 3.5f;
+    const float SeamDist   = std::min(TilePhaseX, TilePhaseY);
+    const float SeamFactor = (SeamDist < 0.022f) ? (1.0f - SeamDist / 0.022f) * MipFine : 0.0f;
+
+    const float AlbedoMod = 1.0f +
+                            0.13f * MacroVar * MipCoarse +
+                            0.10f * MesoVar * MipCoarse +
+                            0.12f * FineGrain * MipFine +
+                            0.09f * Quartz * MipFine -
+                            0.24f * SeamFactor;
+
+    InOutAlbedo = Vec3{
+        std::clamp(InOutAlbedo.X * AlbedoMod, 0.015f, 0.96f),
+        std::clamp(InOutAlbedo.Y * (AlbedoMod + 0.012f * MesoVar * MipCoarse), 0.015f, 0.96f),
+        std::clamp(InOutAlbedo.Z * (AlbedoMod - 0.015f * MacroVar * MipCoarse), 0.015f, 0.96f)};
+
+    InOutRoughness = std::clamp(
+        InOutRoughness - 0.09f * MacroVar * MipCoarse + 0.08f * FineGrain * MipFine + 0.12f * SeamFactor,
+        0.08f,
+        0.95f);
+
+    if (std::abs(InOutNormal.Z) > 0.7f && MipFine > 0.05f)
+    {
+        const float Eps = 0.035f;
+        const float Hx  = QuinticSmoothNoise2D((WorldPoint.X + Eps) * 9.5f, WorldPoint.Y * 9.5f, 73u) -
+                         QuinticSmoothNoise2D((WorldPoint.X - Eps) * 9.5f, WorldPoint.Y * 9.5f, 73u);
+        const float Hy = QuinticSmoothNoise2D(WorldPoint.X * 9.5f, (WorldPoint.Y + Eps) * 9.5f, 73u) -
+                         QuinticSmoothNoise2D(WorldPoint.X * 9.5f, (WorldPoint.Y - Eps) * 9.5f, 73u);
+        const float BumpScale = 0.028f * MipFine;
+        InOutNormal           = Normalise(InOutNormal + Vec3{-Hx * BumpScale, -Hy * BumpScale, 0.0f});
+    }
+}
+
+// Smooth, continuous multi-directional capillary wind micro-ripples on liquid water (strictly zero foam & zero splash!).
+[[nodiscard]] Vec3 EvaluateCapillaryWaterNormal(
+    Vec3  BaseHydroNormal,
+    Vec3  WaterWorldPoint,
+    float FluidDepthMetres,
+    float MudFraction,
+    float RayDistanceM,
+    float RippleStrength) noexcept
+{
+    if (RippleStrength <= 1.0e-5f)
+    {
+        return BaseHydroNormal;
+    }
+    const float ShoreDamp = std::clamp((FluidDepthMetres - 0.003f) / 0.018f, 0.0f, 1.0f);
+    const float ViscDamp  = 1.0f - 0.78f * std::clamp(MudFraction, 0.0f, 1.0f);
+    const float DistDamp  = 1.0f / (1.0f + 0.055f * RayDistanceM);
+    const float Amp       = RippleStrength * ShoreDamp * ViscDamp * DistDamp;
+    if (Amp <= 1.0e-5f)
+    {
+        return BaseHydroNormal;
+    }
+
+    const float X = WaterWorldPoint.X;
+    const float Y = WaterWorldPoint.Y;
+    // Four incommensurate capillary wave vectors so zero grid periodicity appears.
+    const float P0 = 7.4f * X + 3.1f * Y + 0.8f;
+    const float P1 = -4.9f * X + 8.7f * Y + 2.1f;
+    const float P2 = 13.6f * X - 6.3f * Y + 4.3f;
+    const float P3 = 3.2f * X + 16.8f * Y + 1.4f;
+
+    const float SlopeX = Amp * (0.42f * std::cos(P0) - 0.31f * std::cos(P1) + 0.16f * std::cos(P2) + 0.11f * std::cos(P3));
+    const float SlopeY = Amp * (0.19f * std::cos(P0) + 0.52f * std::cos(P1) - 0.08f * std::cos(P2) + 0.24f * std::cos(P3));
+    return Normalise(Vec3{BaseHydroNormal.X - SlopeX, BaseHydroNormal.Y - SlopeY, BaseHydroNormal.Z});
+}
+
 // Chromatic-preserving AgX/ACES filmic tone-mapping: bright emissive cores smoothly desaturate to warm
 // incandescent white instead of clipping R/G/B channels independently into flat yellow/cyan blocks!
 void ChromaticAgxAcesTonemapSrgb(
@@ -463,6 +578,220 @@ uint32_t SdfRestirPortalExtension::RegisterDualTierSolidBox(
     }
 
     return CardIdx;
+}
+
+uint32_t SdfRestirPortalExtension::RegisterTexturedGroundSlab(
+    Vec3  CentreWorld,
+    Vec3  HalfExtents,
+    Vec3  BaseAlbedoRgb,
+    float BaseRoughness,
+    float Metallic)
+{
+    const size_t FirstTri = Triangles_.size();
+    const uint32_t CardIdx = RegisterDualTierSolidBox(
+        CentreWorld,
+        HalfExtents,
+        BaseAlbedoRgb,
+        BaseRoughness,
+        Vec3{0.0f, 0.0f, 0.0f},
+        Metallic);
+    for (size_t I = FirstTri; I < Triangles_.size(); ++I)
+    {
+        Triangles_[I].ProceduralMineralDetail = true;
+    }
+    return CardIdx;
+}
+
+void SdfRestirPortalExtension::RegisterSmoothSnowSurface(const SnowpackPolygonSurface& Surface)
+{
+    if (Surface.Vertices.empty() || Surface.Indices.size() < 3u)
+    {
+        return;
+    }
+
+    // Register a low-profile diffuse snow bounce card for GTX SDF GI while keeping exact smooth triangles in BVH!
+    Vec3 BMin{1.0e9f, 1.0e9f, 1.0e9f};
+    Vec3 BMax{-1.0e9f, -1.0e9f, -1.0e9f};
+    for (const auto& V : Surface.Vertices)
+    {
+        BMin.X = std::min(BMin.X, V.Position.X);
+        BMin.Y = std::min(BMin.Y, V.Position.Y);
+        BMin.Z = std::min(BMin.Z, V.Position.Z);
+        BMax.X = std::max(BMax.X, V.Position.X);
+        BMax.Y = std::max(BMax.Y, V.Position.Y);
+        BMax.Z = std::max(BMax.Z, V.Position.Z);
+    }
+    const uint32_t CardIdx = static_cast<uint32_t>(SurfaceCards_.size());
+    OrientedSurfaceCard SnowCard{};
+    SnowCard.CentreWorld = (BMin + BMax) * 0.5f;
+    SnowCard.HalfExtents = Vec3{
+        std::max(0.05f, (BMax.X - BMin.X) * 0.5f),
+        std::max(0.05f, (BMax.Y - BMin.Y) * 0.5f),
+        std::max(0.02f, (BMax.Z - BMin.Z) * 0.5f)};
+    SnowCard.AlbedoRgb = Vec3{0.88f, 0.92f, 0.97f};
+    SnowCard.Roughness = 0.62f;
+    SnowCard.Metallic  = 0.0f;
+    SurfaceCards_.push_back(SnowCard);
+
+    for (size_t I = 0u; I + 2u < Surface.Indices.size(); I += 3u)
+    {
+        const auto& SV0 = Surface.Vertices[Surface.Indices[I + 0u]];
+        const auto& SV1 = Surface.Vertices[Surface.Indices[I + 1u]];
+        const auto& SV2 = Surface.Vertices[Surface.Indices[I + 2u]];
+
+        RtxSceneTriangle Tri{};
+        Tri.V0 = SV0.Position;
+        Tri.V1 = SV1.Position;
+        Tri.V2 = SV2.Position;
+
+        const Vec3 EdgeCross = Cross(Tri.V1 - Tri.V0, Tri.V2 - Tri.V0);
+        if (Length(EdgeCross) <= 1.0e-7f)
+        {
+            continue;
+        }
+        Tri.Normal              = Normalise(EdgeCross);
+        Tri.SmoothVertexNormals = true;
+        Tri.V0Normal            = Normalise(SV0.Normal);
+        Tri.V1Normal            = Normalise(SV1.Normal);
+        Tri.V2Normal            = Normalise(SV2.Normal);
+
+        const float AvgPack = std::clamp((SV0.CompactionRatio + SV1.CompactionRatio + SV2.CompactionRatio) / 3.0f, 0.0f, 1.0f);
+        const float AvgHail = std::clamp((SV0.HailIceFraction + SV1.HailIceFraction + SV2.HailIceFraction) / 3.0f, 0.0f, 1.0f);
+        // Fresh powder is bright soft matte white (roughness ~0.68); compacted tyre ruts glaze into slightly cooler dense snow/ice!
+        Tri.AlbedoRgb = Vec3{
+            0.91f - 0.14f * AvgPack - 0.05f * AvgHail,
+            0.94f - 0.10f * AvgPack - 0.03f * AvgHail,
+            0.98f - 0.04f * AvgPack};
+        Tri.Roughness             = std::clamp(0.68f - 0.42f * AvgPack - 0.18f * AvgHail, 0.18f, 0.78f);
+        Tri.Metallic              = 0.0f;
+        Tri.SnowSubsurfaceScatter = true;
+        Tri.CardOrMaterialIndex   = CardIdx;
+        Triangles_.push_back(Tri);
+    }
+}
+
+Vec3 SdfRestirPortalExtension::TransformPointAcrossPortal(
+    const SeamlessPortalAperture& Portal,
+    Vec3                          WorldPoint) noexcept
+{
+    const Vec3  Rel = WorldPoint - Portal.EntryCentreWorld;
+    const float U   = Dot(Rel, Portal.EntryRightAxis);
+    const float V   = Dot(Rel, Portal.EntryUpAxis);
+    const float W   = Dot(Rel, Portal.EntryFrontNormal);
+    return Portal.ExitCentreWorld -
+           Portal.ExitRightAxis * U +
+           Portal.ExitUpAxis * V -
+           Portal.ExitFrontNormal * W;
+}
+
+Vec3 SdfRestirPortalExtension::TransformVectorAcrossPortal(
+    const SeamlessPortalAperture& Portal,
+    Vec3                          WorldVector) noexcept
+{
+    const float U = Dot(WorldVector, Portal.EntryRightAxis);
+    const float V = Dot(WorldVector, Portal.EntryUpAxis);
+    const float W = Dot(WorldVector, Portal.EntryFrontNormal);
+    return Portal.ExitRightAxis * (-U) +
+           Portal.ExitUpAxis * V -
+           Portal.ExitFrontNormal * W;
+}
+
+void SdfRestirPortalExtension::RegisterHalfSpaceClippedTriangle(
+    const RtxSceneTriangle& Triangle,
+    Vec3                    PlanePoint,
+    Vec3                    PlaneKeepNormal)
+{
+    struct ClipVertex
+    {
+        Vec3 Pos{};
+        Vec3 Nrm{};
+        float Dist = 0.0f;
+    };
+
+    const Vec3 UnitPlaneN = Normalise(PlaneKeepNormal);
+    const ClipVertex Input[3] = {
+        {Triangle.V0, Triangle.SmoothVertexNormals ? Triangle.V0Normal : Triangle.Normal, Dot(Triangle.V0 - PlanePoint, UnitPlaneN)},
+        {Triangle.V1, Triangle.SmoothVertexNormals ? Triangle.V1Normal : Triangle.Normal, Dot(Triangle.V1 - PlanePoint, UnitPlaneN)},
+        {Triangle.V2, Triangle.SmoothVertexNormals ? Triangle.V2Normal : Triangle.Normal, Dot(Triangle.V2 - PlanePoint, UnitPlaneN)}};
+
+    constexpr float ClipEps = -1.0e-5f;
+    if (Input[0].Dist < ClipEps && Input[1].Dist < ClipEps && Input[2].Dist < ClipEps)
+    {
+        return;
+    }
+    if (Input[0].Dist >= -ClipEps && Input[1].Dist >= -ClipEps && Input[2].Dist >= -ClipEps)
+    {
+        RegisterPolygonTriangle(Triangle);
+        return;
+    }
+
+    ClipVertex Poly[4]{};
+    uint32_t   PolyCount = 0u;
+    for (uint32_t I = 0u; I < 3u; ++I)
+    {
+        const ClipVertex& Curr   = Input[I];
+        const ClipVertex& Next   = Input[(I + 1u) % 3u];
+        const bool        CurrIn = (Curr.Dist >= 0.0f);
+        const bool        NextIn = (Next.Dist >= 0.0f);
+
+        if (CurrIn)
+        {
+            Poly[PolyCount++] = Curr;
+        }
+        if (CurrIn != NextIn)
+        {
+            const float Denom = Curr.Dist - Next.Dist;
+            const float Alpha = (std::abs(Denom) > 1.0e-8f) ? std::clamp(Curr.Dist / Denom, 0.0f, 1.0f) : 0.5f;
+            ClipVertex  Cut{};
+            Cut.Pos           = Curr.Pos + (Next.Pos - Curr.Pos) * Alpha;
+            Cut.Nrm           = Normalise(Curr.Nrm + (Next.Nrm - Curr.Nrm) * Alpha);
+            Cut.Dist          = 0.0f;
+            Poly[PolyCount++] = Cut;
+        }
+    }
+
+    for (uint32_t T = 1u; T + 1u < PolyCount; ++T)
+    {
+        RtxSceneTriangle Sub = Triangle;
+        Sub.V0               = Poly[0].Pos;
+        Sub.V1               = Poly[T].Pos;
+        Sub.V2               = Poly[T + 1u].Pos;
+        const Vec3 CrossN    = Cross(Sub.V1 - Sub.V0, Sub.V2 - Sub.V0);
+        if (Length(CrossN) <= 1.0e-7f)
+        {
+            continue;
+        }
+        Sub.Normal = Normalise(CrossN);
+        if (Sub.SmoothVertexNormals)
+        {
+            Sub.V0Normal = Poly[0].Nrm;
+            Sub.V1Normal = Poly[T].Nrm;
+            Sub.V2Normal = Poly[T + 1u].Nrm;
+        }
+        RegisterPolygonTriangle(Sub);
+    }
+}
+
+void SdfRestirPortalExtension::RegisterPortalTransitingTriangle(
+    const RtxSceneTriangle&       EntryWorldTriangle,
+    const SeamlessPortalAperture& Portal)
+{
+    // 1. Entry side (Portal A): keep ONLY the portion in front of Entry (dot >= 0); strictly hide everything behind Entry!
+    RegisterHalfSpaceClippedTriangle(EntryWorldTriangle, Portal.EntryCentreWorld, Portal.EntryFrontNormal);
+
+    // 2. Exit side (Portal B): isometrically map across the portal and keep ONLY the portion emerging in front of Exit!
+    RtxSceneTriangle Emerged = EntryWorldTriangle;
+    Emerged.V0               = TransformPointAcrossPortal(Portal, EntryWorldTriangle.V0);
+    Emerged.V1               = TransformPointAcrossPortal(Portal, EntryWorldTriangle.V1);
+    Emerged.V2               = TransformPointAcrossPortal(Portal, EntryWorldTriangle.V2);
+    Emerged.Normal           = Normalise(TransformVectorAcrossPortal(Portal, EntryWorldTriangle.Normal));
+    if (Emerged.SmoothVertexNormals)
+    {
+        Emerged.V0Normal = Normalise(TransformVectorAcrossPortal(Portal, EntryWorldTriangle.V0Normal));
+        Emerged.V1Normal = Normalise(TransformVectorAcrossPortal(Portal, EntryWorldTriangle.V1Normal));
+        Emerged.V2Normal = Normalise(TransformVectorAcrossPortal(Portal, EntryWorldTriangle.V2Normal));
+    }
+    RegisterHalfSpaceClippedTriangle(Emerged, Portal.ExitCentreWorld, Portal.ExitFrontNormal);
 }
 
 void SdfRestirPortalExtension::RegisterSmoothSphere(
@@ -914,12 +1243,186 @@ SdfRestirPortalExtension::InternalSurfaceHit SdfRestirPortalExtension::TraceTria
         Result.EmissiveRgb        = Tri.EmissiveRgb;
         Result.Roughness          = Tri.Roughness;
         Result.Metallic           = Tri.Metallic;
-        Result.TransmissiveGlass  = Tri.TransmissiveGlass;
-        Result.RefractiveIndexIor = Tri.RefractiveIndexIor;
-        Result.SpectralAbsorption = Tri.SpectralAbsorption;
-        Result.CardIndex          = Tri.CardOrMaterialIndex;
+        Result.TransmissiveGlass     = Tri.TransmissiveGlass;
+        Result.SnowSubsurfaceScatter = Tri.SnowSubsurfaceScatter;
+        Result.RefractiveIndexIor    = Tri.RefractiveIndexIor;
+        Result.SpectralAbsorption    = Tri.SpectralAbsorption;
+        Result.CardIndex             = Tri.CardOrMaterialIndex;
+        if (Tri.ProceduralMineralDetail)
+        {
+            EvaluateMineralGroundDetail(Result.Position, Result.DistanceM, Result.AlbedoRgb, Result.Roughness, Result.Normal);
+        }
     }
     return Result;
+}
+
+bool SdfRestirPortalExtension::IntersectShallowWaterSurface(
+    Vec3                              Origin,
+    Vec3                              DirectionUnit,
+    float                             MaxDistanceM,
+    const CoupledWorldOpticalContext& Context,
+    float&                            OutHitDistanceM,
+    Vec3&                             OutWaterHitWorld,
+    SurfaceFluidSample&               OutSample) const noexcept
+{
+    if (Context.ShallowWater == nullptr || DirectionUnit.Z >= -1.0e-5f)
+    {
+        return false;
+    }
+
+    const auto& WCfg = Context.ShallowWater->Configuration();
+    const float MinX = WCfg.WorldOriginXY[0];
+    const float MinY = WCfg.WorldOriginXY[1];
+    const float MaxX = MinX + static_cast<float>(WCfg.CellsX) * WCfg.CellSizeMetres;
+    const float MaxY = MinY + static_cast<float>(WCfg.CellsY) * WCfg.CellSizeMetres;
+
+    // Intersect ray with horizontal XY bounding box of the shallow-water grid first so step budget concentrates tightly!
+    float TxMin = 0.0f;
+    float TxMax = MaxDistanceM;
+    if (std::abs(DirectionUnit.X) > 1.0e-6f)
+    {
+        const float T0 = (MinX - Origin.X) / DirectionUnit.X;
+        const float T1 = (MaxX - Origin.X) / DirectionUnit.X;
+        TxMin          = std::max(TxMin, std::min(T0, T1));
+        TxMax          = std::min(TxMax, std::max(T0, T1));
+    }
+    else if (Origin.X < MinX || Origin.X > MaxX)
+    {
+        return false;
+    }
+
+    if (std::abs(DirectionUnit.Y) > 1.0e-6f)
+    {
+        const float T0 = (MinY - Origin.Y) / DirectionUnit.Y;
+        const float T1 = (MaxY - Origin.Y) / DirectionUnit.Y;
+        TxMin          = std::max(TxMin, std::min(T0, T1));
+        TxMax          = std::min(TxMax, std::max(T0, T1));
+    }
+    else if (Origin.Y < MinY || Origin.Y > MaxY)
+    {
+        return false;
+    }
+
+    const float TzTop = std::max(0.0f, (1.20f - Origin.Z) / DirectionUnit.Z);
+    const float TzBot = std::min(MaxDistanceM, (-1.20f - Origin.Z) / DirectionUnit.Z);
+    const float TTop  = std::max(TxMin, TzTop);
+    const float TBot  = std::min(TxMax, TzBot);
+    if (TBot <= TTop + 1.0e-5f)
+    {
+        return false;
+    }
+
+    constexpr uint32_t Steps    = 56u;
+    constexpr float    DryCutM  = 1.2e-3f;
+    const float        Dt       = (TBot - TTop) / static_cast<float>(Steps);
+    float              PrevT    = TTop;
+    for (uint32_t S = 0u; S <= Steps; ++S)
+    {
+        const float TTest = TTop + static_cast<float>(S) * Dt;
+        if (TTest > MaxDistanceM + 1.0e-4f)
+        {
+            break;
+        }
+        const Vec3 P = Origin + DirectionUnit * TTest;
+        if (P.X >= MinX && P.X <= MaxX && P.Y >= MinY && P.Y <= MaxY)
+        {
+            const SurfaceFluidSample Samp = Context.ShallowWater->SampleSurface({P.X, P.Y});
+            if (Samp.FluidDepthMetres > DryCutM && P.Z <= Samp.FreeSurfaceElevationM + 1.0e-5f)
+            {
+                // Refine exact sub-millimetre shoreline / free-surface intersection via 10 binary bisection iterations!
+                float LoT           = PrevT;
+                float HiT           = TTest;
+                SurfaceFluidSample BestSamp = Samp;
+                for (uint32_t Iter = 0u; Iter < 10u; ++Iter)
+                {
+                    const float MidT = 0.5f * (LoT + HiT);
+                    const Vec3  MidP = Origin + DirectionUnit * MidT;
+                    if (MidP.X >= MinX && MidP.X <= MaxX && MidP.Y >= MinY && MidP.Y <= MaxY)
+                    {
+                        const SurfaceFluidSample MidS = Context.ShallowWater->SampleSurface({MidP.X, MidP.Y});
+                        if (MidS.FluidDepthMetres > DryCutM && MidP.Z <= MidS.FreeSurfaceElevationM)
+                        {
+                            HiT      = MidT;
+                            BestSamp = MidS;
+                        }
+                        else
+                        {
+                            LoT = MidT;
+                        }
+                    }
+                    else
+                    {
+                        LoT = MidT;
+                    }
+                }
+                if (HiT <= MaxDistanceM + 1.0e-4f)
+                {
+                    const Vec3 HitP  = Origin + DirectionUnit * HiT;
+                    OutHitDistanceM  = HiT;
+                    OutWaterHitWorld = Vec3{HitP.X, HitP.Y, BestSamp.FreeSurfaceElevationM};
+                    OutSample        = BestSamp;
+                    return true;
+                }
+            }
+        }
+        PrevT = TTest;
+    }
+    return false;
+}
+
+double SdfRestirPortalExtension::EvaluateSolarFlareVisibility(
+    Vec3                              CameraOriginWorld,
+    Vec3                              SunDirectionUnit,
+    const CoupledWorldOpticalContext& Context) const noexcept
+{
+    if (SunDirectionUnit.Z <= -0.02f)
+    {
+        return 0.0;
+    }
+
+    const Vec3 UpRef      = (std::abs(SunDirectionUnit.Z) < 0.92f) ? Vec3{0.0f, 0.0f, 1.0f} : Vec3{1.0f, 0.0f, 0.0f};
+    const Vec3 BasisRight = Normalise(Cross(SunDirectionUnit, UpRef));
+    const Vec3 BasisUp    = Cross(BasisRight, SunDirectionUnit);
+
+    const float     DiscRadiusRad = static_cast<float>(std::max(1.0e-3, Context.SolarDisc.AngularRadiusRad));
+    constexpr int   TapCount      = 21;
+    constexpr float GoldenAngle   = 2.39996323f;
+    double          VisSum        = 0.0;
+
+    for (int I = 0; I < TapCount; ++I)
+    {
+        const float Rad   = DiscRadiusRad * std::sqrt((static_cast<float>(I) + 0.5f) / static_cast<float>(TapCount));
+        const float Theta = GoldenAngle * static_cast<float>(I);
+        const Vec3  RayD  = Normalise(
+            SunDirectionUnit + BasisRight * (Rad * std::cos(Theta)) + BasisUp * (Rad * std::sin(Theta)));
+
+        if (!TraceShadowUnoccluded(GpuTracingTier::HardwareRayTracingRtx, CameraOriginWorld, RayD, 220.0f))
+        {
+            continue;
+        }
+
+        double Trans = 1.0;
+        if (RayD.Z > 0.02f)
+        {
+            const CloudMarchResult CloudRes = MarchClouds(
+                Context.Clouds,
+                ToSpatial(CameraOriginWorld),
+                ToSpatial(RayD),
+                ToSpatial(SunDirectionUnit),
+                SpectrumRgb{1.0, 1.0, 1.0},
+                18000.0,
+                10u,
+                2u);
+            Trans *= CloudRes.Transmittance;
+        }
+        if (Context.PlumeFluid != nullptr)
+        {
+            Trans *= static_cast<double>(
+                Context.PlumeFluid->EvaluateShadowTransmittance(ToArr3(CameraOriginWorld), ToArr3(RayD), 90.0f));
+        }
+        VisSum += Trans;
+    }
+    return std::clamp(VisSum / static_cast<double>(TapCount), 0.0, 1.0);
 }
 
 bool SdfRestirPortalExtension::TraceShadowUnoccluded(
@@ -983,19 +1486,26 @@ Vec3 SdfRestirPortalExtension::EvaluateVolumetricSegmentAndSky(
             SunSpec);
         BackgroundRgb = FromSpectrum(SingleSky) + FromSpectrum(MultiSky);
 
-        // Smooth solar disc & Mie aureole when Sun is luminous!
+        // Limb-darkened physical solar disc (LensFlareModel.h) + smooth atmospheric Mie aureole!
         const float SunStrength = LuminanceRec709(Context.SunIrradianceRgb);
         if (SunStrength > 0.25f)
         {
-            const float CosSun = Dot(SegmentDirectionUnit, SunDir);
-            if (CosSun > 0.9994f)
+            const float  CosSun   = std::clamp(Dot(SegmentDirectionUnit, SunDir), -1.0f, 1.0f);
+            const double AngleRad = std::acos(static_cast<double>(CosSun));
+            const SpectrumRgb DiscRad = EvaluateSunDiscRadiance(
+                AngleRad,
+                Context.SolarDisc,
+                SpectrumRgb{
+                    static_cast<double>(Context.SunIrradianceRgb.X * 16.0f),
+                    static_cast<double>(Context.SunIrradianceRgb.Y * 16.0f),
+                    static_cast<double>(Context.SunIrradianceRgb.Z * 16.0f)});
+            BackgroundRgb = BackgroundRgb + FromSpectrum(DiscRad);
+
+            if (CosSun > 0.965f)
             {
-                BackgroundRgb = BackgroundRgb + Context.SunIrradianceRgb * 6.5f;
-            }
-            else if (CosSun > 0.990f)
-            {
-                const float Aureole = std::pow((CosSun - 0.990f) / 0.0094f, 3.0f);
-                BackgroundRgb       = BackgroundRgb + Context.SunIrradianceRgb * (0.45f * Aureole);
+                const float AureoleInner = std::pow(std::clamp((CosSun - 0.992f) / 0.008f, 0.0f, 1.0f), 2.5f);
+                const float AureoleWide  = std::pow(std::clamp((CosSun - 0.965f) / 0.035f, 0.0f, 1.0f), 4.0f);
+                BackgroundRgb            = BackgroundRgb + Context.SunIrradianceRgb * (0.62f * AureoleInner + 0.14f * AureoleWide);
             }
         }
 
@@ -1164,7 +1674,8 @@ Vec3 SdfRestirPortalExtension::EvaluateDirectSurfaceLighting(
     Vec3                              Albedo,
     float                             Roughness,
     float                             Metallic,
-    const CoupledWorldOpticalContext& Context) const noexcept
+    const CoupledWorldOpticalContext& Context,
+    bool                              SnowSubsurface) const noexcept
 {
     const float Alpha       = std::max(0.03f, Roughness * Roughness);
     const float NdotV       = std::max(1.0e-3f, Dot(Normal, ViewDirUnit));
@@ -1210,9 +1721,11 @@ Vec3 SdfRestirPortalExtension::EvaluateDirectSurfaceLighting(
     Vec3 Outgoing{0.0f, 0.0f, 0.0f};
 
     // 1. Directional Solar Light + Volumetric Cloud & Plume Beer-Lambert Shadows!
-    const Vec3  SunDir = Normalise(Context.SunDirectionUnit);
-    const float NdotSun = std::max(0.0f, Dot(Normal, SunDir));
-    if (NdotSun > 0.0f && LuminanceRec709(Context.SunIrradianceRgb) > 1.0e-4f)
+    const Vec3  SunDir      = Normalise(Context.SunDirectionUnit);
+    const float RawDotSun   = Dot(Normal, SunDir);
+    const float NdotSun     = std::max(0.0f, RawDotSun);
+    const float SnowWrapSun = SnowSubsurface ? std::clamp((RawDotSun + 0.36f) / 1.36f, 0.0f, 1.0f) : NdotSun;
+    if ((NdotSun > 0.0f || SnowWrapSun > 0.0f) && LuminanceRec709(Context.SunIrradianceRgb) > 1.0e-4f)
     {
         if (TraceShadowUnoccluded(Tier, Point + Normal * 0.015f, SunDir, 160.0f))
         {
@@ -1234,7 +1747,19 @@ Vec3 SdfRestirPortalExtension::EvaluateDirectSurfaceLighting(
             {
                 VolumetricTrans *= Context.PlumeFluid->EvaluateShadowTransmittance(ToArr3(Point + Normal * 0.03f), ToArr3(SunDir), 64.0f);
             }
-            Outgoing = Outgoing + AddCookTorranceContribution(SunDir, Context.SunIrradianceRgb * (NdotSun * VolumetricTrans), Alpha);
+            if (NdotSun > 0.0f)
+            {
+                Outgoing = Outgoing + AddCookTorranceContribution(SunDir, Context.SunIrradianceRgb * (NdotSun * VolumetricTrans), Alpha);
+            }
+            if (SnowSubsurface && SnowWrapSun > NdotSun)
+            {
+                // Multiple-scattering subsurface diffuse wrap inside snowpack + faint cold cyan scatter!
+                const float SubDiff = (SnowWrapSun - NdotSun) * 0.72f * VolumetricTrans;
+                Outgoing            = Outgoing + Vec3{
+                    DiffuseBase.X * Context.SunIrradianceRgb.X * SubDiff * 0.88f,
+                    DiffuseBase.Y * Context.SunIrradianceRgb.Y * SubDiff * 0.96f,
+                    DiffuseBase.Z * Context.SunIrradianceRgb.Z * SubDiff * 1.06f};
+            }
         }
     }
 
@@ -1687,47 +2212,17 @@ TracedRayDiagnostics SdfRestirPortalExtension::TraceCoupledRadianceRay(
             }
         }
 
-        // 4. Check 2.5D Shallow-Water & Mud free-surface sheet (strictly zero foam & zero splash)!
+        // 4. Check 2.5D Shallow-Water & Mud free-surface sheet via tight-slab + 10-step bisection root-finder!
         bool               HitWater = false;
         SurfaceFluidSample WaterSample{};
         Vec3               WaterHitPt{};
-        if (Context.ShallowWater != nullptr && CurrDir.Z < -1.0e-4f)
+        float              WaterHitDist = BestDistance;
+        if (IntersectShallowWaterSurface(CurrOrigin, CurrDir, BestDistance, Context, WaterHitDist, WaterHitPt, WaterSample))
         {
-            const auto& WCfg  = Context.ShallowWater->Configuration();
-            const float MinX  = WCfg.WorldOriginXY[0];
-            const float MinY  = WCfg.WorldOriginXY[1];
-            const float MaxX  = MinX + static_cast<float>(WCfg.CellsX) * WCfg.CellSizeMetres;
-            const float MaxY  = MinY + static_cast<float>(WCfg.CellsY) * WCfg.CellSizeMetres;
-            const float TTop  = std::max(0.0f, (1.6f - CurrOrigin.Z) / CurrDir.Z);
-            const float TBot  = std::min(BestDistance, (-1.6f - CurrOrigin.Z) / CurrDir.Z);
-            if (TBot > TTop)
-            {
-                constexpr uint32_t Steps = 24u;
-                const float        Dt    = (TBot - TTop) / static_cast<float>(Steps);
-                for (uint32_t S = 0u; S <= Steps; ++S)
-                {
-                    const float TTest = TTop + static_cast<float>(S) * Dt;
-                    if (TTest > BestDistance + 1.0e-4f)
-                    {
-                        break;
-                    }
-                    const Vec3 P = CurrOrigin + CurrDir * TTest;
-                    if (P.X >= MinX && P.X <= MaxX && P.Y >= MinY && P.Y <= MaxY)
-                    {
-                        const SurfaceFluidSample Samp = Context.ShallowWater->SampleSurface({P.X, P.Y});
-                        if (Samp.FluidDepthMetres > 1.5e-3f && P.Z <= Samp.FreeSurfaceElevationM + 1.0e-4f)
-                        {
-                            BestDistance = std::min(BestDistance, TTest);
-                            WaterHitPt   = Vec3{P.X, P.Y, Samp.FreeSurfaceElevationM};
-                            WaterSample  = Samp;
-                            HitWater     = true;
-                            HitPortalIdx = -1;
-                            HitMirrorIdx = -1;
-                            break;
-                        }
-                    }
-                }
-            }
+            BestDistance = WaterHitDist;
+            HitWater     = true;
+            HitPortalIdx = -1;
+            HitMirrorIdx = -1;
         }
 
         const bool ReachedSky = (BestDistance >= 9.9e5f);
@@ -1814,19 +2309,46 @@ TracedRayDiagnostics SdfRestirPortalExtension::TraceCoupledRadianceRay(
         if (HitWater)
         {
             Out.HitWaterSurface = true;
-            const Vec3  WaterN  = Normalise(Vec3{
+            const Vec3 HydroN   = Normalise(Vec3{
                 WaterSample.SurfaceNormal[0],
                 WaterSample.SurfaceNormal[1],
                 WaterSample.SurfaceNormal[2]});
             const float DepthM   = WaterSample.FluidDepthMetres;
-            const float WetT     = std::clamp((DepthM - 0.0015f) / 0.024f, 0.0f, 1.0f);
+            const float WetT     = std::clamp((DepthM - 0.0012f) / 0.018f, 0.0f, 1.0f);
             const float WetAlpha = WetT * WetT * (3.0f - 2.0f * WetT);
-            const float CosV     = std::clamp(Dot(-CurrDir, WaterN), 0.0f, 1.0f);
             const float MudC     = std::clamp(WaterSample.MudConcentration, 0.0f, 1.0f) * WetAlpha;
+            const Vec3  WaterN   = EvaluateCapillaryWaterNormal(
+                HydroN,
+                WaterHitPt,
+                DepthM,
+                MudC,
+                BestDistance,
+                Context.WaterCapillaryRippleStrength);
+            const float CosV     = std::clamp(Dot(-CurrDir, WaterN), 0.0f, 1.0f);
             const float F0       = 0.02f + 0.015f * MudC;
             const float Fresnel  = (F0 + (1.0f - F0) * std::pow(1.0f - CosV, 5.0f)) * (0.18f + 0.82f * WetAlpha);
 
-            const Vec3 ClearBedTint = SolidHit.Hit ? SolidHit.AlbedoRgb : Vec3{0.22f, 0.23f, 0.25f};
+            // Snell refraction offset onto the submerged mineral bed beneath the puddle for crisp liquid depth parallax!
+            Vec3 RefractedWaterDir{};
+            Vec3 BedSampleAlbedo = SolidHit.Hit ? SolidHit.AlbedoRgb : Vec3{0.20f, 0.22f, 0.25f};
+            if (RefractSnell(CurrDir, HydroN, 1.0f / 1.333f, RefractedWaterDir) && RefractedWaterDir.Z < -1.0e-3f)
+            {
+                const Vec3  SubBedPt = WaterHitPt + RefractedWaterDir * (DepthM / std::max(0.15f, -RefractedWaterDir.Z));
+                float       DummyR   = 0.45f;
+                Vec3        DummyN{0.0f, 0.0f, 1.0f};
+                Vec3        BaseBed = SolidHit.Hit ? Triangles_[0].AlbedoRgb : Vec3{0.18f, 0.20f, 0.23f};
+                if (SolidHit.Hit)
+                {
+                    BaseBed = SolidHit.AlbedoRgb;
+                }
+                else
+                {
+                    EvaluateMineralGroundDetail(SubBedPt, BestDistance + DepthM, BaseBed, DummyR, DummyN);
+                }
+                BedSampleAlbedo = BaseBed;
+            }
+
+            const Vec3 ClearBedTint = BedSampleAlbedo;
             const Vec3 RichMudTint{0.22f, 0.14f, 0.08f};
             const Vec3 WaterAbsorb{
                 std::exp(-DepthM * (0.45f + 6.0f * MudC)),
@@ -1957,7 +2479,8 @@ TracedRayDiagnostics SdfRestirPortalExtension::TraceCoupledRadianceRay(
             SolidHit.AlbedoRgb,
             SolidHit.Roughness,
             SolidHit.Metallic,
-            Context);
+            Context,
+            SolidHit.SnowSubsurfaceScatter);
 
         const DualTierGiReservoir GiRes = SampleRestirIndirectReservoir(
             Tier,
@@ -2190,34 +2713,13 @@ void SdfRestirPortalExtension::RenderViewportRgba8(
                     }
                 }
 
-                bool HitWaterFirst = false;
-                if (Context.ShallowWater != nullptr && HopDir.Z < -1.0e-4f)
+                bool               HitWaterFirst = false;
+                float              WaterDist     = BestDist;
+                Vec3               UnusedWaterPt{};
+                SurfaceFluidSample UnusedWaterSamp{};
+                if (IntersectShallowWaterSurface(HopOrigin, HopDir, BestDist, Context, WaterDist, UnusedWaterPt, UnusedWaterSamp))
                 {
-                    const auto& WCfg = Context.ShallowWater->Configuration();
-                    const float MinX = WCfg.WorldOriginXY[0];
-                    const float MinY = WCfg.WorldOriginXY[1];
-                    const float MaxX = MinX + static_cast<float>(WCfg.CellsX) * WCfg.CellSizeMetres;
-                    const float MaxY = MinY + static_cast<float>(WCfg.CellsY) * WCfg.CellSizeMetres;
-                    const float TTop = std::max(0.0f, (1.6f - HopOrigin.Z) / HopDir.Z);
-                    const float TBot = std::min(BestDist, (-1.6f - HopOrigin.Z) / HopDir.Z);
-                    if (TBot > TTop)
-                    {
-                        const float Dt = (TBot - TTop) / 16.0f;
-                        for (uint32_t S = 0u; S <= 16u; ++S)
-                        {
-                            const float TTest = TTop + static_cast<float>(S) * Dt;
-                            const Vec3  Wp    = HopOrigin + HopDir * TTest;
-                            if (Wp.X >= MinX && Wp.X <= MaxX && Wp.Y >= MinY && Wp.Y <= MaxY)
-                            {
-                                const SurfaceFluidSample Samp = Context.ShallowWater->SampleSurface({Wp.X, Wp.Y});
-                                if (Samp.FluidDepthMetres > 1.5e-3f && Wp.Z <= Samp.FreeSurfaceElevationM + 1.0e-4f)
-                                {
-                                    HitWaterFirst = true;
-                                    break;
-                                }
-                            }
-                        }
-                    }
+                    HitWaterFirst = true;
                 }
 
                 if (HitWaterFirst || (BestDist >= 9.9e5f))
@@ -2387,7 +2889,8 @@ void SdfRestirPortalExtension::RenderViewportRgba8(
                     TerminalHit.AlbedoRgb,
                     TerminalHit.Roughness,
                     TerminalHit.Metallic,
-                    Context);
+                    Context,
+                    TerminalHit.SnowSubsurfaceScatter);
 
                 Vec3 GlossyRefl{0.0f, 0.0f, 0.0f};
                 if (TerminalHit.Roughness < 0.50f || TerminalHit.Metallic > 0.05f)
@@ -2476,11 +2979,11 @@ void SdfRestirPortalExtension::RenderViewportRgba8(
             }
             else
             {
-                // Sky, Portal/Mirror Bezel, Closed-Dielectric Glass, or 2.5D Puddle Water: 2x anti-aliased trace!
-                const float JitterX[2] = {-0.24f, +0.24f};
-                const float JitterY[2] = {-0.24f, +0.24f};
-                Vec3        AaSum{0.0f, 0.0f, 0.0f};
-                for (uint32_t Sub = 0u; Sub < 2u; ++Sub)
+                // Sky, Portal/Mirror Bezel, Closed-Dielectric Glass, or 2.5D Puddle Water: 4x RGSS subpixel AA trace!
+                constexpr float JitterX[4] = {-0.375f, +0.125f, -0.125f, +0.375f};
+                constexpr float JitterY[4] = {-0.125f, -0.375f, +0.375f, +0.125f};
+                Vec3            AaSum{0.0f, 0.0f, 0.0f};
+                for (uint32_t Sub = 0u; Sub < 4u; ++Sub)
                 {
                     const float SubY = 1.0f - 2.0f * (static_cast<float>(Py) + 0.5f + JitterY[Sub]) / static_cast<float>(Height);
                     const float SubX = (2.0f * (static_cast<float>(Px) + 0.5f + JitterX[Sub]) / static_cast<float>(Width) - 1.0f) * Aspect;
@@ -2490,7 +2993,7 @@ void SdfRestirPortalExtension::RenderViewportRgba8(
                     AaSum = AaSum + Diag.FinalRadianceRgb;
                 }
                 Samples[PIdx].ValidSurface = false;
-                Samples[PIdx].BaseHdr      = AaSum * 0.5f;
+                Samples[PIdx].BaseHdr      = AaSum * 0.25f;
             }
         }
     }
@@ -2703,6 +3206,55 @@ void SdfRestirPortalExtension::RenderViewportRgba8(
         else
         {
             LinearHdr[I] = Samples[I].BaseHdr;
+        }
+    }
+
+    // 4b. Multi-Element Optical Camera Lens Flare (LensFlareModel.h: coated ghosts, starburst, streaks, glow & halo)!
+    if (Context.EnableSolarLensFlare && LuminanceRec709(Context.SunIrradianceRgb) > 0.05f)
+    {
+        const Vec3   SunDir   = Normalise(Context.SunDirectionUnit);
+        const double SunDepth = static_cast<double>(Dot(SunDir, Forward));
+        const double TanY     = static_cast<double>(TanHalf);
+        if (SunDepth > 1.0e-4 && TanY > 1.0e-5)
+        {
+            const double SunVis = EvaluateSolarFlareVisibility(CameraOriginWorld, SunDir, Context);
+            if (SunVis > 1.0e-4)
+            {
+                const double      SunScreenX = static_cast<double>(Dot(SunDir, Right)) / (SunDepth * TanY);
+                const double      SunScreenY = static_cast<double>(Dot(SunDir, Up)) / (SunDepth * TanY);
+                const double      AltKm      = std::max(0.0, static_cast<double>(CameraOriginWorld.Z) * 1.0e-3);
+                const SpectrumRgb TransAtm   = (Context.AtmosphereLut != nullptr)
+                                                   ? Context.AtmosphereLut->Sample(
+                                                         Context.Atmosphere,
+                                                         Context.Atmosphere.GroundRadiusKm + AltKm,
+                                                         std::clamp(static_cast<double>(SunDir.Z), -1.0, 1.0))
+                                                   : SpectrumRgb{1.0, 1.0, 1.0};
+                const SpectrumRgb SunAtCamera{
+                    static_cast<double>(Context.SunIrradianceRgb.X) * TransAtm.R,
+                    static_cast<double>(Context.SunIrradianceRgb.Y) * TransAtm.G,
+                    static_cast<double>(Context.SunIrradianceRgb.Z) * TransAtm.B};
+
+                const double HalfW = 0.5 * static_cast<double>(Width);
+                const double HalfH = 0.5 * static_cast<double>(Height);
+                for (uint32_t Py = 0u; Py < Height; ++Py)
+                {
+                    const double ScreenY = (HalfH - static_cast<double>(Py) - 0.5) / HalfH;
+                    for (uint32_t Px = 0u; Px < Width; ++Px)
+                    {
+                        const double      ScreenX = (static_cast<double>(Px) + 0.5 - HalfW) / HalfH;
+                        const SpectrumRgb Flare   = EvaluateLensFlareRadiance(
+                            ScreenX,
+                            ScreenY,
+                            SunScreenX,
+                            SunScreenY,
+                            SunAtCamera,
+                            SunVis,
+                            Context.LensFlareOptics);
+                        const size_t PIdx = static_cast<size_t>(Py) * Width + Px;
+                        LinearHdr[PIdx]   = LinearHdr[PIdx] + FromSpectrum(Flare);
+                    }
+                }
+            }
         }
     }
 

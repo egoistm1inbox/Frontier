@@ -14,6 +14,7 @@
 ------------------------------------------------------------------------------------------------------------------------------------------*/
 #include "Engine/Environment/CelestialPlanetaryExtension.h"
 #include "Engine/Environment/LightningThunderExtension.h"
+#include "Engine/Environment/SnowpackAccumulationExtension.h"
 #include "Engine/Fluid/PlumeFluidExtension.h"
 #include "Engine/Fluid/ShallowWaterMudExtension.h"
 #include "Engine/Foundation/Math.h"
@@ -22,6 +23,7 @@
 #include "Engine/Rendering/CloudField.h"
 #include "Engine/Rendering/DistanceField.h"
 #include "Engine/Rendering/FogMedium.h"
+#include "Engine/Rendering/LensFlareModel.h"
 
 #include <array>
 #include <cstdint>
@@ -64,10 +66,12 @@ struct RtxSceneTriangle
     bool     TransmissiveGlass   = false;
     float    RefractiveIndexIor  = 1.52f;
     Vec3     SpectralAbsorption  = {0.10f, 0.03f, 0.05f}; // [1/m] - Beer-Lambert internal absorption
-    bool     SmoothVertexNormals = false;
+    bool     SmoothVertexNormals     = false;
     Vec3     V0Normal{};
     Vec3     V1Normal{};
     Vec3     V2Normal{};
+    bool     ProceduralMineralDetail = false;
+    bool     SnowSubsurfaceScatter   = false;
 };
 
 struct BvhFlatBoundsRecord
@@ -158,12 +162,16 @@ struct CoupledWorldOpticalContext
     const LightningThunderExtension*   Lightning          = nullptr;
     const BallisticSparkExtension*     Sparks             = nullptr;
     const CelestialPlanetaryExtension* CelestialSky       = nullptr;
-    uint32_t                           MaxApertureBounces = 4u;
-    uint32_t                           RestirCandidateK   = 8u;
-    bool                               EnableSpatialReuse = true;
-    bool                               EnableWaveletFilter = true;
-    float                              HdrBloomStrength   = 0.24f;
-    float                              ExposureScale      = 0.82f;
+    uint32_t                           MaxApertureBounces           = 4u;
+    uint32_t                           RestirCandidateK             = 8u;
+    bool                               EnableSpatialReuse           = true;
+    bool                               EnableWaveletFilter          = true;
+    bool                               EnableSolarLensFlare         = false;
+    float                              WaterCapillaryRippleStrength = 0.012f;
+    SunDiscProfile                     SolarDisc{};
+    FlareOpticsProfile                 LensFlareOptics{};
+    float                              HdrBloomStrength             = 0.24f;
+    float                              ExposureScale                = 0.82f;
 };
 
 struct TracedRayDiagnostics
@@ -200,6 +208,37 @@ public:
         float Roughness   = 0.65f,
         Vec3  EmissiveRgb = {0.0f, 0.0f, 0.0f},
         float Metallic    = 0.0f);
+
+    // Registers a ground/plaza slab with anti-aliased multi-octave mineral stone/asphalt micro-aggregate detail!
+    uint32_t RegisterTexturedGroundSlab(
+        Vec3  CentreWorld,
+        Vec3  HalfExtents,
+        Vec3  BaseAlbedoRgb,
+        float BaseRoughness = 0.46f,
+        float Metallic      = 0.04f);
+
+    // Registers a smooth-normal, subsurface-scattering contiguous SnowpackPolygonSurface!
+    void RegisterSmoothSnowSurface(const SnowpackPolygonSurface& Surface);
+
+    // Clips a triangle against half-spacedot(P - PlanePoint, PlaneKeepNormal) >= 0 and registers surviving sub-triangles!
+    void RegisterHalfSpaceClippedTriangle(
+        const RtxSceneTriangle& Triangle,
+        Vec3                    PlanePoint,
+        Vec3                    PlaneKeepNormal);
+
+    // Registers a triangle of an object straddling a Portal: keeps ONLY the entering side in front of Entry,
+    // hides everything behind Entry, and places ONLY the emerging side in front of Exit!
+    void RegisterPortalTransitingTriangle(
+        const RtxSceneTriangle&       EntryWorldTriangle,
+        const SeamlessPortalAperture& Portal);
+
+    static Vec3 TransformPointAcrossPortal(
+        const SeamlessPortalAperture& Portal,
+        Vec3                          WorldPoint) noexcept;
+
+    static Vec3 TransformVectorAcrossPortal(
+        const SeamlessPortalAperture& Portal,
+        Vec3                          WorldVector) noexcept;
 
     // Registers a smooth UV-tessellated sphere (opaque/metallic OR closed refractive dielectric glass)!
     void RegisterSmoothSphere(
@@ -288,11 +327,26 @@ private:
         Vec3     EmissiveRgb{};
         float    Roughness          = 0.65f;
         float    Metallic           = 0.0f;
-        bool     TransmissiveGlass  = false;
-        float    RefractiveIndexIor = 1.52f;
-        Vec3     SpectralAbsorption = {0.10f, 0.03f, 0.05f};
-        uint32_t CardIndex          = UINT32_MAX;
+        bool     TransmissiveGlass     = false;
+        bool     SnowSubsurfaceScatter = false;
+        float    RefractiveIndexIor    = 1.52f;
+        Vec3     SpectralAbsorption    = {0.10f, 0.03f, 0.05f};
+        uint32_t CardIndex             = UINT32_MAX;
     };
+
+    [[nodiscard]] bool IntersectShallowWaterSurface(
+        Vec3                              Origin,
+        Vec3                              DirectionUnit,
+        float                             MaxDistanceM,
+        const CoupledWorldOpticalContext& Context,
+        float&                            OutHitDistanceM,
+        Vec3&                             OutWaterHitWorld,
+        SurfaceFluidSample&               OutSample) const noexcept;
+
+    [[nodiscard]] double EvaluateSolarFlareVisibility(
+        Vec3                              CameraOriginWorld,
+        Vec3                              SunDirectionUnit,
+        const CoupledWorldOpticalContext& Context) const noexcept;
 
     uint32_t BuildBvhRecursive(uint32_t StartTri, uint32_t TriCount);
 
@@ -333,7 +387,8 @@ private:
         Vec3                              Albedo,
         float                             Roughness,
         float                             Metallic,
-        const CoupledWorldOpticalContext& Context) const noexcept;
+        const CoupledWorldOpticalContext& Context,
+        bool                              SnowSubsurface = false) const noexcept;
 
     DistanceFieldScene                   SdfScene_{};
     std::vector<uint32_t>                SdfPrimitiveToCard_;

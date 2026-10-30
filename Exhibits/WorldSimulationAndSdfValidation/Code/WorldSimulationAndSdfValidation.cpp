@@ -24,6 +24,8 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <string>
@@ -146,6 +148,398 @@ bool WriteRgba8PngFile(const std::string& FilePath, uint32_t Width, uint32_t Hei
     }
     Out.write(reinterpret_cast<const char*>(PngBytes.data()), static_cast<std::streamsize>(PngBytes.size()));
     return Out.good();
+}
+
+/*------------------------------------------------------------------------------------------------------------------------------------------
+                         AUTHORED PROJECT-DRIVE FCT1 FACET LOADER & PORTAL TRANSIT ASSEMBLY
+------------------------------------------------------------------------------------------------------------------------------------------*/
+struct FacetSurfaceBuffer
+{
+    std::vector<Frontier::Vec3> Positions;
+    std::vector<Frontier::Vec3> VertexNormals;
+    std::vector<uint32_t>       Indices;
+    std::vector<uint32_t>       MaterialFamilies;
+    bool                        SmoothShaded = false;
+};
+
+bool LoadFacetSurfaceBuffer(const std::string& FilePath, FacetSurfaceBuffer& OutSurface)
+{
+    std::FILE* File = std::fopen(FilePath.c_str(), "rb");
+    if (File == nullptr)
+    {
+        return false;
+    }
+    std::fseek(File, 0, SEEK_END);
+    const long FileBytes = std::ftell(File);
+    std::fseek(File, 0, SEEK_SET);
+    if (FileBytes < 48)
+    {
+        std::fclose(File);
+        return false;
+    }
+
+    std::vector<uint8_t> Raw(static_cast<size_t>(FileBytes));
+    if (std::fread(Raw.data(), 1u, Raw.size(), File) != Raw.size())
+    {
+        std::fclose(File);
+        return false;
+    }
+    std::fclose(File);
+
+    if (std::memcmp(Raw.data(), "FCT1", 4u) != 0)
+    {
+        return false;
+    }
+
+    uint32_t VertexCount = 0u;
+    uint32_t FacetCount  = 0u;
+    uint32_t HeaderBits  = 0u;
+    std::memcpy(&VertexCount, Raw.data() + 4u, 4u);
+    std::memcpy(&FacetCount, Raw.data() + 8u, 4u);
+    std::memcpy(&HeaderBits, Raw.data() + 12u, 4u);
+
+    const float*    PosPtr = reinterpret_cast<const float*>(Raw.data() + 48u);
+    const uint32_t* IdxPtr = reinterpret_cast<const uint32_t*>(Raw.data() + 48u + static_cast<size_t>(VertexCount) * 12u);
+    const uint32_t* FamPtr = IdxPtr + static_cast<size_t>(FacetCount) * 3u;
+
+    OutSurface.Positions.resize(VertexCount);
+    for (uint32_t I = 0u; I < VertexCount; ++I)
+    {
+        OutSurface.Positions[I] = {PosPtr[I * 3u + 0u], PosPtr[I * 3u + 1u], PosPtr[I * 3u + 2u]};
+    }
+    OutSurface.Indices.assign(IdxPtr, IdxPtr + static_cast<size_t>(FacetCount) * 3u);
+    OutSurface.MaterialFamilies.assign(FamPtr, FamPtr + FacetCount);
+    OutSurface.VertexNormals.assign(VertexCount, Frontier::Vec3{0.0f, 0.0f, 0.0f});
+    OutSurface.SmoothShaded = (HeaderBits & 1u) != 0u;
+
+    if (OutSurface.SmoothShaded)
+    {
+        const float* CornerPtr = reinterpret_cast<const float*>(FamPtr + FacetCount);
+        for (uint32_t F = 0u; F < FacetCount; ++F)
+        {
+            for (uint32_t C = 0u; C < 3u; ++C)
+            {
+                const uint32_t V  = OutSurface.Indices[F * 3u + C];
+                const float*   Cn = CornerPtr + (F * 9u + C * 3u);
+                OutSurface.VertexNormals[V] =
+                    OutSurface.VertexNormals[V] + Frontier::Vec3{Cn[0], Cn[1], Cn[2]};
+            }
+        }
+        for (Frontier::Vec3& Nrm : OutSurface.VertexNormals)
+        {
+            Nrm = Frontier::Normalise(Nrm);
+        }
+    }
+    return true;
+}
+
+FacetSurfaceBuffer MirrorLateralSurface(const FacetSurfaceBuffer& Source, float UniformScale)
+{
+    FacetSurfaceBuffer Out = Source;
+    for (size_t I = 0u; I < Out.Positions.size(); ++I)
+    {
+        Out.Positions[I] = {
+            Source.Positions[I].X * UniformScale,
+            -Source.Positions[I].Y * UniformScale,
+            Source.Positions[I].Z * UniformScale};
+        Out.VertexNormals[I] = {
+            Source.VertexNormals[I].X,
+            -Source.VertexNormals[I].Y,
+            Source.VertexNormals[I].Z};
+    }
+    for (size_t F = 0u; F + 2u < Out.Indices.size(); F += 3u)
+    {
+        std::swap(Out.Indices[F + 1u], Out.Indices[F + 2u]);
+    }
+    return Out;
+}
+
+void RegisterOrientedBoxColumns(
+    Frontier::SdfRestirPortalExtension& Scene,
+    Frontier::Vec3                      CentreWorld,
+    Frontier::Vec3                      RightAxis,
+    Frontier::Vec3                      UpAxis,
+    Frontier::Vec3                      FrontNormal,
+    Frontier::Vec3                      HalfExtentsRuf,
+    Frontier::Vec3                      AlbedoRgb,
+    float                               Roughness,
+    float                               Metallic,
+    Frontier::Vec3                      EmissiveRgb = {0.0f, 0.0f, 0.0f})
+{
+    auto Pt = [&](float Sr, float Su, float Sf) -> Frontier::Vec3
+    {
+        return CentreWorld +
+               RightAxis * (Sr * HalfExtentsRuf.X) +
+               UpAxis * (Su * HalfExtentsRuf.Y) +
+               FrontNormal * (Sf * HalfExtentsRuf.Z);
+    };
+
+    const Frontier::Vec3 P000 = Pt(-1.0f, -1.0f, -1.0f);
+    const Frontier::Vec3 P100 = Pt(+1.0f, -1.0f, -1.0f);
+    const Frontier::Vec3 P010 = Pt(-1.0f, +1.0f, -1.0f);
+    const Frontier::Vec3 P110 = Pt(+1.0f, +1.0f, -1.0f);
+    const Frontier::Vec3 P001 = Pt(-1.0f, -1.0f, +1.0f);
+    const Frontier::Vec3 P101 = Pt(+1.0f, -1.0f, +1.0f);
+    const Frontier::Vec3 P011 = Pt(-1.0f, +1.0f, +1.0f);
+    const Frontier::Vec3 P111 = Pt(+1.0f, +1.0f, +1.0f);
+
+    auto Quad = [&](Frontier::Vec3 A, Frontier::Vec3 B, Frontier::Vec3 C, Frontier::Vec3 D, Frontier::Vec3 Nrm)
+    {
+        Frontier::RtxSceneTriangle T0{};
+        T0.V0          = A;
+        T0.V1          = B;
+        T0.V2          = C;
+        T0.Normal      = Frontier::Normalise(Nrm);
+        T0.AlbedoRgb   = AlbedoRgb;
+        T0.EmissiveRgb = EmissiveRgb;
+        T0.Roughness   = Roughness;
+        T0.Metallic    = Metallic;
+        Scene.RegisterPolygonTriangle(T0);
+
+        Frontier::RtxSceneTriangle T1 = T0;
+        T1.V0                         = A;
+        T1.V1                         = C;
+        T1.V2                         = D;
+        Scene.RegisterPolygonTriangle(T1);
+    };
+
+    Quad(P001, P101, P111, P011, FrontNormal);
+    Quad(P100, P000, P010, P110, -FrontNormal);
+    Quad(P101, P100, P110, P111, RightAxis);
+    Quad(P000, P001, P011, P010, -RightAxis);
+    Quad(P011, P111, P110, P010, UpAxis);
+    Quad(P000, P100, P101, P001, -UpAxis);
+}
+
+void RegisterPortalGatewayFrame(
+    Frontier::SdfRestirPortalExtension& Scene,
+    Frontier::Vec3                      CentreWorld,
+    Frontier::Vec3                      RightAxis,
+    Frontier::Vec3                      UpAxis,
+    Frontier::Vec3                      FrontNormal,
+    float                               HalfWidthM,
+    float                               HalfHeightM,
+    Frontier::Vec3                      GlowTrimRgb)
+{
+    const float PostHalfW = 0.085f;
+    const float PostDepth = 0.075f;
+    const Frontier::Vec3 FrameAlbedo{0.16f, 0.18f, 0.22f};
+
+    // Left & right brushed titanium gateway pillars + top lintel (open behind the portal so empty plaza is clearly visible!).
+    RegisterOrientedBoxColumns(
+        Scene,
+        CentreWorld - RightAxis * (HalfWidthM + PostHalfW),
+        RightAxis,
+        UpAxis,
+        FrontNormal,
+        {PostHalfW, HalfHeightM + PostHalfW * 2.0f, PostDepth},
+        FrameAlbedo,
+        0.24f,
+        0.82f);
+    RegisterOrientedBoxColumns(
+        Scene,
+        CentreWorld + RightAxis * (HalfWidthM + PostHalfW),
+        RightAxis,
+        UpAxis,
+        FrontNormal,
+        {PostHalfW, HalfHeightM + PostHalfW * 2.0f, PostDepth},
+        FrameAlbedo,
+        0.24f,
+        0.82f);
+    RegisterOrientedBoxColumns(
+        Scene,
+        CentreWorld + UpAxis * (HalfHeightM + PostHalfW),
+        RightAxis,
+        UpAxis,
+        FrontNormal,
+        {HalfWidthM + PostHalfW * 2.0f, PostHalfW, PostDepth},
+        FrameAlbedo,
+        0.24f,
+        0.82f);
+
+    // Thin inner energy trim strips framing the portal horizon!
+    const float TrimW = 0.024f;
+    RegisterOrientedBoxColumns(
+        Scene,
+        CentreWorld - RightAxis * (HalfWidthM + TrimW * 0.5f),
+        RightAxis,
+        UpAxis,
+        FrontNormal,
+        {TrimW, HalfHeightM, PostDepth * 1.08f},
+        GlowTrimRgb,
+        0.15f,
+        0.0f,
+        GlowTrimRgb * 2.8f);
+    RegisterOrientedBoxColumns(
+        Scene,
+        CentreWorld + RightAxis * (HalfWidthM + TrimW * 0.5f),
+        RightAxis,
+        UpAxis,
+        FrontNormal,
+        {TrimW, HalfHeightM, PostDepth * 1.08f},
+        GlowTrimRgb,
+        0.15f,
+        0.0f,
+        GlowTrimRgb * 2.8f);
+    RegisterOrientedBoxColumns(
+        Scene,
+        CentreWorld + UpAxis * (HalfHeightM + TrimW * 0.5f),
+        RightAxis,
+        UpAxis,
+        FrontNormal,
+        {HalfWidthM + TrimW * 2.0f, TrimW, PostDepth * 1.08f},
+        GlowTrimRgb,
+        0.15f,
+        0.0f,
+        GlowTrimRgb * 2.8f);
+}
+
+bool RegisterTransitingControlVehicle(
+    Frontier::SdfRestirPortalExtension&   Scene,
+    const std::string&                    GeometryDir,
+    Frontier::Vec3                        VehicleOriginWorld,
+    Frontier::Vec3                        VehicleForwardUnit,
+    const Frontier::SeamlessPortalAperture& Portal,
+    uint32_t&                             OutTotalSourceFacets)
+{
+    FacetSurfaceBuffer Body{};
+    FacetSurfaceBuffer TyreL{};
+    FacetSurfaceBuffer RimRaw{};
+    if (!LoadFacetSurfaceBuffer(GeometryDir + "/ControlVehicleBody.facet", Body) ||
+        !LoadFacetSurfaceBuffer(GeometryDir + "/ControlVehicleTyre.facet", TyreL) ||
+        !LoadFacetSurfaceBuffer(GeometryDir + "/ControlVehicleRim.facet", RimRaw))
+    {
+        return false;
+    }
+
+    const float              RimScale = 0.34460f / 0.344818f;
+    const FacetSurfaceBuffer TyreR    = MirrorLateralSurface(TyreL, 1.0f);
+    FacetSurfaceBuffer       RimL     = RimRaw;
+    for (Frontier::Vec3& P : RimL.Positions)
+    {
+        P = P * RimScale;
+    }
+    RimL.SmoothShaded           = false;
+    FacetSurfaceBuffer RimR     = MirrorLateralSurface(RimRaw, RimScale);
+    RimR.SmoothShaded           = false;
+
+    const Frontier::Vec3 Fwd  = Frontier::Normalise(VehicleForwardUnit);
+    const Frontier::Vec3 Up   = {0.0f, 0.0f, 1.0f};
+    const Frontier::Vec3 Left = Frontier::Normalise(Frontier::Cross(Up, Fwd));
+
+    auto RegisterVehiclePart = [&](const FacetSurfaceBuffer& Part, Frontier::Vec3 LocalOffset, bool ForceHardRim)
+    {
+        OutTotalSourceFacets += static_cast<uint32_t>(Part.Indices.size() / 3u);
+        for (size_t F = 0u; F + 2u < Part.Indices.size(); F += 3u)
+        {
+            const uint32_t I0  = Part.Indices[F + 0u];
+            const uint32_t I1  = Part.Indices[F + 1u];
+            const uint32_t I2  = Part.Indices[F + 2u];
+            const uint32_t Fam = Part.MaterialFamilies[F / 3u];
+
+            auto ToWorld = [&](Frontier::Vec3 Lp) -> Frontier::Vec3
+            {
+                const Frontier::Vec3 Shifted = Lp + LocalOffset;
+                return VehicleOriginWorld + Fwd * Shifted.X + Left * Shifted.Y + Up * Shifted.Z;
+            };
+            auto DirToWorld = [&](Frontier::Vec3 Ln) -> Frontier::Vec3
+            {
+                return Frontier::Normalise(Fwd * Ln.X + Left * Ln.Y + Up * Ln.Z);
+            };
+
+            Frontier::RtxSceneTriangle Tri{};
+            Tri.V0 = ToWorld(Part.Positions[I0]);
+            Tri.V1 = ToWorld(Part.Positions[I1]);
+            Tri.V2 = ToWorld(Part.Positions[I2]);
+
+            const Frontier::Vec3 EdgeN = Frontier::Cross(Tri.V1 - Tri.V0, Tri.V2 - Tri.V0);
+            if (Frontier::Length(EdgeN) <= 1.0e-7f)
+            {
+                continue;
+            }
+            Tri.Normal              = Frontier::Normalise(EdgeN);
+            Tri.SmoothVertexNormals = Part.SmoothShaded && !ForceHardRim;
+            if (Tri.SmoothVertexNormals)
+            {
+                Tri.V0Normal = DirToWorld(Part.VertexNormals[I0]);
+                Tri.V1Normal = DirToWorld(Part.VertexNormals[I1]);
+                Tri.V2Normal = DirToWorld(Part.VertexNormals[I2]);
+            }
+
+            // Authoritative Project-Drive material mapping with metallic crimson GT coat & smoked glass!
+            switch (Fam)
+            {
+            case 6u: // BodyCoat (vivid metallic racing crimson so both halves stand out unmistakably!)
+                Tri.AlbedoRgb = {0.84f, 0.09f, 0.07f};
+                Tri.Roughness = 0.13f;
+                Tri.Metallic  = 0.38f;
+                break;
+            case 7u: // VehicleGlass (tinted glossy automotive canopy)
+                Tri.AlbedoRgb = {0.06f, 0.09f, 0.13f};
+                Tri.Roughness = 0.05f;
+                Tri.Metallic  = 0.15f;
+                break;
+            case 8u: // VehiclePlastic / splitter / diffuser
+                Tri.AlbedoRgb = {0.05f, 0.055f, 0.065f};
+                Tri.Roughness = 0.42f;
+                Tri.Metallic  = 0.05f;
+                break;
+            case 9u: // Tyre rubber or machined alloy rim spokes
+                if (ForceHardRim)
+                {
+                    Tri.AlbedoRgb = {0.78f, 0.81f, 0.86f};
+                    Tri.Roughness = 0.18f;
+                    Tri.Metallic  = 0.90f;
+                }
+                else
+                {
+                    Tri.AlbedoRgb = {0.055f, 0.058f, 0.064f};
+                    Tri.Roughness = 0.72f;
+                    Tri.Metallic  = 0.0f;
+                }
+                break;
+            case 10u: // Anodized cobalt centre-lock hub
+                Tri.AlbedoRgb = {0.10f, 0.34f, 0.85f};
+                Tri.Roughness = 0.20f;
+                Tri.Metallic  = 0.92f;
+                break;
+            case 13u: // Xenon/LED Headlight
+                Tri.AlbedoRgb   = {0.82f, 0.88f, 0.96f};
+                Tri.EmissiveRgb = {1.65f, 1.80f, 2.15f};
+                Tri.Roughness   = 0.08f;
+                break;
+            case 14u: // Ruby LED Taillight bar
+                Tri.AlbedoRgb   = {0.92f, 0.08f, 0.08f};
+                Tri.EmissiveRgb = {4.8f, 0.22f, 0.16f};
+                Tri.Roughness   = 0.10f;
+                break;
+            default:
+                Tri.AlbedoRgb = {0.62f, 0.65f, 0.70f};
+                Tri.Roughness = 0.35f;
+                Tri.Metallic  = 0.55f;
+                break;
+            }
+
+            Scene.RegisterPortalTransitingTriangle(Tri, Portal);
+        }
+    };
+
+    // Place model origin at Z = 0.2532 m so all four tyres (HubZ 0.0914 m, Radius 0.3446 m) rest tangent on Z = 0!
+    RegisterVehiclePart(Body, {0.0f, 0.0f, 0.2532f}, false);
+
+    // Four authored ControlVehicle.blend wheel sockets: FL, FR, RL, RR!
+    const Frontier::Vec3 WheelSockets[4] = {
+        {+1.7274f, +1.0475f, 0.3446f},
+        {+1.7274f, -1.0475f, 0.3446f},
+        {-1.6686f, +1.0475f, 0.3446f},
+        {-1.6686f, -1.0475f, 0.3446f}};
+    for (int W = 0; W < 4; ++W)
+    {
+        const bool RightSide = (W & 1) != 0;
+        RegisterVehiclePart(RightSide ? TyreR : TyreL, WheelSockets[W], false);
+        RegisterVehiclePart(RightSide ? RimR : RimL, WheelSockets[W], true);
+    }
+    return true;
 }
 
 struct ValidationLedger
@@ -690,8 +1084,8 @@ int main()
     // -----------------------------------------------------------------------------------------------------------------
     std::printf("\n--- Suite 14 & 15: Dual-Tier GTX SDF & RTX BVH ReSTIR, Mirrors & Portals + Volumetrics ---\n");
     SdfRestirPortalExtension DualRenderer{};
-    // Ground slab + colored walls + vehicle silhouette + remote sanctuary pillar seen through Portal!
-    DualRenderer.RegisterDualTierSolidBox({0.0f, 0.0f, -0.25f}, {45.0f, 45.0f, 0.25f}, {0.26f, 0.27f, 0.30f}, 0.75f);
+    // Textured mineral-aggregate ground slab + colored architectural walls + remote sanctuary pillar seen through Portal!
+    DualRenderer.RegisterTexturedGroundSlab({0.0f, 0.0f, -0.25f}, {45.0f, 45.0f, 0.25f}, {0.23f, 0.25f, 0.29f}, 0.50f, 0.04f);
     DualRenderer.RegisterDualTierSolidBox({-3.5f, 3.2f, 1.1f}, {0.8f, 1.8f, 1.1f}, {0.82f, 0.24f, 0.18f}, 0.55f);
     DualRenderer.RegisterDualTierSolidBox({28.0f, 0.0f, 1.6f}, {1.1f, 1.1f, 1.6f}, {0.20f, 0.78f, 0.45f}, 0.45f, {0.15f, 0.45f, 0.25f});
 
@@ -719,12 +1113,23 @@ int main()
     ScenePortal.HalfHeightMetres = 1.55f;
     DualRenderer.RegisterSeamlessPortal(ScenePortal);
 
-    // Puddle basin in front of mirror & portal so wet ground reflects Clouds, Fog, Plume, Mirror & Portal!
+    // Fine 160x160 (0.085 m cell) multi-lobe organic puddle basin so shorelines & liquid normals are silky smooth!
     ShallowWaterConfiguration SceneWaterCfg = LakeCfg;
-    SceneWaterCfg.WorldOriginXY             = {-12.0f, -12.0f};
+    SceneWaterCfg.CellsX                    = 160u;
+    SceneWaterCfg.CellsY                    = 160u;
+    SceneWaterCfg.CellSizeMetres            = 0.085f;
+    SceneWaterCfg.WorldOriginXY             = {-5.6f, -6.8f};
     ShallowWaterMudExtension ScenePuddle{SceneWaterCfg};
-    ScenePuddle.SculptBedDepressionOrMound({1.0f, 0.0f}, 4.5f, -0.08f);
-    ScenePuddle.FillBasinRegion({1.0f, 0.0f}, 4.2f, 0.02f, 0.0f);
+    ScenePuddle.SculptBedDepressionOrMound({1.0f, 0.0f}, 4.3f, -0.075f);
+    ScenePuddle.SculptBedDepressionOrMound({-0.6f, -1.35f}, 2.5f, -0.055f);
+    ScenePuddle.SculptBedDepressionOrMound({2.1f, +1.25f}, 2.4f, -0.050f);
+    ScenePuddle.FillBasinRegion({1.0f, 0.0f}, 4.1f, 0.014f, 0.0f);
+    ScenePuddle.FillBasinRegion({-0.6f, -1.35f}, 2.3f, 0.014f, 0.0f);
+    ScenePuddle.FillBasinRegion({2.1f, +1.25f}, 2.2f, 0.014f, 0.28f); // Smooth transition to Bingham mud lobe on the left!
+    for (int Relax = 0; Relax < 18; ++Relax)
+    {
+        (void)ScenePuddle.StepSimulation(1.0f / 120.0f);
+    }
 
     TransmittanceLut SkyLut{};
     AtmosphereParameters Atmos{};
@@ -870,96 +1275,164 @@ int main()
         "VehicleCabinHmi 12-app catalogue, shift LEDs & hazard telltales",
         Note);
 
-    // Render 4 PNG visual proof images into Exhibits/WorldSimulationAndSdfValidation/Images/!
-    const std::string ImgDir = "Exhibits/WorldSimulationAndSdfValidation/Images/";
+    // Render HD visual proof images into Exhibits/WorldSimulationAndSdfValidation/Images/!
+    const bool        SanitizerFast = (std::getenv("FRONTIER_SANITIZER_VIEWPORT") != nullptr);
+    const uint32_t    HdWidth       = SanitizerFast ? 240u : 960u;
+    const uint32_t    HdHeight      = SanitizerFast ? 135u : 540u;
+    const uint32_t    GtxWidth      = SanitizerFast ? 192u : 640u;
+    const uint32_t    GtxHeight     = SanitizerFast ? 108u : 360u;
+    const std::string ImgDir        = SanitizerFast ? "/tmp/frontier-san-images/" : "Exhibits/WorldSimulationAndSdfValidation/Images/";
 
     std::vector<uint8_t> GtxFrameRgba, RtxFrameRgba;
     DualRenderer.RenderViewportRgba8(
         GpuTracingTier::SignedDistanceFieldGtx,
-        320u,
-        200u,
+        GtxWidth,
+        GtxHeight,
         CamPos,
         {2.0f, 0.0f, 1.45f},
-        0.95f,
+        0.92f,
         OptCtx,
         GtxFrameRgba);
     DualRenderer.RenderViewportRgba8(
         GpuTracingTier::HardwareRayTracingRtx,
-        320u,
-        200u,
+        HdWidth,
+        HdHeight,
         CamPos,
         {2.0f, 0.0f, 1.45f},
-        0.95f,
+        0.92f,
         OptCtx,
         RtxFrameRgba);
 
-    // Scene 3: Snow Pit with Carved Tyre Ruts + Cleaved Fracture Blocks + Scene-Lighting Sparks!
-    SdfRestirPortalExtension SnowSparkScene{};
-    SnowSparkScene.RegisterDualTierSolidBox({0.0f, 0.0f, -0.27f}, {30.0f, 30.0f, 0.25f}, {0.14f, 0.16f, 0.20f}, 0.8f);
-    // Register the single contiguous SnowpackPolygonSurface triangles directly into RTX scene!
-    const auto& SnowSurf = Snowpack.GroundPolygonSurface();
-    for (size_t T = 0u; T + 2u < SnowSurf.Indices.size(); T += 3u)
+    // Scene 3: Smooth High-Resolution Snowpack (160x160 @ 7.5 cm + Marching-Squares Contour + Smooth Normals + Subsurface)
+    //          with Curved Dual-Wheel Wong-Bekker Tyre Ruts, Cleaved Fracture Hulls & Swept Motion-Stretched Sparks!
+    SnowpackDomainSpec HdSnowSpec{};
+    HdSnowSpec.CellsX                    = 160u;
+    HdSnowSpec.CellsY                    = 160u;
+    HdSnowSpec.CellSizeMetres            = 0.075f;
+    HdSnowSpec.OriginX                   = -2.2f;
+    HdSnowSpec.OriginY                   = -6.2f;
+    HdSnowSpec.AmbientTemperatureKelvin  = 268.15f;
+    HdSnowSpec.SurfaceInclusionThreshold = 0.004f;
+    SnowpackAccumulationExtension HdSnowpack{HdSnowSpec};
+
+    // Sculpt organic wind-drifted snowpack + deep snow pit (leaving foreground-right dark mineral asphalt exposed so the
+    // smooth Marching-Squares 3D snow perimeter is unmistakably a growing 3D PolygonSurface, NEVER floor whitening!).
+    HdSnowpack.SculptSnowPitOrDrift(4.5f, +0.65f, 3.85f, 0.42f, 155.0f);
+    HdSnowpack.SculptSnowPitOrDrift(2.2f, +1.55f, 2.55f, 0.26f, 145.0f);
+    HdSnowpack.SculptSnowPitOrDrift(6.4f, -0.55f, 2.85f, 0.31f, 150.0f);
+
+    // Carve smooth curved dual-track left & right tyre ruts through the deep snowdrift!
+    for (int Step = 0; Step < 64; ++Step)
     {
-        const auto& Va      = SnowSurf.Vertices[SnowSurf.Indices[T + 0u]];
-        const auto& Vb      = SnowSurf.Vertices[SnowSurf.Indices[T + 1u]];
-        const auto& Vc      = SnowSurf.Vertices[SnowSurf.Indices[T + 2u]];
-        const Vec3  TriN    = Normalise(Cross(Vb.Position - Va.Position, Vc.Position - Va.Position));
-        const float RutTint = 1.0f - 0.28f * Va.CompactionRatio;
-        SnowSparkScene.RegisterPolygonTriangle({
-            Va.Position,
-            Vb.Position,
-            Vc.Position,
-            TriN,
-            {0.82f * RutTint, 0.90f * RutTint, 0.99f},
-            {0.0f, 0.0f, 0.0f},
-            0.55f,
-            0u});
+        const float T       = static_cast<float>(Step) / 63.0f;
+        const float PathX   = 0.95f + T * 6.60f;
+        const float Curve   = 0.58f * std::sin(T * 2.45f);
+        const float Slope   = 0.58f * 2.45f * std::cos(T * 2.45f) / 6.60f;
+        const Vec3  Tangent = Normalise(Vec3{1.0f, Slope, 0.0f});
+        const Vec3  Lat     = Normalise(Vec3{-Tangent.Y, Tangent.X, 0.0f});
+
+        for (float Side : {-0.76f, +0.76f})
+        {
+            SnowWheelRutInput RutIn{};
+            RutIn.WheelContactWorld = Vec3{PathX, 0.55f + Curve, 0.0f} + Lat * Side;
+            RutIn.WheelForwardWorld = Tangent;
+            RutIn.TyreWidthMetres   = 0.310f;
+            RutIn.TyreRadiusMetres  = 0.345f;
+            RutIn.NormalLoadNewtons = 4650.0f;
+            RutIn.WheelForwardSpeed = 11.5f;
+            (void)HdSnowpack.CarveWheelRutAndEvaluateResistance(RutIn);
+        }
     }
-    // Register cleaved concrete fracture fragments separated cleanly mid-burst!
-    for (size_t F = 0u; F < std::min<size_t>(10u, ConcreteFrags.size()); ++F)
+    HdSnowpack.RebuildContiguousPolygonSurfaces(ParkedCar);
+
+    // Verify smooth vertex-normal continuity across adjacent snow triangles (eliminating flat grid faceting!).
+    const auto& HdSnowSurf         = HdSnowpack.GroundPolygonSurface();
+    uint32_t    SmoothNormalCount  = 0u;
+    for (const auto& V : HdSnowSurf.Vertices)
     {
-        const Vec3  Offset = Vec3{3.0f, -1.75f, 0.0f} + ConcreteFrags[F].LinearVelocityMps * 0.14f;
-        const auto& Ps     = ConcreteFrags[F].PolygonSurface;
+        if (V.Normal.Z > 0.25f && (std::abs(V.Normal.X) > 1.0e-3f || std::abs(V.Normal.Y) > 1.0e-3f))
+        {
+            ++SmoothNormalCount;
+        }
+    }
+    std::snprintf(
+        Note,
+        sizeof(Note),
+        "snow_verts=%zu snow_tris=%zu sloped_smooth_verts=%u peak=%.3f m",
+        HdSnowSurf.Vertices.size(),
+        HdSnowSurf.Indices.size() / 3u,
+        SmoothNormalCount,
+        HdSnowSurf.PeakThicknessM);
+    Ledger.Verify(
+        HdSnowSurf.Vertices.size() > 1500u && SmoothNormalCount > 400u && HdSnowSurf.PeakThicknessM > 0.25f,
+        "Smooth Marching-Squares 3D snow PolygonSurface & smooth rut normals",
+        Note);
+
+    SdfRestirPortalExtension SnowSparkScene{};
+    SnowSparkScene.RegisterTexturedGroundSlab({0.0f, 0.0f, -0.25f}, {36.0f, 36.0f, 0.25f}, {0.13f, 0.15f, 0.19f}, 0.44f, 0.05f);
+    SnowSparkScene.RegisterSmoothSnowSurface(HdSnowSurf);
+
+    // Cleave a low-profile roadside jersey barrier on the exposed dark mineral asphalt beside the snowbank!
+    const ConvexSolidFragment JerseyBlock = SolidFractureExtension::CreateIntactBoxSolid(
+        {3.35f, -1.95f, 0.44f},
+        {0.58f, 0.26f, 0.44f},
+        2380.0f);
+    FractureImpactDescriptor BarrierHit{};
+    BarrierHit.ImpactPointWorld     = {3.05f, -1.95f, 0.52f};
+    BarrierHit.ImpactDirection      = {0.85f, 0.35f, 0.25f};
+    BarrierHit.ImpactKineticEnergyJ = 7200.0f;
+    BarrierHit.ImpulseNewtonSeconds = 1350.0f;
+    BarrierHit.AnchoredBaseAtMinZ   = true;
+    BarrierHit.DeterministicSeed    = 0x777BEEFull;
+    std::vector<ConvexSolidFragment>   BarrierFrags;
+    std::vector<FragmentAdjacencyBond> BarrierBonds;
+    (void)FractureEngine.CleaveConvexSolid(
+        JerseyBlock,
+        LookupFractureMaterialProperties(FractureMaterialPreset::ReinforcedConcrete),
+        BarrierHit,
+        BarrierFrags,
+        BarrierBonds);
+
+    for (size_t F = 0u; F < BarrierFrags.size(); ++F)
+    {
+        const Vec3  Disp = BarrierFrags[F].AnchoredIntact ? Vec3{0.0f, 0.0f, 0.0f} : (BarrierFrags[F].LinearVelocityMps * 0.09f);
+        const auto& Ps   = BarrierFrags[F].PolygonSurface;
         for (size_t T = 0u; T + 2u < Ps.Indices.size(); T += 3u)
         {
-            SnowSparkScene.RegisterPolygonTriangle({
-                Ps.Vertices[Ps.Indices[T + 0u]] + Offset,
-                Ps.Vertices[Ps.Indices[T + 1u]] + Offset,
-                Ps.Vertices[Ps.Indices[T + 2u]] + Offset,
-                Ps.Normals[T / 3u],
-                {0.62f, 0.56f, 0.49f},
-                {0.0f, 0.0f, 0.0f},
-                0.70f,
-                0u});
+            RtxSceneTriangle FragTri{};
+            FragTri.V0        = Ps.Vertices[Ps.Indices[T + 0u]] + Disp;
+            FragTri.V1        = Ps.Vertices[Ps.Indices[T + 1u]] + Disp;
+            FragTri.V2        = Ps.Vertices[Ps.Indices[T + 2u]] + Disp;
+            FragTri.Normal    = Ps.Normals[T / 3u];
+            FragTri.AlbedoRgb = {0.46f, 0.44f, 0.42f};
+            FragTri.Roughness = 0.66f;
+            SnowSparkScene.RegisterPolygonTriangle(FragTri);
         }
     }
 
-    // Calibrated visual spark shower bouncing near the fractured concrete & casting warm golden light!
+    // True swept ballistic spark shower (rendered natively as anti-aliased motion-stretched capsules, ZERO solid cubes!)
     BallisticSparkConfig VisSparkCfg{};
-    VisSparkCfg.SceneLuminanceGain = 1.8f;
+    VisSparkCfg.SceneLuminanceGain  = 2.6f;
     BallisticSparkExtension VisSparks{VisSparkCfg};
     MetallicScrapeContact   VisScrape{};
-    VisScrape.ContactPointWorld     = {2.6f, -1.3f, 0.45f};
-    VisScrape.TangentialVelocityMps = {7.5f, 2.5f, 2.2f};
-    VisScrape.NormalForceNewtons    = 4800.0f;
-    VisScrape.RequestedSparkCount   = 18u;
+    VisScrape.ContactPointWorld     = {2.85f, -1.78f, 0.46f};
+    VisScrape.TangentialVelocityMps = {9.5f, 2.4f, 3.1f};
+    VisScrape.NormalForceNewtons    = 6200.0f;
+    VisScrape.RequestedSparkCount   = 68u;
     VisSparks.SpawnScrapeSparks(VisScrape);
-    for (int S = 0; S < 6; ++S)
+    for (int S = 0; S < 7; ++S)
     {
         VisSparks.StepBallisticSparks(1.0f / 60.0f);
     }
-    for (const auto& Sp : VisSparks.Sparks())
-    {
-        if (Sp.Active)
-        {
-            const Vec3 Glow = BallisticSparkExtension::EvaluatePlanckianSparkChromaticity(Sp.TemperatureK) * 18.0f;
-            SnowSparkScene.RegisterDualTierSolidBox(Sp.PositionWorld, {0.035f, 0.035f, 0.035f}, {1.0f, 0.8f, 0.4f}, 0.2f, Glow);
-        }
-    }
 
     CoupledWorldOpticalContext DuskSparkCtx = OptCtx;
-    DuskSparkCtx.SunDirectionUnit           = Normalise(Vec3{-0.20f, -0.82f, 0.36f});
-    DuskSparkCtx.SunIrradianceRgb           = {9.5f, 8.8f, 8.2f};
+    // Low grazing golden-winter sun reveals every smooth 3D snowdrift contour & rounded dual tyre rut without whiteout!
+    DuskSparkCtx.SunDirectionUnit           = Normalise(Vec3{-0.56f, -0.78f, 0.27f});
+    DuskSparkCtx.SunIrradianceRgb           = {5.2f, 4.5f, 3.9f};
+    DuskSparkCtx.Clouds.Coverage            = 0.38;
+    DuskSparkCtx.Fog.DensityAtBase          = 0.0025;
+    DuskSparkCtx.HdrBloomStrength           = 0.26f;
+    DuskSparkCtx.ExposureScale              = 0.72f;
     DuskSparkCtx.PlumeFluid                 = nullptr;
     DuskSparkCtx.ShallowWater               = nullptr;
     DuskSparkCtx.Lightning                  = nullptr;
@@ -969,13 +1442,309 @@ int main()
     std::vector<uint8_t> SnowSparkRgba;
     SnowSparkScene.RenderViewportRgba8(
         GpuTracingTier::HardwareRayTracingRtx,
-        320u,
-        200u,
-        {0.6f, -3.6f, 2.15f},
-        {4.4f, -0.4f, 0.35f},
-        0.92f,
+        HdWidth,
+        HdHeight,
+        {-0.45f, -3.65f, 1.88f},
+        {4.25f, +0.20f, 0.18f},
+        0.84f,
         DuskSparkCtx,
         SnowSparkRgba);
+
+    // -----------------------------------------------------------------------------------------------------------------
+    // SUITE 18: Split-Vehicle Two-Portal Transit (Entering Portal 1, Hidden Behind Portal 1, Emerging From Portal 2!)
+    // -----------------------------------------------------------------------------------------------------------------
+    std::printf("\n--- Suite 18: Split-Vehicle Two-Portal Transit (Hidden Behind Portal 1, Emerging Out of Portal 2) ---\n");
+    SdfRestirPortalExtension PortalVehicleScene{};
+    PortalVehicleScene.RegisterTexturedGroundSlab({0.0f, 0.0f, -0.25f}, {48.0f, 48.0f, 0.25f}, {0.21f, 0.23f, 0.27f}, 0.42f, 0.06f);
+
+    // Architectural backdrop colonnade far behind both free-standing portals so empty space behind Portal 1 is unmistakable!
+    for (int Col = -3; Col <= 3; ++Col)
+    {
+        PortalVehicleScene.RegisterDualTierSolidBox(
+            {static_cast<float>(Col) * 3.4f, 8.8f, 1.85f},
+            {0.34f, 0.34f, 1.85f},
+            {0.46f, 0.48f, 0.53f},
+            0.52f,
+            {0.0f, 0.0f, 0.0f},
+            0.08f);
+    }
+
+    // Portal 1 (Left, Cyan Energy Gateway) -> Portal 2 (Right, Amber-Gold Energy Gateway)!
+    // Vehicle drives along CarTransitForward INTO Portal 1, so EntryFrontNormal = -CarTransitForward.
+    const Vec3 CarTransitForward = Normalise(Vec3{+0.78f, +0.625f, 0.0f});
+    const Vec3 EntryFrontN       = -CarTransitForward;
+    const Vec3 EntryUpN          = {0.0f, 0.0f, 1.0f};
+    const Vec3 EntryRightN       = Normalise(Cross(EntryUpN, EntryFrontN));
+
+    const Vec3 ExitFrontN        = Normalise(Vec3{+0.46f, -0.888f, 0.0f});
+    const Vec3 ExitUpN           = {0.0f, 0.0f, 1.0f};
+    const Vec3 ExitRightN        = Normalise(Cross(ExitUpN, ExitFrontN));
+
+    SeamlessPortalAperture TransitPortalFwd{};
+    TransitPortalFwd.EntryCentreWorld = {-2.45f, +0.25f, 1.25f};
+    TransitPortalFwd.EntryRightAxis   = EntryRightN;
+    TransitPortalFwd.EntryUpAxis      = EntryUpN;
+    TransitPortalFwd.EntryFrontNormal = EntryFrontN;
+    TransitPortalFwd.ExitCentreWorld  = {+2.35f, +0.75f, 1.25f};
+    TransitPortalFwd.ExitRightAxis    = ExitRightN;
+    TransitPortalFwd.ExitUpAxis       = ExitUpN;
+    TransitPortalFwd.ExitFrontNormal  = ExitFrontN;
+    TransitPortalFwd.HalfWidthMetres  = 1.58f;
+    TransitPortalFwd.HalfHeightMetres = 1.25f;
+    TransitPortalFwd.PortalRimGlowRgb = {0.12f, 0.86f, 1.45f}; // Vivid Cyan Portal 1!
+
+    // Paired reverse aperture so rays entering Portal 2's front face also teleport seamlessly back to Portal 1!
+    SeamlessPortalAperture TransitPortalRev{};
+    TransitPortalRev.EntryCentreWorld = TransitPortalFwd.ExitCentreWorld;
+    TransitPortalRev.EntryRightAxis   = TransitPortalFwd.ExitRightAxis;
+    TransitPortalRev.EntryUpAxis      = TransitPortalFwd.ExitUpAxis;
+    TransitPortalRev.EntryFrontNormal = TransitPortalFwd.ExitFrontNormal;
+    TransitPortalRev.ExitCentreWorld  = TransitPortalFwd.EntryCentreWorld;
+    TransitPortalRev.ExitRightAxis    = TransitPortalFwd.EntryRightAxis;
+    TransitPortalRev.ExitUpAxis       = TransitPortalFwd.EntryUpAxis;
+    TransitPortalRev.ExitFrontNormal  = TransitPortalFwd.EntryFrontNormal;
+    TransitPortalRev.HalfWidthMetres  = TransitPortalFwd.HalfWidthMetres;
+    TransitPortalRev.HalfHeightMetres = TransitPortalFwd.HalfHeightMetres;
+    TransitPortalRev.PortalRimGlowRgb = {1.45f, 0.62f, 0.12f}; // Vivid Amber Portal 2!
+
+    PortalVehicleScene.RegisterSeamlessPortal(TransitPortalFwd);
+    PortalVehicleScene.RegisterSeamlessPortal(TransitPortalRev);
+    RegisterPortalGatewayFrame(
+        PortalVehicleScene,
+        TransitPortalFwd.EntryCentreWorld,
+        EntryRightN,
+        EntryUpN,
+        EntryFrontN,
+        TransitPortalFwd.HalfWidthMetres,
+        TransitPortalFwd.HalfHeightMetres,
+        {0.10f, 0.78f, 1.35f});
+    RegisterPortalGatewayFrame(
+        PortalVehicleScene,
+        TransitPortalFwd.ExitCentreWorld,
+        ExitRightN,
+        ExitUpN,
+        ExitFrontN,
+        TransitPortalFwd.HalfWidthMetres,
+        TransitPortalFwd.HalfHeightMetres,
+        {1.35f, 0.56f, 0.10f});
+
+    // Position the authored 8,460-facet PROTO-X sports car straddling Portal 1 (rear half in front of Portal 1,
+    // front half inside Portal 1 -> clipped/hidden behind Portal 1 and emerging out of Portal 2!).
+    // Z = +0.055 m places the outer tyre tread rubber cleanly tangent to the Z = 0 plaza slab!
+    uint32_t   SourceVehicleFacets = 0u;
+    const Vec3 CarPortalMidpoint   = {-2.45f, +0.25f, 0.095f};
+    const bool LoadedTransitCar    = RegisterTransitingControlVehicle(
+        PortalVehicleScene,
+        "Frontier/Projects/Project-Drive/Content/Geometry",
+        CarPortalMidpoint,
+        CarTransitForward,
+        TransitPortalFwd,
+        SourceVehicleFacets);
+
+    CoupledWorldOpticalContext PortalCarCtx{};
+    PortalCarCtx.Atmosphere       = Atmos;
+    PortalCarCtx.AtmosphereLut    = &SkyLut;
+    PortalCarCtx.Clouds.Coverage  = 0.34;
+    PortalCarCtx.Fog.DensityAtBase = 0.0025;
+    PortalCarCtx.SunDirectionUnit = Normalise(Vec3{-0.45f, -0.68f, 0.58f});
+    PortalCarCtx.SunIrradianceRgb = {11.8f, 11.2f, 10.5f};
+    PortalCarCtx.ExposureScale    = 0.84f;
+    PortalVehicleScene.FinalizeSceneAndBakeSurfaceCards(PortalCarCtx);
+
+    // Numeric Ray-Probe Proof of Split-Vehicle Portal Clipping & Emergence:
+    // 1. Vertical downward probe onto the REAR half 1.15 m in front of Portal 1 hits the rear deck/roof!
+    const Vec3 RearDeckInFrontOfP1 = Vec3{-2.45f, +0.25f, 0.0f} - CarTransitForward * 1.15f + Vec3{0.0f, 0.0f, 2.20f};
+    const auto ProbeRearDiag       = PortalVehicleScene.TraceCoupledRadianceRay(
+        GpuTracingTier::HardwareRayTracingRtx,
+        RearDeckInFrontOfP1,
+        {0.0f, 0.0f, -1.0f},
+        PortalCarCtx,
+        101ull);
+
+    // 2. Vertical upward probe 1.15 m BEHIND Portal 1 (from Z = 0.10 m straight up through Z = 0.25..1.15 m where the
+    //    unclipped front hood/chassis would sit!) reaches pure sky without hitting ANY solid geometry!
+    const Vec3 GhostHoodBehindP1       = Vec3{-2.45f, +0.25f, 0.10f} + CarTransitForward * 1.15f;
+    const auto ProbeHiddenBehindP1Diag = PortalVehicleScene.TraceCoupledRadianceRay(
+        GpuTracingTier::HardwareRayTracingRtx,
+        GhostHoodBehindP1,
+        {0.0f, 0.0f, +1.0f},
+        PortalCarCtx,
+        103ull);
+
+    // 3. Vertical downward probe onto the EMERGED front half 1.15 m in front of Portal 2 hits the emerged hood!
+    const Vec3 EmergedHoodInFrontOfP2 = Vec3{+2.35f, +0.75f, 0.0f} + ExitFrontN * 1.15f + Vec3{0.0f, 0.0f, 2.20f};
+    const auto ProbeEmergedFrontDiag  = PortalVehicleScene.TraceCoupledRadianceRay(
+        GpuTracingTier::HardwareRayTracingRtx,
+        EmergedHoodInFrontOfP2,
+        {0.0f, 0.0f, -1.0f},
+        PortalCarCtx,
+        107ull);
+
+    // 4. Vertical upward probe 1.15 m BEHIND Portal 2 (from Z = 0.10 m straight up where the unclipped rear body
+    //    would sit!) reaches pure sky without hitting ANY solid geometry!
+    const Vec3 GhostRearBehindP2       = Vec3{+2.35f, +0.75f, 0.10f} - ExitFrontN * 1.15f;
+    const auto ProbeHiddenBehindP2Diag = PortalVehicleScene.TraceCoupledRadianceRay(
+        GpuTracingTier::HardwareRayTracingRtx,
+        GhostRearBehindP2,
+        {0.0f, 0.0f, +1.0f},
+        PortalCarCtx,
+        109ull);
+
+    std::snprintf(
+        Note,
+        sizeof(Note),
+        "src_facets=%u rear_P1=%d(R=%.2f) behind_P1_hit=%d emerged_P2=%d(R=%.2f) behind_P2_hit=%d",
+        SourceVehicleFacets,
+        ProbeRearDiag.HitSolidGeometry ? 1 : 0,
+        ProbeRearDiag.FinalRadianceRgb.X,
+        ProbeHiddenBehindP1Diag.HitSolidGeometry ? 1 : 0,
+        ProbeEmergedFrontDiag.HitSolidGeometry ? 1 : 0,
+        ProbeEmergedFrontDiag.FinalRadianceRgb.X,
+        ProbeHiddenBehindP2Diag.HitSolidGeometry ? 1 : 0);
+    Ledger.Verify(
+        LoadedTransitCar && SourceVehicleFacets > 8000u &&
+            ProbeRearDiag.HitSolidGeometry && !ProbeHiddenBehindP1Diag.HitSolidGeometry &&
+            ProbeEmergedFrontDiag.HitSolidGeometry && !ProbeHiddenBehindP2Diag.HitSolidGeometry,
+        "Split-vehicle portal transit: hidden behind Portal 1 & emerging from Portal 2",
+        Note);
+
+    std::vector<uint8_t> PortalVehicleRgba;
+    PortalVehicleScene.RenderViewportRgba8(
+        GpuTracingTier::HardwareRayTracingRtx,
+        HdWidth,
+        HdHeight,
+        {-0.15f, -6.95f, 2.38f},
+        {+0.15f, +0.55f, 0.88f},
+        0.82f,
+        PortalCarCtx,
+        PortalVehicleRgba);
+
+    // -----------------------------------------------------------------------------------------------------------------
+    // SUITE 19: Limb-Darkened Solar Disc & Multi-Element Optical Camera Lens Flare (LensFlareModel.h Integration!)
+    // -----------------------------------------------------------------------------------------------------------------
+    std::printf("\n--- Suite 19: Limb-Darkened Solar Disc & Multi-Element Camera Lens Flare ---\n");
+    SdfRestirPortalExtension SunFlareScene{};
+    SunFlareScene.RegisterTexturedGroundSlab({0.0f, 0.0f, -0.25f}, {60.0f, 60.0f, 0.25f}, {0.19f, 0.21f, 0.25f}, 0.36f, 0.08f);
+
+    // Architectural stone pillars framing the sunlit reflecting basin without blocking the solar disc!
+    SunFlareScene.RegisterDualTierSolidBox({-4.4f, 9.5f, 2.4f}, {0.55f, 0.55f, 2.4f}, {0.36f, 0.38f, 0.42f}, 0.45f, {0.0f, 0.0f, 0.0f}, 0.10f);
+    SunFlareScene.RegisterDualTierSolidBox({+4.8f, 9.5f, 2.4f}, {0.55f, 0.55f, 2.4f}, {0.36f, 0.38f, 0.42f}, 0.45f, {0.0f, 0.0f, 0.0f}, 0.10f);
+    SunFlareScene.RegisterDualTierSolidBox({+2.6f, 5.2f, 0.95f}, {0.42f, 0.42f, 0.95f}, {0.42f, 0.40f, 0.38f}, 0.40f, {0.0f, 0.0f, 0.0f}, 0.12f);
+
+    ShallowWaterConfiguration FlareBasinCfg = LakeCfg;
+    FlareBasinCfg.CellsX                    = 144u;
+    FlareBasinCfg.CellsY                    = 144u;
+    FlareBasinCfg.CellSizeMetres            = 0.095f;
+    FlareBasinCfg.WorldOriginXY             = {-6.8f, -1.2f};
+    ShallowWaterMudExtension FlareBasin{FlareBasinCfg};
+    FlareBasin.SculptBedDepressionOrMound({0.0f, 5.5f}, 5.4f, -0.08f);
+    FlareBasin.FillBasinRegion({0.0f, 5.5f}, 5.1f, 0.02f, 0.0f);
+    for (int Relax = 0; Relax < 14; ++Relax)
+    {
+        (void)FlareBasin.StepSimulation(1.0f / 120.0f);
+    }
+
+    CoupledWorldOpticalContext SunFlareCtx{};
+    SunFlareCtx.Atmosphere                   = Atmos;
+    SunFlareCtx.AtmosphereLut                = &SkyLut;
+    SunFlareCtx.Clouds.Coverage              = 0.22;
+    SunFlareCtx.Fog.DensityAtBase            = 0.002;
+    // Place Sun in upper-left quadrant of camera view so diagonal coated aperture ghosts march cleanly to lower-right!
+    SunFlareCtx.SunDirectionUnit             = Normalise(Vec3{-0.33f, +0.885f, 0.328f});
+    SunFlareCtx.SunIrradianceRgb             = {14.5f, 13.4f, 11.8f};
+    SunFlareCtx.ShallowWater                 = &FlareBasin;
+    SunFlareCtx.WaterCapillaryRippleStrength = 0.010f;
+    SunFlareCtx.EnableSolarLensFlare         = true;
+    SunFlareCtx.SolarDisc.AngularRadiusRad   = 0.0165; // Crisp visible solar disc with limb darkening!
+    SunFlareCtx.LensFlareOptics.ApertureBlades        = 6u;
+    SunFlareCtx.LensFlareOptics.ApertureRotationRad   = 0.22;
+    SunFlareCtx.LensFlareOptics.GhostStrength         = 2.6;
+    SunFlareCtx.LensFlareOptics.StarburstStrength     = 2.2;
+    SunFlareCtx.LensFlareOptics.StarburstLengthNdc    = 0.65;
+    SunFlareCtx.LensFlareOptics.AnamorphicStrength    = 1.4;
+    SunFlareCtx.LensFlareOptics.StreakStrength        = 1.6;
+    SunFlareCtx.LensFlareOptics.StreakAngleRad        = -0.45;
+    SunFlareCtx.LensFlareOptics.GlowStrength          = 1.8;
+    SunFlareCtx.LensFlareOptics.HaloStrength          = 2.1;
+    SunFlareCtx.LensFlareOptics.VeilingStrength       = 0.45;
+    SunFlareCtx.HdrBloomStrength             = 0.30f;
+    SunFlareCtx.ExposureScale                = 0.74f;
+    SunFlareScene.FinalizeSceneAndBakeSurfaceCards(SunFlareCtx);
+
+    const Vec3 FlareCamPos{0.0f, -4.8f, 1.55f};
+    const Vec3 FlareCamTarget{0.0f, +6.0f, 1.95f};
+
+    // Verify direct solar disc radiance vs off-disc sky AND verify flare difference (FlareEnabled vs FlareDisabled)!
+    const auto DirectSunRay = SunFlareScene.TraceCoupledRadianceRay(
+        GpuTracingTier::HardwareRayTracingRtx,
+        FlareCamPos,
+        SunFlareCtx.SunDirectionUnit,
+        SunFlareCtx,
+        211ull);
+    const auto OffSunSkyRay = SunFlareScene.TraceCoupledRadianceRay(
+        GpuTracingTier::HardwareRayTracingRtx,
+        FlareCamPos,
+        Normalise(Vec3{+0.35f, +0.88f, 0.32f}),
+        SunFlareCtx,
+        213ull);
+
+    std::vector<uint8_t> SunFlareRgba, FlareDisabledRgba;
+    SunFlareScene.RenderViewportRgba8(
+        GpuTracingTier::HardwareRayTracingRtx,
+        HdWidth,
+        HdHeight,
+        FlareCamPos,
+        FlareCamTarget,
+        0.84f,
+        SunFlareCtx,
+        SunFlareRgba);
+
+    CoupledWorldOpticalContext NoFlareCtx = SunFlareCtx;
+    NoFlareCtx.EnableSolarLensFlare       = false;
+    SunFlareScene.RenderViewportRgba8(
+        GpuTracingTier::HardwareRayTracingRtx,
+        160u,
+        90u,
+        FlareCamPos,
+        FlareCamTarget,
+        0.84f,
+        NoFlareCtx,
+        FlareDisabledRgba);
+    std::vector<uint8_t> FlareEnabledRgba;
+    SunFlareScene.RenderViewportRgba8(
+        GpuTracingTier::HardwareRayTracingRtx,
+        160u,
+        90u,
+        FlareCamPos,
+        FlareCamTarget,
+        0.84f,
+        SunFlareCtx,
+        FlareEnabledRgba);
+
+    // Measure off-axis antipode ghost & streak luminance boost in lower-right quadrant (away from the Sun in upper-left)!
+    double OffAxisDiffSum = 0.0;
+    for (uint32_t Y = 48u; Y < 86u; ++Y)
+    {
+        for (uint32_t X = 84u; X < 154u; ++X)
+        {
+            const size_t Idx = (static_cast<size_t>(Y) * 160u + X) * 4u;
+            const double LumWith = 0.2126 * FlareEnabledRgba[Idx + 0u] + 0.7152 * FlareEnabledRgba[Idx + 1u] + 0.0722 * FlareEnabledRgba[Idx + 2u];
+            const double LumNo   = 0.2126 * FlareDisabledRgba[Idx + 0u] + 0.7152 * FlareDisabledRgba[Idx + 1u] + 0.0722 * FlareDisabledRgba[Idx + 2u];
+            OffAxisDiffSum += std::max(0.0, LumWith - LumNo);
+        }
+    }
+    const double MeanGhostBoost = OffAxisDiffSum / static_cast<double>((86u - 48u) * (154u - 84u));
+    std::snprintf(
+        Note,
+        sizeof(Note),
+        "sun_disc_R=%.1f sky_R=%.2f lower_right_ghost_boost=+%.2f_srgb8",
+        DirectSunRay.FinalRadianceRgb.X,
+        OffSunSkyRay.FinalRadianceRgb.X,
+        MeanGhostBoost);
+    Ledger.Verify(
+        DirectSunRay.FinalRadianceRgb.X > OffSunSkyRay.FinalRadianceRgb.X * 12.0f && MeanGhostBoost > 2.5,
+        "Limb-darkened Sun disc & multi-element coated aperture lens flare",
+        Note);
 
     // Composite Cluster (640x140) + Central Screen (640x220) into 640x360 VehicleCabinHmiComposite.png!
     std::vector<uint8_t> HmiComposite;
@@ -983,13 +1752,27 @@ int main()
     HmiComposite.insert(HmiComposite.end(), ClusterImg.begin(), ClusterImg.end());
     HmiComposite.insert(HmiComposite.end(), ScreenImg.begin(), ScreenImg.end());
 
-    const bool Png1 = WriteRgba8PngFile(ImgDir + "GtxSdfPortalMirrorPlumeWater.png", 320u, 200u, GtxFrameRgba);
-    const bool Png2 = WriteRgba8PngFile(ImgDir + "RtxBvhPortalMirrorPlumeWater.png", 320u, 200u, RtxFrameRgba);
-    const bool Png3 = WriteRgba8PngFile(ImgDir + "SnowPitRutAndFractureSparks.png", 320u, 200u, SnowSparkRgba);
+    const bool Png1 = WriteRgba8PngFile(ImgDir + "GtxSdfPortalMirrorPlumeWater.png", GtxWidth, GtxHeight, GtxFrameRgba);
+    const bool Png2 = WriteRgba8PngFile(ImgDir + "RtxBvhPortalMirrorPlumeWater.png", HdWidth, HdHeight, RtxFrameRgba);
+    const bool Png3 = WriteRgba8PngFile(ImgDir + "SnowPitRutAndFractureSparks.png", HdWidth, HdHeight, SnowSparkRgba);
     const bool Png4 = WriteRgba8PngFile(ImgDir + "VehicleCabinHmiComposite.png", 640u, 360u, HmiComposite);
+    const bool Png5 = WriteRgba8PngFile(ImgDir + "PortalSplitVehicleTransit960x540.png", HdWidth, HdHeight, PortalVehicleRgba);
+    const bool Png6 = WriteRgba8PngFile(ImgDir + "SolarDiscAndOpticalLensFlare960x540.png", HdWidth, HdHeight, SunFlareRgba);
 
-    std::snprintf(Note, sizeof(Note), "png_ok=(%d,%d,%d,%d)", Png1 ? 1 : 0, Png2 ? 1 : 0, Png3 ? 1 : 0, Png4 ? 1 : 0);
-    Ledger.Verify(Png1 && Png2 && Png3 && Png4, "Rendered 4 visual proof PNGs (GTX SDF, RTX BVH, SnowPit/Sparks, Cabin HMI)", Note);
+    std::snprintf(
+        Note,
+        sizeof(Note),
+        "png_ok=(%d,%d,%d,%d,%d,%d)",
+        Png1 ? 1 : 0,
+        Png2 ? 1 : 0,
+        Png3 ? 1 : 0,
+        Png4 ? 1 : 0,
+        Png5 ? 1 : 0,
+        Png6 ? 1 : 0);
+    Ledger.Verify(
+        Png1 && Png2 && Png3 && Png4 && Png5 && Png6,
+        "Rendered 6 HD visual proof PNGs (Water, Snow, Split-Portal Vehicle, Sun Flare, HMI)",
+        Note);
 
     std::printf("\n====================================================================================================\n");
     std::printf("  SUMMARY: %u PASSED, %u FAILED\n", Ledger.Passed, Ledger.Failed);
