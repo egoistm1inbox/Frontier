@@ -44,8 +44,8 @@ mkdir -p "$BUILD" "$SW_OUT" "$HW_OUT" "$OUTPUT" "$(dirname "$RESULTS")"
     "$SLANG" -version
 
     sha256sum \
-        Frontier/Engine/Rendering/{CMakeLists.txt,SolarSkyEnvironmentPayload.h,SolarSkyEnvironmentPayload.cpp,PhotometricClusterExtension.h,PhotometricClusterExtension.cpp,PathReplayVulkan.h,PathReplayVulkan.cpp,PathReplayDomain.h,PathReplayDomain.cpp,PathReplaySubmissionSequence.cpp} \
-        Frontier/Engine/Rendering/Shaders/{SolarSkyEnvironment.slang,PhotometricLuminaire.slang,LightInfluence.slang,PathReplayReservoir.slang,PathReplaySampleHistory.slang,PathReplayVarianceFilter.slang,PathReplayRayQuery.slang} \
+        Frontier/Engine/Rendering/{CMakeLists.txt,SkyRadiance.h,SkyRadiance.cpp,PhotometricLights.h,PhotometricLights.cpp,PathReplayVulkan.h,PathReplayVulkan.cpp,PathReplayDomain.h,PathReplayDomain.cpp,PathReplaySubmissionSequence.cpp} \
+        Frontier/Engine/Rendering/Shaders/{SkyRadiance.slang,PhotometricLuminaire.slang,LightInfluence.slang,PathReplayReservoir.slang,PathReplaySampleHistory.slang,PathReplayVarianceFilter.slang,PathReplayRayQuery.slang} \
         Exhibits/LightCompute/{CMakeLists.txt,RunProductionReSTIR.sh} \
         Exhibits/LightCompute/Code/{ProductionReSTIRContractValidation.cpp,ProductionReSTIRValidation.h,PhotometricClusterValidation.cpp,ReplayRayAccelerationValidation.cpp,LightComputeValidation.cpp} \
         "$DRIVER" "$SLANG" Automation/ReplayToolDependencies.json

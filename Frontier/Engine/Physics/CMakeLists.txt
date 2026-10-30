@@ -6,38 +6,26 @@ endif()
 get_filename_component(FRONTIER_PHYSICS_REPO_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../../.." ABSOLUTE)
 
 # 📝 Standalone visual projection and Hex8 deformation; no vehicle dynamics or Jolt dependency.
-if(NOT TARGET FrontierTyreContinuum)
-    add_library(FrontierTyreContinuum STATIC TyreContinuum.cpp TyreProjectionDevice.cpp TyreSolidDevice.cpp)
-    target_compile_features(FrontierTyreContinuum PUBLIC cxx_std_17)
-    target_include_directories(FrontierTyreContinuum PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/../..")
+if(NOT TARGET FrontierTyreMechanics)
+    add_library(FrontierTyreMechanics STATIC TyreContinuum.cpp TyreProjectionDevice.cpp TyreSolidDevice.cpp)
+    target_compile_features(FrontierTyreMechanics PUBLIC cxx_std_17)
+    target_include_directories(FrontierTyreMechanics PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/../..")
     if(MSVC)
-        target_compile_options(FrontierTyreContinuum PRIVATE /utf-8 /W4)
+        target_compile_options(FrontierTyreMechanics PRIVATE /utf-8 /W4)
     else()
-        target_compile_options(FrontierTyreContinuum PRIVATE -Wall -Wextra -Werror)
+        target_compile_options(FrontierTyreMechanics PRIVATE -Wall -Wextra -Werror)
     endif()
 endif()
 
-# 📝 Fuel/Mixture/Additive thermochemistry, Forced Induction, BEV/Hybrid propulsion, and calibrated .tyrx tyre thermodynamics.
-if(NOT TARGET FrontierVehiclePropulsion)
-    add_library(FrontierVehiclePropulsion STATIC
-        VehiclePropulsion/PropulsionThermochemistry.cpp
-        VehiclePropulsion/HybridElectricPropulsion.cpp
-        VehiclePropulsion/CalibratedTyreThermodynamics.cpp)
-    target_compile_features(FrontierVehiclePropulsion PUBLIC cxx_std_17)
-    target_include_directories(FrontierVehiclePropulsion PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/../..")
-    if(MSVC)
-        target_compile_options(FrontierVehiclePropulsion PRIVATE /utf-8 /W4)
-    else()
-        target_compile_options(FrontierVehiclePropulsion PRIVATE -Wall -Wextra -Werror)
-    endif()
+# 📝 Propulsion & gameplay mechanics live in Engine/Gameplay/GameMechanics; particle systems live in Engine/Particles.
+if(NOT TARGET FrontierPropulsion)
+    add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../Gameplay/GameMechanics" "${CMAKE_CURRENT_BINARY_DIR}/FrontierGameMechanics")
 endif()
-
-# 📝 Griffith convex polyhedron fracture & swept scene-lighting ballistic sparks.
 if(NOT TARGET FrontierSolidFracture)
     add_subdirectory(Fracture)
 endif()
-if(NOT TARGET FrontierBallisticSparks)
-    add_subdirectory(Sparks)
+if(NOT TARGET FrontierParticles)
+    add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../Particles" "${CMAKE_CURRENT_BINARY_DIR}/FrontierParticles")
 endif()
 
 # 📝 Optional caller-owned Vulkan command recorder; the CPU tyre library has no Vulkan dependency.
@@ -53,7 +41,7 @@ if(FRONTIER_TYRE_VULKAN_HEADERS)
     endif()
 endif()
 
-# 📝 Reusable Jolt Physics rigid-body world + VehiclePhysicsThread (enabled automatically when ExternalPackages/jolt is present).
+# 📝 Reusable Jolt Physics rigid-body world + VehiclePhysicsThread (enabled automatically when Jolt is present).
 if(NOT DEFINED FRONTIER_JOLT_ROOT)
     set(FRONTIER_JOLT_ROOT "${FRONTIER_PHYSICS_REPO_ROOT}/ExternalPackages/jolt")
 endif()

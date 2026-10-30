@@ -6,7 +6,7 @@
 #include "Engine/Rendering/PathReplayDomain.h"
 #include "Engine/Rendering/PathReplaySubmissionSequence.h"
 #include "Engine/Rendering/PathReplayVulkan.h"
-#include "Engine/Rendering/SolarSkyEnvironmentPayload.h"
+#include "Engine/Rendering/SkyRadiance.h"
 
 #include <array>
 #include <cmath>
@@ -46,7 +46,7 @@ bool RejectsInvalid(Callable&& Operation)
 
 void ValidateSolarSkyPayloadAndConservation()
 {
-    Frontier::SolarSkyEnvironmentSpecification NoonSpecification{};
+    Frontier::SkyRadianceSpecification NoonSpecification{};
     NoonSpecification.SolarDirection     = {0.25, 0.92, 0.30248967};
     NoonSpecification.ZenithDirection    = {0.0, 1.0, 0.0};
     NoonSpecification.SolarIrradiance    = {19.0, 18.4, 17.6};
@@ -55,17 +55,17 @@ void ValidateSolarSkyPayloadAndConservation()
     NoonSpecification.LimbDarkeningU1    = 0.397;
     NoonSpecification.LimbDarkeningU2    = 0.196;
 
-    const auto Payload = Frontier::CompileSolarSkyEnvironmentPayload(NoonSpecification);
-    Frontier::ValidateSolarSkyEnvironmentPayload(Payload);
+    const auto Payload = Frontier::CompileSkyRadiancePayload(NoonSpecification);
+    Frontier::ValidateSkyRadiancePayload(Payload);
 
     auto Corrupted = Payload;
     Corrupted[3] = 0.85f;
-    RequireCondition(RejectsInvalid([&] { Frontier::ValidateSolarSkyEnvironmentPayload(Corrupted); }),
+    RequireCondition(RejectsInvalid([&] { Frontier::ValidateSkyRadiancePayload(Corrupted); }),
                      "Excessive solar angular radius must be rejected");
     Corrupted = Payload;
     Corrupted[12] = 0.65f;
     Corrupted[13] = 0.45f;
-    RequireCondition(RejectsInvalid([&] { Frontier::ValidateSolarSkyEnvironmentPayload(Corrupted); }),
+    RequireCondition(RejectsInvalid([&] { Frontier::ValidateSkyRadiancePayload(Corrupted); }),
                      "Negative-limb solar coefficients must be rejected");
 
     // 📝 Integrate finite limb-darkened solar cap and compare against analytic atmospheric transmittance * E_sun * cos(theta).
@@ -96,12 +96,12 @@ void ValidateSolarSkyPayloadAndConservation()
                      "Limb-darkened solar cap quadrature failed irradiance conservation");
 
     // 📝 Verify physical Rayleigh zenith blueness at noon vs optical-depth reddening at golden-hour sunset.
-    const Frontier::SpectrumRgb NoonZenith = Frontier::EvaluateSolarSkyContinuumRadiance(
+    const Frontier::SpectrumRgb NoonZenith = Frontier::EvaluateSkyContinuumRadiance(
         NoonSpecification, OriginMeters, {0.0, 1.0, 0.0}, 32u);
     RequireCondition(NoonZenith.B > 2.2 * NoonZenith.R && NoonZenith.G > NoonZenith.R,
                      "Noon zenith sky failed Rayleigh blue dominance");
 
-    Frontier::SolarSkyEnvironmentSpecification SunsetSpecification = NoonSpecification;
+    Frontier::SkyRadianceSpecification SunsetSpecification = NoonSpecification;
     SunsetSpecification.SolarDirection = {0.9961947, 0.0871557, 0.0};
     const Frontier::SpectrumRgb SunsetDisc = Frontier::EvaluateSolarDiscLimbRadiance(
         SunsetSpecification, OriginMeters, SunsetSpecification.SolarDirection, 48u);
@@ -109,7 +109,7 @@ void ValidateSolarSkyPayloadAndConservation()
                      "Golden-hour solar disc failed atmospheric Rayleigh/ozone reddening");
 
     // 📝 Verify monotone cloud-slab attenuation when cloud optical depth and coverage are enabled.
-    Frontier::SolarSkyEnvironmentSpecification CloudySpecification = NoonSpecification;
+    Frontier::SkyRadianceSpecification CloudySpecification = NoonSpecification;
     CloudySpecification.CloudExtinctionKm = 4.5;
     CloudySpecification.CloudCoverage     = 0.85;
     const double ClearTransmittance  = Frontier::EvaluateCloudSlabTransmittance(
@@ -179,7 +179,7 @@ void ValidateCompactSlabAndVulkanContracts()
                                  Frontier::PathReplayBalanceSampling | Frontier::PathReplayPowerMis |
                                  Frontier::PathReplaySpatialDisk | Frontier::PathReplayVarianceFilter |
                                  Frontier::PathReplayCompactStorage | Frontier::PathReplayPairwiseMis |
-                                 Frontier::PathReplayHybridReconnection | Frontier::PathReplaySolarSkyEnvironment |
+                                 Frontier::PathReplayHybridReconnection | Frontier::PathReplaySkyRadiance |
                                  Frontier::PathReplayAdaptiveFilter};
 
     Frontier::PathReplayVulkanBuffers Buffers{};
@@ -218,8 +218,8 @@ void ValidateCompactSlabAndVulkanContracts()
 
 void ValidateSequenceSolarRevision()
 {
-    Frontier::SolarSkyEnvironmentSpecification Spec{};
-    auto SolarPayload = Frontier::CompileSolarSkyEnvironmentPayload(Spec);
+    Frontier::SkyRadianceSpecification Spec{};
+    auto SolarPayload = Frontier::CompileSkyRadiancePayload(Spec);
 
     std::array<std::array<float, 4>, 12> Camera{};
     Camera[0] = {0.0f, 1.5f, -4.0f, 0.1f};
@@ -247,7 +247,7 @@ void ValidateSequenceSolarRevision()
     HistorySpec.CompactStorage      = true;
     HistorySpec.PairwiseMis         = true;
     HistorySpec.HybridReconnection  = true;
-    HistorySpec.SolarSkyEnvironment = true;
+    HistorySpec.SkyRadiance = true;
     HistorySpec.AdaptiveFilter      = true;
 
     Frontier::PathReplayHistoryDomain HistoryDomain;
@@ -258,7 +258,7 @@ void ValidateSequenceSolarRevision()
     RequireCondition(!Second.Changed && Second.MaximumHistory == 64u, "Identical solar/sky resolve must retain history");
 
     Spec.SolarDirection = {0.85, 0.42, 0.318};
-    SolarPayload = Frontier::CompileSolarSkyEnvironmentPayload(Spec);
+    SolarPayload = Frontier::CompileSkyRadiancePayload(Spec);
     View.SolarSkyPayload = SolarPayload;
     const auto Third = HistoryDomain.Resolve(View, HistorySpec);
     RequireCondition(Third.Changed && Third.MaximumHistory == 1u, "Changed solar elevation must reset history");

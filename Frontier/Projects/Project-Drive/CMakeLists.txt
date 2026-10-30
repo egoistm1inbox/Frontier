@@ -64,11 +64,11 @@ else()
 endif()
 target_link_libraries(ProjectDriveVehicleHmiScene PUBLIC
     ProjectDriveSimulation
-    FrontierVehiclePropulsion
+    FrontierPropulsion
     FrontierAtmosphericOptics
-    FrontierPhotometricClustering
+    FrontierPhotometricLights
     FrontierPlumeFluid
-    FrontierWindForceField
+    FrontierWindField
     Threads::Threads)
 
 add_library(ProjectDrive SHARED

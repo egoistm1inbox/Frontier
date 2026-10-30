@@ -7,8 +7,8 @@ add_subdirectory("${FRONTIER_REPO_ROOT}/Frontier/Engine/Threading"   "${CMAKE_CU
 add_subdirectory("${FRONTIER_REPO_ROOT}/Frontier/Engine/Audio"       "${CMAKE_CURRENT_BINARY_DIR}/engine-audio")
 add_subdirectory("${FRONTIER_REPO_ROOT}/Frontier/Engine/Networking"  "${CMAKE_CURRENT_BINARY_DIR}/engine-networking")
 add_subdirectory("${FRONTIER_REPO_ROOT}/Frontier/Engine/Physics"     "${CMAKE_CURRENT_BINARY_DIR}/engine-physics")
-add_subdirectory("${FRONTIER_REPO_ROOT}/Frontier/Engine/Geometry"    "${CMAKE_CURRENT_BINARY_DIR}/engine-geometry")
-add_subdirectory("${FRONTIER_REPO_ROOT}/Frontier/Engine/Environment" "${CMAKE_CURRENT_BINARY_DIR}/engine-environment")
+add_subdirectory("${FRONTIER_REPO_ROOT}/Frontier/Engine/GeometryProcessing"    "${CMAKE_CURRENT_BINARY_DIR}/engine-geometry")
+add_subdirectory("${FRONTIER_REPO_ROOT}/Frontier/Engine/VisualEffects" "${CMAKE_CURRENT_BINARY_DIR}/engine-environment")
 add_subdirectory("${FRONTIER_REPO_ROOT}/Frontier/Engine/Rendering"   "${CMAKE_CURRENT_BINARY_DIR}/engine-rendering")
 
 add_executable(CelestialGlassLightingShowcase
@@ -19,13 +19,13 @@ target_include_directories(CelestialGlassLightingShowcase PRIVATE
     "${FRONTIER_REPO_ROOT}/Frontier")
 
 target_link_libraries(CelestialGlassLightingShowcase PRIVATE
-    FrontierClusteredGeometry
-    FrontierCelestialPlanetary
-    FrontierSdfRestirPortal
+    FrontierGeometryProcessing
+    FrontierCelestialSky
+    FrontierSceneRenderer
     FrontierPlumeFluid
-    FrontierShallowWaterMud
-    FrontierSnowLightningEnvironment
-    FrontierBallisticSparks
+    FrontierShallowWater
+    FrontierSnowLightning
+    FrontierParticles
     FrontierAtmosphericOptics)
 
 if(MSVC)

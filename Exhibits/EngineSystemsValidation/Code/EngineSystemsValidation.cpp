@@ -5,14 +5,14 @@
 //    Turbo/Supercharger/BEV/Hybrid Propulsion, Cloud-Gated Budgeted Weather + Wind Force-Field, FP1 Networking, FrameGraph/TaskGraph & Audio.
 
 #include "Engine/Audio/AudioFoundation.h"
-#include "Engine/Networking/ReplicationExtension.h"
+#include "Engine/Networking/StateReplication.h"
 #include "Engine/Physics/TyreThermalSolver.h"
-#include "Engine/Physics/VehiclePropulsion/CalibratedTyreThermodynamics.h"
-#include "Engine/Physics/VehiclePropulsion/HybridElectricPropulsion.h"
-#include "Engine/Physics/VehiclePropulsion/PropulsionThermochemistry.h"
+#include "Engine/Gameplay/GameMechanics/Propulsion/CalibratedTyreThermodynamics.h"
+#include "Engine/Gameplay/GameMechanics/Propulsion/HybridElectricPropulsion.h"
+#include "Engine/Gameplay/GameMechanics/Propulsion/PropulsionThermochemistry.h"
 #include "Engine/Rendering/FrameGraphExecution.h"
-#include "Engine/Fluid/PlumeFluidExtension.h"
-#include "Engine/Environment/WindForceFieldExtension.h"
+#include "Engine/Fluid/PlumeFluid.h"
+#include "Engine/VisualEffects/WindField.h"
 #include "Engine/Threading/TaskGraphExtension.h"
 
 #include "Projects/Project-Drive/Source/DriveSimulation.h"
@@ -63,12 +63,12 @@ void VerifyPlumeAndSmokePhysics()
     MassParams.WindSpeed        = 0.5f;
     MassParams.Buoyancy         = 0.8f;
 
-    PlumeFluidExtension MassPlume(MassParams);
+    PlumeFluid MassPlume(MassParams);
     const std::array<float, 3> SunDir = { 0.45f, -0.35f, 0.82f };
     MassPlume.AppendTransientPlumeSource({ 0.0f, 0.0f, 1.8f }, 0.85f, { 0.2f, 0.0f, 0.5f }, 40.0f, 12.0f, 0.0f, 0.0f);
     (void)MassPlume.AdvanceSimulation({ 0.0f, 0.0f, 0.0f }, SunDir, 1.0f / 60.0f);
 
-    auto IntegrateSmokeMassAndMin = [](const PlumeFluidExtension& Plume, double& OutMinVal, double& OutCentroidZ) -> double
+    auto IntegrateSmokeMassAndMin = [](const PlumeFluid& Plume, double& OutMinVal, double& OutCentroidZ) -> double
     {
         const auto& Thermo = Plume.ThermoData();
         const auto  Ext    = Plume.ThermoExtent();
@@ -125,8 +125,8 @@ void VerifyPlumeAndSmokePhysics()
     BuoyParams.Buoyancy        = 2.60f;
     BuoyParams.ParticulateFall = 0.35f;
 
-    PlumeFluidExtension ColdPlume(BuoyParams);
-    PlumeFluidExtension HotPlume(BuoyParams);
+    PlumeFluid ColdPlume(BuoyParams);
+    PlumeFluid HotPlume(BuoyParams);
     for (int Step = 0; Step < 30; ++Step)
     {
         ColdPlume.AppendTransientPlumeSource({ 0.0f, 0.0f, 1.6f }, 0.65f, { 0.0f, 0.0f, 0.0f }, 25.0f,   0.0f, 0.0f, 0.0f);
@@ -148,8 +148,8 @@ void VerifyPlumeAndSmokePhysics()
     PlumeFluidParameters MacAdv    = LegacyAdv;
     MacAdv.Variant      = PlumeSolverVariant::ProductionUpgraded;
 
-    PlumeFluidExtension LegacySim(LegacyAdv);
-    PlumeFluidExtension MacSim(MacAdv);
+    PlumeFluid LegacySim(LegacyAdv);
+    PlumeFluid MacSim(MacAdv);
     LegacySim.AppendTransientPlumeSource({ -2.0f, 0.0f, 2.0f }, 0.55f, { 0.0f, 0.0f, 0.0f }, 55.0f, 0.0f, 0.0f, 0.0f);
     MacSim.AppendTransientPlumeSource   ({ -2.0f, 0.0f, 2.0f }, 0.55f, { 0.0f, 0.0f, 0.0f }, 55.0f, 0.0f, 0.0f, 0.0f);
     for (int Step = 0; Step < 20; ++Step)
@@ -489,7 +489,7 @@ void VerifyCloudGatedWeatherAndWindField()
 
     WindFieldConfiguration WindCfg{};
     WindCfg.AmbientReferenceWindMps = { 6.5, 2.2, 0.0 };
-    WindForceFieldExtension WindField(WindCfg);
+    WindField WindField(WindCfg);
 
     ForceFieldPrimitive Vortex{};
     Vortex.Form             = ForcePrimitiveForm::VortexColumnUpdraft;

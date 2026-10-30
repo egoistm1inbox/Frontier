@@ -1217,7 +1217,7 @@ void FlushPrimaryTraversalCounters(uint Pixel)
                 float4(float(ReplayThreadBoxTests), float(ReplayThreadTriTests), 0.0, 0.0);
     }
 }
-#include "SolarSkyEnvironment.slang"
+#include "SkyRadiance.slang"
 
 [shader("compute")][numthreads(64, 1, 1)] void TracePrimarySurfaces(uint3 Dispatch : SV_DispatchThreadID)
 {
@@ -1239,9 +1239,9 @@ void FlushPrimaryTraversalCounters(uint Pixel)
     R.ExpectedDirect = asfloat(uint4(0x7fc00000));
     if (Index == 0xffffffffu)
     {
-        float3 Sky = SolarSkyEnvironmentActive() ? EvaluateSolarSkyTotalRadiance(Eye.xyz, Direction)
+        float3 Sky = SkyRadianceActive() ? EvaluateSkyTotalRadiance(Eye.xyz, Direction)
                                                  : EnvironmentRadiance(Direction);
-        if (!SolarSkyEnvironmentActive() && (Extent.Primary.w & 16u) != 0)
+        if (!SkyRadianceActive() && (Extent.Primary.w & 16u) != 0)
         {
             float4 Cloud = CloudRay(Eye.xyz, Direction);
             Sky = Cloud.xyz * CameraProjection(10).w + Cloud.w * EnvironmentRadiance(Direction, true);

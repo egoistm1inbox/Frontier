@@ -34,7 +34,7 @@ struct ProductionReplayConfiguration
     bool                                 ResetVarianceFilter = false;
     bool                                 PairwiseMis         = false;
     bool                                 HybridReconnection  = false;
-    bool                                 SolarSkyEnvironment = false;
+    bool                                 SkyRadiance = false;
     bool                                 AdaptiveFilter      = false;
     bool                                 Sequenced           = false;
     float                                PositiveFloor       = 0.001f;
@@ -63,10 +63,10 @@ inline std::vector<std::array<float, 4>> DispatchProductionReplay(LightComputeSu
         }
     }
 
-    if (Config.SolarSkyEnvironment)
+    if (Config.SkyRadiance)
     {
         const size_t PayloadOffset = Scene.Angles.size() + PathReplayCameraFloats;
-        Require((PayloadOffset + SolarSkyEnvironmentPayloadFloats) * sizeof(float) <= Compute.Buffers[4].Size,
+        Require((PayloadOffset + SkyRadiancePayloadFloats) * sizeof(float) <= Compute.Buffers[4].Size,
                 "Solar/sky payload exceeds prepared angle buffer");
         std::memcpy(static_cast<float*>(Compute.Buffers[4].Address) + PayloadOffset,
                     Config.SolarSkyPayload.data(),
@@ -106,7 +106,7 @@ inline std::vector<std::array<float, 4>> DispatchProductionReplay(LightComputeSu
         (Config.AuthoredMaterials ? PathReplayAuthoredMaterials : 0u) |
         (Config.PairwiseMis ? PathReplayPairwiseMis : 0u) |
         (Config.HybridReconnection ? PathReplayHybridReconnection : 0u) |
-        (Config.SolarSkyEnvironment ? PathReplaySolarSkyEnvironment : 0u) |
+        (Config.SkyRadiance ? PathReplaySkyRadiance : 0u) |
         (Config.AdaptiveFilter ? PathReplayAdaptiveFilter : 0u);
 
     ComputeExtent Extent{};
@@ -175,7 +175,7 @@ inline std::vector<std::array<float, 4>> DispatchProductionReplay(LightComputeSu
     };
 
     PathReplaySceneView DomainView = ReplayDomainView(Scene);
-    if (Config.SolarSkyEnvironment)
+    if (Config.SkyRadiance)
     {
         DomainView.SolarSkyPayload = Config.SolarSkyPayload;
     }
@@ -685,7 +685,7 @@ inline void ValidatePhaseTwoHybridReconnection(LightComputeSubmission& Compute)
 //                      PHASE 3: COUPLED PHYSICAL SOLAR/SKY/CLOUD ENVIRONMENT BENCHMARK
 //------------------------------------------------------------------------------------------------------------------------
 
-inline void ValidatePhaseThreeSolarSkyEnvironment(LightComputeSubmission& Compute)
+inline void ValidatePhaseThreeSkyRadiance(LightComputeSubmission& Compute)
 {
     // Part 3A: Direct GPU primary sky dome vs double-precision CPU AtmosphereModel at Noon & Golden-Hour Sunset.
     constexpr uint32_t SkyW = 32u, SkyH = 16u;
@@ -711,7 +711,7 @@ inline void ValidatePhaseThreeSolarSkyEnvironment(LightComputeSubmission& Comput
     const std::array<const char*, 2> ElevationNames{"noon_60deg", "sunset_5deg"};
     for (size_t ElevIdx = 0; ElevIdx < ElevationsRad.size(); ++ElevIdx)
     {
-        SolarSkyEnvironmentSpecification Spec{};
+        SkyRadianceSpecification Spec{};
         Spec.ZenithDirection    = {0.0, 0.0, 1.0};
         Spec.SolarDirection     = {std::cos(ElevationsRad[ElevIdx]), 0.15, std::sin(ElevationsRad[ElevIdx])};
         Spec.SolarIrradiance    = {18.5, 18.0, 17.2};
@@ -726,8 +726,8 @@ inline void ValidatePhaseThreeSolarSkyEnvironment(LightComputeSubmission& Comput
         Config.ResetHistory        = true;
         Config.PrimaryVisibility   = true;
         Config.CompactStorage      = true;
-        Config.SolarSkyEnvironment = true;
-        Config.SolarSkyPayload     = CompileSolarSkyEnvironmentPayload(Spec);
+        Config.SkyRadiance = true;
+        Config.SolarSkyPayload     = CompileSkyRadiancePayload(Spec);
 
         const auto GpuSky = DispatchProductionReplay(SkyCompute, SkyScene, Config, 0u);
         double RelErrSum = 0.0, MaxRelErr = 0.0;
@@ -744,7 +744,7 @@ inline void ValidatePhaseThreeSolarSkyEnvironment(LightComputeSubmission& Comput
                     SkyScene.Camera[1][2] + SkyScene.Camera[2][2] * (NdcX * SkyScene.Camera[2][3]) +
                         SkyScene.Camera[3][2] * (NdcY * SkyScene.Camera[3][3]),
                 };
-                const SpectrumRgb CpuRad = EvaluateSolarSkyTotalRadiance(Spec, {0.0, 0.0, 1.5}, Dir, 32u);
+                const SpectrumRgb CpuRad = EvaluateSkyTotalRadiance(Spec, {0.0, 0.0, 1.5}, Dir, 32u);
                 const auto& GpuPix = GpuSky[size_t(Y) * SkyW + X];
                 const double CpuLum = 0.2126 * CpuRad.R + 0.7152 * CpuRad.G + 0.0722 * CpuRad.B;
                 const double GpuLum = 0.2126 * GpuPix[0] + 0.7152 * GpuPix[1] + 0.0722 * GpuPix[2];
@@ -766,7 +766,7 @@ inline void ValidatePhaseThreeSolarSkyEnvironment(LightComputeSubmission& Comput
     SurfScene.Receivers.resize(size_t(SurfSize) * SurfSize);
     SurfScene.Camera = SkyScene.Camera;
 
-    SolarSkyEnvironmentSpecification SunSpec{};
+    SkyRadianceSpecification SunSpec{};
     SunSpec.ZenithDirection      = {0.0, 0.0, 1.0};
     SunSpec.SolarDirection       = {0.0, 0.50, 0.8660254};
     SunSpec.SolarIrradiance      = {20.0, 19.2, 18.4};
@@ -794,7 +794,7 @@ inline void ValidatePhaseThreeSolarSkyEnvironment(LightComputeSubmission& Comput
     auto& SurfCompute = Compute;
     SurfCompute.RebindReplayScene(SurfScene, true);
 
-    const auto Payload = CompileSolarSkyEnvironmentPayload(SunSpec);
+    const auto Payload = CompileSkyRadiancePayload(SunSpec);
     // Compute converged 64-batch Coupled MIS reference first.
     double RefMatte = 0.0, RefMirror = 0.0;
     {
@@ -806,7 +806,7 @@ inline void ValidatePhaseThreeSolarSkyEnvironment(LightComputeSubmission& Comput
         RefCfg.BalanceSampling     = true;
         RefCfg.PowerMis            = true;
         RefCfg.CompactStorage      = true;
-        RefCfg.SolarSkyEnvironment = true;
+        RefCfg.SkyRadiance = true;
         RefCfg.SolarSkyPayload     = Payload;
         for (uint32_t B = 0; B < 64u; ++B)
         {
@@ -843,7 +843,7 @@ inline void ValidatePhaseThreeSolarSkyEnvironment(LightComputeSubmission& Comput
         CoupledCfg.PowerMis            = true;
         CoupledCfg.PairwiseMis         = true;
         CoupledCfg.CompactStorage      = true;
-        CoupledCfg.SolarSkyEnvironment = true;
+        CoupledCfg.SkyRadiance = true;
         CoupledCfg.SolarSkyPayload     = Payload;
         const auto CoupledImg = DispatchProductionReplay(SurfCompute, SurfScene, CoupledCfg, 0u);
 
@@ -872,7 +872,7 @@ inline void ValidatePhaseThreeSolarSkyEnvironment(LightComputeSubmission& Comput
                     const double R = std::sqrt(Uni(Rng)), Phi = 6.283185307179586 * Uni(Rng);
                     Dir = {R * std::cos(Phi), R * std::sin(Phi), std::sqrt(std::max(0.0, 1.0 - R * R))};
                     Pdf = std::max(Dir.Z, 1e-9) / 3.141592653589793;
-                    const SpectrumRgb Tot = EvaluateSolarSkyTotalRadiance(SunSpec, {0, 0, 0}, Dir, 16u);
+                    const SpectrumRgb Tot = EvaluateSkyTotalRadiance(SunSpec, {0, 0, 0}, Dir, 16u);
                     const double Val = 0.80 * (0.2126 * Tot.R + 0.7152 * Tot.G + 0.0722 * Tot.B);
                     BMatteSq += (Val - RefMatte) * (Val - RefMatte);
                     BsdfMaxFirefly = std::max(BsdfMaxFirefly, Val);
@@ -893,7 +893,7 @@ inline void ValidatePhaseThreeSolarSkyEnvironment(LightComputeSubmission& Comput
                         const double Denom = CosH * CosH * (Alpha2 - 1.0) + 1.0;
                         const double D = Alpha2 / (3.141592653589793 * Denom * Denom);
                         Pdf = D * CosH / (4.0 * VH);
-                        const SpectrumRgb Tot = EvaluateSolarSkyTotalRadiance(SunSpec, {0, 0, 0}, Dir, 16u);
+                        const SpectrumRgb Tot = EvaluateSkyTotalRadiance(SunSpec, {0, 0, 0}, Dir, 16u);
                         const double Val = 0.80 * (0.2126 * Tot.R + 0.7152 * Tot.G + 0.0722 * Tot.B);
                         BMirrorSq += (Val - RefMirror) * (Val - RefMirror);
                     }
@@ -1159,7 +1159,7 @@ inline void ValidatePhaseFourAdaptiveFilterAndProvingScene(LightComputeSubmissio
         constexpr uint32_t Height = 80u;
         const auto Scene = ConstructVehicleHmiCourtyardScene(Width, Height);
 
-        SolarSkyEnvironmentSpecification GoldenHour{};
+        SkyRadianceSpecification GoldenHour{};
         GoldenHour.ZenithDirection      = {0.0, 0.0, 1.0};
         GoldenHour.SolarDirection       = {0.58, 0.76, 0.29189039};   // ~17 deg golden-hour sun!
         GoldenHour.SolarIrradiance      = {21.0, 19.8, 18.4};
@@ -1170,7 +1170,7 @@ inline void ValidatePhaseFourAdaptiveFilterAndProvingScene(LightComputeSubmissio
         GoldenHour.CloudTopKm           = 2.4;
         GoldenHour.CloudExtinctionKm    = 2.4;
         GoldenHour.CloudCoverage        = 0.48;
-        const auto SolarPayload = CompileSolarSkyEnvironmentPayload(GoldenHour);
+        const auto SolarPayload = CompileSkyRadiancePayload(GoldenHour);
 
         Compute.RebindReplayScene(Scene, true);
 
@@ -1191,7 +1191,7 @@ inline void ValidatePhaseFourAdaptiveFilterAndProvingScene(LightComputeSubmissio
             RefCfg.PowerMis            = true;
             RefCfg.CompactStorage      = true;
             RefCfg.OrderedTraversal    = true;
-            RefCfg.SolarSkyEnvironment = true;
+            RefCfg.SkyRadiance = true;
             RefCfg.SolarSkyPayload     = SolarPayload;
             RefCfg.PositiveFloor       = 0.001f;
 
@@ -1227,7 +1227,7 @@ inline void ValidatePhaseFourAdaptiveFilterAndProvingScene(LightComputeSubmissio
             BaseCfg.UniformFacetMixture = true;
             BaseCfg.CompactStorage      = true;
             BaseCfg.OrderedTraversal    = true;
-            BaseCfg.SolarSkyEnvironment = true;
+            BaseCfg.SkyRadiance = true;
             BaseCfg.SolarSkyPayload     = SolarPayload;
             BaseCfg.PositiveFloor       = 0.0001f;
             Baseline1Spp = DispatchProductionReplay(Compute, Scene, BaseCfg, 0u);
@@ -1259,7 +1259,7 @@ inline void ValidatePhaseFourAdaptiveFilterAndProvingScene(LightComputeSubmissio
             RawCfg.OrderedTraversal    = true;
             RawCfg.PairwiseMis         = true;
             RawCfg.HybridReconnection  = true;
-            RawCfg.SolarSkyEnvironment = true;
+            RawCfg.SkyRadiance = true;
             RawCfg.Sequenced           = true;
             RawCfg.SolarSkyPayload     = SolarPayload;
             RawCfg.PositiveFloor       = 0.0001f;
@@ -1298,7 +1298,7 @@ inline void ValidatePhaseFourAdaptiveFilterAndProvingScene(LightComputeSubmissio
             ProdCfg.VarianceFilter      = true;
             ProdCfg.PairwiseMis         = true;
             ProdCfg.HybridReconnection  = true;
-            ProdCfg.SolarSkyEnvironment = true;
+            ProdCfg.SkyRadiance = true;
             ProdCfg.AdaptiveFilter      = true;
             ProdCfg.Sequenced           = true;
             ProdCfg.SolarSkyPayload     = SolarPayload;
@@ -1376,7 +1376,7 @@ inline void ValidateProductionReSTIRPipeline(const char*        Driver,
     Compute.Prepare(BootstrapScene, Shaders, false, false, false, false, true, false, true);
     ValidatePhaseOnePairwiseMis(Compute);
     ValidatePhaseTwoHybridReconnection(Compute);
-    ValidatePhaseThreeSolarSkyEnvironment(Compute);
+    ValidatePhaseThreeSkyRadiance(Compute);
     ValidatePhaseFourAdaptiveFilterAndProvingScene(Compute, CaptureDir);
     std::printf("PRODUCTION_RESTIR_DECISION phase1=pairwise_power phase2=hybrid_reconnection phase3=coupled_solar_sky_mis phase4=adaptive_variance_filter status=PASS\n");
     std::fflush(stdout);

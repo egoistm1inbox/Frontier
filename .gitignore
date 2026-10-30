@@ -6,6 +6,7 @@ Build/
 build/
 Binaries/
 .local/
+.venv/
 
 # Sample meshes / textures / assets — tracked separately.
 EngineContent/*
@@ -16,6 +17,9 @@ EngineContent/*
 !EngineContent/PatternArchives/
 !EngineContent/EnvironmentArchives/
 !EngineContent/CelestialMaps/
+!EngineContent/Fonts/
+!EngineContent/Fonts/SunReference/
+!EngineContent/Fonts/SunReference/**
 EngineContent/CelestialMaps/*.ppm
 
 # Agent scratch space.

@@ -22,7 +22,7 @@ constexpr std::uint32_t ReplayFlags = PathReplayPhotometricClusters | PathReplay
     PathReplaySpatialDisk | PathReplayVarianceFilter | PathReplayResetVarianceFilter |
     PathReplayOrderedTraversal | PathReplayHardwareRayQuery | PathReplayPowerMis |
     PathReplayCompactStorage | PathReplayAuthoredMaterials | PathReplayPairwiseMis |
-    PathReplayHybridReconnection | PathReplaySolarSkyEnvironment | PathReplayAdaptiveFilter;
+    PathReplayHybridReconnection | PathReplaySkyRadiance | PathReplayAdaptiveFilter;
 
 void RequireReplay(bool Condition)
 {
@@ -49,7 +49,7 @@ void RecordPathReplay(VkCommandBuffer Commands, const PathReplayVulkanAccess &Ac
     const bool AuthoredMaterials = (Flags & PathReplayAuthoredMaterials) != 0;
     const bool PairwiseMis = (Flags & PathReplayPairwiseMis) != 0;
     const bool HybridReconnection = (Flags & PathReplayHybridReconnection) != 0;
-    const bool SolarSkyEnvironment = (Flags & PathReplaySolarSkyEnvironment) != 0;
+    const bool SkyRadiance = (Flags & PathReplaySkyRadiance) != 0;
     const bool AdaptiveFilter = (Flags & PathReplayAdaptiveFilter) != 0;
     const bool PhotometricClusters = (Flags & PathReplayPhotometricClusters) != 0;
     RequireReplay(Commands != VK_NULL_HANDLE && Access.PipelineLayout != VK_NULL_HANDLE &&
@@ -70,7 +70,7 @@ void RecordPathReplay(VkCommandBuffer Commands, const PathReplayVulkanAccess &Ac
         Extent.Sampling[3] > 0 && Extent.Sampling[3] <= 64 && Extent.Reconstruction[0] <= 1 &&
         Extent.Reconstruction[1] <= 1 && Extent.Reconstruction[3] > 0 && Extent.Reconstruction[3] <= 64);
     RequireReplay((Flags & ~ReplayFlags) == 0 && (!DoubleCount || Sources) &&
-        (!Balance || ((Sources || SolarSkyEnvironment || PhotometricClusters) && !DoubleCount)) &&
+        (!Balance || ((Sources || SkyRadiance || PhotometricClusters) && !DoubleCount)) &&
         (!PowerMis || (Balance || PairwiseMis || HybridReconnection)) &&
         (!AdaptiveFilter || VarianceFilter) &&
         (!CompactStorage || !Reconstruct) &&
@@ -127,10 +127,10 @@ void RecordPathReplay(VkCommandBuffer Commands, const PathReplayVulkanAccess &Ac
     // Camera and source offsets are added as uint32 in Slang, even when the Vulkan range is larger.
     constexpr std::uint64_t ShaderAddressLimit = std::uint64_t(UINT32_MAX) + 1u;
     // Textured, authored-PBR, and solar/sky modes read CameraProjection / post-camera payload floats.
-    if (Primary || SolarSkyEnvironment || (Flags & (PathReplayTexturedDiffuse | PathReplayAuthoredMaterials)) != 0)
+    if (Primary || SkyRadiance || (Flags & (PathReplayTexturedDiffuse | PathReplayAuthoredMaterials)) != 0)
     {
         const std::uint64_t RequiredCameraFloats = PathReplayCameraFloats +
-                                                   (SolarSkyEnvironment ? PathReplaySolarSkyFloats : 0u);
+                                                   (SkyRadiance ? PathReplaySolarSkyFloats : 0u);
         const std::uint64_t CameraEnd = std::uint64_t(Extent.Primary[1]) + RequiredCameraFloats;
         RequireReplay(CameraEnd <= Buffers.AngleFloats && CameraEnd <= ShaderAddressLimit);
     }

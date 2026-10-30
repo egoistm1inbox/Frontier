@@ -8,7 +8,7 @@ project-specific course and scenario in `Frontier/Projects/Project-Drive/`.
 
 - **`FrontierProjectDrivePhysics`** (self-contained C++17):
   Unmodified hook-based core (`VehicleSolver`, `Drivetrain`, `Aerodynamics`, `PacejkaMagicFormula`, `TyreSlipDynamics`,
-  `VehicleGeometry`) + `TyreVisualBridge` (`FrontierTyreContinuum`). Preprocesses byte-for-byte identically to
+  `VehicleGeometry`) + `TyreVisualBridge` (`FrontierTyreMechanics`). Preprocesses byte-for-byte identically to
   `Experimental/ProjectDriveReference/`.
 - **`FrontierRigidBodyPhysics`** (`Frontier/Engine/Physics/`, Jolt Physics `5.6.0` via `Automation/BuildJolt.sh`):
   `RigidBodySolver.{h,cpp}` (opaque PIMPL `JoltWorld` with `Plane`, `Box`, `Sphere`, `Capsule`, `Cylinder`,

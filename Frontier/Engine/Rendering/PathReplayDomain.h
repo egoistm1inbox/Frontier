@@ -43,7 +43,7 @@ struct PathReplayDomainSpecification
     bool VarianceFilter = false;
     bool HardwareRayQuery = false;
     bool AuthoredMaterials = false;
-    bool SolarSkyEnvironment = false;
+    bool SkyRadiance = false;
     bool AdaptiveFilter = false;
 };
 
@@ -83,7 +83,7 @@ struct PathReplayHistorySpecification
     bool AuthoredMaterials = false;
     bool PairwiseMis = false;
     bool HybridReconnection = false;
-    bool SolarSkyEnvironment = false;
+    bool SkyRadiance = false;
     bool AdaptiveFilter = false;
     bool operator==(const PathReplayHistorySpecification&) const = default;
 };

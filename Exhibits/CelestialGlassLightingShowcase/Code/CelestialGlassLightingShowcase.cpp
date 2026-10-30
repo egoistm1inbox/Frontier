@@ -2,7 +2,7 @@
                                              CELESTIALGLASSLIGHTINGSHOWCASE.CPP
 ==========================================================================================================================================*/
 // 🧩 Stage F End-to-End Numerical, Sanitizer, and High-Resolution (960x540) Visual Showcase:
-//    1. Glass-Aware Nanite Virtualized Geometry (FacetTierBuild + QuadricTierBuild + GlassAwareClusterExtension).
+//    1. Glass-Aware Nanite Virtualized Geometry (FacetTierBuild + QuadricTierBuild + ClusterHierarchy).
 //    2. Hipparcos 41k Star Catalogue + Custom Stars + Textured Moon + 6 Lunar Presets + Ringed Planets & Atmospheres.
 //    3. Exact Dual-Tier GI & Reflections:
 //         - GTX: SDF + SurfaceCards ReSTIR GI + Software BVH Triangle Reflections!
@@ -12,12 +12,12 @@
 /*------------------------------------------------------------------------------------------------------------------------------------------
                                                              INCLUDES
 ------------------------------------------------------------------------------------------------------------------------------------------*/
-#include "Engine/Environment/CelestialPlanetaryExtension.h"
-#include "Engine/Fluid/PlumeFluidExtension.h"
-#include "Engine/Fluid/ShallowWaterMudExtension.h"
-#include "Engine/Geometry/GlassAwareClusterExtension.h"
-#include "Engine/Physics/Sparks/BallisticSparkExtension.h"
-#include "Engine/Rendering/SdfRestirPortalExtension.h"
+#include "Engine/VisualEffects/CelestialSky.h"
+#include "Engine/Fluid/PlumeFluid.h"
+#include "Engine/Fluid/ShallowWater.h"
+#include "Engine/GeometryProcessing/ClusterHierarchy.h"
+#include "Engine/Particles/SparkParticles.h"
+#include "Engine/Rendering/SceneRenderer.h"
 
 #include <algorithm>
 #include <cmath>
@@ -290,7 +290,7 @@ void AppendSubdividedBoxToFacetField(
 }
 
 void TonemapHdrTileIntoAtlas(
-    const Frontier::CelestialPlanetaryExtension& Sky,
+    const Frontier::CelestialSky& Sky,
     Frontier::Vec3                               CamForward,
     Frontier::Vec3                               CamRight,
     Frontier::Vec3                               CamUp,
@@ -386,7 +386,7 @@ int main(int Argc, char** Argv)
     --------------------------------------------------------------------------------------------------------------------------------------*/
     std::printf("--- Suite 1: Glass-Aware Nanite Virtualized Cluster Geometry (FacetTier + QuadricTier + Two-Phase Hi-Z) ---\n");
 
-    Frontier::GlassAwareClusterExtension ClusteredGeo{};
+    Frontier::ClusterHierarchy ClusteredGeo{};
     ClusteredGeo.RegisterMaterialProfile({0u, false, 1.0f, {0.0f, 0.0f, 0.0f}, {0.72f, 0.70f, 0.66f}, 0.45f, 0.0f});  // Stone floor/wall
     ClusteredGeo.RegisterMaterialProfile({1u, false, 1.0f, {0.0f, 0.0f, 0.0f}, {0.22f, 0.74f, 0.52f}, 0.25f, 0.15f}); // Emerald pillar
     ClusteredGeo.RegisterMaterialProfile({2u, false, 1.0f, {0.0f, 0.0f, 0.0f}, {0.88f, 0.62f, 0.22f}, 0.18f, 0.85f}); // Gold pillar
@@ -526,7 +526,7 @@ int main(int Argc, char** Argv)
     uint32_t TotalPageBytes = 0u;
     for (const auto& Pg : ClusteredGeo.StreamingPages())
     {
-        if (Pg.ByteSize > Frontier::GlassAwareClusterExtension::StreamingPageCapacityBytes)
+        if (Pg.ByteSize > Frontier::ClusterHierarchy::StreamingPageCapacityBytes)
         {
             AllPagesUnder64K = false;
         }
@@ -569,7 +569,7 @@ int main(int Argc, char** Argv)
     --------------------------------------------------------------------------------------------------------------------------------------*/
     std::printf("\n--- Suite 2: 41k Hipparcos Catalogue, Custom Stars, Textured Moon, Ringed Planets & Atmospheres ---\n");
 
-    Frontier::CelestialPlanetaryExtension Celestial{};
+    Frontier::CelestialSky Celestial{};
     const bool LoadedHip = Celestial.LoadHipparcosCatalogueCsv("Exhibits/NightSky/Data/Hipparcos8.csv", 2461343.85, -26.188, 28.320);
     const bool LoadedMoon = Celestial.LoadLunaAlbedoMapPpm("EngineContent/CelestialMaps/MoonAlbedo2048.ppm");
     Celestial.ConfigureStarfieldAppearance(1.45f, 7.8f, 1.28f, 0.18f, 12.5f);
@@ -656,7 +656,7 @@ int main(int Argc, char** Argv)
     bool AllSixLunarPresetsValid = true;
     for (uint8_t P = 0u; P < 6u; ++P)
     {
-        Frontier::CelestialPlanetaryExtension TempMoonSky{};
+        Frontier::CelestialSky TempMoonSky{};
         Frontier::LunarBodyDescriptor         M{};
         M.Preset           = static_cast<Frontier::LunarSurfacePreset>(P);
         M.DirectionUnit    = {0.0f, 1.0f, 0.0f};
@@ -764,7 +764,7 @@ int main(int Argc, char** Argv)
     Frontier::PlumeFluidParameters PlumeCfg{};
     PlumeCfg.Grade              = Frontier::PlumeQualityGrade::High;
     PlumeCfg.FlameRadianceScale = 32.0f;
-    Frontier::PlumeFluidExtension GalleryPlume{PlumeCfg};
+    Frontier::PlumeFluid GalleryPlume{PlumeCfg};
 
     for (int Step = 0; Step < 22; ++Step)
     {
@@ -774,7 +774,7 @@ int main(int Argc, char** Argv)
 
     Frontier::BallisticSparkConfig SparkCfg{};
     SparkCfg.MaxSparkBudget = 256u;
-    Frontier::BallisticSparkExtension GallerySparks{SparkCfg};
+    Frontier::SparkParticles GallerySparks{SparkCfg};
     Frontier::MetallicScrapeContact   Scrape{};
     Scrape.ContactPointWorld     = {+1.85f, 4.6f, 0.55f};
     Scrape.ContactNormalWorld    = {-0.15f, -0.25f, 0.95f};
@@ -787,7 +787,7 @@ int main(int Argc, char** Argv)
         GallerySparks.StepBallisticSparks(0.016f, {0.3f, 0.0f, 0.2f});
     }
 
-    Frontier::SdfRestirPortalExtension Gallery{};
+    Frontier::SceneRenderer Gallery{};
     // Glossy dark slate gallery floor (Roughness = 0.08 -> crisp elongated area-light & BVH sphere reflections!)
     Gallery.RegisterDualTierSolidBox({0.0f, 3.0f, -0.25f}, {15.0f, 15.0f, 0.25f}, {0.15f, 0.17f, 0.21f}, 0.08f, {0.0f, 0.0f, 0.0f}, 0.18f);
     // Architectural framing columns & vivid emerald/crimson sculpture pillars behind the central glass sphere!
@@ -969,7 +969,7 @@ int main(int Argc, char** Argv)
 
     // 3.5: Measure flat-wall pixel-to-pixel high-frequency speckle variance WITH vs WITHOUT Spatial Reuse + A-Trous!
     {
-        Frontier::SdfRestirPortalExtension DenoiseBench{};
+        Frontier::SceneRenderer DenoiseBench{};
         DenoiseBench.RegisterDualTierSolidBox({0.0f, 3.0f, 1.5f}, {4.0f, 0.25f, 2.5f}, {0.75f, 0.75f, 0.78f}, 0.85f);
         DenoiseBench.RegisterDualTierSolidBox({-2.2f, 1.4f, 1.5f}, {0.2f, 1.2f, 1.2f}, {0.85f, 0.25f, 0.22f}, 0.75f);
         Frontier::AreaLuminaireDescriptor BenchLight{};
@@ -1059,11 +1059,11 @@ int main(int Argc, char** Argv)
         LagoonCfg.CellsY         = 96u;
         LagoonCfg.CellSizeMetres = 0.35f;
         LagoonCfg.WorldOriginXY  = {-16.8f, -16.8f};
-        Frontier::ShallowWaterMudExtension Lagoon{LagoonCfg};
+        Frontier::ShallowWaterSimulation Lagoon{LagoonCfg};
         Lagoon.SculptBedDepressionOrMound({0.0f, -1.5f}, 11.5f, -0.14f);
         Lagoon.FillBasinRegion({0.0f, -1.5f}, 11.2f, 0.025f, 0.0f);
 
-        Frontier::SdfRestirPortalExtension Observatory{};
+        Frontier::SceneRenderer Observatory{};
         Observatory.RegisterDualTierSolidBox({0.0f, 0.0f, -0.25f}, {18.0f, 18.0f, 0.25f}, {0.14f, 0.16f, 0.20f}, 0.22f);
         // Low architectural parapet piers flanking the reflecting lagoon + warm subtle observatory step-lights!
         Observatory.RegisterDualTierSolidBox({-6.2f, 2.8f, 0.55f}, {0.65f, 0.65f, 0.55f}, {0.34f, 0.36f, 0.42f}, 0.38f);
@@ -1175,7 +1175,7 @@ int main(int Argc, char** Argv)
 
         // Tile (0, 0): Waxing Crescent Textured Luna (2048x1024 MoonAlbedo2048.ppm) + Earthshine + Hipparcos Stars!
         {
-            Frontier::CelestialPlanetaryExtension SkyT0{};
+            Frontier::CelestialSky SkyT0{};
             SkyT0.LoadHipparcosCatalogueCsv("Exhibits/NightSky/Data/Hipparcos8.csv", 2461343.85, -26.188, 28.320);
             SkyT0.LoadLunaAlbedoMapPpm("EngineContent/CelestialMaps/MoonAlbedo2048.ppm");
             SkyT0.ConfigureStarfieldAppearance(1.5f, 7.8f, 1.15f, 0.1f, 0.0f);
@@ -1193,7 +1193,7 @@ int main(int Argc, char** Argv)
 
         // Tile (1, 0): Volcanic Sulfur Io + Fractured Ice Europa + Titan Orange Shroud Trio!
         {
-            Frontier::CelestialPlanetaryExtension SkyT1{};
+            Frontier::CelestialSky SkyT1{};
             SkyT1.BuildProceduralStarCatalogue(9000u, 0xABC123ULL);
             SkyT1.ConfigureStarfieldAppearance(1.3f, 7.5f, 1.0f, 0.1f, 0.0f);
 
@@ -1226,7 +1226,7 @@ int main(int Argc, char** Argv)
 
         // Tile (2, 0): Banded Saturnian Gas Giant + C/B/Cassini/A/Encke/F Rings + Mutual Planet/Ring Shadows!
         {
-            Frontier::CelestialPlanetaryExtension SkyT2{};
+            Frontier::CelestialSky SkyT2{};
             SkyT2.BuildProceduralStarCatalogue(8000u, 0x777888ULL);
             SkyT2.ConfigureStarfieldAppearance(1.25f, 7.5f, 0.95f, 0.1f, 0.0f);
 
@@ -1244,7 +1244,7 @@ int main(int Argc, char** Argv)
 
         // Tile (0, 1): Oceanic Terrestrial Exoplanet + Dense Blue N2-O2 Rayleigh/Ozone Atmosphere + Shepherd Ice Ring!
         {
-            Frontier::CelestialPlanetaryExtension SkyT3{};
+            Frontier::CelestialSky SkyT3{};
             SkyT3.BuildProceduralStarCatalogue(8500u, 0x555666ULL);
             Frontier::PlanetaryBodyDescriptor Terra{};
             Terra.Archetype                         = Frontier::PlanetarySurfaceArchetype::OceanicTerrestrial;
@@ -1275,7 +1275,7 @@ int main(int Argc, char** Argv)
 
         // Tile (1, 1): Methane Ice Giant w/ High-Tilt Narrow Rings + Rusty Desert World w/ CO2 Amber Limb Haze!
         {
-            Frontier::CelestialPlanetaryExtension SkyT4{};
+            Frontier::CelestialSky SkyT4{};
             SkyT4.BuildProceduralStarCatalogue(8500u, 0x999111ULL);
 
             Frontier::PlanetaryBodyDescriptor IceGiant{};
@@ -1316,7 +1316,7 @@ int main(int Argc, char** Argv)
 
         // Tile (2, 1): Binary Custom Star System (3100 K Red Giant + 24000 K Blue-White Companion + 6100 K Tertiary) + Milky Way!
         {
-            Frontier::CelestialPlanetaryExtension SkyT5{};
+            Frontier::CelestialSky SkyT5{};
             SkyT5.LoadHipparcosCatalogueCsv("Exhibits/NightSky/Data/Hipparcos8.csv", 2461343.85, -26.188, 28.320);
             SkyT5.ConfigureStarfieldAppearance(1.85f, 7.8f, 1.85f, 0.12f, 5.0f);
 

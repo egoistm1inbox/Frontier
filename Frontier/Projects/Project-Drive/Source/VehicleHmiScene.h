@@ -9,16 +9,16 @@
 
 #include "Engine/Physics/ProjectDrive/TyreVisualBridge.h"
 #include "Engine/Physics/TyreSurfaceProjection.h"
-#include "Engine/Physics/VehiclePropulsion/CalibratedTyreThermodynamics.h"
-#include "Engine/Physics/VehiclePropulsion/HybridElectricPropulsion.h"
-#include "Engine/Physics/VehiclePropulsion/PropulsionThermochemistry.h"
+#include "Engine/Gameplay/GameMechanics/Propulsion/CalibratedTyreThermodynamics.h"
+#include "Engine/Gameplay/GameMechanics/Propulsion/HybridElectricPropulsion.h"
+#include "Engine/Gameplay/GameMechanics/Propulsion/PropulsionThermochemistry.h"
 #include "Engine/Rendering/AtmosphereModel.h"
 #include "Engine/Rendering/CloudField.h"
 #include "Engine/Rendering/FogMedium.h"
-#include "Engine/Rendering/PhotometricClusterExtension.h"
-#include "Engine/Fluid/PlumeFluidExtension.h"
+#include "Engine/Rendering/PhotometricLights.h"
+#include "Engine/Fluid/PlumeFluid.h"
 #include "Engine/Rendering/WeatherEffects.h"
-#include "Engine/Environment/WindForceFieldExtension.h"
+#include "Engine/VisualEffects/WindField.h"
 
 #include <array>
 #include <cstdint>
@@ -188,15 +188,15 @@ void PopulateProvingGroundPhotometricLights(
     const DriveSnapshot&                         Snapshot,
     const ShowcaseEnvironmentSettings&           Settings,
     std::vector<AnalyticLuminaireSpecification>& OutLuminaires,
-    PhotometricClusterExtension&                  OutClusters);
+    PhotometricLights&                  OutClusters);
 
 // Renders an anti-aliased HDR->ACES tone-mapped RGB8 frame of the complete scene (with BVH reflections/shadows,
-// Atmosphere + CloudField + clustered FogMedium + PlumeFluidExtension smoke/fire + WeatherEffects snow/hail/rain).
+// Atmosphere + CloudField + clustered FogMedium + PlumeFluid smoke/fire + WeatherEffects snow/hail/rain).
 void RenderVehicleHmiShowcaseImage(
     const std::vector<WorldFacetTriangle>&              Triangles,
     const std::vector<AnalyticLuminaireSpecification>&  Luminaires,
-    const PhotometricClusterExtension&                   LightClusters,
-    const PlumeFluidExtension*                           PlumeFluid,
+    const PhotometricLights&                   LightClusters,
+    const PlumeFluid*                           PlumeFluid,
     const ShowcaseCameraPose&                           Camera,
     const ShowcaseEnvironmentSettings&                  Environment,
     std::uint32_t                                       Width,

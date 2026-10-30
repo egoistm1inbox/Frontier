@@ -85,7 +85,7 @@ double CloudDensity(const CloudParameters& P, SpatialVector Point) noexcept
 
 CloudMarchResult MarchClouds(const CloudParameters& P, SpatialVector Origin, SpatialVector Direction,
                              SpatialVector SunDirection, const SpectrumRgb& SunRadiance, double MaxDistanceM,
-                             uint32_t Steps, uint32_t SunSteps) noexcept
+                             uint32_t Steps, uint32_t SunSteps, double PhaseJitter01) noexcept
 {
     CloudMarchResult Result;
     if (Steps == 0 || MaxDistanceM <= 0.0)
@@ -114,13 +114,14 @@ CloudMarchResult MarchClouds(const CloudParameters& P, SpatialVector Origin, Spa
     }
 
     const double Dt = (TExit - TEnter) / static_cast<double>(Steps);
+    const double ClampedJitter = std::clamp(PhaseJitter01, 0.01, 0.99);
     const double Phase = HenyeyGreensteinPhase(Dot(Direction, SunDirection), P.PhaseG);
     double Transmittance = 1.0;
     SpectrumRgb Radiance{};
 
     for (uint32_t I = 0; I < Steps; ++I)
     {
-        const double        T = TEnter + Dt * (static_cast<double>(I) + 0.5);
+        const double        T = TEnter + Dt * (static_cast<double>(I) + ClampedJitter);
         const SpatialVector At = Add(Origin, Mul(Direction, T));
         const double        Density = CloudDensity(P, At);
         if (Density <= 0.0)

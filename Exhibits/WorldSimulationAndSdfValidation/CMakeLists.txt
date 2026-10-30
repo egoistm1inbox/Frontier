@@ -20,13 +20,13 @@ target_include_directories(WorldSimulationAndSdfValidation PRIVATE
 
 target_link_libraries(WorldSimulationAndSdfValidation PRIVATE
     FrontierPlumeFluid
-    FrontierShallowWaterMud
-    FrontierWindForceField
-    FrontierSnowLightningEnvironment
+    FrontierShallowWater
+    FrontierWindField
+    FrontierSnowLightning
     FrontierSolidFracture
-    FrontierBallisticSparks
-    FrontierSdfRestirPortal
-    FrontierVehicleCabinHmi
+    FrontierParticles
+    FrontierSceneRenderer
+    FrontierGameMechanics
     FrontierAudioFoundation
     FrontierRigidBodyPhysics
     ProjectDriveSimulation)

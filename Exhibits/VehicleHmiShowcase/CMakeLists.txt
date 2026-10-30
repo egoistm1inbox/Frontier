@@ -26,7 +26,7 @@ if(FRONTIER_SHOWCASE_SANITIZERS AND NOT MSVC)
     foreach(SanTarget
         FrontierPlumeFluid
         FrontierAtmosphericOptics
-        FrontierPhotometricClustering
+        FrontierPhotometricLights
         FrontierProjectDrivePhysics
         FrontierProjectDriveJolt
         ProjectDriveSimulation

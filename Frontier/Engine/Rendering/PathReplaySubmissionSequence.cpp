@@ -43,7 +43,7 @@ PathReplayHistorySpecification DescribeReplayHistory(const LightComputeFootprint
     Result.AuthoredMaterials = (Options & PathReplayAuthoredMaterials) != 0;
     Result.PairwiseMis = (Options & PathReplayPairwiseMis) != 0;
     Result.HybridReconnection = (Options & PathReplayHybridReconnection) != 0;
-    Result.SolarSkyEnvironment = (Options & PathReplaySolarSkyEnvironment) != 0;
+    Result.SkyRadiance = (Options & PathReplaySkyRadiance) != 0;
     Result.AdaptiveFilter = (Options & PathReplayAdaptiveFilter) != 0;
     return Result;
 }
@@ -86,7 +86,7 @@ PathReplaySequenceRecording PathReplaySubmissionSequence::RecordReplay(VkCommand
     Domain.VarianceFilter = (Options & PathReplayVarianceFilter) != 0 || AllowCameraOnly;
     Domain.HardwareRayQuery = (Options & PathReplayHardwareRayQuery) != 0;
     Domain.AuthoredMaterials = (Options & PathReplayAuthoredMaterials) != 0;
-    Domain.SolarSkyEnvironment = (Options & PathReplaySolarSkyEnvironment) != 0;
+    Domain.SkyRadiance = (Options & PathReplaySkyRadiance) != 0;
     Domain.AdaptiveFilter = (Options & PathReplayAdaptiveFilter) != 0;
     ValidatePathReplayDomain(Scene, Domain);
 

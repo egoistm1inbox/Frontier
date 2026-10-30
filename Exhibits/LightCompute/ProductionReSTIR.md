@@ -11,7 +11,7 @@ advances the Frontier C++/Vulkan/Slang ReSTIR pipeline through four prespecified
 | --- | --- | --- | --- | --- |
 | 1 | Spatial + temporal MIS across heterogeneous materials and visibility | WebGPU blind `1/Z` averages neighbor colour without target shadow rays (`+496.5` bias); naive `1/M` biases dim receivers by `30.0 SE` and inflates metal RMSE `+66%` | WebGPU blind `1/Z` (negative control), Uniform `1/M`, Fresh Donor `1/(K+1)`, Defensive Canonical Pairwise Balance (`beta = 1`), Defensive Canonical Pairwise Power (`beta = 2`) | 🏆 Defensive Canonical Pairwise Power MIS (`PathReplayPairwiseMis \| PathReplayPowerMis`) |
 | 2 | Multi-bounce GI vs sharp glossy reflections | Pure Random-Number Replay retraces full multi-bounce chains per neighbor (`25,015` rays); un-gated diffuse reconnection blurs `r = 0.06` metal (`RMSE 1.1024`) | Temporal-only, Pure Seed Replay, Un-gated Diffuse Reconnection (negative control), Wavefront-Specialized Hybrid Secondary Reconnection | 🏆 Wavefront-Specialized Dual-Pipeline Hybrid Reconnection (`PathReplayHybridReconnection`) |
-| 3 | Outdoor `0.53 deg` solar disc, Rayleigh/Mie sky and volumetric cloud deck | Constant RGB ambient sky; BSDF-only sampling misses the `6.8e-5 sr` solar disc (`Matte RMSE 3.678`, `Mirror RMSE 104,632`) | BSDF-only solar hit vs Coupled `20`-float Spherical-Shell Sky/Cloud Continuum + Solid-Angle Solar Cap NEE + GGX Power MIS | 🏆 Coupled Solar/Sky/Cloud NEE + Power MIS (`PathReplaySolarSkyEnvironment`) |
+| 3 | Outdoor `0.53 deg` solar disc, Rayleigh/Mie sky and volumetric cloud deck | Constant RGB ambient sky; BSDF-only sampling misses the `6.8e-5 sr` solar disc (`Matte RMSE 3.678`, `Mirror RMSE 104,632`) | BSDF-only solar hit vs Coupled `20`-float Spherical-Shell Sky/Cloud Continuum + Solid-Angle Solar Cap NEE + GGX Power MIS | 🏆 Coupled Solar/Sky/Cloud NEE + Power MIS (`PathReplaySkyRadiance`) |
 | 4 | Spatiotemporal denoising under moving shadows and sharp reflections | Static SVGF (`MaxHistory = 16`, un-gated `Step = 1,2,4`) lags behind moving shadows (`0.1852`) and blurs mirror reflections (`0.4489` vs `0.4084` unfiltered) | Unfiltered ReSTIR, Static SVGF, Adaptive `3-sigma` Roughness-Split Temporal Clamp + GGX Specular Footprint Gate | 🏆 Adaptive `3-sigma` + GGX Cone Variance Filter (`PathReplayAdaptiveFilter`) |
 
 ![Outdoor Golden-Hour VehicleHMI Courtyard actual Vulkan GPU readbacks](Images/ProductionVehicleHmiCourtyardComparison.png)
@@ -64,10 +64,10 @@ so surface and sky reconnections share one branchless area-measure representatio
 
 ## Phase 3: Coupled Solar Disc, Rayleigh/Mie Sky and Cloud Layer
 
-`FrontierSolarSkyEnvironmentPayload` (`SolarSkyEnvironmentPayload.{h,cpp}`) compiles physical atmospheric parameters
+`FrontierSkyRadiance` (`SkyRadiancePayload.{h,cpp}`) compiles physical atmospheric parameters
 into a validated `20`-float (`5 x float4`) payload at `Angles[Extent.Primary.y + 48 .. +67]`, tracked automatically by
 `PathReplayHistoryDomain::PriorSolarSkyPayload` for instant temporal/variance reset on sun or weather updates.
-`SolarSkyEnvironment.slang` integrates optical depth via quadratic-warped (`t = L * u^2`) `6`-point Gauss-Legendre
+`SkyRadiance.slang` integrates optical depth via quadratic-warped (`t = L * u^2`) `6`-point Gauss-Legendre
 quadrature with Sterbenz-exact `r * mu` shell chords (`<= 0.0089` ground transmittance error vs `64`-step FP64 at `84 deg`
 golden hour) and couples solid-angle spherical-cap solar NEE with multi-stratum GGX BSDF Power MIS:
 

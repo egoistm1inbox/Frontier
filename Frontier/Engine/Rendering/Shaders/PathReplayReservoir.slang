@@ -626,7 +626,7 @@ bool SampleReplayDirectCandidate(uint SourceChannel, SurfacePoint Receiver, floa
     }
     else
     {
-        if (!SolarSkyEnvironmentActive()) return false;
+        if (!SkyRadianceActive()) return false;
         float CapU = RandomUnit(Bits);
         float CapPhi = 6.283185307179586 * RandomUnit(Bits);
         float OneMinusEdge = 0.0;
@@ -726,7 +726,7 @@ float3 EvaluateReplayPathUnified(SurfacePoint Receiver, uint Seed, bool Reconnec
     bool RoughOpaque = (Extent.Primary.w & 64u) != 0, SampleFacets = (Extent.Primary.w & 128u) != 0;
     bool ImportanceRough = (Extent.Primary.w & 4096u) != 0;
     bool AuthoredMaterials = (Extent.Primary.w & 134217728u) != 0;
-    bool SolarEnvironment = SolarSkyEnvironmentActive();
+    bool SolarEnvironment = SkyRadianceActive();
 
     float3 ReconnectDir = 0.0;
     float ReconnectMaxDist = 1e30;

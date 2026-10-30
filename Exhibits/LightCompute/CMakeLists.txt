@@ -45,7 +45,7 @@ target_link_libraries(ProductionReSTIRContractValidation PRIVATE FrontierPathRep
 target_include_directories(ProductionReSTIRContractValidation PRIVATE "${Root}/Frontier" "${VulkanHeaders}")
 add_executable(PhotometricClusterValidation Code/PhotometricClusterValidation.cpp)
 target_link_libraries(PhotometricClusterValidation PRIVATE FrontierPathReplaySubmission FrontierAtmosphericOptics
-    FrontierPhotometricClustering)
+    FrontierPhotometricLights)
 target_include_directories(PhotometricClusterValidation PRIVATE "${Root}/Frontier" "${VulkanHeaders}")
 add_executable(RadiantFacetValidation Code/RadiantFacetValidation.cpp)
 add_executable(MediumRadianceValidation Code/MediumRadianceValidation.cpp)

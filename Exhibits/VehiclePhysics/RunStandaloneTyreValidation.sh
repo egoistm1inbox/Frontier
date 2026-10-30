@@ -45,7 +45,7 @@ export WGPU_BACKEND_TYPE=Vulkan
         printf 'Standalone projection unexpectedly includes vehicle/Jolt dependencies\n' >&2
         exit 1
     fi
-    if nm -u "$BUILD/tyre-engine/libFrontierTyreContinuum.a" | c++filt | grep -Eq 'Frontier::Vehicle|JPH::'; then
+    if nm -u "$BUILD/tyre-engine/libFrontierTyreMechanics.a" | c++filt | grep -Eq 'Frontier::Vehicle|JPH::'; then
         printf 'Standalone tyre library unexpectedly links vehicle/Jolt symbols\n' >&2
         exit 1
     fi

@@ -8,7 +8,7 @@
 #include "Engine/Physics/TyreContinuum.h"
 #include "Engine/Physics/TyreSurfaceProjection.h"
 #include "Engine/Physics/ProjectDrive/TyreVisualBridge.h"
-#include "Engine/Fluid/PlumeFluidExtension.h"
+#include "Engine/Fluid/PlumeFluid.h"
 #include "Engine/Rendering/WeatherEffects.h"
 
 #include <algorithm>
@@ -54,7 +54,7 @@ double ComputeDetailTileAutocorrelation(Frontier::PlumeSolverVariant Variant)
     for (int I = 0; I < Samples; ++I)
     {
         const float Z = 0.25f + static_cast<float>(I) * StepZ;
-        Signal[static_cast<std::size_t>(I)] = Frontier::PlumeFluidExtension::EvaluateDetailFieldSample(
+        Signal[static_cast<std::size_t>(I)] = Frontier::PlumeFluid::EvaluateDetailFieldSample(
             { 0.35f, -0.22f, Z }, { 0.45f, -0.30f, 2.85f }, 1.25f, 2.20f, 0.22f, Variant);
         Mean += Signal[static_cast<std::size_t>(I)];
     }
@@ -140,8 +140,8 @@ int main(int Argc, char** Argv)
     // 1A. Controlled Nyquist / checkerboard velocity projection residual test.
     double HtmlProjAfter = 0.0, UpgradedProjAfter = 0.0;
     {
-        Frontier::PlumeFluidExtension HtmlProj(HtmlParams);
-        Frontier::PlumeFluidExtension UpgrProj(UpgradedParams);
+        Frontier::PlumeFluid HtmlProj(HtmlParams);
+        Frontier::PlumeFluid UpgrProj(UpgradedParams);
 
         auto BuildCheckerboardVelocity = [](std::array<std::uint32_t, 3> Ext)
         {
@@ -174,8 +174,8 @@ int main(int Argc, char** Argv)
     }
 
     // 1B. Matched burnout + tyre-ignition fire plume simulation over 32 steps!
-    Frontier::PlumeFluidExtension HtmlPlume(HtmlParams);
-    Frontier::PlumeFluidExtension UpgradedPlume(UpgradedParams);
+    Frontier::PlumeFluid HtmlPlume(HtmlParams);
+    Frontier::PlumeFluid UpgradedPlume(UpgradedParams);
 
     std::array<Frontier::PlumeWheelTelemetry, 4> BurnoutWheels{};
     for (int W = 0; W < 4; ++W)
@@ -219,7 +219,7 @@ int main(int Argc, char** Argv)
     std::vector<std::uint8_t> HtmlPanelRgb(PanelW * PanelH * 3u, 0u);
     std::vector<std::uint8_t> UpgradedPanelRgb(PanelW * PanelH * 3u, 0u);
 
-    auto RenderPlumePanel = [&](const Frontier::PlumeFluidExtension& Plume, std::vector<std::uint8_t>& OutRgb)
+    auto RenderPlumePanel = [&](const Frontier::PlumeFluid& Plume, std::vector<std::uint8_t>& OutRgb)
     {
         const std::array<float, 3> Eye = { -7.2f, 0.0f, 2.15f };
         for (std::uint32_t Y = 0u; Y < PanelH; ++Y)
@@ -382,7 +382,7 @@ int main(int Argc, char** Argv)
     Frontier::PlumeFluidParameters WorldPlumeParams{};
     WorldPlumeParams.Grade   = Frontier::PlumeQualityGrade::Medium;
     WorldPlumeParams.Variant = Frontier::PlumeSolverVariant::ProductionUpgraded;
-    Frontier::PlumeFluidExtension WorldPlume(WorldPlumeParams);
+    Frontier::PlumeFluid WorldPlume(WorldPlumeParams);
 
     auto StepDrivingAndPlume = [&](int Ticks, float Throttle, float Steer, bool Handbrake, float SmokeScale, float FireScale)
     {
@@ -448,7 +448,7 @@ int main(int Argc, char** Argv)
         ValidationSnap, Archives, &TyreBridge, Frontier::DemoTyreVisualMode::Solid, NominalPressures, FullTriangles);
 
     std::vector<Frontier::AnalyticLuminaireSpecification> Luminaires;
-    Frontier::PhotometricClusterExtension LightClusters;
+    Frontier::PhotometricLights LightClusters;
     Frontier::Drive::ShowcaseEnvironmentSettings Env{};
     Frontier::Drive::PopulateProvingGroundPhotometricLights(ValidationSnap, Env, Luminaires, LightClusters);
 

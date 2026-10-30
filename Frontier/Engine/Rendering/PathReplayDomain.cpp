@@ -4,7 +4,7 @@
 // 🧩 Guard replay-compatible BVH, material and receiver inputs before shader submission.
 
 #include "PathReplayDomain.h"
-#include "SolarSkyEnvironmentPayload.h"
+#include "SkyRadiance.h"
 
 #include <algorithm>
 #include <cmath>
@@ -208,8 +208,8 @@ void ValidatePathReplayDomain(const PathReplaySceneView& Scene, const PathReplay
     Require(!Specification.AdaptiveFilter || Specification.VarianceFilter,
             "Adaptive variance filter requires the variance filter domain");
     Require(Scene.Camera.size() == 12, "Replay camera requires twelve float4 entries");
-    if (Specification.SolarSkyEnvironment)
-        ValidateSolarSkyEnvironmentPayload(Scene.SolarSkyPayload);
+    if (Specification.SkyRadiance)
+        ValidateSkyRadiancePayload(Scene.SolarSkyPayload);
     if (UsesAtlas)
         Require(Scene.MaterialAtlas.size() <= (1u << 24) && Scene.Camera[10][2] == 0 &&
                     std::isfinite(Scene.Camera[3][3]) && Scene.Camera[3][3] >= 0 && Scene.Camera[3][3] <= 10000,

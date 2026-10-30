@@ -1,87 +1,71 @@
-# 🌍 Frontier World Simulation, Fluid, Snow/Hail, Fracture, Sparks, Dual-Tier GI & Cabin HMI
+# 🌍 Frontier World Simulation, Fluid, Snow, Particles, Nanite, Portals, GI & 3D Cabin HMI
 
-## 📋 Architectural & Naming Remediation
+## 📋 Clean Engine Domain Architecture
 
-All non-rendering physical and environmental modules have been relocated out of `Frontier/Engine/Rendering/` into their
-dedicated domain directories, every `*Division` module has been renamed to `*Extension`, and all identifiers pass strict
-`SKILL-Naming.md` enforcement (`0` banned tokens including `Division`, `Kind`, and `Mesh`):
+All simulation, geometry, particle, gameplay, and rendering modules live under clean, intuitive `Frontier/Engine/`
+domain directories with zero `*Extension` or `RtxBvh` naming artifacts:
 
-| Domain Folder | Engine Extensions | Responsibility |
+| Domain Folder | Engine Modules & CMake Targets | Responsibility |
 | :--- | :--- | :--- |
-| `Engine/Fluid/` | `PlumeFluid`, `ShallowWaterMud` | 3D smoke/fire + 2.5D Saint-Venant water/mud |
-| `Engine/Environment/` | `WindForceField`, `Snowpack`, `Lightning` | 3D wind, snow/hail, lightning & thunder |
-| `Engine/Physics/Fracture/` | `SolidFractureExtension` | 6-material Griffith convex cleavage + Jolt |
-| `Engine/Physics/Sparks/` | `BallisticSparkExtension` | Swept `3 mm` colliding blackbody sparks |
-| `Engine/Rendering/` | `SdfRestirPortal`, `PhotometricCluster` | GTX SDF + RTX BVH ReSTIR, Mirrors & Portals |
-| `Engine/Interface/` | `VehicleCabinHmiExtension` | 12-app Cluster, Central Screen & HUD |
-| `Engine/Threading/` | `TaskGraphExtension` | Multi-threaded DAG scheduler |
-| `Engine/Networking/` | `ReplicationExtension` | `FP1` / `48 B` wire codec & Hermite replay |
+| `Engine/Fluid/` | `PlumeFluid`, `ShallowWater` | 3D pyro explosions/fire/soot + 2.5D water/mud |
+| `Engine/VisualEffects/` | `WindField`, `SnowSurface`, `LightningStorm`, `CelestialSky` | 3D wind, 3D snow surface, lightning, celestial |
+| `Engine/Particles/` | `SparkParticles`, `SkyPrecipitation` | Shutter-streaked sparks + 3D sky snow/rain |
+| `Engine/GeometryProcessing/` | `FacetTierBuild`, `QuadricTierBuild`, `ClusterHierarchy` | Glass-aware Karis group-atomic Nanite DAG |
+| `Engine/Gameplay/GameMechanics/` | `Propulsion/*`, `PortalMechanics`, `CabinIconDepot`, `VehicleCabinHmi` | Propulsion, portal mechanics, 3D `ControlVehicle` HMI |
+| `Engine/Rendering/` | `SceneRenderer`, `BlinnRenderer`, `ExposureAdaptation`, `CloudField`, `PhotometricLights`, `SkyRadiance` | GTX/RTX GI, low-res Blinn, cabin exposure, clouds |
+| `Engine/Physics/` | `FrontierTyreMechanics`, `Fracture/SolidFracture`, `ProjectDrive` | Calibrated tyres, 6-material fracture, Jolt `v5.6.0` |
+| `Engine/Networking/` | `StateReplication` | `FP1` / `48 B` wire codec & Hermite replay |
 
 ---
 
-## 🖼️ Rendered Visual Evidence
+## 🖼️ Rendered HD Visual Evidence (`10` PNGs)
 
-### 1. Low-End GTX Tier: SDF Sphere-Tracing + Oriented Surface Cards + SDF ReSTIR (`GtxSdfPortalMirrorPlumeWater.png`)
-
-Sphere-traced `DistanceFieldScene` + `OrientedSurfaceCard` atlas + `M = 12` spatiotemporal SDF ReSTIR reservoirs,
-rendering a **Planar Mirror**, **Seamless Portal** (looking into an emerald sanctuary), **2.5D Saint-Venant Puddle**
-(zero foam/splash), **Volumetric Clouds/Sky/Fog**, and **Obstacle-Colliding Plume Fire & Smoke** lighting the scene and
-reflecting inside both the mirror and floor puddle:
-
-![GTX SDF ReSTIR, Mirror, Portal, Plume & 2.5D Puddle](Images/GtxSdfPortalMirrorPlumeWater.png)
-
-### 2. High-End RTX Tier: BVH Ray-Query ReSTIR + Mirrors + Portals + Volumetrics (`RtxBvhPortalMirrorPlumeWater.png`)
-
-Exact `O(log N)` BVH + Möller–Trumbore triangle ray-tracing (`RayQuery` tier) over the identical scene, matching GTX
-mirror/portal/water/volumetric coupling (`plume_refl = 0.221`, `cloud_refl = 0.063`, `water_plume = 0.997`):
-
-![RTX BVH ReSTIR, Mirror, Portal, Plume & 2.5D Puddle](Images/RtxBvhPortalMirrorPlumeWater.png)
-
-### 3. Snow Pit Tyre Rut + 3D Convex Fracture + Scene-Lighting Sparks (`SnowPitRutAndFractureSparks.png`)
-
-Settled snow fused immediately into **one growing ground `PolygonSurface`** (`0` lingering settled particles; zero floor
-texture whitening) with a `0.451 m` **Snow Pit** carved to `0.130 m` (`0.401 m` lateral berms) by Wong–Bekker tyre
-compaction, alongside volume-conserving cleaved concrete convex shards illuminated by `3 mm` swept colliding sparks:
-
-![Snow Pit Tyre Rut, Cleaved Concrete Shards & Scene-Lighting Sparks](Images/SnowPitRutAndFractureSparks.png)
-
-### 4. C++20 Vehicle Cabin HMI: Digital Instrument Cluster + Split Central Screen (`VehicleCabinHmiComposite.png`)
-
-`175 km/h` speedometer arc, gear `5`, `7200 RPM` redline arc + `10` crimson shift LEDs, fuel/`N2O` bars, hazard
-telltales, 4-wheel calibrated thermal + standing-water/mud/snow bars, G-force bullseye, weather radar, and app dock:
-
-![Vehicle Cabin Digital Cluster and Central Infotainment Screen](Images/VehicleCabinHmiComposite.png)
+1. **RTX Hardware Ray-Tracing Tier (`Images/RtxPortalMirrorPlumeWater.png`, `960x540`)**:
+   Roaring `PlumeFluid` detonation fireball + billowing dark carbonaceous soot column, incandescent spark streaks,
+   zero-banding 64-step volumetric clouds, planar mirror, portal, and smooth 2.5D water puddle (`0` foam, `0` splash).
+2. **GTX SDF + Software BVH Reflection Tier (`Images/GtxSdfPortalMirrorPlumeWater.png`, `640x360`)**:
+   Sphere-traced `DistanceField` + `OrientedSurfaceCard` SDF ReSTIR GI + software BVH triangle reflections over the
+   identical explosion/mirror/portal/puddle scene.
+3. **Settled 3D Snow + Falling Sky Snow + Crisp Sparks (`Images/SnowPitFallingSnowAndSparks960x540.png`, `960x540`)**:
+   Smooth Marching-Squares 3D `SnowSurface` (`0` floor texture whitening) with curved Wong-Bekker dual tyre ruts,
+   `5,200` wind-advected `SkyPrecipitation` snowflakes, cleaved monument shards, and shutter-integrated spark streaks.
+4. **Real 3D `ControlVehicle` Cockpit HMI (`Images/ControlVehicle3DCockpitHmi960x540.png`, `960x540`)**:
+   Mounted inside `ControlVehicle` with 3D steering wheel, chamfered hexagonal `KINETIK` cluster, tilted 3D centre
+   tablet (`12` SVG icons + live 3D `ControlVehicle` turntable), windshield reflection, and cabin exposure lock.
+5. **High-Resolution Cabin Cluster & Garage Screen (`Images/VehicleCabinHmiComposite.png`, `960x780`)**:
+   `960x240` hexagonal `KINETIK` race cluster + `960x540` central screen (`GarageBay` 3D `ControlVehicle` turntable,
+   6 paint swatches, 4-wheel thermal cards, G-meter, and multicolour vector SVG app dock).
+6. **Circular Portals & Blocking (`Images/CircularPortalDuplicateAndBlocking960x540.png`, `960x540`)**:
+   Circular cyan/amber portals automatically clipping & duplicating allowed `ControlVehicle` (`101`) onto the exit side
+   while blocking and halting the crimson hazard cube (`202`, `0` exit duplicate triangles).
+7. **Split-Vehicle Rectangular Portal Transit (`Images/PortalSplitVehicleTransit960x540.png`, `960x540`)**:
+   `ControlVehicle` entering Portal 1 (`0` chassis behind Portal 1) and emerging cleanly from Portal 2 (`+5.8 m` away).
+8. **Low-Resolution Blinn-Phong Renderer (`Images/BlinnLowResProvingGround960x540.png`, `960x540`)**:
+   `0.42x` (`403x227 -> 960x540`) internal z-buffered `BlinnRenderer` with translucent glazing and planar shadows.
+9. **Glass-Aware Nanite Cluster-DAG Showcase (`Images/NaniteClusterLodShowcase960x540.png`, `960x540`)**:
+   4-panel diagnostic (per-cluster IDs + crisp wireframe, Tier LOD heatmap, two-phase Hi-Z + 2-layer glass peel, and
+   deferred Snell/Beer-Lambert refraction) proving Karis group-atomic monotonic triangle reduction (`14,136 -> 1,109`).
+10. **Solar Disc & Multi-Element Optical Lens Flare (`Images/SolarDiscAndOpticalLensFlare960x540.png`, `960x540`)**:
+    Eddington limb-darkened solar disc, starburst diffraction, coated hexagonal aperture ghosts, halo, and streak.
 
 ---
 
-## ✅ Quantitative & Sanitizer Verification (`23/23 PASS`, Release + `ASan+LSan+UBSan`)
+## ✅ Quantitative & Sanitizer Verification (`31/31 PASS`, Release + `ASan+LSan+UBSan`)
 
 | # | Physical / Rendering Check | Measured Result | Status |
 | ---: | :--- | :--- | :---: |
-| 1 | `PlumeFluid` solid OBB Neumann interior zero-velocity | `2384/27648` solid cells, `max_spd = 0.000000 m/s` | ✅ |
-| 2 | `PlumeFluid` Beer–Lambert volumetric shadow ray-march | `T_plume = 0.0009` vs `T_clear = 1.0000` | ✅ |
-| 3 | `PlumeFluid` blackbody fire & hot-gas scene illumination | `near_rgb = 549.18` vs `far_rgb = 12.93` | ✅ |
-| 4 | 2.5D Audusse–Minmod hydrostatic lake-at-rest equilibrium | `peak_speed = 1.0e-7 m/s`, `vol = 10.0342 m^3` | ✅ |
-| 5 | Cloud-gated rain forms puddles only beneath clouds | `cloudy_puddle = 0.1713 m`, `clear = 0.000000 m` | ✅ |
-| 6 | O'Brien–Julien Bingham-plastic mud yield arrest on slope | `water_v = 0.723 m/s` vs `mud_v = 0.031 m/s` | ✅ |
-| 7 | Two-way wheel mud grip/drag & hull buoyancy | `grip = 0.411`, `drag = -3005.7 N`, `buoy = 46.7 kN` | ✅ |
-| 8 | `NestedWaterDomainLink` coarse/fine sync & `6 m` fade | `center_alpha = 1.000`, `border_alpha = 0.375` | ✅ |
-| 9 | Snow fuses into `1` Ground + `1` Car `PolygonSurface` | `retired = 843`, `tris = 4322+100`, `lingering = 0` | ✅ |
-| 10 | Vehicle-adhered snow aerodynamic shear blow-off | `parked = 1.700 kg -> @34 m/s = 0.504 kg` | ✅ |
-| 11 | Snow Pit Wong–Bekker tyre rut, berms & compaction drag | `0.451 m -> 0.130 m`, `berm = 0.401 m`, `3383.0 N` | ✅ |
-| 12 | Hail bounces, granular ice & melt into 2.5D puddles | `3571` bounces, `25.1 kg` melted -> `0.014 m^3` | ✅ |
-| 13 | Branched lightning, `680 m` cloud glow & thunder | `55` segs, `glow = 48.09`, `c = 340.4 m/s` (`@2 s`) | ✅ |
-| 14 | Sub-threshold elastic rebound (`0` spurious fracture) | Impact below Griffith threshold leaves solid intact | ✅ |
-| 15 | 6-material Griffith convex cleavage volume conservation | `6/6` presets cleaved, `max_vol_err = 0.000000` | ✅ |
-| 16 | Cleaved 3D convex hulls simulated in Jolt Physics `v5.6.0` | `28` dynamic Jolt convex hulls (`z = 0.392 m`) | ✅ |
-| 17 | Swept `3 mm` colliding sparks & shadowed blackbody light | `96` bounces, `28` splits, `occ_irr = 0.00000` | ✅ |
-| 18 | GTX SDF `OrientedSurfaceCard` ReSTIR & RTX BVH ReSTIR | `gtx_W = 27.906` (`M = 12`), `rtx_W = 2.842` | ✅ |
-| 19 | Planar Mirrors in BOTH GTX SDF & RTX reflect Volumetrics | `plume = 0.221`, `cloud = 0.063` in both tiers | ✅ |
-| 20 | Seamless Portals in BOTH GTX SDF & RTX teleport rays | `portal = 1, hit = 1` in both GTX SDF and RTX BVH | ✅ |
-| 21 | 2.5D Puddle Water Fresnel reflections (`0` foam/splash) | `gtx_plume = 0.996`, `rtx_plume = 0.997` | ✅ |
-| 22 | `VehicleCabinHmi` 12-app catalogue, LEDs & telltales | `12` apps, `10` shift LEDs, `4/4` hazard flags | ✅ |
-| 23 | Visual PNG proof synthesis (`4/4` non-empty RGBA8 PNGs) | `png_ok = (1, 1, 1, 1)` | ✅ |
-
-- **3D Sparse Narrow-Band Vehicle Water Architecture Plan**:
-  [`GridLiquidWaterArchitecture.md`](../../Documentation/Plans/Ongoing/GridLiquidWaterArchitecture.md)
-- **Prior Stage D Regression Matrix**: `EngineSystemsValidation` (`17/17 PASS`, `0` regressions).
+| 1–3 | `PlumeFluid` OBB Neumann, Beer-Lambert shadow & fire light | `max_spd = 0`, `T = 0.0000`, `near_rgb = 560.98` | ✅ |
+| 4–8 | 2.5D Saint-Venant water, rain puddles, Bingham mud & link | `rest_v = 1e-7 m/s`, `mud_v = 0.031 m/s`, `buoy = 46.7 kN` | ✅ |
+| 9–12 | 3D `SnowSurface`, vehicle blow-off, Wong-Bekker ruts & hail | `lingering = 0`, `0.451 -> 0.142 m`, `3505.1 N` | ✅ |
+| 13 | Branched lightning, `680 m` cloud glow & delayed thunder | `55` segs, `glow = 48.09`, `c = 340.4 m/s` | ✅ |
+| 14–16 | 6-material Griffith fracture & Jolt `v5.6.0` convex hulls | `6/6` presets, `max_vol_err = 0.000000`, `28` hulls | ✅ |
+| 17 | Swept colliding `SparkParticles` & shadowed scene lighting | `96` bounces, `28` splits, `occ_irr = 0.00000` | ✅ |
+| 18–21 | Dual-tier GTX SDF & RTX ReSTIR, Mirrors, Portals & Water | `gtx_W = 4.363`, `rtx_W = 4.821`, `water_plume = 0.997` | ✅ |
+| 22–23 | `VehicleCabinHmi` 12 SVG icons, 3D Garage & smooth snow | `12` SVG apps, `car_3d = 1`, `19,002` smooth snow tris | ✅ |
+| 24 | Split-vehicle two-portal transit & rear clipping | `src = 25,068`, `behind_P1 = 0`, `behind_P2 = 0` | ✅ |
+| 25 | Limb-darkened Sun disc & multi-element optical lens flare | `sun_R = 211.6`, `ghost_boost = +6.77 srgb8` | ✅ |
+| 26 | Low-resolution `BlinnRenderer` (`0.42x` + planar shadows) | `403x227 -> 960x540`, `25,092` tris, `24,937` shadows | ✅ |
+| 27–28 | Protected cabin/dark-room exposure & 3D `ControlVehicle` HMI | `unprot = 5.94x -> prot = 0.85x (clamped)`, `cabin = 1.00` | ✅ |
+| 29 | Circular portals, automatic exit duplicate & object blocking | `dup_exit = 12,695`, `blocked_dup = 0`, `stop = 0.420 m` | ✅ |
+| 30 | Glass-aware Nanite `ClusterHierarchy` group-atomic DAG cut | `14,136 -> 12,497 -> 11,992 -> 1,109 tris`, `35` glass | ✅ |
+| 31 | Rendered `10/10` HD Stage H visual proof PNGs | `png_ok = (1,1,1,1,1,1,1,1,1,1)` | ✅ |

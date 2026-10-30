@@ -48,9 +48,11 @@ struct CloudMarchResult
 };
 
 // Marches Origin + t·Direction (unit), t in [0, MaxDistanceM], through the slab.
+// PhaseJitter01 in [0, 1] offsets ray sample phase (default 0.5 preserves deterministic midpoint quadrature;
+// per-pixel interleaved-gradient noise eliminates horizon raymarch banding).
 [[nodiscard]] CloudMarchResult MarchClouds(const CloudParameters& P, SpatialVector Origin, SpatialVector Direction,
                                            SpatialVector SunDirection, const SpectrumRgb& SunRadiance,
                                            double MaxDistanceM = 40000.0, uint32_t Steps = 64,
-                                           uint32_t SunSteps = 6) noexcept;
+                                           uint32_t SunSteps = 6, double PhaseJitter01 = 0.5) noexcept;
 
 } // namespace Frontier

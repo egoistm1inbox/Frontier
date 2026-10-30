@@ -76,9 +76,9 @@ in **`14.0 s`** (`~11 s` at peak torque).
 
 ## 4. Cloud-Gated Budgeted Weather Particles & Shared 3D Wind / Force-Field
 
-- **`WindForceFieldExtension`**: `32x32x16` (`192 KB` L2-resident) 3D atmospheric boundary-layer log-profile + 3D curl
+- **`WindField`**: `32x32x16` (`192 KB` L2-resident) 3D atmospheric boundary-layer log-profile + 3D curl
   turbulence + force primitives (`VortexColumnUpdraft` `vy = 10.30 m/s`, `VehicleSlipstreamWake`, `RadialImpulseWave`,
-  `DirectionalGustCorridor`) synchronously driving `CloudField`, `FogMedium`, `PlumeFluidExtension`, Vehicle Aero, and
+  `DirectionalGustCorridor`) synchronously driving `CloudField`, `FogMedium`, `PlumeFluid`, Vehicle Aero, and
   falling weather/debris particles.
 - **`CloudGatedWeatherSpawner`**: Evaluates wind-slanted `CloudDensity` optical depth across a `32x32` overhead grid and
   builds an $O(1)$ **Vose Alias Table**:
@@ -90,7 +90,7 @@ in **`14.0 s`** (`~11 s` at peak torque).
 
 ## 5. Engine Networking, TaskGraph, FrameGraph, RenderThread & Audio Foundation
 
-- **`FrontierNetworking` (`ReplicationExtension`)**:
+- **`FrontierNetworking` (`StateReplication`)**:
   - Byte-exact `'FP1'` (`0x315046`) big-endian wire compatibility with `Project-Networking` / upstream `Slate`.
   - `SequenceAckTracker` (`AckSequence + 32-bit AckBitfield`), per-peer baseline delta compression (`40` objects:
     `2107 B` keyframe -> **`183 B` delta = `91.3%` bandwidth reduction**), `HermitePoseInterpolator`, and

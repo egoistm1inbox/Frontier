@@ -9,16 +9,21 @@
                                                              INCLUDES
 ------------------------------------------------------------------------------------------------------------------------------------------*/
 #include "Engine/Audio/AudioFoundation.h"
-#include "Engine/Environment/LightningThunderExtension.h"
-#include "Engine/Environment/SnowpackAccumulationExtension.h"
-#include "Engine/Environment/WindForceFieldExtension.h"
-#include "Engine/Fluid/PlumeFluidExtension.h"
-#include "Engine/Fluid/ShallowWaterMudExtension.h"
-#include "Engine/Interface/VehicleCabinHmiExtension.h"
-#include "Engine/Physics/Fracture/SolidFractureExtension.h"
+#include "Engine/Fluid/PlumeFluid.h"
+#include "Engine/Fluid/ShallowWater.h"
+#include "Engine/Gameplay/GameMechanics/PortalMechanics.h"
+#include "Engine/Gameplay/GameMechanics/VehicleCabinHmi.h"
+#include "Engine/GeometryProcessing/ClusterHierarchy.h"
+#include "Engine/Particles/SkyPrecipitation.h"
+#include "Engine/Particles/SparkParticles.h"
+#include "Engine/Physics/Fracture/SolidFracture.h"
 #include "Engine/Physics/RigidBodySolver.h"
-#include "Engine/Physics/Sparks/BallisticSparkExtension.h"
-#include "Engine/Rendering/SdfRestirPortalExtension.h"
+#include "Engine/Rendering/BlinnRenderer.h"
+#include "Engine/Rendering/ExposureAdaptation.h"
+#include "Engine/Rendering/SceneRenderer.h"
+#include "Engine/VisualEffects/LightningStorm.h"
+#include "Engine/VisualEffects/SnowSurface.h"
+#include "Engine/VisualEffects/WindField.h"
 
 #include <algorithm>
 #include <cmath>
@@ -255,7 +260,7 @@ FacetSurfaceBuffer MirrorLateralSurface(const FacetSurfaceBuffer& Source, float 
 }
 
 void RegisterOrientedBoxColumns(
-    Frontier::SdfRestirPortalExtension& Scene,
+    Frontier::SceneRenderer& Scene,
     Frontier::Vec3                      CentreWorld,
     Frontier::Vec3                      RightAxis,
     Frontier::Vec3                      UpAxis,
@@ -312,7 +317,7 @@ void RegisterOrientedBoxColumns(
 }
 
 void RegisterPortalGatewayFrame(
-    Frontier::SdfRestirPortalExtension& Scene,
+    Frontier::SceneRenderer& Scene,
     Frontier::Vec3                      CentreWorld,
     Frontier::Vec3                      RightAxis,
     Frontier::Vec3                      UpAxis,
@@ -395,7 +400,7 @@ void RegisterPortalGatewayFrame(
 }
 
 bool RegisterTransitingControlVehicle(
-    Frontier::SdfRestirPortalExtension&   Scene,
+    Frontier::SceneRenderer&   Scene,
     const std::string&                    GeometryDir,
     Frontier::Vec3                        VehicleOriginWorld,
     Frontier::Vec3                        VehicleForwardUnit,
@@ -577,12 +582,12 @@ int main()
     std::printf("====================================================================================================\n");
 
     // -----------------------------------------------------------------------------------------------------------------
-    // SUITE 1 & 2: PlumeFluidExtension Solid Obstacle Collision, Moving Wake, Volumetric Shadows & Fire Illumination
+    // SUITE 1 & 2: PlumeFluid Solid Obstacle Collision, Moving Wake, Volumetric Shadows & Fire Illumination
     // -----------------------------------------------------------------------------------------------------------------
     std::printf("\n--- Suite 1 & 2: PlumeFluid Solid Collision, Wake, Volumetric Shadows & Fire Lighting ---\n");
     PlumeFluidParameters PlumeCfg{};
     PlumeCfg.Grade = PlumeQualityGrade::Medium;
-    PlumeFluidExtension Plume{PlumeCfg};
+    PlumeFluid Plume{PlumeCfg};
 
     PlumeSolidObstacleBox SolidWall{};
     SolidWall.Centre         = {0.0f, 0.0f, 1.8f};
@@ -626,7 +631,7 @@ int main()
     Ledger.Verify(NearSum > 0.05f && NearSum > FarSum * 4.0f, "PlumeFluid blackbody fire & hot-gas scene illumination", Note);
 
     // -----------------------------------------------------------------------------------------------------------------
-    // SUITE 3, 4, 5 & 6: 2.5D ShallowWaterMudExtension (Lake-at-Rest, Cloud Rain Puddles, Bingham Mud, Nested Link)
+    // SUITE 3, 4, 5 & 6: 2.5D ShallowWaterSimulation (Lake-at-Rest, Cloud Rain Puddles, Bingham Mud, Nested Link)
     // -----------------------------------------------------------------------------------------------------------------
     std::printf("\n--- Suite 3..6: 2.5D Saint-Venant Shallow-Water, Rain Puddles, Bingham Mud & Nested Link ---\n");
     ShallowWaterConfiguration LakeCfg{};
@@ -635,7 +640,7 @@ int main()
     LakeCfg.CellSizeMetres      = 0.50f;
     LakeCfg.WorldOriginXY       = {-12.0f, -12.0f};
     LakeCfg.InfiltrationRateMps = 0.0f;
-    ShallowWaterMudExtension LakeSolver{LakeCfg};
+    ShallowWaterSimulation LakeSolver{LakeCfg};
     LakeSolver.SculptBedDepressionOrMound({0.0f, 0.0f}, 6.0f, -0.45f);
     LakeSolver.SculptBedDepressionOrMound({1.5f, -1.0f}, 2.0f, +0.25f); // Submerged bump!
     LakeSolver.FillBasinRegion({0.0f, 0.0f}, 5.8f, -0.05f, 0.0f);
@@ -649,7 +654,7 @@ int main()
     Ledger.Verify(LakeDiag.PeakFlowSpeedMps < 1.0e-4f && LakeDiag.TotalLiquidVolumeCubicM > 1.0, "2.5D Audusse-Minmod hydrostatic lake-at-rest", Note);
 
     // Cloud-gated rain puddle formation: left side cloudy (tau = 0.85), right side clear sky (tau = 0.0)!
-    ShallowWaterMudExtension PuddleRoad{LakeCfg};
+    ShallowWaterSimulation PuddleRoad{LakeCfg};
     PuddleRoad.SculptBedDepressionOrMound({-5.0f, 0.0f}, 3.2f, -0.06f);
     PuddleRoad.SculptBedDepressionOrMound({+5.0f, 0.0f}, 3.2f, -0.06f);
     std::array<float, 1024u> HalfCloudColumns{};
@@ -671,8 +676,8 @@ int main()
     Ledger.Verify(CloudyPuddleDepth > 0.03f && ClearRoadDepth < 1.0e-5f, "Cloud-gated rain forms puddles only beneath clouds", Note);
 
     // Bingham-plastic mud rheology vs pure water + wheel & hull coupling!
-    ShallowWaterMudExtension WaterSlope{LakeCfg};
-    ShallowWaterMudExtension MudSlope{LakeCfg};
+    ShallowWaterSimulation WaterSlope{LakeCfg};
+    ShallowWaterSimulation MudSlope{LakeCfg};
     std::vector<float> TiltedBed(48u * 48u, 0.0f);
     for (uint32_t J = 0u; J < 48u; ++J)
     {
@@ -713,12 +718,12 @@ int main()
     ShallowWaterConfiguration CoarseCfg = LakeCfg;
     CoarseCfg.CellSizeMetres            = 2.0f;
     CoarseCfg.WorldOriginXY             = {-48.0f, -48.0f};
-    ShallowWaterMudExtension CoarseWater{CoarseCfg};
+    ShallowWaterSimulation CoarseWater{CoarseCfg};
     CoarseWater.SculptBedDepressionOrMound({0.0f, 0.0f}, 22.0f, -0.60f);
     CoarseWater.FillBasinRegion({0.0f, 0.0f}, 20.0f, -0.10f, 0.15f);
 
     LakeCfg.HoleCrossFadeMetres = 4.0f;
-    ShallowWaterMudExtension FineWater{LakeCfg};
+    ShallowWaterSimulation FineWater{LakeCfg};
     FineWater.SculptBedDepressionOrMound({0.0f, 0.0f}, 11.0f, -0.60f);
     NestedWaterDomainLink::SynchronizeCoarseToFineRim(CoarseWater, FineWater, 3u);
     FineWater.InjectLocalLiquidOrMeltVolume({0.0f, 0.0f}, 2.5f, 0.22f, 0.35f);
@@ -738,7 +743,7 @@ int main()
     StormClouds.Coverage               = 0.92;
     StormClouds.UniformDensityOverride = 0.85;
 
-    WindForceFieldExtension WindField{};
+    WindField WindField{};
     WeatherParticleBudgetConfig SnowBudget{};
     SnowBudget.Category                  = FallingParticleCategory::SnowFlake;
     SnowBudget.StrictParticleBudget      = 1536u;
@@ -754,7 +759,7 @@ int main()
     SnowSpec.OriginX        = -16.0f;
     SnowSpec.OriginY        = -16.0f;
     SnowSpec.FlakeEquivalentMassKg = 0.085f;
-    SnowpackAccumulationExtension Snowpack{SnowSpec};
+    SnowSurface Snowpack{SnowSpec};
 
     VehicleSnowEnvelope ParkedCar{};
     ParkedCar.WorldCentre = {0.0f, 0.0f, 0.65f};
@@ -843,8 +848,8 @@ int main()
     HailBudget.SpawnCeilingHeightM         = 10.0;
     CloudGatedWeatherSpawner HailSpawner{HailBudget};
     SnowSpec.HailPelletMassKg = 0.14f;
-    SnowpackAccumulationExtension HailPack{SnowSpec};
-    ShallowWaterMudExtension      MeltPuddle{LakeCfg};
+    SnowSurface HailPack{SnowSpec};
+    ShallowWaterSimulation      MeltPuddle{LakeCfg};
 
     for (int Frame = 0; Frame < 55; ++Frame)
     {
@@ -878,7 +883,7 @@ int main()
     // SUITE 10: Lightning & Speed-of-Sound Multi-Segment Thunder
     // -----------------------------------------------------------------------------------------------------------------
     std::printf("\n--- Suite 10: Branched Lightning, Internal Cloud Glow, Scene Flash & Delayed Thunder ---\n");
-    LightningThunderExtension StormLightning{};
+    LightningStorm StormLightning{};
     Audio::AcousticListenerPose DriverEars{};
     DriverEars.Position = {0.0f, 0.0f, 1.4f};
 
@@ -924,8 +929,8 @@ int main()
     // SUITE 11 & 12: 6-Material Griffith Convex Fracture + Volume Conservation + Jolt 5.6.0 Rigid-Body Spawning
     // -----------------------------------------------------------------------------------------------------------------
     std::printf("\n--- Suite 11 & 12: 6-Material Griffith Fracture, Volume Conservation & Jolt Convex Hulls ---\n");
-    SolidFractureExtension FractureEngine{};
-    const ConvexSolidFragment IntactPillar = SolidFractureExtension::CreateIntactBoxSolid({0.0f, 0.0f, 1.2f}, {0.45f, 0.45f, 1.2f}, 2380.0f);
+    SolidFracture FractureEngine{};
+    const ConvexSolidFragment IntactPillar = SolidFracture::CreateIntactBoxSolid({0.0f, 0.0f, 1.2f}, {0.45f, 0.45f, 1.2f}, 2380.0f);
 
     // Sub-threshold elastic hit -> 0 fractures!
     FractureImpactDescriptor GentleTap{};
@@ -1032,10 +1037,10 @@ int main()
     JoltWorld.Retire();
 
     // -----------------------------------------------------------------------------------------------------------------
-    // SUITE 13: BallisticSparkExtension Swept 3 mm Scene Collisions & Shadowed Scene Illumination
+    // SUITE 13: SparkParticles Swept 3 mm Scene Collisions & Shadowed Scene Illumination
     // -----------------------------------------------------------------------------------------------------------------
     std::printf("\n--- Suite 13: Swept Colliding Metallic Sparks & Shadowed Blackbody Scene Lighting ---\n");
-    BallisticSparkExtension Sparks{};
+    SparkParticles Sparks{};
     SparkSceneColliderBox   Guardrail{};
     Guardrail.CentreWorld = {2.2f, 0.0f, 0.6f};
     Guardrail.HalfExtents = {0.20f, 2.5f, 0.6f};
@@ -1083,7 +1088,7 @@ int main()
     // SUITE 14 & 15: Dual-Tier GTX SDF + RTX BVH ReSTIR + Mirrors & Portals Reflecting Clouds, Fog & Plume Smoke/Fire
     // -----------------------------------------------------------------------------------------------------------------
     std::printf("\n--- Suite 14 & 15: Dual-Tier GTX SDF & RTX BVH ReSTIR, Mirrors & Portals + Volumetrics ---\n");
-    SdfRestirPortalExtension DualRenderer{};
+    SceneRenderer DualRenderer{};
     // Textured mineral-aggregate ground slab + colored architectural walls + remote sanctuary pillar seen through Portal!
     DualRenderer.RegisterTexturedGroundSlab({0.0f, 0.0f, -0.25f}, {45.0f, 45.0f, 0.25f}, {0.23f, 0.25f, 0.29f}, 0.50f, 0.04f);
     DualRenderer.RegisterDualTierSolidBox({-3.5f, 3.2f, 1.1f}, {0.8f, 1.8f, 1.1f}, {0.82f, 0.24f, 0.18f}, 0.55f);
@@ -1119,7 +1124,7 @@ int main()
     SceneWaterCfg.CellsY                    = 160u;
     SceneWaterCfg.CellSizeMetres            = 0.085f;
     SceneWaterCfg.WorldOriginXY             = {-5.6f, -6.8f};
-    ShallowWaterMudExtension ScenePuddle{SceneWaterCfg};
+    ShallowWaterSimulation ScenePuddle{SceneWaterCfg};
     ScenePuddle.SculptBedDepressionOrMound({1.0f, 0.0f}, 4.3f, -0.075f);
     ScenePuddle.SculptBedDepressionOrMound({-0.6f, -1.35f}, 2.5f, -0.055f);
     ScenePuddle.SculptBedDepressionOrMound({2.1f, +1.25f}, 2.4f, -0.050f);
@@ -1151,7 +1156,7 @@ int main()
     // 14a: Verify GTX SDF ReSTIR vs RTX BVH ReSTIR GI + Spatial Reservoir Merge!
     const auto GtxResA = DualRenderer.SampleRestirIndirectReservoir(GpuTracingTier::SignedDistanceFieldGtx, {-2.2f, 2.5f, 0.05f}, {0.0f, 0.0f, 1.0f}, OptCtx, 11ull);
     const auto GtxResB = DualRenderer.SampleRestirIndirectReservoir(GpuTracingTier::SignedDistanceFieldGtx, {-2.0f, 2.5f, 0.05f}, {0.0f, 0.0f, 1.0f}, OptCtx, 29ull);
-    const auto Merged  = SdfRestirPortalExtension::MergeSpatialReservoirs(GtxResA, GtxResB, {-2.2f, 2.5f, 0.05f}, {0.0f, 0.0f, 1.0f}, 99ull);
+    const auto Merged  = SceneRenderer::MergeSpatialReservoirs(GtxResA, GtxResB, {-2.2f, 2.5f, 0.05f}, {0.0f, 0.0f, 1.0f}, 99ull);
     const auto RtxRes  = DualRenderer.SampleRestirIndirectReservoir(GpuTracingTier::HardwareRayTracingRtx, {-2.2f, 2.5f, 0.05f}, {0.0f, 0.0f, 1.0f}, OptCtx, 11ull);
     std::snprintf(
         Note,
@@ -1228,10 +1233,10 @@ int main()
         Note);
 
     // -----------------------------------------------------------------------------------------------------------------
-    // SUITE 16 & 17: VehicleCabinHmiExtension + Rendered PNG Visual Evidence Generation
+    // SUITE 16 & 17: VehicleCabinHmi + Rendered PNG Visual Evidence Generation
     // -----------------------------------------------------------------------------------------------------------------
     std::printf("\n--- Suite 16 & 17: Vehicle Cabin/HUD HMI & Visual Proof PNG Synthesis ---\n");
-    VehicleCabinHmiExtension CabinHmi{};
+    VehicleCabinHmi CabinHmi{};
     VehicleCabinTelemetryFrame HmiTel{};
     HmiTel.VehicleSpeedMps        = 48.5f; // 175 km/h
     HmiTel.EngineOrMotorRpm       = 7180.0f;
@@ -1252,27 +1257,35 @@ int main()
     HmiTel.Wheels[2]              = {412.0f, 244.0f, 0.48f, 2.8f, 0.35f, 0.14f, true};
     HmiTel.Wheels[3]              = {418.0f, 246.0f, 0.46f, 2.9f, 0.35f, 0.14f, true};
 
-    const CabinHmiAlertDigest HmiAlerts = VehicleCabinHmiExtension::EvaluateAlerts(HmiTel);
-    std::vector<uint8_t>      ClusterImg, ScreenImg, HudImg;
-    CabinHmi.SynthesizeInstrumentClusterRgba8(640u, 140u, HmiTel, ClusterImg);
-    CabinHmi.SynthesizeCentralScreenRgba8(640u, 220u, HmiTel, ScreenImg);
+    const CabinHmiAlertDigest HmiAlerts = VehicleCabinHmi::EvaluateAlerts(HmiTel);
+    const bool LoadedHmiCarMeshes = CabinHmi.LoadControlVehicleMeshesForHmi("Frontier/Projects/Project-Drive/Content/Geometry");
+    CabinHmi.SelectClusterOutline(ClusterOutlineShape::Hexagon);
+    CabinHmi.SelectLauncherDesign(CabinLauncherDesign::SplitDashboard);
+    CabinHmi.SelectActiveApplication(CabinApplicationSlot::GarageBay);
+    CabinHmi.SelectGaragePaintSwatch(1u); // Crimson Corsa
+    CabinHmi.SetGarageTurntableYawRadians(0.58f);
+
+    std::vector<uint8_t> ClusterImg, ScreenImg, HudImg;
+    CabinHmi.SynthesizeInstrumentClusterRgba8(960u, 240u, HmiTel, ClusterImg);
+    CabinHmi.SynthesizeCentralScreenRgba8(960u, 540u, HmiTel, ScreenImg);
     CabinHmi.SynthesizeWindshieldHudRgba8(384u, 240u, HmiTel, HudImg);
 
     std::snprintf(
         Note,
         sizeof(Note),
-        "apps=%zu shift_leds=%u redline=%d traction_warn=%d thermal_warn=%d weather_warn=%d",
-        VehicleCabinHmiExtension::Catalogue().size(),
+        "apps=%zu car_3d=%d shift_leds=%u redline=%d traction_warn=%d thermal_warn=%d weather_warn=%d",
+        VehicleCabinHmi::Catalogue().size(),
+        LoadedHmiCarMeshes ? 1 : 0,
         HmiAlerts.ActiveShiftLedCount,
         HmiAlerts.RedlineShiftFlash ? 1 : 0,
         HmiAlerts.TractionHazardLamp ? 1 : 0,
         HmiAlerts.ThermalWarningLamp ? 1 : 0,
         HmiAlerts.SevereWeatherBanner ? 1 : 0);
     Ledger.Verify(
-        VehicleCabinHmiExtension::Catalogue().size() == 12u && HmiAlerts.ActiveShiftLedCount >= 9u &&
+        LoadedHmiCarMeshes && VehicleCabinHmi::Catalogue().size() == 12u && HmiAlerts.ActiveShiftLedCount >= 9u &&
             HmiAlerts.RedlineShiftFlash && HmiAlerts.TractionHazardLamp &&
             HmiAlerts.ThermalWarningLamp && HmiAlerts.SevereWeatherBanner,
-        "VehicleCabinHmi 12-app catalogue, shift LEDs & hazard telltales",
+        "VehicleCabinHmi 12-SVG-icon catalogue, 3D ControlVehicle Garage & hexagonal cluster",
         Note);
 
     // Render HD visual proof images into Exhibits/WorldSimulationAndSdfValidation/Images/!
@@ -1283,24 +1296,51 @@ int main()
     const uint32_t    GtxHeight     = SanitizerFast ? 108u : 360u;
     const std::string ImgDir        = SanitizerFast ? "/tmp/frontier-san-images/" : "Exhibits/WorldSimulationAndSdfValidation/Images/";
 
+    // Upgrade PlumeFluid into a dramatic Experimental/Fluid hero_detonation fireball + billowing dark soot plume for the HD render!
+    PlumeFluidParameters PyroParams{};
+    PyroParams.Grade              = PlumeQualityGrade::High;
+    PyroParams.Variant            = PlumeSolverVariant::ProductionUpgraded;
+    PyroParams.MarchSampleLimit   = 112u;
+    PyroParams.DetailStrength     = 1.18f;
+    PyroParams.DetailFrequency    = 2.85f;
+    PyroParams.SmokeExtinction    = 0.65f;
+    PyroParams.SootExtinction     = 3.85f;
+    PyroParams.SootAlbedo         = 0.032f;
+    PyroParams.FlameRadianceScale = 36.0f;
+    PlumeFluid HeroPyroPlume{PyroParams};
+    // Lower fireball seat (roaring orange/gold flames) + upper dark billowing carbonaceous soot cloud!
+    HeroPyroPlume.InjectDetonationBlast({2.2f, 0.15f, 1.05f}, 1.42f, 11.5f, 520.0f, 2.35f, 1.35f);
+    HeroPyroPlume.InjectDetonationBlast({2.45f, -0.20f, 2.75f}, 1.65f, 8.5f, 95.0f, 0.0f, 3.40f);
+    const std::array<float, 3> PyroSunArr = {OptCtx.SunDirectionUnit.X, OptCtx.SunDirectionUnit.Y, OptCtx.SunDirectionUnit.Z};
+    for (int Step = 0; Step < 5; ++Step)
+    {
+        HeroPyroPlume.AppendTransientPlumeSource({2.15f, 0.10f, 0.48f}, 0.85f, {0.25f, 0.08f, 6.4f}, 0.03f, 540.0f, 4.6f, 2.8f);
+        (void)HeroPyroPlume.AdvanceSimulation({2.2f, 0.0f, 0.0f}, PyroSunArr, 1.0f / 30.0f);
+    }
+
+    CoupledWorldOpticalContext PyroViewCtx = OptCtx;
+    PyroViewCtx.PlumeFluid                 = &HeroPyroPlume;
+    PyroViewCtx.HdrBloomStrength           = 0.26f;
+    PyroViewCtx.ExposureScale              = 0.80f;
+
     std::vector<uint8_t> GtxFrameRgba, RtxFrameRgba;
     DualRenderer.RenderViewportRgba8(
         GpuTracingTier::SignedDistanceFieldGtx,
         GtxWidth,
         GtxHeight,
         CamPos,
-        {2.0f, 0.0f, 1.45f},
+        {2.0f, 0.0f, 1.55f},
         0.92f,
-        OptCtx,
+        PyroViewCtx,
         GtxFrameRgba);
     DualRenderer.RenderViewportRgba8(
         GpuTracingTier::HardwareRayTracingRtx,
         HdWidth,
         HdHeight,
         CamPos,
-        {2.0f, 0.0f, 1.45f},
+        {2.0f, 0.0f, 1.55f},
         0.92f,
-        OptCtx,
+        PyroViewCtx,
         RtxFrameRgba);
 
     // Scene 3: Smooth High-Resolution Snowpack (160x160 @ 7.5 cm + Marching-Squares Contour + Smooth Normals + Subsurface)
@@ -1313,7 +1353,7 @@ int main()
     HdSnowSpec.OriginY                   = -6.2f;
     HdSnowSpec.AmbientTemperatureKelvin  = 268.15f;
     HdSnowSpec.SurfaceInclusionThreshold = 0.004f;
-    SnowpackAccumulationExtension HdSnowpack{HdSnowSpec};
+    SnowSurface HdSnowpack{HdSnowSpec};
 
     // Sculpt organic wind-drifted snowpack + deep snow pit (leaving foreground-right dark mineral asphalt exposed so the
     // smooth Marching-Squares 3D snow perimeter is unmistakably a growing 3D PolygonSurface, NEVER floor whitening!).
@@ -1368,12 +1408,12 @@ int main()
         "Smooth Marching-Squares 3D snow PolygonSurface & smooth rut normals",
         Note);
 
-    SdfRestirPortalExtension SnowSparkScene{};
+    SceneRenderer SnowSparkScene{};
     SnowSparkScene.RegisterTexturedGroundSlab({0.0f, 0.0f, -0.25f}, {36.0f, 36.0f, 0.25f}, {0.13f, 0.15f, 0.19f}, 0.44f, 0.05f);
     SnowSparkScene.RegisterSmoothSnowSurface(HdSnowSurf);
 
     // Cleave a low-profile roadside jersey barrier on the exposed dark mineral asphalt beside the snowbank!
-    const ConvexSolidFragment JerseyBlock = SolidFractureExtension::CreateIntactBoxSolid(
+    const ConvexSolidFragment JerseyBlock = SolidFracture::CreateIntactBoxSolid(
         {3.35f, -1.95f, 0.44f},
         {0.58f, 0.26f, 0.44f},
         2380.0f);
@@ -1410,33 +1450,54 @@ int main()
         }
     }
 
-    // True swept ballistic spark shower (rendered natively as anti-aliased motion-stretched capsules, ZERO solid cubes!)
+    // True swept ballistic spark shower (rendered natively via SparkRaster.wgsl shutter-integrated razor-sharp streaks!)
     BallisticSparkConfig VisSparkCfg{};
-    VisSparkCfg.SceneLuminanceGain  = 2.6f;
-    BallisticSparkExtension VisSparks{VisSparkCfg};
-    MetallicScrapeContact   VisScrape{};
-    VisScrape.ContactPointWorld     = {2.85f, -1.78f, 0.46f};
-    VisScrape.TangentialVelocityMps = {9.5f, 2.4f, 3.1f};
-    VisScrape.NormalForceNewtons    = 6200.0f;
-    VisScrape.RequestedSparkCount   = 68u;
+    VisSparkCfg.SceneLuminanceGain = 2.6f;
+    SparkParticles VisSparks{VisSparkCfg};
+    MetallicScrapeContact VisScrape{};
+    VisScrape.ContactPointWorld     = {3.85f, -0.95f, 0.52f};
+    VisScrape.TangentialVelocityMps = {-9.5f, -2.5f, 5.4f};
+    VisScrape.NormalForceNewtons    = 8200.0f;
+    VisScrape.RequestedSparkCount   = 130u;
     VisSparks.SpawnScrapeSparks(VisScrape);
-    for (int S = 0; S < 7; ++S)
+    for (int S = 0; S < 5; ++S)
     {
         VisSparks.StepBallisticSparks(1.0f / 60.0f);
     }
 
+    // Wind-advected 3D Falling Sky Snow Precipitation (SkyPrecipitation coupled directly to WindField)!
+    SkyPrecipitationConfig SnowfallCfg{};
+    SnowfallCfg.Phase            = SkyPrecipitationPhase::DendriticSnow;
+    SnowfallCfg.DomainCentreXY   = {2.1f, -1.0f, 0.0f};
+    SnowfallCfg.DomainHalfExtent = {9.5f, 9.5f, 4.8f};
+    SnowfallCfg.ParticleCount    = 5200u;
+    SnowfallCfg.Intensity01      = 0.96f;
+    SnowfallCfg.FlakeRadiusScale = 1.45f;
+    SkyPrecipitation WinterSnowfall{SnowfallCfg};
+    auto SampleSceneWind = [](Vec3 WorldPt, const void* Ctx) noexcept -> Vec3
+    {
+        const auto* Wf = static_cast<const Frontier::WindField*>(Ctx);
+        const auto  W  = Wf->SampleWindVelocity({static_cast<double>(WorldPt.X), static_cast<double>(WorldPt.Y), static_cast<double>(WorldPt.Z)});
+        return Vec3{static_cast<float>(W.X), static_cast<float>(W.Y), static_cast<float>(W.Z)};
+    };
+    for (int PStep = 0; PStep < 14; ++PStep)
+    {
+        WinterSnowfall.StepPrecipitation(1.0f / 30.0f, {1.8f, 0.5f, 0.0f}, SampleSceneWind, &WindField);
+    }
+
     CoupledWorldOpticalContext DuskSparkCtx = OptCtx;
-    // Low grazing golden-winter sun reveals every smooth 3D snowdrift contour & rounded dual tyre rut without whiteout!
-    DuskSparkCtx.SunDirectionUnit           = Normalise(Vec3{-0.56f, -0.78f, 0.27f});
-    DuskSparkCtx.SunIrradianceRgb           = {5.2f, 4.5f, 3.9f};
-    DuskSparkCtx.Clouds.Coverage            = 0.38;
-    DuskSparkCtx.Fog.DensityAtBase          = 0.0025;
-    DuskSparkCtx.HdrBloomStrength           = 0.26f;
-    DuskSparkCtx.ExposureScale              = 0.72f;
-    DuskSparkCtx.PlumeFluid                 = nullptr;
-    DuskSparkCtx.ShallowWater               = nullptr;
-    DuskSparkCtx.Lightning                  = nullptr;
-    DuskSparkCtx.Sparks                     = &VisSparks;
+    // Low grazing golden-winter sun reveals every smooth 3D snowdrift contour, falling sky snow crystals & crisp sparks!
+    DuskSparkCtx.SunDirectionUnit = Normalise(Vec3{-0.56f, -0.78f, 0.27f});
+    DuskSparkCtx.SunIrradianceRgb = {5.4f, 4.7f, 4.0f};
+    DuskSparkCtx.Clouds.Coverage  = 0.44;
+    DuskSparkCtx.Fog.DensityAtBase = 0.0025;
+    DuskSparkCtx.HdrBloomStrength = 0.24f;
+    DuskSparkCtx.ExposureScale    = 0.74f;
+    DuskSparkCtx.PlumeFluid       = nullptr;
+    DuskSparkCtx.ShallowWater     = nullptr;
+    DuskSparkCtx.Lightning        = nullptr;
+    DuskSparkCtx.Sparks           = &VisSparks;
+    DuskSparkCtx.Precipitation    = &WinterSnowfall;
     SnowSparkScene.FinalizeSceneAndBakeSurfaceCards(DuskSparkCtx);
 
     std::vector<uint8_t> SnowSparkRgba;
@@ -1454,7 +1515,7 @@ int main()
     // SUITE 18: Split-Vehicle Two-Portal Transit (Entering Portal 1, Hidden Behind Portal 1, Emerging From Portal 2!)
     // -----------------------------------------------------------------------------------------------------------------
     std::printf("\n--- Suite 18: Split-Vehicle Two-Portal Transit (Hidden Behind Portal 1, Emerging Out of Portal 2) ---\n");
-    SdfRestirPortalExtension PortalVehicleScene{};
+    SceneRenderer PortalVehicleScene{};
     PortalVehicleScene.RegisterTexturedGroundSlab({0.0f, 0.0f, -0.25f}, {48.0f, 48.0f, 0.25f}, {0.21f, 0.23f, 0.27f}, 0.42f, 0.06f);
 
     // Architectural backdrop colonnade far behind both free-standing portals so empty space behind Portal 1 is unmistakable!
@@ -1623,7 +1684,7 @@ int main()
     // SUITE 19: Limb-Darkened Solar Disc & Multi-Element Optical Camera Lens Flare (LensFlareModel.h Integration!)
     // -----------------------------------------------------------------------------------------------------------------
     std::printf("\n--- Suite 19: Limb-Darkened Solar Disc & Multi-Element Camera Lens Flare ---\n");
-    SdfRestirPortalExtension SunFlareScene{};
+    SceneRenderer SunFlareScene{};
     SunFlareScene.RegisterTexturedGroundSlab({0.0f, 0.0f, -0.25f}, {60.0f, 60.0f, 0.25f}, {0.19f, 0.21f, 0.25f}, 0.36f, 0.08f);
 
     // Architectural stone pillars framing the sunlit reflecting basin without blocking the solar disc!
@@ -1636,7 +1697,7 @@ int main()
     FlareBasinCfg.CellsY                    = 144u;
     FlareBasinCfg.CellSizeMetres            = 0.095f;
     FlareBasinCfg.WorldOriginXY             = {-6.8f, -1.2f};
-    ShallowWaterMudExtension FlareBasin{FlareBasinCfg};
+    ShallowWaterSimulation FlareBasin{FlareBasinCfg};
     FlareBasin.SculptBedDepressionOrMound({0.0f, 5.5f}, 5.4f, -0.08f);
     FlareBasin.FillBasinRegion({0.0f, 5.5f}, 5.1f, 0.02f, 0.0f);
     for (int Relax = 0; Relax < 14; ++Relax)
@@ -1746,32 +1807,441 @@ int main()
         "Limb-darkened Sun disc & multi-element coated aperture lens flare",
         Note);
 
-    // Composite Cluster (640x140) + Central Screen (640x220) into 640x360 VehicleCabinHmiComposite.png!
+    // -----------------------------------------------------------------------------------------------------------------
+    // SUITE 20: Low-Resolution Blinn-Phong Renderer (BlinnRenderer.h: 0.42x Low-Res Raster + Planar Shadows)
+    // -----------------------------------------------------------------------------------------------------------------
+    std::printf("\n--- Suite 20: Low-Resolution Blinn-Phong Renderer (Engine/Rendering/BlinnRenderer) ---\n");
+    BlinnRenderer LowResBlinn{};
+    BlinnFacetMesh BlinnBody{}, BlinnRimL{}, BlinnRimR{}, BlinnTyre{};
+    const bool BlinnLoaded = BlinnRenderer::LoadFacetStream("Frontier/Projects/Project-Drive/Content/Geometry/ControlVehicleBody.facet", BlinnBody) &&
+                             BlinnRenderer::LoadFacetStream("Frontier/Projects/Project-Drive/Content/Geometry/ControlVehicleRim.facet", BlinnRimL) &&
+                             BlinnRenderer::LoadFacetStream("Frontier/Projects/Project-Drive/Content/Geometry/ControlVehicleTyre.facet", BlinnTyre);
+    if (BlinnLoaded)
+    {
+        for (Vec3& P : BlinnBody.Positions)
+        {
+            P.Z -= 0.625f;
+        }
+        BlinnRimR = BlinnRenderer::MirrorFacetMeshAcrossY(BlinnRimL);
+        BlinnMaterialProperties CobaltCoat{};
+        CobaltCoat.LinearAlbedo = {0.10f, 0.42f, 0.92f};
+        CobaltCoat.Roughness    = 0.18f;
+        CobaltCoat.Metallic     = 0.35f;
+        LowResBlinn.SubmitFacetMesh(BlinnBody, {0.0f, 0.0f, 0.79f}, {1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f, 1.0f}, &CobaltCoat);
+        const std::array<Vec3, 4u> WheelPos = {{{1.7274f, 1.0475f, 0.42f}, {1.7274f, -1.0475f, 0.42f}, {-1.6686f, 1.0475f, 0.42f}, {-1.6686f, -1.0475f, 0.42f}}};
+        for (size_t K = 0u; K < 4u; ++K)
+        {
+            LowResBlinn.SubmitFacetMesh(BlinnTyre, WheelPos[K], {1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f, 1.0f});
+            LowResBlinn.SubmitFacetMesh((K % 2u == 0u) ? BlinnRimL : BlinnRimR, WheelPos[K], {1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f, 1.0f});
+        }
+    }
+    BlinnMaterialProperties PillarMat{};
+    PillarMat.LinearAlbedo = {0.76f, 0.32f, 0.22f};
+    LowResBlinn.SubmitAxisBox({-2.8f, 2.8f, 1.05f}, {0.45f, 0.45f, 1.05f}, PillarMat, true);
+    PillarMat.LinearAlbedo = {0.82f, 0.68f, 0.24f};
+    LowResBlinn.SubmitAxisBox({+2.6f, 3.1f, 0.85f}, {0.55f, 0.55f, 0.85f}, PillarMat, true);
+
+    BlinnCameraDescriptor BlinnCam{};
+    BlinnCam.EyeWorld       = {4.85f, -4.15f, 2.05f};
+    BlinnCam.TargetWorld    = {0.10f, +0.20f, 0.68f};
+    BlinnCam.VerticalFovDeg = 40.0f;
+
+    BlinnRenderSettings BlinnSet{};
+    BlinnSet.ResolutionScale   = 0.42f; // Explicit low-resolution internal rasterization!
+    BlinnSet.BilinearUpscale   = false; // Crisp low-res pixel upscale!
+    BlinnSet.CastPlanarShadows = true;
+    BlinnSet.DrawGroundChecker = true;
+
+    std::vector<uint8_t> BlinnRgb8;
+    BlinnRenderDiagnostics BlinnDiag{};
+    LowResBlinn.RenderSceneToSrgb8(HdWidth, HdHeight, BlinnCam, BlinnSet, BlinnRgb8, &BlinnDiag);
+    std::vector<uint8_t> BlinnRgba8(static_cast<size_t>(HdWidth) * HdHeight * 4u, 255u);
+    for (size_t I = 0u; I < static_cast<size_t>(HdWidth) * HdHeight; ++I)
+    {
+        BlinnRgba8[I * 4u + 0u] = BlinnRgb8[I * 3u + 0u];
+        BlinnRgba8[I * 4u + 1u] = BlinnRgb8[I * 3u + 1u];
+        BlinnRgba8[I * 4u + 2u] = BlinnRgb8[I * 3u + 2u];
+    }
+    std::snprintf(
+        Note,
+        sizeof(Note),
+        "internal=%ux%u->%ux%u tris=%u shadow_tris=%u",
+        BlinnDiag.InternalWidth,
+        BlinnDiag.InternalHeight,
+        BlinnDiag.OutputWidth,
+        BlinnDiag.OutputHeight,
+        BlinnDiag.RasterizedTriangles,
+        BlinnDiag.ShadowTriangles);
+    Ledger.Verify(
+        BlinnLoaded && BlinnDiag.InternalWidth < BlinnDiag.OutputWidth &&
+            BlinnDiag.RasterizedTriangles > 2000u && BlinnDiag.ShadowTriangles > 2000u,
+        "Low-resolution Blinn-Phong renderer (0.42x internal raster + planar shadows)",
+        Note);
+
+    // -----------------------------------------------------------------------------------------------------------------
+    // SUITE 21: Auto-Exposure Dark-Room / Cabin Protection & 3D ControlVehicle Cabin HMI
+    // -----------------------------------------------------------------------------------------------------------------
+    std::printf("\n--- Suite 21: Protected Auto-Exposure & Real 3D ControlVehicle Cockpit HMI ---\n");
+    // Construct a synthetic dark room (92% dark walls @ 0.008 radiance, 8% glowing emissive neon/HMI @ 4.2 radiance):
+    std::vector<Vec3> DarkEmissiveRoomHdr(128u * 128u, Vec3{0.008f, 0.009f, 0.012f});
+    for (uint32_t Y = 44u; Y < 84u; ++Y)
+    {
+        for (uint32_t X = 44u; X < 84u; ++X)
+        {
+            DarkEmissiveRoomHdr[Y * 128u + X] = Vec3{3.8f, 4.2f, 4.6f};
+        }
+    }
+    ExposureSettings UnprotectedExp{};
+    UnprotectedExp.ProtectDarkEmissiveInteriors = false;
+    UnprotectedExp.ProtectVehicleCabins         = false;
+    ExposureAdaptationState UnprotectedState{};
+    ExposureAdaptation::IntegrateExposure(DarkEmissiveRoomHdr, 128u, 128u, UnprotectedExp, UnprotectedState, true);
+
+    ExposureSettings ProtectedExp{};
+    ProtectedExp.ProtectDarkEmissiveInteriors = true;
+    ProtectedExp.ProtectVehicleCabins         = true;
+    ExposureAdaptationState ProtectedRoomState{};
+    ExposureAdaptation::IntegrateExposure(DarkEmissiveRoomHdr, 128u, 128u, ProtectedExp, ProtectedRoomState, true);
+
+    const float DriverSeatCabinShare = ExposureAdaptation::EvaluateVehicleCabinShare({-0.20f, 0.42f, 1.12f - 0.625f});
+    const float OutsideRoadCabinShare = ExposureAdaptation::EvaluateVehicleCabinShare({6.0f, 4.0f, 1.5f});
+    ProtectedExp.VehicleCabinShare01 = DriverSeatCabinShare;
+    ExposureAdaptationState ProtectedCabinState{};
+    ExposureAdaptation::IntegrateExposure(DarkEmissiveRoomHdr, 128u, 128u, ProtectedExp, ProtectedCabinState, true);
+
+    std::snprintf(
+        Note,
+        sizeof(Note),
+        "unprotected_gain=%.2fx protected_room_gain=%.2fx(clamped=%d) cabin_share=%.2f(out=%.2f) cabin_gain=%.2fx",
+        UnprotectedState.CurrentExposureGain,
+        ProtectedRoomState.CurrentExposureGain,
+        ProtectedRoomState.ProtectionClamped ? 1 : 0,
+        DriverSeatCabinShare,
+        OutsideRoadCabinShare,
+        ProtectedCabinState.CurrentExposureGain);
+    Ledger.Verify(
+        UnprotectedState.CurrentExposureGain > 2.2f &&
+            ProtectedRoomState.ProtectionClamped && ProtectedRoomState.CurrentExposureGain <= 0.86f &&
+            DriverSeatCabinShare > 0.95f && OutsideRoadCabinShare < 0.01f &&
+            ProtectedCabinState.ProtectionClamped && ProtectedCabinState.CurrentExposureGain <= 0.86f,
+        "Auto-exposure protects dark emissive rooms & ControlVehicle cabins from washout",
+        Note);
+
+    // Build and render the real 3D ControlVehicle Cockpit scene (3D steering wheel, 3D hexagonal KINETIK cluster,
+    // 3D tilted centre tablet with 12 multicolour SVG icons & live 3D ControlVehicle turntable, and dielectric windshield)!
+    SceneRenderer CockpitScene{};
+    CockpitScene.RegisterTexturedGroundSlab({0.0f, 0.0f, -0.25f}, {60.0f, 60.0f, 0.25f}, {0.18f, 0.20f, 0.24f}, 0.44f, 0.05f);
+    CockpitScene.RegisterDualTierSolidBox({14.0f, -2.6f, 1.4f}, {0.65f, 0.65f, 1.4f}, {0.82f, 0.28f, 0.20f}, 0.48f);
+    CockpitScene.RegisterDualTierSolidBox({18.5f, +2.8f, 1.8f}, {0.75f, 0.75f, 1.8f}, {0.22f, 0.64f, 0.88f}, 0.45f);
+
+    ExposureAdaptationState CockpitExposureState{};
+    CoupledWorldOpticalContext CockpitCtx{};
+    CockpitCtx.Atmosphere       = Atmos;
+    CockpitCtx.AtmosphereLut    = &SkyLut;
+    CockpitCtx.Clouds.Coverage  = 0.42;
+    CockpitCtx.Fog.DensityAtBase = 0.002;
+    CockpitCtx.SunDirectionUnit = Normalise(Vec3{0.52f, -0.58f, 0.62f});
+    CockpitCtx.SunIrradianceRgb = {11.5f, 10.9f, 10.1f};
+    CockpitCtx.HdrBloomStrength = 0.16f;
+    CockpitCtx.ExposureScale    = 0.85f;
+    CockpitCtx.AutoExposure     = &CockpitExposureState;
+
+    const MountedControlVehicleCockpitRig CockpitRig = CabinHmi.MountControlVehicle3DCockpit(
+        {0.0f, 0.0f, 0.0f},
+        0.0f,
+        HmiTel,
+        CockpitScene,
+        CockpitCtx);
+    CockpitScene.FinalizeSceneAndBakeSurfaceCards(CockpitCtx);
+
+    std::vector<uint8_t> Cockpit3DRgba;
+    CockpitScene.RenderViewportRgba8(
+        GpuTracingTier::HardwareRayTracingRtx,
+        HdWidth,
+        HdHeight,
+        CockpitRig.HmiFocusEyeWorld,
+        CockpitRig.HmiFocusTargetWorld,
+        0.92f,
+        CockpitCtx,
+        Cockpit3DRgba);
+    Ledger.Verify(
+        CockpitRig.ClusterDisplayTextureId >= 0 && CockpitRig.TabletDisplayTextureId >= 0 &&
+            CockpitRig.CockpitTrianglesAdded > 8000u && CockpitExposureState.CurrentExposureGain <= 0.86f,
+        "3D ControlVehicle Cockpit HMI (3D hexagonal cluster + 3D SVG/Garage tablet + cabin lock)",
+        "mounted inside ControlVehicle");
+
+    // -----------------------------------------------------------------------------------------------------------------
+    // SUITE 22: Circular Portals + Automatic Duplicate Emerging Geometry + Per-Object Portal Blocking
+    // -----------------------------------------------------------------------------------------------------------------
+    std::printf("\n--- Suite 22: Circular Portals, Automatic Duplicate Exit Mesh & Object Blocking ---\n");
+    SceneRenderer CircularPortalScene{};
+    CircularPortalScene.RegisterTexturedGroundSlab({0.0f, 0.0f, -0.25f}, {48.0f, 48.0f, 0.25f}, {0.19f, 0.21f, 0.26f}, 0.42f, 0.06f);
+    for (int Col = -3; Col <= 3; ++Col)
+    {
+        CircularPortalScene.RegisterDualTierSolidBox(
+            {static_cast<float>(Col) * 3.2f, 8.6f, 1.8f},
+            {0.32f, 0.32f, 1.8f},
+            {0.44f, 0.47f, 0.52f},
+            0.50f);
+    }
+
+    SeamlessPortalAperture CircPortalFwd{};
+    CircPortalFwd.Shape            = PortalApertureShape::Circular;
+    CircPortalFwd.RadiusMetres     = 1.52f;
+    CircPortalFwd.EntryCentreWorld = {-2.35f, +0.45f, 1.56f};
+    CircPortalFwd.EntryRightAxis   = EntryRightN;
+    CircPortalFwd.EntryUpAxis      = EntryUpN;
+    CircPortalFwd.EntryFrontNormal = EntryFrontN;
+    CircPortalFwd.ExitCentreWorld  = {+2.35f, +0.75f, 1.56f};
+    CircPortalFwd.ExitRightAxis    = ExitRightN;
+    CircPortalFwd.ExitUpAxis       = ExitUpN;
+    CircPortalFwd.ExitFrontNormal  = ExitFrontN;
+    CircPortalFwd.PortalRimGlowRgb = {0.12f, 0.88f, 1.50f};
+    CircPortalFwd.ExitRimGlowRgb   = {1.50f, 0.62f, 0.14f};
+
+    SeamlessPortalAperture CircPortalRev = CircPortalFwd;
+    CircPortalRev.EntryCentreWorld       = CircPortalFwd.ExitCentreWorld;
+    CircPortalRev.EntryRightAxis         = CircPortalFwd.ExitRightAxis;
+    CircPortalRev.EntryUpAxis            = CircPortalFwd.ExitUpAxis;
+    CircPortalRev.EntryFrontNormal       = CircPortalFwd.ExitFrontNormal;
+    CircPortalRev.ExitCentreWorld        = CircPortalFwd.EntryCentreWorld;
+    CircPortalRev.ExitRightAxis          = CircPortalFwd.EntryRightAxis;
+    CircPortalRev.ExitUpAxis             = CircPortalFwd.EntryUpAxis;
+    CircPortalRev.ExitFrontNormal        = CircPortalFwd.EntryFrontNormal;
+    CircPortalRev.PortalRimGlowRgb       = CircPortalFwd.ExitRimGlowRgb;
+    CircPortalRev.ExitRimGlowRgb         = CircPortalFwd.PortalRimGlowRgb;
+
+    CircularPortalScene.RegisterSeamlessPortal(CircPortalFwd);
+    CircularPortalScene.RegisterSeamlessPortal(CircPortalRev);
+    PortalMechanics::RegisterCircularPortalFrameRings(CircPortalFwd, 0.085f, 44u, CircularPortalScene);
+
+    PortalMechanics PortalFilter{};
+    constexpr uint32_t AllowedCarObjectId    = 101u;
+    constexpr uint32_t BlockedSphereObjectId = 202u;
+    PortalFilter.AllowObjectThroughPortals(AllowedCarObjectId);
+    PortalFilter.BlockObjectFromPortals(BlockedSphereObjectId);
+
+    // Verify dynamic motion blocking vs allowed teleportation:
+    PortalObjectBodyState BlockedBody{BlockedSphereObjectId, CircPortalFwd.EntryCentreWorld + EntryFrontN * 0.45f, -EntryFrontN * 12.0f, 0.42f};
+    const auto BlockedStep = PortalFilter.StepObjectAgainstPortal(BlockedBody, 0.08f, CircPortalFwd);
+
+    PortalObjectBodyState AllowedBody{AllowedCarObjectId, CircPortalFwd.EntryCentreWorld + EntryFrontN * 0.25f, -EntryFrontN * 12.0f, 0.50f};
+    const auto AllowedStep = PortalFilter.StepObjectAgainstPortal(AllowedBody, 0.08f, CircPortalFwd);
+
+    // Build world-space triangles for ControlVehicle (ObjectId 101, ALLOWED -> automatic clipped entry + emerging exit duplicate!)
+    std::vector<RtxSceneTriangle> CarWorldTris;
+    if (BlinnLoaded)
+    {
+        const Vec3 CarCentre = {-2.35f, +0.45f, 0.815f};
+        const Vec3 CarLeft   = Cross(Vec3{0.0f, 0.0f, 1.0f}, CarTransitForward);
+        auto AppendPartTris = [&](const BlinnFacetMesh& Mesh, Vec3 LocalOff, Vec3 Tint, bool OverrideTint)
+        {
+            for (size_t T = 0u; T + 2u < Mesh.Indices.size(); T += 3u)
+            {
+                const uint32_t I0 = Mesh.Indices[T + 0u], I1 = Mesh.Indices[T + 1u], I2 = Mesh.Indices[T + 2u];
+                auto ToW = [&](Vec3 P) { return CarCentre + CarTransitForward * (P.X + LocalOff.X) + CarLeft * (P.Y + LocalOff.Y) + Vec3{0.0f, 0.0f, P.Z + LocalOff.Z}; };
+                const Vec3 V0 = ToW(Mesh.Positions[I0]), V1 = ToW(Mesh.Positions[I1]), V2 = ToW(Mesh.Positions[I2]);
+                const Vec3 Cr = Cross(V1 - V0, V2 - V0);
+                if (Length(Cr) <= 1.0e-7f) continue;
+                const uint32_t MatId = (T / 3u < Mesh.MaterialIds.size()) ? Mesh.MaterialIds[T / 3u] : 0u;
+                BlinnMaterialProperties St = BlinnRenderer::ResolveVehicleMaterial(MatId);
+                RtxSceneTriangle Tri{};
+                Tri.V0 = V0; Tri.V1 = V1; Tri.V2 = V2; Tri.Normal = Normalise(Cr);
+                Tri.AlbedoRgb = (OverrideTint && MatId == 0u) ? Tint : St.LinearAlbedo;
+                Tri.Roughness = St.Roughness;
+                Tri.Metallic  = St.Metallic;
+                CarWorldTris.push_back(Tri);
+            }
+        };
+        AppendPartTris(BlinnBody, {0.0f, 0.0f, 0.0f}, {0.88f, 0.16f, 0.14f}, true);
+        const std::array<Vec3, 4u> WOff = {{{1.7274f, 1.0475f, -0.375f}, {1.7274f, -1.0475f, -0.375f}, {-1.6686f, 1.0475f, -0.375f}, {-1.6686f, -1.0475f, -0.375f}}};
+        for (size_t K = 0u; K < 4u; ++K)
+        {
+            AppendPartTris(BlinnTyre, WOff[K], {}, false);
+            AppendPartTris((K % 2u == 0u) ? BlinnRimL : BlinnRimR, WOff[K], {}, false);
+        }
+    }
+    const PortalSubmissionSummary AllowedCarSubmit = PortalFilter.SubmitPortalAwareMesh(
+        AllowedCarObjectId, CarWorldTris, {-2.35f, +0.45f, 0.85f}, {2.2f, 1.1f, 0.75f}, CircPortalFwd, CircularPortalScene);
+
+    // Build a golden-amber hazard cube pushed halfway into the circular portal with ObjectId 202 (BLOCKED -> clamped outside, 0 duplicate!)
+    SceneRenderer TempBoxBuilder{};
+    // Place the blocked crimson hazard cube in clear foreground view right at the circular portal mouth so it is visibly halted outside!
+    const Vec3 IntrudingBlockedPos = CircPortalFwd.EntryCentreWorld + EntryRightN * 1.15f - Vec3{0.0f, 0.0f, 1.10f} - EntryFrontN * 0.25f;
+    TempBoxBuilder.RegisterDualTierSolidBox(IntrudingBlockedPos, {0.38f, 0.38f, 0.38f}, {0.92f, 0.14f, 0.10f}, 0.24f, {0.22f, 0.03f, 0.02f}, 0.30f);
+    const PortalSubmissionSummary BlockedCubeSubmit = PortalFilter.SubmitPortalAwareMesh(
+        BlockedSphereObjectId, TempBoxBuilder.RtxTriangles(), IntrudingBlockedPos, {0.38f, 0.38f, 0.38f}, CircPortalFwd, CircularPortalScene);
+
+    CircularPortalScene.FinalizeSceneAndBakeSurfaceCards(PortalCarCtx);
+    std::vector<uint8_t> CircularPortalRgba;
+    CircularPortalScene.RenderViewportRgba8(
+        GpuTracingTier::HardwareRayTracingRtx,
+        HdWidth,
+        HdHeight,
+        {-0.15f, -6.95f, 2.38f},
+        {+0.15f, +0.55f, 0.98f},
+        0.82f,
+        PortalCarCtx,
+        CircularPortalRgba);
+
+    std::snprintf(
+        Note,
+        sizeof(Note),
+        "allowed_entry=%u allowed_dup_exit=%u teleport=%d | blocked_filter=%d blocked_dup_exit=%u stop_dist=%.3fm",
+        AllowedCarSubmit.EntrySideTrianglesEmitted,
+        AllowedCarSubmit.ExitDuplicateTrianglesEmitted,
+        AllowedStep.TeleportedCentroidToExit ? 1 : 0,
+        BlockedCubeSubmit.BlockedByFilter ? 1 : 0,
+        BlockedCubeSubmit.ExitDuplicateTrianglesEmitted,
+        Dot(BlockedBody.CentreWorld - CircPortalFwd.EntryCentreWorld, EntryFrontN));
+    Ledger.Verify(
+        AllowedCarSubmit.EntrySideTrianglesEmitted > 2000u &&
+            AllowedCarSubmit.ExitDuplicateTrianglesEmitted > 2000u &&
+            AllowedStep.TeleportedCentroidToExit &&
+            BlockedCubeSubmit.BlockedByFilter &&
+            BlockedCubeSubmit.ExitDuplicateTrianglesEmitted == 0u &&
+            !BlockedStep.TeleportedCentroidToExit &&
+            Dot(BlockedBody.CentreWorld - CircPortalFwd.EntryCentreWorld, EntryFrontN) >= 0.40f,
+        "Circular portals: automatic exit-side duplicate mesh & per-object portal blocking",
+        Note);
+
+    // -----------------------------------------------------------------------------------------------------------------
+    // SUITE 23: Glass-Aware Nanite Cluster-Hierarchy DAG Visual & Quantitative Demonstration
+    // -----------------------------------------------------------------------------------------------------------------
+    std::printf("\n--- Suite 23: Nanite Cluster-Hierarchy DAG (4-Panel Diagnostic + Near/Mid/Far Reduction) ---\n");
+    FacetField NaniteField{};
+    auto AppendCorrugatedUvSphere = [&](Vec3 Centre, float Radius, float Amp, uint32_t Slices, uint32_t Stacks, uint32_t ClassId)
+    {
+        auto EvalPt = [&](float U, float V) -> Vector3
+        {
+            const double Phi = static_cast<double>(U) * 6.283185307179586;
+            const double Th  = static_cast<double>(V) * 3.141592653589793;
+            const double SinT = std::sin(Th);
+            const double R = static_cast<double>(Radius) *
+                             (1.0 + static_cast<double>(Amp) * SinT * SinT * (0.55 * std::sin(Phi * 8.0) * std::sin(Th * 6.0)));
+            return {
+                static_cast<double>(Centre.X) + R * SinT * std::cos(Phi),
+                static_cast<double>(Centre.Y) + R * SinT * std::sin(Phi),
+                static_cast<double>(Centre.Z) + R * std::cos(Th)};
+        };
+        auto EmitFacet = [&](float U0, float V0, float U1, float V1, float U2, float V2)
+        {
+            NaniteField.Corners.push_back(EvalPt(U0, V0));
+            NaniteField.Corners.push_back(EvalPt(U1, V1));
+            NaniteField.Corners.push_back(EvalPt(U2, V2));
+            NaniteField.CornerUVs.push_back({static_cast<double>(U0), static_cast<double>(V0)});
+            NaniteField.CornerUVs.push_back({static_cast<double>(U1), static_cast<double>(V1)});
+            NaniteField.CornerUVs.push_back({static_cast<double>(U2), static_cast<double>(V2)});
+            NaniteField.Classification.push_back(ClassId);
+            NaniteField.SharpMask.push_back(0u);
+        };
+        for (uint32_t J = 0u; J < Stacks; ++J)
+        {
+            const float V0 = static_cast<float>(J) / static_cast<float>(Stacks);
+            const float V1 = static_cast<float>(J + 1u) / static_cast<float>(Stacks);
+            for (uint32_t I = 0u; I < Slices; ++I)
+            {
+                const float U0 = static_cast<float>(I) / static_cast<float>(Slices);
+                const float U1 = static_cast<float>(I + 1u) / static_cast<float>(Slices);
+                if (J > 0u)
+                {
+                    EmitFacet(U0, V0, U0, V1, U1, V0);
+                }
+                if (J + 1u < Stacks)
+                {
+                    EmitFacet(U1, V0, U0, V1, U1, V1);
+                }
+            }
+        }
+    };
+
+    // Populate Nanite showcase with Near (3.2m -> Tier 0 Red), Mid (12m -> Tier 2 Emerald), Far (28m -> Tier 4 Blue) corrugated statues + foreground glass sphere!
+    AppendCorrugatedUvSphere({-1.65f, -2.3f, 1.15f}, 1.05f, 0.14f, 56u, 36u, 1u); // Foreground detailed statue (Tier 0!)
+    AppendCorrugatedUvSphere({-0.25f, +6.2f, 1.55f}, 1.55f, 0.14f, 56u, 36u, 2u); // Midground statue (Tier 2!)
+    AppendCorrugatedUvSphere({+4.40f, +22.5f, 2.75f}, 2.75f, 0.14f, 56u, 36u, 3u); // Background statue (Tier 4!)
+    AppendCorrugatedUvSphere({+1.30f, -1.8f, 1.10f}, 0.86f, 0.00f, 44u, 28u, 10u); // Foreground refractive dielectric glass sphere!
+
+    ClusterHierarchy NaniteDag{};
+    NaniteDag.RegisterMaterialProfile({1u, false, 1.5f, {}, {0.82f, 0.42f, 0.24f}, 0.32f, 0.10f});
+    NaniteDag.RegisterMaterialProfile({2u, false, 1.5f, {}, {0.24f, 0.68f, 0.86f}, 0.32f, 0.10f});
+    NaniteDag.RegisterMaterialProfile({3u, false, 1.5f, {}, {0.84f, 0.72f, 0.26f}, 0.35f, 0.10f});
+    NaniteDag.RegisterMaterialProfile({10u, true, 1.54f, {0.10f, 0.03f, 0.04f}, {0.92f, 0.96f, 0.99f}, 0.04f, 0.0f});
+
+    TierBuildSpecification TierSpec{};
+    TierSpec.TriangleLimit = 96u;
+    TierSpec.MaximumTiers  = 6u;
+    const bool BuiltNanite = NaniteDag.BuildFromFacetField(NaniteField, TierSpec);
+
+    ClusterCameraView ShowcaseCam{};
+    ShowcaseCam.CameraOrigin     = {0.0f, -5.6f, 1.55f};
+    ShowcaseCam.CameraTarget     = {0.35f, +4.0f, 1.45f};
+    ShowcaseCam.ViewportWidthPx  = HdWidth;
+    ShowcaseCam.ViewportHeightPx = HdHeight;
+    ShowcaseCam.ErrorThresholdPx = 9.50f;
+
+    // Also measure pure Near (full scene visible at 8.5m) vs Far (full scene at 85m) monotonic triangle reduction!
+    ClusterCameraView NearCam = ShowcaseCam;
+    NearCam.CameraOrigin      = {0.6f, -8.5f, 1.85f};
+    NearCam.ErrorThresholdPx  = 0.65f;
+
+    ClusterCameraView FarCam = ShowcaseCam;
+    FarCam.CameraOrigin      = {0.6f, -85.0f, 7.50f};
+    FarCam.ErrorThresholdPx  = 9.50f;
+
+    const ClusterRuntimeFrameReport ShowcaseCut = NaniteDag.ExecuteGlassAwareCutAndTwoPhaseHiZ(ShowcaseCam);
+    const ClusterRuntimeFrameReport NearCut     = NaniteDag.ExecuteGlassAwareCutAndTwoPhaseHiZ(NearCam);
+    const ClusterRuntimeFrameReport FarCut      = NaniteDag.ExecuteGlassAwareCutAndTwoPhaseHiZ(FarCam);
+
+    std::vector<uint8_t> NaniteShowcaseRgba;
+    NaniteDag.RenderFourPanelDiagnosticRgba8(ShowcaseCam, NaniteShowcaseRgba);
+
+    std::snprintf(
+        Note,
+        sizeof(Note),
+        "tiers=%zu clusters=%zu pages=%zu leaf_tris=%u near_cut=%u showcase_cut=%u far_cut=%u glass_clusters=%zu",
+        NaniteDag.TierSequence().Tiers.size(),
+        NaniteDag.ClusterRecords().size(),
+        NaniteDag.StreamingPages().size(),
+        NearCut.SourceLeafTriangles,
+        NearCut.ActiveTrianglesAfterCull,
+        ShowcaseCut.ActiveTrianglesAfterCull,
+        FarCut.ActiveTrianglesAfterCull,
+        ShowcaseCut.SelectedGlassGlobals.size());
+    Ledger.Verify(
+        BuiltNanite && NaniteDag.TierSequence().Tiers.size() >= 3u &&
+            ShowcaseCut.ActiveTrianglesAfterCull < ShowcaseCut.SourceLeafTriangles &&
+            FarCut.TotalCutClusters < NearCut.TotalCutClusters &&
+            FarCut.ActiveTrianglesAfterCull < NearCut.ActiveTrianglesAfterCull &&
+            !ShowcaseCut.SelectedGlassGlobals.empty(),
+        "Glass-aware Nanite ClusterHierarchy DAG cut, reduction & 4-panel showcase",
+        Note);
+
+    // Composite Cluster (960x240) + Central Screen (960x540) into 960x780 VehicleCabinHmiComposite.png!
     std::vector<uint8_t> HmiComposite;
     HmiComposite.reserve(ClusterImg.size() + ScreenImg.size());
     HmiComposite.insert(HmiComposite.end(), ClusterImg.begin(), ClusterImg.end());
     HmiComposite.insert(HmiComposite.end(), ScreenImg.begin(), ScreenImg.end());
 
-    const bool Png1 = WriteRgba8PngFile(ImgDir + "GtxSdfPortalMirrorPlumeWater.png", GtxWidth, GtxHeight, GtxFrameRgba);
-    const bool Png2 = WriteRgba8PngFile(ImgDir + "RtxBvhPortalMirrorPlumeWater.png", HdWidth, HdHeight, RtxFrameRgba);
-    const bool Png3 = WriteRgba8PngFile(ImgDir + "SnowPitRutAndFractureSparks.png", HdWidth, HdHeight, SnowSparkRgba);
-    const bool Png4 = WriteRgba8PngFile(ImgDir + "VehicleCabinHmiComposite.png", 640u, 360u, HmiComposite);
-    const bool Png5 = WriteRgba8PngFile(ImgDir + "PortalSplitVehicleTransit960x540.png", HdWidth, HdHeight, PortalVehicleRgba);
-    const bool Png6 = WriteRgba8PngFile(ImgDir + "SolarDiscAndOpticalLensFlare960x540.png", HdWidth, HdHeight, SunFlareRgba);
+    const bool Png1  = WriteRgba8PngFile(ImgDir + "GtxSdfPortalMirrorPlumeWater.png", GtxWidth, GtxHeight, GtxFrameRgba);
+    const bool Png2  = WriteRgba8PngFile(ImgDir + "RtxPortalMirrorPlumeWater.png", HdWidth, HdHeight, RtxFrameRgba);
+    const bool Png3  = WriteRgba8PngFile(ImgDir + "SnowPitFallingSnowAndSparks960x540.png", HdWidth, HdHeight, SnowSparkRgba);
+    const bool Png4  = WriteRgba8PngFile(ImgDir + "VehicleCabinHmiComposite.png", 960u, 780u, HmiComposite);
+    const bool Png5  = WriteRgba8PngFile(ImgDir + "PortalSplitVehicleTransit960x540.png", HdWidth, HdHeight, PortalVehicleRgba);
+    const bool Png6  = WriteRgba8PngFile(ImgDir + "SolarDiscAndOpticalLensFlare960x540.png", HdWidth, HdHeight, SunFlareRgba);
+    const bool Png7  = WriteRgba8PngFile(ImgDir + "BlinnLowResProvingGround960x540.png", HdWidth, HdHeight, BlinnRgba8);
+    const bool Png8  = WriteRgba8PngFile(ImgDir + "ControlVehicle3DCockpitHmi960x540.png", HdWidth, HdHeight, Cockpit3DRgba);
+    const bool Png9  = WriteRgba8PngFile(ImgDir + "CircularPortalDuplicateAndBlocking960x540.png", HdWidth, HdHeight, CircularPortalRgba);
+    const bool Png10 = WriteRgba8PngFile(ImgDir + "NaniteClusterLodShowcase960x540.png", HdWidth, HdHeight, NaniteShowcaseRgba);
 
     std::snprintf(
         Note,
         sizeof(Note),
-        "png_ok=(%d,%d,%d,%d,%d,%d)",
-        Png1 ? 1 : 0,
-        Png2 ? 1 : 0,
-        Png3 ? 1 : 0,
-        Png4 ? 1 : 0,
-        Png5 ? 1 : 0,
-        Png6 ? 1 : 0);
+        "png_ok=(%d,%d,%d,%d,%d,%d,%d,%d,%d,%d)",
+        Png1 ? 1 : 0, Png2 ? 1 : 0, Png3 ? 1 : 0, Png4 ? 1 : 0, Png5 ? 1 : 0,
+        Png6 ? 1 : 0, Png7 ? 1 : 0, Png8 ? 1 : 0, Png9 ? 1 : 0, Png10 ? 1 : 0);
     Ledger.Verify(
-        Png1 && Png2 && Png3 && Png4 && Png5 && Png6,
-        "Rendered 6 HD visual proof PNGs (Water, Snow, Split-Portal Vehicle, Sun Flare, HMI)",
+        Png1 && Png2 && Png3 && Png4 && Png5 && Png6 && Png7 && Png8 && Png9 && Png10,
+        "Rendered 10 HD Stage H visual proof PNGs",
         Note);
 
     std::printf("\n====================================================================================================\n");

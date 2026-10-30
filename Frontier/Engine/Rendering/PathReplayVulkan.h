@@ -25,14 +25,14 @@ inline constexpr std::uint32_t PathReplayPhotometricClusters = 4u, PathReplayRou
     PathReplayPowerMis = 33554432u, PathReplayCompactStorage = 67108864u,
     PathReplayAuthoredMaterials = 134217728u,
     PathReplayPairwiseMis = 268435456u, PathReplayHybridReconnection = 536870912u,
-    PathReplaySolarSkyEnvironment = 1073741824u, PathReplayAdaptiveFilter = 2147483648u;
+    PathReplaySkyRadiance = 1073741824u, PathReplayAdaptiveFilter = 2147483648u;
 
 inline constexpr std::uint32_t PathReplayProductionTransportMask =
     PathReplayRoughOpaque | PathReplaySampleFacets | PathReplayBalanceSampling |
     PathReplayImportanceRough | PathReplayPowerWeightedFacets | PathReplayUniformFacetMixture |
     PathReplaySpatialDisk | PathReplayVarianceFilter | PathReplayOrderedTraversal |
     PathReplayPowerMis | PathReplayCompactStorage | PathReplayAuthoredMaterials |
-    PathReplayPairwiseMis | PathReplayHybridReconnection | PathReplaySolarSkyEnvironment |
+    PathReplayPairwiseMis | PathReplayHybridReconnection | PathReplaySkyRadiance |
     PathReplayAdaptiveFilter;
 
 inline constexpr std::uint32_t PathReplayCounterWords = 23, PathReplayReconstructionCounterWords = 24;

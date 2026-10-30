@@ -7,7 +7,7 @@ Retained validation and benchmark record for Milestone 3 on `arena/9ce908bc-fron
 | Domain | Engine / Project Substrate | Verified Mechanism | Status |
 |---|---|---|---|
 | **3D Fluid Smoke & Fire** | `FrontierPlumeFluid` + `PlumeFluid{Transport,March}.slang` | Toroidal MAC face-flux + RB-SOR pressure, Clamped MacCormack thermo, aperiodic $SO(3)$ + flow-warped detail, reaction-sheet blackbody fire | ✔️ `PASS` |
-| **Tyre Continuum** | `FrontierTyreContinuum` + `TyreVisualBridge` | Analytical `Spring`, `160`-particle `XPBD` (`TyreCarcassProjection`), and `128`-cell `Hex8` Neo-Hookean FEM (`TyreCarcassSolid`) + integrated reaction/patch/bulge queries | ✔️ `PASS` |
+| **Tyre Continuum** | `FrontierTyreMechanics` + `TyreVisualBridge` | Analytical `Spring`, `160`-particle `XPBD` (`TyreCarcassProjection`), and `128`-cell `Hex8` Neo-Hookean FEM (`TyreCarcassSolid`) + integrated reaction/patch/bulge queries | ✔️ `PASS` |
 | **Precipitation & Grip** | `WeatherEffects` + `PrecipitationOptics.slang` | `Rain`, `Snow`, and `Hail` terminal-velocity hydrometeors, slope-gated surface snow cover, and monotonic road-grip scaling | ✔️ `PASS` |
 | **VehicleHMI Scene** | `Frontier/Projects/Project-Drive/Source/VehicleHmiScene.{h,cpp}` | `ControlVehicle{Body,Rim,Tyre}.facet` (`8,460` base facets -> `34,048` scene tris), Hangar, Tunnel, Tower, Materials Garden, Streetlamps, Signals, Jolt `5.6.0` cones & ramp | ✔️ `PASS` |
 

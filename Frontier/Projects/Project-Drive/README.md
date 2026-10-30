@@ -8,7 +8,7 @@ deployment scenario, possession/camera flow, and v3 `CodeInterchange` code image
 ## ⭐ Ownership Boundary
 
 - **Shared Jolt substrate (`Frontier/Engine/Physics/`)**:
-  `RigidBodySolver` (Jolt `5.6.0`), `VehiclePhysicsThread`, `PhysicsChannel<T>`, `FrontierTyreContinuum`.
+  `RigidBodySolver` (Jolt `5.6.0`), `VehiclePhysicsThread`, `PhysicsChannel<T>`, `FrontierTyreMechanics`.
 - **Shared vehicle dynamics (`Frontier/Engine/Physics/ProjectDrive/`)**:
   `VehicleSolver`, `Drivetrain`, `Aerodynamics`, `PacejkaMagicFormula`, `TyreSlipDynamics`, `VehicleGeometry`,
   `VehicleSpawnSolver`, `DriverInputIntegrator`, `ChaseCameraProjection`, `VehicleRigidBodyAssembly`,

@@ -3,6 +3,10 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     project(FrontierPathReplay LANGUAGES CXX)
 endif()
 
+if(TARGET FrontierAtmosphericOptics)
+    return()
+endif()
+
 # 📝 Atmospheric scattering, celestial ephemeris, clouds, height fog, weather, and solar lens-flare optics.
 add_library(FrontierAtmosphericOptics STATIC
     AtmosphereModel.cpp
@@ -39,31 +43,31 @@ else()
 endif()
 
 # 📝 Cone-sphere-box analytic luminaire clustering, Type-C LM-63 Emissive-IES, and 3D radiant facet importance grids.
-add_library(FrontierPhotometricClustering STATIC PhotometricClusterExtension.cpp)
-target_compile_features(FrontierPhotometricClustering PUBLIC cxx_std_20)
-target_link_libraries(FrontierPhotometricClustering PUBLIC FrontierRadiantFacetDistribution)
-target_include_directories(FrontierPhotometricClustering PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/../..")
+add_library(FrontierPhotometricLights STATIC PhotometricLights.cpp)
+target_compile_features(FrontierPhotometricLights PUBLIC cxx_std_20)
+target_link_libraries(FrontierPhotometricLights PUBLIC FrontierRadiantFacetDistribution)
+target_include_directories(FrontierPhotometricLights PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/../..")
 if(MSVC)
-    target_compile_options(FrontierPhotometricClustering PRIVATE /utf-8 /W4)
+    target_compile_options(FrontierPhotometricLights PRIVATE /utf-8 /W4)
 else()
-    target_compile_options(FrontierPhotometricClustering PRIVATE -Wall -Wextra -Werror)
+    target_compile_options(FrontierPhotometricLights PRIVATE -Wall -Wextra -Werror)
 endif()
 
 # 📝 Coupled solar/sky/cloud payload and double-precision reference quadrature.
-add_library(FrontierSolarSkyEnvironmentPayload STATIC SolarSkyEnvironmentPayload.cpp)
-target_compile_features(FrontierSolarSkyEnvironmentPayload PUBLIC cxx_std_20)
-target_link_libraries(FrontierSolarSkyEnvironmentPayload PUBLIC FrontierAtmosphericOptics)
-target_include_directories(FrontierSolarSkyEnvironmentPayload PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/../..")
+add_library(FrontierSkyRadiance STATIC SkyRadiance.cpp)
+target_compile_features(FrontierSkyRadiance PUBLIC cxx_std_20)
+target_link_libraries(FrontierSkyRadiance PUBLIC FrontierAtmosphericOptics)
+target_include_directories(FrontierSkyRadiance PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/../..")
 if(MSVC)
-    target_compile_options(FrontierSolarSkyEnvironmentPayload PRIVATE /utf-8 /W4)
+    target_compile_options(FrontierSkyRadiance PRIVATE /utf-8 /W4)
 else()
-    target_compile_options(FrontierSolarSkyEnvironmentPayload PRIVATE -Wall -Wextra -Werror)
+    target_compile_options(FrontierSkyRadiance PRIVATE -Wall -Wextra -Werror)
 endif()
 
 # 📝 Reusable bounded replay-domain intake; shader submission and editor wiring are separate work.
 add_library(FrontierPathReplayDomain STATIC PathReplayDomain.cpp)
 target_compile_features(FrontierPathReplayDomain PUBLIC cxx_std_20)
-target_link_libraries(FrontierPathReplayDomain PUBLIC FrontierSolarSkyEnvironmentPayload FrontierPhotometricClustering)
+target_link_libraries(FrontierPathReplayDomain PUBLIC FrontierSkyRadiance FrontierPhotometricLights)
 target_include_directories(FrontierPathReplayDomain PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/../..")
 if(MSVC)
     target_compile_options(FrontierPathReplayDomain PRIVATE /utf-8 /W4)
@@ -112,39 +116,41 @@ endif()
 if(NOT TARGET FrontierPlumeFluid)
     add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../Fluid" "${CMAKE_CURRENT_BINARY_DIR}/FrontierFluid")
 endif()
-if(NOT TARGET FrontierWindForceField)
-    add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../Environment" "${CMAKE_CURRENT_BINARY_DIR}/FrontierEnvironment")
+if(NOT TARGET FrontierWindField)
+    add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../VisualEffects" "${CMAKE_CURRENT_BINARY_DIR}/FrontierEnvironment")
 endif()
-if(NOT TARGET FrontierClusteredGeometry)
-    add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../Geometry" "${CMAKE_CURRENT_BINARY_DIR}/FrontierGeometry")
+if(NOT TARGET FrontierGeometryProcessing)
+    add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../GeometryProcessing" "${CMAKE_CURRENT_BINARY_DIR}/FrontierGeometry")
 endif()
 if(NOT TARGET FrontierSolidFracture)
     add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../Physics/Fracture" "${CMAKE_CURRENT_BINARY_DIR}/FrontierFracture")
 endif()
-if(NOT TARGET FrontierBallisticSparks)
-    add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../Physics/Sparks" "${CMAKE_CURRENT_BINARY_DIR}/FrontierSparks")
+if(NOT TARGET FrontierParticles)
+    add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../Particles" "${CMAKE_CURRENT_BINARY_DIR}/FrontierSparks")
 endif()
 
-# 📝 Dual-tier GTX (SDF GI + BVH Triangle Reflections) and RTX (Full Raytracing) ReSTIR extension with Portals & Mirrors.
-if(NOT TARGET FrontierSdfRestirPortal)
-    add_library(FrontierSdfRestirPortal STATIC
+# 📝 Dual-tier GTX (SDF GI + BVH Triangle Reflections), RTX (Full Raytracing), Blinn Low-Res & Protected Auto-Exposure.
+if(NOT TARGET FrontierSceneRenderer)
+    add_library(FrontierSceneRenderer STATIC
+        BlinnRenderer.cpp
         DiscrepancySequence.cpp
         DistanceField.cpp
-        SdfRestirPortalExtension.cpp)
-    target_compile_features(FrontierSdfRestirPortal PUBLIC cxx_std_20)
-    target_link_libraries(FrontierSdfRestirPortal PUBLIC
+        ExposureAdaptation.cpp
+        SceneRenderer.cpp)
+    target_compile_features(FrontierSceneRenderer PUBLIC cxx_std_20)
+    target_link_libraries(FrontierSceneRenderer PUBLIC
         FrontierAtmosphericOptics
-        FrontierCelestialPlanetary
-        FrontierClusteredGeometry
+        FrontierCelestialSky
+        FrontierGeometryProcessing
         FrontierPlumeFluid
-        FrontierShallowWaterMud
-        FrontierSnowLightningEnvironment
-        FrontierBallisticSparks)
-    target_include_directories(FrontierSdfRestirPortal PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/../..")
+        FrontierShallowWater
+        FrontierSnowLightning
+        FrontierParticles)
+    target_include_directories(FrontierSceneRenderer PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/../..")
     if(MSVC)
-        target_compile_options(FrontierSdfRestirPortal PRIVATE /utf-8 /W4)
+        target_compile_options(FrontierSceneRenderer PRIVATE /utf-8 /W4)
     else()
-        target_compile_options(FrontierSdfRestirPortal PRIVATE -Wall -Wextra -Werror)
+        target_compile_options(FrontierSceneRenderer PRIVATE -Wall -Wextra -Werror)
     endif()
 endif()
 

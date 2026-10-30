@@ -5,7 +5,7 @@
 `CelestialGlassLightingShowcase` validates and renders the Stage F Engine substrates across four verification suites
 (`13/13 PASS`) and five `960x540` showcase PNGs:
 
-1. **Glass-Aware Virtualized Cluster Geometry (`FrontierClusteredGeometry`)**:
+1. **Glass-Aware Virtualized Cluster Geometry (`FrontierGeometryProcessing`)**:
    - Class-pure `<= 128`-triangle cluster partitioning (`FacetTierBuild`) and monotonic Garland-Heckbert quadric DAGs
      (`QuadricTierBuild`) with `UV`/material seam locks.
    - Optical IOR error magnification (`1 + 4.5 * (eta - 1) * sin(theta_cone)`) keeping curved transmissive glass at
@@ -13,7 +13,7 @@
      that never culls geometry behind glass, `64 KB` streaming pages with pinned root fallback, and two-layer glass
      entry/exit peeling.
 2. **Celestial Catalogue, Custom Stars, Textured Moon, Ringed Planets & Simulated Atmospheres
-   (`FrontierCelestialPlanetary`)**:
+   (`FrontierCelestialSky`)**:
    - 41,360-star `Hipparcos8.csv` `32x32` octahedral star index (`46,690` overlap-binned entries) + structured Milky
      Way and central dust rift.
    - Custom user-defined stars with Planckian chromaticity, 6-blade constant-thickness needle diffraction spikes, and
@@ -24,7 +24,7 @@
      Cassini/A/Encke/F radial ring profiles, spherical Rayleigh/Mie/absorption atmospheres, and mutual planet/ring
      shadows with red-refracted atmospheric limb penumbrae.
 3. **Exact Dual-Tier GTX vs RTX ReSTIR GI, Reflections, Portals, Mirrors & Area Luminaires
-   (`FrontierSdfRestirPortal`)**:
+   (`FrontierSceneRenderer`)**:
    - **GTX (`SignedDistanceFieldGtx`)**: SDF + `3x3`-quadrature `OrientedSurfaceCard` ReSTIR GI paired with exact
      software triangle-BVH reflections (never coarse SDF reflection boxes).
    - **RTX (`HardwareRayTracingRtx`)**: Full hardware triangle raytracing for both ReSTIR GI and reflections.

@@ -1,7 +1,7 @@
 /*==========================================================================================================================================
                                                 PHOTOMETRICCLUSTERVALIDATION.CPP
 ==========================================================================================================================================*/
-// 🧩 Host CTest validation for FrontierAtmosphericOptics and FrontierPhotometricClustering Engine libraries.
+// 🧩 Host CTest validation for FrontierAtmosphericOptics and FrontierPhotometricLights Engine libraries.
 
 #include "Engine/Rendering/AtmosphereModel.h"
 #include "Engine/Rendering/CelestialModel.h"
@@ -10,7 +10,7 @@
 #include "Engine/Rendering/LensFlareModel.h"
 #include "Engine/Rendering/PathReplaySubmissionSequence.h"
 #include "Engine/Rendering/PathReplayVulkan.h"
-#include "Engine/Rendering/PhotometricClusterExtension.h"
+#include "Engine/Rendering/PhotometricLights.h"
 #include "Engine/Rendering/SolarOpticsPayload.h"
 #include "Engine/Rendering/WeatherEffects.h"
 
@@ -194,8 +194,8 @@ void ValidateAnalyticTightConeClustering()
     PhotometricClusterSpecification TightSpec = LegacySpec;
     TightSpec.CullingMode                     = ClusterCullingMode::TightPolarCone;
 
-    PhotometricClusterExtension LegacyDivision;
-    PhotometricClusterExtension TightDivision;
+    PhotometricLights LegacyDivision;
+    PhotometricLights TightDivision;
     LegacyDivision.Partition(Luminaires, LegacySpec);
     TightDivision.Partition(Luminaires, TightSpec);
 

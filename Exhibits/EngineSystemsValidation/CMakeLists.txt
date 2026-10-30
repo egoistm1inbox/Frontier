@@ -20,8 +20,8 @@ target_include_directories(EngineSystemsValidation PRIVATE
     "${FRONTIER_REPO_ROOT}/Frontier/Projects/Project-Networking/Source")
 
 target_link_libraries(EngineSystemsValidation PRIVATE
-    FrontierVehiclePropulsion
-    FrontierWindForceField
+    FrontierPropulsion
+    FrontierWindField
     FrontierFrameGraphRuntime
     FrontierNetworking
     FrontierAudioFoundation

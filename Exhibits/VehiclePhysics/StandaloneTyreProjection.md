@@ -4,7 +4,7 @@
 
 The 160-particle XPBD and 128-cell Hex8 demo models already lived in
 `Frontier/Engine/Physics/TyreContinuum.{h,cpp}`. They now have a standalone C++17 CMake library,
-`FrontierTyreContinuum`, that does not require a vehicle solver or Jolt. Existing spring-style and
+`FrontierTyreMechanics`, that does not require a vehicle solver or Jolt. Existing spring-style and
 continuum **visual vertex deformation** were separated from `TyreDeformation.h` into the
 header-only `TyreSurfaceProjection.h`; the vehicle-state adapter remains in the old header and
 includes the shared projection. This is a dependency/ownership extraction, not a new tyre solver.

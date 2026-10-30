@@ -11,7 +11,7 @@ No physical GPU, hardware ray-query or Windows execution is claimed.
 
 [Photometric clustered lighting and volumetric optics](PhotometricClusterLighting.md) compiles `FrontierAtmosphericOptics`
 (`AtmosphereModel`, `CelestialModel`, `CloudField`, `FogMedium`, `LensFlareModel`, `SolarOpticsPayload`, `WeatherEffects`)
-and `FrontierPhotometricClustering` (`PhotometricClusterDivision`) into `Frontier/Engine/Rendering/` alongside loop-free
+and `FrontierPhotometricLights` (`PhotometricClusterDivision`) into `Frontier/Engine/Rendering/` alongside loop-free
 Slang GPU evaluation (`PhotometricLuminaire.slang`, `LightInfluence.slang`, `PathReplayReservoir.slang`). Tight
 polar-cone-box culling (`PhotometricTightClusterMask = 128u`) eliminates **`124/256`** sphere-cluster overflows (`0`
 overflows, **`3.84x`** fewer GPU visits vs sphere-reach, **`7.78x`** vs exhaustive, `0.0000000` error), clustered
@@ -26,7 +26,7 @@ alias 3D radiant clustering (`PathReplayPhotometricClusters = 4u`) cuts 48-lumin
 
 [Four-phase production ReSTIR verification](ProductionReSTIR.md) unifies both prior research branches and advances
 Engine C++/Slang (`PathReplayVulkan`, `PathReplayDomain`, `PathReplaySubmissionSequence`,
-`SolarSkyEnvironmentPayload`, `PathReplayReservoir.slang`, `PathReplayVarianceFilter.slang`, `PathReplayRayQuery.slang`)
+`SkyRadiancePayload`, `PathReplayReservoir.slang`, `PathReplayVarianceFilter.slang`, `PathReplayRayQuery.slang`)
 through four GPU-gated upgrades: Defensive Canonical Pairwise Power MIS (`dim |bias| = 0.68 SE`, `metal |bias| = 0.016 SE`,
 `-39.5%` metal RMSE vs `1/M`), Wavefront-Specialized Dual-Pipeline Hybrid Reconnection (`ResolveReplayReservoirs` +
 `ResolveHybridReplayReservoirs`, `-22.9%` total multi-bounce rays, `<= 89 MB` per-pipeline Subzero RSS vs `2.63 GB`

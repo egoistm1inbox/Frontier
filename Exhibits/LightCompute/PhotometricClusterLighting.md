@@ -2,7 +2,7 @@
 
 **TL;DR:** Audited and upgraded `Frontier/Engine/Rendering/` so clouds, height fog, atmosphere, celestial sun, lens
 flare, clustered **Analytic Point / Spot / IES**, and clustered **Emissive + Emissive-IES** luminaires build as
-first-class Engine targets (`FrontierAtmosphericOptics`, `FrontierPhotometricClustering`) and execute in $O(1)$
+first-class Engine targets (`FrontierAtmosphericOptics`, `FrontierPhotometricLights`) and execute in $O(1)$
 loop-free GPU shader stages (`PathReplayPhotometricClusters = 4u`, `PhotometricTightClusterMask = 128u`). Tight
 polar-cone culling eliminates **124/256** sphere-cluster cell overflows (`0` overflows, **`3.84x`** fewer GPU visits vs
 sphere-reach, **`7.78x`** vs exhaustive, `0.0000000` error), clustered height-fog scattering cuts volumetric light
@@ -26,7 +26,7 @@ and `253 MB` SwiftShader Subzero RSS.
 
 ## Analytic IES vs Emissive-IES vs Diffuse Emissive: Decision Matrix
 
-Both **Analytic IES** and **Emissive-IES** are first-class in `FrontierPhotometricClustering` and `PathReplayReservoir`
+Both **Analytic IES** and **Emissive-IES** are first-class in `FrontierPhotometricLights` and `PathReplayReservoir`
 because neither dominates every physical regime:
 
 | Criterion | Diffuse Emissive Facet | Clustered Analytic IES (`LightShape`) | Clustered Emissive-IES (`RadiantFacetPhotometry`) | Winner / Guidance |
