@@ -21,34 +21,20 @@ jobs:
 
       - name: Prepare UI packages, fonts, and Jolt v5.6.0
         run: |
-          set -o pipefail
-          {
-            sudo apt-get update
-            sudo apt-get install -y ninja-build zip
-            python -m pip install -r Automation/FontRequirements.txt
-            python Automation/PrepareUI.py
-            python Automation/PrepareFonts.py
-            bash Automation/BuildJolt.sh
-          } 2>&1 | tee prep.log || {
-            DETAIL=$(tail -n 35 prep.log | sed -e 's/%/%25/g' -e ':a;N;$!ba;s/\n/%0A/g')
-            echo "::error title=LinuxPrepFailed::$DETAIL"
-            exit 1
-          }
+          sudo apt-get update
+          sudo apt-get install -y ninja-build zip
+          python -m pip install -r Automation/FontRequirements.txt
+          python Automation/PrepareUI.py
+          python Automation/PrepareFonts.py
+          bash Automation/BuildJolt.sh
 
       - name: Build ProjectDrive (Editor + Runtime) & ProjectDriveShipping
         run: |
-          set -o pipefail
-          {
-            cmake -S Frontier/Projects/Project-Drive -B build-editor -G Ninja -DCMAKE_BUILD_TYPE=Release -DFRONTIER_CI_RELAX_WERROR=ON
-            cmake --build build-editor --config Release -j 4
-            cmake -S Frontier/Projects/Project-Drive -B build-shipping -G Ninja -DCMAKE_BUILD_TYPE=Release -DFRONTIER_PROJECT_DRIVE_SHIPPING=ON -DFRONTIER_CI_RELAX_WERROR=ON
-            cmake --build build-shipping --config Release -j 4
-            ./build-shipping/Shipping/ProjectDriveShipping --project-root Frontier/Projects/Project-Drive
-          } 2>&1 | tee build.log || {
-            DETAIL=$(tail -n 45 build.log | sed -e 's/%/%25/g' -e ':a;N;$!ba;s/\n/%0A/g')
-            echo "::error title=LinuxBuildFailed::$DETAIL"
-            exit 1
-          }
+          cmake -S Frontier/Projects/Project-Drive -B build-editor -G Ninja -DCMAKE_BUILD_TYPE=Release -DFRONTIER_CI_RELAX_WERROR=ON
+          cmake --build build-editor --config Release -j 4
+          cmake -S Frontier/Projects/Project-Drive -B build-shipping -G Ninja -DCMAKE_BUILD_TYPE=Release -DFRONTIER_PROJECT_DRIVE_SHIPPING=ON -DFRONTIER_CI_RELAX_WERROR=ON
+          cmake --build build-shipping --config Release -j 4
+          ./build-shipping/Shipping/ProjectDriveShipping --project-root Frontier/Projects/Project-Drive
 
       - name: Package ProjectDrive-linux-x86_64.zip
         run: |
@@ -59,19 +45,7 @@ jobs:
           cp -r Frontier/Projects/Project-Drive/Geometry dist/ProjectDrive/
           cp -r EngineContent/FontArchives dist/EngineContent/
           cp -r EngineContent/Icons dist/EngineContent/
-          cat > dist/README.txt <<'EOF'
-          Frontier Engine — Project-Drive (Linux x86_64)
-          ==============================================
-          Interactive Browser UI + Live 3D Viewport:
-            ./ProjectDrive/Binaries/ProjectDrive --serve 5174
-            Then open http://127.0.0.1:5174 in any browser.
-
-          Automated 10-Shot Verification & Captures:
-            ./ProjectDrive/Binaries/ProjectDrive --verify-and-capture ./Captures
-
-          Zero-Editor Shipping Runtime:
-            ./ProjectDrive/Binaries/ProjectDriveShipping
-          EOF
+          python -c "import pathlib; pathlib.Path('dist/README.txt').write_text('Frontier Engine - Project-Drive (Linux x86_64)\n==============================================\n1. Interactive Browser UI + Live 3D Viewport:\n   ./ProjectDrive/Binaries/ProjectDrive --serve 5174\n   Then open http://127.0.0.1:5174 in any browser.\n\n2. Automated 10-Shot Verification & Captures:\n   ./ProjectDrive/Binaries/ProjectDrive --verify-and-capture ./Captures\n\n3. Zero-Editor Shipping Runtime:\n   ./ProjectDrive/Binaries/ProjectDriveShipping\n')"
           (cd dist && zip -r ../ProjectDrive-linux-x86_64.zip .)
 
       - uses: actions/upload-artifact@v4
@@ -91,28 +65,14 @@ jobs:
       - name: Prepare UI packages & OFL FontArchives
         shell: pwsh
         run: |
-          $ErrorActionPreference = 'Continue'
           python -c "import pathlib; [p.write_bytes(p.read_bytes().replace(b'\r\n', b'\n')) for p in pathlib.Path('Automation/Patches').glob('*.patch')]"
-          $Out = & {
-            python -m pip install -r Automation/FontRequirements.txt
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-            python Automation/PrepareUI.py
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-            python Automation/PrepareFonts.py
-            exit $LASTEXITCODE
-          } 2>&1
-          $Code = $LASTEXITCODE
-          $Out | Write-Host
-          if ($Code -ne 0) {
-            $Detail = (($Out | Select-Object -Last 35) -join "`n").Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
-            Write-Host "::error title=WindowsPrepFailed::$Detail"
-            exit 1
-          }
+          python -m pip install -r Automation/FontRequirements.txt
+          python Automation/PrepareUI.py
+          python Automation/PrepareFonts.py
 
       - name: Build Jolt.lib + ProjectDrive.exe (Win32 + DirectX 11) + ProjectDriveShipping.exe
         shell: pwsh
         run: |
-          $ErrorActionPreference = 'Continue'
           $VsWhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
           $VisualStudio = & $VsWhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
           if (-not $VisualStudio) { Write-Host "::error::Visual Studio C++ tools not found"; exit 1 }
@@ -120,30 +80,8 @@ jobs:
           cmd /c "`"$VcVars`" >nul && set" | ForEach-Object {
             if ($_ -match '^([^=]+)=(.*)$') { Set-Item "Env:$($Matches[1])" $Matches[2] }
           }
-          $JoltLib = (Join-Path (Get-Location) 'ExternalPackages/jolt/lib/Release/Jolt.lib').Replace('\', '/')
-          $Out = & {
-            python Automation/BuildJoltWindows.py
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-            cmake -S Frontier/Projects/Project-Drive -B build-win-editor -G Ninja -DCMAKE_BUILD_TYPE=Release "-DFRONTIER_JOLT_LIBRARY=$JoltLib"
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-            cmake --build build-win-editor --config Release
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-            cmake -S Frontier/Projects/Project-Drive -B build-win-shipping -G Ninja -DCMAKE_BUILD_TYPE=Release -DFRONTIER_PROJECT_DRIVE_SHIPPING=ON "-DFRONTIER_JOLT_LIBRARY=$JoltLib"
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-            cmake --build build-win-shipping --config Release
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-            & "build-win-shipping/Shipping/ProjectDriveShipping.exe" --project-root Frontier/Projects/Project-Drive
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-            & "Frontier/Projects/Project-Drive/Binaries/ProjectDrive.exe" --project-root Frontier/Projects/Project-Drive --smoke-frames 6
-            exit $LASTEXITCODE
-          } 2>&1
-          $Code = $LASTEXITCODE
-          $Out | Write-Host
-          if ($Code -ne 0) {
-            $Detail = (($Out | Select-Object -Last 45) -join "`n").Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
-            Write-Host "::error title=WindowsBuildFailed::$Detail"
-            exit 1
-          }
+          python Automation/BuildWindowsCi.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Package ProjectDrive-windows-x86_64.zip
         shell: pwsh
@@ -155,15 +93,7 @@ jobs:
           Copy-Item -Recurse Frontier/Projects/Project-Drive/Geometry dist/ProjectDrive/
           Copy-Item -Recurse EngineContent/FontArchives dist/EngineContent/
           Copy-Item -Recurse EngineContent/Icons dist/EngineContent/
-          @"
-          Frontier Engine — Project-Drive (Windows 10/11 x64, DirectX 11, Zero External DLLs)
-          ====================================================================================
-          1. Extract all files keeping the ProjectDrive/ and EngineContent/ folders side-by-side.
-          2. Double-click ProjectDrive\Binaries\ProjectDrive.exe to launch the 1:1 Dark OLED
-             VehicleHMI Proving Grounds + ReSTIR GI + Dedicated Entity Studios desktop app!
-          3. Double-click (or click the popup icon on) any entity in the Outliner to open its
-             zero-copy Shared-Memory Dedicated Studio window (Pyro Plume, Fracture, 3D Object, etc.).
-          "@ | Set-Content -Encoding UTF8 dist/README.txt
+          python -c "import pathlib; pathlib.Path('dist/README.txt').write_text('Frontier Engine - Project-Drive (Windows 10/11 x64, DirectX 11, Zero External DLLs)\n====================================================================================\n1. Extract all files keeping the ProjectDrive/ and EngineContent/ folders side-by-side.\n2. Double-click ProjectDrive\\Binaries\\ProjectDrive.exe to launch the 1:1 Dark OLED\n   VehicleHMI Proving Grounds + ReSTIR GI + Dedicated Entity Studios desktop app!\n3. Double-click (or click the popup icon on) any entity in the Outliner to open its\n   zero-copy Shared-Memory Dedicated Studio window (Pyro Plume, Fracture, 3D Object, etc.).\n')"
           Compress-Archive -Path dist/* -DestinationPath ProjectDrive-windows-x86_64.zip -Force
 
       - uses: actions/upload-artifact@v4

@@ -263,7 +263,7 @@ else()
         FrontierNetworking
         Threads::Threads)
     if(WIN32)
-        target_link_libraries(ProjectDriveApp PRIVATE d3d11 dxgi dwmapi)
+        target_link_libraries(ProjectDriveApp PRIVATE d3d11 dxgi d3dcompiler dwmapi imm32 user32 gdi32 shell32)
     endif()
     set_target_properties(ProjectDriveApp PROPERTIES
         OUTPUT_NAME "ProjectDrive"
