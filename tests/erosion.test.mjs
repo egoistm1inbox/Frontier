@@ -483,9 +483,9 @@ test('3D Rocks are drawn at their CPU rigid-body centre and never sink below the
       const o = k * 16;
       const cx = arr[o + 12], cy = arr[o + 13], cz = arr[o + 14];
       assert.ok(Number.isFinite(cx + cy + cz), 'Rock centre must be finite');
-      const ground = sys.sampleTerrain(cx, cz).totalH;
-      // Centre of mass must never sit below the surface it rests on (contact keeps corners above ground)
-      assert.ok(cy >= ground - 0.05, `Rock centre ${cy.toFixed(2)} must not sink below terrain ${ground.toFixed(2)}`);
+      const rigidFloor = sys.sampleTerrain(cx, cz).bedrock;
+      // Rock centre must never sink through the rigid bedrock floor; soft sediment and snow may embed it
+      assert.ok(cy >= rigidFloor - 0.05, `Rock centre ${cy.toFixed(2)} must not sink below bedrock ${rigidFloor.toFixed(2)}`);
     }
   }
 });

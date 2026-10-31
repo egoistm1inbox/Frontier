@@ -622,6 +622,51 @@ export function createGeologicalSdfEvaluator(macro, params, rng) {
     };
   }
 
+  // Chemical weathering stains layered over any archetype's albedo (iron-oxide bleed & copper patina).
+  // Iron: dark rust-brown streaks run down vertical faces, fed from sheltered cavities and ledges.
+  // Copper: blue-green verdigris patches on upward-facing, sheltered surfaces. Both are noise-driven.
+  const ironAmt = clamp(params.ironStain ?? 0, 0, 1);
+  const copperAmt = clamp(params.copperPatina ?? 0, 0, 1);
+  if (ironAmt > 0.001 || copperAmt > 0.001) {
+    const baseEval = evalRockColor;
+    const ironFreq = mesoFreq * 1.6;
+    const copperFreq = mesoFreq * 0.9;
+    const toSrgb = (v) => Math.pow(Math.max(0, v), 1 / 2.2);
+    evalRockColor = (wx, wy, wz, nx, ny, nz, ao, cav, outRgb) => {
+      if (baseEval) {
+        baseEval(wx, wy, wz, nx, ny, nz, ao, cav, outRgb);
+      } else {
+        // Neutral stone base for archetypes without a bespoke palette (sRGB ~0.5)
+        outRgb[0] = outRgb[1] = outRgb[2] = 0.214;
+      }
+      let r = toSrgb(outRgb[0]), g = toSrgb(outRgb[1]), b = toSrgb(outRgb[2]);
+
+      // Seepage: sheltered, cavity-rich zones are where water sits and drips
+      const seep = clamp(cav * 0.6 + (1.0 - ao) * 0.5, 0, 1);
+
+      // Iron-oxide bleed: vertically stretched noise gives streaks that run down the face
+      const streakN = 0.5 + 0.5 * clamp(scalarField3D(wx * ironFreq, wy * ironFreq * 0.07, wz * ironFreq, restSalt + 733), -1, 1);
+      const vertFace = clamp(1.0 - Math.abs(ny), 0, 1);
+      const streak = smoothstep(0.46, 0.80, streakN) * (0.45 + 0.55 * seep) * vertFace;
+      const ironK = clamp(ironAmt * streak * 1.25, 0, 0.92);
+      r = r * (1 - ironK) + 0.26 * ironK;
+      g = g * (1 - ironK) + 0.12 * ironK;
+      b = b * (1 - ironK) + 0.06 * ironK;
+
+      // Copper patina (verdigris): blotchy patches on upward-facing, sheltered rock
+      const patchN = 0.5 + 0.5 * clamp(scalarField3D(wx * copperFreq, wy * copperFreq, wz * copperFreq, restSalt + 911), -1, 1);
+      const upFace = smoothstep(0.35, 0.80, ny);
+      const copperK = clamp(copperAmt * smoothstep(0.52, 0.78, patchN) * upFace * (0.5 + 0.5 * seep) * 1.4, 0, 0.85);
+      r = r * (1 - copperK) + 0.17 * copperK;
+      g = g * (1 - copperK) + 0.52 * copperK;
+      b = b * (1 - copperK) + 0.48 * copperK;
+
+      outRgb[0] = Math.pow(clamp(r, 0.02, 0.92), 2.2);
+      outRgb[1] = Math.pow(clamp(g, 0.02, 0.92), 2.2);
+      outRgb[2] = Math.pow(clamp(b, 0.02, 0.92), 2.2);
+    };
+  }
+
   return {
     detailMargin,
     buildBrickContext,

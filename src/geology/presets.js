@@ -654,6 +654,8 @@ export function resolveParams(input = {}) {
     quality: input.quality ?? 'medium',
     decimation: input.decimation ?? 1.0,
     rainErosion: input.rainErosion ?? 0.5,
+    ironStain: input.ironStain ?? 0.35,
+    copperPatina: input.copperPatina ?? 0.12,
     ...preset.params,
     ...input,
   };

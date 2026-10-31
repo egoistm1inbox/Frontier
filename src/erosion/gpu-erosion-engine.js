@@ -316,6 +316,7 @@ export class GpuErosionEngine {
     this.physTex = createDataTexture(gl, PHYS_RES, PHYS_RES, gl.RGBA32F, gl.RGBA, gl.FLOAT);
     this.fboPhys = createFbo(gl, [this.physTex]);
     this.physBuf = new Float32Array(PHYS_RES * PHYS_RES * 4);
+    this.physSnowBuf = new Float32Array(PHYS_RES * PHYS_RES * 4);
   }
 
   /**
@@ -335,10 +336,15 @@ export class GpuErosionEngine {
     gl.uniform1f(gl.getUniformLocation(this.progTelemetry, 'uGridRes'), this.gridRes);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     gl.readPixels(0, 0, PHYS_RES, PHYS_RES, gl.RGBA, gl.FLOAT, this.physBuf);
+
+    // Snow (depth, ice) on the same grid: soft bearing material for boulders
+    this._bindTex(this.progTelemetry, 'uTerrainTex', this.snowTex[this.snowIdx], 0);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    gl.readPixels(0, 0, PHYS_RES, PHYS_RES, gl.RGBA, gl.FLOAT, this.physSnowBuf);
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 
     this.rockCalving.sampleShiftTexels = (0.5 * PHYS_RES) / this.gridRes;
-    this.rockCalving.updateTerrainSnapshot(this.physBuf, PHYS_RES, worldSpan);
+    this.rockCalving.updateTerrainSnapshot(this.physBuf, PHYS_RES, worldSpan, this.physSnowBuf);
     return this.physBuf;
   }
 

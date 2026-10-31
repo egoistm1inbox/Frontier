@@ -27,6 +27,8 @@ const SLIDER_SCHEMA = {
   ],
   detail: [
     { key: 'rainErosion',       label: 'Rain Erosion (Particles)', min: 0.0, max: 1.0, step: 0.02, fmt: (v) => `${Math.round(v * 100)}%` },
+    { key: 'ironStain',         label: 'Iron Bleed Staining',    min: 0.0, max: 1.0, step: 0.02, fmt: (v) => `${Math.round(v * 100)}%` },
+    { key: 'copperPatina',      label: 'Copper Verdigris Patina', min: 0.0, max: 1.0, step: 0.02, fmt: (v) => `${Math.round(v * 100)}%` },
     { key: 'cleavageSharpness', label: 'Cleavage Planarity',     min: 0.15, max: 1.0, step: 0.02, fmt: (v) => `${Math.round(v * 100)}%` },
     { key: 'facetAmplitude',    label: 'Stepped Scarplet Depth', min: 0.0,  max: 1.0, step: 0.02, fmt: (v) => `${Math.round(v * 100)}%` },
     { key: 'edgeWear',          label: 'Chisel Chamfer & Wear',  min: 0.0,  max: 1.0, step: 0.02, fmt: (v) => `${Math.round(v * 100)}%` },
@@ -488,6 +490,8 @@ function selectArchetype(archId) {
     quality: state.params.quality,
     decimation: state.params.decimation,
     rainErosion: state.params.rainErosion,
+    ironStain: state.params.ironStain,
+    copperPatina: state.params.copperPatina,
   });
   document.getElementById('active-category').textContent = preset.category;
   document.querySelectorAll('#archetype-list .archetype-card').forEach((el) => {

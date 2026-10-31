@@ -176,6 +176,13 @@ const SLEEP_LINEAR = 0.10;        // m/s (visually motionless)
 const SLEEP_ANGULAR = 0.15;       // rad/s
 const SLEEP_TIME = 0.8;           // seconds at rest before sleeping
 const WAKE_CLEARANCE = 0.12;      // ground dropping away this far under a sleeper wakes it
+// Soft ground: sediment and snow take boulders on bearing springs, so they settle to a depth set by their weight.
+// Sink depth ~ g * height / kSoft (bearing pressure ~ weight / footprint ~ height). kSoft values give a
+// sink of roughly 10% of boulder height in sediment and 30% in fresh snow.
+const SOFT_K_SEDIMENT = 98.0;
+const SOFT_K_SNOW = 33.0;
+const SOFT_SNOW_FULL = 0.3;        // snow depth (m) at which the bearing is fully snow-soft
+const SOFT_DAMP_ZETA = 0.7;
 const BURY_FRAC = 0.9;             // fraction of a boulder's height under ground before it is buried
 const UNBURY_FRAC = 0.5;           // ground must fall back below this fraction to release it
 const ABRASION_PER_METRE = 0.006;  // metres of bedrock scoured per metre a boulder slides on the ground
@@ -270,13 +277,20 @@ export class RockCalvingSystem {
    * Rooted outcrops follow the ground, undercut outcrops fall, and sleeping boulders wake if the
    * ground under them was removed.
    */
-  updateTerrainSnapshot(rgbaGrid, gridRes = 128, worldSpan = 512.0) {
+  updateTerrainSnapshot(rgbaGrid, gridRes = 128, worldSpan = 512.0, snowRgba = null) {
     this.gridRes = gridRes;
     this.worldSpan = worldSpan;
     if (this.heightGrid.length !== rgbaGrid.length) {
       this.heightGrid = new Float32Array(rgbaGrid.length);
     }
     this.heightGrid.set(rgbaGrid);
+    // Snow depth (channel r) sits on the ground as soft bearing material; null means no snow
+    if (snowRgba && snowRgba.length === rgbaGrid.length) {
+      if (!this.snowGrid || this.snowGrid.length !== snowRgba.length) this.snowGrid = new Float32Array(snowRgba.length);
+      this.snowGrid.set(snowRgba);
+    } else {
+      this.snowGrid = null;
+    }
     this.hasHeightSnapshot = true;
     if (!this.scourGrid || this.scourRes !== gridRes) {
       this.scourGrid = new Float32Array(gridRes * gridRes);
@@ -336,6 +350,10 @@ export class RockCalvingSystem {
     out.fine = g[i00 + 2] * w00 + g[i10 + 2] * w10 + g[i01 + 2] * w01 + g[i11 + 2] * w11;
     out.water = g[i00 + 3] * w00 + g[i10 + 3] * w10 + g[i01 + 3] * w01 + g[i11 + 3] * w11;
     out.totalH = out.bedrock + out.coarse + out.fine;
+    const sg = this.snowGrid;
+    out.snow = sg ? sg[i00] * w00 + sg[i10] * w10 + sg[i01] * w01 + sg[i11] * w11 : 0.0;
+    // Visible surface top includes snow; rigid support is bedrock only (sediment and snow are soft)
+    out.surfaceH = out.totalH + out.snow;
 
     const cellM = span / N;
     const h00 = g[i00] + g[i00 + 1] + g[i00 + 2];
@@ -705,7 +723,7 @@ export class RockCalvingSystem {
       const c = this._cornerWorld(r, m, i);
       const px = r.x + c[0], py = r.y + c[1], pz = r.z + c[2];
       this._sampleInto(px, pz, st);
-      minC = Math.min(minC, py - st.totalH);
+      minC = Math.min(minC, py - st.surfaceH);
     }
     return minC;
   }
@@ -713,7 +731,7 @@ export class RockCalvingSystem {
   /** Returns true while the boulder is buried. Hysteresis keeps it buried until the ground falls clearly. */
   _updateBurial(r) {
     const s = this.sampleTerrain(r.x, r.z);
-    const frac = (s.totalH - (r.y - r.hy)) / Math.max(1e-3, 2 * r.hy);
+    const frac = (s.surfaceH - (r.y - r.hy)) / Math.max(1e-3, 2 * r.hy);
     if (!r.buried) {
       if (frac > BURY_FRAC) {
         r.buried = true;
@@ -845,18 +863,84 @@ export class RockCalvingSystem {
       r.wx *= wd; r.wy *= wd; r.wz *= wd;
     }
 
+    // 1b. Soft bearing: corners inside sediment or snow are held by springs whose force builds with depth.
+    // Each boulder sinks until spring force balances its weight; off-centre loads tilt it via torque.
+    const st2 = this._scratch2 || (this._scratch2 = {});
+    for (let k = 0; k < awakeList.length; k++) {
+      const r = awakeList[k];
+      r.softSupport = false;
+      const m = quatToMat(r.q);
+      const hy = Math.max(0.2, r.hy);
+      const invInertia = 3.0 / Math.max(1e-6, r.hx * r.hx + r.hy * r.hy + r.hz * r.hz);
+      let anySoft = false;
+      let snowAcc = 0;
+      const soft = [];
+      for (let i = 0; i < 8; i++) {
+        const c = this._cornerWorld(r, m, i);
+        const px = r.x + c[0], py = r.y + c[1], pz = r.z + c[2];
+        this._sampleInto(px, pz, st2);
+        if (py < st2.surfaceH && py > st2.bedrock) {
+          soft.push({ c, pS: st2.surfaceH - py, snow: st2.snow, nx: st2.nx, ny: st2.ny, nz: st2.nz });
+          snowAcc += st2.snow;
+          anySoft = true;
+        }
+      }
+      if (!anySoft) continue;
+      r.softSupport = true;
+      const snowFrac = clamp((snowAcc / soft.length) / SOFT_SNOW_FULL, 0, 1);
+      const kSoft = SOFT_K_SEDIMENT * (1 - snowFrac) + SOFT_K_SNOW * snowFrac;
+      const kA = kSoft / hy;
+      let sumA = 0;
+      let nAvgX = 0, nAvgY = 0, nAvgZ = 0;
+      for (const sc of soft) {
+        // Bearing acts along the local surface normal, so slopes push back perpendicular to the ground
+        const a = kA * sc.pS / 4.0;
+        sumA += a;
+        nAvgX += sc.nx; nAvgY += sc.ny; nAvgZ += sc.nz;
+        r.vx += a * sc.nx * h;
+        r.vy += a * sc.ny * h;
+        r.vz += a * sc.nz * h;
+        // Torque about the centre: tau = c x (a n)
+        const ax = a * sc.nx, ay = a * sc.ny, az = a * sc.nz;
+        r.wx += (sc.c[1] * az - sc.c[2] * ay) * invInertia * h;
+        r.wy += (sc.c[2] * ax - sc.c[0] * az) * invInertia * h;
+        r.wz += (sc.c[0] * ay - sc.c[1] * ax) * invInertia * h;
+      }
+      // Bearing damping along the mean normal (critical-ish), then Coulomb friction against the bearing normal
+      const nLen = Math.max(1e-6, Math.hypot(nAvgX, nAvgY, nAvgZ));
+      const nxA = nAvgX / nLen, nyA = nAvgY / nLen, nzA = nAvgZ / nLen;
+      const vnDamp = (1.0 - Math.exp(-2.0 * SOFT_DAMP_ZETA * Math.sqrt(kA) * h));
+      const vnow = r.vx * nxA + r.vy * nyA + r.vz * nzA;
+      if (vnow > 0) {
+        r.vx -= vnow * nxA * vnDamp;
+        r.vy -= vnow * nyA * vnDamp;
+        r.vz -= vnow * nzA * vnDamp;
+      }
+      // Friction acts on the full tangential velocity (sliding down a slope has a vertical part too)
+      const vnN = r.vx * nxA + r.vy * nyA + r.vz * nzA;
+      const tvx = r.vx - vnN * nxA, tvy = r.vy - vnN * nyA, tvz = r.vz - vnN * nzA;
+      const vt = Math.hypot(tvx, tvy, tvz);
+      if (vt > 1e-6 && sumA > 0) {
+        const f = Math.min(vt, r.friction * sumA * h);
+        r.vx -= (tvx / vt) * f;
+        r.vy -= (tvy / vt) * f;
+        r.vz -= (tvz / vt) * f;
+      }
+    }
+
     // 2. Build contact list against the terrain (corners below the ground surface)
     const contacts = [];
     for (let k = 0; k < awakeList.length; k++) {
       const r = awakeList[k];
       const m = quatToMat(r.q);
-      r.touching = false;
+      r.touching = !!r.softSupport;
       r.nCont = 0;
       for (let i = 0; i < 8; i++) {
         const c = this._cornerWorld(r, m, i);
         const px = r.x + c[0], py = r.y + c[1], pz = r.z + c[2];
         this._sampleInto(px, pz, st);
-        const pen = st.totalH - py;
+        // Rigid support is bedrock; soft sediment and snow are handled by the bearing springs above
+        const pen = st.bedrock - py;
         const margin = 0.03 + 2.0 * h * Math.hypot(r.vx, r.vy, r.vz);
         if (pen > -margin) {
           const mu = st.water > 0.08 ? Math.min(r.friction, 0.38) : r.friction;

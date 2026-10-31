@@ -112,7 +112,11 @@ test('All 25 geological archetypes synthesize grounded, valid, watertight-grade 
       assert.equal(hasCustomAlbedo, true, `${key}: must emit multilayered per-vertex albedos`);
       assert.equal(albedos.length, positions.length, `${key}: albedos length matches positions`);
     } else {
-      assert.equal(hasCustomAlbedo, false, `${key}: retains clean flat lithology material by default`);
+      // Chemical stains (iron bleed / copper patina) are on by default and emit per-vertex albedo;
+      // with both switched off the archetype keeps its clean flat material.
+      assert.equal(hasCustomAlbedo, true, `${key}: default chemical staining must emit per-vertex albedo`);
+      const flat = generateRockFormation({ archetype: key, seed: 4029, quality: 'fast', ironStain: 0, copperPatina: 0 });
+      assert.equal(flat.mesh.hasCustomAlbedo, false, `${key}: retains clean flat lithology material with stains off`);
     }
 
     assert.ok(res.stats.triangles > 1500, `${key}: expected > 1500 triangles, got ${res.stats.triangles}`);
