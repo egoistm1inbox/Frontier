@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Frontier Studio — Non-Destructive Terrain Pipeline &amp; 3D SDF Editor</title>
+  <link rel="stylesheet" href="/src/app/style.css" />
+</head>
+<body>
+  <div id="app" class="tp-studio">
+    <!-- =====================================================================
+         FRONTIER STUDIO WORKSPACE HEADER (43px, #0b0b0b)
+         ===================================================================== -->
+    <header class="tp-workspace-header">
+      <div class="tp-header-left">
+        <div class="tp-studio-mark">
+          <span class="tp-mark-glyph">◆</span>
+          <span class="tp-mark-text">Frontier</span>
+        </div>
+        <span class="tp-header-sep"></span>
+        <span class="tp-doc-name" id="tp-doc-title">Icelandic Glacial Highlands</span>
+      </div>
+
+      <div class="tp-workspace-switch" id="studio-mode-switcher">
+        <button id="mode-btn-erosion" class="tp-ws-btn active" type="button">
+          <span class="tp-ws-dot"></span>
+          Terrain Studio
+        </button>
+        <button id="mode-btn-rock" class="tp-ws-btn" type="button">
+          Rock &amp; Cliff Studio
+        </button>
+      </div>
+
+      <div class="tp-header-right" id="tp-terrain-header-actions">
+        <button id="btn-er-reset" class="tp-hdr-btn" type="button" title="Re-evaluate full bottom-to-top pipeline">↻ Re-evaluate</button>
+        <button id="btn-er-play" class="tp-hdr-btn" type="button" title="Toggle continuous live erosion ticking [Space]">▶ Live Sim</button>
+        <span class="tp-header-sep"></span>
+        <button id="btn-er-export-glb" class="tp-hdr-btn primary" type="button" title="Export 3D Terrain Mesh (.GLB)">Export .GLB</button>
+        <button id="btn-er-export-obj" class="tp-hdr-btn" type="button" title="Export Wavefront Mesh (.OBJ)">.OBJ</button>
+      </div>
+    </header>
+
+    <!-- =====================================================================
+         3-COLUMN DOCKED FRONTIER EDITOR LAYOUT
+         ===================================================================== -->
+    <div class="tp-layout">
+      <!-- 1. LEFT DOCK: LAYER STACK -->
+      <aside class="tp-dock tp-layer-dock">
+        <div class="tp-tab-strip">
+          <div class="tp-document-tab active">
+            <span id="tp-left-tab-label">Layer stack</span>
+          </div>
+        </div>
+
+        <!-- TERRAIN LAYER STACK PANE -->
+        <div id="left-erosion-panels" class="tp-pane-scroll">
+          <div class="tp-pane-heading">
+            <div class="tp-pane-title-wrap">
+              <h1>Layer stack</h1>
+              <span class="tp-count-pill" id="tp-layer-count">7</span>
+            </div>
+            <div class="tp-add-menu-anchor">
+              <button type="button" class="tp-add-btn" id="tp-btn-add-layer" title="Add Landform, SDF Cave, Sculpt, Simulation, Spline, Rock or Vegetation Layer">+</button>
+              <div class="tp-add-popover" id="tp-add-layer-menu" hidden></div>
+            </div>
+          </div>
+
+          <div class="tp-layer-stats">
+            <div class="tp-stat-card">
+              <div class="tp-stat-top">
+                <span class="tp-stat-disc active"></span>
+                <span class="tp-stat-label">Active</span>
+              </div>
+              <div class="tp-stat-num" id="tp-stat-visible">7</div>
+            </div>
+            <div class="tp-stat-card">
+              <div class="tp-stat-top">
+                <span class="tp-stat-disc muted"></span>
+                <span class="tp-stat-label">Muted</span>
+              </div>
+              <div class="tp-stat-num" id="tp-stat-hidden">0</div>
+            </div>
+          </div>
+
+          <label class="tp-layer-search">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="4.5"/><path d="m10.5 10.5 3.5 3.5"/></svg>
+            <input type="text" id="tp-layer-search-input" placeholder="Filter stack operations..." autocomplete="off" />
+          </label>
+
+          <div class="tp-layer-order top">
+            <span>TOP — EVALUATED LAST</span>
+            <em>↑ Bottom-Up Pipeline</em>
+          </div>
+
+          <div class="tp-layer-list" id="tp-layer-list"></div>
+
+          <div class="tp-layer-order bottom">
+            <span>BOTTOM — EVALUATED FIRST (BASE)</span>
+          </div>
+        </div>
+
+        <!-- 3D ROCK STUDIO LEFT PANE (Preserved cleanly behind Workspace Switcher) -->
+        <div id="left-rock-panels" class="tp-pane-scroll hidden-panel">
+          <section class="panel-section">
+            <div class="section-header">
+              <span>FORMATION ARCHETYPE</span>
+              <span class="tag-pill" id="active-category">Arch</span>
+            </div>
+            <div id="cat-filter-bar" class="cat-filter-bar"></div>
+            <div id="archetype-list" class="archetype-grid"></div>
+          </section>
+
+          <section class="panel-section">
+            <div class="section-header">
+              <span>CURVE DRAWING &amp; 3D GIZMO</span>
+              <span class="tag-pill" id="curve-mode-pill">Off</span>
+            </div>
+            <div class="export-buttons">
+              <button id="btn-curve-draw" class="btn-primary" type="button">Draw Arch</button>
+              <button id="btn-curve-reset" class="btn-secondary" type="button">Reset</button>
+            </div>
+            <div class="export-buttons" style="margin-top:6px;">
+              <button id="btn-curve-branch" class="btn-secondary" type="button">+ Branch</button>
+              <button id="btn-curve-delete" class="btn-secondary" type="button">− Point</button>
+            </div>
+            <div class="slider-group" style="margin-top:8px;">
+              <div class="slider-label">
+                <span>Point Boulder Radius</span>
+                <output id="out-curve-radius">1.00×</output>
+              </div>
+              <input id="slider-curve-radius" type="range" min="0.4" max="2.4" step="0.05" value="1.0" />
+            </div>
+            <p class="export-note" id="curve-point-readout" style="margin-bottom:0;">Crown P3</p>
+          </section>
+
+          <section class="panel-section">
+            <div class="section-header">
+              <span>PROCEDURAL SEED</span>
+              <button id="btn-random-seed" class="btn-mini accent" type="button">Randomize</button>
+            </div>
+            <div class="seed-row">
+              <input id="input-seed" type="number" step="1" value="4029" />
+              <button id="btn-apply-seed" class="btn-mini" type="button">Apply</button>
+            </div>
+            <div id="seed-strip" class="seed-strip"></div>
+          </section>
+
+          <section class="panel-section">
+            <div class="section-header"><span>STUDIO SHADING &amp; RIG</span></div>
+            <label class="field-row">
+              <span>Surface Mode</span>
+              <select id="select-shading">
+                <option value="lithology">Lithology &amp; Strata</option>
+                <option value="flat-stone">Neutral Grey Stone</option>
+                <option value="pure-clay">Pure Sculptor Clay</option>
+                <option value="ao">Baked Volumetric AO</option>
+                <option value="curvature">Cavity / Edge Mask</option>
+                <option value="normals">World Crease Normals</option>
+              </select>
+            </label>
+            <label class="field-row" id="row-lithology">
+              <span>Stone Tone</span>
+              <select id="select-lithology"></select>
+            </label>
+            <label class="field-row">
+              <span>Stone Fabric</span>
+              <select id="select-rock-fabric">
+                <option value="0">Clean Studio Stone</option>
+                <option value="1">Columnar Basalt</option>
+                <option value="2">Aeolian Cross-Bedding</option>
+                <option value="3">Tafoni Honeycomb</option>
+                <option value="4">Foliated Gneiss</option>
+              </select>
+            </label>
+            <div class="slider-group">
+              <div class="slider-label"><span>Sun Azimuth</span><output id="out-sun-az">42°</output></div>
+              <input id="slider-sun-az" type="range" min="-180" max="180" step="1" value="42" />
+            </div>
+            <div class="slider-group">
+              <div class="slider-label"><span>Sun Elevation</span><output id="out-sun-el">44°</output></div>
+              <input id="slider-sun-el" type="range" min="8" max="85" step="1" value="44" />
+            </div>
+            <div class="toggle-grid">
+              <label class="check-pill"><input id="chk-human" type="checkbox" checked /><span>1.8m Ref</span></label>
+              <label class="check-pill"><input id="chk-wireframe" type="checkbox" /><span>Wireframe</span></label>
+              <label class="check-pill"><input id="chk-turntable" type="checkbox" /><span>Turntable</span></label>
+            </div>
+          </section>
+        </div>
+      </aside>
+
+      <!-- 2. CENTER DOCK: 3D VIEWPORT + SHADING BAR + AUTHORING BAR + PRESET SHELF -->
+      <main class="tp-dock tp-viewport-dock">
+        <div class="tp-tab-strip">
+          <div class="tp-document-tab viewport-tab active">
+            <span>Viewport</span>
+          </div>
+        </div>
+
+        <!-- TERRAIN VIEWPORT SHADING & AUTHORING BARS (Explicitly separate from Layer Stack!) -->
+        <div id="tp-terrain-bars">
+          <div class="tp-viewport-toolbar">
+            <div class="tp-toolbar-group">
+              <span class="tp-bar-label">Derived Shading</span>
+              <select id="tp-select-shading" class="tp-pill-select">
+                <option value="0">Derived Geology (AO + Strata + Sediment + Flow)</option>
+                <option value="1">AO &amp; Ridge Protrusions</option>
+                <option value="2">3D Rock Hardness &amp; Competency</option>
+                <option value="3">Drainage Flow &amp; Basin Water</option>
+                <option value="4">Sedimentation (Talus vs Alluvium)</option>
+                <option value="5">Selected Layer B&amp;W Mask</option>
+                <option value="6">Pure Sculptor Clay</option>
+                <option value="7">Cryosphere (Snow &amp; Glacier Ice)</option>
+                <option value="8">2.5D Hydrology &amp; Basins</option>
+              </select>
+            </div>
+
+            <div class="tp-toolbar-group">
+              <span class="tp-bar-label">Palette</span>
+              <select id="tp-select-palette" class="tp-pill-select"></select>
+            </div>
+          </div>
+
+          <div class="tp-authoring-bar" id="tp-author-tools">
+            <span class="tp-bar-label">Authoring</span>
+            <button type="button" data-tool="navigate" class="active" title="Orbit (LMB), Pan (MMB/Alt+LMB), Fly (RMB + WASD/QE)">Orbit / Fly</button>
+            <button type="button" data-tool="sculpt-add" title="Non-destructively raise terrain in active Sculpt Layer">+ Raise</button>
+            <button type="button" data-tool="sculpt-remove" title="Non-destructively carve terrain in active Sculpt Layer">− Carve</button>
+            <button type="button" data-tool="sculpt-smooth" title="Smooth terrain inside active Sculpt Layer">≈ Smooth</button>
+            <button type="button" data-tool="cave-carve" title="Subtract real 3D volumetric SDF caves &amp; overhangs!">◔ Carve 3D Cave</button>
+            <button type="button" data-tool="cave-fill" title="Fill 3D SDF cave volume">● Fill Cave</button>
+            <button type="button" data-tool="spline-edit" title="Drag 3D spline control handles directly on terrain">✎ Edit Spline</button>
+          </div>
+        </div>
+
+        <!-- 3D CANVAS STAGE -->
+        <div class="viewport-stage">
+          <div id="progress-bar" class="progress-bar hidden">
+            <div id="progress-fill" class="progress-fill"></div>
+          </div>
+
+          <div class="tp-scene-caption" id="tp-scene-caption">
+            PIPELINE · EVALUATING BOTTOM → TOP
+          </div>
+
+          <div class="tp-scene-nav" id="tp-scene-nav">
+            <button type="button" id="btn-er-frame" title="Frame full terrain [F]">Overview</button>
+            <button type="button" id="btn-cam-cliff" title="Frame low cliff &amp; SDF cave perspective">Cliff &amp; Caves</button>
+            <button type="button" id="btn-cam-top" title="Top-down orthographic-style plan view">Top Plan</button>
+          </div>
+
+          <!-- Rock Studio HUD & Camera Bar (only visible in Rock Studio mode) -->
+          <div id="hud-rock" class="hud-top hidden-panel">
+            <div class="hud-stat"><span class="hud-k">DIMS</span><span class="hud-v" id="stat-dims">—</span></div>
+            <div class="hud-stat"><span class="hud-k">TRIS</span><span class="hud-v" id="stat-tris">—</span></div>
+            <div class="hud-stat"><span class="hud-k">VERTS</span><span class="hud-v" id="stat-verts">—</span></div>
+            <div class="hud-stat"><span class="hud-k">LITHONS</span><span class="hud-v" id="stat-blocks">—</span></div>
+            <div class="hud-stat"><span class="hud-k">TIME</span><span class="hud-v" id="stat-time">—</span></div>
+          </div>
+
+          <div id="status-toast" class="status-toast hidden">Synthesizing...</div>
+
+          <!-- WebGL2 Terrain Pipeline Canvas -->
+          <canvas id="erosion-canvas" class="erosion-canvas"></canvas>
+
+          <!-- Interactive 3D Spline Control-Point SVG Overlay -->
+          <svg id="spline-gizmo-svg" class="tp-spline-svg"></svg>
+
+          <!-- Three.js 3D Rock Studio Container -->
+          <div id="viewport-canvas" class="viewport-canvas hidden-panel"></div>
+
+          <div id="rock-camera-bar" class="camera-bar hidden-panel">
+            <button data-cam="hero" class="cam-btn" type="button">3/4 Hero [F]</button>
+            <button data-cam="front" class="cam-btn" type="button">Front Face</button>
+            <button data-cam="low" class="cam-btn" type="button">Low Eye</button>
+            <button data-cam="side" class="cam-btn" type="button">Side</button>
+            <button data-cam="top" class="cam-btn" type="button">Top</button>
+          </div>
+        </div>
+
+        <!-- VIEWPORT TELEMETRY FOOTER -->
+        <footer class="tp-viewport-footer" id="hud-erosion">
+          <span>GRID <strong id="er-stat-grid">512²</strong></span>
+          <span>PASSES <strong id="er-stat-steps">8</strong></span>
+          <span>EVAL <strong id="er-stat-eval">0.0 ms</strong></span>
+          <span>SDF CAVES <strong id="er-stat-caves">0 tris</strong></span>
+          <span>TALUS <strong id="er-stat-cut">0 m³</strong></span>
+          <span>ALLUVIUM <strong id="er-stat-sed">0 m³</strong></span>
+          <span>WATER <strong id="er-stat-water">0 m³</strong></span>
+          <span>WASD+QE FLY · RMB LOOK · <strong id="er-stat-fps">60 FPS</strong></span>
+        </footer>
+
+        <!-- COLLAPSIBLE PRESET STACK RECIPES SHELF (.asset-content-browser / .cb-*) -->
+        <section class="asset-content-browser" id="cb-shelf-root">
+          <div class="cb-bar">
+            <button type="button" class="cb-toggle-btn open" id="cb-btn-toggle">
+              <span class="cb-chevron">▾</span>
+              <span>Stack Preset Recipes (19 Landscapes · Seed #4029)</span>
+            </button>
+            <span class="cb-hint">Loading a preset populates the full non-destructive layer stack</span>
+          </div>
+          <div class="cb-drawer" id="cb-shelf-drawer">
+            <div class="cb-preset-grid" id="cb-preset-grid"></div>
+          </div>
+        </section>
+      </main>
+
+      <!-- 3. RIGHT DOCK: CONTEXTUAL LAYER INSPECTOR -->
+      <aside class="tp-dock tp-inspector-dock">
+        <div class="tp-tab-strip">
+          <div class="tp-document-tab active">
+            <span>Inspector</span>
+          </div>
+        </div>
+
+        <!-- TERRAIN LAYER INSPECTOR -->
+        <div id="right-erosion-panels" class="tp-pane-scroll">
+          <div id="tp-inspector-content" class="tp-inspector-body"></div>
+        </div>
+
+        <!-- 3D ROCK STUDIO INSPECTOR (Preserved cleanly behind Workspace Switcher) -->
+        <div id="right-rock-panels" class="tp-pane-scroll hidden-panel">
+          <section class="panel-section">
+            <div class="section-header"><span>VOXEL DENSITY &amp; TOPOLOGY</span></div>
+            <div class="quality-seg" id="quality-buttons">
+              <button data-q="fast" type="button">Fast</button>
+              <button data-q="medium" class="active" type="button">Interactive</button>
+              <button data-q="high" type="button">High</button>
+              <button data-q="ultra" type="button">Ultra</button>
+            </div>
+            <label class="field-row" style="margin-top:8px;">
+              <span>QEM Target</span>
+              <select id="select-decimation">
+                <option value="1">Source Mesh (100%)</option>
+                <option value="0.55">Clean Planar (55%)</option>
+                <option value="0.30">Game LOD0 (30%)</option>
+                <option value="0.14">Game LOD1 (14%)</option>
+                <option value="0.06">Game LOD2 (6%)</option>
+              </select>
+            </label>
+          </section>
+
+          <section class="panel-section">
+            <div class="section-header">
+              <span>TECTONICS &amp; BEDDING</span>
+              <button id="btn-reset-params" class="btn-mini" type="button">Reset</button>
+            </div>
+            <div id="sliders-tectonics"></div>
+          </section>
+
+          <section class="panel-section">
+            <div class="section-header"><span>MACRO ARCHITECTURE</span></div>
+            <div id="sliders-macro"></div>
+          </section>
+
+          <section class="panel-section">
+            <div class="section-header"><span>SURFACE &amp; CLEAVAGE</span></div>
+            <div id="sliders-detail"></div>
+          </section>
+
+          <section class="panel-section">
+            <div class="section-header"><span>EXPORT ROCK ASSET</span></div>
+            <div class="export-buttons">
+              <button id="btn-export-glb" class="btn-primary" type="button">Export .GLB</button>
+              <button id="btn-export-obj" class="btn-secondary" type="button">Export .OBJ</button>
+            </div>
+          </section>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <script type="module" src="/src/app/main.js"></script>
+</body>
+</html>
