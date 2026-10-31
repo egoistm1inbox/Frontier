@@ -176,6 +176,9 @@ const SLEEP_LINEAR = 0.10;        // m/s (visually motionless)
 const SLEEP_ANGULAR = 0.15;       // rad/s
 const SLEEP_TIME = 0.8;           // seconds at rest before sleeping
 const WAKE_CLEARANCE = 0.12;      // ground dropping away this far under a sleeper wakes it
+const BURY_FRAC = 0.9;             // fraction of a boulder's height under ground before it is buried
+const UNBURY_FRAC = 0.5;           // ground must fall back below this fraction to release it
+const ABRASION_PER_METRE = 0.006;  // metres of bedrock scoured per metre a boulder slides on the ground
 const OUTCROP_UNDERCUT = 0.9;     // metres of ground loss under a rooted outcrop before it falls
 const ROCK_DENSITY = 2600;        // kg/m^3 (only the ratios matter for the solver)
 
@@ -253,6 +256,9 @@ export class RockCalvingSystem {
 
     this.rocks = [];
     this.simTime = 0;
+    // Bed scour removed by sliding boulders this interval (metres per cell), applied to the GPU terrain
+    this.scourGrid = null;
+    this.scourRes = 0;
     this._scratch = { bedrock: 0, coarse: 0, fine: 0, water: 0, totalH: 0, dhdx: 0, dhdz: 0, slope: 0, nx: 0, ny: 1, nz: 0 };
     // Separate per-submesh instance staging arrays for 6-archetype instanced draw
     this.bucketData = this.atlas.submeshes.map(() => new Float32Array(MAX_INSTANCES * FLOATS_PER_INSTANCE));
@@ -272,6 +278,10 @@ export class RockCalvingSystem {
     }
     this.heightGrid.set(rgbaGrid);
     this.hasHeightSnapshot = true;
+    if (!this.scourGrid || this.scourRes !== gridRes) {
+      this.scourGrid = new Float32Array(gridRes * gridRes);
+      this.scourRes = gridRes;
+    }
 
     for (let i = 0; i < this.rocks.length; i++) {
       const r = this.rocks[i];
@@ -284,10 +294,14 @@ export class RockCalvingSystem {
           r.y = s.totalH + r.embed;
           this._alignToSurface(r, s.nx, s.ny, s.nz);
         }
-      } else if (r.dynamic && r.sleeping) {
+      } else if (r.dynamic) {
+        // Sediment burial: a boulder the ground has risen over is frozen and hidden by the surface
+        if (this._updateBurial(r)) continue;
         // Sleeping boulders wake up if the ground under any corner has dropped away
-        const clearance = this._minClearance(r);
-        if (clearance > WAKE_CLEARANCE || clearance < -0.25) this._wake(r);
+        if (r.sleeping) {
+          const clearance = this._minClearance(r);
+          if (clearance > WAKE_CLEARANCE || clearance < -0.25) this._wake(r);
+        }
       }
     }
     this._rebuildInstanceBuckets();
@@ -352,6 +366,7 @@ export class RockCalvingSystem {
   seedForLandscape(params) {
     this.rocks.length = 0;
     this.simTime = 0;
+    if (this.scourGrid) this.scourGrid.fill(0);
     const density = clamp(params.boulderDensity ?? 0.65, 0, 1);
     if (!this.hasHeightSnapshot || density <= 0.02) {
       this._rebuildInstanceBuckets();
@@ -695,7 +710,57 @@ export class RockCalvingSystem {
     return minC;
   }
 
+  /** Returns true while the boulder is buried. Hysteresis keeps it buried until the ground falls clearly. */
+  _updateBurial(r) {
+    const s = this.sampleTerrain(r.x, r.z);
+    const frac = (s.totalH - (r.y - r.hy)) / Math.max(1e-3, 2 * r.hy);
+    if (!r.buried) {
+      if (frac > BURY_FRAC) {
+        r.buried = true;
+        r.sleeping = true;
+        r.sleepTimer = 0;
+        r.vx = r.vy = r.vz = 0;
+        r.wx = r.wy = r.wz = 0;
+      }
+    } else if (frac < UNBURY_FRAC) {
+      r.buried = false;
+      r.sleeping = false;
+      r.sleepTimer = 0;
+    }
+    return r.buried;
+  }
+
+  /** Grid index of the texel the physics sampler reads for world (wx, wz). */
+  _scourIndex(wx, wz) {
+    const N = this.gridRes;
+    const span = this.worldSpan;
+    const u = clamp(wx / span + 0.5, 0.0, 1.0) * N - 0.5 - (this.sampleShiftTexels || 0);
+    const v = clamp(wz / span + 0.5, 0.0, 1.0) * N - 0.5 - (this.sampleShiftTexels || 0);
+    const ix = clamp(Math.round(u), 0, N - 1);
+    const iz = clamp(Math.round(v), 0, N - 1);
+    return iz * N + ix;
+  }
+
+  _addScour(wx, wz, dz) {
+    if (!this.scourGrid || dz <= 0) return;
+    this.scourGrid[this._scourIndex(wx, wz)] += dz;
+  }
+
+  /** Returns the accumulated scour grid (metres per texel) and resets it, or null if nothing to apply. */
+  takeScourGrid() {
+    if (!this.scourGrid) return null;
+    let any = false;
+    for (let i = 0; i < this.scourGrid.length; i++) {
+      if (this.scourGrid[i] > 0) { any = true; break; }
+    }
+    if (!any) return null;
+    const out = this.scourGrid;
+    this.scourGrid = new Float32Array(out.length);
+    return { data: out, res: this.gridRes };
+  }
+
   _wake(r) {
+    if (r.buried) return;
     r.sleeping = false;
     r.sleepTimer = 0;
   }
@@ -786,6 +851,7 @@ export class RockCalvingSystem {
       const r = awakeList[k];
       const m = quatToMat(r.q);
       r.touching = false;
+      r.nCont = 0;
       for (let i = 0; i < 8; i++) {
         const c = this._cornerWorld(r, m, i);
         const px = r.x + c[0], py = r.y + c[1], pz = r.z + c[2];
@@ -794,6 +860,7 @@ export class RockCalvingSystem {
         const margin = 0.03 + 2.0 * h * Math.hypot(r.vx, r.vy, r.vz);
         if (pen > -margin) {
           const mu = st.water > 0.08 ? Math.min(r.friction, 0.38) : r.friction;
+          r.nCont++;
           contacts.push({
             body: r, other: null,
             rx: c[0], ry: c[1], rz: c[2],
@@ -842,6 +909,7 @@ export class RockCalvingSystem {
             const nx = dx / d, ny = dy / d, nz = dz / d;
             if (!b.dynamic && !a.dynamic) continue;
             if (a.sleeping && b.sleeping) continue;
+            if (a.buried || b.buried) continue;
             const pen = rs - d;
             // Contact normal points from b into a. a's contact arm points toward b, b's toward a.
             contacts.push({
@@ -954,7 +1022,19 @@ export class RockCalvingSystem {
       quatIntegrate(r.q, r.wx, r.wy, r.wz, h);
     }
 
-    // 7. Sleep detection and bounds
+    // 7. Abrasion: boulders sliding on the bed scour it (rate ~ distance travelled x contact fraction)
+    if (this.scourGrid) {
+      for (let k = 0; k < awakeList.length; k++) {
+        const r = awakeList[k];
+        if (!r.nCont) continue;
+        const vxz = Math.hypot(r.vx, r.vz);
+        if (vxz < 0.05) continue;
+        const dz = ABRASION_PER_METRE * vxz * h * Math.min(1, r.nCont / 4);
+        this._addScour(r.x, r.z, dz);
+      }
+    }
+
+    // 8. Sleep detection and bounds
     for (let k = 0; k < awakeList.length; k++) {
       const r = awakeList[k];
       const lin = Math.hypot(r.vx, r.vy, r.vz);

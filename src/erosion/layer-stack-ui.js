@@ -301,6 +301,44 @@ export class ErosionLayerStackUI {
   }
 
   _bindGlobalEvents() {
+    // Water surface display: flood / flat level / channels & lakes (view only)
+    const selWaterMode = document.getElementById('tp-select-water-mode');
+    const slLevel = document.getElementById('tp-slider-water-level');
+    const outLevel = document.getElementById('tp-out-water-level');
+    const slDepth = document.getElementById('tp-slider-water-depth');
+    const outDepth = document.getElementById('tp-out-water-depth');
+    const levelWrap = document.getElementById('tp-water-level-wrap');
+    const depthWrap = document.getElementById('tp-water-depth-wrap');
+    const syncWaterView = () => {
+      const mode = this.engine.viewWater.mode;
+      if (selWaterMode) selWaterMode.value = String(mode);
+      if (levelWrap) levelWrap.hidden = mode !== 1;
+      if (depthWrap) depthWrap.hidden = mode !== 2;
+    };
+    if (selWaterMode) {
+      selWaterMode.addEventListener('change', () => {
+        this.engine.viewWater.mode = Number(selWaterMode.value) || 0;
+        syncWaterView();
+      });
+    }
+    if (slLevel) {
+      slLevel.value = String(Math.round(this.engine.viewWater.levelFrac * 100));
+      if (outLevel) outLevel.textContent = `${slLevel.value}%`;
+      slLevel.addEventListener('input', () => {
+        this.engine.viewWater.levelFrac = Number(slLevel.value) / 100;
+        if (outLevel) outLevel.textContent = `${slLevel.value}%`;
+      });
+    }
+    if (slDepth) {
+      slDepth.value = String(Math.round(this.engine.viewWater.channelDepth * 100));
+      if (outDepth) outDepth.textContent = `${(Number(slDepth.value) / 100).toFixed(2)} m`;
+      slDepth.addEventListener('input', () => {
+        this.engine.viewWater.channelDepth = Number(slDepth.value) / 100;
+        if (outDepth) outDepth.textContent = `${(Number(slDepth.value) / 100).toFixed(2)} m`;
+      });
+    }
+    syncWaterView();
+
     // View-only visibility toggles (water / snow / rain). They never alter simulation state or presets.
     for (const [id, key] of [['tp-view-water', 'water'], ['tp-view-snow', 'snow'], ['tp-view-rain', 'rain']]) {
       const el = document.getElementById(id);

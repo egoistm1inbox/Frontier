@@ -1021,6 +1021,7 @@ export class TerrainStackPipeline {
       (this.engine.viewVis.water && p.showWater && p.waterLayerEnabled !== false) ? 1.0 : 0.0,
       timeSec
     );
+    gl.uniform4fv(gl.getUniformLocation(this.engine.progTerrainRender, 'uWaterView'), this.engine._waterViewUniform());
     gl.uniform4fv(gl.getUniformLocation(this.engine.progTerrainRender, 'uLayerVis'), layerVisVec);
     gl.uniform4fv(gl.getUniformLocation(this.engine.progTerrainRender, 'uHardnessParams'), hardnessVec);
     gl.uniform4fv(gl.getUniformLocation(this.engine.progTerrainRender, 'uStrataOrient'), strataVec);

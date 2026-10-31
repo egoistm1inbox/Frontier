@@ -1674,3 +1674,7 @@ select {
   accent-color: #d6a25b;
   margin: 0;
 }
+
+.tp-check[hidden] {
+  display: none;
+}

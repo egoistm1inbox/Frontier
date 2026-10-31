@@ -2014,6 +2014,7 @@ uniform sampler2D uMaskPreviewTex;
 uniform vec3 uCameraPos;
 uniform vec3 uSunDir;
 uniform vec4 uRenderDomain;   // (worldSpan, gridRes, showWater, timeSec)
+uniform vec4 uWaterView;      // (displayMode 0 flood / 1 level / 2 channels, levelMetres, channelDepthMetres, 0)
 uniform vec4 uHardnessParams; // (rockHardness, strataStrength, strataFreq, faultWeakness)
 uniform vec4 uStrataOrient;   // (sinStrike, cosStrike, tanDip, reliefScale)
 uniform vec4 uBrush;          // (brushX, brushZ, brushRadius, brushMode)
@@ -2417,8 +2418,20 @@ void main() {
     litColor += vec3(0.42, 0.58, 0.72) * specCryo * (iceCover * 0.55 + snowCover * 0.16);
   }
 
-  if (!isSideSkirt && uRenderDomain.z > 0.5 && uViewMode == 0 && tC.a > 0.004) {
-    float wDepth = tC.a;
+  // Water display mode (view only, does not change the simulation):
+  //   0 = Flood: every simulated puddle and sheet is drawn (original behaviour)
+  //   1 = Level: a flat water surface at a chosen height, wherever the ground lies below it (lakes, sea level)
+  //   2 = Channels: only simulated water deeper than a threshold, so rivers and lakes stand out and sheet flooding disappears
+  int wMode = int(uWaterView.x + 0.5);
+  float wDepthView = tC.a;
+  if (wMode == 1) {
+    wDepthView = max(0.0, uWaterView.y - (tC.r + tC.g + tC.b));
+  } else if (wMode == 2) {
+    wDepthView = max(0.0, tC.a - uWaterView.z);
+  }
+
+  if (!isSideSkirt && uRenderDomain.z > 0.5 && uViewMode == 0 && wDepthView > 0.004) {
+    float wDepth = wDepthView;
     vec4 flowD = sampleGridBilinear(uVelocityFieldTex, vUv, res);
     float tSec = uRenderDomain.w;
 
@@ -2441,6 +2454,8 @@ void main() {
     float wH_U = hU + (tU.a > 0.003 ? tU.a : 0.0);
     float wH_D = hD + (tD.a > 0.003 ? tD.a : 0.0);
     vec3 waterN = safeNorm3(vec3(wH_L - wH_R + ripX * 0.06, 2.0 * cellSize, wH_D - wH_U + ripZ * 0.06), vec3(0.0, 1.0, 0.0));
+    // A level lake surface is flat: no sheet-flow slope or simulated neighbour heights
+    if (wMode == 1) waterN = vec3(0.0, 1.0, 0.0);
 
     float turbidity = clamp(flowD.z * 0.35 + fineMask * 0.45, 0.0, 1.0);
     // Deep 2.5D hydrostatic lakes, Oasis emerald lagoons & Studlagil glacial-flour turquoise rivers!
@@ -3193,3 +3208,30 @@ void main() {
 }
 `;
 
+/**
+ * Applies boulder abrasion from the CPU scour grid (metres per physics texel, 128^2) to the terrain.
+ * Bedrock is removed where a boulder slid; ~40% of the removed rock stays in the groove as coarse debris,
+ * the rest is carried away. Output is ping-ponged like the other terrain passes.
+ */
+export const SCOUR_APPLY_FRAG = `#version 300 es
+${GLSL_PRECISION_HEADER}
+in vec2 vUv;
+layout(location = 0) out vec4 outTerrain;
+
+uniform sampler2D uTerrainTex;   // (bedrock, coarse, fine, water)
+uniform sampler2D uScourTex;     // R = metres of bedrock scoured this interval
+uniform float uScourRes;
+
+void main() {
+  ivec2 px = ivec2(gl_FragCoord.xy);
+  vec4 t = texelFetch(uTerrainTex, px, 0);
+  ivec2 sp = ivec2(clamp(floor(vUv * uScourRes), vec2(0.0), vec2(uScourRes - 1.0)));
+  float dz = texelFetch(uScourTex, sp, 0).r;
+  if (dz > 0.0) {
+    float cut = min(dz, t.r);
+    t.r -= cut;
+    t.g += 0.4 * cut;
+  }
+  outTerrain = t;
+}
+`;

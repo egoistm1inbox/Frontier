@@ -215,6 +215,23 @@
               </select>
             </div>
 
+            <div class="tp-toolbar-group tp-water-view" title="View-only: how simulated water is drawn. Flood shows every puddle; Water level draws a flat lake surface; Channels shows only deeper water">
+              <span class="tp-bar-label">Water Surface</span>
+              <select id="tp-select-water-mode" class="tp-pill-select">
+                <option value="0">Flood (simulated)</option>
+                <option value="1">Water level</option>
+                <option value="2">Channels &amp; lakes</option>
+              </select>
+              <label class="tp-check" id="tp-water-level-wrap" hidden>Level
+                <input type="range" id="tp-slider-water-level" min="0" max="100" step="1" value="35" />
+                <output id="tp-out-water-level">35%</output>
+              </label>
+              <label class="tp-check" id="tp-water-depth-wrap" hidden>Min depth
+                <input type="range" id="tp-slider-water-depth" min="0" max="100" step="1" value="5" />
+                <output id="tp-out-water-depth">0.05 m</output>
+              </label>
+            </div>
+
             <div class="tp-toolbar-group tp-view-toggles" title="View-only: hides the layer from the viewport without changing the simulation">
               <span class="tp-bar-label">Show</span>
               <label class="tp-check"><input type="checkbox" id="tp-view-water" checked /> Water</label>

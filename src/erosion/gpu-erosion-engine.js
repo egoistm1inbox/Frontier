@@ -26,6 +26,7 @@ import {
   TERRAIN_RENDER_VERT,
   THERMAL_TALUS_FRAG,
   WATER_FLUX_FRAG,
+  SCOUR_APPLY_FRAG,
 } from './erosion-shaders.js';
 import { MAX_GRASS_TUFTS, buildGrassTuftMesh } from './grass-system.js';
 import { RockCalvingSystem } from './rock-calving.js';
@@ -118,6 +119,8 @@ export class GpuErosionEngine {
     this.onTelemetry = onTelemetry;
     // View-only layer visibility (toolbar toggles). Independent of presets and of simulation state.
     this.viewVis = { water: true, snow: true, rain: true };
+    // Water surface display (view only): 0 flood, 1 flat level, 2 channels & lakes
+    this.viewWater = { mode: 0, levelFrac: 0.35, channelDepth: 0.05 };
 
     const gl = canvas.getContext('webgl2', {
       antialias: true,
@@ -207,6 +210,7 @@ export class GpuErosionEngine {
     this.progTerrainIntegrate = createProgram(gl, FULLSCREEN_VERT, TERRAIN_INTEGRATE_FRAG, 'TerrainIntegrate');
     this.progSnowCryo = createProgram(gl, FULLSCREEN_VERT, SNOW_CRYO_FRAG, 'SnowCryo');
     this.progThermalTalus = createProgram(gl, FULLSCREEN_VERT, THERMAL_TALUS_FRAG, 'ThermalTalus');
+    this.progScourApply = createProgram(gl, FULLSCREEN_VERT, SCOUR_APPLY_FRAG, 'ScourApply');
     this.progTerrainRender = createProgram(gl, TERRAIN_RENDER_VERT, TERRAIN_RENDER_FRAG, 'TerrainRender');
     this.progRockInstance = createProgram(gl, ROCK_INSTANCE_VERT, ROCK_INSTANCE_FRAG, 'RockInstance');
     this.progGrassInstance = createProgram(gl, GRASS_INSTANCE_VERT, GRASS_INSTANCE_FRAG, 'GrassInstance');
@@ -230,6 +234,8 @@ export class GpuErosionEngine {
 
     // Initial un-eroded snapshot for cut/fill heatmap & cubic-meter telemetry
     this.initialTerrainTex = createDataTexture(gl, R, R, gl.RGBA32F, gl.RGBA, gl.FLOAT);
+    // Boulder scour grid (physics resolution), uploaded each telemetry sample when boulders have ground contact
+    this.scourTex = createDataTexture(gl, PHYS_RES, PHYS_RES, gl.R32F, gl.RED, gl.FLOAT);
     this.fboInitialTerrain = createFbo(gl, [this.initialTerrainTex]);
 
     // Pipe flux ping-pong (RGBA32F)
@@ -786,6 +792,13 @@ export class GpuErosionEngine {
       hardnessVec: [p.rockHardness, strataStr, p.strataFreq, p.faultWeakness],
       strataVec: [Math.sin(strikeRad), Math.cos(strikeRad), Math.tan(dipRad), Math.max(40, p.relief)],
     };
+  }
+
+  /** (mode, levelMetres, channelDepthMetres, 0) for the terrain water display. */
+  _waterViewUniform() {
+    const relief = this.pipelineMode && this.pipeline ? this.pipeline._maxReliefEstimate() : 150;
+    const v = this.viewWater;
+    return [v.mode, v.levelFrac * relief, v.channelDepth, 0];
   }
 
   _getLayerVisUniforms() {
@@ -1385,6 +1398,8 @@ export class GpuErosionEngine {
       sumWater += buf[i + 3];
     }
 
+    // Boulders that slid this interval have scoured the bed: carve it before the physics re-reads the ground
+    this._applyRockScour();
     // Feed live 64x64 terrain heightfield to 3D rock calving & undercut-boulder wake-up!
     this.readPhysicsSnapshot();
     if (this.playing && (this.params.rockfallRate || 0) > 0.25 && (this.params.boulderDensity ?? 0.65) > 0.05) {
@@ -1408,6 +1423,33 @@ export class GpuErosionEngine {
       this.telemetry.caveTris = Math.round(this.pipeline.caveSystem.vertexCount / 3);
     }
     if (this.onTelemetry) this.onTelemetry(this.telemetry);
+  }
+
+  /** Carves bedrock where boulders slid since the last call (ping-pong terrain pass). */
+  _applyRockScour() {
+    const scour = this.rockCalving.takeScourGrid();
+    if (!scour) return;
+    const gl = this.gl;
+    const R = this.gridRes;
+    const S = scour.res;
+    gl.bindTexture(gl.TEXTURE_2D, this.scourTex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.R32F, S, S, 0, gl.RED, gl.FLOAT, scour.data);
+    gl.bindTexture(gl.TEXTURE_2D, null);
+
+    gl.disable(gl.DEPTH_TEST);
+    gl.disable(gl.BLEND);
+    gl.viewport(0, 0, R, R);
+    gl.useProgram(this.progScourApply);
+    gl.bindVertexArray(this.emptyVao);
+    const nextT = 1 - this.terrainIdx;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, this.fboTerrainSingle[nextT]);
+    this._bindTex(this.progScourApply, 'uTerrainTex', this.terrainTex[this.terrainIdx], 0);
+    this._bindTex(this.progScourApply, 'uScourTex', this.scourTex, 1);
+    gl.uniform1f(gl.getUniformLocation(this.progScourApply, 'uScourRes'), S);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    this.terrainIdx = nextT;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.bindVertexArray(null);
   }
 
   _bindTex(prog, name, tex, unit) {
@@ -1494,6 +1536,7 @@ export class GpuErosionEngine {
       (this.viewVis.water && p.showWater && p.waterLayerEnabled !== false) ? 1.0 : 0.0,
       timeSec
     );
+    gl.uniform4fv(gl.getUniformLocation(this.progTerrainRender, 'uWaterView'), this._waterViewUniform());
     gl.uniform4fv(gl.getUniformLocation(this.progTerrainRender, 'uLayerVis'), layerVisVec);
     gl.uniform4fv(gl.getUniformLocation(this.progTerrainRender, 'uHardnessParams'), hardnessVec);
     gl.uniform4fv(gl.getUniformLocation(this.progTerrainRender, 'uStrataOrient'), strataVec);
