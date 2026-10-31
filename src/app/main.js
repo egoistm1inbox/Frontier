@@ -486,6 +486,11 @@ function selectArchetype(archId) {
     seed: state.params.seed,
     quality: state.params.quality,
     decimation: state.params.decimation,
+    rainDroplets: state.params.rainDroplets ?? 0,
+    rainStrength: state.params.rainStrength ?? 0.35,
+    rainDeposition: state.params.rainDeposition ?? 0.3,
+    rainLifetime: state.params.rainLifetime ?? 36,
+    rainInertia: state.params.rainInertia ?? 0.25,
   });
   document.getElementById('active-category').textContent = preset.category;
   document.querySelectorAll('#archetype-list .archetype-card').forEach((el) => {
@@ -645,8 +650,63 @@ function initRockActionButtons() {
   });
 }
 
+function updateRainStats(rain) {
+  const el = document.getElementById('rain-stats');
+  const pill = document.getElementById('rain-state-pill');
+  if (!el) return;
+  if (!rain || !rain.droplets) {
+    el.textContent = 'No rain applied yet.';
+    if (pill) pill.textContent = 'Off';
+    return;
+  }
+  if (pill) pill.textContent = 'On';
+  el.textContent = `${rain.droplets.toLocaleString()} droplets · ${rain.steps.toLocaleString()} flow steps · eroded ${rain.eroded} · deposited ${rain.deposited} · max wear ${rain.maxDisplacement}m`;
+}
+
+// Rain-only particle erosion (Rock & Cliff Studio). Sliders only update the
+// readout; erosion runs in the generation worker when Apply is pressed (or a
+// slider is released), so dragging never thrashes the SDF synthesis queue.
+function initRainErosionControls() {
+  const bind = (id, outId, key, fmt, applyOnRelease = true) => {
+    const input = document.getElementById(id);
+    const out = document.getElementById(outId);
+    if (!input) return;
+    input.addEventListener('input', () => {
+      const num = Number(input.value);
+      state.params[key] = num;
+      if (out) out.textContent = fmt(num);
+      if (key === 'rainDroplets') {
+        const pill = document.getElementById('rain-state-pill');
+        if (pill) pill.textContent = num > 0 ? 'Ready' : 'Off';
+      }
+    });
+    if (applyOnRelease) input.addEventListener('change', () => { if (state.params.rainDroplets > 0) requestSynthesis(false); });
+  };
+  bind('slider-rain-droplets', 'out-rain-droplets', 'rainDroplets', (v) => `${v}`);
+  bind('slider-rain-strength', 'out-rain-strength', 'rainStrength', (v) => `${Math.round(v * 100)}%`);
+  bind('slider-rain-deposition', 'out-rain-deposition', 'rainDeposition', (v) => `${Math.round(v * 100)}%`);
+  bind('slider-rain-lifetime', 'out-rain-lifetime', 'rainLifetime', (v) => `${v} steps`);
+  document.getElementById('btn-rain-apply').addEventListener('click', () => {
+    if (!(state.params.rainDroplets > 0)) {
+      state.params.rainDroplets = 6000;
+      const s = document.getElementById('slider-rain-droplets');
+      s.value = '6000';
+      document.getElementById('out-rain-droplets').textContent = '6000';
+    }
+    if (state.studioMode !== 'rock') setStudioMode('rock');
+    requestSynthesis(false);
+  });
+  document.getElementById('btn-rain-reset').addEventListener('click', () => {
+    state.params.rainDroplets = 0;
+    document.getElementById('slider-rain-droplets').value = '0';
+    document.getElementById('out-rain-droplets').textContent = '0';
+    requestSynthesis(false);
+  });
+}
+
 // Boot Frontier Terrain Studio + Rock Studio Controls
 initTerrainStudio();
+initRainErosionControls();
 buildCategoryFilterBar();
 buildArchetypeCards();
 buildSliders('tectonics', 'sliders-tectonics');

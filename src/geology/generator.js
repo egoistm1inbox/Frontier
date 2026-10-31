@@ -89,9 +89,30 @@ export function generateRockFormation(rawParams = {}, onProgress = null) {
     ? decimateMeshQEM(surfacePositions, cleaned.indices, params.decimation)
     : { positions: surfacePositions, indices: cleaned.indices };
 
+  // Rain-only particle erosion (same droplet model as Terrain Studio, run on
+  // the welded 3D mesh — see rain-erosion.js). Off unless droplets > 0, so
+  // existing formations stay bit-identical by default. Runs before attribute
+  // baking so normals/AO/curvature are rebuilt on the eroded surface.
+  let rainStats = null;
+  let erodedPositions = decimated.positions;
+  const rainDroplets = Math.floor(params.rainDroplets ?? 0);
+  if (rainDroplets > 0) {
+    if (onProgress) onProgress(0.90, `Eroding surface with ${rainDroplets.toLocaleString()} rain droplets...`);
+    const rain = erodeRockWithRain(decimated.positions, decimated.indices, {
+      seed: params.seed,
+      droplets: rainDroplets,
+      strength: params.rainStrength ?? 0.35,
+      deposition: params.rainDeposition ?? 0.3,
+      lifetime: params.rainLifetime ?? 36,
+      inertia: params.rainInertia ?? 0.25,
+    });
+    erodedPositions = rain.positions;
+    rainStats = rain.stats;
+  }
+
   if (onProgress) onProgress(0.92, 'Baking volumetric AO, curvature & normals...');
   const finalMesh = buildGameReadyAttributes(
-    decimated.positions,
+    erodedPositions,
     decimated.indices,
     sdf,
     {

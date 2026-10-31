@@ -2071,8 +2071,10 @@ void main() {
   float rockY = isSideSkirt ? vWorldPos.y : tC.r;
   float hardness = evalRockHardness3D(vec3(vWorldPos.x, rockY, vWorldPos.z), uHardnessParams, uStrataOrient, uSeed);
 
-  float grain = noise2D(vWorldPos.xz * 0.55 + rockY * 0.35) - 0.5;
-  float patchN = fbm2D(vWorldPos.xz * 0.045, 3, 0.55) - 0.5;
+  // FLAT COLOURS ONLY: no noise/grain/fabric texture is ever blended into
+  // terrain colour. Albedo is one flat palette colour per material class
+  // (rock hardness band, sediment species, snow, ice, water); all visible
+  // variation comes from lighting, shadow and AO — never from a texture.
 
   // ==========================================================================
   // REGIONAL LITHOLOGY PALETTES (Utah Desert / Icelandic Volcanic / Himalayan Gneiss)
@@ -2189,71 +2191,10 @@ void main() {
   float elevFrac = clamp(rockY / max(uStrataOrient.w, 1.0), 0.0, 1.2);
   rockAlbedo = mix(rockAlbedo, summitCol, smoothstep(0.76, 1.08, elevFrac) * 0.48);
   rockAlbedo = mix(basinFloorCol, rockAlbedo, smoothstep(0.03, 0.20, elevFrac));
-  rockAlbedo *= (1.0 + 0.12 * grain + 0.10 * patchN + 0.12 * ridgeConvex);
 
-  // Icelandic subarctic vegetation belt: moss & lichen colonise gentle low & mid slopes
-  if (uMaterialTheme == 1 || uMaterialTheme == 4) {
-    float mossFlora = smoothstep(0.42, 0.90, bedNormal.y)
-      * (1.0 - smoothstep(0.34, 0.68, elevFrac))
-      * smoothstep(0.05, 0.42, fbm2D(vWorldPos.xz * 0.030 + 11.7, 3, 0.55));
-    mossCol *= (0.85 + 0.30 * patchN + 0.20 * grain);
-    rockAlbedo = mix(rockAlbedo, mossCol, mossFlora * 0.80);
-  } else if (uMaterialTheme == 8) {
-    // Thorsmork Green Highlands: lush emerald moss & arctic birch blanket valleys, benches & steep ridge shoulders!
-    float floraNoise = fbm2D(vWorldPos.xz * 0.028 + 7.3, 4, 0.55);
-    float mossFlora = smoothstep(0.26, 0.76, bedNormal.y)
-      * (1.0 - smoothstep(0.52, 0.86, elevFrac))
-      * smoothstep(0.02, 0.34, floraNoise + 0.14);
-    vec3 lushGreen = mix(vec3(0.068, 0.165, 0.038), mossCol * vec3(1.18, 1.12, 0.95), clamp(floraNoise * 1.3, 0.0, 1.0));
-    lushGreen *= (0.88 + 0.26 * grain);
-    rockAlbedo = mix(rockAlbedo, lushGreen, mossFlora * 0.90);
-  }
 
-  // ==========================================================================
-  // PROCEDURAL LITHOLOGY FABRIC TEXTURING (uFabricMode 1..4; 0 = untouched baseline!)
-  // ==========================================================================
-  vec3 preFabricAlbedo = rockAlbedo;
-  vec3 preFabricNormal = bedNormal;
-  if (uFabricMode > 0 && uLayerVis.y > 0.001 && (uMaterialTheme != 6 || tC.b < 0.08)) {
-    float steepFace = smoothstep(0.18, 0.72, 1.0 - bedNormal.y);
-    if (uFabricMode == 1) {
-      // Hexagonal Columnar Basalt Colonnades + Chisel Cross-Joints
-      vec2 hq = vWorldPos.xz * 0.52;
-      vec2 hr = vec2(1.0, 1.7320508);
-      vec2 hh = hr * 0.5;
-      vec2 ha = mod(hq, hr) - hh;
-      vec2 hb = mod(hq - hh, hr) - hh;
-      vec2 hgv = dot(ha, ha) < dot(hb, hb) ? ha : hb;
-      float hexDist = 0.5 - max(abs(hgv.x), abs(hgv.x) * 0.5 + abs(hgv.y) * 0.8660254);
-      float colSeam = (1.0 - smoothstep(0.02, 0.10, hexDist)) * (0.35 + 0.65 * steepFace);
-      float crossStep = (1.0 - smoothstep(0.03, 0.11, abs(fract(rockY * 0.28 + patchN * 0.4) - 0.5))) * steepFace;
-      rockAlbedo *= (1.0 - 0.32 * colSeam - 0.15 * crossStep);
-      rockAlbedo = mix(rockAlbedo, vec3(0.24, 0.13, 0.07), colSeam * 0.28);
-      bedNormal = safeNorm3(bedNormal + vec3(hgv.x, 0.0, hgv.y) * (0.22 * steepFace), bedNormal);
-    } else if (uFabricMode == 2) {
-      // Aeolian Trough Cross-Bedding Foresets on Exposed Sandstone
-      float foreset = sin(rockY * 1.45 + vWorldPos.x * 0.22 + sin(vWorldPos.z * 0.09) * 2.4 + patchN * 3.0);
-      float lam = smoothstep(-0.65, 0.75, foreset);
-      rockAlbedo *= mix(0.86, 1.12, lam);
-    } else if (uFabricMode == 3) {
-      // Tafoni Honeycomb & Palagonite Hyaloclastite Pitting
-      float c1 = abs(noise2D(vWorldPos.xz * 0.48 + rockY * 0.36) - 0.5) * 2.0;
-      float c2 = abs(noise2D(vWorldPos.xz * 1.05 - rockY * 0.62) - 0.5) * 2.0;
-      float pit = (1.0 - smoothstep(0.08, 0.40, c1 * 0.68 + c2 * 0.32)) * steepFace;
-      rockAlbedo *= (1.0 - 0.38 * pit);
-    } else if (uFabricMode == 4) {
-      // Folded Metamorphic Gneissic Banding & Conjugate Fractures
-      float fold = rockY * 0.42 + sin(vWorldPos.x * 0.06 + patchN * 5.0) * 1.8;
-      float gneissBand = smoothstep(-0.55, 0.55, sin(fold * 3.1));
-      rockAlbedo = mix(rockAlbedo * 0.78, rockAlbedo * 1.22 + vec3(0.03), gneissBand);
-    }
-    if (uLayerVis.y < 0.999) {
-      rockAlbedo = mix(preFabricAlbedo, rockAlbedo, uLayerVis.y);
-      bedNormal = safeNorm3(mix(preFabricNormal, bedNormal, uLayerVis.y), preFabricNormal);
-    }
-  }
   if (uLayerVis.x < 0.999) {
-    rockAlbedo = mix(vec3(0.24, 0.23, 0.22) * (1.0 + 0.08 * grain), rockAlbedo, uLayerVis.x);
+    rockAlbedo = mix(vec3(0.24, 0.23, 0.22), rockAlbedo, uLayerVis.x);
   }
 
   // ==========================================================================
@@ -2267,22 +2208,18 @@ void main() {
   // Snow bridges ledges, cirques & couloirs; only sheer 58-deg+ rock ribs shed snow to bare gneiss/basalt!
   float slopeHold = 1.0 - smoothstep(0.62, 0.88, 1.0 - bedNormal.y);
   // Subtle wind-fluted sastrugi & exposed rock ribs ONLY on steep walls; broad snowfields stay rich & continuous!
-  float snowPatch = mix(1.0, 0.62 + 0.38 * ridgedFbm2D(vWorldPos.xz * 0.055 + 5.3, 3, 0.5), smoothstep(0.28, 0.65, 1.0 - bedNormal.y));
   float snowCover = isSideSkirt ? 0.0
-    : clamp(smoothstep(0.018, 0.32, snowDepth) * mix(0.35, 1.0, slopeHold) * snowPatch, 0.0, 1.0) * uLayerVis.z;
+    : clamp(smoothstep(0.018, 0.32, snowDepth) * mix(0.35, 1.0, slopeHold), 0.0, 1.0) * uLayerVis.z;
   float iceCover = (isSideSkirt ? 0.0 : smoothstep(0.06, 0.70, iceDepth) * mix(0.45, 1.0, slopeHold)) * uLayerVis.z;
 
   // Fresh snow is high-albedo; shaded snow picks up cold Himalayan sky-blue subsurface bounce!
   vec3 snowAlbedo = mix(vec3(0.56, 0.64, 0.76), vec3(0.89, 0.92, 0.97), clamp(bedNormal.y, 0.0, 1.0));
-  snowAlbedo *= (1.0 + 0.04 * grain - 0.04 * patchN);
-  // Glacier ice: dense blue crevassed ice with wind-scoured firn bands
-  float crevasse = smoothstep(0.55, 0.95, ridgedFbm2D(vWorldPos.xz * 0.085 + vWorldPos.y * 0.02, 4, 0.55));
-  vec3 iceAlbedo = mix(vec3(0.255, 0.470, 0.610), vec3(0.520, 0.760, 0.860), 1.0 - crevasse * 0.55);
-  iceAlbedo = mix(iceAlbedo, vec3(0.845, 0.900, 0.940), smoothstep(0.34, 0.90, elevFrac) * 0.42);
+  // Glacier ice: one flat dense-blue ice colour (firn tint only by elevation band)
+  vec3 iceAlbedo = mix(vec3(0.255, 0.470, 0.610), vec3(0.845, 0.900, 0.940), smoothstep(0.34, 0.90, elevFrac) * 0.42);
 
   vec3 surfaceAlbedo = rockAlbedo;
-  surfaceAlbedo = mix(surfaceAlbedo, coarseGravelCol * (1.0 + 0.15 * grain), (isSideSkirt ? 0.0 : smoothstep(0.012, 0.24, tC.g)) * 0.88);
-  surfaceAlbedo = mix(surfaceAlbedo, fineAlluvialCol * (1.0 + 0.10 * patchN + 0.08 * grain), (isSideSkirt ? 0.0 : smoothstep(0.008, 0.18, tC.b)) * 0.92);
+  surfaceAlbedo = mix(surfaceAlbedo, coarseGravelCol, (isSideSkirt ? 0.0 : smoothstep(0.012, 0.24, tC.g)) * 0.88);
+  surfaceAlbedo = mix(surfaceAlbedo, fineAlluvialCol, (isSideSkirt ? 0.0 : smoothstep(0.008, 0.18, tC.b)) * 0.92);
   surfaceAlbedo = mix(surfaceAlbedo, iceAlbedo, iceCover * 0.94);
   surfaceAlbedo = mix(surfaceAlbedo, snowAlbedo, snowCover * 0.97);
 
@@ -2292,59 +2229,16 @@ void main() {
   // ==========================================================================
   // JOURNEY / NAMIB SAND DUNE SURFACE SHADER (Asymmetric Windward Ripples + Silky Slipfaces!)
   // ==========================================================================
-  float sandRippleMask = 0.0;
   float sandCover = (!isSideSkirt && (uMaterialTheme == 6 || uMaterialTheme == 5 || uMaterialTheme == 9))
     ? smoothstep(0.04, 0.45, tC.b) * (1.0 - snowCover)
     : 0.0;
   if (sandCover > 0.01) {
-    vec2 wDir = safeNorm2(uWindRender.xy, vec2(0.88, 0.47));
-    vec2 cDir = vec2(-wDir.y, wDir.x);
-    vec2 horizN = bedNormal.xz;
-    float slopeTan = length(horizN) / max(bedNormal.y, 0.08);
-    // Leeward 34-deg avalanche slipface faces WITH the wind (dot(horizN, wDir) > 0) and is steep:
-    // Real avalanche slipfaces are silky smooth (ZERO wind ripples!), while gentler windward stoss
-    // slopes carry crisp asymmetric wind-sculpted ripples!
-    float leeSlipMask = smoothstep(0.38, 0.60, slopeTan) * smoothstep(-0.05, 0.28, dot(safeNorm2(horizN, wDir), wDir));
-    sandRippleMask = sandCover * (1.0 - leeSlipMask) * smoothstep(0.02, 0.12, slopeTan + 0.06);
-
-    // Subtle wind-sorted mineral colour shift: slightly paler coarser quartz on windward crests,
-    // deeper iron-oxide terracotta-apricot on smooth avalanche slipfaces!
-    vec3 stossSand = fineAlluvialCol * vec3(1.06, 1.04, 0.98);
-    vec3 slipSand  = fineAlluvialCol * vec3(0.94, 0.86, 0.82);
-    surfaceAlbedo = mix(surfaceAlbedo, mix(stossSand, slipSand, leeSlipMask), sandCover * 0.96);
-
-    if (sandRippleMask > 0.01) {
-      float warpR = fbm2D(vWorldPos.xz * 0.085, 2, 0.5) * 2.2;
-      float rCoord1 = dot(vWorldPos.xz, wDir) * 1.55 + sin(dot(vWorldPos.xz, cDir) * 0.35 + warpR) * 0.85;
-      float rCoord2 = dot(vWorldPos.xz, wDir) * 3.10 + cos(dot(vWorldPos.xz, cDir) * 0.72 - warpR) * 0.55;
-      // Asymmetric wind-ripple sawtooth derivative (gentle stoss, steeper lee micro-facet!)
-      float f1 = fract(rCoord1);
-      float f2 = fract(rCoord2);
-      float dRip1 = f1 < 0.72 ? 0.38 : -1.05;
-      float dRip2 = f2 < 0.72 ? 0.22 : -0.60;
-      // Fade micro-ripples cleanly with camera distance to prevent aliasing shimmer!
-      float distAtten = 1.0 - smoothstep(90.0, 420.0, length(uCameraPos - vWorldPos));
-      float ripStrength = (dRip1 * 0.065 + dRip2 * 0.032) * sandRippleMask * distAtten * uLayerVis.y;
-      bedNormal = safeNorm3(bedNormal - vec3(wDir.x * ripStrength, 0.0, wDir.y * ripStrength), bedNormal);
-    }
+    // Flat sand colour — no wind-ripple texture, no mineral noise, no glitter.
+    surfaceAlbedo = mix(surfaceAlbedo, fineAlluvialCol, sandCover * 0.96);
   }
 
   float wetness = isSideSkirt ? 0.0 : smoothstep(0.001, 0.025, tC.a);
   surfaceAlbedo *= mix(1.0, 0.68, wetness * 0.55 * (1.0 - snowCover));
-
-  // Verdant Oasis Date-Palm & Reed Vegetation Belt hugging the moist groundwater shoreline!
-  if (!isSideSkirt && uMaterialTheme == 9) {
-    vec2 oasisUv = (vUv * 2.0 - 1.0) - vec2(-0.04, -0.03);
-    float dO = length(vec2(oasisUv.x * 1.15, (oasisUv.y + 0.22 * sq(oasisUv.x * 1.8)) * 1.55));
-    float canopyPatch = fbm2D(vWorldPos.xz * 0.14 + 3.7, 3, 0.55);
-    float shoreBand = smoothstep(9.75, 10.15, hC) * (1.0 - smoothstep(11.6, 13.8, hC))
-                    * (1.0 - smoothstep(0.24, 0.42, dO))
-                    * (1.0 - smoothstep(0.005, 0.05, tC.a))
-                    * smoothstep(0.45, 0.85, bedNormal.y);
-    float palmMask = clamp(shoreBand * smoothstep(0.22, 0.62, canopyPatch + 0.16), 0.0, 1.0);
-    vec3 oasisFoliage = mix(vec3(0.045, 0.145, 0.038), mossCol * vec3(1.22, 1.15, 0.95), canopyPatch);
-    surfaceAlbedo = mix(surfaceAlbedo, oasisFoliage, palmMask * 0.92);
-  }
 
   if (uViewMode == 1) {
     float initB = sampleGridBilinear(uInitialTex, vUv, res).r;
@@ -2417,16 +2311,6 @@ void main() {
 
   vec3 litColor = surfaceAlbedo * (sunRadiance + ambient);
 
-  // Journey-style grazing warm sand sheen + subtle quartz micro-glitter on sunlit sand crests!
-  if (sandCover > 0.02) {
-    float graze = pow(max(0.0, 1.0 - clamp(dot(bedNormal, V), 0.0, 1.0)), 3.2);
-    float forwardSun = pow(max(0.0, dot(-L, V) * 0.5 + 0.5), 2.0);
-    litColor += vec3(0.32, 0.18, 0.08) * graze * (0.35 + 0.65 * forwardSun) * shadow * sandCover;
-    float sparkHash = hash12(floor(vWorldPos.xz * 7.5));
-    float spark = step(0.992, sparkHash) * shadow * ndotl * (1.0 - smoothstep(60.0, 240.0, length(uCameraPos - vWorldPos)));
-    litColor += vec3(0.55, 0.44, 0.30) * spark * sandCover;
-  }
-
   // Glossy specular sheen off glacier ice & wet snow surfaces
   if (iceCover > 0.02 || snowCover > 0.02) {
     vec3 Hs = safeNorm3(L + V, vec3(0.0, 1.0, 0.0));
@@ -2439,9 +2323,9 @@ void main() {
     vec4 flowD = sampleGridBilinear(uVelocityFieldTex, vUv, res);
     float tSec = uRenderDomain.w;
 
-    vec2 wUv = vWorldPos.xz * 0.42 - flowD.xy * tSec * 0.35;
-    float ripX = noise2D(wUv * 2.1 + vec2(tSec * 0.6, 0.0)) - noise2D(wUv * 2.1 - vec2(tSec * 0.6, 0.0));
-    float ripZ = noise2D(wUv * 2.3 + vec2(0.0, tSec * 0.5)) - noise2D(wUv * 2.3 - vec2(0.0, tSec * 0.5));
+    // Flat water surface: normals come only from the real water heightfield.
+    float ripX = 0.0;
+    float ripZ = 0.0;
 
     float wH_R = hR + (tR.a > 0.003 ? tR.a : 0.0);
     float wH_L = hL + (tL.a > 0.003 ? tL.a : 0.0);
@@ -2467,7 +2351,7 @@ void main() {
     vec3 H = safeNorm3(L + V, vec3(0.0, 1.0, 0.0));
     float spec = pow(max(1e-5, dot(waterN, H)), 96.0) * 1.35 * shadow;
     float shoreFoam = (1.0 - smoothstep(0.02, 0.16, wDepth)) * smoothstep(0.015, 0.05, wDepth) * 0.45;
-    float foam = (smoothstep(0.55, 1.8, flowD.z) + shoreFoam) * (0.35 + 0.35 * noise2D(wUv * 4.5 + tSec));
+    float foam = (smoothstep(0.55, 1.8, flowD.z) + shoreFoam) * 0.5;
 
     vec3 submerged = mix(litColor, waterTint * (sunRadiance * 0.55 + ambient * 1.15), clamp(absorb * 0.85 + 0.18, 0.0, 0.94));
     vec3 waterCol = mix(submerged, skyReflect, fresnel * 0.68) + vec3(spec) + vec3(0.55, 0.58, 0.60) * foam * 0.35;
@@ -2779,7 +2663,6 @@ void main() {
   float groundH = tCell.r + tCell.g + tCell.b;
 
   float hardness = evalRockHardness3D(vWorldPos + vec3(vInstMeta.x * 19.0, 0.0, 0.0), uHardnessParams, uStrataOrient, uSeed);
-  float grain = noise2D(vWorldPos.xz * 1.15 + vWorldPos.y * 0.85 + vInstMeta.x * 31.0) - 0.5;
 
   vec3 softCol;
   vec3 hardCol;
@@ -2807,21 +2690,8 @@ void main() {
   }
 
   vec3 albedo = mix(softCol, hardCol, clamp(hardness * 0.85 + vInstMeta.x * 0.25, 0.0, 1.0));
-  albedo *= (1.0 + 0.14 * grain + 0.08 * vMask.z - 0.14 * vMask.y);
+  albedo *= (1.0 + 0.08 * vMask.z - 0.14 * vMask.y); // baked curvature shading only — no texture
 
-  if (uFabricMode == 1) {
-    float seam = 1.0 - smoothstep(0.02, 0.12, abs(fract(vWorldPos.x * 0.55 + vWorldPos.z * 0.42) - 0.5));
-    albedo *= (1.0 - 0.26 * seam);
-  } else if (uFabricMode == 2) {
-    float lam = smoothstep(-0.6, 0.75, sin(vWorldPos.y * 2.1 + vWorldPos.x * 0.35 + vInstMeta.x * 6.0));
-    albedo *= mix(0.86, 1.12, lam);
-  } else if (uFabricMode == 3) {
-    float pit = 1.0 - smoothstep(0.08, 0.38, abs(noise2D(vWorldPos.xz * 0.9 + vWorldPos.y * 0.7) - 0.5) * 2.0);
-    albedo *= (1.0 - 0.30 * pit);
-  } else if (uFabricMode == 4) {
-    float band = smoothstep(-0.5, 0.5, sin(vWorldPos.y * 1.4 + sin(vWorldPos.x * 0.25) * 2.0));
-    albedo = mix(albedo * 0.80, albedo * 1.20, band);
-  }
 
   // Icelandic moss on upward-facing settled boulders & damp outcrops
   if ((uMaterialTheme == 1 || uMaterialTheme == 4 || uMaterialTheme == 8) && N.y > 0.45) {

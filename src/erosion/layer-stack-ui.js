@@ -10,7 +10,6 @@
 import {
   BASE_ARCHETYPES,
   COMBINE_MODES,
-  DERIVED_FABRICS,
   DERIVED_PALETTES,
   LAYER_CATEGORIES,
   LAYER_OPERATION_SPECS,
@@ -808,19 +807,10 @@ export class ErosionLayerStackUI {
     const sunEl = this.engine.params.sunElevation ?? 28;
     const sunAzPct = (((sunAz + 180) / 360) * 100).toFixed(1);
     const sunElPct = (((sunEl - 4) / 81) * 100).toFixed(1);
-    const curFab = this.pipeline.fabricMode ?? 0;
-    const fabOpts = Object.values(DERIVED_FABRICS)
-      .map((f) => `<option value="${f.id}" ${Number(curFab) === f.id ? 'selected' : ''}>${f.label}</option>`)
-      .join('');
-
     const shadingCardHtml = `
       <section class="tp-property-card">
         <h2><i style="background:#82939e"></i><span>Derived Surface Shading &amp; Sun</span></h2>
-        <p class="tp-card-note">Shading is derived purely from AO, protrusions, height, rock hardness, sediment &amp; flow — independent of the geometry stack.</p>
-        <div class="tp-control-row">
-          <div class="tp-control-label"><span>Rock Micro-Fabric</span></div>
-          <select class="tp-select" id="tp-select-fabric">${fabOpts}</select>
-        </div>
+        <p class="tp-card-note">Flat colours only — no noise, grain or repeating fabric texture is blended into terrain colour. Shading is derived purely from lighting, shadow, AO, height, rock hardness, sediment &amp; flow — independent of the geometry stack.</p>
         <div class="tp-control-row">
           <div class="tp-control-label"><span>Sun Azimuth</span></div>
           <div class="tp-amount" style="--fill:${sunAzPct}%">
@@ -1034,14 +1024,7 @@ export class ErosionLayerStackUI {
       });
     }
 
-    // Fabric, Sun, Water & Particle bindings
-    const selFab = document.getElementById('tp-select-fabric');
-    if (selFab) {
-      selFab.addEventListener('change', () => {
-        this.pipeline.fabricMode = Number(selFab.value);
-        this.engine.params.fabricMode = this.pipeline.fabricMode;
-      });
-    }
+    // Sun, Water & Particle bindings (fabric texturing removed — flat colours)
     const slAz = document.getElementById('tp-slider-sun-az');
     const outAz = document.getElementById('tp-out-sun-az');
     if (slAz) {

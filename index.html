@@ -359,6 +359,35 @@
           </section>
 
           <section class="panel-section">
+            <div class="section-header">
+              <span>RAIN PARTICLE EROSION</span>
+              <span class="tag-pill" id="rain-state-pill">Off</span>
+            </div>
+            <p class="export-note" style="margin-top:0;">Rain only — the Terrain Studio droplet particles, run on this rock's 3D surface. Droplets fall on crowns &amp; ledges, run downhill, carve where they flow fast and deposit sediment in hollows.</p>
+            <div class="slider-group">
+              <div class="slider-label"><span>Rain Droplets</span><output id="out-rain-droplets">0</output></div>
+              <input id="slider-rain-droplets" type="range" min="0" max="20000" step="250" value="0" />
+            </div>
+            <div class="slider-group">
+              <div class="slider-label"><span>Erosion Strength</span><output id="out-rain-strength">35%</output></div>
+              <input id="slider-rain-strength" type="range" min="0" max="1" step="0.05" value="0.35" />
+            </div>
+            <div class="slider-group">
+              <div class="slider-label"><span>Sediment Deposition</span><output id="out-rain-deposition">30%</output></div>
+              <input id="slider-rain-deposition" type="range" min="0" max="1" step="0.05" value="0.3" />
+            </div>
+            <div class="slider-group">
+              <div class="slider-label"><span>Droplet Run Length</span><output id="out-rain-lifetime">36 steps</output></div>
+              <input id="slider-rain-lifetime" type="range" min="4" max="80" step="2" value="36" />
+            </div>
+            <div class="export-buttons">
+              <button id="btn-rain-apply" class="btn-primary" type="button">🌧 Apply Rain Erosion</button>
+              <button id="btn-rain-reset" class="btn-secondary" type="button">Reset</button>
+            </div>
+            <p class="export-note" id="rain-stats" style="margin-bottom:0;">No rain applied yet.</p>
+          </section>
+
+          <section class="panel-section">
             <div class="section-header"><span>EXPORT ROCK ASSET</span></div>
             <div class="export-buttons">
               <button id="btn-export-glb" class="btn-primary" type="button">Export .GLB</button>

@@ -171,3 +171,47 @@ test('QEM adaptive decimation reduces polycount cleanly and GLB/OBJ exporters pr
   const obj = exportFormationToOBJ(lod1);
   assert.ok(obj.includes('\nv ') && obj.includes('\nvn ') && obj.includes('\nf '));
 });
+
+test('Rain-only particle erosion wears a rock mesh surface downhill and is deterministic', async () => {
+  const { erodeRockWithRain } = await import('../src/geology/rain-erosion.js');
+  // Welded grid "hill" heightfield mesh (like a rock slab), peak in the middle.
+  const N = 12, pos = [], idx = [];
+  for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
+    const x = i - N / 2, z = j - N / 2;
+    pos.push(x, Math.max(0, 3 - Math.hypot(x, z) * 0.55), z);
+  }
+  for (let j = 0; j < N - 1; j++) for (let i = 0; i < N - 1; i++) {
+    const a = j * N + i, b = a + 1, c = a + N, d = c + 1;
+    idx.push(a, c, b, b, c, d);
+  }
+  const positions = new Float32Array(pos), indices = new Uint32Array(idx);
+  const before = new Float32Array(positions);
+  const opts = { seed: 7, droplets: 1500, strength: 0.6, deposition: 0.3, lifetime: 30 };
+  const r1 = erodeRockWithRain(positions, indices, opts);
+  const r2 = erodeRockWithRain(positions, indices, opts);
+  assert.deepEqual(positions, before, 'input positions must not be mutated');
+  assert.deepEqual(r1.positions, r2.positions, 'same seed => identical erosion');
+  assert.equal(r1.stats.droplets, 1500);
+  assert.ok(r1.stats.steps > 0 && r1.stats.eroded > 0, `expected real erosion, got ${JSON.stringify(r1.stats)}`);
+  let moved = 0;
+  for (let i = 0; i < positions.length; i++) if (Math.abs(r1.positions[i] - positions[i]) > 1e-6) moved++;
+  assert.ok(moved > 20, `rain should wear many surface vertices, moved=${moved}`);
+  for (const v of r1.positions) assert.ok(Number.isFinite(v), 'no NaN vertices');
+  // Off by default: zero droplets leaves the formation untouched.
+  const off = erodeRockWithRain(positions, indices, { droplets: 0 });
+  assert.deepEqual(off.positions, positions);
+});
+
+test('Terrain Studio colouring is flat: no noise/fabric texture in terrain or rock-instance shaders', async () => {
+  const { TERRAIN_RENDER_FRAG, ROCK_INSTANCE_FRAG } = await import('../src/erosion/erosion-shaders.js');
+  // COMMON_GEOLOGY_GLSL (interpolated into both) still defines noise helpers
+  // for the *simulation/hardness* fields — those are not colour textures and
+  // must stay. What must be gone is every use of them (or of repeating
+  // fabric tiling) to modulate albedo.
+  for (const [name, src] of [['terrain', TERRAIN_RENDER_FRAG], ['rock-instance', ROCK_INSTANCE_FRAG]]) {
+    assert.ok(!/float grain =|patchN|fabricAlbedo/.test(src), `${name} shader must not texture colour with grain/patch noise`);
+    assert.ok(!/uFabricMode\s*==|uFabricMode\s*>/.test(src), `${name} shader must not apply repeating fabric textures`);
+    assert.ok(!/albedo \*= \(1\.0 \+ 0\.1[24] \* grain|rockAlbedo \*=/.test(src), `${name} albedo must be a flat palette colour`);
+  }
+  assert.ok(TERRAIN_RENDER_FRAG.includes('FLAT COLOURS ONLY'), 'flat-colour policy documented in shader');
+});
