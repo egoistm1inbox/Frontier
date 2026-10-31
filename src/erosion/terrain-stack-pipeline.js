@@ -871,7 +871,7 @@ export class TerrainStackPipeline {
     }
 
     // 7. Update Rock Placement Layer & Telemetry
-    this.engine.rockCalving.updateTerrainSnapshot(this.snapBuf, this.snapN, span);
+    this.engine.readPhysicsSnapshot(span);
     if (activeRockLayer && reseedPlacements) {
       ep.showOutcrops = true;
       ep.boulderDensity = activeRockLayer.params.density ?? DEFAULT_EROSION_PARAMS.boulderDensity;

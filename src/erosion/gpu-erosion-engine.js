@@ -36,6 +36,8 @@ const PART_TEX_H = 128; // 256 * 128 = 32,768 GPU particle slots
 export const MAX_GPU_PARTICLES = PART_TEX_W * PART_TEX_H;
 
 const TELEMETRY_RES = 64;
+// Rigid-body rock physics heightfield resolution (texel-centre convention, see readPhysicsSnapshot)
+const PHYS_RES = 128;
 
 const TELEMETRY_FRAG = `#version 300 es
 precision highp float;
@@ -301,6 +303,35 @@ export class GpuErosionEngine {
     this.fboTelemetry = createFbo(gl, [this.telemetryTex]);
     this.telemetryBuf = new Float32Array(TELEMETRY_RES * TELEMETRY_RES * 4);
     this.initialSnap64 = new Float32Array(TELEMETRY_RES * TELEMETRY_RES * 4);
+
+    // 128x128 physics read-back for rigid-body rocks (kept separate from the 64x64 telemetry grid)
+    this.physTex = createDataTexture(gl, PHYS_RES, PHYS_RES, gl.RGBA32F, gl.RGBA, gl.FLOAT);
+    this.fboPhys = createFbo(gl, [this.physTex]);
+    this.physBuf = new Float32Array(PHYS_RES * PHYS_RES * 4);
+  }
+
+  /**
+   * Reads the live terrain at PHYS_RES² and feeds it to rigid-body rock physics.
+   * The shader samples texel floor((j + 0.5) * gridRes / PHYS_RES), so the physics grid is
+   * offset by half a physics texel's fraction of the source grid; the sampler is told so.
+   */
+  readPhysicsSnapshot(worldSpan = this.params.worldSpan) {
+    const gl = this.gl;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, this.fboPhys);
+    gl.viewport(0, 0, PHYS_RES, PHYS_RES);
+    gl.disable(gl.DEPTH_TEST);
+    gl.disable(gl.BLEND);
+    gl.useProgram(this.progTelemetry);
+    gl.bindVertexArray(this.emptyVao);
+    this._bindTex(this.progTelemetry, 'uTerrainTex', this.terrainTex[this.terrainIdx], 0);
+    gl.uniform1f(gl.getUniformLocation(this.progTelemetry, 'uGridRes'), this.gridRes);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    gl.readPixels(0, 0, PHYS_RES, PHYS_RES, gl.RGBA, gl.FLOAT, this.physBuf);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+
+    this.rockCalving.sampleShiftTexels = (0.5 * PHYS_RES) / this.gridRes;
+    this.rockCalving.updateTerrainSnapshot(this.physBuf, PHYS_RES, worldSpan);
+    return this.physBuf;
   }
 
   _initMeshVao() {
@@ -990,7 +1021,7 @@ export class GpuErosionEngine {
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.bindVertexArray(null);
 
-    this.rockCalving.updateTerrainSnapshot(this.initialSnap64, TELEMETRY_RES, p.worldSpan);
+    this.readPhysicsSnapshot();
     this.rockCalving.seedForLandscape(p);
 
     let initWaterSum = 0;
@@ -1353,7 +1384,7 @@ export class GpuErosionEngine {
     }
 
     // Feed live 64x64 terrain heightfield to 3D rock calving & undercut-boulder wake-up!
-    this.rockCalving.updateTerrainSnapshot(buf, TELEMETRY_RES, this.params.worldSpan);
+    this.readPhysicsSnapshot();
     if (this.playing && (this.params.rockfallRate || 0) > 0.25 && (this.params.boulderDensity ?? 0.65) > 0.05) {
       if (this.stepCount % 144 === 0) {
         this.rockCalving.calveCliffBoulders(Math.max(1, Math.round(this.params.rockfallRate * 3)));

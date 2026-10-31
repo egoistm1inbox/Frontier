@@ -2668,7 +2668,7 @@ layout(location = 2) in vec4 aMask;        // (ao, cavity, edge, localY)
 layout(location = 3) in vec4 aInstCol0;    // (rightScaled.xyz, seedHash)
 layout(location = 4) in vec4 aInstCol1;    // (upScaled.xyz, wear)
 layout(location = 5) in vec4 aInstCol2;    // (fwdScaled.xyz, radiusY)
-layout(location = 6) in vec4 aInstPosMeta; // (worldX, airLift, worldZ, isOutcrop)
+layout(location = 6) in vec4 aInstPosMeta; // (centreX, centreY, centreZ, isOutcrop) from CPU rigid-body physics
 
 uniform sampler2D uTerrainTex;
 uniform sampler2D uSnowTex;
@@ -2681,54 +2681,14 @@ out vec3 vWorldNormal;
 out vec4 vMask;
 out vec3 vInstMeta; // (seedHash, wear, isOutcrop)
 
-float sampleSurfaceAtXZ(vec2 xz, float span, float res, float snowVis) {
-  vec2 uv = clamp(xz / max(span, 1.0) + 0.5, vec2(0.001), vec2(0.999));
-  vec2 grid = uv * (res - 1.0);
-  ivec2 i0 = ivec2(floor(grid));
-  vec2 f = fract(grid);
-  int maxI = int(res) - 1;
-  ivec2 i00 = clamp(i0, ivec2(0), ivec2(maxI));
-  ivec2 i10 = clamp(i0 + ivec2(1, 0), ivec2(0), ivec2(maxI));
-  ivec2 i01 = clamp(i0 + ivec2(0, 1), ivec2(0), ivec2(maxI));
-  ivec2 i11 = clamp(i0 + ivec2(1, 1), ivec2(0), ivec2(maxI));
-
-  vec4 t00 = texelFetch(uTerrainTex, i00, 0);
-  vec4 t10 = texelFetch(uTerrainTex, i10, 0);
-  vec4 t01 = texelFetch(uTerrainTex, i01, 0);
-  vec4 t11 = texelFetch(uTerrainTex, i11, 0);
-  vec4 terr = mix(mix(t00, t10, f.x), mix(t01, t11, f.x), f.y);
-
-  vec4 s00 = texelFetch(uSnowTex, i00, 0);
-  vec4 s10 = texelFetch(uSnowTex, i10, 0);
-  vec4 s01 = texelFetch(uSnowTex, i01, 0);
-  vec4 s11 = texelFetch(uSnowTex, i11, 0);
-  vec4 cryo = mix(mix(s00, s10, f.x), mix(s01, s11, f.x), f.y);
-
-  float cryoLift = min(3.4, cryo.r * 0.85 + cryo.g * 0.62) * snowVis;
-  return terr.r + terr.g + terr.b + cryoLift;
-}
-
 void main() {
   mat3 M = mat3(aInstCol0.xyz, aInstCol1.xyz, aInstCol2.xyz);
-  float span = uRenderDomain.x;
-  float res = uRenderDomain.y;
-  vec2 centerXZ = aInstPosMeta.xz;
-  float airLift = max(0.0, aInstPosMeta.y);
-  float radiusY = max(0.25, aInstCol2.w);
   bool isOutcrop = aInstPosMeta.w > 0.5;
 
-  // Sample exact 512x512 GPU terrain + snow across the rock footprint so rocks NEVER sink under
-  // sub-8m ridges, dunes, or snowdrifts that were smoothed out in the 64x64 CPU telemetry grid!
-  float rFoot = min(3.2, 0.50 * max(length(aInstCol0.xyz), length(aInstCol2.xyz)));
-  float hC = sampleSurfaceAtXZ(centerXZ, span, res, uLayerVis.z);
-  float hE = sampleSurfaceAtXZ(centerXZ + vec2(rFoot, 0.0), span, res, uLayerVis.z);
-  float hW = sampleSurfaceAtXZ(centerXZ - vec2(rFoot, 0.0), span, res, uLayerVis.z);
-  float hN = sampleSurfaceAtXZ(centerXZ + vec2(0.0, rFoot), span, res, uLayerVis.z);
-  float hS = sampleSurfaceAtXZ(centerXZ - vec2(0.0, rFoot), span, res, uLayerVis.z);
-  float hFoot = max(hC, 0.55 * hC + 0.45 * max(max(hE, hW), max(hN, hS)));
-
-  float centerY = hFoot + radiusY * (isOutcrop ? 0.36 : 0.48) + airLift;
-  vec3 wp = M * aPos + vec3(centerXZ.x, centerY, centerXZ.y);
+  // The CPU rigid-body simulation is the single source of truth for placement: the rock's
+  // centre of mass is drawn exactly where physics put it, with no GPU terrain re-sampling.
+  vec3 centre = aInstPosMeta.xyz;
+  vec3 wp = M * aPos + centre;
 
   // Cofactor / inverse-transpose for non-uniform rock scaling so facet normals stay exact!
   vec3 nWorld = cross(M[1], M[2]) * aNormal.x

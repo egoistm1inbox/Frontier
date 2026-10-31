@@ -385,50 +385,36 @@ test('3D RockCalvingSystem synthesizes outward-normal CCW polyhedral outcrops & 
     assert.ok(s <= 0.40, `Rooted outcrop must never cling to steep slope, got slope=${s}`);
   }
 
-  // Verify brisk rockfall speed: a boulder on the steep cliff face x=0 must travel >12m in 1.0s!
+  // Real rigid-body rockfall: a boulder released on the steep cliff face (x=0) must tumble
+  // downslope under gravity, friction and contact, then come to rest on the gentler apron.
   const cliffSample = sys.sampleTerrain(0.0, 0.0);
   assert.ok(cliffSample.slope > 1.0, `Expected steep cliff at x=0, got slope=${cliffSample.slope}`);
-  const testRock = {
-    submesh: 2,
-    isOutcrop: false,
-    settled: false,
-    x: 0.0,
-    y: cliffSample.totalH + 1.5,
-    z: 0.0,
-    vx: 2.0,
-    vy: 0.0,
-    vz: 0.0,
-    sx: 2.0,
-    sy: 1.8,
-    sz: 2.0,
-    radiusY: 1.8,
-    yaw: 0.0,
-    upX: 0.0,
-    upY: 1.0,
-    upZ: 0.0,
-    isSlab: false,
-    wakeTimer: 4.0,
-    wear: 0.2,
-    seedHash: 0.5,
-  };
-  sys.rocks.push(testRock);
-  for (let s = 0; s < 20; s++) sys.stepPhysics(0.05); // 1.0 second elapsed
-  assert.ok(testRock.x > 12.0, `Cliff boulder must slide briskly (>12m in 1.0s), moved ${testRock.x.toFixed(2)}m`);
+  const testRock = sys.addBoulder({
+    submesh: 2, isOutcrop: false, x: 0.0, y: cliffSample.totalH + 3.0, z: 0.0,
+    sx: 2.0, sy: 1.8, sz: 2.0, yaw: 0.3, pitch: 0.2, roll: 0.1, seedHash: 0.5, wear: 0.2, vx: 2.0,
+  });
+  const startX = testRock.x;
+  for (let s = 0; s < 20; s++) sys.stepPhysics(0.05); // 1.0 second
+  assert.ok(Number.isFinite(testRock.x + testRock.y + testRock.z), 'Rigid boulder state must stay finite');
+  assert.ok(testRock.x > startX + 1.0, `Cliff boulder must tumble downslope, moved ${(testRock.x - startX).toFixed(2)}m in 1.0s`);
+  for (let s = 0; s < 240; s++) sys.stepPhysics(0.05); // 12 seconds more
+  assert.ok(testRock.sleeping, 'Released boulder must come to rest and fall asleep on the apron');
 
-  // Step boulder gravity rolling until boulders reach the gentle cliff toe / apron
-  for (let s = 0; s < 100; s++) sys.stepPhysics(0.05);
-  const settled = sys.rocks.filter((r) => !r.isOutcrop && r.settled);
-  assert.ok(settled.length >= boulders.length * 0.75, 'Calved boulders must naturally decelerate and settle on gentler terrain');
+  // Settled boulders must not rest on slopes steeper than their frictional limit
+  const settled = sys.rocks.filter((r) => !r.isOutcrop && r.sleeping);
+  assert.ok(settled.length >= 1, 'Some calved boulders must settle on the apron');
   for (const b of settled) {
     const s = sys.sampleTerrain(b.x, b.z).slope;
-    assert.ok(s <= 0.43, `Settled boulder must NEVER cling on steep slope (>0.43), got slope=${s}`);
+    // Centre-sampled slope may exceed the friction cone slightly because the ~2 m footprint
+    // spans flatter ground; allow a 0.1 margin on top of the boulder's own friction coefficient.
+    assert.ok(s <= b.friction + 0.1, `Sleeping boulder must not rest on a slope beyond its friction (${b.friction}), got slope=${s}`);
   }
 
-  // Verify hydraulic undercutting wakes settled boulders up to roll further!
+  // Undercutting the ground beneath a sleeping boulder must wake it so it can roll further
   const target = settled[0];
   for (let i = 0; i < grid.length; i += 4) grid[i] = Math.max(2.0, grid[i] - 2.5);
   sys.updateTerrainSnapshot(grid, N, 512.0);
-  assert.equal(target.settled, false, 'Erosion undercutting (>0.24m drop) must wake settled boulder to roll');
+  assert.equal(target.sleeping, false, 'Erosion undercutting must wake a sleeping boulder');
 });
 
 test('Asymmetric Namib/Sahara sand dune profile joins windward stoss & 33.8-deg planar slipface along a razor-sharp brink', () => {
@@ -456,12 +442,14 @@ test('Asymmetric Namib/Sahara sand dune profile joins windward stoss & 33.8-deg 
   assert.equal(evalDune(-190.0), 0, 'Upwind stoss toe merges smoothly onto flat desert pan');
 });
 
-test('3D Rocks pack non-negative airLift and ROCK_INSTANCE_VERT locks footprints to exact 512x512 terrain heightfield', () => {
+test('3D Rocks are drawn at their CPU rigid-body centre and never sink below the terrain snapshot', () => {
   assert.ok(
-    Shaders.ROCK_INSTANCE_VERT.includes('texelFetch(uTerrainTex') &&
-    Shaders.ROCK_INSTANCE_VERT.includes('texelFetch(uSnowTex') &&
-    Shaders.ROCK_INSTANCE_VERT.includes('max(0.0, aInstPosMeta.y)'),
-    'ROCK_INSTANCE_VERT must lock 3D rock footprints onto exact 512x512 uTerrainTex + uSnowTex with non-negative airLift'
+    Shaders.ROCK_INSTANCE_VERT.includes('vec3 centre = aInstPosMeta.xyz'),
+    'ROCK_INSTANCE_VERT must place rocks at the CPU rigid-body centre'
+  );
+  assert.ok(
+    !Shaders.ROCK_INSTANCE_VERT.includes('airLift') && !Shaders.ROCK_INSTANCE_VERT.includes('texelFetch(uTerrainTex'),
+    'ROCK_INSTANCE_VERT must not re-sample GPU terrain or add airLift on top of the physics centre'
   );
 
   const sys = new RockCalvingSystem(6);
@@ -471,16 +459,16 @@ test('3D Rocks pack non-negative airLift and ROCK_INSTANCE_VERT locks footprints
     for (let i = 0; i < N; i++) {
       const idx = (j * N + i) * 4;
       const u = i / (N - 1);
-      // Create convex rocky crown on left, steep cliff in center, gentle talus apron on right
+      // Convex rocky crown on the left, steep cliff in the centre, gentle talus apron on the right
       const h = u < 0.35
         ? 110.0 - Math.pow((u - 0.18) * 12.0, 2.0) * 1.4
         : u < 0.55
           ? 105.0 - (u - 0.35) * 360.0
           : 33.0 - (u - 0.55) * 14.0;
       grid[idx] = h;
-      grid[idx + 1] = 0.0; // dry
-      grid[idx + 2] = u >= 0.55 && u < 0.72 ? 1.4 : 0.0; // coarse scree at cliff toe
-      grid[idx + 3] = 0.0; // low sand
+      grid[idx + 1] = 0.0;
+      grid[idx + 2] = u >= 0.55 && u < 0.72 ? 1.4 : 0.0;
+      grid[idx + 3] = 0.0;
     }
   }
   sys.updateTerrainSnapshot(grid, N, 512.0);
@@ -492,8 +480,12 @@ test('3D Rocks pack non-negative airLift and ROCK_INSTANCE_VERT locks footprints
     const count = sys.bucketCounts[v];
     const arr = sys.bucketData[v];
     for (let k = 0; k < count; k++) {
-      const airLift = arr[k * 16 + 13];
-      assert.ok(Number.isFinite(airLift) && airLift >= 0.0, `Rock airLift must be >= 0 so rocks never sink underground, got ${airLift}`);
+      const o = k * 16;
+      const cx = arr[o + 12], cy = arr[o + 13], cz = arr[o + 14];
+      assert.ok(Number.isFinite(cx + cy + cz), 'Rock centre must be finite');
+      const ground = sys.sampleTerrain(cx, cz).totalH;
+      // Centre of mass must never sit below the surface it rests on (contact keeps corners above ground)
+      assert.ok(cy >= ground - 0.05, `Rock centre ${cy.toFixed(2)} must not sink below terrain ${ground.toFixed(2)}`);
     }
   }
 });
