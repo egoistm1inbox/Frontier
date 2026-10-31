@@ -116,6 +116,8 @@ export class GpuErosionEngine {
   constructor(canvas, onTelemetry = null) {
     this.canvas = canvas;
     this.onTelemetry = onTelemetry;
+    // View-only layer visibility (toolbar toggles). Independent of presets and of simulation state.
+    this.viewVis = { water: true, snow: true, rain: true };
 
     const gl = canvas.getContext('webgl2', {
       antialias: true,
@@ -791,8 +793,8 @@ export class GpuErosionEngine {
     return [
       p.lithologyLayerEnabled === false ? 0.0 : (p.lithologyOpacity ?? 1.0),
       p.fabricLayerEnabled === false ? 0.0 : (p.fabricStrength ?? 1.0),
-      p.snowLayerEnabled === false ? 0.0 : (p.snowVisOpacity ?? 1.0),
-      (p.waterLayerEnabled === false || !p.showWater) ? 0.0 : (p.waterVisOpacity ?? 1.0),
+      (p.snowLayerEnabled === false || !this.viewVis.snow) ? 0.0 : (p.snowVisOpacity ?? 1.0),
+      (p.waterLayerEnabled === false || !p.showWater || !this.viewVis.water) ? 0.0 : (p.waterVisOpacity ?? 1.0),
     ];
   }
 
@@ -1489,7 +1491,7 @@ export class GpuErosionEngine {
       gl.getUniformLocation(this.progTerrainRender, 'uRenderDomain'),
       p.worldSpan,
       this.gridRes,
-      (p.showWater && p.waterLayerEnabled !== false) ? 1.0 : 0.0,
+      (this.viewVis.water && p.showWater && p.waterLayerEnabled !== false) ? 1.0 : 0.0,
       timeSec
     );
     gl.uniform4fv(gl.getUniformLocation(this.progTerrainRender, 'uLayerVis'), layerVisVec);
@@ -1539,7 +1541,7 @@ export class GpuErosionEngine {
         gl.getUniformLocation(this.progRockInstance, 'uRenderDomain'),
         p.worldSpan,
         this.gridRes,
-        (p.showWater && p.waterLayerEnabled !== false) ? 1.0 : 0.0,
+        (this.viewVis.water && p.showWater && p.waterLayerEnabled !== false) ? 1.0 : 0.0,
         timeSec
       );
       gl.uniform4fv(gl.getUniformLocation(this.progRockInstance, 'uLayerVis'), layerVisVec);
@@ -1585,7 +1587,7 @@ export class GpuErosionEngine {
         gl.getUniformLocation(this.progGrassInstance, 'uRenderDomain'),
         p.worldSpan,
         this.gridRes,
-        p.showWater ? 1.0 : 0.0,
+        (this.viewVis.water && p.showWater) ? 1.0 : 0.0,
         timeSec
       );
       gl.uniform4f(
@@ -1619,7 +1621,7 @@ export class GpuErosionEngine {
     }
 
     // 3. 3D Falling Sky Raindrops & Sediment-Colored Surface Runoff Particles!
-    if (p.showParticles && p.particleOpacity > 0.01 && climate.anyParticleSpecies) {
+    if (this.viewVis.rain && p.showParticles && p.particleOpacity > 0.01 && climate.anyParticleSpecies) {
       const activeCount = Math.min(MAX_GPU_PARTICLES, Math.max(1024, Math.floor(p.particleCount)));
       gl.disable(gl.CULL_FACE);
       gl.depthMask(false);

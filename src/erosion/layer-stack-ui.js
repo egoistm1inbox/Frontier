@@ -301,6 +301,16 @@ export class ErosionLayerStackUI {
   }
 
   _bindGlobalEvents() {
+    // View-only visibility toggles (water / snow / rain). They never alter simulation state or presets.
+    for (const [id, key] of [['tp-view-water', 'water'], ['tp-view-snow', 'snow'], ['tp-view-rain', 'rain']]) {
+      const el = document.getElementById(id);
+      if (!el) continue;
+      el.checked = this.engine.viewVis[key] !== false;
+      el.addEventListener('change', () => {
+        this.engine.viewVis[key] = el.checked;
+      });
+    }
+
     if (this.elSearch) {
       this.elSearch.addEventListener('input', () => {
         this.searchQuery = this.elSearch.value.trim().toLowerCase();

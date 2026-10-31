@@ -1652,3 +1652,25 @@ select {
     grid-template-columns: repeat(2, minmax(140px, 1fr));
   }
 }
+
+/* View-only layer visibility toggles (Water / Snow / Rain) in the Terrain Studio viewport toolbar */
+.tp-view-toggles {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tp-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: #c9d1d9;
+  cursor: pointer;
+  user-select: none;
+}
+
+.tp-check input {
+  accent-color: #d6a25b;
+  margin: 0;
+}

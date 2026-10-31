@@ -1018,7 +1018,7 @@ export class TerrainStackPipeline {
       gl.getUniformLocation(this.engine.progTerrainRender, 'uRenderDomain'),
       p.worldSpan,
       R,
-      (p.showWater && p.waterLayerEnabled !== false) ? 1.0 : 0.0,
+      (this.engine.viewVis.water && p.showWater && p.waterLayerEnabled !== false) ? 1.0 : 0.0,
       timeSec
     );
     gl.uniform4fv(gl.getUniformLocation(this.engine.progTerrainRender, 'uLayerVis'), layerVisVec);
@@ -1083,7 +1083,7 @@ export class TerrainStackPipeline {
         gl.getUniformLocation(this.engine.progRockInstance, 'uRenderDomain'),
         p.worldSpan,
         R,
-        (p.showWater && p.waterLayerEnabled !== false) ? 1.0 : 0.0,
+        (this.engine.viewVis.water && p.showWater && p.waterLayerEnabled !== false) ? 1.0 : 0.0,
         timeSec
       );
       gl.uniform4fv(gl.getUniformLocation(this.engine.progRockInstance, 'uLayerVis'), layerVisVec);
@@ -1129,7 +1129,7 @@ export class TerrainStackPipeline {
         gl.getUniformLocation(this.engine.progGrassInstance, 'uRenderDomain'),
         p.worldSpan,
         R,
-        p.showWater ? 1.0 : 0.0,
+        (this.engine.viewVis.water && p.showWater) ? 1.0 : 0.0,
         timeSec
       );
       gl.uniform4f(
@@ -1163,7 +1163,7 @@ export class TerrainStackPipeline {
     }
 
     // 6. 3D Falling Sky Raindrops, Snow, Wind Sand & Runoff Particles (`progParticleRender`)
-    if (this.liveSimRunning && p.showParticles && p.particleOpacity > 0.01 && climate.anyParticleSpecies && viewCode !== 7) {
+    if (this.liveSimRunning && this.engine.viewVis.rain && p.showParticles && p.particleOpacity > 0.01 && climate.anyParticleSpecies && viewCode !== 7) {
       const activeCount = Math.min(MAX_GPU_PARTICLES, Math.max(1024, Math.floor(p.particleCount)));
       gl.disable(gl.CULL_FACE);
       gl.depthMask(false);
