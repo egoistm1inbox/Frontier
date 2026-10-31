@@ -653,6 +653,7 @@ export function resolveParams(input = {}) {
     seed: input.seed ?? 4029,
     quality: input.quality ?? 'medium',
     decimation: input.decimation ?? 1.0,
+    rainErosion: input.rainErosion ?? 0.5,
     ...preset.params,
     ...input,
   };

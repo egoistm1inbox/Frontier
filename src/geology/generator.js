@@ -12,6 +12,7 @@ import {
   buildGameReadyAttributes,
 } from '../core/mesh-post.js';
 import { resolveParams, QUALITY_LEVELS, FORMATION_PRESETS } from './presets.js';
+import { applyRainErosion } from './rain-erosion.js';
 import { createTectonicField } from './tectonics.js';
 import { buildMacroFormation } from './formations.js';
 import { createGeologicalSdfEvaluator } from './surface-detail.js';
@@ -84,10 +85,19 @@ export function generateRockFormation(rawParams = {}, onProgress = null) {
     macro.groundY ?? 0
   );
 
+  // Particle rain erosion on the smoothed mesh, BEFORE decimation so the low-poly bake keeps the carved detail
+  if (onProgress) onProgress(0.86, 'Rain erosion over rock faces...');
+  const rained = applyRainErosion(surfacePositions, cleaned.indices, {
+    strength: params.rainErosion ?? 0,
+    groundY: macro.groundY ?? 0,
+    seed: params.seed || 4029,
+  });
+  const erodedPositions = rained.positions;
+
   const rawTriCount = cleaned.indices.length / 3;
   const decimated = params.decimation < 0.98
-    ? decimateMeshQEM(surfacePositions, cleaned.indices, params.decimation)
-    : { positions: surfacePositions, indices: cleaned.indices };
+    ? decimateMeshQEM(erodedPositions, cleaned.indices, params.decimation)
+    : { positions: erodedPositions, indices: cleaned.indices };
 
   if (onProgress) onProgress(0.92, 'Baking volumetric AO, curvature & normals...');
   const finalMesh = buildGameReadyAttributes(

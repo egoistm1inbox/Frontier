@@ -26,6 +26,7 @@ const SLIDER_SCHEMA = {
     { key: 'talusAmount',      label: 'Talus & Fallen Slabs',   min: 0.0, max: 1.0, step: 0.02, fmt: (v) => `${Math.round(v * 100)}%` },
   ],
   detail: [
+    { key: 'rainErosion',       label: 'Rain Erosion (Particles)', min: 0.0, max: 1.0, step: 0.02, fmt: (v) => `${Math.round(v * 100)}%` },
     { key: 'cleavageSharpness', label: 'Cleavage Planarity',     min: 0.15, max: 1.0, step: 0.02, fmt: (v) => `${Math.round(v * 100)}%` },
     { key: 'facetAmplitude',    label: 'Stepped Scarplet Depth', min: 0.0,  max: 1.0, step: 0.02, fmt: (v) => `${Math.round(v * 100)}%` },
     { key: 'edgeWear',          label: 'Chisel Chamfer & Wear',  min: 0.0,  max: 1.0, step: 0.02, fmt: (v) => `${Math.round(v * 100)}%` },
@@ -486,6 +487,7 @@ function selectArchetype(archId) {
     seed: state.params.seed,
     quality: state.params.quality,
     decimation: state.params.decimation,
+    rainErosion: state.params.rainErosion,
   });
   document.getElementById('active-category').textContent = preset.category;
   document.querySelectorAll('#archetype-list .archetype-card').forEach((el) => {

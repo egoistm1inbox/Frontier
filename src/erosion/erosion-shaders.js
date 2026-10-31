@@ -1730,7 +1730,33 @@ void main() {
     // Lowering snowline blankets all lower slopes & valleys too!
     float coldZone = smoothstep(snowlineNorm - 0.18 * uClimate.y, snowlineNorm + 0.12, elevN);
     float capSoft = max(0.0, 1.0 - snowDepth / 6.5);
-    snowDepth += uClimate.y * coldZone * stormSwirl * capSoft * 0.085 * dt;
+
+    // Terrain-aware retention: snow sticks to gentle ground and sheds from steep faces (couloirs take it)
+    ivec2 cE = ivec2(min(c.x + 1, maxI), c.y);
+    ivec2 cW = ivec2(max(c.x - 1, 0), c.y);
+    ivec2 cN = ivec2(c.x, min(c.y + 1, maxI));
+    ivec2 cS = ivec2(c.x, max(c.y - 1, 0));
+    vec4 tE = texelFetch(uTerrainTex, cE, 0);
+    vec4 tW = texelFetch(uTerrainTex, cW, 0);
+    vec4 tN2 = texelFetch(uTerrainTex, cN, 0);
+    vec4 tS = texelFetch(uTerrainTex, cS, 0);
+    float dhdx = ((tE.r + tE.g + tE.b) - (tW.r + tW.g + tW.b)) / max(2.0 * cellSize, 1e-4);
+    float dhdz = ((tN2.r + tN2.g + tN2.b) - (tS.r + tS.g + tS.b)) / max(2.0 * cellSize, 1e-4);
+    float slopeT = length(vec2(dhdx, dhdz));
+    float retention = 1.0 - smoothstep(0.62, 1.05, slopeT);
+
+    // Wind loading: the windward face is scoured, the lee face is loaded with drifted snow
+    vec2 windD = uWindCryo.xy;
+    float windLen = length(windD);
+    float windFace = 0.0;
+    if (windLen > 1e-4) {
+      vec2 wdir = windD / windLen;
+      vec3 nT = normalize(vec3(-dhdx, 1.0, -dhdz));
+      windFace = clamp(dot(nT.xz, -wdir) * 2.0, -1.0, 1.0); // > 0 faces into the wind
+    }
+    float windLoad = 1.0 - 0.45 * max(windFace, 0.0) + 0.35 * max(-windFace, 0.0);
+
+    snowDepth += uClimate.y * coldZone * stormSwirl * capSoft * retention * windLoad * 0.085 * dt;
   }
 
   // ==========================================================================
@@ -2396,15 +2422,25 @@ void main() {
     vec4 flowD = sampleGridBilinear(uVelocityFieldTex, vUv, res);
     float tSec = uRenderDomain.w;
 
-    vec2 wUv = vWorldPos.xz * 0.42 - flowD.xy * tSec * 0.35;
-    float ripX = noise2D(wUv * 2.1 + vec2(tSec * 0.6, 0.0)) - noise2D(wUv * 2.1 - vec2(tSec * 0.6, 0.0));
-    float ripZ = noise2D(wUv * 2.3 + vec2(0.0, tSec * 0.5)) - noise2D(wUv * 2.3 - vec2(0.0, tSec * 0.5));
+    // Flow-aligned ripples: streaks run across the local current and are advected downstream at a
+    // speed that follows the flow magnitude, so surface detail reads as moving water (not noise).
+    vec2 fD = flowD.xy;
+    float fm = length(fD);
+    vec2 fdir = fm > 1e-4 ? fD / fm : vec2(1.0, 0.0);
+    float along = dot(vWorldPos.xz, fdir);
+    float across = dot(vWorldPos.xz, vec2(-fdir.y, fdir.x));
+    float ripBend = 1.7 * (noise2D(vec2(across * 0.9, along * 0.12)) - 0.5);
+    float ripPhase = along * 3.2 - tSec * (0.8 + 2.0 * fm) + ripBend;
+    float ripAmp = clamp(fm * 1.2, 0.0, 1.0) * 0.8 * smoothstep(0.01, 0.12, wDepth);
+    vec2 ripGrad = fdir * cos(ripPhase) * 3.2 * ripAmp;
+    float ripX = ripGrad.x * 0.7;
+    float ripZ = ripGrad.y * 0.7;
 
     float wH_R = hR + (tR.a > 0.003 ? tR.a : 0.0);
     float wH_L = hL + (tL.a > 0.003 ? tL.a : 0.0);
     float wH_U = hU + (tU.a > 0.003 ? tU.a : 0.0);
     float wH_D = hD + (tD.a > 0.003 ? tD.a : 0.0);
-    vec3 waterN = safeNorm3(vec3(wH_L - wH_R + ripX * 0.08, 2.0 * cellSize, wH_D - wH_U + ripZ * 0.08), vec3(0.0, 1.0, 0.0));
+    vec3 waterN = safeNorm3(vec3(wH_L - wH_R + ripX * 0.06, 2.0 * cellSize, wH_D - wH_U + ripZ * 0.06), vec3(0.0, 1.0, 0.0));
 
     float turbidity = clamp(flowD.z * 0.35 + fineMask * 0.45, 0.0, 1.0);
     // Deep 2.5D hydrostatic lakes, Oasis emerald lagoons & Studlagil glacial-flour turquoise rivers!
@@ -2424,7 +2460,7 @@ void main() {
     vec3 H = safeNorm3(L + V, vec3(0.0, 1.0, 0.0));
     float spec = pow(max(1e-5, dot(waterN, H)), 96.0) * 1.35 * shadow;
     float shoreFoam = (1.0 - smoothstep(0.02, 0.16, wDepth)) * smoothstep(0.015, 0.05, wDepth) * 0.45;
-    float foam = (smoothstep(0.55, 1.8, flowD.z) + shoreFoam) * (0.35 + 0.35 * noise2D(wUv * 4.5 + tSec));
+    float foam = (smoothstep(0.55, 1.8, flowD.z) + shoreFoam) * (0.35 + 0.35 * noise2D(vec2(across * 1.6, along * 0.5 - tSec * (0.5 + fm))));
 
     vec3 submerged = mix(litColor, waterTint * (sunRadiance * 0.55 + ambient * 1.15), clamp(absorb * 0.85 + 0.18, 0.0, 0.94));
     vec3 waterCol = mix(submerged, skyReflect, fresnel * 0.68) + vec3(spec) + vec3(0.55, 0.58, 0.60) * foam * 0.35;
