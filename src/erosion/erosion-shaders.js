@@ -1446,6 +1446,16 @@ export const TERRAIN_INTEGRATE_FRAG = `#version 300 es
 ${GLSL_PRECISION_HEADER}
 in vec2 vUv;
 
+// Net pipe discharge (x, z) through the cell at p, from its four neighbours' flux
+vec2 pipeDischarge(ivec2 p, int mI, float cellSize, sampler2D fluxTex) {
+  vec4 fc = texelFetch(fluxTex, p, 0);
+  float inL = p.x > 0 ? texelFetch(fluxTex, ivec2(p.x - 1, p.y), 0).x : 0.0;
+  float inR = p.x < mI ? texelFetch(fluxTex, ivec2(p.x + 1, p.y), 0).y : 0.0;
+  float inD = p.y > 0 ? texelFetch(fluxTex, ivec2(p.x, p.y - 1), 0).z : 0.0;
+  float inU = p.y < mI ? texelFetch(fluxTex, ivec2(p.x, p.y + 1), 0).w : 0.0;
+  return 0.5 * vec2((inL - fc.y) + (fc.x - inR), (inD - fc.w) + (fc.z - inU)) / cellSize;
+}
+
 layout(location = 0) out vec4 outTerrain;
 layout(location = 1) out vec4 outVelocity;
 
@@ -1486,8 +1496,16 @@ void main() {
   float totalOut = fC.x + fC.y + fC.z + fC.w;
   float dWaterPipe = dt * (totalIn - totalOut) / (cellSize * cellSize);
 
-  float qX = 0.5 * ((inFromL - fC.y) + (fC.x - inFromR)) / cellSize;
-  float qZ = 0.5 * ((inFromD - fC.w) + (fC.z - inFromU)) / cellSize;
+  // Discharge is averaged with the four neighbours so the flow direction is coherent cell-to-cell
+  // (raw per-cell discharge jitters and reads as noisy, sideways water)
+  vec2 qRaw = pipeDischarge(c, maxI, cellSize, uFluxTex);
+  vec2 qNb = pipeDischarge(ivec2(max(0, c.x - 1), c.y), maxI, cellSize, uFluxTex)
+           + pipeDischarge(ivec2(min(maxI, c.x + 1), c.y), maxI, cellSize, uFluxTex)
+           + pipeDischarge(ivec2(c.x, max(0, c.y - 1)), maxI, cellSize, uFluxTex)
+           + pipeDischarge(ivec2(c.x, min(maxI, c.y + 1)), maxI, cellSize, uFluxTex);
+  vec2 qS = 0.4 * qRaw + 0.15 * qNb;
+  float qX = qS.x;
+  float qZ = qS.y;
   float avgW = max(0.025, terr.a + 0.5 * dWaterPipe);
   vec2 flowVel = clamp(vec2(qX, qZ) / avgW, vec2(-12.0), vec2(12.0));
   float flowSpeed = length(flowVel);
@@ -1569,7 +1587,9 @@ void main() {
   if (uHydrology.y > 0.01) {
     float upstreamBand = smoothstep(0.32, 0.47, -vUv.y + 0.5) * (1.0 - smoothstep(0.47, 0.50, abs(vUv.y - 0.5)));
     float channelLow = 1.0 - smoothstep(0.06, 0.24, elevN);
-    water += upstreamBand * channelLow * uHydrology.y * 0.16 * dt;
+    // Springs are discrete patches (noise-gated), so headwaters start as distinct sources, not a ruled line
+    float springs = smoothstep(0.42, 0.68, noise2D(worldXZ * 0.045 + vec2(uSeed * 0.013, 3.7)));
+    water += upstreamBand * channelLow * springs * uHydrology.y * 0.36 * dt;
   } else if (uHydrology.y < -0.01) {
     // Artesian desert oasis groundwater spring: maintains crystal oasis lake at water-table 9.8m!
     vec2 oasisD = (vUv * 2.0 - 1.0) - vec2(-0.04, -0.03);
@@ -1671,8 +1691,11 @@ void main() {
     }
   }
 
-  if (c.x == 0 || c.x == maxI || c.y == 0 || c.y == maxI) {
-    water *= 0.65;
+  float edgeDist = float(min(min(c.x, maxI - c.x), min(c.y, maxI - c.y)));
+  if (edgeDist < 6.0) {
+    // Absorbing sponge over the outer six cells: water leaves gradually, with no dry seam along the border
+    float sponge = 1.0 - smoothstep(0.0, 6.0, edgeDist);
+    water *= 1.0 - 0.35 * sponge;
   } else {
     // Surface-area-limited evaporation: thin hillslope films evaporate cleanly while deep 2.5D
     // pooled lakes retain hydrostatic volume and spill naturally into downstream river channels!
