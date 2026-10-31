@@ -109,8 +109,9 @@ for (const [k, theme] of Object.entries(MATERIAL_THEMES)) {
   const id = Number(k);
   DERIVED_PALETTES[id] = {
     id,
-    label: theme.name,
-    subtitle: theme.subtitle,
+    // MATERIAL_THEMES entries carry `label` only; `name` was never defined (rendered as "undefined")
+    label: theme.label,
+    subtitle: theme.subtitle || '',
   };
 }
 
