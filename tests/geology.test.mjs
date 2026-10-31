@@ -215,3 +215,13 @@ test('Terrain Studio colouring is flat: no noise/fabric texture in terrain or ro
   }
   assert.ok(TERRAIN_RENDER_FRAG.includes('FLAT COLOURS ONLY'), 'flat-colour policy documented in shader');
 });
+
+test('Snow landscapes have no vein/streak texture: uniform snowfall, blurred opaque flat snow blanket', async () => {
+  const { INIT_SNOW_FRAG, SNOW_CRYO_FRAG, TERRAIN_RENDER_FRAG } = await import('../src/erosion/erosion-shaders.js');
+  assert.ok(!/driftNoise/.test(INIT_SNOW_FRAG), 'initial snowpack must not be modulated by a drift-noise field');
+  assert.ok(!/stormSwirl = 0\.72/.test(SNOW_CRYO_FRAG), 'live snowfall must not be modulated by swirl noise');
+  assert.ok(TERRAIN_RENDER_FRAG.includes('sBlur'), 'rendered snow depth must be cross-blurred so narrow streaks cannot print through');
+  assert.ok(TERRAIN_RENDER_FRAG.includes('surfaceAlbedo = mix(surfaceAlbedo, snowAlbedo, snowCover);'), 'snow must be fully opaque where present');
+  assert.ok(/bedNormal = safeNorm3\(mix\(bedNormal, vec3\(0\.0, 1\.0, 0\.0\), cryoShade/.test(TERRAIN_RENDER_FRAG), 'snow shading normal must be flattened so buried channels draw no lines');
+  assert.ok(TERRAIN_RENDER_FRAG.includes('snowCover < 0.5 && iceCover < 0.5'), 'no meltwater sheet may be drawn over the snow blanket');
+});

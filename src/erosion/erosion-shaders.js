@@ -736,21 +736,21 @@ void main() {
   float elevN = hC / reliefScale;
   float snowline = clamp(uClimate.x, 0.02, 1.05);
 
-  vec2 worldXZ = (vUv - 0.5) * uCryoParams.w;
-  float driftNoise = fbm2D(worldXZ * 0.024 + uSeed * 0.017, 4, 0.52);
+  // Uniform snowfall: snow depth is a flat function of elevation, slope and
+  // concavity ONLY — no noise field, so no patchy/streaky texture in the pack.
 
   // Full-domain mountain snowpack: covers ridges, shoulders, cirques & wind-drifted benches across
   // the ENTIRE terrain above snowline (and snow-drifted hollows slightly below snowline!), while
   // sheer 55-deg+ rock cliffs shed snow into couloir chutes & cliff-base snow aprons!
-  float altFactor = smoothstep(snowline - 0.16 * snowfallRate, snowline + 0.14, elevN + (driftNoise - 0.5) * 0.09);
+  float altFactor = smoothstep(snowline - 0.16 * snowfallRate, snowline + 0.14, elevN);
   float slopeHold = 1.0 - smoothstep(1.05, 1.95, slope);
   float couloirPool = clamp(concavity * 0.95, 0.0, 1.25);
 
-  float initSnow = snowfallRate * (altFactor * slopeHold * (0.85 + 0.95 * driftNoise) + couloirPool * altFactor * 0.85);
+  float initSnow = snowfallRate * (altFactor * slopeHold * 1.30 + couloirPool * altFactor * 0.85);
   // Valley & cirque glaciers extend below the snowline down concave U-shaped troughs!
   float valleyGlacierZone = smoothstep(snowline - 0.28 * uClimate.z, snowline + 0.18, elevN)
                           * (1.0 - smoothstep(0.28, 0.82, slope))
-                          * smoothstep(-0.04, 0.14, concavity + 0.06 * driftNoise);
+                          * smoothstep(-0.04, 0.14, concavity);
   float initIce = uClimate.z * valleyGlacierZone * (1.2 + 2.6 * smoothstep(snowline - 0.05, snowline + 0.32, elevN));
 
   outSnow = vec4(clamp(initSnow, 0.0, 5.5), clamp(initIce, 0.0, 14.0), 0.0, 0.0);
@@ -1725,7 +1725,7 @@ void main() {
   // 1. FULL-DOMAIN OROGRAPHIC BLIZZARD SNOWFALL (Covers ENTIRE Terrain Smoothly!)
   // ==========================================================================
   if (uClimate.y > 0.01) {
-    float stormSwirl = 0.72 + 0.56 * fbm2D(worldXZ * 0.016 + vec2(uWindCryo.w * 0.025, -uWindCryo.w * 0.018) + uSeed * 0.01, 3, 0.52);
+    float stormSwirl = 1.0; // uniform snowfall — no swirl noise texture in the snowpack
     // Snow falls across the entire domain wherever temperature is near/below freezing!
     // Lowering snowline blankets all lower slopes & valleys too!
     float coldZone = smoothstep(snowlineNorm - 0.18 * uClimate.y, snowlineNorm + 0.12, elevN);
@@ -2200,7 +2200,19 @@ void main() {
   // ==========================================================================
   // CRYOSPHERE: SNOWPACK, WIND-DRIFTED SNOW COVER, CREVASSED GLACIER ICE & FIRN
   // ==========================================================================
+  // Snow/ice depth is cross-blurred (centre + 4 taps, 2 texels out) so narrow
+  // avalanche/drainage streaks in the raw snow field cannot show through as
+  // dark vein-like lines — the blanket reads as one continuous flat sheet.
   vec4 snowCell = isSideSkirt ? vec4(0.0) : sampleGridBilinear(uSnowTex, vUv, res);
+  if (!isSideSkirt) {
+    float sEps = 2.0 / res;
+    vec4 sBlur = snowCell
+      + sampleGridBilinear(uSnowTex, vUv + vec2(sEps, 0.0), res)
+      + sampleGridBilinear(uSnowTex, vUv - vec2(sEps, 0.0), res)
+      + sampleGridBilinear(uSnowTex, vUv + vec2(0.0, sEps), res)
+      + sampleGridBilinear(uSnowTex, vUv - vec2(0.0, sEps), res);
+    snowCell = sBlur * 0.2;
+  }
   float snowDepth = snowCell.r;
   float iceDepth = snowCell.g;
   float snowlineY = clamp(uClimate.x, 0.02, 1.05) * max(uStrataOrient.w, 1.0);
@@ -2209,8 +2221,8 @@ void main() {
   float slopeHold = 1.0 - smoothstep(0.62, 0.88, 1.0 - bedNormal.y);
   // Subtle wind-fluted sastrugi & exposed rock ribs ONLY on steep walls; broad snowfields stay rich & continuous!
   float snowCover = isSideSkirt ? 0.0
-    : clamp(smoothstep(0.018, 0.32, snowDepth) * mix(0.35, 1.0, slopeHold), 0.0, 1.0) * uLayerVis.z;
-  float iceCover = (isSideSkirt ? 0.0 : smoothstep(0.06, 0.70, iceDepth) * mix(0.45, 1.0, slopeHold)) * uLayerVis.z;
+    : clamp(smoothstep(0.008, 0.10, snowDepth) * mix(0.55, 1.0, slopeHold), 0.0, 1.0) * uLayerVis.z;
+  float iceCover = (isSideSkirt ? 0.0 : smoothstep(0.03, 0.35, iceDepth) * mix(0.55, 1.0, slopeHold)) * uLayerVis.z;
 
   // Fresh snow is high-albedo; shaded snow picks up cold Himalayan sky-blue subsurface bounce!
   vec3 snowAlbedo = mix(vec3(0.56, 0.64, 0.76), vec3(0.89, 0.92, 0.97), clamp(bedNormal.y, 0.0, 1.0));
@@ -2221,7 +2233,16 @@ void main() {
   surfaceAlbedo = mix(surfaceAlbedo, coarseGravelCol, (isSideSkirt ? 0.0 : smoothstep(0.012, 0.24, tC.g)) * 0.88);
   surfaceAlbedo = mix(surfaceAlbedo, fineAlluvialCol, (isSideSkirt ? 0.0 : smoothstep(0.008, 0.18, tC.b)) * 0.92);
   surfaceAlbedo = mix(surfaceAlbedo, iceAlbedo, iceCover * 0.94);
-  surfaceAlbedo = mix(surfaceAlbedo, snowAlbedo, snowCover * 0.97);
+  surfaceAlbedo = mix(surfaceAlbedo, snowAlbedo, snowCover); // fully opaque flat snow — no rock/water line-work shows through
+
+  // A snow blanket bridges micro-relief: on snow/ice, shade with a smoothed
+  // (up-blended) normal and near-flat AO so buried drainage channels, wetness
+  // streaks and creases cannot print through as dark lines.
+  float cryoShade = max(snowCover, iceCover * 0.85);
+  if (cryoShade > 0.001) {
+    bedNormal = safeNorm3(mix(bedNormal, vec3(0.0, 1.0, 0.0), cryoShade * 0.72), bedNormal);
+    ao = mix(ao, 1.0, cryoShade * 0.88);
+  }
 
   float coarseMask = isSideSkirt ? 0.0 : smoothstep(0.012, 0.24, tC.g);
   float fineMask   = isSideSkirt ? 0.0 : smoothstep(0.008, 0.18, tC.b);
@@ -2318,7 +2339,7 @@ void main() {
     litColor += vec3(0.42, 0.58, 0.72) * specCryo * (iceCover * 0.55 + snowCover * 0.16);
   }
 
-  if (!isSideSkirt && uRenderDomain.z > 0.5 && uViewMode == 0 && tC.a > 0.004) {
+  if (!isSideSkirt && uRenderDomain.z > 0.5 && uViewMode == 0 && tC.a > 0.004 && snowCover < 0.5 && iceCover < 0.5) {
     float wDepth = tC.a;
     vec4 flowD = sampleGridBilinear(uVelocityFieldTex, vUv, res);
     float tSec = uRenderDomain.w;
