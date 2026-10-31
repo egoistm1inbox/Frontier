@@ -558,12 +558,62 @@ size_t ProjectBrowserPanel::AttachPaths(const std::vector<std::filesystem::path>
     return Attached;
 }
 
+size_t ProjectBrowserPanel::DiscoverProjects(const std::filesystem::path &ProjectsRoot)
+{
+    namespace fs = std::filesystem;
+    std::error_code Status;
+    if (!fs::exists(ProjectsRoot, Status) || Status) return 0;
+
+    size_t Discovered = 0;
+    for (const auto &DirectoryItem : fs::directory_iterator(ProjectsRoot, Status))
+    {
+        if (Status || !DirectoryItem.is_directory(Status)) continue;
+        for (const auto &FileItem : fs::directory_iterator(DirectoryItem.path(), Status))
+        {
+            if (Status || !FileItem.is_regular_file(Status)) continue;
+            const fs::path CandidatePath = FileItem.path();
+            if (CandidatePath.extension() != ".projectspace") continue;
+
+            ProjectSpaceDocument Decoded;
+            std::string DecodeDiag;
+            if (!ProjectSpaceCodec::Decode(CandidatePath, Decoded, DecodeDiag)) continue;
+
+            const std::string Identity = Decoded.Sections["project"]["identity"].value_or(std::string{});
+            const std::string Token    = !Identity.empty() ? Identity : CandidatePath.stem().string();
+            if (FindEntry(Token) != nullptr) continue;
+
+            BrowserCatalogueEntry Entry;
+            Entry.Token     = Token;
+            Entry.Title     = Decoded.Sections["project"]["name"].value_or(CandidatePath.stem().string());
+            Entry.Extension = ".projectspace";
+            Entry.Category  = BrowserFileCategory::Project;
+            Entry.Description = Decoded.Sections["project"]["summary"].value_or(
+                std::string("Native Frontier application workspace container."));
+            Entry.Art       = "Valley";
+            Entry.Context   = "Application \xC2\xB7 Vulkan 1.3 \xC2\xB7 RTX + GTX";
+            Entry.Opened    = "Pinned";
+            const std::u8string RawPath = CandidatePath.u8string();
+            Entry.Path.assign(RawPath.begin(), RawPath.end());
+            Entry.Views     = {"Proving Grounds \xC2\xB7 Chase", "RTX ReSTIR GI", "GTX SDF + BVH"};
+            Entry.Revisions = {"r1 \xC2\xB7 VehicleHMI UI + LogStream + Modular Inspectors"};
+            Entry.Notes     = {{"Frontier", "F",
+                                "Dual-tier RTX VK_KHR_ray_query ReSTIR + GTX SDF GI & SAH-2 BVH Reflections.",
+                                "Pinned"}};
+            Entry.Imported  = false;
+            Entry.ByteCount = fs::file_size(CandidatePath, Status);
+            Entries.insert(Entries.begin(), std::move(Entry));
+            ++Discovered;
+        }
+    }
+    return Discovered;
+}
+
 void ProjectBrowserPanel::OpenInFrontier()
 {
     const BrowserCatalogueEntry *Entry = FindEntry(ActiveToken);
     if (Entry == nullptr) return;
-    // 🚀 Real native hand-off for attached project containers; the launch dialog previews every other target.
-    if (Entry->Imported && Entry->Extension == ".projectspace")
+    // 🚀 Real native hand-off for attached or discovered .projectspace containers; the launch dialog previews every other target.
+    if (Entry->Extension == ".projectspace")
     {
         namespace fs = std::filesystem;
         std::error_code Status;

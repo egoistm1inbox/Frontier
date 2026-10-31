@@ -58,6 +58,9 @@ class ProjectBrowserPanel
     bool OpenSample(const std::string &Token);
     void CloseFile();
     size_t AttachPaths(const std::vector<std::filesystem::path> &Paths, bool AutoOpen = true);
+    size_t DiscoverProjects(const std::filesystem::path &ProjectsRoot);
+    void ActivateOpenInFrontier() { OpenInFrontier(); }
+    [[nodiscard]] const std::vector<BrowserCatalogueEntry> &QueryCatalogue() const noexcept { return Entries; }
     [[nodiscard]] bool IsReaderOpen() const noexcept { return !ActiveToken.empty(); }
     [[nodiscard]] const std::string &QueryActiveToken() const noexcept { return ActiveToken; }
     [[nodiscard]] size_t QueryEntryCount() const noexcept { return Entries.size(); }

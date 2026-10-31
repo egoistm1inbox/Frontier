@@ -1,0 +1,28 @@
+# Project Everest descriptor — native C++ Vulkan port of the VehicleHMI Proving Grounds application.
+ProjectName = "Project Everest"
+ProjectFormatNumber = 1
+ContentLocation = "Content"
+OpeningScene = "ProvingGrounds"
+CodeImage = "Build/Output/ProjectEverest.dll"
+CodeInterchangeNumber = 3
+InterfaceFingerprint = 0xb6725f24d0869173
+
+[[LogCategories]]
+Name = "Illumination"
+Colour = "mint"
+
+[[LogCategories]]
+Name = "Drivetrain"
+Colour = "amber"
+
+[[LogCategories]]
+Name = "TyreContact"
+Colour = "blue"
+
+[[LogCategories]]
+Name = "Atmosphere"
+Colour = "purple"
+
+[[LogCategories]]
+Name = "Destruction"
+Colour = "pink"

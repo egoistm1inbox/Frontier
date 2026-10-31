@@ -1,0 +1,19 @@
+# Project Everest content manifest
+FormatVersion = 1
+OpeningScene = "Scenes/ProvingGrounds.scene"
+
+[[Entries]]
+Path = "Scenes/ProvingGrounds.scene"
+Category = "Scene"
+
+[[Entries]]
+Path = "Vehicles/ControlVehicle.vehicle.toml"
+Category = "Vehicle"
+
+[[Entries]]
+Path = "Environment/ProvingGroundsSky.environment.toml"
+Category = "Environment"
+
+[[Entries]]
+Path = "Destruction/BreakableProps.fracture.toml"
+Category = "Fracture"

@@ -859,8 +859,6 @@ void LogStreamPanel::ConstructInterface()
         const float SparkRight = CR - 18.0f;
         if (SparkRight - MetricX > 60.0f)
         {
-            DrawTracked(Ink, Faces.Medium, 11.0f, ImVec2(MetricX, LabelY), Theme::Faint, "ENTRIES PER SECOND",
-                        11.0f * 0.13f);
             char NowText[16] = {};
             char PeakText[16] = {};
             std::snprintf(NowText, sizeof(NowText), "%u", QueryRateNow());
@@ -869,6 +867,17 @@ void LogStreamPanel::ConstructInterface()
                                 TextWidth(Faces.Regular, 13.0f, " now \xC2\xB7 ") +
                                 TextWidth(Faces.Regular, 13.0f, PeakText) +
                                 TextWidth(Faces.Regular, 13.0f, " peak");
+            const float FullTitleW = TrackedWidth(Faces.Medium, 11.0f, "ENTRIES PER SECOND", 11.0f * 0.13f);
+            if (SparkRight - MetricX - RateW > FullTitleW + 16.0f)
+            {
+                DrawTracked(Ink, Faces.Medium, 11.0f, ImVec2(MetricX, LabelY), Theme::Faint, "ENTRIES PER SECOND",
+                            11.0f * 0.13f);
+            }
+            else if (SparkRight - MetricX - RateW > 56.0f)
+            {
+                DrawTracked(Ink, Faces.Medium, 11.0f, ImVec2(MetricX, LabelY), Theme::Faint, "RATE",
+                            11.0f * 0.13f);
+            }
             float RateX = SparkRight - RateW;
             const float RateY = LabelY - 2.0f;
             DrawText(Ink, Faces.Medium, 13.0f, ImVec2(RateX, RateY), Theme::Text, NowText);
@@ -967,9 +976,9 @@ void LogStreamPanel::ConstructInterface()
     ImVec2 VerbosityTriggerMin(0, 0);
     ImVec2 VerbosityTriggerMax(0, 0);
     {
-        const float RowTop = CursorY + 16.0f;
-        const float RowCY  = RowTop + 18.5f;
-        float       X      = CL;
+        float RowTop = CursorY + 16.0f;
+        float RowCY  = RowTop + 18.5f;
+        float X      = CL;
 
         struct ChipSpec
         {
@@ -1066,6 +1075,12 @@ void LogStreamPanel::ConstructInterface()
             const float LabelW = TextWidth(Faces.Regular, 13.5f, ChannelsLabel);
             const float TrigW  = 14.0f + 15.0f + 9.0f + LabelW + 9.0f + 12.0f + 14.0f;
             const float TrigH  = 34.0f;
+            if (X + TrigW > CR && X > CL + 4.0f)
+            {
+                RowTop += 37.0f + 8.0f;
+                RowCY   = RowTop + 18.5f;
+                X       = CL;
+            }
             ChannelsTriggerMin = ImVec2(X, RowCY - TrigH * 0.5f);
             ChannelsTriggerMax = ImVec2(X + TrigW, RowCY + TrigH * 0.5f);
             bool Hovered = false;
@@ -1089,6 +1104,12 @@ void LogStreamPanel::ConstructInterface()
             const float ValueW = TextWidth(Faces.Regular, 13.5f, Value);
             const float TrigW  = 14.0f + DimW + 9.0f + ValueW + 9.0f + 12.0f + 14.0f;
             const float TrigH  = 34.0f;
+            if (X + TrigW > CR && X > CL + 4.0f)
+            {
+                RowTop += 37.0f + 8.0f;
+                RowCY   = RowTop + 18.5f;
+                X       = CL;
+            }
             VerbosityTriggerMin = ImVec2(X, RowCY - TrigH * 0.5f);
             VerbosityTriggerMax = ImVec2(X + TrigW, RowCY + TrigH * 0.5f);
             bool Hovered = false;
@@ -1109,13 +1130,21 @@ void LogStreamPanel::ConstructInterface()
         }
 
         // Follow pill (right edge), measured before the flexing search field.
+        // Wrap Search + Follow onto a clean second toolbar line when docked width cannot fit both without collision.
         const char* FollowText = FollowFlag ? "Following" : "Follow";
         const float FollowW    = 14.0f + 7.0f + 8.0f + TextWidth(Faces.Regular, 13.0f, FollowText) + 14.0f;
         const float FollowX    = CR - FollowW;
+        if (FollowX - 9.0f - X < 150.0f && X > CL + 4.0f)
+        {
+            RowTop += 37.0f + 8.0f;
+            RowCY   = RowTop + 18.5f;
+            X       = CL;
+        }
 
         // Search pill with match count and clear control.
         {
-            const float SearchW = std::min(330.0f, std::max(140.0f, FollowX - 9.0f - X));
+            const float AvailableSearchW = std::max(80.0f, FollowX - 9.0f - X);
+            const float SearchW          = std::min(330.0f, AvailableSearchW);
             const ImVec2 Minimum(X, RowTop);
             const ImVec2 Maximum(X + SearchW, RowTop + 37.0f);
             PillSurface(Ink, Minimum, Maximum, Theme::Surface2,

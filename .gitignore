@@ -32,6 +32,7 @@ Thumbs.db
 # Python tooling intermediates.
 __pycache__/
 *.pyc
+.venv/
 
 # Downloaded open fonts and generated catalogue; recover with Automation/PrepareFonts.py.
 EngineContent/FontArchives/

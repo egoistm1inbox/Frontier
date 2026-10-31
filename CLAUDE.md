@@ -152,3 +152,40 @@ to the native Pattern panel, persists vector TOML, and submits GPU coverage/sele
 the recorded evidence explicitly does not represent a Windows desktop session. Pattern Float32 outputs remain
 unconnected to the PBR material renderer; native 3D application, physical height calibration, user-document export and
 Pattern 1:1 parity remain open. GIF previews are 8-bit evidence, not precision checks. Scope remains approximately 68%.
+
+## Upstream main branch, post-commit sync, and pinned reference branches
+
+- **Authoritative upstream main branch:** `https://github.com/SultanAladin/Frontier/tree/arena/11f31835-frontier`
+- **Mandatory post-commit sync rule:** After **every** local `git commit`, synchronize with the upstream main branch immediately so the working branch never drifts:
+  ```bash
+  git fetch https://github.com/SultanAladin/Frontier.git arena/11f31835-frontier && git merge --no-edit FETCH_HEAD
+  ```
+  Do not push to remotes without explicit user approval (per the GitHub Actions policy above).
+
+### Pinned GPU & engine reference branches (audited for Project Everest)
+
+| Reference branch | Scope | Verified working & adoptable | Audited caveats / excluded items |
+|---|---|---|---|
+| `https://github.com/streamlinkinbox/Frontier/tree/arena/08e7de48-frontier` (`7bc60250`) | Slang/Vulkan GPU Emissive Facet Area & Prefix-Sum CDF (`FacetCdfPreparation.slang`) | Fence-published GPU CDF cache (`25,609,728` → `466` facet-area evaluations, bit-exact `0.000000` RMSE delta, `16/16` CTests, `20,535` checks) | RGB-norm target promotion failed holdouts (`GlassPrism` `+7.99%` RMSE); triangle RT only, no GTX SDF fallback |
+| `https://github.com/streamlinkinbox/Frontier/tree/arena/5ec53579-frontier` (`56059b39`) | `PathReplayRayQuery` (`VK_KHR_ray_query`, SPIR-V 1.4) + 16-bin SAH-2 software BVH + SVGF + `EnvironmentRecords` | Hardware `RayQuery` + ordered SAH-2 BVH parity, blocked-visibility NEE guard, thin-glass dielectric MIS fix, multi-stratum lobe PDF fix (`1.243515` → `1.000000`) | Target floor `< 0.0001` (`+18.4%` variance), address guard (`5/32` wins), and `Fresh4` (`+41.8%` RMSE) failed holdouts — keep `0.0001` floor; no GTX SDF GI path |
+| `https://github.com/egoistm1inbox/Frontier/tree/arena/9ce908bc-frontier` (`4be51f2e`) | End-to-end `Project-Drive` integration (`RayQuery` RTX + Toroidal SDF GI + Surface Cards + BVH reflections + Jolt + Pyro + Fracture + `LogStreamPanel`) | Dual-tier **RTX / GTX** renderer split, portable `LogStreamPanel` + `SceneDirectory` + `RecordEntry` RAII foundation | UI deviated from 1:1 VehicleHMI (`Following`/`Filter text…` overlap in narrow dock, non-1:1 chrome, monolithic inspector records) |
+
+## Project Everest — architecture & modular inspector contract
+
+**Project Everest** (`Frontier/Projects/Project-Everest/`) is the native C++ Vulkan port of the VehicleHMI demonstration (`Experimental/VehicleHmiPrototype/`), launched from Frontier's `ProjectBrowserPanel` onto the shared `PanelDockspace`, `ControlCentrePanel` (UI theme/typography drawer), and `LogStreamPanel`.
+
+### Dual-tier GPU rendering architecture
+
+- **RTX Tier (RTX GPUs with `VK_KHR_acceleration_structure` + `VK_KHR_ray_query`):** Full hardware ray-traced ReSTIR GI, multi-bounce GGX VNDF reflections, ray-traced direct/IES sun & lamp cones, GPU emissive facet CDF sampling, and SVGF reconstruction (preserving the `0.0001` ReSTIR target floor).
+- **GTX Tier (Fallback for GTX / non-RT GPUs):** Toroidal **SDF Distance-Field GI** (`DistanceRecords` / cascade bricks) coupled with multi-bounce **Surface Cache** (`SurfaceCards`) radiosity, paired with **16-bin SAH-2 ordered software BVH reflections** and shadows.
+
+### Scene record RAII lifecycle & three-tier modular inspector contract
+
+Every item created in the editor derives from `Frontier::RecordEntry` (`Frontier/Engine/Scene/RecordEntry.h`):
+- **Constructor (`RecordEntry::RecordEntry`):** Issues a monotonic `RecordToken`, inserts into `RecordStore`, and in `Editor` / `Development` builds automatically registers in `SceneDirectory` (Outliner) and binds its modular inspector entry in `InspectorCatalogue`.
+- **Destructor (`RecordEntry::~RecordEntry`):** Automatically unbinds from `InspectorCatalogue`, unregisters from `SceneDirectory` (removing the item from the Outliner), and removes from `RecordStore`. In `Shipping` builds (`FRONTIER_SHIPPING_PROFILE`), both `SceneDirectory` and `InspectorCatalogue` compile out to zero symbols and zero overhead.
+
+Inspectors are strictly modular across three authoring tiers — never one monolithic page switch:
+1. **Reusable Engine Inspector Profiles (`EngineReusable`):** Pre-built 1:1 inspectors in `Frontier/Engine/Interface/` for standard engine items (`Sun`, `Atmosphere`, `Clouds`, `Local Cloud`, `Height Fog`, `Atmospheric Fog`, `Local Volumetric Fog`, `Stars`, `Moons`, `Lens Flare`, `Lightning & Thunder`, `Wind`, `Render Settings`, `BVH & Distance Field`, `Surface Cache`, `Geometry Clusters`, `Diagnostics`, `World Transform`). Instantiating the engine record automatically populates its Outliner entry and full inspector without user UI code.
+2. **User-Authored Custom Inspector Profiles (`ProjectCustom`):** Project-specific items (such as `ControlVehicle` with its 8 system category tabs and 5 tyre sub-tabs, `Training Arena`, `Cones`, `Proving Grounds`, `Stress Test`, and breakable `Prop` items) register custom inspector compositions over the shared `InspectorPrimitives` widget kit.
+3. **Dedicated Domain Studios (`DedicatedStudio`):** Specialized authoring domains (`Fracture Studio`, `Fluid & Plume Studio`, `Particle Studio`, `Cluster Studio`, `Texture / Material Studio`) expose dedicated dockable studio workspaces launched directly from their Outliner row, Inspector header, or Viewport toolbar.

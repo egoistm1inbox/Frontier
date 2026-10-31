@@ -121,6 +121,24 @@ add_subdirectory(ExternalPackages/glfw EXCLUDE_FROM_ALL)
 execute_process(COMMAND git rev-parse HEAD WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
     OUTPUT_VARIABLE FRONTIER_BUILD_REVISION OUTPUT_STRIP_TRAILING_WHITESPACE)
 
+add_library(FrontierEverestUI STATIC
+    Frontier/Engine/Diagnostics/LogCategories.cpp
+    Frontier/Engine/Diagnostics/LogRingStore.cpp
+    Frontier/Engine/Diagnostics/LogStream.cpp
+    Frontier/Engine/Scene/RecordStore.cpp
+    Frontier/Engine/Scene/RecordEntry.cpp
+    Frontier/Engine/Scene/SceneDirectory.cpp
+    Frontier/Engine/Interface/LogStreamPanel.cpp
+    Frontier/Engine/Interface/LogStreamPanelPresentation.cpp
+    Frontier/Engine/Interface/StackRailControls.cpp
+    Frontier/Engine/Interface/EverestInterfaceKit.cpp
+    Frontier/Engine/Interface/EngineReusableInspectors.cpp
+    Frontier/Projects/Project-Everest/Source/EverestSceneAssembly.cpp
+    Frontier/Projects/Project-Everest/Source/EverestWorkspace.cpp)
+target_include_directories(FrontierEverestUI PUBLIC "${CMAKE_SOURCE_DIR}" "${CMAKE_SOURCE_DIR}/Frontier")
+target_compile_definitions(FrontierEverestUI PUBLIC FRONTIER_WITH_INTERFACE_SDK=1 FRONTIER_EDITOR_PROFILE=1)
+target_link_libraries(FrontierEverestUI PUBLIC FrontierEditorUI FrontierInterface)
+
 # TextureStudio ships on both Windows and Linux; Vulkan + GLFW own presentation on each, and the
 # shared WindowsApplication.cpp/VulkanPresentation.cpp plumbing is platform-neutral.
 add_executable(TextureStudio Experimental/TextureStudio/Native/TextureStudioApplication.cpp
@@ -176,7 +194,7 @@ if(WIN32)
         "${CMAKE_SOURCE_DIR}/ExternalPackages/vulkan-headers/include")
     target_compile_definitions(Frontier PRIVATE FRONTIER_UI_VULKAN=1 VK_NO_PROTOTYPES GLFW_INCLUDE_NONE
         FRONTIER_BUILD_COMMIT=\"${FRONTIER_BUILD_COMMIT}\")
-    target_link_libraries(Frontier PRIVATE FrontierEditorUI FrontierSurfaceRasterization glfw ole32)
+    target_link_libraries(Frontier PRIVATE FrontierEditorUI FrontierEverestUI FrontierSurfaceRasterization glfw ole32)
     if(MSVC)
         enable_language(RC)
         foreach(WORKSPACE_TARGET Frontier TextureStudio)
@@ -493,4 +511,13 @@ if(BUILD_TESTING)
     target_link_libraries(InterfaceValidation PRIVATE FrontierEditorUI)
     add_test(NAME InterfaceValidation COMMAND InterfaceValidation
         "${CMAKE_SOURCE_DIR}/EngineContent/Icons" "${CMAKE_BINARY_DIR}/evidence")
+    add_executable(ProjectEverestValidation Exhibits/ProjectEverest/Code/ProjectEverestValidation.cpp)
+    target_include_directories(ProjectEverestValidation PRIVATE
+        "${CMAKE_SOURCE_DIR}/Exhibits/ControlCentre/Code"
+        "${CMAKE_SOURCE_DIR}/ExternalPackages/stb")
+    target_link_libraries(ProjectEverestValidation PRIVATE FrontierEverestUI FrontierSurfaceRasterization)
+    add_test(NAME ProjectEverestValidation COMMAND ProjectEverestValidation
+        "${CMAKE_SOURCE_DIR}"
+        "${CMAKE_SOURCE_DIR}/Exhibits/ProjectEverest/Captures")
+    set_tests_properties(ProjectEverestValidation PROPERTIES WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
 endif()
