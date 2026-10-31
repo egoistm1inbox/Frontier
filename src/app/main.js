@@ -1,4 +1,5 @@
 import { GpuErosionEngine } from '../erosion/gpu-erosion-engine.js';
+import { RockRainErosion } from '../erosion/rock-rain-erosion.js';
 import { ErosionLayerStackUI } from '../erosion/layer-stack-ui.js';
 import { DEFAULT_CUSTOM_ARCH_CURVES } from '../geology/custom-arch-spline.js';
 import { FORMATION_PRESETS, LITHOLOGY_PALETTES, resolveParams } from '../geology/presets.js';
@@ -45,7 +46,139 @@ const state = {
   rockInitializedOnce: false,
   curveMode: false,
   customCurveActive: false,
+  rainParams: {
+    rainIntensity: 0.65,
+    erosionStrength: 0.55,
+    deposition: 0.45,
+    smoothing: 0.40,
+    evaporation: 0.30,
+  },
 };
+
+const RAIN_SLIDER_SCHEMA = [
+  { key: 'rainIntensity',    label: 'Rain Intensity',      min: 0.05, max: 1.0, step: 0.05, fmt: (v) => `${Math.round(v * 100)}%` },
+  { key: 'erosionStrength',  label: 'Erosion Strength',    min: 0.05, max: 1.0, step: 0.05, fmt: (v) => `${Math.round(v * 100)}%` },
+  { key: 'deposition',       label: 'Sediment Deposition', min: 0.0,  max: 1.0, step: 0.05, fmt: (v) => `${Math.round(v * 100)}%` },
+  { key: 'smoothing',        label: 'Gully Rounding',      min: 0.0,  max: 1.0, step: 0.05, fmt: (v) => `${Math.round(v * 100)}%` },
+  { key: 'evaporation',      label: 'Runoff Evaporation',  min: 0.0,  max: 1.0, step: 0.05, fmt: (v) => `${Math.round(v * 100)}%` },
+];
+
+const rockRain = new RockRainErosion({ ...state.rainParams });
+let rainGeometryDirty = false;
+let rainFrameTick = 0;
+
+function updateRainReadout() {
+  const pill = document.getElementById('rain-status-pill');
+  const out = document.getElementById('rain-readout');
+  const btn = document.getElementById('btn-rain-toggle');
+  const running = Boolean(rockRain.params.running);
+  if (pill) pill.textContent = running ? 'Eroding' : 'Idle';
+  if (btn) btn.textContent = running ? 'Pause Rain Erosion' : 'Start Rain Erosion';
+  if (out && rockRain.ready) {
+    const cut = Math.abs(rockRain.totalEroded);
+    out.textContent = `Surface cut ${cut.toFixed(2)} m · ${rockRain.dropletCount} drops/frame`;
+  } else if (out && !running) {
+    out.textContent = rockRain.ready ? 'Surface intact · 0 droplets' : 'Synthesise a formation to begin';
+  }
+}
+
+/** Advances the Rock Studio rain erosion from the render loop (only while Rock Studio is open). */
+function tickRockRain(dt) {
+  if (!viewport) return;
+  // Build the (expensive) welded topology only once erosion is actually started
+  if (!rockRain.ready && !rockRain.params.running) return;
+  if (!rockRain.mesh || rockRain.mesh !== state.latestResult?.mesh) {
+    // Keep the solver pointed at the newest mesh (worker transfers fresh buffers every build)
+    if (state.latestResult?.mesh) {
+      rockRain.setMesh(state.latestResult.mesh);
+      rainGeometryDirty = false;
+    }
+  }
+  const rain = rockRain.getRainDrawData();
+  if (rain) viewport.updateRainParticles(rain.positions, rain.count);
+
+  const dirty = rockRain.step(dt);
+  if (dirty) rainGeometryDirty = true;
+
+  rainFrameTick++;
+  if (rainGeometryDirty && rainFrameTick % 3 === 0) {
+    rockRain.writeGeometry();
+    viewport.updateRockGeometry();
+    rainGeometryDirty = false;
+    if (rainFrameTick % 30 === 0) updateRainReadout();
+  }
+}
+
+function buildRainSliders() {
+  const mount = document.getElementById('sliders-rain');
+  if (!mount) return;
+  mount.innerHTML = '';
+  for (const spec of RAIN_SLIDER_SCHEMA) {
+    const wrap = document.createElement('div');
+    wrap.className = 'slider-group';
+    const val = state.rainParams[spec.key];
+    wrap.innerHTML = `
+      <div class="slider-label">
+        <span>${spec.label}</span>
+        <output>${spec.fmt(val)}</output>
+      </div>
+      <input type="range" min="${spec.min}" max="${spec.max}" step="${spec.step}" value="${val}" />
+    `;
+    const input = wrap.querySelector('input');
+    const out = wrap.querySelector('output');
+    input.addEventListener('input', () => {
+      const num = Number(input.value);
+      state.rainParams[spec.key] = num;
+      rockRain.setParams({ [spec.key]: num });
+      out.textContent = spec.fmt(num);
+    });
+    mount.appendChild(wrap);
+  }
+}
+
+function initRainErosionControls() {
+  const toggle = document.getElementById('btn-rain-toggle');
+  const reset = document.getElementById('btn-rain-reset');
+  const visible = document.getElementById('chk-rain-visible');
+  if (!toggle || !reset) return;
+
+  buildRainSliders();
+  updateRainReadout();
+
+  toggle.addEventListener('click', () => {
+    const pill = document.getElementById('rain-status-pill');
+    // The very first start welds topology + builds the drop grid: let the UI repaint first
+    if (!rockRain.params.running && !rockRain.ready) {
+      if (pill) pill.textContent = 'Preparing…';
+      if (toggle) toggle.disabled = true;
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          rockRain.setParams({ running: true });
+          if (toggle) toggle.disabled = false;
+          updateRainReadout();
+        });
+      });
+      return;
+    }
+    rockRain.setParams({ running: !rockRain.params.running });
+    updateRainReadout();
+  });
+
+  reset.addEventListener('click', () => {
+    if (rockRain.reset()) {
+      rockRain.writeGeometry();
+      if (viewport) viewport.updateRockGeometry();
+    }
+    updateRainReadout();
+  });
+
+  if (visible) {
+    visible.addEventListener('change', () => {
+      rockRain.setParams({ showRain: visible.checked });
+      if (viewport) viewport.setRainVisible(visible.checked);
+    });
+  }
+}
 
 // ============================================================================
 // VIEWPORTS & WORKER INITIALIZATION
@@ -70,6 +203,7 @@ function ensureRockViewport() {
   try {
     viewport = new RockStudioViewport(viewportEl);
     viewport.setActive(false);
+    viewport.onAnimate = tickRockRain;
     curveOverlay = new ArchCurveGizmoOverlay(stageEl, {
       getCameraAdapter: () => (state.studioMode === 'rock' && viewport ? viewport.getCameraAdapter() : null),
       onCurveChanged: () => updateCurveReadout(),
@@ -179,9 +313,13 @@ worker.onmessage = (e) => {
         msg.stats.dimensions,
         state.autoFrameNext
       );
+      // Fresh synthesis = pristine surface: re-arm the rain erosion solver on the new mesh
+      rockRain.setMesh(msg.mesh);
+      viewport.setRainVisible(rockRain.params.showRain !== false);
     }
     state.autoFrameNext = false;
     updateRockHud(msg.stats);
+    updateRainReadout();
   } else if (msg.type === 'error') {
     console.error('Geology worker error:', msg.message);
     statusToast.classList.remove('hidden');
@@ -255,7 +393,11 @@ function setStudioMode(mode) {
   } else {
     if (erosionEngine) erosionEngine.stop();
     const vp = ensureRockViewport();
-    if (vp) vp.setActive(true);
+    if (vp) {
+      vp.setActive(true);
+      vp.setRainVisible(rockRain.params.showRain !== false);
+      updateRainReadout();
+    }
     if (!state.rockInitializedOnce) {
       state.rockInitializedOnce = true;
       requestSynthesis(true);
@@ -299,6 +441,56 @@ function initTerrainStudio() {
     erosionEngine.pipeline.liveSimRunning = !erosionEngine.pipeline.liveSimRunning;
     syncPlayBtn();
   });
+
+  // ---- Flat-colour surface control (removes the procedural colour textures) ----
+  const detailSel = document.getElementById('tp-select-detail');
+  if (detailSel) {
+    detailSel.value = String(erosionEngine.params.surfaceDetail ?? 0);
+    detailSel.addEventListener('change', () => {
+      erosionEngine.params.surfaceDetail = Number(detailSel.value);
+      if (erosionLayerStackUI) erosionLayerStackUI.renderAll();
+    });
+  }
+
+  // ---- Viewport visibility toggles: Water / Snow / Rain ----
+  const waterBtn = document.getElementById('tp-toggle-water');
+  const snowBtn = document.getElementById('tp-toggle-snow');
+  const rainBtn = document.getElementById('tp-toggle-rain');
+  const syncVisButtons = () => {
+    const p = erosionEngine.params;
+    if (waterBtn) waterBtn.classList.toggle('active', p.showWater !== false);
+    if (snowBtn) snowBtn.classList.toggle('active', p.showSnow !== false);
+    if (rainBtn) rainBtn.classList.toggle('active', p.showRain !== false);
+  };
+  window.__frontierSyncVis = syncVisButtons;
+  syncVisButtons();
+  if (waterBtn) {
+    waterBtn.addEventListener('click', () => {
+      erosionEngine.params.showWater = erosionEngine.params.showWater === false;
+      syncVisButtons();
+    });
+  }
+  if (snowBtn) {
+    snowBtn.addEventListener('click', () => {
+      erosionEngine.params.showSnow = erosionEngine.params.showSnow === false;
+      syncVisButtons();
+    });
+  }
+  if (rainBtn) {
+    rainBtn.addEventListener('click', () => {
+      erosionEngine.params.showRain = erosionEngine.params.showRain === false;
+      syncVisButtons();
+    });
+  }
+  if (erosionLayerStackUI) {
+    const baseRenderInspector = erosionLayerStackUI.renderInspector?.bind(erosionLayerStackUI);
+    if (baseRenderInspector) {
+      erosionLayerStackUI.renderInspector = (...args) => {
+        baseRenderInspector(...args);
+        if (window.__frontierSyncVis) window.__frontierSyncVis();
+      };
+    }
+  }
 
   document.getElementById('btn-er-reset').addEventListener('click', () => {
     erosionEngine.pipeline.evaluateStack({ reseedPlacements: true, fastPreview: false });
@@ -652,6 +844,7 @@ buildArchetypeCards();
 buildSliders('tectonics', 'sliders-tectonics');
 buildSliders('macro', 'sliders-macro');
 buildSliders('detail', 'sliders-detail');
+initRainErosionControls();
 buildSeedStrip();
 initShadingControls();
 initRockActionButtons();

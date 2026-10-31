@@ -110,7 +110,7 @@ export class TerrainStackPipeline {
     const initPreset = TERRAIN_STACK_PRESETS[this.activePresetId];
     this.projectTitle = initPreset.name;
     this.paletteId = initPreset.palette ?? 1;
-    this.fabricMode = initPreset.fabricMode ?? 0;
+    this.fabricMode = 0; // FLAT COLOURS: no procedural micro-fabric pattern by default
     this.shadingMode = 0; // 0=Derived Geology, 1=AO & Protrusions, 2=Hardness, 3=Flow, 4=Sedimentation, 5=Active Mask B&W, 6=Clay, 7=Cryosphere, 8=Hydrology
     this.authorTool = 'navigate'; // 'navigate' | 'sculpt-add' | 'sculpt-remove' | 'sculpt-smooth' | 'cave-carve' | 'cave-fill' | 'spline-edit'
     this.layers = [];
@@ -251,7 +251,7 @@ export class TerrainStackPipeline {
     this.activePresetId = preset.id;
     this.projectTitle = preset.name;
     this.paletteId = preset.palette ?? 0;
-    this.fabricMode = preset.fabricMode ?? 0;
+    this.fabricMode = 0; // FLAT COLOURS: presets never force a repeating colour pattern
 
     // Apply preset's non-layer visual & emitter configuration cleanly
     const ep = this.engine.params;
@@ -1022,6 +1022,10 @@ export class TerrainStackPipeline {
       timeSec
     );
     gl.uniform4fv(gl.getUniformLocation(this.engine.progTerrainRender, 'uLayerVis'), layerVisVec);
+    gl.uniform1f(
+      gl.getUniformLocation(this.engine.progTerrainRender, 'uSurfaceDetail'),
+      p.surfaceDetail ?? 0.0
+    );
     gl.uniform4fv(gl.getUniformLocation(this.engine.progTerrainRender, 'uHardnessParams'), hardnessVec);
     gl.uniform4fv(gl.getUniformLocation(this.engine.progTerrainRender, 'uStrataOrient'), strataVec);
 
@@ -1093,6 +1097,7 @@ export class TerrainStackPipeline {
       gl.uniform1i(gl.getUniformLocation(this.engine.progRockInstance, 'uViewMode'), viewCode === 8 ? 0 : viewCode);
       gl.uniform1i(gl.getUniformLocation(this.engine.progRockInstance, 'uMaterialTheme'), this.engine._themeCode());
       gl.uniform1i(gl.getUniformLocation(this.engine.progRockInstance, 'uFabricMode'), this.engine._fabricCode());
+      gl.uniform1f(gl.getUniformLocation(this.engine.progRockInstance, 'uSurfaceDetail'), p.surfaceDetail ?? 0.0);
       gl.uniform1f(gl.getUniformLocation(this.engine.progRockInstance, 'uSeed'), p.seed);
 
       gl.bindBuffer(gl.ARRAY_BUFFER, this.engine.rockInstVbo);
@@ -1186,6 +1191,10 @@ export class TerrainStackPipeline {
         R,
         p.particleOpacity,
         activeCount
+      );
+      gl.uniform4fv(
+        gl.getUniformLocation(this.engine.progParticleRender, 'uSpeciesVis'),
+        this.engine._getSpeciesVisUniforms()
       );
 
       gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, activeCount);

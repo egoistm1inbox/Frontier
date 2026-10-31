@@ -39,3 +39,58 @@ npm run build    # Production Vite bundle
 npm run generate -- --archetype desert-arch --seed 4029 --quality high --out exports/arch.glb
 npm run generate -- --archetype sedimentary-cliff --seed 4029 --lods --out exports/cliff.glb
 ```
+
+---
+
+## Terrain Studio & Rock Studio — Simulation Update
+
+### Flat, palette-true terrain colours
+The procedural colour textures are gone by default. `TERRAIN_RENDER_FRAG` now exposes
+`uSurfaceDetail`:
+
+* `0.0` — **Flat colours** (default): rock grain, patch mottling, sastrugi, ice crevasses,
+  sand ripples and the repeating hexagonal / cross-bedded "micro-fabric" patterns are all
+  suppressed, leaving clean uniform palettes per lithology zone (hardness, elevation,
+  sediment and AO still shade the terrain, because those are geometry-derived).
+* `0.5` / `1.0` — subtle / full procedural detail, selectable from the **Surface** dropdown
+  in the viewport toolbar and the *Derived Surface Shading* inspector card.
+
+Landscape presets no longer force a repeating `fabricMode`; the "Rock Micro-Fabric" pattern
+selector was removed from the studio UI.
+
+### Hydrology (water flow)
+`WATER_FLUX_FRAG` was rewritten as a conservative virtual-pipe shallow-water solver:
+
+* Flow is driven by the free water-surface gradient (bed + sediment + water), not the bare bed.
+* Each pipe accelerates through its own wetted cross-section and is damped by turbulent friction.
+* The domain edge is a closed wall instead of a unit-inconsistent drain, so mass is conserved.
+* Outflow is CFL-limited per step and deep water gets a hydrostatic levelling term, removing the
+  checkerboard oscillation that made rivers behave strangely.
+* The velocity field now uses the correct signed unit-width discharge, so flow direction,
+  foam and ripple advection follow the actual current.
+
+### Cryosphere (snow)
+`SNOW_CRYO_FRAG` and `INIT_SNOW_FRAG` were rebuilt:
+
+* Snow only accumulates where the bed can hold it (steep faces shed instantly).
+* Avalanching is symmetric, donor-limited and CFL-clamped — genuinely mass conserving.
+* Wind transport is an availability-limited upwind flux that builds cornices and fills lee gullies.
+* Degree-day melt depends on altitude warmth **and** solar exposure of the local slope, and returns
+  meltwater to the 2.5D river network.
+* Glacier creep and firn compaction are conservative; the initial snowpack is smooth and settled.
+
+### Visibility toggles
+Terrain Studio toolbar **Show → Water / Snow / Rain** toggle rendering only (simulations keep
+running, so hiding rain never changes the terrain). Rock Studio has its own *Falling Rain* toggle.
+
+### Particle Rain Erosion in the Rock & Cliff Studio
+`src/erosion/rock-rain-erosion.js` brings the Terrain Studio raindrop idea to real 3D meshes:
+
+* Drops are ray-cast onto the topmost triangle (arches, ledges and overhangs work), then run down
+  the steepest-descent direction of the surface, carrying sediment.
+* Contacted vertices are dissolved along their welded normals; sediment is redeposited where the
+  flow pools or dries up, and a Laplacian relaxation rounds the rills.
+* Controls: **Start/Pause**, **Reset Surface**, rain intensity, erosion strength, sediment
+  deposition, gully rounding, runoff evaporation and a falling-rain toggle.
+* In-place GPU buffer refresh (`RockStudioViewport.updateRockGeometry`) keeps it real-time, and the
+  original surface is byte-exact restorable.

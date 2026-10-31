@@ -83,6 +83,11 @@ export class RockStudioViewport {
     this.wireMesh = null;
     this.wireframeVisible = false;
 
+    // Particle Rain Erosion hooks (stepped by main.js from the animate loop)
+    this.onAnimate = null;
+    this.rainPoints = null;
+    this.rainVisible = true;
+
     this._onResize = () => {
       if (this.active) this.resize();
     };
@@ -467,6 +472,7 @@ export class RockStudioViewport {
     geometry.setAttribute('aRockAlbedo', new THREE.BufferAttribute(albedoArr, 3));
     geometry.setIndex(new THREE.BufferAttribute(meshData.indices, 1));
     geometry.computeBoundingSphere();
+    this._baseBoundRadius = geometry.boundingSphere ? geometry.boundingSphere.radius : 8;
 
     this.hasCustomAlbedo = !!(meshData.hasCustomAlbedo && meshData.albedos);
     this.manualLithologyOverride = false;
@@ -731,6 +737,68 @@ export class RockStudioViewport {
     }
   }
 
+  /**
+   * In-place geometry refresh used by the Particle Rain Erosion solver. The position/normal
+   * arrays are mutated by the solver itself, so this only flags the GPU buffers dirty.
+   */
+  updateRockGeometry() {
+    if (!this.rockMesh) return;
+    const geo = this.rockMesh.geometry;
+    const pos = geo.getAttribute('position');
+    if (pos) pos.needsUpdate = true;
+    const nrm = geo.getAttribute('normal');
+    if (nrm) nrm.needsUpdate = true;
+    // Rain erosion only ever removes material (plus a small talus fill), so an expanded
+    // base bounding sphere stays valid — far cheaper than recomputing it every update.
+    if (geo.boundingSphere && this._baseBoundRadius) {
+      geo.boundingSphere.radius = this._baseBoundRadius + 1.0;
+    } else {
+      geo.computeBoundingSphere();
+    }
+    if (this.wireMesh && this.wireMesh.geometry !== geo) {
+      const wp = this.wireMesh.geometry.getAttribute('position');
+      if (wp) wp.needsUpdate = true;
+    }
+  }
+
+  /** Creates / updates the falling-rain particle cloud rendered above the formation. */
+  updateRainParticles(positions, count) {
+    if (!positions || !count) {
+      if (this.rainPoints) this.rainPoints.visible = false;
+      return;
+    }
+    if (!this.rainPoints) {
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+      const mat = new THREE.PointsMaterial({
+        color: 0xa8d4ff,
+        size: 0.075,
+        sizeAttenuation: true,
+        transparent: true,
+        opacity: 0.55,
+        depthWrite: false,
+        fog: false,
+      });
+      this.rainPoints = new THREE.Points(geo, mat);
+      this.rainPoints.frustumCulled = false;
+      this.scene.add(this.rainPoints);
+    } else {
+      const attr = this.rainPoints.geometry.getAttribute('position');
+      if (attr.array !== positions) {
+        attr.array = positions;
+        attr.count = count;
+      }
+      attr.needsUpdate = true;
+      this.rainPoints.geometry.setDrawRange(0, count);
+    }
+    this.rainPoints.visible = this.rainVisible;
+  }
+
+  setRainVisible(visible) {
+    this.rainVisible = Boolean(visible);
+    if (this.rainPoints) this.rainPoints.visible = this.rainVisible;
+  }
+
   _animate() {
     this._raf = requestAnimationFrame(this._animate);
     if (!this.active) return;
@@ -742,6 +810,14 @@ export class RockStudioViewport {
       this.camera.position.copy(this.controls.target).add(offset);
     }
     this.controls.update();
+    if (this.onAnimate) {
+      try {
+        this.onAnimate(dt);
+      } catch (err) {
+        console.error('Rock Studio animate hook error:', err);
+        this.onAnimate = null;
+      }
+    }
     this.renderer.render(this.scene, this.camera);
   }
 }

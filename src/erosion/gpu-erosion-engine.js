@@ -760,8 +760,22 @@ export class GpuErosionEngine {
     return [
       p.lithologyLayerEnabled === false ? 0.0 : (p.lithologyOpacity ?? 1.0),
       p.fabricLayerEnabled === false ? 0.0 : (p.fabricStrength ?? 1.0),
-      p.snowLayerEnabled === false ? 0.0 : (p.snowVisOpacity ?? 1.0),
+      (p.snowLayerEnabled === false || p.showSnow === false) ? 0.0 : (p.snowVisOpacity ?? 1.0),
       (p.waterLayerEnabled === false || !p.showWater) ? 0.0 : (p.waterVisOpacity ?? 1.0),
+    ];
+  }
+
+  /**
+   * Per-species particle visibility (1 = shown, 0 = hidden). Purely a VIEWPORT toggle:
+   * hiding rain/snow never stops the hydrology or cryosphere simulation underneath.
+   */
+  _getSpeciesVisUniforms() {
+    const p = this.params;
+    return [
+      p.showRain === false ? 0.0 : 1.0,
+      p.showSnow === false || p.snowLayerEnabled === false ? 0.0 : 1.0,
+      p.showParticles === false ? 0.0 : 1.0,
+      p.showParticles === false ? 0.0 : 1.0,
     ];
   }
 
@@ -1295,6 +1309,15 @@ export class GpuErosionEngine {
           p.simWindPlaying === false ? 0.0 : (p.windSpeed ?? 0.0),
           this.stepCount * dt
         );
+        const sunAzRad = ((p.sunAzimuth ?? 48) * Math.PI) / 180;
+        const sunElRad = ((p.sunElevation ?? 28) * Math.PI) / 180;
+        gl.uniform4f(
+          gl.getUniformLocation(this.progSnowCryo, 'uSunCryo'),
+          Math.cos(sunElRad) * Math.sin(sunAzRad),
+          Math.sin(sunElRad),
+          Math.cos(sunElRad) * Math.cos(sunAzRad),
+          1.0
+        );
         gl.uniform1f(gl.getUniformLocation(this.progSnowCryo, 'uIceMeltRate'), p.iceMeltRate ?? 0.22);
         gl.uniform1f(gl.getUniformLocation(this.progSnowCryo, 'uSeed'), p.seed);
 
@@ -1462,6 +1485,7 @@ export class GpuErosionEngine {
       timeSec
     );
     gl.uniform4fv(gl.getUniformLocation(this.progTerrainRender, 'uLayerVis'), layerVisVec);
+    gl.uniform1f(gl.getUniformLocation(this.progTerrainRender, 'uSurfaceDetail'), p.surfaceDetail ?? 0.0);
     gl.uniform4fv(gl.getUniformLocation(this.progTerrainRender, 'uHardnessParams'), hardnessVec);
     gl.uniform4fv(gl.getUniformLocation(this.progTerrainRender, 'uStrataOrient'), strataVec);
 
@@ -1518,6 +1542,7 @@ export class GpuErosionEngine {
       gl.uniform1i(gl.getUniformLocation(this.progRockInstance, 'uViewMode'), viewCode);
       gl.uniform1i(gl.getUniformLocation(this.progRockInstance, 'uMaterialTheme'), this._themeCode());
       gl.uniform1i(gl.getUniformLocation(this.progRockInstance, 'uFabricMode'), this._fabricCode());
+      gl.uniform1f(gl.getUniformLocation(this.progRockInstance, 'uSurfaceDetail'), p.surfaceDetail ?? 0.0);
       gl.uniform1f(gl.getUniformLocation(this.progRockInstance, 'uSeed'), p.seed);
 
       gl.bindBuffer(gl.ARRAY_BUFFER, this.rockInstVbo);
@@ -1611,6 +1636,10 @@ export class GpuErosionEngine {
         this.gridRes,
         p.particleOpacity,
         activeCount
+      );
+      gl.uniform4fv(
+        gl.getUniformLocation(this.progParticleRender, 'uSpeciesVis'),
+        this._getSpeciesVisUniforms()
       );
 
       gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, activeCount);

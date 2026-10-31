@@ -808,18 +808,19 @@ export class ErosionLayerStackUI {
     const sunEl = this.engine.params.sunElevation ?? 28;
     const sunAzPct = (((sunAz + 180) / 360) * 100).toFixed(1);
     const sunElPct = (((sunEl - 4) / 81) * 100).toFixed(1);
-    const curFab = this.pipeline.fabricMode ?? 0;
-    const fabOpts = Object.values(DERIVED_FABRICS)
-      .map((f) => `<option value="${f.id}" ${Number(curFab) === f.id ? 'selected' : ''}>${f.label}</option>`)
-      .join('');
+    const curDetail = Number(this.engine.params.surfaceDetail ?? 0);
 
     const shadingCardHtml = `
       <section class="tp-property-card">
         <h2><i style="background:#82939e"></i><span>Derived Surface Shading &amp; Sun</span></h2>
         <p class="tp-card-note">Shading is derived purely from AO, protrusions, height, rock hardness, sediment &amp; flow — independent of the geometry stack.</p>
         <div class="tp-control-row">
-          <div class="tp-control-label"><span>Rock Micro-Fabric</span></div>
-          <select class="tp-select" id="tp-select-fabric">${fabOpts}</select>
+          <div class="tp-control-label"><span>Surface Colour</span></div>
+          <select class="tp-select" id="tp-select-surface-detail">
+            <option value="0" ${curDetail < 0.25 ? 'selected' : ''}>Flat colours (no texture)</option>
+            <option value="0.5" ${curDetail >= 0.25 && curDetail < 0.75 ? 'selected' : ''}>Subtle surface detail</option>
+            <option value="1" ${curDetail >= 0.75 ? 'selected' : ''}>Full procedural detail</option>
+          </select>
         </div>
         <div class="tp-control-row">
           <div class="tp-control-label"><span>Sun Azimuth</span></div>
@@ -837,11 +838,19 @@ export class ErosionLayerStackUI {
         </div>
         <label class="tp-check-row">
           <input type="checkbox" id="tp-chk-show-water" ${this.engine.params.showWater !== false ? 'checked' : ''} />
-          <span>Render 2.5D River &amp; Basin Water</span>
+          <span>Show River &amp; Basin Water</span>
+        </label>
+        <label class="tp-check-row">
+          <input type="checkbox" id="tp-chk-show-snow" ${this.engine.params.showSnow !== false ? 'checked' : ''} />
+          <span>Show Snow &amp; Glacier Ice</span>
+        </label>
+        <label class="tp-check-row">
+          <input type="checkbox" id="tp-chk-show-rain" ${this.engine.params.showRain !== false ? 'checked' : ''} />
+          <span>Show Falling Rain</span>
         </label>
         <label class="tp-check-row">
           <input type="checkbox" id="tp-chk-show-particles" ${this.engine.params.showParticles !== false ? 'checked' : ''} />
-          <span>Show 3D Rain / Snow / Wind Particles</span>
+          <span>Show Wind Sand &amp; Rockfall Particles</span>
         </label>
       </section>`;
 
@@ -1034,12 +1043,11 @@ export class ErosionLayerStackUI {
       });
     }
 
-    // Fabric, Sun, Water & Particle bindings
-    const selFab = document.getElementById('tp-select-fabric');
-    if (selFab) {
-      selFab.addEventListener('change', () => {
-        this.pipeline.fabricMode = Number(selFab.value);
-        this.engine.params.fabricMode = this.pipeline.fabricMode;
+    // Surface colour-depth, Sun, Water, Snow & Particle bindings
+    const selDetail = document.getElementById('tp-select-surface-detail');
+    if (selDetail) {
+      selDetail.addEventListener('change', () => {
+        this.engine.params.surfaceDetail = Number(selDetail.value);
       });
     }
     const slAz = document.getElementById('tp-slider-sun-az');
@@ -1066,6 +1074,18 @@ export class ErosionLayerStackUI {
     if (chkWater) {
       chkWater.addEventListener('change', () => {
         this.engine.params.showWater = chkWater.checked;
+      });
+    }
+    const chkSnow = document.getElementById('tp-chk-show-snow');
+    if (chkSnow) {
+      chkSnow.addEventListener('change', () => {
+        this.engine.params.showSnow = chkSnow.checked;
+      });
+    }
+    const chkRain = document.getElementById('tp-chk-show-rain');
+    if (chkRain) {
+      chkRain.addEventListener('change', () => {
+        this.engine.params.showRain = chkRain.checked;
       });
     }
     const chkPart = document.getElementById('tp-chk-show-particles');

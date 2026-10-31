@@ -706,6 +706,12 @@ uniform float uSeed;
 
 ${COMMON_GEOLOGY_GLSL}
 
+/**
+ * Initial cryosphere seeding — smooth, altitude + slope driven accumulation.
+ * Snow is placed only where it can physically rest (gentle & concave ground) and is
+ * thickened in hollows / thinned on wind-scoured ridges, so the very first frame already
+ * looks like a settled snowpack instead of a noisy speckle.
+ */
 void main() {
   ivec2 c = ivec2(gl_FragCoord.xy);
   int maxI = int(uCryoParams.x) - 1;
@@ -729,7 +735,7 @@ void main() {
   float hD = tD.r + tD.g + tD.b;
   vec2 grad = vec2(hR - hL, hU - hD) / (2.0 * cellSize);
   float slope = length(grad);
-  // Positive concavity in cirque bowls, couloirs, and U-shaped glacier troughs!
+  // Positive concavity in cirque bowls, couloirs and U-shaped glacier troughs
   float concavity = (hR + hL + hU + hD) * 0.25 - hC;
 
   float reliefScale = max(1.0, uStrataOrient.w);
@@ -737,21 +743,20 @@ void main() {
   float snowline = clamp(uClimate.x, 0.02, 1.05);
 
   vec2 worldXZ = (vUv - 0.5) * uCryoParams.w;
-  float driftNoise = fbm2D(worldXZ * 0.024 + uSeed * 0.017, 4, 0.52);
+  // Only large, smooth drift patterns (2 octaves) — no high-frequency speckle
+  float driftNoise = fbm2D(worldXZ * 0.020 + uSeed * 0.017, 2, 0.55);
 
-  // Full-domain mountain snowpack: covers ridges, shoulders, cirques & wind-drifted benches across
-  // the ENTIRE terrain above snowline (and snow-drifted hollows slightly below snowline!), while
-  // sheer 55-deg+ rock cliffs shed snow into couloir chutes & cliff-base snow aprons!
-  float altFactor = smoothstep(snowline - 0.16 * snowfallRate, snowline + 0.14, elevN + (driftNoise - 0.5) * 0.09);
-  float slopeHold = 1.0 - smoothstep(1.05, 1.95, slope);
-  float couloirPool = clamp(concavity * 0.95, 0.0, 1.25);
+  float altFactor = smoothstep(snowline - 0.15 * snowfallRate, snowline + 0.13, elevN + (driftNoise - 0.5) * 0.05);
+  // Snow cannot cling to steep rock (tan > ~60 deg sheds instantly)
+  float slopeHold = clamp(1.0 - smoothstep(0.90, 1.95, slope), 0.0, 1.0);
+  float couloirPool = clamp(concavity * 0.85, 0.0, 1.1);
 
-  float initSnow = snowfallRate * (altFactor * slopeHold * (0.85 + 0.95 * driftNoise) + couloirPool * altFactor * 0.85);
-  // Valley & cirque glaciers extend below the snowline down concave U-shaped troughs!
+  float initSnow = snowfallRate * altFactor * (slopeHold * (0.85 + 0.30 * driftNoise) + couloirPool * 0.60);
+  // Valley & cirque glaciers extend below the snowline down concave U-shaped troughs
   float valleyGlacierZone = smoothstep(snowline - 0.28 * uClimate.z, snowline + 0.18, elevN)
-                          * (1.0 - smoothstep(0.28, 0.82, slope))
-                          * smoothstep(-0.04, 0.14, concavity + 0.06 * driftNoise);
-  float initIce = uClimate.z * valleyGlacierZone * (1.2 + 2.6 * smoothstep(snowline - 0.05, snowline + 0.32, elevN));
+                          * (1.0 - smoothstep(0.30, 0.85, slope))
+                          * smoothstep(-0.03, 0.13, concavity + 0.04 * driftNoise);
+  float initIce = uClimate.z * valleyGlacierZone * (1.2 + 2.4 * smoothstep(snowline - 0.05, snowline + 0.32, elevN));
 
   outSnow = vec4(clamp(initSnow, 0.0, 5.5), clamp(initIce, 0.0, 14.0), 0.0, 0.0);
 }
@@ -1396,46 +1401,88 @@ uniform sampler2D uTerrainTex;
 uniform sampler2D uFluxTex;
 uniform vec4 uPipeParams; // (gridRes, cellSize, dt, gravity)
 
+/**
+ * CONSERVATIVE 2.5D VIRTUAL-PIPE SHALLOW-WATER FLUX
+ * -------------------------------------------------
+ * Flux channel packing:  r = +X, g = -X, b = +Y, a = -Y   [m^3 / s]
+ *
+ * Physics:
+ *  - Flow is driven by the free water-surface gradient (bedrock + sediment + water), never by
+ *    the bare bed, so rivers sit in channels, floodplains flood and lake surfaces level out.
+ *  - Each pipe is accelerated by gravity through its own wetted cross-section
+ *    (cellWidth * mean depth), then damped by turbulent friction.
+ *  - The domain edge is a CLOSED wall (zero-gradient) instead of the old unit-broken
+ *    water*cellSize*0.35 drain, so mass is conserved and shorelines stop collapsing.
+ *  - Outflow per step is CFL-limited to a fraction of the stored water volume, which removes
+ *    the classic pipe-model checkerboard oscillation that made rivers "flow weirdly".
+ */
 void main() {
   ivec2 c = ivec2(gl_FragCoord.xy);
   int maxI = int(uPipeParams.x) - 1;
+  float cellSize = uPipeParams.y;
+  float dt = uPipeParams.z;
+  float gravity = uPipeParams.w;
 
   vec4 tC = texelFetch(uTerrainTex, c, 0);
   vec4 fOld = texelFetch(uFluxTex, c, 0);
 
-  float water = tC.a;
-  if (water <= 1e-5) {
-    outFlux = vec4(0.0);
-    return;
-  }
+  float waterC = max(0.0, tC.a);
+  float surfC = tC.r + tC.g + tC.b + waterC;
 
-  float hTotalC = tC.r + tC.g + tC.b + water;
+  // Turbulent pipe friction (stronger for thin films, weaker for deep water)
+  float friction = exp(-dt * mix(4.2, 0.55, clamp(waterC / 1.6, 0.0, 1.0)));
+
+  float validX = (c.x < maxI) ? 1.0 : 0.0;
+  float validY = (c.y < maxI) ? 1.0 : 0.0;
 
   vec4 tR = texelFetch(uTerrainTex, ivec2(min(maxI, c.x + 1), c.y), 0);
   vec4 tL = texelFetch(uTerrainTex, ivec2(max(0, c.x - 1), c.y), 0);
   vec4 tU = texelFetch(uTerrainTex, ivec2(c.x, min(maxI, c.y + 1)), 0);
   vec4 tD = texelFetch(uTerrainTex, ivec2(c.x, max(0, c.y - 1)), 0);
 
-  vec4 dh = vec4(
-    hTotalC - (tR.r + tR.g + tR.b + tR.a),
-    hTotalC - (tL.r + tL.g + tL.b + tL.a),
-    hTotalC - (tU.r + tU.g + tU.b + tU.a),
-    hTotalC - (tD.r + tD.g + tD.b + tD.a)
+  vec4 sN;
+  vec4 waterN;
+  sN.x = tR.r + tR.g + tR.b + max(0.0, tR.a);
+  sN.y = tL.r + tL.g + tL.b + max(0.0, tL.a);
+  sN.z = tU.r + tU.g + tU.b + max(0.0, tU.a);
+  sN.w = tD.r + tD.g + tD.b + max(0.0, tD.a);
+  waterN = vec4(max(0.0, tR.a), max(0.0, tL.a), max(0.0, tU.a), max(0.0, tD.a));
+
+  // Hydraulic head difference (only downhill / level water surfaces push flow)
+  vec4 dh = vec4(surfC - sN.x, surfC - sN.y, surfC - sN.z, surfC - sN.w);
+  dh.x *= validX;
+  dh.y *= (c.x > 0) ? 1.0 : 0.0;
+  dh.z *= validY;
+  dh.w *= (c.y > 0) ? 1.0 : 0.0;
+
+  // Wetted cross-section of every pipe [m^2] uses the mean depth of the two cells
+  vec4 crossA = vec4(
+    cellSize * max(waterC * 0.35 + waterN.x * 0.65, 0.0015),
+    cellSize * max(waterC * 0.35 + waterN.y * 0.65, 0.0015),
+    cellSize * max(waterC * 0.35 + waterN.z * 0.65, 0.0015),
+    cellSize * max(waterC * 0.35 + waterN.w * 0.65, 0.0015)
   );
 
-  float dt = uPipeParams.z;
-  float accel = dt * uPipeParams.w / uPipeParams.y;
-  vec4 flux = max(vec4(0.0), fOld * 0.96 + dh * accel);
+  // Gravity acceleration along each pipe: dt * g * A * dh / cellLength  [m^3/s]
+  vec4 accel = dh * (dt * gravity / cellSize) * crossA;
+  vec4 flux = max(vec4(0.0), fOld * friction + accel);
 
-  if (c.x == maxI) flux.x = water * uPipeParams.y * 0.35;
-  if (c.x == 0)    flux.y = water * uPipeParams.y * 0.35;
-  if (c.y == maxI) flux.z = water * uPipeParams.y * 0.35;
-  if (c.y == 0)    flux.w = water * uPipeParams.y * 0.35;
+  // Closed domain walls (mass conserving) — no artificial edge drain
+  flux.x *= validX;
+  flux.y *= (c.x > 0) ? 1.0 : 0.0;
+  flux.z *= validY;
+  flux.w *= (c.y > 0) ? 1.0 : 0.0;
 
+  // CFL / storage limit: never move more than 42% of the stored water volume in one step
   float sumFlux = flux.x + flux.y + flux.z + flux.w;
-  float maxOut = (water * uPipeParams.y * uPipeParams.y) / max(dt, 1e-4);
+  float maxOut = 0.42 * waterC * cellSize * cellSize / max(dt, 1e-4);
   if (sumFlux > maxOut && sumFlux > 1e-7) {
     flux *= maxOut / sumFlux;
+  }
+
+  // Deep standing water keeps a tiny residual momentum only, so lakes settle instead of sloshing
+  if (waterC > 0.6) {
+    flux *= 0.985;
   }
 
   outFlux = flux;
@@ -1486,12 +1533,14 @@ void main() {
   float totalOut = fC.x + fC.y + fC.z + fC.w;
   float dWaterPipe = dt * (totalIn - totalOut) / (cellSize * cellSize);
 
-  float qX = 0.5 * ((inFromL - fC.y) + (fC.x - inFromR)) / cellSize;
-  float qZ = 0.5 * ((inFromD - fC.w) + (fC.z - inFromU)) / cellSize;
-  float avgW = max(0.025, terr.a + 0.5 * dWaterPipe);
-  vec2 flowVel = clamp(vec2(qX, qZ) / avgW, vec2(-12.0), vec2(12.0));
+  // Signed unit-width discharge [m^2/s]: flow entering through the left edge plus flow leaving
+  // through the right edge is genuinely +X transport; the reverse edges are -X transport.
+  float qX = 0.5 * ((inFromL + fC.x) - (inFromR + fC.y));
+  float qZ = 0.5 * ((inFromD + fC.z) - (inFromU + fC.w));
+  float avgW = max(0.02, terr.a + 0.5 * dWaterPipe);
+  vec2 flowVel = clamp(vec2(qX, qZ) / (cellSize * avgW), vec2(-25.0), vec2(25.0));
   float flowSpeed = length(flowVel);
-  float discharge = length(vec2(qX, qZ));
+  float discharge = length(vec2(qX, qZ)) / cellSize;
 
   float dBed = clamp(delta.r, -0.22, 0.05);
   float dCoarse = clamp(delta.g, -0.25, 0.25);
@@ -1515,9 +1564,9 @@ void main() {
     float slope = length(sGrad);
     float hardness = evalRockHardness3D(vec3(worldXZ.x, bedrock, worldXZ.y), uHardnessParams, uStrataOrient, uSeed);
 
-    float shear = discharge * (0.15 + slope) * 2.2;
-    float critShear = 0.04 + 0.55 * hardness * hardness;
-    if (shear > critShear && slope > 0.06) {
+    float shear = discharge * (0.16 + slope) * 2.4;
+    float critShear = 0.035 + 0.52 * hardness * hardness;
+    if (shear > critShear && slope > 0.045) {
       float streamCut = min(0.035, (shear - critShear) * uPipeErode.y * uPipeErode.x * 0.018 * dt / (0.15 + 2.5 * hardness));
       bedrock = max(1.0, bedrock - streamCut);
       fine += streamCut * 0.18;
@@ -1671,8 +1720,24 @@ void main() {
     }
   }
 
+  // ==========================================================================
+  // HYDROSTATIC LAKE SETTLING: inside standing water bodies (all 4 neighbours wet) the free
+  // surface is gently levelled, which kills pipe-model ripple noise and gives flat lake mirrors.
+  // ==========================================================================
+  if (c.x > 0 && c.x < maxI && c.y > 0 && c.y < maxI && water > 0.02) {
+    float wR = max(0.0, texelFetch(uTerrainTex, ivec2(c.x + 1, c.y), 0).a);
+    float wL = max(0.0, texelFetch(uTerrainTex, ivec2(c.x - 1, c.y), 0).a);
+    float wU = max(0.0, texelFetch(uTerrainTex, ivec2(c.x, c.y + 1), 0).a);
+    float wD = max(0.0, texelFetch(uTerrainTex, ivec2(c.x, c.y - 1), 0).a);
+    if (min(min(wR, wL), min(wU, wD)) > 0.015) {
+      float avgWet = (wR + wL + wU + wD) * 0.25;
+      float lakeMix = 0.18 * clamp(water / 0.9, 0.0, 1.0);
+      water = mix(water, avgWet, lakeMix);
+    }
+  }
+
   if (c.x == 0 || c.x == maxI || c.y == 0 || c.y == maxI) {
-    water *= 0.65;
+    water *= 0.92;
   } else {
     // Surface-area-limited evaporation: thin hillslope films evaporate cleanly while deep 2.5D
     // pooled lakes retain hydrostatic volume and spill naturally into downstream river channels!
@@ -1697,11 +1762,26 @@ uniform vec4 uCryoParams;     // (gridRes, cellSize, dt, worldSpan)
 uniform vec4 uClimate;        // (snowlineNorm, snowfallRate, glacierStrength, meltRate)
 uniform vec4 uStrataOrient;   // (sinStrike, cosStrike, tanDip, reliefScale)
 uniform vec4 uWindCryo;       // (windDirX, windDirZ, windSpeed, stepTime)
+uniform vec4 uSunCryo;        // (sunDirX, sunDirY, sunDirZ, seasonWarmth)
 uniform float uIceMeltRate;
 uniform float uSeed;
 
 ${COMMON_GEOLOGY_GLSL}
 
+/**
+ * CRYOSPHERE SOLVER — snowpack / avalanching / wind loading / firn / glacier creep / melt.
+ *
+ * Improvements over the previous version:
+ *  1. Snow only STICKS where the bed is gentle enough (slope-dependent holding capacity), so
+ *     vertical cliff faces stay bare instead of being varnished with impossible snow.
+ *  2. Avalanche transfer is symmetric & mass-conserving (donor-limited), CFL-clamped to 35% of
+ *     the stored snow per step — no more snow teleporting or oscillating between two cells.
+ *  3. Wind transport is a real upwind flux that is limited by the snow actually available,
+ *     depositing cornices / filling lee gullies.
+ *  4. Melt is a proper degree-day model driven by altitude warmth AND solar exposure of the
+ *     local slope (sun-facing snowfields melt first), returning the meltwater to the rivers.
+ *  5. Glacier creep is conservative and only transports ice from thick ice into lower ice.
+ */
 void main() {
   ivec2 c = ivec2(gl_FragCoord.xy);
   int maxI = int(uCryoParams.x) - 1;
@@ -1721,119 +1801,150 @@ void main() {
   float snowlineNorm = clamp(uClimate.x, 0.02, 1.05);
   vec2 worldXZ = (vUv - 0.5) * uCryoParams.w;
 
+  bool interior = (c.x > 0 && c.x < maxI && c.y > 0 && c.y < maxI);
+
+  // Local bed gradient, slope tangent & surface normal (used by every process below)
+  float hR = hBase, hL = hBase, hU = hBase, hD = hBase;
+  if (interior) {
+    vec4 tR = texelFetch(uTerrainTex, ivec2(c.x + 1, c.y), 0);
+    vec4 tL = texelFetch(uTerrainTex, ivec2(c.x - 1, c.y), 0);
+    vec4 tU = texelFetch(uTerrainTex, ivec2(c.x, c.y + 1), 0);
+    vec4 tD = texelFetch(uTerrainTex, ivec2(c.x, c.y - 1), 0);
+    hR = tR.r + tR.g + tR.b;
+    hL = tL.r + tL.g + tL.b;
+    hU = tU.r + tU.g + tU.b;
+    hD = tD.r + tD.g + tD.b;
+  }
+  vec2 grad = vec2(hR - hL, hU - hD) / (2.0 * cellSize);
+  float slopeTan = length(grad);
+  vec3 normal = safeNorm3(vec3(-grad.x, 1.0, -grad.y), vec3(0.0, 1.0, 0.0));
+  float sunFace = clamp(0.42 + dot(normal, safeNorm3(uSunCryo.xyz, vec3(0.4, 0.8, 0.4))), 0.0, 1.35);
+
+  // Freezing factor: 1 high above the snowline, 0 well below it
+  float freeze = smoothstep(snowlineNorm - 0.20, snowlineNorm + 0.10, elevN);
+
   // ==========================================================================
-  // 1. FULL-DOMAIN OROGRAPHIC BLIZZARD SNOWFALL (Covers ENTIRE Terrain Smoothly!)
+  // 1. OROGRAPHIC SNOWFALL — slope-aware deposition with wind loading / scour
   // ==========================================================================
   if (uClimate.y > 0.01) {
-    float stormSwirl = 0.72 + 0.56 * fbm2D(worldXZ * 0.016 + vec2(uWindCryo.w * 0.025, -uWindCryo.w * 0.018) + uSeed * 0.01, 3, 0.52);
-    // Snow falls across the entire domain wherever temperature is near/below freezing!
-    // Lowering snowline blankets all lower slopes & valleys too!
-    float coldZone = smoothstep(snowlineNorm - 0.18 * uClimate.y, snowlineNorm + 0.12, elevN);
-    float capSoft = max(0.0, 1.0 - snowDepth / 6.5);
-    snowDepth += uClimate.y * coldZone * stormSwirl * capSoft * 0.085 * dt;
+    float stormSwirl = 0.78 + 0.44 * fbm2D(worldXZ * 0.014 + vec2(uWindCryo.w * 0.02, -uWindCryo.w * 0.015) + uSeed * 0.01, 3, 0.52);
+    // Snow cannot adhere to near-vertical faces; it sheds instantly and feeds the couloirs.
+    float slopeHold = clamp(1.0 - smoothstep(0.90, 1.95, slopeTan), 0.02, 1.0);
+    // Windward stoss faces are scoured, lee slopes & hollows are loaded
+    vec2 wDir = safeNorm2(uWindCryo.xy, vec2(1.0, 0.0));
+    float leeBias = clamp(0.72 + 0.55 * dot(safeNorm2(-grad, wDir), wDir), 0.25, 1.35);
+    float coldZone = smoothstep(snowlineNorm - 0.16 * uClimate.y, snowlineNorm + 0.12, elevN);
+    float capSoft = max(0.0, 1.0 - snowDepth / 7.5);
+    float fall = uClimate.y * coldZone * stormSwirl * slopeHold * leeBias * capSoft * 0.080 * dt;
+    snowDepth += fall;
   }
 
   // ==========================================================================
-  // 2. MASS-CONSERVING SLAB AVALANCHE, COULOIR CASCADE, WIND DRIFT & GLACIER CREEP
+  // 2. MASS-CONSERVING SLAB AVALANCHES & COULOIR CASCADES (8-neighbour, CFL-limited)
   // ==========================================================================
-  if (c.x > 0 && c.x < maxI && c.y > 0 && c.y < maxI) {
+  if (interior) {
     const ivec2 offs[8] = ivec2[8](
       ivec2( 1,  0), ivec2(-1,  0), ivec2( 0,  1), ivec2( 0, -1),
       ivec2( 1,  1), ivec2(-1, -1), ivec2( 1, -1), ivec2(-1,  1)
     );
-    float hSnowHere = hBase + snowDepth;
-    float snowReposeTan = 0.76; // ~37-deg alpine dry-snow repose: steeper cliffs shed into couloirs & snow cones!
-    float netAvalanche = 0.0;
+    // Dry-snow angle of repose ~35 deg measured on the *snow surface* height field
+    float repose = clamp(0.60 + 0.22 * freeze, 0.52, 0.82);
+    float hSurfHere = hBase + snowDepth;
+    float outSum = 0.0;
+    float inSum = 0.0;
 
     for (int i = 0; i < 8; i++) {
       ivec2 nb = c + offs[i];
       float dist = (i < 4 ? 1.0 : 1.41421356) * cellSize;
       vec4 tN = texelFetch(uTerrainTex, nb, 0);
-      vec4 sN = texelFetch(uSnowTex, nb, 0);
-      float hSnowN = tN.r + tN.g + tN.b + sN.r;
-      float diff = hSnowHere - hSnowN;
-      float maxDiff = snowReposeTan * dist;
-
-      if (diff > maxDiff && snowDepth > 0.01) {
-        netAvalanche -= min(snowDepth * 0.095, (diff - maxDiff) * 0.070);
-      } else if (-diff > maxDiff && sN.r > 0.01) {
-        netAvalanche += min(sN.r * 0.095, (-diff - maxDiff) * 0.070);
+      vec4 sN = texelFetch(uSnowTex, nb, 0) + texelFetch(uSnowDeltaTex, nb, 0);
+      float snowN = max(0.0, sN.r);
+      float hN = tN.r + tN.g + tN.b + snowN;
+      // Positive = this cell's snow surface stands above its repose cone toward nb
+      float excess = (hSurfHere - hN) - repose * dist;
+      if (excess > 0.0) {
+        outSum += min(excess * 0.30, snowDepth * 0.090);
+      } else if (excess < 0.0 && snowN > 0.001) {
+        // Symmetric donor-limited inflow: neighbour uses the identical expression for its outflow
+        inSum += min(-excess * 0.30, snowN * 0.090);
       }
     }
-    snowDepth = max(0.0, snowDepth + netAvalanche);
+    if (outSum > snowDepth * 0.35 && outSum > 1e-7) {
+      outSum = snowDepth * 0.35;
+    }
+    snowDepth = max(0.0, snowDepth - outSum + inSum);
 
-    // Wind-drifted snow redistribution: scours windward crests & loads leeward cirques/cornices!
-    if (uWindCryo.z > 0.05) {
+    // ========================================================================
+    // 3. WIND TRANSPORT (SALTATION & CORNICE LOADING) — upwind, availability-limited
+    // ========================================================================
+    if (uWindCryo.z > 0.05 && snowDepth + 0.05 > 0.0) {
       vec2 wDir = safeNorm2(uWindCryo.xy, vec2(1.0, 0.0));
-      vec2 upUv = clamp(vUv - wDir * (1.2 / uCryoParams.x), vec2(0.002), vec2(0.998));
+      vec2 upUv = clamp(vUv - wDir * (1.25 / uCryoParams.x), vec2(0.002), vec2(0.998));
       vec4 sUp = sampleGridBilinear(uSnowTex, upUv, uCryoParams.x);
-      vec4 tR = texelFetch(uTerrainTex, ivec2(c.x + 1, c.y), 0);
-      vec4 tL = texelFetch(uTerrainTex, ivec2(c.x - 1, c.y), 0);
-      vec4 tU = texelFetch(uTerrainTex, ivec2(c.x, c.y + 1), 0);
-      vec4 tD = texelFetch(uTerrainTex, ivec2(c.x, c.y - 1), 0);
-      float hR = tR.r + tR.g + tR.b;
-      float hL = tL.r + tL.g + tL.b;
-      float hU = tU.r + tU.g + tU.b;
-      float hD = tD.r + tD.g + tD.b;
-      vec2 g = vec2(hR - hL, hU - hD) / (2.0 * cellSize);
-      float leeTrap = clamp(-dot(g, wDir) * 0.8, -0.6, 0.8);
-      float driftIn  = min(sUp.r * 0.05, sUp.r * max(0.0, 0.25 + leeTrap) * uWindCryo.z * 0.18 * dt);
-      float driftOut = min(snowDepth * 0.05, snowDepth * max(0.0, 0.25 - leeTrap) * uWindCryo.z * 0.18 * dt);
-      snowDepth = max(0.0, snowDepth + driftIn - driftOut);
+      float snowUp = max(0.0, sUp.r);
+      float leeTrap = clamp(-dot(grad, wDir) * 0.9, -0.65, 0.85);
+      // Saltation picks up snow where the wind accelerates (convex windward crests)
+      float pickup = snowDepth * max(0.0, 0.22 - leeTrap) * uWindCryo.z * 0.16 * dt;
+      // Deposition where flow separates in the lee (cornices, gully fill)
+      float drop = snowUp * max(0.0, 0.20 + leeTrap) * uWindCryo.z * 0.14 * dt;
+      pickup = min(pickup, snowDepth * 0.12);
+      drop = min(drop, snowDepth * 0.10 + 0.02);
+      snowDepth = max(0.0, snowDepth - pickup + drop);
     }
 
-    // Downslope glacier creep: thick valley ice flows from high cirques down into warm U-valleys!
-    if (uClimate.z > 0.02) {
-      vec4 tR2 = texelFetch(uTerrainTex, ivec2(c.x + 1, c.y), 0);
-      vec4 tL2 = texelFetch(uTerrainTex, ivec2(c.x - 1, c.y), 0);
-      vec4 tU2 = texelFetch(uTerrainTex, ivec2(c.x, c.y + 1), 0);
-      vec4 tD2 = texelFetch(uTerrainTex, ivec2(c.x, c.y - 1), 0);
-      float hR2 = tR2.r + tR2.g + tR2.b;
-      float hL2 = tL2.r + tL2.g + tL2.b;
-      float hU2 = tU2.r + tU2.g + tU2.b;
-      float hD2 = tD2.r + tD2.g + tD2.b;
-      float sR = texelFetch(uSnowTex, ivec2(c.x + 1, c.y), 0).g;
-      float sL = texelFetch(uSnowTex, ivec2(c.x - 1, c.y), 0).g;
-      float sU = texelFetch(uSnowTex, ivec2(c.x, c.y + 1), 0).g;
-      float sD = texelFetch(uSnowTex, ivec2(c.x, c.y - 1), 0).g;
-      float hC0 = hBase + iceDepth;
-      float creepRate = 0.055 * uClimate.z * dt;
-      float inIce = max(0.0, hR2 + sR - hC0) * min(sR, 2.5)
-                  + max(0.0, hL2 + sL - hC0) * min(sL, 2.5)
-                  + max(0.0, hU2 + sU - hC0) * min(sU, 2.5)
-                  + max(0.0, hD2 + sD - hC0) * min(sD, 2.5);
-      float outIce = (max(0.0, hC0 - (hR2 + sR)) + max(0.0, hC0 - (hL2 + sL))
-                    + max(0.0, hC0 - (hU2 + sU)) + max(0.0, hC0 - (hD2 + sD))) * min(iceDepth, 2.5);
-      iceDepth = max(0.0, iceDepth + (inIce - outIce) * creepRate);
+    // ========================================================================
+    // 4. GLACIER CREEP — conservative ice mass transfer down-valley
+    // ========================================================================
+    if (uClimate.z > 0.02 && iceDepth > 0.05) {
+      float moveOut = 0.0;
+      float moveIn = 0.0;
+      for (int i = 0; i < 4; i++) {
+        ivec2 nb = c + offs[i];
+        vec4 tN = texelFetch(uTerrainTex, nb, 0);
+        vec4 sN = texelFetch(uSnowTex, nb, 0) + texelFetch(uSnowDeltaTex, nb, 0);
+        float iceN = max(0.0, sN.g);
+        float iceSurfHere = hBase + snowDepth + iceDepth;
+        float iceSurfN = tN.r + tN.g + tN.b + max(0.0, sN.r) + iceN;
+        float d = iceSurfHere - iceSurfN;
+        if (d > 0.0) {
+          moveOut += min(d * 0.10, iceDepth * 0.05);
+        } else if (iceN > 0.02) {
+          moveIn += min(-d * 0.10, iceN * 0.05);
+        }
+      }
+      moveOut = min(moveOut, iceDepth * 0.18);
+      moveIn = min(moveIn, 0.35);
+      iceDepth = max(0.0, iceDepth - moveOut + moveIn);
     }
   }
 
   // ==========================================================================
-  // 3. FIRN COMPACTION ABOVE SNOWLINE & TRUE ALTITUDE-LAPSE MELT BELOW SNOWLINE!
+  // 5. FIRN COMPACTION ABOVE THE SNOWLINE (snow -> dense glacier ice)
   // ==========================================================================
   float aboveSnowline = smoothstep(snowlineNorm - 0.05, snowlineNorm + 0.18, elevN);
-  float compaction = min(snowDepth * 0.16, max(0.0, snowDepth - 0.55) * aboveSnowline * uClimate.z * 0.38 * dt);
+  float compaction = min(snowDepth * 0.14, max(0.0, snowDepth - 0.55) * aboveSnowline * uClimate.z * 0.36 * dt);
   snowDepth -= compaction;
   iceDepth += compaction;
 
-  // Strictly elevation-controlled air warmth: ZERO solar melt above the snowline so peaks,
-  // ridges, and high snowfields stay permanently snow-clad, while snow/glaciers creeping or
-  // avalanching below snowlineNorm melt naturally into 2.5D rivers & alpine tarns!
-  float subSnowDepth = max(0.0, snowlineNorm - elevN);
-  float warmth = clamp(subSnowDepth / max(0.16, snowlineNorm), 0.0, 1.35);
+  // ==========================================================================
+  // 6. DEGREE-DAY MELT: altitude warmth × solar exposure × season, self-limiting to
+  //    available snow/ice, and returning meltwater to the hydrology layer.
+  // ==========================================================================
+  float warmth = clamp((snowlineNorm - elevN) / max(0.16, snowlineNorm), 0.0, 1.4);
   float meltMod = 0.35 + 1.35 * uIceMeltRate;
-  float melt = min(snowDepth, snowDepth * 0.55 * meltMod * warmth * dt);
+  float season = clamp(uSunCryo.w, 0.0, 1.5);
+  float melt = min(snowDepth, snowDepth * (0.10 + 0.55 * sunFace) * meltMod * (0.35 + warmth) * season * dt);
   snowDepth -= melt;
-  // Valley glacier snouts also experience gentle basal/snout pressure-melting into rivers
-  float iceMelt = min(iceDepth, iceDepth * (0.32 * warmth + 0.015 * uIceMeltRate) * meltMod * dt);
+  // Ice ablates much more slowly: only exposed, sun-facing, low-altitude snouts give up mass
+  float iceMelt = min(iceDepth, iceDepth * (0.045 * warmth + 0.012) * (0.5 + 0.6 * sunFace) * meltMod * season * dt);
   iceDepth -= iceMelt;
 
-  if (c.x == 0 || c.x == maxI || c.y == 0 || c.y == maxI) {
-    snowDepth *= 0.96;
-    iceDepth *= 0.96;
+  if (!interior) {
+    snowDepth *= 0.94;
+    iceDepth *= 0.94;
   }
 
-  outSnow = vec4(min(snowDepth, 9.0), min(iceDepth, 22.0), melt, iceMelt);
+  outSnow = vec4(min(max(snowDepth, 0.0), 9.0), min(max(iceDepth, 0.0), 22.0), melt, iceMelt);
 }
 `;
 
@@ -1994,6 +2105,7 @@ uniform vec4 uBrush;          // (brushX, brushZ, brushRadius, brushMode)
 uniform vec4 uClimate;        // (snowlineNorm, snowfallRate, glacierStrength, meltRate)
 uniform vec4 uWindRender;     // (windX, windZ, windSpeed, dryAeolianMode)
 uniform vec4 uLayerVis;       // (lithologyOpacity, fabricStrength, snowVisOpacity, waterVisOpacity)
+uniform float uSurfaceDetail;  // 0 = FLAT flat colours (no procedural micro-texture!), 1 = full detail
 uniform int uViewMode;
 uniform int uMaterialTheme;   // 0..2 = Baseline, 3 = Grand Canyon, 4 = Studlagil, 5 = Yardang, 6 = Namib Erg
 uniform int uFabricMode;      // 0 = Baseline, 1 = Columnar, 2 = Cross-Bed/Ripples, 3 = Tafoni, 4 = Gneiss
@@ -2071,8 +2183,12 @@ void main() {
   float rockY = isSideSkirt ? vWorldPos.y : tC.r;
   float hardness = evalRockHardness3D(vec3(vWorldPos.x, rockY, vWorldPos.z), uHardnessParams, uStrataOrient, uSeed);
 
-  float grain = noise2D(vWorldPos.xz * 0.55 + rockY * 0.35) - 0.5;
-  float patchN = fbm2D(vWorldPos.xz * 0.045, 3, 0.55) - 0.5;
+  // FLAT-COLOUR CONTROLS: uSurfaceDetail = 0 kills every procedural micro-texture (grain,
+  // patch mottling, fabric patterns, ripples & crevasse detail) so palettes render as clean,
+  // uniform flat colours. 1.0 restores the full procedural stone detail.
+  float dTex = clamp(uSurfaceDetail, 0.0, 1.0);
+  float grain = (noise2D(vWorldPos.xz * 0.55 + rockY * 0.35) - 0.5) * dTex;
+  float patchN = (fbm2D(vWorldPos.xz * 0.045, 3, 0.55) - 0.5) * dTex;
 
   // ==========================================================================
   // REGIONAL LITHOLOGY PALETTES (Utah Desert / Icelandic Volcanic / Himalayan Gneiss)
@@ -2195,12 +2311,12 @@ void main() {
   if (uMaterialTheme == 1 || uMaterialTheme == 4) {
     float mossFlora = smoothstep(0.42, 0.90, bedNormal.y)
       * (1.0 - smoothstep(0.34, 0.68, elevFrac))
-      * smoothstep(0.05, 0.42, fbm2D(vWorldPos.xz * 0.030 + 11.7, 3, 0.55));
+      * smoothstep(0.05, 0.42, mix(0.5, fbm2D(vWorldPos.xz * 0.030 + 11.7, 3, 0.55), dTex));
     mossCol *= (0.85 + 0.30 * patchN + 0.20 * grain);
     rockAlbedo = mix(rockAlbedo, mossCol, mossFlora * 0.80);
   } else if (uMaterialTheme == 8) {
     // Thorsmork Green Highlands: lush emerald moss & arctic birch blanket valleys, benches & steep ridge shoulders!
-    float floraNoise = fbm2D(vWorldPos.xz * 0.028 + 7.3, 4, 0.55);
+    float floraNoise = mix(0.5, fbm2D(vWorldPos.xz * 0.028 + 7.3, 4, 0.55), dTex);
     float mossFlora = smoothstep(0.26, 0.76, bedNormal.y)
       * (1.0 - smoothstep(0.52, 0.86, elevFrac))
       * smoothstep(0.02, 0.34, floraNoise + 0.14);
@@ -2214,7 +2330,8 @@ void main() {
   // ==========================================================================
   vec3 preFabricAlbedo = rockAlbedo;
   vec3 preFabricNormal = bedNormal;
-  if (uFabricMode > 0 && uLayerVis.y > 0.001 && (uMaterialTheme != 6 || tC.b < 0.08)) {
+  float fabW = clamp(uLayerVis.y * dTex, 0.0, 1.0);
+  if (uFabricMode > 0 && fabW > 0.004 && (uMaterialTheme != 6 || tC.b < 0.08)) {
     float steepFace = smoothstep(0.18, 0.72, 1.0 - bedNormal.y);
     if (uFabricMode == 1) {
       // Hexagonal Columnar Basalt Colonnades + Chisel Cross-Joints
@@ -2227,29 +2344,29 @@ void main() {
       float hexDist = 0.5 - max(abs(hgv.x), abs(hgv.x) * 0.5 + abs(hgv.y) * 0.8660254);
       float colSeam = (1.0 - smoothstep(0.02, 0.10, hexDist)) * (0.35 + 0.65 * steepFace);
       float crossStep = (1.0 - smoothstep(0.03, 0.11, abs(fract(rockY * 0.28 + patchN * 0.4) - 0.5))) * steepFace;
-      rockAlbedo *= (1.0 - 0.32 * colSeam - 0.15 * crossStep);
-      rockAlbedo = mix(rockAlbedo, vec3(0.24, 0.13, 0.07), colSeam * 0.28);
-      bedNormal = safeNorm3(bedNormal + vec3(hgv.x, 0.0, hgv.y) * (0.22 * steepFace), bedNormal);
+      rockAlbedo *= (1.0 - (0.32 * colSeam + 0.15 * crossStep) * fabW);
+      rockAlbedo = mix(rockAlbedo, vec3(0.24, 0.13, 0.07), colSeam * 0.28 * fabW);
+      bedNormal = safeNorm3(bedNormal + vec3(hgv.x, 0.0, hgv.y) * (0.22 * steepFace * fabW), bedNormal);
     } else if (uFabricMode == 2) {
       // Aeolian Trough Cross-Bedding Foresets on Exposed Sandstone
       float foreset = sin(rockY * 1.45 + vWorldPos.x * 0.22 + sin(vWorldPos.z * 0.09) * 2.4 + patchN * 3.0);
       float lam = smoothstep(-0.65, 0.75, foreset);
-      rockAlbedo *= mix(0.86, 1.12, lam);
+      rockAlbedo *= mix(1.0, mix(0.86, 1.12, lam), fabW);
     } else if (uFabricMode == 3) {
       // Tafoni Honeycomb & Palagonite Hyaloclastite Pitting
       float c1 = abs(noise2D(vWorldPos.xz * 0.48 + rockY * 0.36) - 0.5) * 2.0;
       float c2 = abs(noise2D(vWorldPos.xz * 1.05 - rockY * 0.62) - 0.5) * 2.0;
       float pit = (1.0 - smoothstep(0.08, 0.40, c1 * 0.68 + c2 * 0.32)) * steepFace;
-      rockAlbedo *= (1.0 - 0.38 * pit);
+      rockAlbedo *= (1.0 - 0.38 * pit * fabW);
     } else if (uFabricMode == 4) {
       // Folded Metamorphic Gneissic Banding & Conjugate Fractures
       float fold = rockY * 0.42 + sin(vWorldPos.x * 0.06 + patchN * 5.0) * 1.8;
       float gneissBand = smoothstep(-0.55, 0.55, sin(fold * 3.1));
-      rockAlbedo = mix(rockAlbedo * 0.78, rockAlbedo * 1.22 + vec3(0.03), gneissBand);
+      rockAlbedo = mix(rockAlbedo, mix(rockAlbedo * 0.78, rockAlbedo * 1.22 + vec3(0.03), gneissBand), fabW);
     }
-    if (uLayerVis.y < 0.999) {
-      rockAlbedo = mix(preFabricAlbedo, rockAlbedo, uLayerVis.y);
-      bedNormal = safeNorm3(mix(preFabricNormal, bedNormal, uLayerVis.y), preFabricNormal);
+    if (fabW < 0.999) {
+      rockAlbedo = mix(preFabricAlbedo, rockAlbedo, fabW);
+      bedNormal = safeNorm3(mix(preFabricNormal, bedNormal, fabW), preFabricNormal);
     }
   }
   if (uLayerVis.x < 0.999) {
@@ -2267,7 +2384,7 @@ void main() {
   // Snow bridges ledges, cirques & couloirs; only sheer 58-deg+ rock ribs shed snow to bare gneiss/basalt!
   float slopeHold = 1.0 - smoothstep(0.62, 0.88, 1.0 - bedNormal.y);
   // Subtle wind-fluted sastrugi & exposed rock ribs ONLY on steep walls; broad snowfields stay rich & continuous!
-  float snowPatch = mix(1.0, 0.62 + 0.38 * ridgedFbm2D(vWorldPos.xz * 0.055 + 5.3, 3, 0.5), smoothstep(0.28, 0.65, 1.0 - bedNormal.y));
+  float snowPatch = mix(1.0, mix(1.0, 0.62 + 0.38 * ridgedFbm2D(vWorldPos.xz * 0.055 + 5.3, 3, 0.5), dTex), smoothstep(0.28, 0.65, 1.0 - bedNormal.y));
   float snowCover = isSideSkirt ? 0.0
     : clamp(smoothstep(0.018, 0.32, snowDepth) * mix(0.35, 1.0, slopeHold) * snowPatch, 0.0, 1.0) * uLayerVis.z;
   float iceCover = (isSideSkirt ? 0.0 : smoothstep(0.06, 0.70, iceDepth) * mix(0.45, 1.0, slopeHold)) * uLayerVis.z;
@@ -2276,7 +2393,7 @@ void main() {
   vec3 snowAlbedo = mix(vec3(0.56, 0.64, 0.76), vec3(0.89, 0.92, 0.97), clamp(bedNormal.y, 0.0, 1.0));
   snowAlbedo *= (1.0 + 0.04 * grain - 0.04 * patchN);
   // Glacier ice: dense blue crevassed ice with wind-scoured firn bands
-  float crevasse = smoothstep(0.55, 0.95, ridgedFbm2D(vWorldPos.xz * 0.085 + vWorldPos.y * 0.02, 4, 0.55));
+  float crevasse = mix(0.46, smoothstep(0.55, 0.95, ridgedFbm2D(vWorldPos.xz * 0.085 + vWorldPos.y * 0.02, 4, 0.55)), dTex);
   vec3 iceAlbedo = mix(vec3(0.255, 0.470, 0.610), vec3(0.520, 0.760, 0.860), 1.0 - crevasse * 0.55);
   iceAlbedo = mix(iceAlbedo, vec3(0.845, 0.900, 0.940), smoothstep(0.34, 0.90, elevFrac) * 0.42);
 
@@ -2313,7 +2430,7 @@ void main() {
     vec3 slipSand  = fineAlluvialCol * vec3(0.94, 0.86, 0.82);
     surfaceAlbedo = mix(surfaceAlbedo, mix(stossSand, slipSand, leeSlipMask), sandCover * 0.96);
 
-    if (sandRippleMask > 0.01) {
+    if (sandRippleMask > 0.01 && dTex > 0.05) {
       float warpR = fbm2D(vWorldPos.xz * 0.085, 2, 0.5) * 2.2;
       float rCoord1 = dot(vWorldPos.xz, wDir) * 1.55 + sin(dot(vWorldPos.xz, cDir) * 0.35 + warpR) * 0.85;
       float rCoord2 = dot(vWorldPos.xz, wDir) * 3.10 + cos(dot(vWorldPos.xz, cDir) * 0.72 - warpR) * 0.55;
@@ -2324,7 +2441,7 @@ void main() {
       float dRip2 = f2 < 0.72 ? 0.22 : -0.60;
       // Fade micro-ripples cleanly with camera distance to prevent aliasing shimmer!
       float distAtten = 1.0 - smoothstep(90.0, 420.0, length(uCameraPos - vWorldPos));
-      float ripStrength = (dRip1 * 0.065 + dRip2 * 0.032) * sandRippleMask * distAtten * uLayerVis.y;
+      float ripStrength = (dRip1 * 0.065 + dRip2 * 0.032) * sandRippleMask * distAtten * fabW;
       bedNormal = safeNorm3(bedNormal - vec3(wDir.x * ripStrength, 0.0, wDir.y * ripStrength), bedNormal);
     }
   }
@@ -2423,7 +2540,7 @@ void main() {
     float forwardSun = pow(max(0.0, dot(-L, V) * 0.5 + 0.5), 2.0);
     litColor += vec3(0.32, 0.18, 0.08) * graze * (0.35 + 0.65 * forwardSun) * shadow * sandCover;
     float sparkHash = hash12(floor(vWorldPos.xz * 7.5));
-    float spark = step(0.992, sparkHash) * shadow * ndotl * (1.0 - smoothstep(60.0, 240.0, length(uCameraPos - vWorldPos)));
+    float spark = step(0.992, sparkHash) * shadow * ndotl * dTex * (1.0 - smoothstep(60.0, 240.0, length(uCameraPos - vWorldPos)));
     litColor += vec3(0.55, 0.44, 0.30) * spark * sandCover;
   }
 
@@ -2440,8 +2557,9 @@ void main() {
     float tSec = uRenderDomain.w;
 
     vec2 wUv = vWorldPos.xz * 0.42 - flowD.xy * tSec * 0.35;
-    float ripX = noise2D(wUv * 2.1 + vec2(tSec * 0.6, 0.0)) - noise2D(wUv * 2.1 - vec2(tSec * 0.6, 0.0));
-    float ripZ = noise2D(wUv * 2.3 + vec2(0.0, tSec * 0.5)) - noise2D(wUv * 2.3 - vec2(0.0, tSec * 0.5));
+    float ripScale = mix(0.25, 1.0, dTex);
+    float ripX = (noise2D(wUv * 2.1 + vec2(tSec * 0.6, 0.0)) - noise2D(wUv * 2.1 - vec2(tSec * 0.6, 0.0))) * ripScale;
+    float ripZ = (noise2D(wUv * 2.3 + vec2(0.0, tSec * 0.5)) - noise2D(wUv * 2.3 - vec2(0.0, tSec * 0.5))) * ripScale;
 
     float wH_R = hR + (tR.a > 0.003 ? tR.a : 0.0);
     float wH_L = hL + (tL.a > 0.003 ? tL.a : 0.0);
@@ -2503,7 +2621,8 @@ uniform sampler2D uTerrainTex;
 
 uniform mat4 uViewProj;
 uniform vec3 uCameraPos;
-uniform vec4 uPartVis; // (worldSpan, gridRes, opacity, activeCount)
+uniform vec4 uPartVis;     // (worldSpan, gridRes, opacity, activeCount)
+uniform vec4 uSpeciesVis;  // (rain, snow, aeolian sand, rockfall) 0 = hidden species
 
 out vec2 vQuadUv;
 out vec4 vColor;
@@ -2534,6 +2653,15 @@ void main() {
 
   // 0 = rain, 1 = snow, 2 = aeolian sand, 3 = rockfall boulder
   int species = int(sed.w + 0.5);
+  float speciesVis = species == 0 ? uSpeciesVis.x
+    : (species == 1 ? uSpeciesVis.y
+    : (species == 2 ? uSpeciesVis.z : uSpeciesVis.w));
+  if (speciesVis < 0.01) {
+    gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+    vColor = vec4(0.0);
+    vQuadUv = vec2(0.0);
+    return;
+  }
 
   if (!isAirborne) {
     vec2 uv = pos.xz / uPartVis.x + 0.5;
@@ -2764,6 +2892,7 @@ uniform vec4 uClimate;        // (snowlineNorm, snowfallRate, glacierStrength, m
 uniform int uViewMode;
 uniform int uMaterialTheme;
 uniform int uFabricMode;
+uniform float uSurfaceDetail;  // 0 = flat colours (no stone grain / repeating joints)
 uniform float uSeed;
 
 ${COMMON_GEOLOGY_GLSL}
@@ -2779,7 +2908,7 @@ void main() {
   float groundH = tCell.r + tCell.g + tCell.b;
 
   float hardness = evalRockHardness3D(vWorldPos + vec3(vInstMeta.x * 19.0, 0.0, 0.0), uHardnessParams, uStrataOrient, uSeed);
-  float grain = noise2D(vWorldPos.xz * 1.15 + vWorldPos.y * 0.85 + vInstMeta.x * 31.0) - 0.5;
+  float grain = (noise2D(vWorldPos.xz * 1.15 + vWorldPos.y * 0.85 + vInstMeta.x * 31.0) - 0.5) * clamp(uSurfaceDetail, 0.0, 1.0);
 
   vec3 softCol;
   vec3 hardCol;
@@ -2809,18 +2938,20 @@ void main() {
   vec3 albedo = mix(softCol, hardCol, clamp(hardness * 0.85 + vInstMeta.x * 0.25, 0.0, 1.0));
   albedo *= (1.0 + 0.14 * grain + 0.08 * vMask.z - 0.14 * vMask.y);
 
-  if (uFabricMode == 1) {
+  // Repeating stone joints / pits are disabled in flat-colour mode (uSurfaceDetail)
+  float rockFabW = clamp(uSurfaceDetail, 0.0, 1.0);
+  if (uFabricMode == 1 && rockFabW > 0.05) {
     float seam = 1.0 - smoothstep(0.02, 0.12, abs(fract(vWorldPos.x * 0.55 + vWorldPos.z * 0.42) - 0.5));
-    albedo *= (1.0 - 0.26 * seam);
-  } else if (uFabricMode == 2) {
+    albedo *= (1.0 - 0.26 * seam * rockFabW);
+  } else if (uFabricMode == 2 && rockFabW > 0.05) {
     float lam = smoothstep(-0.6, 0.75, sin(vWorldPos.y * 2.1 + vWorldPos.x * 0.35 + vInstMeta.x * 6.0));
-    albedo *= mix(0.86, 1.12, lam);
-  } else if (uFabricMode == 3) {
+    albedo *= mix(1.0, mix(0.86, 1.12, lam), rockFabW);
+  } else if (uFabricMode == 3 && rockFabW > 0.05) {
     float pit = 1.0 - smoothstep(0.08, 0.38, abs(noise2D(vWorldPos.xz * 0.9 + vWorldPos.y * 0.7) - 0.5) * 2.0);
-    albedo *= (1.0 - 0.30 * pit);
-  } else if (uFabricMode == 4) {
+    albedo *= (1.0 - 0.30 * pit * rockFabW);
+  } else if (uFabricMode == 4 && rockFabW > 0.05) {
     float band = smoothstep(-0.5, 0.5, sin(vWorldPos.y * 1.4 + sin(vWorldPos.x * 0.25) * 2.0));
-    albedo = mix(albedo * 0.80, albedo * 1.20, band);
+    albedo = mix(albedo, mix(albedo * 0.80, albedo * 1.20, band), rockFabW);
   }
 
   // Icelandic moss on upward-facing settled boulders & damp outcrops

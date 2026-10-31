@@ -146,6 +146,26 @@
           </section>
 
           <section class="panel-section">
+            <div class="section-header">
+              <span>PARTICLE RAIN EROSION</span>
+              <span class="tag-pill" id="rain-status-pill">Idle</span>
+            </div>
+            <p class="export-note" style="margin-bottom:8px;">
+              Lagrangian raindrops run down the rock surface and dissolve it — the same hydraulic
+              solver used in Terrain Studio, adapted for 3D meshes (arches &amp; overhangs included).
+            </p>
+            <div class="export-buttons">
+              <button id="btn-rain-toggle" class="btn-primary" type="button">Start Rain Erosion</button>
+              <button id="btn-rain-reset" class="btn-secondary" type="button">Reset Surface</button>
+            </div>
+            <div id="sliders-rain"></div>
+            <div class="toggle-grid">
+              <label class="check-pill"><input id="chk-rain-visible" type="checkbox" checked /><span>Falling Rain</span></label>
+            </div>
+            <p class="export-note" id="rain-readout" style="margin-bottom:0;">Surface intact · 0 droplets</p>
+          </section>
+
+          <section class="panel-section">
             <div class="section-header"><span>STUDIO SHADING &amp; RIG</span></div>
             <label class="field-row">
               <span>Surface Mode</span>
@@ -218,6 +238,22 @@
             <div class="tp-toolbar-group">
               <span class="tp-bar-label">Palette</span>
               <select id="tp-select-palette" class="tp-pill-select"></select>
+            </div>
+
+            <div class="tp-toolbar-group">
+              <span class="tp-bar-label">Surface</span>
+              <select id="tp-select-detail" class="tp-pill-select" title="Flat colours remove every procedural colour texture; detail adds grain & patterns">
+                <option value="0">Flat colours</option>
+                <option value="0.5">Subtle detail</option>
+                <option value="1">Full detail</option>
+              </select>
+            </div>
+
+            <div class="tp-toolbar-group tp-vis-group">
+              <span class="tp-bar-label">Show</span>
+              <button type="button" class="tp-vis-toggle active" id="tp-toggle-water" title="Show / hide all rivers, lakes and water surfaces">Water</button>
+              <button type="button" class="tp-vis-toggle active" id="tp-toggle-snow" title="Show / hide the snowpack and glacier ice">Snow</button>
+              <button type="button" class="tp-vis-toggle active" id="tp-toggle-rain" title="Show / hide falling rain particles (erosion keeps running)">Rain</button>
             </div>
           </div>
 

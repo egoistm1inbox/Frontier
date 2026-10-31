@@ -792,6 +792,33 @@ select {
   cursor: pointer;
 }
 
+.tp-vis-toggle {
+  height: 25px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid var(--tp-border);
+  background: #1a1a1a;
+  color: var(--tp-muted);
+  font-size: 11px;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+
+.tp-vis-toggle:hover {
+  color: #f0f0ec;
+  background: #232323;
+}
+
+.tp-vis-toggle.active {
+  background: #1d2a26;
+  border-color: rgba(110, 205, 170, 0.5);
+  color: #a9e8cd;
+}
+
+.tp-vis-toggle:not(.active) {
+  opacity: 0.6;
+}
+
 .tp-authoring-bar button {
   height: 25px;
   padding: 0 10px;
