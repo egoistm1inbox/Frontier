@@ -1049,7 +1049,10 @@ void main() {
         sed.z + splashBed,
         sed.w
       );
-      outExchange = vec4(-splashBed, 0.0, -splashLoose, velWater.w * 0.032);
+      // Saturated ground stops absorbing rain: once a cell holds a standing film, further drops run off
+      // downhill instead of deepening it. This bounds ponding no matter how long the rain falls.
+      float saturationGate = exp(-terr.a / 0.15);
+      outExchange = vec4(-splashBed, 0.0, -splashLoose, velWater.w * 0.032 * saturationGate);
       return;
     }
 
@@ -1589,7 +1592,10 @@ void main() {
     float channelLow = 1.0 - smoothstep(0.06, 0.24, elevN);
     // Springs are discrete patches (noise-gated), so headwaters start as distinct sources, not a ruled line
     float springs = smoothstep(0.42, 0.68, noise2D(worldXZ * 0.045 + vec2(uSeed * 0.013, 3.7)));
-    water += upstreamBand * channelLow * springs * uHydrology.y * 0.36 * dt;
+    // Springs seep up to a shallow film (~6 cm) and the surplus runs downhill as river water.
+    // Without this cap a constant spring ponds every low cell and the basin floods indefinitely.
+    float seepRoom = clamp(1.0 - water / 0.06, 0.0, 1.0);
+    water += upstreamBand * channelLow * springs * uHydrology.y * 0.36 * dt * seepRoom;
   } else if (uHydrology.y < -0.01) {
     // Artesian desert oasis groundwater spring: maintains crystal oasis lake at water-table 9.8m!
     vec2 oasisD = (vUv * 2.0 - 1.0) - vec2(-0.04, -0.03);
@@ -1701,6 +1707,15 @@ void main() {
     // pooled lakes retain hydrostatic volume and spill naturally into downstream river channels!
     float poolShield = mix(1.0, 0.18, smoothstep(0.10, 0.65, water) * clamp(uHydrology.z, 0.0, 1.0));
     water = max(0.0, water * (1.0 - uIntParams.w * 0.035 * poolShield * dt) - 0.00015 * poolShield * dt);
+
+    // Infiltration: ponded water soaks into the ground (fast through sand/gravel, slowly through bedrock).
+    // This first-order sink applies at any depth, so rain keeps every basin at a finite level
+    // instead of filling forever. The lake shape still forms where water collects.
+    // Ponded water (slow) soaks in; fast channel flow keeps its discharge so rivers still carve.
+    float sedFrac = clamp((coarse + fine) * 1.5, 0.0, 1.0);
+    float ponded = 1.0 - smoothstep(0.25, 1.0, flowSpeed);
+    float kInfiltrate = mix(0.5, 1.2, sedFrac) * ponded;
+    water = max(0.0, water * (1.0 - kInfiltrate * dt));
   }
 
   outTerrain = vec4(bedrock, coarse, fine, water);
