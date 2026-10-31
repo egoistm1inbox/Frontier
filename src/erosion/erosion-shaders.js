@@ -1708,14 +1708,24 @@ void main() {
     float poolShield = mix(1.0, 0.18, smoothstep(0.10, 0.65, water) * clamp(uHydrology.z, 0.0, 1.0));
     water = max(0.0, water * (1.0 - uIntParams.w * 0.035 * poolShield * dt) - 0.00015 * poolShield * dt);
 
-    // Infiltration: ponded water soaks into the ground (fast through sand/gravel, slowly through bedrock).
-    // This first-order sink applies at any depth, so rain keeps every basin at a finite level
-    // instead of filling forever. The lake shape still forms where water collects.
-    // Ponded water (slow) soaks in; fast channel flow keeps its discharge so rivers still carve.
+    // Infiltration / drainage of standing water. Thin films (rain sheets) soak away almost at once, so
+    // rain cannot build a flood sheet; deep standing water drains slowly so lakes can still hold.
+    // Shallow fast channel flow is exempt, so rivers keep their discharge and keep carving.
+    // Exponential form stays stable at any rate; the film depth equilibrates at rain input / rate.
     float sedFrac = clamp((coarse + fine) * 1.5, 0.0, 1.0);
-    float ponded = 1.0 - smoothstep(0.25, 1.0, flowSpeed);
-    float kInfiltrate = mix(0.5, 1.2, sedFrac) * ponded;
-    water = max(0.0, water * (1.0 - kInfiltrate * dt));
+    // Speed alone is not a channel signal: velocity = discharge / depth, so thin sloshing films read as
+    // fast. Exempt flow must also carry a real depth, so rain sheets drain while true channels keep running.
+    float ponded = 1.0 - smoothstep(0.25, 1.0, flowSpeed) * smoothstep(0.03, 0.10, water);
+    // Depth-dependent drain: a linear sink alone gives equilibrium depth = input / k, which keeps
+    // climbing under heavy rain. The stiff term above ~0.3 m makes the equilibrium depth grow only
+    // like sqrt(input), so the standing-water volume settles at a set level rather than flooding.
+    float filmK = mix(14.0, 0.6, smoothstep(0.04, 0.30, water));
+    float deepK = 30.0 * smoothstep(0.30, 0.55, water) + 2.0 * max(water - 0.55, 0.0);
+    // The channel exemption covers shallow fast flow only. Deep water drains whatever its speed:
+    // a closed basin that spills at the rim would otherwise carry a steady throughflow and never
+    // be bounded, because its velocity (discharge / depth) stays above the exemption threshold.
+    float kInfiltrate = filmK * mix(1.0, 1.35, sedFrac) * ponded + deepK * mix(1.0, 1.35, sedFrac);
+    water = max(0.0, water * exp(-kInfiltrate * dt));
   }
 
   outTerrain = vec4(bedrock, coarse, fine, water);
