@@ -2205,7 +2205,7 @@ void main() {
   // dark vein-like lines — the blanket reads as one continuous flat sheet.
   vec4 snowCell = isSideSkirt ? vec4(0.0) : sampleGridBilinear(uSnowTex, vUv, res);
   if (!isSideSkirt) {
-    float sEps = 2.0 / res;
+    float sEps = 1.0 / res;
     vec4 sBlur = snowCell
       + sampleGridBilinear(uSnowTex, vUv + vec2(sEps, 0.0), res)
       + sampleGridBilinear(uSnowTex, vUv - vec2(sEps, 0.0), res)
@@ -2217,12 +2217,16 @@ void main() {
   float iceDepth = snowCell.g;
   float snowlineY = clamp(uClimate.x, 0.02, 1.05) * max(uStrataOrient.w, 1.0);
 
-  // Snow bridges ledges, cirques & couloirs; only sheer 58-deg+ rock ribs shed snow to bare gneiss/basalt!
-  float slopeHold = 1.0 - smoothstep(0.62, 0.88, 1.0 - bedNormal.y);
-  // Subtle wind-fluted sastrugi & exposed rock ribs ONLY on steep walls; broad snowfields stay rich & continuous!
+  // Snow holds on flats/benches but sheds from steep faces: 45deg holds fully,
+  // ~65deg holds ~40%, 75deg+ cliffs shed to bare rock (mountain sides show).
+  float slopeHold = 1.0 - smoothstep(0.38, 0.72, 1.0 - bedNormal.y);
+  // Sharp convex crests, aretes & peak ribs are wind-scoured bare rock;
+  // concave hollows/channels keep their snow (no vein lines return).
+  float crestExposure = smoothstep(0.10, 0.50, ridgeConvex);
   float snowCover = isSideSkirt ? 0.0
-    : clamp(smoothstep(0.008, 0.10, snowDepth) * mix(0.55, 1.0, slopeHold), 0.0, 1.0) * uLayerVis.z;
-  float iceCover = (isSideSkirt ? 0.0 : smoothstep(0.03, 0.35, iceDepth) * mix(0.55, 1.0, slopeHold)) * uLayerVis.z;
+    : clamp(smoothstep(0.015, 0.22, snowDepth) * mix(0.06, 1.0, slopeHold), 0.0, 1.0)
+      * (1.0 - 0.88 * crestExposure) * uLayerVis.z;
+  float iceCover = (isSideSkirt ? 0.0 : smoothstep(0.05, 0.55, iceDepth) * mix(0.18, 1.0, slopeHold)) * uLayerVis.z;
 
   // Fresh snow is high-albedo; shaded snow picks up cold Himalayan sky-blue subsurface bounce!
   vec3 snowAlbedo = mix(vec3(0.56, 0.64, 0.76), vec3(0.89, 0.92, 0.97), clamp(bedNormal.y, 0.0, 1.0));
@@ -2240,8 +2244,8 @@ void main() {
   // streaks and creases cannot print through as dark lines.
   float cryoShade = max(snowCover, iceCover * 0.85);
   if (cryoShade > 0.001) {
-    bedNormal = safeNorm3(mix(bedNormal, vec3(0.0, 1.0, 0.0), cryoShade * 0.72), bedNormal);
-    ao = mix(ao, 1.0, cryoShade * 0.88);
+    bedNormal = safeNorm3(mix(bedNormal, vec3(0.0, 1.0, 0.0), cryoShade * 0.50), bedNormal);
+    ao = mix(ao, 1.0, cryoShade * 0.62);
   }
 
   float coarseMask = isSideSkirt ? 0.0 : smoothstep(0.012, 0.24, tC.g);
