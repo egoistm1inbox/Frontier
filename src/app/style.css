@@ -1,0 +1,10 @@
+html, body { margin: 0; height: 100%; background: #0b1020; overflow: hidden; font-family: ui-monospace, Menlo, Consolas, monospace; color: #e8eef7; }
+#view { position: fixed; inset: 0; width: 100%; height: 100%; display: block; cursor: crosshair; }
+#crosshair { position: fixed; left: 50%; top: 50%; width: 14px; height: 14px; margin: -7px 0 0 -7px; pointer-events: none; }
+#crosshair::before, #crosshair::after { content: ''; position: absolute; background: rgba(255,255,255,.85); }
+#crosshair::before { left: 6px; top: 0; width: 2px; height: 14px; }
+#crosshair::after { left: 0; top: 6px; width: 14px; height: 2px; }
+#hud { position: fixed; left: 12px; top: 12px; padding: 10px 12px; background: rgba(8,12,24,.72); border: 1px solid rgba(255,255,255,.12); border-radius: 8px; font-size: 12px; line-height: 1.5; white-space: pre; pointer-events: none; min-width: 300px; }
+#hud .err { color: #ff8a8a; }
+#help { position: fixed; left: 12px; bottom: 12px; padding: 8px 12px; background: rgba(8,12,24,.6); border-radius: 8px; font-size: 12px; line-height: 1.6; pointer-events: none; }
+#help b { color: #ffd479; }
