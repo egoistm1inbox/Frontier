@@ -29,7 +29,10 @@ export class Program {
     gl.attachShader(prog, fs);
     gl.linkProgram(prog);
     if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
-      throw new Error(`${name}: link failed: ${gl.getProgramInfoLog(prog)}`);
+      const log = (gl.getProgramInfoLog(prog) ?? '').trim();
+      // Drivers often return an empty log when they give up on shader size or complexity.
+      const hint = log ? log : '(empty driver log: likely a shader too large or complex for this driver)';
+      throw new Error(`${name}: link failed: ${hint}`);
     }
     gl.deleteShader(vs);
     gl.deleteShader(fs);

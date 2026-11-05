@@ -1,12 +1,13 @@
 // App shell: builds the world, residency manager, GPU atlas and renderer, then runs the frame loop.
 import './app/style.css';
-import { STREAM, VRAM_BUDGET_BYTES, WORLD, BRICK } from './config.ts';
+import { VRAM_BUDGET_BYTES, WORLD } from './config.ts';
 import { africaPolygonM } from './world/africa.ts';
 import { bakeCoastField, type CoastField } from './world/coastField.ts';
 import { lonLatToWorld } from './world/macroParams.ts';
-import { macroHeight, macroSDF, type MacroField } from './world/macroReference.ts';
-import { ClipmapResidency, type BrickClass } from './clipmap/residency.ts';
-import { LEVELS, atlasDims, brickCenter, brickSize, cellSize, estimateVram, type V3 } from './clipmap/layout.ts';
+import { macroHeight, type MacroField } from './world/macroReference.ts';
+import { ClipmapResidency } from './clipmap/residency.ts';
+import { classifyBrick } from './clipmap/classify.ts';
+import { LEVELS, atlasDims, brickSize, cellSize, estimateVram, type V3 } from './clipmap/layout.ts';
 import { createGl, maxTexture3D } from './gpu/gl.ts';
 import { ClipAtlas } from './gpu/atlas.ts';
 import { Renderer } from './gpu/renderer.ts';
@@ -14,18 +15,6 @@ import { Sculptor, type Tool } from './sculpt/brush.ts';
 import { FlyCamera } from './app/camera.ts';
 
 const TOOLS: Tool[] = ['raise', 'lower', 'smooth', 'flatten'];
-
-/** Brick class from the CPU reference: uniform only if the centre is farther than the conservative bound. */
-function classifyBrick(field: MacroField, lv: number, x: number, y: number, z: number): BrickClass {
-  const cs = cellSize(lv);
-  const c = brickCenter(lv, x, y, z);
-  const d = macroSDF(field, c[0], c[1], c[2], 8);
-  const halfDiag = (BRICK.cells / 2) * Math.sqrt(3) * cs;
-  const margin = halfDiag * STREAM.uniformLipschitz + BRICK.bandCells * cs + STREAM.uniformSafetyM;
-  if (d > margin) return 'air';
-  if (d < -margin) return 'solid';
-  return 'mixed';
-}
 
 function fmtMB(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(0)} MB`;
@@ -138,7 +127,7 @@ function boot(): void {
 
     // Pick the surface under the crosshair (screen centre) for the brush preview and for sculpting.
     lastHit = null;
-    const opts = { shadows, brush: { on: brushOn, center: [0, 0, 0] as V3, radius: sculptor.radius }, maxDist: 60000 };
+    const opts = { shadows, brush: { on: brushOn, center: [0, 0, 0] as V3, radius: sculptor.radius }, maxDist: 200000 };
     if (brushOn) {
       const hit = renderer.pick(renderer.width / 2, renderer.height / 2, residency, rc, opts);
       if (hit) {

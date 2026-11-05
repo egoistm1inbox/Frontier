@@ -1,5 +1,6 @@
-// Fragment programs. Every program is GLSL ES 3.00 and starts with COMMON_GLSL.
-import { COMMON_GLSL } from './chunks.ts';
+// Fragment programs. Every program is GLSL ES 3.00. Only GEN_FS includes the macro SDF; sculpt and
+// raymarch sample the clipmap through CLIP_CHUNK so their shaders stay small enough to link.
+import { CLIP_CHUNK, GEN_CHUNK } from './chunks.ts';
 
 export const FULLSCREEN_VS = `#version 300 es
 precision highp float;
@@ -12,7 +13,7 @@ void main() {
 export const GEN_FS = `#version 300 es
 precision highp float;
 precision highp int;
-${COMMON_GLSL}
+${GEN_CHUNK}
 uniform ivec3 uBaseCell;   // brick base cell index (texel 1 maps to this cell)
 uniform float uCell;
 uniform int uSlice;
@@ -49,7 +50,7 @@ void main() {
 export const SCULPT_FS = `#version 300 es
 precision highp float;
 precision highp int;
-${COMMON_GLSL}
+${CLIP_CHUNK}
 uniform ivec3 uSrcOrigin;   // atlas origin of the brick being edited
 uniform vec3 uBrickRel;     // camera-relative position of brick cell 0
 uniform float uCell;
@@ -83,11 +84,14 @@ float sculptValue(vec3 p, float d) {
     return mix(d, smax_(d, -ball, k), a);
   }
   if (uTool == 2) {
+    // One call site in a loop (not six inlined calls): keeps the driver-side program small.
     float o = uSmoothOff;
-    float avg = (sceneSDF(p + vec3(o, 0.0, 0.0), 8) + sceneSDF(p - vec3(o, 0.0, 0.0), 8)
-               + sceneSDF(p + vec3(0.0, o, 0.0), 8) + sceneSDF(p - vec3(0.0, o, 0.0), 8)
-               + sceneSDF(p + vec3(0.0, 0.0, o), 8) + sceneSDF(p - vec3(0.0, 0.0, o), 8)) / 6.0;
-    return mix(d, avg, a);
+    float acc = 0.0;
+    for (int i = 0; i < 3; i++) {
+      vec3 ax = vec3(i == 0 ? o : 0.0, i == 1 ? o : 0.0, i == 2 ? o : 0.0);
+      acc += sceneSDF(p + ax) + sceneSDF(p - ax);
+    }
+    return mix(d, acc / 6.0, a);
   }
   return mix(d, p.y - uFlatY, a);
 }
@@ -104,7 +108,7 @@ void main() {
 export const RAYMARCH_FS = `#version 300 es
 precision highp float;
 precision highp int;
-${COMMON_GLSL}
+${CLIP_CHUNK}
 uniform vec2 uRes;
 uniform vec3 uCamRight;
 uniform vec3 uCamUp;
@@ -123,13 +127,14 @@ out vec4 oColor;
 
 bool castRay(vec3 ro, vec3 rd, out float tOut) {
   float t = 0.0;
-  for (int i = 0; i < 260; i++) {
+  for (int i = 0; i < 300; i++) {
     vec3 p = ro + rd * t;
-    int oct = t < 1500.0 ? 8 : (t < 9000.0 ? 4 : 2);   // distance-based LOD of the macro field
-    float d = sceneSDF(p, oct);
+    float d = sceneSDF(p);   // level selection (distance-based LOD) happens inside sceneSDF
     float eps = max(0.01, 0.0007 * t);
     if (d < eps) { tOut = t; return true; }
-    t += max(d * 0.6, 0.02);
+    // Relative floor keeps far rays moving: coarse bricks clamp the field to ~t/64, so without it a
+    // horizon ray would need far more than the iteration budget to cover the far field.
+    t += max(d * 0.6, 0.02 + 0.025 * t);
     if (t > uMaxDist) break;
   }
   return false;
@@ -138,15 +143,20 @@ bool castRay(vec3 ro, vec3 rd, out float tOut) {
 vec3 calcNormal(vec3 p, float t) {
   float e = max(0.25, 0.0007 * t);
   vec2 k = vec2(1.0, -1.0);
-  return normalize(k.xyy * sceneSDF(p + k.xyy * e, 6) + k.yyx * sceneSDF(p + k.yyx * e, 6)
-                 + k.yxy * sceneSDF(p + k.yxy * e, 6) + k.xxx * sceneSDF(p + k.xxx * e, 6));
+  // Tetrahedron gradient with a single sceneSDF call site (loop) to keep the program compact.
+  vec3 n = vec3(0.0);
+  for (int i = 0; i < 4; i++) {
+    vec3 q = i == 0 ? k.xyy : (i == 1 ? k.yyx : (i == 2 ? k.yxy : k.xxx));
+    n += q * sceneSDF(p + q * e);
+  }
+  return normalize(n);
 }
 
 float calcAO(vec3 p, vec3 n) {
   float occ = 0.0, sca = 1.0;
   for (int i = 0; i < 5; i++) {
     float h = 0.5 * pow(2.0, float(i));
-    float d = sceneSDF(p + n * h, 6);
+    float d = sceneSDF(p + n * h);
     occ += (h - d) * sca;
     sca *= 0.85;
   }
@@ -156,7 +166,7 @@ float calcAO(vec3 p, vec3 n) {
 float softShadow(vec3 ro, vec3 rd) {
   float res = 1.0, t = 0.5;
   for (int i = 0; i < 40; i++) {
-    float h = sceneSDF(ro + rd * t, 6);
+    float h = sceneSDF(ro + rd * t);
     res = min(res, 10.0 * h / t);
     t += clamp(h, 0.5, 40.0);
     if (res < 0.01 || t > 600.0) break;

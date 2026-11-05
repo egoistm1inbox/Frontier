@@ -1,4 +1,4 @@
-// Full-screen raymarcher over the clipmap + macro field, plus a 1-pixel pick pass.
+// Full-screen raymarcher over the clipmap (clip sampling only; no macro field at run time), plus a 1-pixel pick pass.
 import { RAYMARCH_FS } from './shaders/passes.ts';
 import { Program } from './gl.ts';
 import type { ClipAtlas } from './atlas.ts';

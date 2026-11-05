@@ -40,7 +40,7 @@ The camera starts near Benoni, Gauteng.
 | `npm run dev` | Vite dev server with HMR |
 | `npm run build` | Typecheck + production build |
 | `npm run typecheck` | `tsc --noEmit` (strict) |
-| `npm test` | Node unit tests (layout, slot pool, coastline SDF, macro SDF, residency) |
+| `npm test` | Node unit tests (layout, slot pool, coastline SDF, macro SDF, residency, pool budget) |
 | `npm run check:glsl` | Compiles every fragment program with glslang (catches GLSL errors without a GPU) |
 
 ## Layout
@@ -50,7 +50,7 @@ src/config.ts              all sizes and budgets (single source of truth)
 src/world/                 continent: outline, coastline 2D SDF, macro SDF (CPU reference), noise
 src/clipmap/               layout math, slot pool, residency / streaming manager (GPU-agnostic)
 src/gpu/                   WebGL2 helpers, atlas + passes (generate / copy / sculpt), raymarch renderer
-src/gpu/shaders/           GLSL: shared chunk (noise, macro SDF, clip sampling) and pass programs
+src/gpu/shaders/           GLSL: GEN chunk (noise, macro SDF; generation only), CLIP chunk (clipmap sampling), pass programs
 src/sculpt/brush.ts        sculpt tools and the dab pipeline
 src/app/                   fly camera, styles
 src/main.ts                app shell, input, HUD

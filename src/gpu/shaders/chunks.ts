@@ -1,6 +1,14 @@
 // GLSL ES 3.00 shared code. The macro constants are generated from src/world/macroParams.ts so the
 // CPU reference and the GPU field cannot drift apart. Keep the noise & macro functions in sync with
 // src/world/noise.ts and src/world/macroReference.ts.
+//
+// Pass layout (see passes.ts):
+//   GEN_CHUNK  = DEFINES + COAST + NOISE + MACRO   generation only: the one place the macro is evaluated
+//   CLIP_CHUNK = DEFINES + COAST + NOISE + CLIP    sculpt + raymarch: clipmap sampling only
+//
+// Why: a driver rejects shaders that inline the full macro SDF at many call sites (the sculpt pass
+// linked to "link failed" with an empty log). The render-side shaders therefore never touch the
+// macro field; far terrain comes from coarse clipmap levels that the generation pass baked.
 import { BRICK, LOD, POOL, WORLD } from '../../config.ts';
 import { HIGHLANDS_M, MACRO } from '../../world/macroParams.ts';
 
@@ -23,7 +31,7 @@ ${defs}
 `;
 }
 
-export const COMMON_GLSL = `
+export const DEFINES_GLSL = `
 #define BRICK_CELLS ${BRICK.cells}
 #define BRICK_TEX ${BRICK.texels}
 #define BAND ${f(BRICK.bandCells)}
@@ -36,17 +44,15 @@ export const COMMON_GLSL = `
 #define CODE_SOLID -2
 #define CODE_PENDING -3
 #define WH ${f(WORLD.halfExtentM)}
-${macroConstants()}
+#define FAR_D 100000.0
+`;
 
-uniform highp sampler3D uAtlas;      // R16F: cell-normalised SDF, clamped to ±BAND
-uniform highp isampler3D uPage;      // R16I: toroidal page table, one stacked block per level
+export const COAST_GLSL = `
 uniform highp sampler2D uCoast;      // R16F: signed distance to coastline (km, negative inland)
-uniform vec3 uAtlasInvSize;
-uniform vec3 uLevelOrigin[LEVELS];   // camera-relative metres of brick (0,0,0) cell of each window
-uniform float uLevelCell[LEVELS];
-uniform ivec3 uLevelPhase[LEVELS];   // window base mod grid (toroidal phase)
-uniform vec3 uCamWorld;              // camera position in world metres
+float coastKm(vec2 xz) { return textureLod(uCoast, (xz + WH) / (2.0 * WH), 0.0).r; }
+`;
 
+export const NOISE_GLSL = `
 // ------------------------------------------------------------------ noise (mirrors noise.ts)
 uint hash3(ivec3 c) {
   uint h = uint(c.x) * 0x8da6b343u ^ uint(c.y) * 0xd8163841u ^ uint(c.z) * 0xcb1ab31fu;
@@ -103,10 +109,11 @@ float ridged2(vec2 p, int oct) {
   }
   return s / n;
 }
+`;
 
-// ------------------------------------------------------------------ macro continent SDF (world metres)
-float coastKm(vec2 xz) { return textureLod(uCoast, (xz + WH) / (2.0 * WH), 0.0).r; }
-
+/** Macro continent SDF (world metres). Included ONLY by the generation pass. */
+export const MACRO_GLSL = `
+${macroConstants()}
 float macroCoastM(vec2 xz, int oct) {
   vec2 w = xz + P_WARP_AMP_M * vec2(vnoise2(xz * P_WARP_FREQ), vnoise2(xz * P_WARP_FREQ + vec2(31.7, 11.3)));
   float cd = coastKm(w) * 1000.0;
@@ -135,14 +142,24 @@ float macroSDF(vec3 pw, int oct) {
   d += P_DETAIL_AMP_M * fbm3(pw * P_DETAIL_FREQ, oct);
   return d;
 }
+`;
 
-// ------------------------------------------------------------------ clipmap sampling
+/** Clipmap uniforms and sampling. No macro call anywhere in this chunk. */
+export const CLIP_GLSL = `
+uniform highp sampler3D uAtlas;      // R16F: cell-normalised SDF, clamped to ±BAND
+uniform highp isampler3D uPage;      // R16I: toroidal page table, one stacked block per level
+uniform vec3 uAtlasInvSize;
+uniform vec3 uLevelOrigin[LEVELS];   // camera-relative metres of brick (0,0,0) cell of each window
+uniform float uLevelCell[LEVELS];
+uniform ivec3 uLevelPhase[LEVELS];   // window base mod grid (toroidal phase)
+uniform vec3 uCamWorld;              // camera position in world metres
+
 ivec3 slotOrigin(int s) {
   return ivec3(s % SLOTS_XY, (s / SLOTS_XY) % SLOTS_XY, s / (SLOTS_XY * SLOTS_XY)) * BRICK_TEX;
 }
 
 // Samples level lv at camera-relative point p. Returns false if p is outside the window or the
-// brick is not resident (pending). edge ∈ [0,1] is 1 on the window's outer rim (used for blending).
+// brick is not resident (pending). edge in [0,1] is 1 on the window's outer rim (used for blending).
 bool levelSample(int lv, vec3 p, out float dOut, out float edge) {
   float cell = uLevelCell[lv];
   vec3 q = (p - uLevelOrigin[lv]) / cell;
@@ -167,7 +184,7 @@ bool levelSample(int lv, vec3 p, out float dOut, out float edge) {
   return true;
 }
 
-// First resident level at or after "from" that contains p. No macro call here (keeps code size low).
+// First resident level at or after "from" that contains p.
 bool levelFrom(vec3 p, int from, out float d, out float e, out int lv) {
   for (int i = 0; i < LEVELS; i++) {
     if (i < from) continue;
@@ -176,20 +193,20 @@ bool levelFrom(vec3 p, int from, out float d, out float e, out int lv) {
   return false;
 }
 
-// Finest resident level wins; near its rim it blends into the next coarser level, so transitions
-// are continuous while a finer brick is still streaming in. The analytic macro field is the final
-// fallback. macroSDF() appears exactly once here to keep shader size bounded.
-float sceneSDF(vec3 p, int oct) {
+// Finest resident level wins; near its rim it blends into the next coarser resident level, so
+// transitions stay continuous while a finer brick streams in. Outside every window, or where nothing
+// is resident yet, the field reads as empty space.
+float sceneSDF(vec3 p) {
   float d = 0.0; float e = 0.0; int lv = 0;
-  bool hit = levelFrom(p, 0, d, e, lv);
-  bool blend = hit && e > 0.0;
-  float mac = (!hit || blend) ? macroSDF(p + uCamWorld, oct) : 0.0;
-  if (!hit) return mac;
-  if (blend) {
+  if (!levelFrom(p, 0, d, e, lv)) return FAR_D;
+  if (e > 0.0) {
     float dc = 0.0; float ec = 0.0; int lc = 0;
-    bool hc = levelFrom(p, lv + 1, dc, ec, lc);
-    return mix(d, hc ? dc : mac, e);
+    if (levelFrom(p, lv + 1, dc, ec, lc)) d = mix(d, dc, e);
   }
   return d;
 }
 `;
+
+/** Full chunks for each pass family. */
+export const GEN_CHUNK = DEFINES_GLSL + COAST_GLSL + NOISE_GLSL + MACRO_GLSL;
+export const CLIP_CHUNK = DEFINES_GLSL + COAST_GLSL + NOISE_GLSL + CLIP_GLSL;

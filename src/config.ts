@@ -20,16 +20,23 @@ export const BRICK = {
 } as const;
 
 export const LOD = {
-  /** Number of clipmap levels. Level i has cell size baseCellM × 2^i. */
-  levels: 8,
+  /**
+   * Number of clipmap levels. Level i has cell size baseCellM × 2^i and a window of
+   * grid × brick cells. Levels 0–7 are the detailed near field; 8–14 are coarse far-field windows
+   * (≈65 km … ≈4200 km across) that the generation pass fills from the macro SDF.
+   */
+  levels: 15,
   baseCellM: 0.5,
   /** Bricks per level window (x, y, z). The window is centred on the camera. */
   grid: [16, 8, 16] as const,
 } as const;
 
 export const POOL = {
-  /** Physical brick slots in the shared atlas. */
-  slots: 8192,
+  /**
+   * Physical brick slots in the shared atlas. Sized from the probe in tests/budget.test.ts: a camera
+   * window needs up to ~10.2k mixed bricks over 15 levels, so 11264 leaves ~10% headroom.
+   */
+  slots: 11264,
   /** Slots per atlas z-block (16 × 16). */
   slotsPerLayerXY: 16,
   /** Bricks processed by the scratch buffer in one sculpt batch. */
