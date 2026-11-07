@@ -1,0 +1,33 @@
+{
+  "name": "tachyon-flow-prototype",
+  "version": "0.9.0",
+  "description": "Neon anti-gravity circuit racing prototype — full steering, drift, boost, rivals.",
+  "main": "index.js",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "vite build",
+    "preview": "vite preview --host 0.0.0.0",
+    "test": "node tools/sim.mjs && node tools/dom-smoke.mjs",
+    "sim": "node tools/sim.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/egoistm1inbox/Frontier.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/egoistm1inbox/Frontier/issues"
+  },
+  "homepage": "https://github.com/egoistm1inbox/Frontier#readme",
+  "dependencies": {
+    "three": "^0.169.0"
+  },
+  "devDependencies": {
+    "playwright": "^1.48.2",
+    "vite": "^5.4.10"
+  },
+  "private": true,
+  "type": "module"
+}
