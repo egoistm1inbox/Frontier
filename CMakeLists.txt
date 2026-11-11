@@ -169,6 +169,8 @@ set(FRONTIER_UI_COMPONENT_SOURCES
 set(FRONTIER_ENGINE_SOURCES
     Engine/Input/InputExchange.cpp
     Engine/Input/InputExtension.cpp
+    Engine/UVSpace/SurfaceAppearanceLayout.cpp
+    Engine/GeometricRaster/FastSurfaceLighting.cpp
     Engine/Windowing/PlatformWindowStub.cpp
 )
 if(NOT ANDROID)
@@ -213,8 +215,9 @@ if(BUILD_TESTING)
         set(FRONTIER_SHIPPING_UI_SOURCES ${FRONTIER_UI_COMPONENT_SOURCES})
     endif()
 
-    frontier_register_exhibit(InputValidation         Exhibits/InputValidation.cpp         ${FRONTIER_SHIPPING_UI_SOURCES})
-    frontier_register_exhibit(WindowValidation        Exhibits/WindowValidation.cpp        ${FRONTIER_SHIPPING_UI_SOURCES})
-    frontier_register_exhibit(DockingValidation       Exhibits/DockingValidation.cpp       ${FRONTIER_SHIPPING_UI_SOURCES})
-    frontier_register_exhibit(ControlCentreValidation Exhibits/ControlCentreValidation.cpp ${FRONTIER_SHIPPING_UI_SOURCES})
+    frontier_register_exhibit(InputValidation           Exhibits/InputValidation.cpp           ${FRONTIER_SHIPPING_UI_SOURCES})
+    frontier_register_exhibit(WindowValidation          Exhibits/WindowValidation.cpp          ${FRONTIER_SHIPPING_UI_SOURCES})
+    frontier_register_exhibit(DockingValidation         Exhibits/DockingValidation.cpp         ${FRONTIER_SHIPPING_UI_SOURCES})
+    frontier_register_exhibit(ControlCentreValidation   Exhibits/ControlCentreValidation.cpp   ${FRONTIER_SHIPPING_UI_SOURCES})
+    frontier_register_exhibit(SurfaceLightingValidation Exhibits/SurfaceLightingValidation.cpp ${FRONTIER_SHIPPING_UI_SOURCES})
 endif()
