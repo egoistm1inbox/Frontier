@@ -72,12 +72,29 @@ jobs:
       - name: Configure and build Windows x64 applications and boundary checks
         shell: pwsh
         run: |
-          cmake -S . -B Build/Windows -G "Visual Studio 17 2022" -A x64 `
-            -DBUILD_TESTING=ON `
-            '-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded$<$<CONFIG:Debug>:Debug>'
-          if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          cmake --build Build/Windows --config Release --parallel 4 --target FrontierUV FrontierEditor UVBoundaryValidation
-          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $CmakeLogPath = 'Build/WindowsCMake.log'
+          function Publish-CmakeFailure {
+            Get-Content $CmakeLogPath -Tail 100 | ForEach-Object {
+              $DiagnosticLine = $_.Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
+              Write-Host "::error title=Windows CMake::$DiagnosticLine"
+            }
+          }
+          $ConfigureOutput = & cmake -S . -B Build/Windows -G 'Visual Studio 17 2022' -A x64 `
+            -DBUILD_TESTING=ON '-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded$<$<CONFIG:Debug>:Debug>' 2>&1
+          $ConfigureExitCode = $LASTEXITCODE
+          $ConfigureOutput | Tee-Object -FilePath $CmakeLogPath -Append
+          if ($ConfigureExitCode -ne 0) {
+            Publish-CmakeFailure
+            exit $ConfigureExitCode
+          }
+          $BuildOutput = & cmake --build Build/Windows --config Release --parallel 4 `
+            --target FrontierUV FrontierEditor UVBoundaryValidation 2>&1
+          $BuildExitCode = $LASTEXITCODE
+          $BuildOutput | Tee-Object -FilePath $CmakeLogPath -Append
+          if ($BuildExitCode -ne 0) {
+            Publish-CmakeFailure
+            exit $BuildExitCode
+          }
 
       - name: Run Windows hostile-input and UV chart checks
         shell: pwsh
@@ -211,5 +228,6 @@ jobs:
           path: |
             Build/UVVocabularyAudit.md
             Build/WindowsDependencyRecovery.log
+            Build/WindowsCMake.log
           if-no-files-found: warn
           retention-days: 14
