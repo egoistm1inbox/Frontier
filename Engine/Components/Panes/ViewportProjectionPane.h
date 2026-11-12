@@ -102,7 +102,12 @@ public:
     void PresentInImGuiPane(double Δt, float ScaleFactor = 1.0f);
 
 private:
-    static void UploadTexturePixels(ImTextureData& TargetTex, const ViewportRasterBuffer& Source);
+    static bool UploadTexturePixels(
+        ImTextureData&             TargetTex,
+        uint32_t&                  OutContentWidthPx,
+        uint32_t&                  OutContentHeightPx,
+        bool&                      TextureRegistered,
+        const ViewportRasterBuffer& Source);
 
     Workspaces::WorkspaceDocument*   BoundDocument        = nullptr;
     Editor::ViewportProjection       FallbackProjection   {};
@@ -115,6 +120,12 @@ private:
     ViewportInteractionCallback      InteractionCallback  {};
     ImTextureData                    PlanarTexture        {};
     ImTextureData                    SpatialTexture       {};
+    uint32_t                         PlanarContentWidthPx = 0u;
+    uint32_t                         PlanarContentHeightPx = 0u;
+    uint32_t                         SpatialContentWidthPx = 0u;
+    uint32_t                         SpatialContentHeightPx = 0u;
+    bool                             PlanarTextureRegistered = false;
+    bool                             SpatialTextureRegistered = false;
 };
 
 } // namespace Frontier

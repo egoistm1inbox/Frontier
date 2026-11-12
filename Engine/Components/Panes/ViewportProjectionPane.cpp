@@ -9,6 +9,8 @@
 
 #include "Engine/Components/Panes/ViewportProjectionPane.h"
 
+#include <imgui_internal.h>
+
 #include <algorithm>
 #include <array>
 #include <cstring>
@@ -21,6 +23,20 @@ ViewportProjectionPane::ViewportProjectionPane() = default;
 
 ViewportProjectionPane::~ViewportProjectionPane()
 {
+    // RegisterUserTexture() is context-owned. Normal desktop shutdown destroys the
+    // ImGui Vulkan backend before this pane outlives its context, but unit/UI hosts may
+    // dispose of a pane earlier.
+    if (ImGui::GetCurrentContext() != nullptr)
+    {
+        if (PlanarTextureRegistered)
+        {
+            ImGui::UnregisterUserTexture(&PlanarTexture);
+        }
+        if (SpatialTextureRegistered)
+        {
+            ImGui::UnregisterUserTexture(&SpatialTexture);
+        }
+    }
     PlanarTexture.DestroyPixels();
     SpatialTexture.DestroyPixels();
 }
@@ -71,22 +87,78 @@ const Editor::ViewportProjection& ViewportProjectionPane::InspectProjection() co
     return BoundDocument != nullptr ? BoundDocument->InspectViewportProjection() : FallbackProjection;
 }
 
-void ViewportProjectionPane::UploadTexturePixels(ImTextureData& TargetTex, const ViewportRasterBuffer& Source)
+bool ViewportProjectionPane::UploadTexturePixels(
+    ImTextureData&              TargetTex,
+    uint32_t&                   OutContentWidthPx,
+    uint32_t&                   OutContentHeightPx,
+    bool&                       TextureRegistered,
+    const ViewportRasterBuffer& Source)
 {
-    if (Source.RgbaPixels == nullptr || Source.WidthPx == 0u || Source.HeightPx == 0u)
+    if (Source.RgbaPixels == nullptr || Source.WidthPx == 0u || Source.HeightPx == 0u ||
+        Source.WidthPx > 65535u || Source.HeightPx > 65535u)
     {
-        return;
+        return false;
     }
-    if (TargetTex.Width != static_cast<int>(Source.WidthPx) ||
-        TargetTex.Height != static_cast<int>(Source.HeightPx) ||
-        TargetTex.Pixels == nullptr)
+
+    if (TargetTex.Pixels == nullptr)
     {
-        TargetTex.DestroyPixels();
-        TargetTex.SetStatus(ImTextureStatus_Destroyed);
-        TargetTex.Create(ImTextureFormat_RGBA32, static_cast<int>(Source.WidthPx), static_cast<int>(Source.HeightPx));
+        // GPU framebuffers change size with dock layout. Allocate a practical viewport
+        // capacity once, then use ImTextureDataQueueUpload() for the live source area.
+        // This avoids invalidating a descriptor while it can still be referenced by a
+        // previously rendered ImGui frame.
+        constexpr uint32_t MinimumViewportTextureExtent = 2048u;
+        const uint32_t CapacityWidth  = std::max(MinimumViewportTextureExtent, Source.WidthPx);
+        const uint32_t CapacityHeight = std::max(MinimumViewportTextureExtent, Source.HeightPx);
+        TargetTex.Create(
+            ImTextureFormat_RGBA32,
+            static_cast<int>(CapacityWidth),
+            static_cast<int>(CapacityHeight));
+
+        // Dear ImGui only exposes textures in ImDrawData::Textures after they have been
+        // registered. Without this, the Vulkan backend sees an unresolved ImTextureRef
+        // and samples the font atlas, which is the repeated-text output in the report.
+        if (ImGui::GetCurrentContext() != nullptr)
+        {
+            ImGui::RegisterUserTexture(&TargetTex);
+            TextureRegistered = true;
+        }
     }
-    std::memcpy(TargetTex.Pixels, Source.RgbaPixels, static_cast<std::size_t>(Source.WidthPx) * Source.HeightPx * 4u);
-    TargetTex.SetStatus(ImTextureStatus_OK);
+
+    if (!TextureRegistered || TargetTex.Width < static_cast<int>(Source.WidthPx) ||
+        TargetTex.Height < static_cast<int>(Source.HeightPx))
+    {
+        // A giant monitor can exceed the preserved capacity. Keep the last valid image
+        // instead of copying out of bounds or replacing an in-flight backend texture.
+        return false;
+    }
+
+    auto* TargetPixels = static_cast<uint8_t*>(TargetTex.Pixels);
+    const std::size_t SourceRowBytes = static_cast<std::size_t>(Source.WidthPx) * 4u;
+    const std::size_t TargetRowBytes = static_cast<std::size_t>(TargetTex.Width) * 4u;
+    for (uint32_t Row = 0u; Row < Source.HeightPx; ++Row)
+    {
+        std::memcpy(
+            TargetPixels + static_cast<std::size_t>(Row) * TargetRowBytes,
+            Source.RgbaPixels + static_cast<std::size_t>(Row) * SourceRowBytes,
+            SourceRowBytes);
+    }
+
+    OutContentWidthPx  = Source.WidthPx;
+    OutContentHeightPx = Source.HeightPx;
+
+    // Fresh textures remain WantCreate, so the backend uploads their whole initialized
+    // allocation. Existing ones use the exact changed source rectangle; setting status
+    // OK here was incorrectly suppressing the backend upload altogether.
+    if (TargetTex.Status == ImTextureStatus_OK)
+    {
+        ImTextureDataQueueUpload(
+            &TargetTex,
+            0,
+            0,
+            static_cast<int>(Source.WidthPx),
+            static_cast<int>(Source.HeightPx));
+    }
+    return true;
 }
 
 void ViewportProjectionPane::Render(
@@ -215,20 +287,38 @@ void ViewportProjectionPane::Render(
     }
 
     // 4. Present GPU Framebuffers via upstream PixelSpace::FillTexturedRectangle
-    if (Rect2D.Width >= 16.0f && Rect2D.Height >= 16.0f && Slices.Planar2D.RgbaPixels != nullptr)
+    if (Rect2D.Width >= 16.0f && Rect2D.Height >= 16.0f && Slices.Planar2D.RgbaPixels != nullptr &&
+        UploadTexturePixels(
+            PlanarTexture,
+            PlanarContentWidthPx,
+            PlanarContentHeightPx,
+            PlanarTextureRegistered,
+            Slices.Planar2D))
     {
-        UploadTexturePixels(PlanarTexture, Slices.Planar2D);
-        Surface.FillTexturedRectangle(Rect2D, &PlanarTexture, { 0.0f, 0.0f }, { 1.0f, 1.0f }, 5.0f);
+        const Point2D UvMax {
+            static_cast<float>(PlanarContentWidthPx) / static_cast<float>(PlanarTexture.Width),
+            static_cast<float>(PlanarContentHeightPx) / static_cast<float>(PlanarTexture.Height),
+        };
+        Surface.FillTexturedRectangle(Rect2D, &PlanarTexture, { 0.0f, 0.0f }, UvMax, 5.0f);
         Surface.StrokeRectangle(Rect2D, BorderCol, 5.0f, 1.2f);
         const float TagWidth = std::max(140.0f, Surface.MeasureTextWidth(10.5f, PlanarIndicatorTitle.c_str()) + 22.0f);
         Surface.FillRectangle({ Rect2D.X + 10.0f, Rect2D.Y + 10.0f, TagWidth, 22.0f }, { 18, 20, 25, 215 }, 4.0f);
         Surface.Text({ Rect2D.X + 18.0f, Rect2D.Y + 14.0f }, 10.5f, IvoryText, PlanarIndicatorTitle.c_str());
     }
 
-    if (Rect3D.Width >= 16.0f && Rect3D.Height >= 16.0f && Slices.Spatial3D.RgbaPixels != nullptr)
+    if (Rect3D.Width >= 16.0f && Rect3D.Height >= 16.0f && Slices.Spatial3D.RgbaPixels != nullptr &&
+        UploadTexturePixels(
+            SpatialTexture,
+            SpatialContentWidthPx,
+            SpatialContentHeightPx,
+            SpatialTextureRegistered,
+            Slices.Spatial3D))
     {
-        UploadTexturePixels(SpatialTexture, Slices.Spatial3D);
-        Surface.FillTexturedRectangle(Rect3D, &SpatialTexture, { 0.0f, 0.0f }, { 1.0f, 1.0f }, 5.0f);
+        const Point2D UvMax {
+            static_cast<float>(SpatialContentWidthPx) / static_cast<float>(SpatialTexture.Width),
+            static_cast<float>(SpatialContentHeightPx) / static_cast<float>(SpatialTexture.Height),
+        };
+        Surface.FillTexturedRectangle(Rect3D, &SpatialTexture, { 0.0f, 0.0f }, UvMax, 5.0f);
         Surface.StrokeRectangle(Rect3D, BorderCol, 5.0f, 1.2f);
         const float TagWidth = std::max(160.0f, Surface.MeasureTextWidth(10.5f, SpatialIndicatorTitle.c_str()) + 22.0f);
         Surface.FillRectangle({ Rect3D.X + 10.0f, Rect3D.Y + 10.0f, TagWidth, 22.0f }, { 18, 20, 25, 215 }, 4.0f);
@@ -297,16 +387,34 @@ void ViewportProjectionPane::RenderViewportCanvas(
 
     const bool IsSplit = (Projection.QuerySplitMode() == Editor::ViewportSplitMode::SplitPlanarAndSpatial);
 
-    if (Rect2D.Width >= 16.0f && Rect2D.Height >= 16.0f && Slices.Planar2D.RgbaPixels != nullptr)
+    if (Rect2D.Width >= 16.0f && Rect2D.Height >= 16.0f && Slices.Planar2D.RgbaPixels != nullptr &&
+        UploadTexturePixels(
+            PlanarTexture,
+            PlanarContentWidthPx,
+            PlanarContentHeightPx,
+            PlanarTextureRegistered,
+            Slices.Planar2D))
     {
-        UploadTexturePixels(PlanarTexture, Slices.Planar2D);
-        Surface.FillTexturedRectangle(Rect2D, &PlanarTexture, { 0.0f, 0.0f }, { 1.0f, 1.0f }, IsSplit ? 8.0f : 10.0f);
+        const Point2D UvMax {
+            static_cast<float>(PlanarContentWidthPx) / static_cast<float>(PlanarTexture.Width),
+            static_cast<float>(PlanarContentHeightPx) / static_cast<float>(PlanarTexture.Height),
+        };
+        Surface.FillTexturedRectangle(Rect2D, &PlanarTexture, { 0.0f, 0.0f }, UvMax, IsSplit ? 8.0f : 10.0f);
     }
 
-    if (Rect3D.Width >= 16.0f && Rect3D.Height >= 16.0f && Slices.Spatial3D.RgbaPixels != nullptr)
+    if (Rect3D.Width >= 16.0f && Rect3D.Height >= 16.0f && Slices.Spatial3D.RgbaPixels != nullptr &&
+        UploadTexturePixels(
+            SpatialTexture,
+            SpatialContentWidthPx,
+            SpatialContentHeightPx,
+            SpatialTextureRegistered,
+            Slices.Spatial3D))
     {
-        UploadTexturePixels(SpatialTexture, Slices.Spatial3D);
-        Surface.FillTexturedRectangle(Rect3D, &SpatialTexture, { 0.0f, 0.0f }, { 1.0f, 1.0f }, IsSplit ? 8.0f : 10.0f);
+        const Point2D UvMax {
+            static_cast<float>(SpatialContentWidthPx) / static_cast<float>(SpatialTexture.Width),
+            static_cast<float>(SpatialContentHeightPx) / static_cast<float>(SpatialTexture.Height),
+        };
+        Surface.FillTexturedRectangle(Rect3D, &SpatialTexture, { 0.0f, 0.0f }, UvMax, IsSplit ? 8.0f : 10.0f);
     }
 
     if (IsSplit)

@@ -586,7 +586,18 @@ int LaunchDesktopWorkspace(
                 HostSurface->ResizeSurface(SurfaceW, SurfaceH, Extent.DpiScaleFactor);
             }
         }
+        else
 #endif
+        {
+            // StandaloneDock is a logical/headless dock host, while DesktopWindow is
+            // the real GLFW surface. Keep their extents identical. Otherwise a desktop
+            // constrained below FrontierUV's 1840x980 preferred size lays out the 3D
+            // half and Inspector beyond the visible swapchain.
+            if (auto* HostSurface = StandaloneDock.AccessOperatingSurface(Components::HostWindowToken{ 0u }))
+            {
+                HostSurface->ResizeSurface(SurfaceW, SurfaceH, Extent.DpiScaleFactor);
+            }
+        }
         if (auto* GlfwWin = static_cast<GLFWwindow*>(DesktopWindow.NativeGlfwHandle()))
         {
             SynchronizeGlfwToImGui(GlfwWin, Io, SupplementalQueue);
