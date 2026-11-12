@@ -79,22 +79,24 @@ jobs:
               Write-Host "::error title=Windows CMake::$DiagnosticLine"
             }
           }
-          $ConfigureOutput = & cmake -S . -B Build/Windows -G 'Visual Studio 17 2022' -A x64 `
-            -DBUILD_TESTING=ON '-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded$<$<CONFIG:Debug>:Debug>' 2>&1
-          $ConfigureExitCode = $LASTEXITCODE
-          $ConfigureOutput | Tee-Object -FilePath $CmakeLogPath -Append
-          if ($ConfigureExitCode -ne 0) {
-            Publish-CmakeFailure
-            exit $ConfigureExitCode
+          function Invoke-FrontierCmake {
+            param([string]$Heading, [string[]]$CmakeArguments)
+            "===== $Heading =====" | Tee-Object -FilePath $CmakeLogPath -Append
+            $CmakeOutput = & cmake @CmakeArguments 2>&1
+            $CmakeExitCode = $LASTEXITCODE
+            $CmakeOutput | Tee-Object -FilePath $CmakeLogPath -Append
+            "CMake process exit code: $CmakeExitCode" | Tee-Object -FilePath $CmakeLogPath -Append
+            if ($CmakeExitCode -ne 0) {
+              Publish-CmakeFailure
+              exit $CmakeExitCode
+            }
           }
-          $BuildOutput = & cmake --build Build/Windows --config Release --parallel 4 `
-            --target FrontierUV FrontierEditor UVBoundaryValidation 2>&1
-          $BuildExitCode = $LASTEXITCODE
-          $BuildOutput | Tee-Object -FilePath $CmakeLogPath -Append
-          if ($BuildExitCode -ne 0) {
-            Publish-CmakeFailure
-            exit $BuildExitCode
-          }
+          Invoke-FrontierCmake -Heading 'Configure' -CmakeArguments @(
+            '-S', '.', '-B', 'Build/Windows', '-G', 'Visual Studio 17 2022', '-A', 'x64',
+            '-DBUILD_TESTING=ON', '-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded$<$<CONFIG:Debug>:Debug>')
+          Invoke-FrontierCmake -Heading 'Build' -CmakeArguments @(
+            '--build', 'Build/Windows', '--config', 'Release', '--parallel', '4',
+            '--target', 'FrontierUV', 'FrontierEditor', 'UVBoundaryValidation')
 
       - name: Run Windows hostile-input and UV chart checks
         shell: pwsh
