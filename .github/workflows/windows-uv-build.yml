@@ -50,6 +50,8 @@ jobs:
 
       - name: Prepare bundled fonts
         shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           $Output = & python Automation/PrepareFonts.py 2>&1
           $Result = $LASTEXITCODE
