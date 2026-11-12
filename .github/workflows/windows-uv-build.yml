@@ -82,9 +82,14 @@ jobs:
           function Invoke-FrontierCmake {
             param([string]$Heading, [string[]]$CmakeArguments)
             "===== $Heading =====" | Tee-Object -FilePath $CmakeLogPath -Append
-            $CmakeOutput = & cmake @CmakeArguments 2>&1
-            $CmakeExitCode = $LASTEXITCODE
-            $CmakeOutput | Tee-Object -FilePath $CmakeLogPath -Append
+            $StandardOutputPath = Join-Path $env:RUNNER_TEMP 'frontier-cmake-standard-output.txt'
+            $StandardErrorPath = Join-Path $env:RUNNER_TEMP 'frontier-cmake-standard-error.txt'
+            Remove-Item $StandardOutputPath, $StandardErrorPath -Force -ErrorAction SilentlyContinue
+            $CmakeProcess = Start-Process -FilePath cmake -ArgumentList $CmakeArguments -NoNewWindow -PassThru -Wait `
+              -RedirectStandardOutput $StandardOutputPath -RedirectStandardError $StandardErrorPath
+            Get-Content $StandardOutputPath, $StandardErrorPath -ErrorAction SilentlyContinue |
+              Tee-Object -FilePath $CmakeLogPath -Append
+            $CmakeExitCode = $CmakeProcess.ExitCode
             "CMake process exit code: $CmakeExitCode" | Tee-Object -FilePath $CmakeLogPath -Append
             if ($CmakeExitCode -ne 0) {
               Publish-CmakeFailure
