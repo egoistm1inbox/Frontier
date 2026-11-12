@@ -29,10 +29,14 @@ namespace Frontier::GeometricRaster
 
 struct OverlayRasterizationStats
 {
-    bool     LiveWindowSwapchain = false; // [-]     - True when presenting to OS VkSwapchainKHR; false when offscreen
-    uint32_t WidthPx             = 0u;    // [px]    - Active presentation width
-    uint32_t HeightPx            = 0u;    // [px]    - Active presentation height
-    uint64_t PresentedBatchCount = 0ull;  // [count] - Total frames rasterized through ImGuiOverlayRasterization.slang
+    bool     LiveWindowSwapchain       = false; // [-]     - True when presenting to OS VkSwapchainKHR; false when offscreen
+    uint32_t WidthPx                   = 0u;    // [px]    - Active presentation width
+    uint32_t HeightPx                  = 0u;    // [px]    - Active presentation height
+    uint64_t PresentedBatchCount       = 0ull;  // [count] - Total frames rasterized through ImGuiOverlayRasterization.slang
+    uint32_t LastDrawCommandCount      = 0u;    // [count] - Expanded ImGui commands submitted during the latest frame
+    uint32_t LastDrawVertexCount       = 0u;    // [count] - Expanded ImGui vertices submitted during the latest frame
+    uint32_t ResidentTextureCount      = 0u;    // [count] - ImGui texture records represented by Vulkan descriptors
+    uint64_t TextureUploadCount        = 0ull;  // [count] - Completed ImGui texture create/update uploads
 };
 
 class ImGuiOverlayRasterization
@@ -87,7 +91,7 @@ private:
     [[nodiscard]] bool ConstructRasterResources(VkFormat TargetFormat, std::string* OptionalDiagnostic);
     [[nodiscard]] bool RebuildSwapchainOrOffscreenTarget(uint32_t WidthPx, uint32_t HeightPx);
     void               DestroyTargetAttachments() noexcept;
-    [[nodiscard]] VkDescriptorSet EnsureTextureUploaded(const ImTextureData* SourceTex, bool FontAtlasTexture);
+    [[nodiscard]] VkDescriptorSet EnsureTextureUploaded(ImTextureData* SourceTex, bool FontAtlasTexture);
 
     VulkanInterchange*                                      BoundDevice           = nullptr;
     Windowing::DesktopPlatformWindow*                         DesktopWindow         = nullptr;

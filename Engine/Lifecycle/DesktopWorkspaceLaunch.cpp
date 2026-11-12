@@ -435,6 +435,9 @@ int LaunchDesktopWorkspace(
     ImGui::SetCurrentContext(GuiCtx);
     ImGuiIO& Io = ImGui::GetIO();
     Io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+    // The native Vulkan presenter honors ImGui 1.92 texture create/update requests.
+    // This is required for its dynamic font atlas rather than relying on a stale legacy atlas.
+    Io.BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
     Io.IniFilename  = nullptr;
 
     TypographyRepository Typography {};
@@ -513,11 +516,6 @@ int LaunchDesktopWorkspace(
 #endif
         UVHost.RegisterDockPanes(StandaloneDock);
     }
-
-    unsigned char* FontPixels = nullptr;
-    int            FontW      = 0;
-    int            FontH      = 0;
-    Io.Fonts->GetTexDataAsRGBA32(&FontPixels, &FontW, &FontH);
 
     GeometricRaster::ImGuiOverlayRasterization SwapchainPresenter {};
 #if !defined(__ANDROID__)
@@ -631,7 +629,8 @@ int LaunchDesktopWorkspace(
         }
         ImGui::Render();
 
-        const bool FramePresented = SwapchainPresenter.PresentImGuiBatches(ImGui::GetDrawData(), SurfaceW, SurfaceH);
+        const ImDrawData* DrawData = ImGui::GetDrawData();
+        const bool FramePresented = SwapchainPresenter.PresentImGuiBatches(DrawData, SurfaceW, SurfaceH);
         if (!FramePresented)
         {
             PresentationFaultObserved = true;
@@ -643,6 +642,18 @@ int LaunchDesktopWorkspace(
                 std::fprintf(stderr, "[FrontierHost] Frame presentation failed: %s\n", PresentationDiagnostic.c_str());
             }
             break;
+        }
+        if (ExecutedSteps == 0u)
+        {
+            const auto FirstFrameStats = SwapchainPresenter.InspectStats();
+            PresentationJournal.Append(
+                "First ImGui frame presented. DrawLists=" +
+                std::to_string(DrawData != nullptr ? DrawData->CmdListsCount : 0) +
+                "; ImGuiVertices=" + std::to_string(DrawData != nullptr ? DrawData->TotalVtxCount : 0) +
+                "; DecodedCommands=" + std::to_string(FirstFrameStats.LastDrawCommandCount) +
+                "; DecodedVertices=" + std::to_string(FirstFrameStats.LastDrawVertexCount) +
+                "; ResidentTextures=" + std::to_string(FirstFrameStats.ResidentTextureCount) +
+                "; TextureUploads=" + std::to_string(FirstFrameStats.TextureUploadCount) + ".");
         }
         ++ExecutedSteps;
     }

@@ -11,9 +11,20 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <cstring>
 #include <limits>
 #include <utility>
+
+namespace
+{
+
+[[nodiscard]] ImTextureID EncodeImGuiTextureId(VkDescriptorSet Descriptor) noexcept
+{
+    return static_cast<ImTextureID>(reinterpret_cast<uintptr_t>(Descriptor));
+}
+
+} // namespace
 
 namespace Frontier::GeometricRaster
 {
@@ -590,9 +601,32 @@ bool ImGuiOverlayRasterization::RebuildSwapchainOrOffscreenTarget(uint32_t Width
     return true;
 }
 
-VkDescriptorSet ImGuiOverlayRasterization::EnsureTextureUploaded(const ImTextureData* SourceTex, bool FontAtlasTexture)
+VkDescriptorSet ImGuiOverlayRasterization::EnsureTextureUploaded(ImTextureData* SourceTex, bool FontAtlasTexture)
 {
-    if (SourceTex == nullptr || SourceTex->Pixels == nullptr || SourceTex->Width <= 0 || SourceTex->Height <= 0)
+    if (SourceTex == nullptr)
+    {
+        return FallbackDescriptor;
+    }
+
+    if (SourceTex->Status == ImTextureStatus_WantDestroy || SourceTex->Status == ImTextureStatus_Destroyed)
+    {
+        const auto Existing = TextureCache.find(SourceTex);
+        if (Existing != TextureCache.end())
+        {
+            if (Existing->second.Descriptor != VK_NULL_HANDLE)
+            {
+                (void)vkFreeDescriptorSets(BoundDevice->AccessDevice(), DescriptorAllocator, 1u, &Existing->second.Descriptor);
+            }
+            BoundDevice->ReleaseImage2D(Existing->second.Image);
+            TextureCache.erase(Existing);
+            Stats.ResidentTextureCount = static_cast<uint32_t>(TextureCache.size());
+        }
+        SourceTex->SetTexID(ImTextureID_Invalid);
+        SourceTex->SetStatus(ImTextureStatus_Destroyed);
+        return FallbackDescriptor;
+    }
+
+    if (SourceTex->Pixels == nullptr || SourceTex->Width <= 0 || SourceTex->Height <= 0)
     {
         return FallbackDescriptor;
     }
@@ -602,6 +636,8 @@ VkDescriptorSet ImGuiOverlayRasterization::EnsureTextureUploaded(const ImTexture
     const bool        Rgba32   = (SourceTex->Format == ImTextureFormat_RGBA32);
     const std::size_t ByteLen  = static_cast<std::size_t>(W) * H * (Rgba32 ? 4u : 1u);
     const auto*       RawBytes = static_cast<const uint8_t*>(SourceTex->Pixels);
+    const bool        TextureRequestsUpload =
+        SourceTex->Status == ImTextureStatus_WantCreate || SourceTex->Status == ImTextureStatus_WantUpdates;
 
     auto FoundEntry = TextureCache.find(SourceTex);
     if (FoundEntry == TextureCache.end() && TextureCache.size() >= 255u)
@@ -639,16 +675,19 @@ VkDescriptorSet ImGuiOverlayRasterization::EnsureTextureUploaded(const ImTexture
     auto& Entry = FoundEntry->second;
     Entry.LastTouched = ++TextureUseCounter;
     Entry.LastPresentSerial = TexturePresentSerial;
-    const uint64_t Hash  = FontAtlasTexture
+    const uint64_t Hash = FontAtlasTexture && !TextureRequestsUpload
         ? ((Entry.ContentHash != 0ull && Entry.Image.WidthPx == W && Entry.Image.HeightPx == H) ? Entry.ContentHash : 1ull)
         : HashPixelBytesSampled(RawBytes, ByteLen);
 
-    if (Entry.Image.ImageHandle != VK_NULL_HANDLE &&
+    if (!TextureRequestsUpload &&
+        Entry.Image.ImageHandle != VK_NULL_HANDLE &&
         Entry.Image.WidthPx == W &&
         Entry.Image.HeightPx == H &&
         Entry.ContentHash == Hash &&
         Entry.Descriptor != VK_NULL_HANDLE)
     {
+        SourceTex->SetTexID(EncodeImGuiTextureId(Entry.Descriptor));
+        SourceTex->SetStatus(ImTextureStatus_OK);
         return Entry.Descriptor;
     }
 
@@ -683,7 +722,9 @@ VkDescriptorSet ImGuiOverlayRasterization::EnsureTextureUploaded(const ImTexture
         }
     }
 
-    if (Entry.Image.ImageHandle == VK_NULL_HANDLE || Entry.Image.WidthPx != W || Entry.Image.HeightPx != H)
+    const bool ReusesResidentImage =
+        Entry.Image.ImageHandle != VK_NULL_HANDLE && Entry.Image.WidthPx == W && Entry.Image.HeightPx == H;
+    if (!ReusesResidentImage)
     {
         BoundDevice->ReleaseImage2D(Entry.Image);
         Entry.Image = BoundDevice->AllocateImage2D(
@@ -699,16 +740,33 @@ VkDescriptorSet ImGuiOverlayRasterization::EnsureTextureUploaded(const ImTexture
     }
 
     VkCommandBuffer Cmd = BoundDevice->BeginSingleTimeCommands();
+    if (Cmd == VK_NULL_HANDLE)
+    {
+        return FallbackDescriptor;
+    }
     VkImageMemoryBarrier ToDst {};
     ToDst.sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-    ToDst.oldLayout           = VK_IMAGE_LAYOUT_UNDEFINED;
+    ToDst.oldLayout           = ReusesResidentImage ? VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL : VK_IMAGE_LAYOUT_UNDEFINED;
     ToDst.newLayout           = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
     ToDst.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
     ToDst.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
     ToDst.image               = Entry.Image.ImageHandle;
     ToDst.subresourceRange    = { VK_IMAGE_ASPECT_COLOR_BIT, 0u, 1u, 0u, 1u };
+    ToDst.srcAccessMask       = ReusesResidentImage
+        ? static_cast<VkAccessFlags>(VK_ACCESS_SHADER_READ_BIT)
+        : static_cast<VkAccessFlags>(0u);
     ToDst.dstAccessMask       = VK_ACCESS_TRANSFER_WRITE_BIT;
-    vkCmdPipelineBarrier(Cmd, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0u, 0u, nullptr, 0u, nullptr, 1u, &ToDst);
+    vkCmdPipelineBarrier(
+        Cmd,
+        ReusesResidentImage ? VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+        VK_PIPELINE_STAGE_TRANSFER_BIT,
+        0u,
+        0u,
+        nullptr,
+        0u,
+        nullptr,
+        1u,
+        &ToDst);
 
     VkBufferImageCopy CopyRegion {};
     CopyRegion.imageSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, 0u, 0u, 1u };
@@ -723,7 +781,10 @@ VkDescriptorSet ImGuiOverlayRasterization::EnsureTextureUploaded(const ImTexture
     vkCmdPipelineBarrier(Cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0u, 0u, nullptr, 0u, nullptr, 1u, &ToRead);
 
     const uint64_t SyncPoint = BoundDevice->DispatchCommandBufferAsync(Cmd);
-    (void)BoundDevice->AwaitTimelineTick(SyncPoint);
+    if (!BoundDevice->AwaitTimelineTick(SyncPoint))
+    {
+        return FallbackDescriptor;
+    }
 
     if (Entry.Descriptor == VK_NULL_HANDLE)
     {
@@ -758,6 +819,10 @@ VkDescriptorSet ImGuiOverlayRasterization::EnsureTextureUploaded(const ImTexture
 
     vkUpdateDescriptorSets(LogicalVk, 2u, Writes, 0u, nullptr);
     Entry.ContentHash = Hash;
+    SourceTex->SetTexID(EncodeImGuiTextureId(Entry.Descriptor));
+    SourceTex->SetStatus(ImTextureStatus_OK);
+    Stats.ResidentTextureCount = static_cast<uint32_t>(TextureCache.size());
+    ++Stats.TextureUploadCount;
     return Entry.Descriptor;
 }
 
@@ -806,8 +871,19 @@ bool ImGuiOverlayRasterization::PresentImGuiBatches(
     };
     std::vector<PreparedBatchSlice> Batches {};
 
-    const ImFontAtlas*   FontAtlas = (ImGui::GetCurrentContext() != nullptr) ? ImGui::GetIO().Fonts : nullptr;
-    const ImTextureData* FontTex   = (FontAtlas != nullptr) ? FontAtlas->TexData : nullptr;
+    ImFontAtlas*   FontAtlas = (ImGui::GetCurrentContext() != nullptr) ? ImGui::GetIO().Fonts : nullptr;
+    ImTextureData* FontTex   = (FontAtlas != nullptr) ? FontAtlas->TexData : nullptr;
+
+    // Dear ImGui 1.92 supplies texture create/update requests with the draw data. Process
+    // those before decoding commands so the font atlas and custom ImTextureData instances
+    // are live before their first draw call.
+    if (OverlayGeometry != nullptr && OverlayGeometry->Textures != nullptr)
+    {
+        for (ImTextureData* RequestedTexture : *OverlayGeometry->Textures)
+        {
+            (void)EnsureTextureUploaded(RequestedTexture, RequestedTexture == FontTex);
+        }
+    }
 
     const uint64_t RequiredVertexCount = (OverlayGeometry != nullptr && OverlayGeometry->TotalVtxCount > 0)
         ? static_cast<uint64_t>(OverlayGeometry->TotalVtxCount)
@@ -887,7 +963,7 @@ bool ImGuiOverlayRasterization::PresentImGuiBatches(
                     continue;
                 }
 
-                const ImTextureData* TexSource = Cmd.TexRef._TexData != nullptr ? Cmd.TexRef._TexData : FontTex;
+                ImTextureData*       TexSource = Cmd.TexRef._TexData != nullptr ? Cmd.TexRef._TexData : FontTex;
                 const VkDescriptorSet BoundSet = EnsureTextureUploaded(TexSource, TexSource == FontTex);
 
                 const uint32_t StartVert = WrittenVertices;
@@ -922,6 +998,10 @@ bool ImGuiOverlayRasterization::PresentImGuiBatches(
             }
         }
     }
+
+    Stats.LastDrawCommandCount = static_cast<uint32_t>(Batches.size());
+    Stats.LastDrawVertexCount  = WrittenVertices;
+    Stats.ResidentTextureCount = static_cast<uint32_t>(TextureCache.size());
 
     uint32_t ImageIndex = 0u;
     if (Stats.LiveWindowSwapchain)
