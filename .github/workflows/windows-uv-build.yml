@@ -97,7 +97,7 @@ jobs:
             }
           }
           Invoke-FrontierCmake -Heading 'Configure' -CmakeArguments @(
-            '-S', '.', '-B', 'Build/Windows', '-G', 'Visual Studio 17 2022', '-A', 'x64',
+            '-S', '.', '-B', 'Build/Windows', '-G', '"Visual Studio 17 2022"', '-A', 'x64',
             '-DBUILD_TESTING=ON', '-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded$<$<CONFIG:Debug>:Debug>')
           Invoke-FrontierCmake -Heading 'Build' -CmakeArguments @(
             '--build', 'Build/Windows', '--config', 'Release', '--parallel', '4',
