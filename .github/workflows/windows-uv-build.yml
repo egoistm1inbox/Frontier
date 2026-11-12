@@ -105,6 +105,10 @@ jobs:
           if (Test-Path $Journal) {
             Get-Content $Journal | ForEach-Object { Write-Output "[PresentationJournal] $_" }
           }
+          $LoaderUnavailable = (Test-Path $Journal) -and (
+            Select-String -Path $Journal -SimpleMatch `
+              'Failed to initialize the Vulkan loader through volk or bundled SwiftShader.' -Quiet
+          )
           if ($Result -ne 0) {
             $Details = if (Test-Path $Journal) {
               (Get-Content $Journal -Tail 40) -join "`n"
@@ -112,6 +116,12 @@ jobs:
               (Get-Content $RunLog -Tail 40 -ErrorAction SilentlyContinue) -join "`n"
             }
             $Details = $Details.Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
+            if ($LoaderUnavailable) {
+              $SkipReason = 'GitHub-hosted Windows did not expose a Vulkan loader; presentation capture requires a Windows Vulkan driver. The journal was uploaded for this environment skip.'
+              $SkipReason | Set-Content 'Build/Windows/FrontierUV-WindowsPresentation-skip.txt' -Encoding utf8
+              Write-Output "::warning title=FrontierUV presentation capture skipped::$SkipReason"
+              exit 0
+            }
             Write-Output "::error title=FrontierUV desktop capture failed::Exit code $Result. $Details"
             exit $Result
           }
@@ -134,6 +144,7 @@ jobs:
           path: |
             Build/Windows/FrontierUV-WindowsPresentation.png
             Build/Windows/FrontierUV-WindowsPresentation.log
+            Build/Windows/FrontierUV-WindowsPresentation-skip.txt
             FrontierPresentationDiagnostics.log
           if-no-files-found: warn
           retention-days: 14
