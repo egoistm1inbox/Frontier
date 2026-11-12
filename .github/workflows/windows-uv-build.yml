@@ -64,10 +64,10 @@ jobs:
               exit $PythonProcess.ExitCode
             }
           }
-          Invoke-FrontierPython 'Python packages' @('-m', 'pip', 'install', '--requirement', 'Automation/FontRequirements.txt') -IgnoreExitCode
-          Invoke-FrontierPython 'Native dependencies' @('Automation/PrepareDependencies.py')
-          Invoke-FrontierPython 'Font repository' @('Automation/PrepareFonts.py')
-          Invoke-FrontierPython 'Slang compiler' @('Automation/PrepareShaderToolchain.py')
+          Invoke-FrontierPython -Heading 'Python packages' -PythonArguments @('-m', 'pip', 'install', '--requirement', 'Automation/FontRequirements.txt') -IgnoreExitCode
+          Invoke-FrontierPython -Heading 'Native dependencies' -PythonArguments @('Automation/PrepareDependencies.py')
+          Invoke-FrontierPython -Heading 'Font repository' -PythonArguments @('Automation/PrepareFonts.py')
+          Invoke-FrontierPython -Heading 'Slang compiler' -PythonArguments @('Automation/PrepareShaderToolchain.py')
 
       - name: Configure and build Windows x64 applications and boundary checks
         shell: pwsh
