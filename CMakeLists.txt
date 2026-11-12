@@ -46,9 +46,13 @@ find_package(Python3 3.9 REQUIRED COMPONENTS Interpreter)
 execute_process(
     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/Automation/PrepareDependencies.py" --verify
     RESULT_VARIABLE FRONTIER_DEP_STATUS
+    OUTPUT_VARIABLE FRONTIER_DEP_OUTPUT
+    ERROR_VARIABLE FRONTIER_DEP_ERROR
 )
 if(NOT FRONTIER_DEP_STATUS EQUAL 0)
-    message(FATAL_ERROR "Dependencies or ImGui patches unverified. Run: python3 Automation/PrepareDependencies.py")
+    message(FATAL_ERROR
+        "Dependencies or ImGui patches unverified. Run: python3 Automation/PrepareDependencies.py\n"
+        "${FRONTIER_DEP_OUTPUT}${FRONTIER_DEP_ERROR}")
 endif()
 
 #------------------------------------------------------------------------------------------------------------------------
