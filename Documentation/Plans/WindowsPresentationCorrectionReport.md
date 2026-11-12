@@ -25,7 +25,7 @@ The journal destination is `FrontierPresentationDiagnostics.log` beside the reso
 
 ## GitHub-hosted Windows Result
 
-The Windows workflow run [`43225642932`](https://github.com/egoistm1inbox/Frontier/actions/runs/43225642932), on 12 November 2026, completed all preparation, CMake configuration, Windows x64 builds, and the hostile-input/UV chart check. Its bounded desktop attempt then produced this journal sequence:
+The final Windows workflow run [`43226848666`](https://github.com/egoistm1inbox/Frontier/actions/runs/43226848666), on 12 November 2026, completed successfully. It prepared dependencies and fonts, configured CMake, built the Windows x64 applications, passed the hostile-input/UV chart check, ran the bounded desktop command, and uploaded both the presentation evidence and portable package. Its bounded desktop attempt produced this journal sequence:
 
 ```text
 GLFW desktop window initialized. Platform=1; Surface=1028x749.
@@ -34,9 +34,9 @@ Vulkan initialization failed: Failed to initialize the Vulkan loader through vol
 
 So the GitHub-hosted `windows-2022` environment did create a GLFW window, but did not expose a usable Vulkan loader before instance, adapter, swapchain, or frame presentation could be tested. It did **not** produce a PNG. This is an environment limitation, not evidence of a remaining swapchain/presentation failure on a PC with a working Windows Vulkan driver.
 
-The workflow retains strict failures for application failures after a loader is present. It now classifies only this exact loader-unavailable journal result as an environment skip, uploads `FrontierUV-WindowsPresentation-skip.txt` with the run log and journal, and continues to produce the portable package. This keeps hosted packaging/build validation useful without treating a missing hosted GPU driver as a product regression.
+The bounded executable itself exits unsuccessfully in this environment, but the workflow retains strict failures for application failures after a loader is present. It classifies only this exact loader-unavailable journal result as an environment skip, uploads `FrontierUV-WindowsPresentation-skip.txt` with the run log and journal, and continues to produce the portable package. The final green run validated that branch: it uploaded a 1,017-byte presentation-evidence artifact and a 5,921,732-byte Windows x64 package.
 
-The artifact download endpoint returned an EOF from this workspace, but the workflow emits the journal tail in the GitHub Actions annotation as well; the text above is from that annotation.
+The artifact download endpoint returned an EOF from this workspace on earlier attempts, but the workflow emits the journal tail in the GitHub Actions annotation as well; the text above is from that annotation.
 
 ## Windows Actions Evidence Payload
 
@@ -55,10 +55,10 @@ The artifact download endpoint returned an EOF from this workspace, but the work
 | :--- | :--- |
 | `PresentationDiagnosticsJournal.cpp` C++20 syntax check with `g++ -fsyntax-only` | ✔️ Passed. |
 | Changed source and workflow whitespace check | ✔️ Passed. |
-| Windows x64 configure/build of `FrontierUV`, `FrontierEditor`, and `UVBoundaryValidation` | ✔️ Passed in run `43225642932`. |
-| Windows hostile-input and UV chart check | ✔️ Passed in run `43225642932`. |
+| Windows x64 configure/build of `FrontierUV`, `FrontierEditor`, and `UVBoundaryValidation` | ✔️ Passed in run `43226848666`. |
+| Windows hostile-input and UV chart check | ✔️ Passed in run `43226848666`. |
 | Hosted GLFW startup | ✔️ Passed; journal recorded a `1028x749` desktop window. |
-| Hosted Vulkan initialization and PNG capture | ⏭️ Skipped: the runner did not provide a Vulkan loader. |
+| Hosted Vulkan initialization and PNG capture | ⏭️ Environment skip in successful run `43226848666`: the runner did not provide a Vulkan loader. |
 | Physical Windows GPU/presentation validation | ⏳ Required on the affected Windows PC or an interactive self-hosted Windows runner. |
 
 ## Physical Windows Validation
