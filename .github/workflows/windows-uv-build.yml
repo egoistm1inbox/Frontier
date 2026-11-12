@@ -52,12 +52,16 @@ jobs:
           function Invoke-FrontierPython {
             param([string]$Heading, [string[]]$PythonArguments)
             "===== $Heading =====" | Tee-Object -FilePath $RecoveryLogPath -Append
-            $PythonOutput = & python @PythonArguments 2>&1
-            $PythonExitCode = $LASTEXITCODE
-            $PythonOutput | Tee-Object -FilePath $RecoveryLogPath -Append
-            if ($PythonExitCode -ne 0) {
+            $StandardOutputPath = Join-Path $env:RUNNER_TEMP 'frontier-python-standard-output.txt'
+            $StandardErrorPath = Join-Path $env:RUNNER_TEMP 'frontier-python-standard-error.txt'
+            Remove-Item $StandardOutputPath, $StandardErrorPath -Force -ErrorAction SilentlyContinue
+            $PythonProcess = Start-Process -FilePath python -ArgumentList $PythonArguments -NoNewWindow -PassThru -Wait `
+              -RedirectStandardOutput $StandardOutputPath -RedirectStandardError $StandardErrorPath
+            Get-Content $StandardOutputPath, $StandardErrorPath -ErrorAction SilentlyContinue |
+              Tee-Object -FilePath $RecoveryLogPath -Append
+            if ($PythonProcess.ExitCode -ne 0) {
               Publish-RecoveryFailure
-              exit $PythonExitCode
+              exit $PythonProcess.ExitCode
             }
           }
           Invoke-FrontierPython 'Python packages' @('-m', 'pip', 'install', '--requirement', 'Automation/FontRequirements.txt')
