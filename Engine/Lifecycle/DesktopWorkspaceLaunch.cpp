@@ -435,9 +435,8 @@ int LaunchDesktopWorkspace(
     ImGui::SetCurrentContext(GuiCtx);
     ImGuiIO& Io = ImGui::GetIO();
     Io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
-    // The native Vulkan presenter honors ImGui 1.92 texture create/update requests.
-    // This is required for its dynamic font atlas rather than relying on a stale legacy atlas.
-    Io.BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
+    // ImGuiOverlayRasterization initializes Dear ImGui's official Vulkan backend after the
+    // Vulkan render pass exists; that backend owns RendererHasTextures and the atlas lifecycle.
     Io.IniFilename  = nullptr;
 
     TypographyRepository Typography {};
@@ -607,6 +606,9 @@ int LaunchDesktopWorkspace(
         Io.DisplaySize = ImVec2(static_cast<float>(SurfaceW), static_cast<float>(SurfaceH));
         Io.DeltaTime   = static_cast<float>(Dt);
 
+        // Keep the upstream Vulkan renderer's per-frame dynamic-texture lifecycle in
+        // lockstep with Dear ImGui before it starts producing draw commands.
+        SwapchainPresenter.PrepareImGuiFrame();
         ImGui::NewFrame();
 #if FRONTIER_EDITOR_ENABLED
         if (UseFullEditorLifecycle)

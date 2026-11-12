@@ -34,7 +34,7 @@ struct OverlayRasterizationStats
     uint32_t HeightPx                  = 0u;    // [px]    - Active presentation height
     uint64_t PresentedBatchCount       = 0ull;  // [count] - Total frames rasterized through ImGuiOverlayRasterization.slang
     uint32_t LastDrawCommandCount      = 0u;    // [count] - Expanded ImGui commands submitted during the latest frame
-    uint32_t LastDrawVertexCount       = 0u;    // [count] - Expanded ImGui vertices submitted during the latest frame
+    uint32_t LastDrawVertexCount       = 0u;    // [count] - Indexed ImGui elements submitted during the latest frame
     uint32_t ResidentTextureCount      = 0u;    // [count] - ImGui texture records represented by Vulkan descriptors
     uint64_t TextureUploadCount        = 0ull;  // [count] - Completed ImGui texture create/update uploads
 };
@@ -57,6 +57,10 @@ public:
         std::string*                      OptionalDiagnostic = nullptr);
 
     void TeardownOverlay() noexcept;
+
+    // Must run immediately before ImGui::NewFrame() so Dear ImGui's upstream Vulkan
+    // backend can advance its texture-atlas lifecycle.
+    void PrepareImGuiFrame() noexcept;
 
     [[nodiscard]] bool PresentImGuiBatches(
         const ImDrawData* OverlayGeometry,
@@ -90,6 +94,8 @@ private:
 
     [[nodiscard]] bool ConstructRasterResources(VkFormat TargetFormat, std::string* OptionalDiagnostic);
     [[nodiscard]] bool RebuildSwapchainOrOffscreenTarget(uint32_t WidthPx, uint32_t HeightPx);
+    [[nodiscard]] bool InitializeUpstreamImGuiBackend(std::string* OptionalDiagnostic);
+    void               TeardownUpstreamImGuiBackend() noexcept;
     void               DestroyTargetAttachments() noexcept;
     [[nodiscard]] VkDescriptorSet EnsureTextureUploaded(ImTextureData* SourceTex, bool FontAtlasTexture);
 
@@ -112,6 +118,7 @@ private:
     VkDescriptorPool                                          DescriptorAllocator   = VK_NULL_HANDLE;
     VkPipelineLayout                                          RasterLayout          = VK_NULL_HANDLE;
     VkPipeline                                                OverlayRasterUnit     = VK_NULL_HANDLE;
+    bool                                                      UpstreamImGuiBackendReady = false;
 
     DeviceBufferResource                                      VertexStreamBuffer    {};
     DeviceBufferResource                                      UploadStagingBuffer   {};

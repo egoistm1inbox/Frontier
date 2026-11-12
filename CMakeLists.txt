@@ -91,6 +91,7 @@ if(NOT FRONTIER_PROFILE STREQUAL "Shipping" OR BUILD_TESTING)
             "${IMGUI_ROOT}/imgui_draw.cpp"
             "${IMGUI_ROOT}/imgui_tables.cpp"
             "${IMGUI_ROOT}/imgui_widgets.cpp"
+            "${IMGUI_ROOT}/backends/imgui_impl_vulkan.cpp"
         )
     else()
         add_library(FrontierImGui STATIC
@@ -98,9 +99,15 @@ if(NOT FRONTIER_PROFILE STREQUAL "Shipping" OR BUILD_TESTING)
             "${IMGUI_ROOT}/imgui_draw.cpp"
             "${IMGUI_ROOT}/imgui_tables.cpp"
             "${IMGUI_ROOT}/imgui_widgets.cpp"
+            "${IMGUI_ROOT}/backends/imgui_impl_vulkan.cpp"
         )
     endif()
-    target_include_directories(FrontierImGui PUBLIC "${IMGUI_ROOT}")
+    target_include_directories(FrontierImGui PUBLIC
+        "${IMGUI_ROOT}"
+        "${CMAKE_SOURCE_DIR}/ExternalPackages/vulkan-headers/include"
+        "${CMAKE_SOURCE_DIR}/ExternalPackages/volk")
+    # Frontier owns Vulkan dispatch through volk, including the ImGui upstream backend.
+    target_compile_definitions(FrontierImGui PRIVATE IMGUI_IMPL_VULKAN_USE_VOLK)
     target_compile_definitions(FrontierImGui PUBLIC "ImDrawIdx=unsigned int")
     if(NOT MSVC)
         target_compile_options(FrontierImGui PRIVATE -w)
