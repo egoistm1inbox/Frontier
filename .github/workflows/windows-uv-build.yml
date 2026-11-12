@@ -43,11 +43,20 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force Build | Out-Null
           $RecoveryLogPath = 'Build/WindowsDependencyRecovery.log'
+          function Publish-RecoveryFailure {
+            Get-Content $RecoveryLogPath -Tail 80 | ForEach-Object {
+              $DiagnosticLine = $_.Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
+              Write-Host "::error title=Windows dependency recovery::$DiagnosticLine"
+            }
+          }
           function Invoke-FrontierPython {
             param([string]$Heading, [string[]]$PythonArguments)
             "===== $Heading =====" | Tee-Object -FilePath $RecoveryLogPath -Append
             & python @PythonArguments 2>&1 | Tee-Object -FilePath $RecoveryLogPath -Append
-            if ($LASTEXITCODE) { exit $LASTEXITCODE }
+            if ($LASTEXITCODE) {
+              Publish-RecoveryFailure
+              exit $LASTEXITCODE
+            }
           }
           Invoke-FrontierPython 'Python packages' @('-m', 'pip', 'install', '--requirement', 'Automation/FontRequirements.txt')
           Invoke-FrontierPython 'Native dependencies' @('Automation/PrepareDependencies.py')
