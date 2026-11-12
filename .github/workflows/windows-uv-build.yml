@@ -50,7 +50,7 @@ jobs:
             }
           }
           function Invoke-FrontierPython {
-            param([string]$Heading, [string[]]$PythonArguments, [switch]$IgnoreExitCode)
+            param([string]$Heading, [string[]]$PythonArguments)
             "===== $Heading =====" | Tee-Object -FilePath $RecoveryLogPath -Append
             $StandardOutputPath = Join-Path $env:RUNNER_TEMP 'frontier-python-standard-output.txt'
             $StandardErrorPath = Join-Path $env:RUNNER_TEMP 'frontier-python-standard-error.txt'
@@ -59,12 +59,14 @@ jobs:
               -RedirectStandardOutput $StandardOutputPath -RedirectStandardError $StandardErrorPath
             Get-Content $StandardOutputPath, $StandardErrorPath -ErrorAction SilentlyContinue |
               Tee-Object -FilePath $RecoveryLogPath -Append
-            if (-not $IgnoreExitCode -and $PythonProcess.ExitCode -ne 0) {
+            $PythonExitCode = $PythonProcess.ExitCode
+            $global:LASTEXITCODE = 0
+            if ($PythonExitCode -ne 0) {
               Publish-RecoveryFailure
-              exit $PythonProcess.ExitCode
+              exit $PythonExitCode
             }
           }
-          Invoke-FrontierPython -Heading 'Python packages' -PythonArguments @('-m', 'pip', 'install', '--requirement', 'Automation/FontRequirements.txt') -IgnoreExitCode
+          Invoke-FrontierPython -Heading 'Python packages' -PythonArguments @('-m', 'pip', 'install', '--requirement', 'Automation/FontRequirements.txt')
           Invoke-FrontierPython -Heading 'Native dependencies' -PythonArguments @('Automation/PrepareDependencies.py')
           Invoke-FrontierPython -Heading 'Font repository' -PythonArguments @('Automation/PrepareFonts.py')
           Invoke-FrontierPython -Heading 'Slang compiler' -PythonArguments @('Automation/PrepareShaderToolchain.py')
