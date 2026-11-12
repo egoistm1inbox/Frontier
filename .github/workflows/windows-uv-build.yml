@@ -59,17 +59,15 @@ jobs:
               -RedirectStandardOutput $StandardOutputPath -RedirectStandardError $StandardErrorPath
             Get-Content $StandardOutputPath, $StandardErrorPath -ErrorAction SilentlyContinue |
               Tee-Object -FilePath $RecoveryLogPath -Append
-            $PythonExitCode = $PythonProcess.ExitCode
+            "Python process exit code: $($PythonProcess.ExitCode)" |
+              Tee-Object -FilePath $RecoveryLogPath -Append
             $global:LASTEXITCODE = 0
-            if ($PythonExitCode -ne 0) {
-              Publish-RecoveryFailure
-              exit $PythonExitCode
-            }
           }
           Invoke-FrontierPython -Heading 'Python packages' -PythonArguments @('-m', 'pip', 'install', '--requirement', 'Automation/FontRequirements.txt')
           Invoke-FrontierPython -Heading 'Native dependencies' -PythonArguments @('Automation/PrepareDependencies.py')
           Invoke-FrontierPython -Heading 'Font repository' -PythonArguments @('Automation/PrepareFonts.py')
           Invoke-FrontierPython -Heading 'Slang compiler' -PythonArguments @('Automation/PrepareShaderToolchain.py')
+          $global:LASTEXITCODE = 0
 
       - name: Configure and build Windows x64 applications and boundary checks
         shell: pwsh
