@@ -74,7 +74,9 @@ jobs:
         run: |
           $CmakeLogPath = 'Build/WindowsCMake.log'
           function Publish-CmakeFailure {
-            Get-Content $CmakeLogPath -Tail 100 | ForEach-Object {
+            $Diagnostics = @(Get-Content $CmakeLogPath -Tail 100)
+            [array]::Reverse($Diagnostics)
+            $Diagnostics | ForEach-Object {
               $DiagnosticLine = $_.Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
               Write-Host "::error title=Windows CMake::$DiagnosticLine"
             }
