@@ -52,10 +52,12 @@ jobs:
           function Invoke-FrontierPython {
             param([string]$Heading, [string[]]$PythonArguments)
             "===== $Heading =====" | Tee-Object -FilePath $RecoveryLogPath -Append
-            & python @PythonArguments 2>&1 | Tee-Object -FilePath $RecoveryLogPath -Append
-            if ($LASTEXITCODE) {
+            $PythonOutput = & python @PythonArguments 2>&1
+            $PythonExitCode = $LASTEXITCODE
+            $PythonOutput | Tee-Object -FilePath $RecoveryLogPath -Append
+            if ($PythonExitCode -ne 0) {
               Publish-RecoveryFailure
-              exit $LASTEXITCODE
+              exit $PythonExitCode
             }
           }
           Invoke-FrontierPython 'Python packages' @('-m', 'pip', 'install', '--requirement', 'Automation/FontRequirements.txt')
