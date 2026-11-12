@@ -1,0 +1,181 @@
+name: UV workspace Windows build
+
+on:
+  push:
+    branches:
+      - 'arena/**'
+    paths:
+      - '.github/workflows/windows-uv-build.yml'
+      - 'CMakeLists.txt'
+      - 'Automation/**'
+      - 'Engine/**'
+      - 'EngineContent/**'
+      - 'Exhibits/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  attestations: write
+  id-token: write
+
+jobs:
+  windows-x64:
+    name: Build portable UV workspace package
+    runs-on: windows-2022
+    timeout-minutes: 90
+    steps:
+      - name: Check out branch source
+        uses: actions/checkout@v4
+
+      - name: Set up pinned Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Audit UV naming policy transition ledger
+        shell: pwsh
+        run: python Automation/VerifyVocabulary.py --verify --report Build/UVVocabularyAudit.md
+
+      - name: Recover pinned dependencies, fonts, and Slang compiler
+        shell: pwsh
+        run: |
+          python -m pip install --requirement Automation/FontRequirements.txt
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python Automation/PrepareDependencies.py
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python Automation/PrepareFonts.py
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python Automation/PrepareShaderToolchain.py
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+
+      - name: Configure and build Windows x64 applications and boundary checks
+        shell: pwsh
+        run: |
+          cmake -S . -B Build/Windows -G "Visual Studio 17 2022" -A x64 `
+            -DBUILD_TESTING=ON `
+            '-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded$<$<CONFIG:Debug>:Debug>'
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          cmake --build Build/Windows --config Release --parallel 4 --target FrontierUV FrontierEditor UVBoundaryValidation
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+
+      - name: Run Windows hostile-input and UV chart checks
+        shell: pwsh
+        run: |
+          ctest --test-dir Build/Windows -C Release --output-on-failure -R '^UVBoundaryValidation$'
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+
+      - name: Authenticode-sign public distribution executables when a certificate is configured
+        shell: pwsh
+        env:
+          WINDOWS_SIGNING_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE_BASE64 }}
+          WINDOWS_SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE_PASSWORD }}
+          WINDOWS_SIGNING_TIMESTAMP_URL: ${{ vars.WINDOWS_SIGNING_TIMESTAMP_URL }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:WINDOWS_SIGNING_CERTIFICATE_BASE64)) {
+            'FRONTIER_PACKAGE_CHANNEL=unsigned-internal' | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+            Write-Host 'No signing certificate is configured. This run will upload an explicitly internal test package only.'
+            exit 0
+          }
+          if ([string]::IsNullOrWhiteSpace($env:WINDOWS_SIGNING_CERTIFICATE_PASSWORD)) {
+            throw 'WINDOWS_SIGNING_CERTIFICATE_PASSWORD is required when WINDOWS_SIGNING_CERTIFICATE_BASE64 is configured.'
+          }
+
+          $CertificatePath = Join-Path $env:RUNNER_TEMP 'frontier-distribution-certificate.pfx'
+          try {
+            [System.IO.File]::WriteAllBytes($CertificatePath, [Convert]::FromBase64String($env:WINDOWS_SIGNING_CERTIFICATE_BASE64))
+            $SigningTool = Get-ChildItem 'C:\Program Files (x86)\Windows Kits\10\bin' -Filter signtool.exe -Recurse |
+              Sort-Object FullName -Descending |
+              Select-Object -First 1
+            if ($null -eq $SigningTool) {
+              throw 'signtool.exe was not found on the Windows runner.'
+            }
+            $TimestampUrl = $env:WINDOWS_SIGNING_TIMESTAMP_URL
+            if ([string]::IsNullOrWhiteSpace($TimestampUrl)) {
+              $TimestampUrl = 'http://timestamp.digicert.com'
+            }
+            foreach ($Executable in @('Build/Windows/Release/FrontierUV.exe', 'Build/Windows/Release/FrontierEditor.exe')) {
+              & $SigningTool.FullName sign /fd SHA256 /f $CertificatePath /p $env:WINDOWS_SIGNING_CERTIFICATE_PASSWORD /tr $TimestampUrl /td SHA256 $Executable
+              if ($LASTEXITCODE) { exit $LASTEXITCODE }
+              $Signature = Get-AuthenticodeSignature -FilePath $Executable
+              if ($Signature.Status -ne 'Valid') {
+                throw "Authenticode verification failed for $Executable: $($Signature.Status) $($Signature.StatusMessage)"
+              }
+            }
+          }
+          finally {
+            Remove-Item $CertificatePath -Force -ErrorAction SilentlyContinue
+          }
+          'FRONTIER_PACKAGE_CHANNEL=signed' | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Assemble portable folder and checksum manifest
+        shell: pwsh
+        run: |
+          $Payload = Join-Path $env:RUNNER_TEMP 'Frontier-UV-Windows-x64'
+          New-Item -ItemType Directory -Force "$Payload/CompiledShaders", "$Payload/EngineContent" | Out-Null
+          Copy-Item 'Build/Windows/Release/FrontierUV.exe' "$Payload/"
+          Copy-Item 'Build/Windows/Release/FrontierEditor.exe' "$Payload/"
+          Copy-Item 'Build/Windows/CompiledShaders/*' "$Payload/CompiledShaders/" -Recurse -Force
+          Copy-Item 'EngineContent/*' "$Payload/EngineContent/" -Recurse -Force
+          if ($env:FRONTIER_PACKAGE_CHANNEL -eq 'signed') {
+            @'
+          Authenticode signature verified during this GitHub Actions run.
+          Use the SHA-256 manifest beside this package and the GitHub artifact attestation to verify provenance.
+          '@ | Set-Content "$Payload/SIGNING.txt" -Encoding utf8
+          }
+          else {
+            @'
+          INTERNAL TEST BUILD ONLY
+          No publicly trusted Authenticode certificate was configured for this run.
+          Do not redistribute this package or treat it as a Chrome or Windows trust signal.
+          '@ | Set-Content "$Payload/SIGNING.txt" -Encoding utf8
+          }
+          @'
+          Frontier UV Workspace for Windows x64
+
+          Run FrontierUV.exe for the standalone UV workspace or FrontierEditor.exe for the multi-workspace editor.
+          Keep the CompiledShaders and EngineContent folders beside both executables.
+          A Windows Vulkan 1.2 graphics driver is required.
+          The bundled Controlled Integrator geometry is the default sample asset.
+          '@ | Set-Content "$Payload/README.txt" -Encoding utf8
+          $PackagePath = 'Build/Frontier-UV-Windows-x64.zip'
+          Remove-Item $PackagePath -Force -ErrorAction SilentlyContinue
+          Compress-Archive -Path "$Payload/*" -DestinationPath $PackagePath -CompressionLevel Optimal
+          $PackageHash = (Get-FileHash $PackagePath -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$PackageHash *Frontier-UV-Windows-x64.zip" | Set-Content 'Build/SHA256SUMS.txt' -Encoding ascii
+
+      - name: Attest signed package provenance
+        if: env.FRONTIER_PACKAGE_CHANNEL == 'signed'
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: Build/Frontier-UV-Windows-x64.zip
+
+      - name: Upload signed Windows x64 package
+        if: env.FRONTIER_PACKAGE_CHANNEL == 'signed'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Frontier-UV-Windows-x64
+          path: |
+            Build/Frontier-UV-Windows-x64.zip
+            Build/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload internal Windows x64 test package
+        if: env.FRONTIER_PACKAGE_CHANNEL != 'signed'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Frontier-UV-Windows-x64-unsigned-internal
+          path: |
+            Build/Frontier-UV-Windows-x64.zip
+            Build/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload UV vocabulary audit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Frontier-UV-vocabulary-audit
+          path: Build/UVVocabularyAudit.md
+          if-no-files-found: warn
+          retention-days: 14

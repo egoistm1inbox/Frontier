@@ -1,0 +1,37 @@
+# Third-party fetched packages & toolchains (reproduced via Automation/)
+ExternalPackages/
+EngineContent/FontsArchives/
+
+# Local transient scratchpad
+_ClaudeScratch/
+
+# Build & packaged output directories
+Build/
+build/
+Binaries/
+out/
+dist/
+
+# User project local caches/saves
+Projects/*/Saved/
+
+# Editor / OS / Python / Node transient artifacts
+imgui.ini
+__pycache__/
+*.pyc
+node_modules/
+**/node_modules/
+*.log
+.DS_Store
+Thumbs.db
+*.swp
+.env
+.env.local
+
+# Distribution-signing credentials must remain in GitHub Actions secrets
+*.pfx
+*.p12
+*.key
+
+_Build/
+Experimental/FrontierEditor/dist/
