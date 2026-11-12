@@ -99,8 +99,9 @@ def Main():
                 RawBytes = DownloadedPackages[SourceUrl]
             else:
                 Headers = {'Accept': 'application/vnd.github.raw+json', 'User-Agent': 'Frontier-font-setup'}
-                if SourceUrl.startswith('https://api.github.com/') and os.environ.get('GH_TOKEN'):
-                    Headers['Authorization'] = 'Bearer ' + os.environ['GH_TOKEN']
+                AccessToken = os.environ.get('GH_TOKEN') or os.environ.get('GITHUB_TOKEN')
+                if SourceUrl.startswith('https://api.github.com/') and AccessToken:
+                    Headers['Authorization'] = 'Bearer ' + AccessToken
                 Request = urllib.request.Request(SourceUrl, headers=Headers)
                 with urllib.request.urlopen(Request, timeout=60) as Response:
                     RawBytes = Response.read()
