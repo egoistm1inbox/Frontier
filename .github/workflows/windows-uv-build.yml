@@ -97,11 +97,23 @@ jobs:
             Get-Content $Journal | ForEach-Object { Write-Output "[PresentationJournal] $_" }
           }
           if ($Result -ne 0) {
-            Write-Output "::error title=FrontierUV desktop capture failed::Exit code $Result. Inspect the uploaded presentation journal and run log."
+            $Details = if (Test-Path $Journal) {
+              (Get-Content $Journal -Tail 40) -join "`n"
+            } else {
+              (Get-Content $RunLog -Tail 40 -ErrorAction SilentlyContinue) -join "`n"
+            }
+            $Details = $Details.Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
+            Write-Output "::error title=FrontierUV desktop capture failed::Exit code $Result. $Details"
             exit $Result
           }
           if (-not (Test-Path $Capture) -or (Get-Item $Capture).Length -le 1024) {
-            Write-Output '::error title=FrontierUV desktop capture missing::The executable returned success without a usable captured image.'
+            $Details = if (Test-Path $Journal) {
+              (Get-Content $Journal -Tail 40) -join "`n"
+            } else {
+              'The executable returned success without writing a presentation journal.'
+            }
+            $Details = $Details.Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
+            Write-Output "::error title=FrontierUV desktop capture missing::$Details"
             exit 1
           }
 
