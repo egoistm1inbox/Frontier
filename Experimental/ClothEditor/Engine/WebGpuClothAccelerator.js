@@ -813,9 +813,12 @@ export class WebGpuClothAccelerator
         }
         if (this.readbackBusy)
             return true;
-        // Architecture switched back from a CPU-only path (C–F): re-upload the authoritative CPU state first,
-        // otherwise the GPU would keep integrating a stale pose and the cloth would look frozen.
-        if (this._lastSteppedMode !== solver.solverMode)
+
+        const isGpuSolver = solver.solverMode === 'avbd' || solver.solverMode === 'xpbd';
+
+        // Architecture switched back from a CPU-only path (C–F) to a GPU path (A/B): re-upload the authoritative
+        // CPU state first, otherwise the GPU would keep integrating a stale pose and the cloth would look frozen.
+        if (isGpuSolver && this._lastSteppedMode !== solver.solverMode)
         {
             this.syncStateToGpu(solver);
             this._lastSteppedMode = solver.solverMode;
@@ -823,9 +826,10 @@ export class WebGpuClothAccelerator
 
         if (solver.windEnabled || solver.grabVertex >= 0)
             solver.wakeUp();
+
         // Research solver candidates C–F (Cosserat / GN-knot / JGS2 / Kawabata) carry CPU-side state that the
         // current 8-buffer WGSL pipeline does not yet mirror, so they run on the deterministic CPU solver.
-        if (solver.solverMode !== 'avbd' && solver.solverMode !== 'xpbd')
+        if (!isGpuSolver)
         {
             this._lastSteppedMode = 'cpu';
             solver.stepFrame(dt);
