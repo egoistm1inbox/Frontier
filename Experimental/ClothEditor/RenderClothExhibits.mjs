@@ -394,3 +394,28 @@ avatar.ensureSignedDistanceVolume();
     savePNG(p2, fb.w, fb.h, fb.rgba);
     console.log('Saved', p2);
 }
+
+// Exhibit 3: Six-Solver Architecture Showdown Gallery (A through F on Couture Dress) (1800 x 680)
+{
+    const fb = new FrameBuffer(1800, 680);
+    const modes = [
+        ['avbd',    '#3b82f6', 'A · AVBD (Giles 25)'],
+        ['xpbd',    '#10b981', 'B · XPBD (Macklin 16)'],
+        ['scr',     '#c4513d', 'C · SCR (Hsu 25)'],
+        ['gn_knot', '#8b5cf6', 'D · FPB-GN (Guo 25)'],
+        ['jgs2',    '#f59e0b', 'E · JGS2 (Lan 25)'],
+        ['kes_aa',  '#ec4899', 'F · KES-AA (Kawabata)'],
+    ];
+    const spec = buildGarmentPresetSpec('coutureDress', avatar);
+    const net = compileGarmentNetwork(spec, avatar, { particleSpacingMm: 16.5 });
+    modes.forEach(([mode, hex, title], idx) =>
+    {
+        const solver = new OrthotropicClothSolver(net, cloneTextileMaterial('cottonPoplin'), avatar);
+        solver.solverMode = mode;
+        for (let f = 0; f < 80; ++f) solver.stepFrame(1.0 / 60.0);
+        renderDrapedViewport(fb, { x: 12 + idx * 296, y: 16, w: 288, h: 648 }, avatar, solver, hex, 'textile', Math.PI - 0.28);
+    });
+    const p3 = path.join(OutDir, '03-SixSolverComparisonGallery.png');
+    savePNG(p3, fb.w, fb.h, fb.rgba);
+    console.log('Saved', p3);
+}
