@@ -1,0 +1,30 @@
+# Preset coutureDress, 3576 pts / 6690 tris, 180 frames @ 60 FPS, spacing 16.5 mm
+# Spawn shell: gap 78.4 mm, bbox 0.189 m^3
+
+## 0. Shipped solvers (unmodified)
+{"label":"shipped avbd","mode":"avbd","ms":"66.1","gapMm":"17.1","volM3":"0.113","rms":"322 -> 39.1","yarn":"1.038","shearDeg":"7.9","nan":false}
+{"label":"shipped xpbd","mode":"xpbd","ms":"60.5","gapMm":"29.4","volM3":"0.159","rms":"336 -> 8.4","yarn":"1.046","shearDeg":"1.7","nan":false}
+{"label":"shipped scr","mode":"scr","ms":"52.5","gapMm":"29.7","volM3":"0.166","rms":"316 -> 3.1","yarn":"1.090","shearDeg":"6.1","nan":false}
+{"label":"shipped gn_knot","mode":"gn_knot","ms":"79.6","gapMm":"26.7","volM3":"0.138","rms":"489 -> 36.8","yarn":"1.038","shearDeg":"4.4","nan":false}
+{"label":"shipped jgs2","mode":"jgs2","ms":"66.0","gapMm":"24.9","volM3":"0.134","rms":"327 -> 39.8","yarn":"1.107","shearDeg":"9.2","nan":false}
+{"label":"shipped kes_aa","mode":"kes_aa","ms":"73.5","gapMm":"30.5","volM3":"0.168","rms":"723 -> 24.7","yarn":"1.065","shearDeg":"11.6","nan":false}
+
+## 1. Option C — scramble all rod quaternions every frame
+{"label":"scr + random quaternions","mode":"scr","ms":"72.1","gapMm":"29.7","volM3":"0.166","rms":"316 -> 3.1","yarn":"1.090","shearDeg":"6.1","nan":false}
+# max |x_scrambled - x_shipped| = 0  => quaternions are DEAD STATE (no effect on positions)
+
+## 2. Option F — fix the squared modulus (stress = C11^2 * strain)
+{"label":"kes_aa single modulus","mode":"kes_aa","ms":"63.5","gapMm":"25.5","volM3":"0.121","rms":"893 -> 10.4","yarn":"1.062","shearDeg":"8.3","nan":false}
+{"label":"kes_aa single modulus, no Anderson","mode":"kes_aa","ms":"65.4","gapMm":"21.2","volM3":"0.114","rms":"310 -> 8.8","yarn":"1.063","shearDeg":"8.4","nan":false}
+
+## 3. Option D — contact Hessian (I - nn^T -> nn^T) and contact force sign
+{"label":"gn_knot contact fix","mode":"gn_knot","ms":"70.9","gapMm":"34.3","volM3":"0.183","rms":"293 -> 13.8","yarn":"1.043","shearDeg":"6.1","nan":false}
+{"label":"gn_knot shipped (throttle trace)","mode":"gn_knot","ms":"73.6","gapMm":"26.7","volM3":"0.138","rms":"489 -> 36.8","yarn":"1.038","shearDeg":"4.4","nan":false}
+#   step-scale: min 0.10, frames below 0.5 = 56/180, every 20 frames: 0.53 0.66 1.00 1.00 0.81 0.32 0.17 0.21
+{"label":"gn_knot shipped, global throttle disabled","mode":"gn_knot","ms":"59.3","gapMm":"26.3","volM3":"0.148","rms":"484 -> 381.3","yarn":"1.056","shearDeg":"5.5","nan":false}
+#   step-scale: min 1.00, frames below 0.5 = 0/180, every 20 frames: 1.00 1.00 1.00 1.00 1.00 1.00 1.00 1.00
+
+## 4. Option E — remove the fabricated 1-ring Schur coupling (kE = 0 => plain block Jacobi)
+{"label":"jgs2 without Schur term","mode":"jgs2","ms":"56.5","gapMm":"26.2","volM3":"0.144","rms":"328 -> 27.9","yarn":"1.112","shearDeg":"9.2","nan":false}
+
+# patched copies written to /tmp/cloth-audit-Rdh7NQ
