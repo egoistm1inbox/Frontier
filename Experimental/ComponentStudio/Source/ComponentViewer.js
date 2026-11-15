@@ -533,7 +533,7 @@ export function createComponentViewer({ library, openCompile, openImportMenu }) 
       h('div', { class: 'bake-grid' },
         chip('uv', 'UV charts', 'uv', r.uv ? `${r.uv.charts} islands · ${Math.round(r.uv.fit * 100)} % fit` : ''),
         chip('sdf', 'SDF', 'sdf', r.sdf ? `${r.sdf.dims}³ · ${r.sdf.voxel.toFixed(3)} voxel` : ''),
-        chip('lod', 'Cluster LOD', 'lod', r.lod ? `${r.lod.levels.length} levels · ${formatCount(r.lod.clusterCount)} clusters` : ''),
+        chip('lod', 'Cluster LOD', 'lod', r.lod ? `${r.lod.levels.length} levels${r.lod.preserveMaterials ? ' · materials kept' : ` · ${formatCount(r.lod.clusterCount)} clusters`}` : ''),
         chip('icon', 'Icon', 'icon', 'Content thumbnail')),
       (!r.uv || !r.sdf || !r.lod) ? h('button', { class: 'tool wide', onclick: () => openCompile(r) }, 'Bake missing data in Geometry Compile…') : null)];
     if (r.lod) {

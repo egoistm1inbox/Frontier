@@ -2,8 +2,8 @@
 // Left: the bake pipeline (Source → Geometry → UV → SDF → Cluster LOD → Icon → Metadata) with per-step state.
 // Centre: one preview viewport whose mode follows the step (lit, checker, charts, clusters, GPU SDF raymarch, normals).
 // Right: the Import Inspector for the active step, and the compile / add actions.
-import { Viewport } from './Renderer.js';
-import { STEPS, DOWNSTREAM, CATEGORIES, defaultSettings, buildGeometry, runUv, runSdf, runLod, lodLevel, formatCount, ms } from './Compile.js';
+import { Viewport, LineBuilder } from './Renderer.js';
+import { STEPS, DOWNSTREAM, CATEGORIES, defaultSettings, buildGeometry, runUv, runSdf, runLod, lodLevel, materialSeams, formatCount, ms } from './Compile.js';
 import { cornerNormals, triangleColors, indexColors, hueColor, linearToHex, hexToLinear } from './MeshData.js';
 import { identityTransform } from '../Engine/GeometryTransform.js';
 import { formatObj, formatUvSvg } from '../Engine/ObjExport.js';
@@ -16,7 +16,7 @@ export function createGeometryCompile({ onSave, targetName }) {
   let job = null; // { raw, fileName, ext, settings, geo, results, status, step, mode, levelPick, existingId }
   let gpu = { preview: null, lod: null, lodLevel: -1 };
   let rebuildTimer = 0, autoTimer = 0, busy = false;
-  const view = { wire: false, grid: true, uvInset: false, iconFrame: false };
+  const view = { wire: false, grid: true, uvInset: false, iconFrame: false, seams: true, lodView: 'clusters' };
 
   // -------------------------------------------------------------------------------------------- open / close
   function open({ raw, fileName, ext, existing = null, preset = null }) {
@@ -207,13 +207,38 @@ export function createGeometryCompile({ onSave, targetName }) {
   }
 
   function uploadLod() {
-    viewport.deleteMesh(gpu.lod); gpu.lod = null; gpu.lodLevel = -1;
+    viewport.deleteMesh(gpu.lod); gpu.lod = null; gpu.lodLevel = -1; gpu.lodSeams = null; gpu.lodFamilies = null;
     const lod = job.results.lod;
     if (!lod || !job.geo) return;
     const L = Math.min(job.levelPick, lod.levels.length - 1);
-    const { indices, cluster } = lodLevel(lod, L);
-    gpu.lod = viewport.createMesh({ positions: job.geo.positions, indices, cornerNormals: cornerNormals(job.geo.positions, indices, job.settings.geometry.smoothing), debug: indexColors(cluster) });
+    const { indices, cluster, families } = lodLevel(lod, L);
+    const g = job.geo;
+    gpu.lod = viewport.createMesh({
+      positions: g.positions, indices, cornerNormals: cornerNormals(g.positions, indices, job.settings.geometry.smoothing),
+      colors: families ? triangleColors(families, g.slots) : null, debug: indexColors(cluster),
+    });
     gpu.lodLevel = L;
+    gpu.lodFamilies = families;
+    if (families && g.slots.length > 1) gpu.lodSeams = seamLines(g.positions, indices, families, g.bounds.radius);
+  }
+
+  // Material seams of a LOD level as an overlay, nudged off the surface along the vertex normal so the depth
+  // test keeps hidden seams hidden without z-fighting.
+  function seamLines(positions, indices, families, radius) {
+    const pairs = materialSeams(indices, families);
+    if (!pairs.length) return null;
+    const normal = new Float32Array(positions.length);
+    for (let t = 0; t < indices.length; t += 3) {
+      const a = indices[t] * 3, b = indices[t + 1] * 3, c = indices[t + 2] * 3;
+      const ux = positions[b] - positions[a], uy = positions[b + 1] - positions[a + 1], uz = positions[b + 2] - positions[a + 2];
+      const vx = positions[c] - positions[a], vy = positions[c + 1] - positions[a + 1], vz = positions[c + 2] - positions[a + 2];
+      const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
+      for (const o of [a, b, c]) { normal[o] += nx; normal[o + 1] += ny; normal[o + 2] += nz; }
+    }
+    const lift = radius * 0.004, L = new LineBuilder(), col = [1, 0.7, 0.22, 1];
+    const at = (v) => { const o = v * 3, l = Math.hypot(normal[o], normal[o + 1], normal[o + 2]) || 1; return [positions[o] + (normal[o] / l) * lift, positions[o + 1] + (normal[o + 1] / l) * lift, positions[o + 2] + (normal[o + 2] / l) * lift]; };
+    for (let i = 0; i < pairs.length; i += 2) L.line(at(pairs[i]), at(pairs[i + 1]), col);
+    return L.build();
   }
 
   function applyObjects() {
@@ -223,8 +248,9 @@ export function createGeometryCompile({ onSave, targetName }) {
     Object.assign(viewport.sdfView, job.sdfView);
     viewport.settings.wire = view.wire;
     let objects = [];
-    if (m === 'clusters' && gpu.lod) objects = [{ mesh: gpu.lod, mode: 'debug' }];
+    if (m === 'clusters' && gpu.lod) objects = [{ mesh: gpu.lod, mode: view.lodView === 'materials' && gpu.lodFamilies ? 'lit' : 'debug' }];
     else if (gpu.preview) objects = [{ mesh: gpu.preview, mode: m === 'charts' ? 'debug' : m === 'checker' ? 'checker' : m === 'normal' ? 'normal' : 'lit' }];
+    viewport.setLines('seams', m === 'clusters' && view.seams && gpu.lodSeams ? gpu.lodSeams : null, { depth: true });
     viewport.setObjects(objects);
     legend();
     updateReadout();
@@ -234,7 +260,7 @@ export function createGeometryCompile({ onSave, targetName }) {
     const L = $('CompileLegend'), m = job.mode;
     const content = {
       charts: job.results.uv ? `<b>UV CHARTS</b><div style="margin-top:4px">${job.results.uv.charts} islands · one colour each</div>` : '<b>UV CHARTS</b><div>Run the UV step first</div>',
-      clusters: job.results.lod ? `<b>CLUSTERS · LOD ${gpu.lodLevel}</b><div style="margin-top:4px">${formatCount(job.results.lod.levels[gpu.lodLevel].clusters)} clusters · ${formatCount(job.results.lod.levels[gpu.lodLevel].triangles)} tris</div>` : '<b>CLUSTERS</b><div>Build the Cluster LOD step first</div>',
+      clusters: job.results.lod ? `<b>${view.lodView === 'materials' ? 'MATERIALS' : 'CLUSTERS'} · LOD ${gpu.lodLevel}</b><div style="margin-top:4px">${formatCount(job.results.lod.levels[gpu.lodLevel].clusters)} clusters · ${formatCount(job.results.lod.levels[gpu.lodLevel].triangles)} tris</div><div style="margin-top:2px;color:${job.results.lod.preserveMaterials ? '#46d267' : '#8a8a8a'}">${job.results.lod.preserveMaterials ? 'material borders preserved' : 'materials not preserved'}</div>${gpu.lodSeams && view.seams ? '<div style="margin-top:2px;color:#ffb238">— material seams</div>' : ''}` : '<b>CLUSTERS</b><div>Build the Cluster LOD step first</div>',
       sdf: job.results.sdf ? `<b>SIGNED DISTANCE · ${job.results.sdf.dims}³</b><div class="ramp" style="background:linear-gradient(90deg,#d94d2e,#ffc85c,#fff,#4db3d9,#14295c)"></div><div class="ends"><span>INSIDE</span><span>SURFACE</span><span>OUTSIDE</span></div>` : '<b>SDF</b><div>Bake the SDF step first</div>',
       checker: job.results.uv ? '<b>CHECKER · 16 × 16</b><div style="margin-top:4px">Magenta = no UVs</div>' : '<b>CHECKER</b><div>Run the UV step first</div>',
     }[m];
@@ -314,7 +340,7 @@ export function createGeometryCompile({ onSave, targetName }) {
       job.levelPick = Math.min(job.levelPick, result.levels.length - 1);
       uploadLod();
       const top = result.levels[result.levels.length - 1];
-      log(`Cluster LOD · ${result.levels.length} levels · ${formatCount(result.clusterCount)} clusters · coarsest ${formatCount(top.triangles)} tris${result.stalled ? ' · simplification stalled' : ''} · ${ms(result.buildMs)}`, 'ok');
+      log(`Cluster LOD · ${result.levels.length} levels · ${formatCount(result.clusterCount)} clusters · coarsest ${formatCount(top.triangles)} tris${result.preserveMaterials ? ' · material borders preserved' : ''}${result.stalled ? ' · simplification stalled' : ''} · ${ms(result.buildMs)}`, 'ok');
     } catch (error) { if (job) { job.status.lod = 'failed'; log(`Cluster LOD failed: ${error.message}`, 'err'); } }
     if (job) { renderSteps(); updateHeader(); applyObjects(); }
   }
@@ -550,11 +576,17 @@ export function createGeometryCompile({ onSave, targetName }) {
         h('div', {}, h('b', {}, r ? formatCount(r.groupCount) : '—'), h('small', {}, 'GROUPS')),
         h('div', {}, h('b', {}, r ? ms(r.buildMs) : '—'), h('small', {}, 'BUILD'))),
     );
+    const slots = job.geo ? job.geo.slots : [];
     if (r) {
       const top = r.levels.length - 1;
       host.append(heading('LEVEL PREVIEW'), panel(
         slider({ label: 'LOD level', min: 0, max: top, step: 1, value: L, format: (x) => `LOD ${x} of ${top}`, onChange: (x) => { job.levelPick = x; uploadLod(); setMode('clusters'); renderInspector(); } }),
+        segmented([['clusters', 'Cluster colours'], ['materials', 'Material colours']], view.lodView, (x) => { view.lodView = x; setMode('clusters'); }),
+        slots.length > 1 ? h('div', { class: 'tiles' },
+          tile({ icon: 'layers', label: 'Material seams', on: view.seams, onToggle: (on) => { view.seams = on; setMode('clusters'); } }),
+          tile({ icon: 'wire', label: 'Wireframe', on: view.wire, onToggle: (on) => { view.wire = on; $('PreviewWire').classList.toggle('active', on); applyObjects(); } })) : null,
         levelTable(r, L)));
+      if (slots.length > 1) host.append(heading('MATERIALS AT LOD ' + L, r.preserveMaterials ? 'BORDERS PRESERVED' : 'NOT PRESERVED'), panel(materialTable(r, L, slots)));
     }
     host.append(
       heading('BUILD'),
@@ -562,9 +594,38 @@ export function createGeometryCompile({ onSave, targetName }) {
         slider({ label: 'Cluster size', min: 32, max: 256, step: 32, value: s.clusterTriangles, format: (x) => `${x} tris`, onChange: (x) => { s.clusterTriangles = x; lodStale(); } }),
         slider({ label: 'Group size', min: 2, max: 8, step: 1, value: s.groupClusters, format: (x) => `${x} clusters`, onChange: (x) => { s.groupClusters = x; lodStale(); } }),
         slider({ label: 'Keep ratio', min: 0.3, max: 0.8, step: 0.05, value: s.simplifyRatio, format: (x) => `${Math.round(x * 100)} %`, onChange: (x) => { s.simplifyRatio = x; lodStale(); } }),
+        h('div', { class: 'tiles one' }, tile({
+          icon: 'layers', label: 'Preserve materials', on: !!s.preserveMaterials,
+          title: 'Treat each material as its own mesh while simplifying, without splitting vertices',
+          onToggle: (on) => { s.preserveMaterials = on; lodStale(); renderInspector(); },
+        })),
+        note(slots.length > 1
+          ? (s.preserveMaterials
+            ? `Each of the ${slots.length} materials reduces like a separate mesh: clusters are single-material, seam vertices only slide along their seam, corners and junctions stay pinned, and small islands never vanish. Neighbouring clusters still share the same seam vertices and edges, so there is one vertex buffer and no cracks.`
+            : `Off: the ${slots.length} materials are simplified as one surface. Each triangle keeps its material, but borders wander and small regions (lights, glass, trim) can collapse away at coarse levels.`)
+          : 'Single material: nothing to preserve. The toggle matters for meshes with two or more material slots.'),
         h('button', { class: 'primary' + (job.status.lod === 'stale' ? ' stale' : ''), disabled: job.status.lod === 'running', onclick: async () => { await runWithOverlay('Cluster LOD', stepLod); setMode('clusters'); renderInspector(); } }, h('span', { dataset: { icon: 'lod', size: '15' } }), r ? 'Rebuild hierarchy' : 'Build hierarchy')),
       h('p', { class: 'honest' }, 'Nanite-style DAG (Frontier-1 ClusterHierarchy): median-split clusters, border-sharing groups, quadric simplification with locked group borders, recursive until one cluster. Every level is crack-free against its neighbours.'),
     );
+  }
+  // Triangles and surface share of each material at a level, against LOD 0.
+  function materialTable(r, L, slots) {
+    const count = (level) => { const out = new Array(slots.length).fill(0); const f = lodLevel(r, level).families; if (f) for (const x of f) out[x]++; return out; };
+    if (!r.triangleFamily) return note('This hierarchy was built before materials were tracked. Rebuild it to see materials per level.');
+    const base = count(0), now = L === 0 ? base : count(L);
+    const wrap = h('div', {});
+    let lost = 0;
+    slots.forEach((slot, i) => {
+      if (!base[i]) return;
+      const gone = now[i] === 0; if (gone) lost++;
+      wrap.append(h('div', { class: 'level-row mat' + (gone ? ' lost' : ''), title: `${slot.name}: ${now[i]} of ${base[i]} triangles` },
+        h('i', { style: { background: linearToHex(slot.color) } }), h('b', {}, slot.name),
+        h('div', { class: 'meter' }, h('em', { style: { width: Math.max(gone ? 0 : 2, (now[i] / base[i]) * 100) + '%', background: gone ? '#ff6b5e' : '' } })),
+        h('span', { style: gone ? { color: '#ff6b5e' } : {} }, gone ? 'lost' : `${formatCount(now[i])} / ${formatCount(base[i])}`)));
+    });
+    wrap.append(h('small', { style: { display: 'block', marginTop: '6px', color: lost ? '#ff8a6b' : '#46d267' } },
+      lost ? `${lost} material${lost > 1 ? 's' : ''} lost at this level${r.preserveMaterials ? '' : ' — turn on Preserve materials'}` : `All ${slots.filter((_, i) => base[i]).length} materials present at LOD ${L}`));
+    return wrap;
   }
   function lodStale() { if (job.status.lod === 'done') { job.status.lod = 'stale'; renderSteps(); } }
   function levelTable(r, active) {

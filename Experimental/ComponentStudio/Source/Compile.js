@@ -24,7 +24,7 @@ export function defaultSettings(raw, name) {
     geometry: { transform: identityTransform(), uniform: true, smoothing: 40 },
     uv: { normalLimit: 60, mergeBelow: 24, mergeLimit: 75 },
     sdf: { resolution: 40, band: 2 },
-    lod: { clusterTriangles: 128, groupClusters: 4, simplifyRatio: 0.5 },
+    lod: { clusterTriangles: 128, groupClusters: 4, simplifyRatio: 0.5, preserveMaterials: (raw.slots || []).length > 1 },
     icon: { size: 256, yaw: 0.75, pitch: 0.42, mode: 'lit', background: 'transparent' },
     meta: { name: meshName(name), category: 'Prop', tags: '', notes: '' },
     enabled: { uv: true, sdf: true, lod: true, icon: true },
@@ -108,25 +108,48 @@ export async function runSdf(geo, s, onProgress) {
 export async function runLod(geo, s, onProgress) {
   const result = await runWorker(new URL('../Engine/LodWorker.js', import.meta.url), {
     positions: new Float32Array(geo.positions), indices: new Uint32Array(geo.indices),
-    build: { clusterTriangles: s.clusterTriangles, groupClusters: s.groupClusters, simplifyRatio: s.simplifyRatio },
+    families: geo.families ? new Uint32Array(geo.families) : null,
+    build: { clusterTriangles: s.clusterTriangles, groupClusters: s.groupClusters, simplifyRatio: s.simplifyRatio, preserveMaterials: !!s.preserveMaterials },
   }, onProgress);
   return { ...result, settings: { ...s } };
 }
 
 // Triangles of one LOD level straight from the hierarchy's corner stream, with the cluster id of each triangle.
+// `families` is the material of each triangle as carried through simplification (null for hierarchies built
+// before materials were tracked).
 export function lodLevel(lod, level) {
   let corners = 0;
   for (let c = 0; c < lod.clusterFirst.length; c++) if (lod.clusterLevel[c] === level) corners += lod.clusterSize[c];
   const indices = new Uint32Array(corners), cluster = new Uint32Array(corners / 3);
+  const tf = lod.triangleFamily, families = tf ? new Uint16Array(corners / 3) : null;
   let o = 0;
   for (let c = 0; c < lod.clusterFirst.length; c++) {
     if (lod.clusterLevel[c] !== level) continue;
     const first = lod.clusterFirst[c], n = lod.clusterSize[c];
     for (let k = 0; k < n; k++) indices[o + k] = lod.cornerVertex[first + k];
+    if (families) families.set(tf.subarray(first / 3, (first + n) / 3), o / 3);
     cluster.fill(c, o / 3, (o + n) / 3);
     o += n;
   }
-  return { indices, cluster };
+  return { indices, cluster, families };
+}
+
+// Material seam edges of a triangle list (edges whose two triangles carry different materials), as vertex pairs.
+export function materialSeams(indices, families) {
+  const first = new Map(), seams = [];
+  const tris = indices.length / 3;
+  let stride = 0;
+  for (let i = 0; i < indices.length; i++) if (indices[i] >= stride) stride = indices[i] + 1;
+  for (let t = 0; t < tris; t++) {
+    for (let k = 0; k < 3; k++) {
+      const a = indices[t * 3 + k], b = indices[t * 3 + (k + 1) % 3];
+      const key = a < b ? a * stride + b : b * stride + a;
+      const f = first.get(key);
+      if (f === undefined) first.set(key, families[t]);
+      else if (f !== families[t] && f !== -1) { seams.push(a, b); first.set(key, -1); }
+    }
+  }
+  return seams;
 }
 
 // GPU-ready mesh data for a compiled record at a level (−1 = source triangles).
@@ -138,12 +161,16 @@ export function meshPayload(record, level = -1, smoothing = 40) {
     };
   }
   const L = Math.min(level, record.lod.levels.length - 1);
-  const { indices, cluster } = lodLevel(record.lod, L);
-  // Simplified triangles reuse source vertices; give each the family of the nearest source triangle by vertex lookup.
-  const familyOfVertex = new Uint16Array(record.positions.length / 3);
-  for (let t = 0; t < record.indices.length / 3; t++) for (let k = 0; k < 3; k++) familyOfVertex[record.indices[t * 3 + k]] = record.families[t];
-  const families = new Uint16Array(indices.length / 3);
-  for (let t = 0; t < families.length; t++) families[t] = familyOfVertex[indices[t * 3]];
+  const level_ = lodLevel(record.lod, L);
+  const { indices, cluster } = level_;
+  let families = level_.families;
+  if (!families) {
+    // Legacy hierarchies (no per-triangle materials): approximate from the first corner's source material.
+    const familyOfVertex = new Uint16Array(record.positions.length / 3);
+    for (let t = 0; t < record.indices.length / 3; t++) for (let k = 0; k < 3; k++) familyOfVertex[record.indices[t * 3 + k]] = record.families[t];
+    families = new Uint16Array(indices.length / 3);
+    for (let t = 0; t < families.length; t++) families[t] = familyOfVertex[indices[t * 3]];
+  }
   return {
     positions: record.positions, indices, cornerNormals: cornerNormals(record.positions, indices, smoothing), uvs: null,
     colors: triangleColors(families, record.slots), debug: indexColors(cluster),

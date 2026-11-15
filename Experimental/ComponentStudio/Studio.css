@@ -362,3 +362,10 @@ kbd { font: 400 10px ui-monospace, SFMono-Regular, Menlo, monospace; background:
   .dock.left { display: none; }
 }
 .sample-row > span:first-child { justify-self: center; }
+.tiles.one { grid-template-columns: 1fr; }
+.tiles.one .tile { flex-direction: row; height: 52px; justify-content: flex-start; gap: 12px; padding: 0 14px; text-align: left; }
+.tiles.one .tile b { flex: 1; font-weight: 400; font-size: 12px; }
+.level-row.mat { grid-template-columns: 14px 104px minmax(0, 1fr) 78px; cursor: default; }
+.level-row.mat b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 400; }
+.level-row.mat span { text-align: right; font-variant-numeric: tabular-nums; }
+.level-row.lost b { color: #ff8a6b; }

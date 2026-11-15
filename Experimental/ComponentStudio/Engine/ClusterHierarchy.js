@@ -10,6 +10,13 @@
 // therefore take the same decision at run time, and because the border vertices were locked, any mix of
 // levels across a border is watertight.
 //
+// Materials (options.families = one material id per source triangle):
+//   every cluster triangle carries its material through every level (`triangleFamily` in the result), because the
+//   simplifier only ever removes triangles. With options.preserveMaterials each cluster is also material-pure and
+//   material seams are treated like borders during simplification (slide along the seam, junctions pinned), so
+//   each material reduces like a separate mesh while neighbouring clusters keep sharing the same vertices and
+//   edges across the seam: one vertex buffer, still watertight.
+//
 // Monotonicity enforced here (the run-time cut depends on it):
 //   group.error  >= every child error
 //   group.sphere encloses every child LOD sphere
@@ -22,6 +29,7 @@ export const DEFAULT_BUILD = {
   simplifyRatio: 0.5,
   maxLevels: 24,
   errorLimit: 1.0, // refuse collapses whose error exceeds this many target-triangle sizes (sqrt of mean area)
+  preserveMaterials: false,
 };
 
 // ---------------------------------------------------------------------------------------------------------
@@ -138,9 +146,13 @@ export function buildClusterHierarchy(positions, sourceIndices, options = {}, re
   const ratio = Math.max(0.1, Math.min(0.9, config.simplifyRatio));
   const vertexCount = positions.length / 3;
   const started = performance.now();
+  const sourceFamilies = options.families && options.families.length * 3 === sourceIndices.length ? options.families : null;
+  const preserve = !!(config.preserveMaterials && sourceFamilies);
+  delete config.families;
 
   // Growable cluster / group records.
   const chunks = [];            // Uint32Array per cluster (vertex indices)
+  const chunkFamilies = [];     // Uint32Array per cluster (material per triangle) or null
   const clusterLevel = [];
   const clusterGroupSelf = [];  // group that produced the cluster (-1 at level 0)
   const clusterGroupParent = []; // group that consumed the cluster (-1 for roots)
@@ -151,9 +163,10 @@ export function buildClusterHierarchy(positions, sourceIndices, options = {}, re
   const tight = [];             // tight sphere, 4 per cluster (filled on creation)
   const scratch = new Float32Array(4);
 
-  function addCluster(indices, level, groupSelf) {
+  function addCluster(indices, families, level, groupSelf) {
     const id = chunks.length;
     chunks.push(indices);
+    chunkFamilies.push(families);
     clusterLevel.push(level);
     clusterGroupSelf.push(groupSelf);
     clusterGroupParent.push(-1);
@@ -162,10 +175,29 @@ export function buildClusterHierarchy(positions, sourceIndices, options = {}, re
     return id;
   }
 
-  function splitIntoClusters(indices, level, groupSelf, out) {
+  function splitIntoClusters(indices, families, level, groupSelf, out) {
     const count = indices.length / 3;
     if (count === 0) return;
-    if (count <= limit) { out.push(addCluster(indices, level, groupSelf)); return; }
+    if (preserve && families) {
+      // Material-pure clusters: bucket by material, then split each bucket spatially.
+      const buckets = new Map();
+      for (let t = 0; t < count; t++) { const f = families[t]; if (!buckets.has(f)) buckets.set(f, []); buckets.get(f).push(t); }
+      if (buckets.size > 1) {
+        for (const [f, list] of buckets) {
+          const part = new Uint32Array(list.length * 3);
+          for (let i = 0; i < list.length; i++) { const t = list[i] * 3; part[i * 3] = indices[t]; part[i * 3 + 1] = indices[t + 1]; part[i * 3 + 2] = indices[t + 2]; }
+          splitSpatialOnly(part, new Uint32Array(list.length).fill(f), level, groupSelf, out);
+        }
+        return;
+      }
+    }
+    splitSpatialOnly(indices, families, level, groupSelf, out);
+  }
+
+  function splitSpatialOnly(indices, families, level, groupSelf, out) {
+    const count = indices.length / 3;
+    if (count === 0) return;
+    if (count <= limit) { out.push(addCluster(indices, families, level, groupSelf)); return; }
     const centroids = new Float32Array(count * 3);
     for (let t = 0; t < count; t++) {
       const a = indices[t * 3] * 3, b = indices[t * 3 + 1] * 3, c = indices[t * 3 + 2] * 3;
@@ -175,37 +207,52 @@ export function buildClusterHierarchy(positions, sourceIndices, options = {}, re
     }
     splitSpatially(centroids, count, limit, (ids) => {
       const part = new Uint32Array(ids.length * 3);
+      const partFamilies = families ? new Uint32Array(ids.length) : null;
       for (let i = 0; i < ids.length; i++) {
         const t = ids[i] * 3;
         part[i * 3] = indices[t]; part[i * 3 + 1] = indices[t + 1]; part[i * 3 + 2] = indices[t + 2];
+        if (partFamilies) partFamilies[i] = families[ids[i]];
       }
-      out.push(addCluster(part, level, groupSelf));
+      out.push(addCluster(part, partFamilies, level, groupSelf));
     });
   }
 
   // Drop degenerate source triangles up front.
-  let source = sourceIndices;
+  let source = sourceIndices, sourceFam = null;
   {
     let kept = 0;
     const clean = new Uint32Array(source.length);
+    const cleanFam = sourceFamilies ? new Uint32Array(source.length / 3) : null;
     for (let i = 0; i < source.length; i += 3) {
       const a = source[i], b = source[i + 1], c = source[i + 2];
       if (a === b || b === c || a === c || a >= vertexCount || b >= vertexCount || c >= vertexCount) continue;
+      if (cleanFam) cleanFam[kept / 3] = sourceFamilies[i / 3];
       clean[kept++] = a; clean[kept++] = b; clean[kept++] = c;
     }
     source = clean.subarray(0, kept);
+    sourceFam = cleanFam ? cleanFam.subarray(0, kept / 3) : null;
   }
   if (!source.length) throw new Error('Source has no usable triangles');
 
   report(0.02, 'Clustering source triangles');
   let current = [];
-  splitIntoClusters(source, 0, -1, current);
+  splitIntoClusters(source, sourceFam, 0, -1, current);
   const levels = [{ level: 0, clusters: current.length, triangles: source.length / 3, groups: 0, error: 0 }];
   const totalEstimate = (source.length / 3) * 2;
   let processed = 0;
   let stalled = false;
+  let seamBlocked = 0;
 
-  for (let level = 1; level <= config.maxLevels && current.length > 1; level++) {
+  // Material-pure clusters can never merge across materials, so with preserveMaterials the hierarchy is complete
+  // once there is one cluster per material still present (otherwise it would keep shrinking the surface).
+  const finished = () => {
+    if (current.length <= 1) return true;
+    if (!preserve) return false;
+    const present = new Set();
+    for (const id of current) present.add(chunkFamilies[id][0]);
+    return current.length <= present.size;
+  };
+  for (let level = 1; level <= config.maxLevels && !finished(); level++) {
     // --- Edge ownership for this level: border detection + cluster neighbour weights.
     //     value >= 0 : seen once, by that cluster (still open -> true border if it stays that way)
     //     value  -1  : seen exactly twice (manifold interior edge)
@@ -278,8 +325,13 @@ export function buildClusterHierarchy(positions, sourceIndices, options = {}, re
       let total = 0;
       for (const id of members) total += chunks[id].length;
       const merged = new Uint32Array(total);
+      const mergedFam = sourceFam ? new Uint32Array(total / 3) : null;
       let o = 0;
-      for (const id of members) { merged.set(chunks[id], o); o += chunks[id].length; }
+      for (const id of members) {
+        merged.set(chunks[id], o);
+        if (mergedFam) mergedFam.set(chunkFamilies[id], o / 3);
+        o += chunks[id].length;
+      }
 
       // Vertex kinds from edge use inside the group vs. across the whole level.
       const localUse = new Map();
@@ -325,8 +377,10 @@ export function buildClusterHierarchy(positions, sourceIndices, options = {}, re
 
       const before = merged.length / 3;
       const target = Math.max(1, Math.floor(before * ratio));
-      const result = simplifyGroup(positions, merged, (v) => kinds.get(v) || FREE, target, config.errorLimit * Math.sqrt(surfaceArea(positions, merged) / target));
+      const result = simplifyGroup(positions, merged, (v) => kinds.get(v) || FREE, target, config.errorLimit * Math.sqrt(surfaceArea(positions, merged) / target),
+        { families: mergedFam, materialSeams: preserve });
       error = Math.max(error, result.error);
+      seamBlocked += result.seamBlocked || 0;
 
 
       const group = groupError.length;
@@ -335,7 +389,7 @@ export function buildClusterHierarchy(positions, sourceIndices, options = {}, re
       groupLevel.push(level);
       groupChildren.push(members);
       for (const id of members) clusterGroupParent[id] = group;
-      splitIntoClusters(result.indices, level, group, next);
+      splitIntoClusters(result.indices, result.families, level, group, next);
 
       levelTriangles += result.indices.length / 3;
       levelBefore += before;
@@ -356,6 +410,7 @@ export function buildClusterHierarchy(positions, sourceIndices, options = {}, re
   let corners = 0;
   for (const c of chunks) corners += c.length;
   const cornerVertex = new Uint32Array(corners);
+  const triangleFamily = sourceFam ? new Uint16Array(corners / 3) : null; // material per cluster triangle
   const cornerCluster = new Uint32Array(corners);
   const first = new Uint32Array(clusterCount);     // first corner
   const size = new Uint32Array(clusterCount);      // corner count
@@ -364,6 +419,7 @@ export function buildClusterHierarchy(positions, sourceIndices, options = {}, re
   for (let i = 0; i < clusterCount; i++) {
     const c = chunks[i];
     cornerVertex.set(c, offset);
+    if (triangleFamily) triangleFamily.set(chunkFamilies[i], offset / 3);
     cornerCluster.fill(i, offset, offset + c.length);
     first[i] = offset; size[i] = c.length;
     normalCone(positions, c, 0, c.length, cones, i * 4);
@@ -397,7 +453,8 @@ export function buildClusterHierarchy(positions, sourceIndices, options = {}, re
     roots: Uint32Array.from(roots),
     levels,
     stalled,
-    config: { clusterTriangles: limit, groupClusters: groupLimit, simplifyRatio: ratio },
+    config: { clusterTriangles: limit, groupClusters: groupLimit, simplifyRatio: ratio, preserveMaterials: preserve },
+    triangleFamily, preserveMaterials: preserve, seamBlocked,
     sourceTriangles: source.length / 3,
     buildMs: performance.now() - started,
   };
@@ -405,5 +462,6 @@ export function buildClusterHierarchy(positions, sourceIndices, options = {}, re
 
 export function hierarchyTransferables(h) {
   return [h.cornerVertex, h.cornerCluster, h.clusterFirst, h.clusterSize, h.clusterLevel, h.clusterGroupSelf, h.clusterGroupParent,
-    h.clusterSphere, h.clusterCone, h.groupError, h.groupSphere, h.groupLevel, h.groupChildStart, h.groupChildren, h.roots].map((a) => a.buffer);
+    h.clusterSphere, h.clusterCone, h.groupError, h.groupSphere, h.groupLevel, h.groupChildStart, h.groupChildren, h.roots,
+    ...(h.triangleFamily ? [h.triangleFamily] : [])].map((a) => a.buffer);
 }

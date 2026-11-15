@@ -61,7 +61,7 @@ There are three ways to open it: **Import…** (OBJ / STL / FCT1, or a procedura
 | 2 Geometry | transform + normals | scale (uniform lock), mirror, rotate, centre, flip, smoothing angle |
 | 3 UV Charts | planar island unwrap + pack | island normal limit, merge thresholds, UV sheet preview, OBJ / SVG export |
 | 4 SDF Bake | signed distance field (worker) | resolution 32³–80³, narrow band, slice preview, iso surface |
-| 5 Cluster LOD | Nanite-style cluster DAG (worker) | cluster size, group size, simplify ratio, level list + preview slider |
+| 5 Cluster LOD | Nanite-style cluster DAG (worker) | cluster size, group size, keep ratio, **Preserve materials**, level slider, cluster / material colours, seam overlay, materials-per-level table |
 | 6 Icon | thumbnail capture | ¾ / front / side / top, yaw, pitch, size, background, live icon frame |
 | 7 Metadata | `SM_*` name, category, tags, notes | compile summary |
 
@@ -71,6 +71,30 @@ There are three ways to open it: **Import…** (OBJ / STL / FCT1, or a procedura
 - **Compile & add to BP_ControlVehicle** saves the mesh to Content and adds a Static Mesh component.
 - When re-opened from an existing mesh, the button becomes **Compile & update**. The update applies everywhere the mesh is used.
 - Keys: `1`–`7` steps, `F` frame, `Esc` close.
+
+## Material-preserving Cluster LOD
+
+Every triangle keeps its material through every LOD level. The simplifier only moves a vertex onto an existing vertex and never creates triangles, so nothing has to be re-guessed afterwards. The Component Viewer draws LOD levels with these real materials.
+
+**Preserve materials** (on by default for meshes with 2+ material slots) makes each material reduce like a separate mesh **without splitting it**:
+
+- Clusters are single-material.
+- An edge whose two triangles carry different materials is a seam. A vertex on a simple two-material seam may only slide along that seam onto another seam vertex.
+- Seam corners (turns over ~50°), junctions where 3+ materials meet, and seam/border meetings never move. Seams get constraint planes like open borders.
+- A seam loop can't shrink below three edges, so small islands (lights, glass, trim) never vanish.
+- Neighbouring clusters and materials keep sharing the same seam vertices and edges. There is one vertex buffer, no duplicated seams and no cracks.
+- The build stops once there is one cluster per material, instead of shrinking the surface further.
+
+`node Tests/MaterialLodCheck.mjs ControlVehicleBody.facet` prints, per level, seam vertices off the source seams, material share drift, lost materials, area and non-manifold edges, with the toggle off vs on. On the body at LOD 4:
+
+| | Off | On |
+|---|---|---|
+| Materials still present | 4 / 8 (glass, trim, headlights and taillights gone) | 8 / 8 |
+| Seam vertices off the source seams | 4 / 116 | 0 / 196 |
+| Surface area kept | 78 % | 84 % |
+| New non-manifold edges | 0 | 0 |
+
+The rim's hub material is gone by LOD 3 with the toggle off. With it on, the hub survives every level.
 
 ## Layout
 
@@ -83,6 +107,7 @@ Source/Compile.js           headless pipeline (also used to pre-compile the vehi
 Source/Renderer.js          WebGL2 viewport: lit / checker / debug / normal, picking, lines, SDF raymarch, icon capture
 Source/MeshData.js          OBJ / STL / FCT1 readers, topology, corner normals, material slots
 Source/Kit.js, Icons.js     inspector building blocks, icon set (StudioIconSet definitions + component glyphs)
+Tests/MaterialLodCheck.mjs  Node check for material-preserving Cluster LOD
 Engine/                     Cluster LOD Studio engine (cluster hierarchy, QEM, UV charts, SDF bake, transforms) + workers
 Vehicle/                    FCT1 codec, material + vehicle specification sheets, ControlVehicle facet archive
 ```

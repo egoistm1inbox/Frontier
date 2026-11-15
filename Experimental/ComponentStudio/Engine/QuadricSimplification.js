@@ -7,6 +7,13 @@
 //    LOCKED (shared with another group this level: never moves).
 //  - Each collapse is rejected if it flips or degenerates a surviving triangle, or breaks the link condition
 //    (which would create a non-manifold fin).
+//  - Materials: triangles are never created, only removed, so every surviving triangle keeps the material it
+//    started with (`families` in, `families` out). With `materialSeams` on, an edge whose two triangles carry
+//    different materials is a seam: a vertex on a simple two-material seam may only slide along that seam onto
+//    another seam vertex, and a vertex where three or more materials meet (or a seam meets an open border) never
+//    moves. Seams also get constraint planes like open borders. Each material region then simplifies as if it
+//    were its own mesh, while the regions keep sharing the same seam vertices and edges: one vertex buffer, no
+//    splits, no cracks.
 //
 // Reported error is sqrt(quadric cost / accumulated area): an RMS-distance estimate in object units.
 // It is an estimate, not a certified Hausdorff bound.
@@ -14,6 +21,7 @@
 export const FREE = 0, BORDER = 1, LOCKED = 2;
 
 const Q = 11; // 10 symmetric quadric coefficients + accumulated weight
+const SEAM_STRAIGHT = -Math.cos((50 * Math.PI) / 180); // cos of the angle between the two seam edges at a sliding vertex
 
 class CollapseQueue {
   constructor() {
@@ -64,10 +72,14 @@ class CollapseQueue {
  * @param {number} targetTriangles
  * @param {number} [maxError]  collapses whose error estimate exceeds this are refused (keeps one forced bad
  *                             collapse from poisoning the monotone error of every level above it)
- * @returns {{ indices: Uint32Array, error: number, collapses: number }}
+ * @param {{ families?: ArrayLike<number>, materialSeams?: boolean }} [materials]  per-triangle material ids to
+ *                             carry through; `materialSeams` keeps material borders (see header)
+ * @returns {{ indices: Uint32Array, families: Uint32Array|null, error: number, collapses: number, seamBlocked: number }}
  */
-export function simplifyGroup(positions, triangles, kindOf, targetTriangles, maxError = Infinity) {
+export function simplifyGroup(positions, triangles, kindOf, targetTriangles, maxError = Infinity, materials = {}) {
   const triCount = triangles.length / 3;
+  const fam = materials.families ? Uint32Array.from(materials.families) : null;
+  const seams = !!(fam && materials.materialSeams);
 
   // Local vertex remap.
   const localOf = new Map();
@@ -114,6 +126,20 @@ export function simplifyGroup(positions, triangles, kindOf, targetTriangles, max
     edgeUse.set(edgeKey(b, c), (edgeUse.get(edgeKey(b, c)) || 0) + 1);
     edgeUse.set(edgeKey(c, a), (edgeUse.get(edgeKey(c, a)) || 0) + 1);
   }
+  // Material seam edges: two triangles with different materials on one edge.
+  const seamEdge = new Set();
+  if (seams) {
+    const firstFamily = new Map();
+    for (let t = 0; t < triCount; t++) {
+      if (!alive[t]) continue;
+      for (let k = 0; k < 3; k++) {
+        const key = edgeKey(tri[t * 3 + k], tri[t * 3 + (k + 1) % 3]);
+        const f = firstFamily.get(key);
+        if (f === undefined) firstFamily.set(key, fam[t]);
+        else if (f !== fam[t]) seamEdge.add(key);
+      }
+    }
+  }
   for (let t = 0; t < triCount; t++) {
     if (!alive[t]) continue;
     const v = [tri[t * 3], tri[t * 3 + 1], tri[t * 3 + 2]];
@@ -126,10 +152,10 @@ export function simplifyGroup(positions, triangles, kindOf, targetTriangles, max
     const area = len * 0.5;
     const d = -(nx * px[v[0]] + ny * py[v[0]] + nz * pz[v[0]]);
     for (let k = 0; k < 3; k++) addPlane(v[k], nx, ny, nz, d, area);
-    // Open edges get a perpendicular constraint plane so borders keep their outline.
+    // Open edges (and material seams) get a perpendicular constraint plane so they keep their outline.
     for (let k = 0; k < 3; k++) {
       const a = v[k], b = v[(k + 1) % 3];
-      if (edgeUse.get(edgeKey(a, b)) !== 1) continue;
+      if (edgeUse.get(edgeKey(a, b)) !== 1 && !seamEdge.has(edgeKey(a, b))) continue;
       const ex = px[b] - px[a], ey = py[b] - py[a], ez = pz[b] - pz[a];
       let bx = ey * nz - ez * ny, by = ez * nx - ex * nz, bz = ex * ny - ey * nx;
       const bl = Math.hypot(bx, by, bz);
@@ -169,8 +195,63 @@ export function simplifyGroup(positions, triangles, kindOf, targetTriangles, max
     return shared;
   }
 
+  // Is (u, v) currently a material seam? Evaluated live, because collapses change the fans.
+  function isSeam(u, v) {
+    let first = -1, count = 0, differs = false;
+    const fan = fans[u];
+    for (let i = 0; i < fan.length; i++) {
+      const t = fan[i], o = t * 3;
+      if (tri[o] !== v && tri[o + 1] !== v && tri[o + 2] !== v) continue;
+      count++;
+      if (first < 0) first = fam[t]; else if (fam[t] !== first) differs = true;
+    }
+    return count === 2 && differs;
+  }
+  // May u move onto v without changing which material covers which part of the surface?
+  let seamBlocked = 0, seamCounter = 0;
+  const seamMark = seams ? new Int32Array(n) : null;
+  function materialAllows(u, v) {
+    if (!seams) return true;
+    const fan = fans[u];
+    let a = -1, b = -1;
+    for (let i = 0; i < fan.length; i++) {
+      const f = fam[fan[i]];
+      if (a < 0 || f === a) a = f;
+      else if (b < 0 || f === b) b = f;
+      else return false; // three or more materials meet here: a junction never moves
+    }
+    if (b < 0) return true; // interior of one material region: free to collapse anywhere
+    if (kind[u] === BORDER || !isSeam(u, v)) return false;
+    // Only a simple seam (exactly two seam edges through u) may slide; crossing seams stay put.
+    const m = ++seamCounter;
+    let seamCount = 0, p = -1;
+    for (let i = 0; i < fan.length; i++) {
+      const o = fan[i] * 3;
+      for (let k = 0; k < 3; k++) {
+        const w = tri[o + k];
+        if (w === u || seamMark[w] === m) continue;
+        seamMark[w] = m;
+        if (isSeam(u, w)) { seamCount++; if (w !== v) p = w; }
+      }
+    }
+    if (seamCount !== 2 || p < 0) return false;
+    // Seam corners stay: sliding is only allowed where the seam runs roughly straight through u (< ~50° turn).
+    const ax = px[p] - px[u], ay = py[p] - py[u], az = pz[p] - pz[u];
+    const bx = px[v] - px[u], by = py[v] - py[u], bz = pz[v] - pz[u];
+    const la = Math.hypot(ax, ay, az), lb = Math.hypot(bx, by, bz);
+    if (la < 1e-30 || lb < 1e-30 || (ax * bx + ay * by + az * bz) / (la * lb) > SEAM_STRAIGHT) return false;
+    // Never shrink a seam loop below three edges: a small material island would vanish.
+    const fv = fans[v];
+    for (let i = 0; i < fv.length; i++) {
+      const o = fv[i] * 3;
+      if ((tri[o] === p || tri[o + 1] === p || tri[o + 2] === p) && isSeam(v, p)) return false;
+    }
+    return true;
+  }
+
   function propose(u, v) {
     if (kind[u] === LOCKED) return;
+    if (seams && !materialAllows(u, v)) return;
     if (kind[u] === BORDER && (kind[v] === FREE || sharedTriangles(u, v) !== 1)) return;
     const cost = collapseCost(u, v);
     // A tiny length term orders zero-cost collapses on flat regions short-edge first (avoids slivers).
@@ -272,6 +353,7 @@ export function simplifyGroup(positions, triangles, kindOf, targetTriangles, max
     const u = queue.topU, v = queue.topV;
     if (stamp[u] !== queue.topSu || stamp[v] !== queue.topSv) continue;
     if (kind[u] === BORDER && sharedTriangles(u, v) !== 1) continue;
+    if (seams && !materialAllows(u, v)) { seamBlocked++; continue; }
     if (!linkConditionHolds(u, v) || !avoidsLockedBridge(u, v) || !keepsOrientation(u, v)) continue;
 
     const cost = collapseCost(u, v);
@@ -306,10 +388,12 @@ export function simplifyGroup(positions, triangles, kindOf, targetTriangles, max
   }
 
   const out = new Uint32Array(aliveCount * 3);
+  const outFamilies = fam ? new Uint32Array(aliveCount) : null;
   let o = 0;
   for (let t = 0; t < triCount; t++) {
     if (!alive[t]) continue;
+    if (outFamilies) outFamilies[o / 3] = fam[t];
     out[o++] = globalOf[tri[t * 3]]; out[o++] = globalOf[tri[t * 3 + 1]]; out[o++] = globalOf[tri[t * 3 + 2]];
   }
-  return { indices: out, error: Math.sqrt(worstSquared), collapses };
+  return { indices: out, families: outFamilies, error: Math.sqrt(worstSquared), collapses, seamBlocked };
 }
