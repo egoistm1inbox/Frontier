@@ -3,12 +3,13 @@
 A standalone page for fracturing **analytical primitives**, separate from Component Studio. It uses the Project Zero
 editor layout: Outliner, Viewport and Inspector docks, the top and bottom notches, the segmented Edit / Sim / Play
 control and quick tiles. The design follows the Frontier-OLD `SourceImages/General UI` references: glass panels, thin
-oversized numerals with dimmed fractions, callouts with leader lines, warning chips and a full-width playback bar.
+oversized numerals with dimmed fractions, callouts with leader lines, warning chips, and a playback strip in the viewport footer.
 
 ![Edit · torus, energy share](Screenshots/edit-torus.png)
 ![Sim · scrubbing the baked motion, fragment selected](Screenshots/sim-torus.png)
 ![Glass pane, radial pattern, exploded](Screenshots/glass-pane.png)
 ![Primitive library drawer](Screenshots/library.png)
+![Diagnostics, fracture result · material pickers](Screenshots/diagnostics.png)
 
 ## Run
 
@@ -80,18 +81,36 @@ stands alone.
   - The bottom notch opens the **Primitive library**.
 - **Inspector.**
   - Primitive view:
-    - A hero chart: energy share per fragment in Edit, with the dashed release threshold; the kinetic curve in Sim and
-      Play.
+    - A hero chart with gridlines, axis labels, a hover probe and a tooltip:
+      - **Edit:** every fragment's energy share ranked highest first, on the energy ramp. The dashed release threshold
+        divides released fragments (filled dots) from held ones (rings). Click a dot to select that fragment.
+      - **Sim / Play:** kinetic energy over the bake, with the playhead, the peak, the settled stretch and the moving
+        count. A selected fragment's curve is drawn over the faint total. Click to scrub.
     - Stat tiles.
-    - Sections: Shape (dimension sliders, facet detail, exact vs faceted volume), Material tiles, Impact (log energy
+    - Sections: Shape (dimension sliders, facet detail, exact vs faceted volume), Material, Impact (log energy
       slider, XYZ, place on surface), Pattern (seed, ceiling, minimum size), Quality toggles, Simulation, size
       distribution and the bake log.
+  - **Material** has two pickers:
+    - **Outside**: the original surface. It only colours the uncut shell.
+    - **Interior**: the bulk. It sets density, crack resistance (Gc) and the fracture pattern, and colours every cut
+      face.
   - Fragment view: mass, volume, energy share, distance, a Hold / Release override, geometry facts and the baked motion.
-- **Playback bar.**
+- **Playback** (viewport footer).
   - To start, play / pause, step, and the clock (with a −0.6 s pre-roll in Play).
   - A scrub track showing the kinetic curve, how many pieces are moving, the settled band, and event chips (Impact, Peak,
     Settled).
   - The live kinetic readout, playback speed ¼× ½× 1× 2×, and loop.
+- **Diagnostics** (toolbar pulse button or F3). A movable, resizable panel modelled on Project Zero's debug readout.
+  Its position, size and choices are saved.
+  - **Metrics:**
+    - Frame rate and frame interval, measured from animation frames.
+    - Bake timing: fracture ms split into seeding, cells + seams, needle rejection and the rest, plus the rigid-body
+      bake.
+    - Fracture result: pieces vs ceiling, cells, seam joins, triangles, volume kept, faceting error and worst
+      triangle.
+    - Simulation: kinetic energy, moving count and settle time.
+  - **Controls:** Plot + stats, plot only or stats only; Pause samples; 15 / 30 / 60 s history; a hover probe on the
+    plot. Esc closes it.
 
 Keys:
 
@@ -107,6 +126,7 @@ Keys:
 | `[` `]` | Previous / next fragment |
 | H | Hide the selected fragment |
 | Alt+F | Frame the selection |
+| F3 | Diagnostics |
 | Esc | Back out one step |
 
 Edits are saved in `localStorage`.

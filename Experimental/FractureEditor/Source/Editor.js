@@ -1,12 +1,13 @@
 // Fracture Editor: a standalone page for fracturing analytical primitives.
 // Edit sets the shape, impact and recipe (re-fractured live), Sim bakes rigid-body motion you can scrub, and Play
-// runs it in real time with a short pre-roll and a shock ring. The bottom playback bar drives both.
+// runs it in real time with a short pre-roll and a shock ring. The playback strip in the viewport footer drives both.
 import { Viewport, LineBuilder } from './Renderer.js';
 import { invert } from './MathUtils.js';
 import { PRIMITIVES, primitiveById, defaultDims, normalizeDims, describe, DETAIL } from './Primitives.js';
 import { buildSource, fracture, defaultImpact, MATERIALS, MATERIAL_ORDER, normalizeRecipe, histogram, DEFAULT_RECIPE } from './Fracture.js';
 import { simulate, sample, totalAt, poseMatrix, impactShares, normalizeSimulation, SIMULATION_DEFAULTS } from './FractureSimulation.js';
 import { hydrateGlyphs, glyph } from './Glyphs.js';
+import { Diagnostics } from './Diagnostics.js';
 
 const $ = (id) => document.getElementById(id);
 const PREROLL = 0.6;
@@ -43,7 +44,7 @@ function save() {
 }
 
 // Derived
-let source = null, result = null, shares = null, cache = null, meshes = [], kineticPeak = 1;
+let source = null, result = null, shares = null, cache = null, meshes = [], kineticPeak = 1, diagnostics = null;
 const pieceKinetic = []; // per piece: peak kinetic over the bake
 
 // ---------------------------------------------------------------------------------------------------- formatting
@@ -77,13 +78,13 @@ let seq = new Uint32Array(0);
 function buildMeshes() {
   viewport.setObjects([]); // never let the renderer draw a mesh that is about to be deleted
   for (const m of meshes) viewport.deleteMesh(m);
-  const mat = MATERIALS[result.recipe.Material];
+  const inside = MATERIALS[doc.recipe.Material], outside = MATERIALS[doc.recipe.Surface] || inside;
   meshes = result.pieces.map((pc) => {
     const n = pc.positions.length / 3, tris = n / 3;
     if (seq.length < n) { seq = new Uint32Array(n * 2); for (let i = 0; i < seq.length; i++) seq[i] = i; }
     const colors = new Float32Array(tris * 4), debug = new Float32Array(tris * 3);
     for (let t = 0; t < tris; t++) {
-      const c = linear(pc.cut[t] ? mat.interior : mat.color).map((v) => v * 0.82), g = pc.cut[t] ? 0.62 : 1;
+      const c = linear(pc.cut[t] ? inside.interior : outside.color).map((v) => v * 0.82), g = pc.cut[t] ? 0.62 : 1;
       colors.set([c[0], c[1], c[2], 0], t * 4); debug.set([g, g, g], t * 3);
     }
     return viewport.createMesh({ positions: pc.positions, indices: seq.subarray(0, n), cornerNormals: pc.normals, colors, debug });
@@ -112,11 +113,13 @@ function refracture() {
   sceneDirty = overlayDirty = treeDirty = true;
   updateScene(); sceneDirty = true;
   refreshLive();
+  diagnostics?.bakeFracture(result);
   save();
 }
 function ensureCache() {
   if (cache) return cache;
   cache = simulate(result, doc.simulation, { overrides: doc.overrides });
+  diagnostics?.bakeSimulation(cache);
   kineticPeak = 1e-6; pieceKinetic.length = 0;
   for (let i = 0; i < cache.n; i++) {
     let m = 0; for (let f = 0; f < cache.steps; f++) m = Math.max(m, cache.poses[(f * cache.n + i) * 8 + 7]);
@@ -375,7 +378,7 @@ function renderTree() {
   const m = MATERIALS[doc.recipe.Material];
   const recipeRows = [
     ['impact', 'lightning', 'Impact', `${fmtJ(doc.recipe.Energy)} · ${[doc.recipe.X, doc.recipe.Y, doc.recipe.Z].map((v) => v.toFixed(2)).join(', ')}`],
-    ['material', 'material', 'Material', `${m.label} · Gc ${m.Gc} J/m² · ${m.density} kg/m³`],
+    ['material', 'material', 'Material', `Outside ${MATERIALS[doc.recipe.Surface].label.toLowerCase()} · inside ${m.label.toLowerCase()}`],
     ['pattern', 'dice', 'Pattern', `Seed ${doc.recipe.Seed} · ceiling ${doc.recipe.Ceiling} · min ${(doc.recipe.MinimumSize * 1000).toFixed(0)} mm`],
     ['simulation', 'editor-physics', 'Simulation', `${doc.simulation.Duration.toFixed(1)} s · transfer ${(doc.simulation.Transfer * 100).toFixed(0)} % · release ${doc.simulation.Release} J`],
   ].filter((r) => !q || r[2].toLowerCase().includes(q)).map(([sec, icon, title, sub]) => `<button class="tr" data-section="${sec}"><img src="Icons/${icon}.svg" alt=""><span class="tr-text"><b>${title}</b><small>${sub}</small></span></button>`).join('');
@@ -475,14 +478,32 @@ function renderInspector() {
   paintChrome();
 }
 
+const heroHtml = () => `<div class="hero" id="InsHero"><canvas></canvas><div class="hero-head"><span class="hero-tag" id="InsHeroTag"></span><div class="hero-key" id="InsHeroKey"></div></div><div class="hero-text"><b id="InsHeroBig"></b><small id="InsHeroSmall"></small></div><div class="hero-tip" id="InsHeroTip" hidden></div></div>`;
+
+// Material: two pickers. Outside colours the original surface only; Interior is the bulk, so it sets density,
+// crack resistance and the fracture pattern, and colours every cut face.
+const MATERIAL_MODE = { 'bulk-brittle': 'Brittle bulk', fibrous: 'Fibrous grain', 'plate-brittle': 'Brittle plate', ductile: 'Tough polymer' };
+const lift = (c, k, add = 0) => c.map((v) => Math.min(1, v * k + add));
+const ballStyle = (c) => `background:radial-gradient(circle at 34% 30%, ${hex(lift(c, 1.3, 0.12))} 0%, ${hex(c)} 42%, ${hex(lift(c, 0.32))} 100%)`;
+const cutStyle = (c) => `background:linear-gradient(140deg, ${hex(lift(c, 1.18, 0.05))} 0%, ${hex(c)} 48%, ${hex(lift(c, 0.55))} 100%)`;
+function materialPick(slot) {
+  const outside = slot === 'Surface', cur = MATERIALS[doc.recipe[slot]], tone = (mm) => (outside ? mm.color : mm.interior);
+  const ball = (mm) => `<span class="mat-ball${outside ? '' : ' cut'}" style="${outside ? ballStyle(tone(mm)) : cutStyle(tone(mm))}"></span>`;
+  const sub = (mm) => (outside ? `${MATERIAL_MODE[mm.mode]} · surface finish` : `Gc ${mm.Gc} J/m² · ${mm.density.toLocaleString('en-US')} kg/m³`);
+  const lead = outside ? `${MATERIAL_MODE[cur.mode]} · colours the uncut shell` : `Gc ${cur.Gc} J/m² · ${cur.density.toLocaleString('en-US')} kg/m³ · sets the cracks`;
+  return `<div class="mat-pick" data-pick="${slot}">
+    <button class="mat-face">${ball(cur)}<span class="mat-text"><small>${outside ? 'Outside · original surface' : 'Interior · cut faces and bulk'}</small><b>${cur.label}</b><em>${lead}</em></span><i>${glyph('chevron')}</i></button>
+    <div class="mat-list">${MATERIAL_ORDER.map((k) => { const mm = MATERIALS[k]; return `<button class="mat-opt${doc.recipe[slot] === k ? ' on' : ''}" data-pick-to="${k}">${ball(mm)}<span><b>${mm.label}</b><small>${sub(mm)}</small></span><i>${glyph('check')}</i></button>`; }).join('')}</div>
+  </div>`;
+}
+
 function primitiveInspector() {
   const spec = primitiveById(doc.primitive), m = MATERIALS[doc.recipe.Material], d = source.dims;
   const shape = `<div class="panel">${spec.dims.map(([key, label, unit]) => field('dim:' + key, label, unit)).join('')}
       <div class="field"><span>Facet detail</span></div>
       <div class="seg" style="margin-top:7px" data-seg="detail">${Object.entries(DETAIL).map(([k, v]) => `<button data-value="${k}" class="${doc.detail === k ? 'on' : ''}">${v.label}</button>`).join('')}</div></div>
     <div class="panel"><dl class="facts" id="InsShapeFacts"></dl></div>`;
-  const materials = `<div class="tiles">${MATERIAL_ORDER.map((k) => { const mm = MATERIALS[k]; return `<button class="qt${doc.recipe.Material === k ? ' on' : ''}" data-material="${k}" style="--qt-ink:${hex(mm.color.map((c) => Math.min(1, c * 1.15)))}"><span class="qt-seat"><span class="dot" style="background:${hex(mm.color)}"></span></span><b>${mm.label}</b><small>Gc ${mm.Gc} J/m²</small></button>`; }).join('')}</div>
-    <p class="note">${m.note}</p>`;
+  const materials = materialPick('Surface') + materialPick('Material');
   const impact = `<div class="panel">${field('Energy', 'Impact energy', 'J')}
       <div class="xyz" id="ImpactXYZ">${['X', 'Y', 'Z'].map((k) => `<label><em>${k}</em><input data-axis="${k}" value="${doc.recipe[k].toFixed(3)}"></label>`).join('')}</div>
       <div class="pair"><button class="wide-btn${doc.aiming ? ' on' : ''}" data-act="aim"><img src="Icons/lightning.svg" alt="">Place on surface</button><button class="wide-btn" data-act="impact-reset">${glyph('reset')}Default</button></div></div>`;
@@ -494,10 +515,10 @@ function primitiveInspector() {
     <div class="panel">${field('Gravity', 'Gravity', 'm/s²')}${field('Restitution', 'Restitution', '')}${field('Friction', 'Friction', 'μ')}</div>
     <div class="tiles" style="margin-top:8px">${toggleTile('Collisions', 'Collisions', doc.simulation.Collisions, 'dots', doc.simulation.Collisions ? 'Spheres' : 'Off')}<button class="qt" data-act="sim-reset"><span class="qt-seat" style="--qt-ink:#bbb">${glyph('reset')}</span><b>Defaults</b><small>Reset motion</small></button></div>`;
   return `<div class="ins-heading"><div class="crumbs">Inspector / Fracture / <b>${spec.label}</b></div><button class="notes-btn" data-act="reroll">${glyph('dice')}Reroll seed</button><h1>${spec.label}</h1><p>Analytical primitive · ${m.label} · ${describe(spec.id, d)}</p></div>
-    <div class="hero" id="InsHero"><canvas></canvas><span class="hero-tag" id="InsHeroTag"></span><div class="hero-text"><b id="InsHeroBig"></b><small id="InsHeroSmall"></small></div></div>
+    ${heroHtml()}
     <div class="stats" id="InsStats"></div>
     ${section('shape', 'Shape', spec.formula, shape)}
-    ${section('material', 'Material', `${m.density} kg/m³`, materials)}
+    ${section('material', 'Material', 'Outside and interior', materials)}
     ${section('impact', 'Impact', 'Energy and point', impact)}
     ${section('pattern', 'Pattern', 'Voronoi seeds', pattern)}
     ${section('quality', 'Quality', 'Cells and shading', quality)}
@@ -509,7 +530,7 @@ function primitiveInspector() {
 function fragmentInspector(i) {
   const pc = result.pieces[i], spec = primitiveById(doc.primitive), m = MATERIALS[doc.recipe.Material], ov = doc.overrides.get(i) || 'auto', hidden = doc.hidden.has(i);
   return `<div class="ins-heading"><div class="crumbs">Inspector / Fragments / <b>Fragment ${pad2(i)}</b></div><button class="notes-btn" data-act="back">${glyph('chevron-right').replace('<svg', '<svg style="transform:rotate(180deg)"')}Back to ${spec.label}</button><h1>Fragment ${pad2(i)}</h1><p>Piece of ${spec.label} · ${m.label}${pc.chunks > 1 ? ` · ${pc.chunks} chunks rejoined at seams` : ''}</p></div>
-    <div class="hero" id="InsHero"><canvas></canvas><span class="hero-tag" id="InsHeroTag"></span><div class="hero-text"><b id="InsHeroBig"></b><small id="InsHeroSmall"></small></div></div>
+    ${heroHtml()}
     <div class="stats" id="InsStats"></div>
     ${section('release', 'Release', 'Per-fragment override', `<div class="seg" data-seg="override">${['auto', 'held', 'released'].map((k) => `<button data-value="${k}" class="${ov === k ? 'on' : ''}">${{ auto: 'Auto', held: 'Hold', released: 'Release' }[k]}</button>`).join('')}</div>
       <p class="note">Auto releases a fragment when its share of the impact energy exceeds the ${doc.simulation.Release} J release threshold. Held fragments stay in the remaining body.</p>`)}
@@ -533,7 +554,7 @@ function refreshLive() {
       big.innerHTML = `${m.pieces} <span>fragments</span>`;
       const kin = Math.max(0, r.Energy - Math.min(r.Energy, result.plan.energy)) * doc.simulation.Transfer;
       small.innerHTML = `<span>${fmtJ(r.Energy)} impact · ${fmtJ(kin)} kinetic</span><span>${shares.releasedCount} released</span>`;
-      tag.textContent = doc.mode === 'edit' ? 'Energy share per fragment' : 'Kinetic energy · baked';
+      tag.textContent = doc.mode === 'edit' ? 'Energy share' : 'Kinetic energy';
     }
     const facts = $('InsShapeFacts');
     if (facts) facts.innerHTML = `<dt>Exact volume</dt><dd>${(source.exactVolume * 1000).toFixed(1)} L</dd><dt>Faceted volume</dt><dd>${(source.volume * 1000).toFixed(1)} L</dd><dt>Faceting error</dt><dd class="${Math.abs(source.faceting) < 0.01 ? 'good' : ''}">${(source.faceting * 100).toFixed(2)} %</dd><dt>Surface area</dt><dd>${source.exactArea.toFixed(3)} m²</dd><dt>Convex parts</dt><dd>${source.segments}${source.segmented ? ' wedge segments' : ''}</dd><dt>Surface facets</dt><dd>${source.faces.toLocaleString()}</dd>`;
@@ -551,7 +572,7 @@ function refreshLive() {
     if (big) {
       big.innerHTML = `${fmtKg(pc.mass)} <span>· ${shares.released[sel] ? 'released' : 'held'}</span>`;
       $('InsHeroSmall').innerHTML = `<span>Rank ${sel + 1} of ${result.pieces.length} by distance</span><span>${fmtJ(shares.energy[sel])}</span>`;
-      $('InsHeroTag').textContent = doc.mode === 'edit' ? 'Energy share · this fragment highlighted' : 'Kinetic energy · this fragment';
+      $('InsHeroTag').textContent = doc.mode === 'edit' ? 'Energy share' : 'Kinetic · fragment';
     }
     const geo = $('InsGeoFacts');
     if (geo) geo.innerHTML = `<dt>Faces</dt><dd>${pc.faces} (${pc.cutFaces} cut)</dd><dt>Triangles</dt><dd>${pc.tris}</dd><dt>Thickness</dt><dd class="${pc.span < r.MinimumSize ? 'bad' : ''}">${(pc.span * 1000).toFixed(0)} mm</dd><dt>Bounds</dt><dd>${pc.bounds.size.map((v) => (v * 100).toFixed(0)).join(' × ')} cm</dd><dt>Crack surface</dt><dd>${(pc.cutArea * 1e4).toFixed(0)} cm²</dd><dt>Worst triangle</dt><dd>${pc.minQ.toFixed(2)}</dd><dt>Convex chunks</dt><dd>${pc.chunks}</dd>`;
@@ -568,41 +589,140 @@ function refreshLive() {
   paintHero();
 }
 
-// Hero chart: energy share bars in Edit (General UI bar treatment, dashed release line), kinetic curve otherwise.
+// Hero chart. Edit: every fragment's share of the impact energy, ranked highest first, on the energy ramp, with the
+// release threshold dividing released (filled) from held (ring) fragments. Sim / Play: kinetic energy over the bake
+// with the playhead, peak and settle marks; a selected fragment is drawn over the faint total.
+let heroHover = null;
+function niceTop(v) { const mag = Math.pow(10, Math.floor(Math.log10(Math.max(v, 1e-9)))); return [1, 2, 2.5, 5, 10].find((n) => n * mag >= v * 0.999) * mag; }
+function heroGeometry(w, h) { return { x0: 16, x1: w - 46, y0: 100, y1: h - 26 }; }
 function paintHero() {
   const hero = $('InsHero'); if (!hero || !result) return;
   const cv = hero.querySelector('canvas'), w = hero.clientWidth, h = hero.clientHeight, dpr = Math.min(2, devicePixelRatio || 1);
   if (!w) return;
-  if (cv.width !== w * dpr) { cv.width = w * dpr; cv.height = h * dpr; }
+  if (cv.width !== w * dpr || cv.height !== h * dpr) { cv.width = w * dpr; cv.height = h * dpr; }
   const g = cv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, w, h);
-  const x0 = 14, x1 = w - 14, y0 = 30, y1 = h - 52, sel = doc.selected;
+  const { x0, x1, y0, y1 } = heroGeometry(w, h), sel = doc.selected, tip = $('InsHeroTip'), key = $('InsHeroKey');
+  g.font = '300 8.5px DM Sans'; g.textBaseline = 'alphabetic';
+  const gridLine = (y, label, strong = false) => {
+    g.strokeStyle = strong ? '#ffffff24' : '#ffffff10'; g.lineWidth = 1; g.setLineDash(strong ? [] : [2, 4]);
+    g.beginPath(); g.moveTo(x0, Math.round(y) + 0.5); g.lineTo(x1, Math.round(y) + 0.5); g.stroke(); g.setLineDash([]);
+    if (label) { g.fillStyle = '#7d848d'; g.fillText(label, x1 + 8, y + 3); }
+  };
+  const axisText = (x, text, align) => { g.fillStyle = '#6f757d'; g.textAlign = align; g.fillText(text, x, h - 10); g.textAlign = 'left'; };
+  let tipAt = null;
+
   if (doc.mode === 'edit' || !cache) {
-    const order = result.pieces.map((p) => p.id).sort((a, b) => shares.energy[b] - shares.energy[a]), n = order.length, peak = shares.peak || 1;
-    const bw = (x1 - x0) / n, logLo = Math.max(shares.low || peak * 1e-3, peak * 1e-4);
-    const yOf = (e) => { const t = doc.logScale ? (e <= logLo ? 0 : Math.log(e / logLo) / Math.log(peak / logLo)) : e / peak; return y1 - Math.max(0.02, t) * (y1 - y0); };
+    const order = result.pieces.map((p) => p.id).sort((a, b) => shares.energy[b] - shares.energy[a]), n = order.length;
+    const peak = shares.peak || 1, lo = Math.max(shares.low || peak * 1e-3, peak * 1e-4);
+    const norm = (e) => (doc.logScale ? (e <= lo ? 0 : Math.log(e / lo) / Math.log(peak / lo || 10)) : e / peak);
+    const top = doc.logScale ? peak : niceTop(peak);
+    const Y = (e) => y1 - Math.max(0, Math.min(1, doc.logScale ? norm(e) : e / top)) * (y1 - y0);
+    const X = (k) => (n > 1 ? x0 + 6 + (k / (n - 1)) * (x1 - x0 - 12) : (x0 + x1) / 2);
+    // grid: decades on log, quarters on linear
+    if (doc.logScale) {
+      for (let d = Math.ceil(Math.log10(lo)); d <= Math.floor(Math.log10(peak)); d++) { const e = Math.pow(10, d); gridLine(Y(e), fmtJ(e).replace('.00', '').replace('.0 ', ' ')); }
+      gridLine(y1, '', true);
+    } else for (let k = 0; k <= 4; k++) gridLine(Y((top * k) / 4), k ? fmtJ((top * k) / 4) : '', k === 0);
+    // released zone above the threshold
+    const rel = doc.simulation.Release, relY = rel > 0 && rel < peak ? Y(rel) : null;
+    if (relY !== null) {
+      const band = g.createLinearGradient(0, y0, 0, relY); band.addColorStop(0, '#ff8a3d14'); band.addColorStop(1, '#ff8a3d03');
+      g.fillStyle = band; g.fillRect(x0, y0 - 4, x1 - x0, relY - y0 + 4);
+    }
+    // area under the ranked profile, coloured along the ramp
+    if (n > 1) {
+      const fill = g.createLinearGradient(x0, 0, x1, 0);
+      order.forEach((id, k) => fill.addColorStop(k / (n - 1), hex(ramp(energyNorm(id, 0))) + '30'));
+      g.beginPath(); g.moveTo(X(0), y1); order.forEach((id, k) => g.lineTo(X(k), Y(shares.energy[id]))); g.lineTo(X(n - 1), y1); g.closePath(); g.fillStyle = fill; g.fill();
+      g.beginPath(); order.forEach((id, k) => (k ? g.lineTo(X(k), Y(shares.energy[id])) : g.moveTo(X(k), Y(shares.energy[id])))); g.strokeStyle = '#ffffff70'; g.lineWidth = 1.1; g.lineJoin = 'round'; g.stroke();
+    }
+    if (relY !== null) {
+      g.setLineDash([5, 4]); g.strokeStyle = '#ffffffb0'; g.lineWidth = 1; g.beginPath(); g.moveTo(x0, relY + 0.5); g.lineTo(x1, relY + 0.5); g.stroke(); g.setLineDash([]);
+      const label = `release ${fmtJ(rel)}`, tw = g.measureText(label).width; g.fillStyle = '#111214e6'; roundRect(g, x0 + 2, relY - 8, tw + 14, 16, 8); g.fill(); g.strokeStyle = '#ffffff22'; g.stroke();
+      g.fillStyle = '#f2f2f0'; g.fillText(label, x0 + 9, relY + 3);
+    }
+    // one dot per fragment: filled when released, ring when held
+    const r = n > 70 ? 1.8 : n > 40 ? 2.4 : 3;
+    let hoverK = null;
+    if (heroHover && heroHover.y > y0 - 12) { hoverK = Math.round(((heroHover.x - x0 - 6) / (x1 - x0 - 12)) * (n - 1)); hoverK = Math.max(0, Math.min(n - 1, hoverK)); }
     order.forEach((id, k) => {
-      const e = shares.energy[id], y = yOf(e), c = ramp(energyNorm(id, 0));
-      g.fillStyle = sel === id ? '#f2a93b' : hex(c); g.globalAlpha = sel === null || sel === id ? 0.95 : 0.35;
-      const bx = x0 + k * bw + Math.min(1, bw * 0.15);
-      roundRect(g, bx, y, Math.max(1, bw - Math.min(2, bw * 0.3)), y1 - y, Math.min(3, bw / 2)); g.fill();
+      const x = X(k), y = Y(shares.energy[id]), col = hex(ramp(energyNorm(id, 0))), dim = sel !== null && sel !== id;
+      g.globalAlpha = dim ? 0.35 : 1;
+      g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2);
+      if (shares.released[id]) { g.fillStyle = col; g.fill(); } else { g.fillStyle = '#141518'; g.fill(); g.strokeStyle = col; g.lineWidth = 1.2; g.stroke(); }
     });
     g.globalAlpha = 1;
-    const rel = doc.simulation.Release;
-    if (rel > 0 && rel < peak) { const y = yOf(rel); g.setLineDash([4, 4]); g.strokeStyle = '#ffffffaa'; g.lineWidth = 1; g.beginPath(); g.moveTo(x0, y); g.lineTo(x1, y); g.stroke(); g.setLineDash([]); const label = `release ${fmtJ(rel)}`; g.font = '400 8.5px DM Sans'; const tw = g.measureText(label).width; g.fillStyle = '#0d0d0dcc'; roundRect(g, x1 - tw - 14, y - 8, tw + 12, 16, 8); g.fill(); g.fillStyle = '#f2f2f0'; g.fillText(label, x1 - tw - 8, y + 3); }
+    const mark = (k, strong) => {
+      const id = order[k], x = X(k), y = Y(shares.energy[id]);
+      g.strokeStyle = strong ? '#f2f2f0' : '#ffffff55'; g.lineWidth = 1; g.beginPath(); g.moveTo(x + 0.5, y + 6); g.lineTo(x + 0.5, y1); g.stroke();
+      g.beginPath(); g.arc(x, y, r + 3, 0, Math.PI * 2); g.strokeStyle = '#f2f2f0'; g.lineWidth = 1.6; g.stroke();
+      tipAt = { x, y: y - r - 8, text: `Fragment ${pad2(id)} · ${fmtJ(shares.energy[id])} · #${k + 1}` };
+    };
+    if (sel !== null) { const k = order.indexOf(sel); if (k >= 0) mark(k, true); }
+    if (hoverK !== null) mark(hoverK, false);
+    axisText(x0, 'highest share', 'left'); axisText((x0 + x1) / 2, `${n} fragments ranked`, 'center'); axisText(x1, 'lowest', 'right');
+    key.innerHTML = `<span><i style="background:#ff8a3d"></i>Released</span><span><i style="border:1.2px solid #4f8fd9"></i>Held</span><span><i class="dash"></i>Threshold</span>`;
   } else {
-    const steps = cache.steps, series = new Float32Array(steps);
-    for (let f = 0; f < steps; f++) series[f] = sel === null ? cache.totals[f] : cache.poses[(f * cache.n + sel) * 8 + 7];
-    const peak = Math.max(1e-6, ...series), X = (f) => x0 + (f / (steps - 1)) * (x1 - x0), Y = (v) => y1 - (v / peak) * (y1 - y0);
-    if (cache.settled !== null) { g.fillStyle = '#2fa58a22'; g.fillRect(x0, y0 - 6, X(cache.settled * cache.rate) - x0, y1 - y0 + 6); }
-    g.beginPath(); g.moveTo(X(0), y1); for (let f = 0; f < steps; f++) g.lineTo(X(f), Y(series[f])); g.lineTo(X(steps - 1), y1); g.closePath();
-    const grad = g.createLinearGradient(0, y0, 0, y1); grad.addColorStop(0, '#ff8a3d55'); grad.addColorStop(1, '#ff8a3d00'); g.fillStyle = grad; g.fill();
-    g.beginPath(); for (let f = 0; f < steps; f++) f ? g.lineTo(X(f), Y(series[f])) : g.moveTo(X(f), Y(series[f])); g.strokeStyle = '#f4f4f2'; g.lineWidth = 1.4; g.stroke();
-    g.setLineDash([4, 4]); g.strokeStyle = '#ffffff55'; g.beginPath(); g.moveTo(x0, Y(peak * 0.5)); g.lineTo(x1, Y(peak * 0.5)); g.stroke(); g.setLineDash([]);
-    const f = Math.max(0, Math.min(steps - 1, sceneTime() * cache.rate)), v = series[Math.round(f)];
-    g.beginPath(); g.arc(X(f), Y(v), 4.5, 0, Math.PI * 2); g.fillStyle = '#fff'; g.fill(); g.lineWidth = 3; g.strokeStyle = '#0d0d0d'; g.stroke();
-    g.fillStyle = '#ffffffcc'; g.font = '300 9px DM Sans'; const pl = `peak ${fmtJ(peak)}`; g.fillText(pl, x1 - g.measureText(pl).width, 20);
+    const steps = cache.steps, totals = cache.totals, single = sel !== null;
+    const series = single ? Array.from({ length: steps }, (_, f) => cache.poses[(f * cache.n + sel) * 8 + 7]) : totals;
+    const peak = Math.max(1e-6, ...series), top = niceTop(peak * 1.08), dur = cache.duration;
+    const X = (t) => x0 + (t / dur) * (x1 - x0), Y = (v) => y1 - (v / top) * (y1 - y0);
+    for (let k = 0; k <= 4; k++) gridLine(Y((top * k) / 4), k ? fmtJ((top * k) / 4) : '', k === 0);
+    // settled stretch
+    if (cache.settled !== null) {
+      const sx = X(cache.settled); g.fillStyle = '#2fa58a12'; g.fillRect(sx, y0 - 4, x1 - sx, y1 - y0 + 4);
+      g.strokeStyle = '#5bdb8766'; g.setLineDash([3, 3]); g.beginPath(); g.moveTo(sx + 0.5, y0 - 4); g.lineTo(sx + 0.5, y1); g.stroke(); g.setLineDash([]);
+      g.fillStyle = '#5bdb87'; g.fillText(`settled ${cache.settled.toFixed(2)} s`, Math.min(sx + 6, x1 - 70), y0 + 6);
+    }
+    // moving count as quiet columns along the floor
+    const maxAwake = Math.max(1, ...cache.awake), colH = (y1 - y0) * 0.22;
+    g.fillStyle = '#ffffff0d';
+    for (let f = 0; f < steps; f += 3) { const v = cache.awake[f] / maxAwake; if (v > 0) g.fillRect(X(f / cache.rate), y1 - v * colH, Math.max(1, X(3 / cache.rate) - X(0) - 1), v * colH); }
+    // ghost total under a selected fragment
+    if (single) {
+      const tp = Math.max(1e-6, ...totals);
+      g.beginPath(); for (let f = 0; f < steps; f++) { const x = X(f / cache.rate), y = y1 - (totals[f] / tp) * (y1 - y0) * 0.92; f ? g.lineTo(x, y) : g.moveTo(x, y); }
+      g.strokeStyle = '#ffffff26'; g.lineWidth = 1; g.stroke();
+    }
+    const accent = single ? '#f2a93b' : '#ff8a3d';
+    g.beginPath(); g.moveTo(X(0), y1); for (let f = 0; f < steps; f++) g.lineTo(X(f / cache.rate), Y(series[f])); g.lineTo(X(dur), y1); g.closePath();
+    const grad = g.createLinearGradient(0, y0, 0, y1); grad.addColorStop(0, accent + '55'); grad.addColorStop(1, accent + '00'); g.fillStyle = grad; g.fill();
+    g.beginPath(); for (let f = 0; f < steps; f++) { const x = X(f / cache.rate), y = Y(series[f]); f ? g.lineTo(x, y) : g.moveTo(x, y); }
+    g.strokeStyle = single ? accent : '#f4f4f2'; g.lineWidth = 1.5; g.lineJoin = 'round'; g.stroke();
+    // peak
+    let pf = 0; for (let f = 1; f < steps; f++) if (series[f] > series[pf]) pf = f;
+    const px = X(pf / cache.rate), py = Y(series[pf]);
+    g.beginPath(); g.arc(px, py, 2.5, 0, Math.PI * 2); g.fillStyle = '#f04d3d'; g.fill();
+    g.fillStyle = '#e9e9e7'; const pl = `peak ${fmtJ(series[pf])}`; g.fillText(pl, Math.min(px + 7, x1 - g.measureText(pl).width), Math.max(y0 + 2, py - 4));
+    // playhead or hover probe
+    const probeT = heroHover && heroHover.y > y0 - 12 ? Math.max(0, Math.min(dur, ((heroHover.x - x0) / (x1 - x0)) * dur)) : sceneTime();
+    const f = Math.max(0, Math.min(steps - 1, Math.round(probeT * cache.rate))), x = X(f / cache.rate), y = Y(series[f]);
+    g.strokeStyle = heroHover ? '#ffffff55' : '#f2f2f0aa'; g.lineWidth = 1; g.beginPath(); g.moveTo(x + 0.5, y0 - 4); g.lineTo(x + 0.5, y1); g.stroke();
+    g.beginPath(); g.arc(x, y, 4.5, 0, Math.PI * 2); g.fillStyle = '#fff'; g.fill(); g.lineWidth = 2.5; g.strokeStyle = '#141518'; g.stroke();
+    tipAt = { x, y: y - 10, text: `${(f / cache.rate).toFixed(2)} s · ${fmtJ(series[f])} · ${cache.awake[f]} moving` };
+    axisText(x0, '0 s', 'left'); axisText((x0 + x1) / 2, `${(dur / 2).toFixed(1)} s`, 'center'); axisText(x1, `${dur.toFixed(1)} s`, 'right');
+    key.innerHTML = `${single ? `<span><i style="background:${accent}"></i>Fragment ${pad2(sel)}</span><span><i class="dash" style="border-top-style:solid;opacity:.4"></i>Total</span>` : `<span><i style="background:#f4f4f2"></i>Kinetic</span>`}<span><i style="background:#ffffff30;border-radius:2px"></i>Moving</span>`;
   }
+  if (tipAt) {
+    tip.hidden = false; tip.textContent = tipAt.text;
+    const half = Math.min(tip.offsetWidth / 2 + 4, w / 2);
+    tip.style.left = `${Math.max(half, Math.min(w - half, tipAt.x))}px`; tip.style.top = `${Math.max(92, tipAt.y)}px`;
+  } else tip.hidden = true;
 }
+// Hover probes the chart; click selects the ranked fragment (Edit) or scrubs to that moment (Sim / Play).
+function heroPoint(e) { const hero = e.target.closest?.('#InsHero'); if (!hero) return null; const r = hero.getBoundingClientRect(); return { hero, x: e.clientX - r.left, y: e.clientY - r.top, w: r.width, h: r.height }; }
+$('Inspector').addEventListener('pointermove', (e) => { const p = heroPoint(e); const next = p ? { x: p.x, y: p.y } : null; if (next || heroHover) { heroHover = next; paintHero(); } });
+$('Inspector').addEventListener('pointerleave', () => { if (heroHover) { heroHover = null; paintHero(); } });
+$('Inspector').addEventListener('click', (e) => {
+  const p = heroPoint(e); if (!p || !result) return;
+  const { x0, x1, y0 } = heroGeometry(p.w, p.h); if (p.y < y0 - 12) return;
+  const u = Math.max(0, Math.min(1, (p.x - x0) / (x1 - x0)));
+  if (doc.mode === 'edit' || !cache) {
+    const order = result.pieces.map((pc) => pc.id).sort((a, b) => shares.energy[b] - shares.energy[a]);
+    const k = Math.max(0, Math.min(order.length - 1, Math.round(((p.x - x0 - 6) / (x1 - x0 - 12)) * (order.length - 1))));
+    heroHover = null; select(order[k]);
+  } else { doc.playing = false; doc.time = u * cache.duration; sceneDirty = overlayDirty = true; paintTransport(); paintHero(); }
+});
 function roundRect(g, x, y, w, h, r) { g.beginPath(); g.moveTo(x + r, y); g.lineTo(x + w - r, y); g.quadraticCurveTo(x + w, y, x + w, y + r); g.lineTo(x + w, y + h); g.lineTo(x, y + h); g.lineTo(x, y + r); g.quadraticCurveTo(x, y, x + r, y); g.closePath(); }
 
 function openSection(id) {
@@ -640,8 +760,14 @@ ins.addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.tagNa
 ins.addEventListener('click', (e) => {
   const head = e.target.closest('.sec-head');
   if (head) { const s = head.parentElement, id = s.dataset.sec; s.classList.toggle('shut'); s.classList.contains('shut') ? doc.shutSections.add(id) : doc.shutSections.delete(id); save(); if (!s.classList.contains('shut')) refreshLive(); return; }
-  const mat = e.target.closest('[data-material]');
-  if (mat) { doc.recipe.Material = mat.dataset.material; renderInspector(); schedule('fracture'); return; }
+  const face = e.target.closest('.mat-face');
+  if (face) { const pick = face.parentElement, open = pick.classList.contains('open'); document.querySelectorAll('.mat-pick.open').forEach((p) => p.classList.remove('open')); pick.classList.toggle('open', !open); return; }
+  const opt = e.target.closest('[data-pick-to]');
+  if (opt) {
+    const slot = opt.closest('[data-pick]').dataset.pick; doc.recipe[slot] = opt.dataset.pickTo;
+    if (slot === 'Surface') { buildMeshes(); sceneDirty = overlayDirty = treeDirty = true; save(); } else schedule('fracture');
+    renderInspector(); return;
+  }
   const tog = e.target.closest('[data-toggle]');
   if (tog) {
     const k = tog.dataset.toggle;
@@ -724,7 +850,7 @@ function paintTrack() {
   }
   let events = '';
   if (cache) {
-    const steps = cache.steps, peak = Math.max(1e-6, ...cache.totals), top = 26, bottom = h - 14;
+    const steps = cache.steps, peak = Math.max(1e-6, ...cache.totals), top = 8, bottom = h - 13;
     if (cache.settled !== null) { g.fillStyle = '#2fa58a1c'; g.fillRect(0, 0, X(cache.settled), h); }
     // awake count as faint bars
     const maxAwake = Math.max(1, ...cache.awake);
@@ -736,7 +862,7 @@ function paintTrack() {
     const grad = g.createLinearGradient(0, top, 0, bottom); grad.addColorStop(0, '#ff8a3d50'); grad.addColorStop(1, '#ff8a3d00'); g.fillStyle = grad; g.fill();
     g.beginPath(); for (let f = 0; f < steps; f++) { const x = X(f / cache.rate), y = Y(cache.totals[f]); f ? g.lineTo(x, y) : g.moveTo(x, y); } g.strokeStyle = '#ececea'; g.lineWidth = 1.3; g.stroke();
     let pf = 0; for (let f = 0; f < steps; f++) if (cache.totals[f] > cache.totals[pf]) pf = f;
-    const ev = (t, label, color) => `<span class="pb-event" style="left:${Math.max(40, Math.min(w - 50, X(t)))}px"><i style="background:${color}"></i>${label}</span>`;
+    const ev = (t, label, color) => `<span class="pb-event" style="left:${Math.max(44, Math.min(w - 54, X(t)))}px"><i style="background:${color}"></i>${label}</span>`;
     events += ev(0, 'Impact 0.00', '#ff8a3d');
     if (pf > 2) events += ev(pf / cache.rate, `Peak ${fmtJ(cache.totals[pf])}`, '#f04d3d');
     events += cache.settled !== null ? ev(cache.settled, `Settled ${cache.settled.toFixed(2)}`, '#5bdb87') : ev(duration, 'Still moving', '#f0c23d');
@@ -768,6 +894,7 @@ $('FrameBtn').addEventListener('click', frameSelection);
 $('ImpactBtn').addEventListener('click', () => setAiming(!doc.aiming));
 $('WireBtn').addEventListener('click', () => { doc.wire = !doc.wire; sceneDirty = true; paintChrome(); });
 $('SeedsBtn').addEventListener('click', () => { doc.seeds = !doc.seeds; sceneDirty = true; paintChrome(); });
+$('DiagBtn').addEventListener('click', () => diagnostics.toggle());
 $('GridBtn').addEventListener('click', () => { doc.grid = !doc.grid; sceneDirty = true; paintChrome(); save(); });
 $('Explode').addEventListener('input', (e) => { doc.explode = +e.target.value; $('ExplodeValue').textContent = `${Math.round(doc.explode * 100)} %`; e.target.style.setProperty('--fill', `${doc.explode * 100}%`); sceneDirty = overlayDirty = true; });
 $('LegendScale').addEventListener('click', () => { doc.logScale = !doc.logScale; sceneDirty = true; paintChips(); paintHero(); paintSwatches(); save(); });
@@ -778,7 +905,10 @@ for (const drop of document.querySelectorAll('.drop')) {
     if (drop.id === 'ShadingDrop') setShading(b.dataset.value); else setFilter(b.dataset.value);
   });
 }
-document.addEventListener('click', () => document.querySelectorAll('.drop.open').forEach((d) => d.classList.remove('open')));
+document.addEventListener('click', (e) => {
+  document.querySelectorAll('.drop.open').forEach((d) => d.classList.remove('open'));
+  if (!e.target.closest('.mat-pick')) document.querySelectorAll('.mat-pick.open').forEach((p) => p.classList.remove('open'));
+});
 function setShading(s) { doc.shading = s; sceneDirty = true; paintChrome(); paintChips(); save(); }
 
 // Library drawer (bottom notch)
@@ -795,6 +925,7 @@ addEventListener('keydown', (e) => {
   const typing = e.target.tagName === 'INPUT' && e.target.type !== 'range';
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') { e.preventDefault(); $('OlSearch').focus(); $('OlSearch').select(); return; }
   if (typing) { if (e.key === 'Escape') e.target.blur(); return; }
+  if (e.target.tagName === 'SELECT' && e.code !== 'F3' && e.code !== 'Escape') return;
   if (e.shiftKey && ['Digit1', 'Digit2', 'Digit3'].includes(e.code)) { e.preventDefault(); setMode(['edit', 'sim', 'play'][+e.code.slice(-1) - 1]); return; }
   if (e.altKey && e.code === 'KeyF') { e.preventDefault(); frameSelection(); return; }
   switch (e.code) {
@@ -811,8 +942,9 @@ addEventListener('keydown', (e) => {
     case 'KeyV': doc.seeds = !doc.seeds; sceneDirty = true; paintChrome(); break;
     case 'KeyE': setShading(doc.shading === 'energy' ? 'material' : 'energy'); break;
     case 'KeyH': if (doc.selected !== null) { const i = doc.selected; doc.hidden.has(i) ? doc.hidden.delete(i) : doc.hidden.add(i); sceneDirty = overlayDirty = treeDirty = true; renderInspector(); } break;
+    case 'F3': e.preventDefault(); diagnostics.toggle(); break;
     case 'Escape':
-      if (doc.library) setLibrary(false); else if (doc.aiming) setAiming(false); else if (doc.selected !== null) select(null); else if (doc.mode !== 'edit') setMode('edit');
+      if (diagnostics.isOpen) diagnostics.close(); else if (doc.library) setLibrary(false); else if (doc.aiming) setAiming(false); else if (doc.selected !== null) select(null); else if (doc.mode !== 'edit') setMode('edit');
       break;
     case 'BracketRight': case 'BracketLeft': if (result) { const n = result.pieces.length, d = e.code === 'BracketRight' ? 1 : -1; select(doc.selected === null ? 0 : (doc.selected + d + n) % n); } break;
   }
@@ -823,6 +955,7 @@ let last = performance.now(), frames = 0, fpsAt = last, swatchAt = 0, holdUntil 
 function tick(now) {
   requestAnimationFrame(tick);
   const dt = Math.min(0.1, (now - last) / 1000); last = now; frames++;
+  diagnostics.frame(now);
   if (now - fpsAt > 1000) { $('StatusFps').textContent = `${Math.round((frames * 1000) / (now - fpsAt))} fps`; frames = 0; fpsAt = now; }
   if (doc.playing && cache && now > holdUntil) {
     doc.time += dt * doc.speed;
@@ -850,5 +983,7 @@ refracture();
 viewport.camera.yaw = 0.62; viewport.camera.pitch = 0.42;
 frameSelection();
 paintLibrary(); renderInspector(); setFilter('all'); paintTransport(); paintTrack();
+diagnostics = new Diagnostics(() => ({ mode: doc.mode, playing: doc.playing, time: sceneTime(), result, cache, source, recipe: doc.recipe, simulation: doc.simulation, live, shares }));
+diagnostics.bakeFracture(result);
 requestAnimationFrame(tick);
-window.fractureEditor = { doc, get result() { return result; }, get cache() { return cache; }, setMode, setPrimitive, select, setShading };
+window.fractureEditor = { doc, get result() { return result; }, get cache() { return cache; }, diagnostics, setMode, setPrimitive, select, setShading };

@@ -29,12 +29,15 @@ export const MATERIALS = {
 };
 export const MATERIAL_ORDER = ['concrete', 'rock', 'wood', 'glass', 'tempered', 'plastic'];
 
-export const DEFAULT_RECIPE = { Material: 'concrete', Energy: 2500, Seed: 42, Ceiling: 48, MinimumSize: 0.045, X: 0, Y: 0, Z: 0, NeedleRejection: true, ClosedCaps: true, QualityTriangulation: true };
+// Material is the inside (bulk) material: it decides density, crack resistance and the pattern, and colours the cut
+// faces. Surface is the outside material: it colours the original surface only.
+export const DEFAULT_RECIPE = { Material: 'concrete', Surface: 'concrete', Energy: 2500, Seed: 42, Ceiling: 48, MinimumSize: 0.045, X: 0, Y: 0, Z: 0, NeedleRejection: true, ClosedCaps: true, QualityTriangulation: true };
 export const LIMITS = { Energy: [0, 50000], Seed: [1, 999999], Ceiling: [2, 160], MinimumSize: [0.002, 0.3] };
 
 export function normalizeRecipe(input = {}) {
   const r = { ...DEFAULT_RECIPE, ...(input && typeof input === 'object' ? input : {}) };
   if (!MATERIALS[r.Material]) r.Material = 'concrete';
+  if (!MATERIALS[r.Surface]) r.Surface = r.Material;
   for (const [k, [lo, hi]] of Object.entries(LIMITS)) { const v = +r[k]; r[k] = Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : DEFAULT_RECIPE[k]; }
   r.Seed = Math.round(r.Seed); r.Ceiling = Math.round(r.Ceiling);
   for (const k of ['X', 'Y', 'Z']) r[k] = Number.isFinite(+r[k]) ? +r[k] : 0;
@@ -224,6 +227,8 @@ export function fracture(source, input) {
     return [impact[0] + gauss() * sigma * grain, impact[1] + gauss() * sigma, impact[2] + gauss() * sigma];
   };
 
+  const timings = { seeds: 0, cells: 0, needles: 0 };
+  let tick = performance.now();
   let seeds = [];
   if (plan.target > 1) {
     const candidates = [], want = Math.min(4000, plan.target * 14);
@@ -243,7 +248,9 @@ export function fracture(source, input) {
   const single = seeds.length < 2;
   if (single) seeds = [{ p: B.centre.slice(), priority: 1 }];
 
+  timings.seeds = performance.now() - tick; tick = performance.now();
   let pieces = cells(source, seeds, S, recipe, stats);
+  timings.cells = performance.now() - tick; tick = performance.now();
   if (recipe.NeedleRejection && pieces.length > 2) {
     const needles = pieces.filter((p) => p.span < recipe.MinimumSize);
     if (needles.length) {
@@ -252,6 +259,7 @@ export function fracture(source, input) {
     }
   }
 
+  timings.needles = performance.now() - tick;
   let minQ = 1, tris = 0, cutArea = 0, volume = 0;
   pieces.sort((a, b) => metric(a.centre, impact) - metric(b.centre, impact));
   pieces.forEach((pc, i) => {
@@ -271,7 +279,7 @@ export function fracture(source, input) {
   if (stats.refusedSpan) log.push(`span    ${stats.refusedSpan} candidate seed(s) refused, closer than ${(recipe.MinimumSize * 2000).toFixed(0)} mm to an accepted seed`);
   if (stats.refusedNeedle) log.push(`needles ${stats.refusedNeedle} cell(s) thinner than ${(recipe.MinimumSize * 1000).toFixed(0)} mm merged into their neighbours`);
   return {
-    recipe, source, pieces, impact, plan, ms, log, stats, single,
+    recipe, source, pieces, impact, plan, ms, log, stats, single, timings, seedCount: seeds.length,
     metrics: {
       pieces: pieces.length, cells: seeds.length, tris, minQ, occupied: (volume / source.volume) * 100, cutArea,
       smallest: Math.min(...volumes), largest: Math.max(...volumes), mass: volume * m.density, bytes: tris * 3 * 24 + pieces.length * 64,

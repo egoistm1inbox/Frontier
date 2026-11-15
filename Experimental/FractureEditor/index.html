@@ -71,6 +71,7 @@
             </div>
             <label class="explode" id="ExplodeWrap" title="Spread pieces apart (Edit)"><span>Explode</span><input type="range" id="Explode" min="0" max="1" step="0.01" value="0"><b id="ExplodeValue">0 %</b></label>
             <span class="grow"></span>
+            <button class="round-btn" id="DiagBtn" title="Diagnostics · F3" data-glyph="pulse"></button>
             <button class="round-btn" id="WireBtn" title="Wireframe · W" data-glyph="wire"></button>
             <button class="round-btn" id="SeedsBtn" title="Show seeds and impact vectors · V" data-glyph="dots"></button>
             <button class="round-btn" id="GridBtn" title="Ground grid · G" data-glyph="grid"></button>
@@ -87,10 +88,54 @@
             <div class="legend-scale"><span id="LegendLow">0 J</span><span id="LegendHigh">0 J</span></div>
           </div>
           <div class="hint" id="Hint">Drag to orbit · right-drag to pan · wheel to zoom · click a fragment to select</div>
+          <section class="diag" id="Diag" hidden aria-label="Fracture diagnostics">
+            <header class="diag-head">
+              <button class="diag-drag" id="DiagDrag" title="Drag to move"><span class="diag-dot"></span>Diagnostics <small id="DiagLive">LIVE</small></button>
+              <button id="DiagReset" title="Reset layout" data-glyph="arrow-ne"></button>
+              <button id="DiagClose" title="Close · F3" data-glyph="close"></button>
+            </header>
+            <div class="diag-body">
+              <div class="diag-selectors">
+                <select class="diag-select" id="DiagMetric"></select>
+                <select class="diag-select" id="DiagView"></select>
+              </div>
+              <h2 id="DiagTitle"><i></i><span></span></h2>
+              <div class="diag-number" id="DiagNumber"></div>
+              <p class="diag-source" id="DiagSource"></p>
+              <div class="diag-plot" id="DiagPlot"></div>
+              <dl class="diag-stats" id="DiagStats"></dl>
+              <details class="diag-native"><summary id="DiagNativeTitle">Debug view</summary><p id="DiagNative"></p></details>
+            </div>
+            <div class="diag-controls">
+              <button id="DiagPause">Pause samples</button>
+              <select class="diag-select" id="DiagSeconds"></select>
+            </div>
+            <footer class="diag-foot"><span id="DiagSize">340 × 480 · resize ↘</span><button class="diag-resize" id="DiagResize" title="Drag to resize">⌟</button></footer>
+          </section>
           <div class="library" id="Library" hidden>
             <header><div><h2>Primitive library</h2><small>Analytical shapes · exact distance fields · closed-form volume</small></div><button class="round-btn" id="LibraryClose" data-glyph="close"></button></header>
             <div class="library-grid" id="LibraryGrid"></div>
           </div>
+        </div>
+        <div class="playback" id="Playback">
+          <div class="pb-transport">
+            <button class="pb-btn" id="PbStart" title="To start · Home" data-glyph="skip-start"></button>
+            <button class="pb-play" id="PbPlay" title="Play / pause · Space" data-glyph="play"></button>
+            <button class="pb-btn" id="PbStep" title="Step one frame · ." data-glyph="skip-end"></button>
+          </div>
+          <div class="pb-time">
+            <div class="pb-clock"><b id="PbNow">0.00</b><span id="PbTotal">/ 4.00 s</span></div>
+            <small id="PbPhase">EDIT · NOT BAKED</small>
+          </div>
+          <div class="pb-track" id="Track">
+            <canvas id="TrackCanvas"></canvas>
+            <div class="pb-events" id="TrackEvents"></div>
+            <div class="pb-head" id="TrackHead"><i></i></div>
+            <div class="pb-empty" id="TrackEmpty"><span>Timeline bakes when you simulate · </span><kbd>Shift+2</kbd><span> or </span><kbd>Space</kbd><span> to play</span></div>
+          </div>
+          <div class="pb-energy"><small>Kinetic</small><b id="PbEnergy">0 J</b><small id="PbAwake">0 moving</small></div>
+          <div class="seg pb-speed" id="PbSpeed" title="Playback speed"><button data-speed="0.25">¼×</button><button data-speed="0.5">½×</button><button data-speed="1" class="on">1×</button><button data-speed="2">2×</button></div>
+          <button class="round-btn" id="PbLoop" title="Loop · L" data-glyph="loop"></button>
         </div>
         <footer class="vp-foot" id="VpFoot">HTML PREVIEW</footer>
       </div>
@@ -107,31 +152,6 @@
     </section>
   </main>
 
-  <!-- ───────────────────────────── playback bar ───────────────────────────── -->
-  <footer class="playback" id="Playback">
-    <div class="pb-transport">
-      <button class="pb-btn" id="PbStart" title="To start · Home" data-glyph="skip-start"></button>
-      <button class="pb-play" id="PbPlay" title="Play / pause · Space" data-glyph="play"></button>
-      <button class="pb-btn" id="PbStep" title="Step one frame · ." data-glyph="skip-end"></button>
-    </div>
-    <div class="pb-time">
-      <div class="pb-clock"><b id="PbNow">0.00</b><span id="PbTotal">/ 4.00 s</span></div>
-      <small id="PbPhase">EDIT · NOT BAKED</small>
-    </div>
-    <div class="pb-track" id="Track">
-      <canvas id="TrackCanvas"></canvas>
-      <div class="pb-events" id="TrackEvents"></div>
-      <div class="pb-head" id="TrackHead"><i></i></div>
-      <div class="pb-empty" id="TrackEmpty"><span>Timeline bakes when you simulate · press </span><kbd>Shift+2</kbd><span> or </span><kbd>Space</kbd><span> to play</span></div>
-    </div>
-    <div class="pb-energy">
-      <small>Kinetic</small><b id="PbEnergy">0 J</b><small id="PbAwake">0 moving</small>
-    </div>
-    <div class="pb-speed">
-      <small>Playback speed</small>
-      <div class="seg" id="PbSpeed"><button data-speed="0.25">¼×</button><button data-speed="0.5">½×</button><button data-speed="1" class="on">1×</button><button data-speed="2">2×</button></div>
-    </div>
-    <button class="round-btn" id="PbLoop" title="Loop · L" data-glyph="loop"></button>
-  </footer>
+
 </body>
 </html>

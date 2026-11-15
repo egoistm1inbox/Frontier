@@ -29,6 +29,7 @@ export const GLYPHS = {
   reset: s('<path d="M5 12a7 7 0 1 0 2.1-5"/><path d="M5 4v4h4"/>'),
   eye: s('<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="2.8"/>'),
   'eye-off': s('<path d="M4 4l16 16"/><path d="M9.6 6A9.8 9.8 0 0 1 12 5.5c6 0 9.5 6.5 9.5 6.5a17 17 0 0 1-3 3.7M6.4 7.6A17 17 0 0 0 2.5 12s3.5 6.5 9.5 6.5a9 9 0 0 0 3.6-.7"/>'),
+  pulse: s('<path d="M3 12h4l2.5-6 4 12 2.5-6H21"/>'),
   target: s('<circle cx="12" cy="12" r="7.5"/><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>'),
   hold: s('<rect x="6" y="10" width="12" height="9" rx="2"/><path d="M8.5 10V7.5a3.5 3.5 0 0 1 7 0V10"/>'),
   release: s('<rect x="6" y="10" width="12" height="9" rx="2"/><path d="M8.5 10V7.5a3.5 3.5 0 0 1 6.8-1.2"/>'),
