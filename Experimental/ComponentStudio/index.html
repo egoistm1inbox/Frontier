@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Frontier · Component Studio</title>
+<link rel="stylesheet" href="./Studio.css">
+</head>
+<body>
+
+<!-- ============================================================================================ Component Viewer -->
+<div id="Studio" class="workspace">
+  <div class="notch"><span>Frontier</span><i>·</i><b>Component Viewer</b></div>
+
+  <section class="dock left" aria-label="Components">
+    <div class="tab-strip"><div class="document-tab active">Components</div></div>
+    <div class="outliner-heading"><h1>Components</h1><small id="ClassSummary">—</small></div>
+    <div class="stats">
+      <div class="stat-tile"><span class="disc ok" data-icon="check" data-size="13"></span><small>Components</small><strong id="StatComponents">0</strong></div>
+      <div class="stat-tile"><span class="disc blue" data-icon="mesh" data-size="13"></span><small>Triangles</small><strong id="StatTriangles">0</strong></div>
+    </div>
+    <div class="search-row">
+      <label class="search"><span data-icon="search" data-size="14"></span><input id="TreeSearch" type="search" placeholder="Search components" autocomplete="off"></label>
+      <button id="AddComponent" class="add-btn" title="Add a component to the selected parent"><span data-icon="plus" data-size="14"></span>Add</button>
+    </div>
+    <div class="outliner-scroll">
+      <div class="collection"><b>SCENE COMPONENTS</b><span class="count" id="SceneCount">0</span></div>
+      <div id="ComponentTree" role="tree" aria-label="Scene components"></div>
+      <div class="collection"><b>CLASS COMPONENTS</b><span class="count" id="ActorCount">0</span></div>
+      <div id="ActorTree"></div>
+      <div class="collection"><b>INSPECTION CHANNELS</b><span class="count" id="ChannelCount">0</span></div>
+      <div id="ChannelList"></div>
+    </div>
+    <div class="dock-footer"><span><i>CLASS</i><b id="FootClass">—</b></span><span><i>MESHES</i><b id="FootMeshes">—</b></span><span class="live" id="SaveState">SAVED</span></div>
+  </section>
+
+  <section class="dock centre" aria-label="Viewport">
+    <div class="tab-strip" id="DocumentTabs"><div class="document-tab active"><span class="tab-dot"></span><span id="DocTab">BP_ControlVehicle</span></div></div>
+    <header class="viewport-heading">
+      <span class="scene-icon" data-icon="blueprint" data-size="20" data-accent="blue"></span>
+      <div class="scene-title"><b id="ViewerTitle">—</b><small id="ViewerNote">—</small></div>
+      <span id="ViewerState" class="state-tag live">LIVE</span>
+      <div class="spacer"></div>
+      <div id="ViewModes" class="segmented" role="radiogroup" aria-label="View mode">
+        <button data-mode="lit" class="active">Lit</button><button data-mode="checker">Checker UV</button><button data-mode="clusters">Clusters</button><button data-mode="normal">Normals</button>
+      </div>
+    </header>
+    <div class="viewport-tools">
+      <button id="ImportBtn" class="tool import" title="Import a mesh and open Geometry Compile (Ctrl+I)"><span data-icon="import" data-size="15" data-accent="#7a5a10"></span>Import…</button>
+      <span class="divider"></span>
+      <button id="ToolSimulate" class="tool" title="Drive preview: torque curve → wheel spin"><span data-icon="play" data-size="13"></span>Simulate</button>
+      <button id="ToolWire" class="tool" title="Wireframe overlay (Z)"><span data-icon="wire" data-size="15"></span>Wire</button>
+      <button id="ToolGrid" class="tool active" title="Ground grid (G)"><span data-icon="grid" data-size="15"></span>Grid</button>
+      <span class="divider"></span>
+      <div class="segmented" id="CameraPresets"><button data-cam="persp" class="active">Persp</button><button data-cam="side">Side</button><button data-cam="front">Front</button><button data-cam="top">Top</button></div>
+      <div class="spacer"></div>
+      <label class="tool" style="gap:6px;padding-right:4px" title="Cluster LOD level for meshes with a baked hierarchy">LOD<select id="LodMode" style="height:24px;min-height:24px;padding:0 8px"><option value="auto">Auto</option><option value="0">LOD 0</option><option value="1">LOD 1</option><option value="2">LOD 2</option><option value="3">LOD 3</option><option value="4">LOD 4</option><option value="max">Coarsest</option></select></label>
+      <button id="ToolFit" class="tool round" title="Frame selection (F)" aria-label="Frame selection"><span data-icon="frame" data-size="15"></span></button>
+    </div>
+    <div class="canvas-well" id="ViewerWell">
+      <canvas id="ViewerCanvas" tabindex="0" aria-label="Component viewport"></canvas>
+      <div id="ViewerReadout" class="readout"></div>
+      <div id="ViewerLegend" class="legend" hidden></div>
+      <div class="chips"><span>ORBIT <b>LEFT DRAG</b></span><span>PAN <b>RIGHT DRAG</b></span><span>ZOOM <b>SCROLL</b></span><span>SELECT <b>CLICK</b></span></div>
+      <div id="SimHud" class="sim-hud" hidden>
+        <div class="card-head">DRIVE PREVIEW<em id="SimGear">GEAR 1</em></div>
+        <div class="gauges"><div><b id="SimSpeed">0</b><small>KM/H</small></div><div><b id="SimRpm">0</b><small>RPM</small></div><div><b id="SimTorque">0</b><small>N·M</small></div></div>
+        <div class="field"><label>Throttle</label><output id="ThrottleOut">60 %</output><input id="Throttle" type="range" class="cream" min="0" max="1" step="0.01" value="0.6"></div>
+        <div class="field"><label>Brake</label><output id="BrakeOut">0 %</output><input id="Brake" type="range" min="0" max="1" step="0.01" value="0"></div>
+      </div>
+      <div id="ViewerEmpty" class="empty-state" hidden><span data-icon="mesh" data-size="28"></span>Loading ControlVehicle facet streams…</div>
+    </div>
+    <footer class="strip"><span id="StripLeft">WEBGL2 · Y-UP · METRES</span><span class="grow"></span><span id="StripRight">COMPONENT VIEWER</span></footer>
+    <div class="drawer-handles">
+      <button class="drawer-handle" data-drawer="ContentDrawer"><svg class="trap" viewBox="0 0 170 30" preserveAspectRatio="none"><path d="M0 30 L18 0 L152 0 L170 30 Z"/></svg><span><span data-icon="layers" data-size="13"></span>Content</span></button>
+      <button class="drawer-handle" data-drawer="CurveDrawer"><svg class="trap" viewBox="0 0 170 30" preserveAspectRatio="none"><path d="M0 30 L18 0 L152 0 L170 30 Z"/></svg><span><span data-icon="curve" data-size="13"></span>Curves</span></button>
+    </div>
+    <div id="ContentDrawer" class="drawer" aria-label="Content">
+      <header><b>Content</b><small id="LibrarySummary">Compiled meshes · drag onto the viewport or the tree to add a Static Mesh component</small><div class="spacer"></div><button class="tool" data-close-drawer>Close</button></header>
+      <div id="LibraryGrid" class="library-grid"></div>
+    </div>
+    <div id="CurveDrawer" class="drawer" aria-label="Curves">
+      <header><b id="CurveTitle">Engine torque</b><small id="CurveMeta" class="curve-meta">—</small><div class="spacer"></div>
+        <div class="segmented" id="CurveTabs"><button data-curve="Torque" class="active">Torque</button><button data-curve="Boost">Turbo</button></div>
+        <select id="CurveInterp"><option value="linear">Linear</option><option value="smooth">Smooth spline</option><option value="step">Step / hold</option></select>
+        <button class="tool round" id="CurveReset" title="Reset curve" aria-label="Reset curve"><span data-icon="reset" data-size="14"></span></button>
+        <button class="tool" data-close-drawer>Close</button></header>
+      <div class="curve-wrap"><canvas id="CurveCanvas" aria-label="Response curve editor"></canvas></div>
+      <small style="margin-top:8px">Drag control points · double-click to add · right-click to remove. The drive preview reads this curve.</small>
+    </div>
+  </section>
+
+  <section class="dock right" aria-label="Details">
+    <div class="tab-strip"><div class="document-tab active">Details</div></div>
+    <div class="inspector-scroll" id="Details"></div>
+  </section>
+</div>
+
+<!-- ============================================================================================ Import menu -->
+<div id="ImportMenu" class="popover" hidden>
+  <div class="card-head">IMPORT INTO GEOMETRY COMPILE<em>ESC CLOSES</em></div>
+  <label class="drop-zone" tabindex="0">
+    <span data-icon="import" data-size="24" data-accent="amber"></span>
+    <span><b>Choose a file</b> or drop it anywhere on the studio</span>
+    <input id="ImportFile" type="file" accept=".obj,.stl,.facet,.fct" hidden>
+  </label>
+  <h4>FORMATS</h4>
+  <div id="FormatList"></div>
+  <h4>SAMPLE SOURCES<em>PROCEDURAL</em></h4>
+  <div id="SampleList"></div>
+</div>
+<div id="DropVeil" class="drop-veil" hidden><div>Drop to open Geometry Compile</div></div>
+
+<!-- ============================================================================================ Add component dialog -->
+<dialog id="AddDialog">
+  <form method="dialog" id="AddForm">
+    <header><span data-icon="plus" data-size="16"></span><b>Add component</b><button type="button" class="tool round" id="AddClose" aria-label="Close"><span data-icon="close" data-size="14"></span></button></header>
+    <div class="type-grid" id="TypeGrid"></div>
+    <div class="dialog-fields">
+      <label class="meta-field"><span>Name</span><input id="AddName" maxlength="40" autocomplete="off"></label>
+      <label class="meta-field"><span>Parent</span><select id="AddParent"></select></label>
+      <label class="meta-field" id="AddMeshField"><span>Static mesh</span><select id="AddMesh"></select></label>
+      <label class="meta-field"><span>Mount</span><select id="AddMount"><option value="origin">Parent origin</option><option value="roof">Roof</option><option value="front">Front</option><option value="rear">Rear</option><option value="left">Left side</option><option value="right">Right side</option></select></label>
+    </div>
+    <div class="dialog-actions"><button type="button" class="tool" id="AddCancel">Cancel</button><button type="submit" class="primary">Add component</button></div>
+  </form>
+</dialog>
+
+<!-- ============================================================================================ Geometry Compile -->
+<div id="Compile" class="compile-window" hidden>
+  <div class="workspace">
+    <div class="notch"><span>Import</span><i>·</i><b>Geometry Compile</b></div>
+
+    <section class="dock left" aria-label="Compile pipeline">
+      <div class="tab-strip"><div class="document-tab active">Pipeline</div></div>
+      <div class="outliner-heading"><h1>Compile</h1><small id="CompileSummary">—</small></div>
+      <div class="file-card"><span class="ext" id="CompileExt">OBJ</span><div><b id="CompileFile">—</b><small id="CompileFileNote">—</small></div></div>
+      <div class="stats" style="margin-top:10px">
+        <div class="stat-tile"><span class="disc amber" data-icon="geometry" data-size="13"></span><small>Triangles</small><strong id="CompileTris">0</strong></div>
+        <div class="stat-tile"><span class="disc blue" data-icon="mesh" data-size="13"></span><small>Vertices</small><strong id="CompileVerts">0</strong></div>
+      </div>
+      <div class="outliner-scroll">
+        <div class="collection"><b>BAKE STEPS</b><span class="count" id="StepCount">—</span></div>
+        <div id="StepList"></div>
+      </div>
+      <div class="dock-footer"><span><i>COMPILE</i><b id="CompileTime">—</b></span><span><i>MEMORY</i><b id="CompileMemory">—</b></span><span class="live" id="CompileLive">DRAFT</span></div>
+    </section>
+
+    <section class="dock centre" aria-label="Compile preview">
+      <div class="tab-strip"><div class="document-tab active"><span class="tab-dot"></span><span id="CompileTab">Preview</span></div></div>
+      <header class="viewport-heading">
+        <span class="scene-icon" data-icon="compile" data-size="20" data-accent="amber"></span>
+        <div class="scene-title"><b id="CompileTitle">—</b><small id="CompileNote">—</small></div>
+        <span id="CompileState" class="state-tag">DRAFT</span>
+        <div class="spacer"></div>
+        <div id="CompileModes" class="segmented" role="radiogroup" aria-label="Preview mode">
+          <button data-pmode="lit" class="active">Lit</button><button data-pmode="checker">Checker</button><button data-pmode="charts">Charts</button><button data-pmode="clusters">Clusters</button><button data-pmode="sdf">SDF</button><button data-pmode="normal">Normals</button>
+        </div>
+      </header>
+      <div class="viewport-tools">
+        <button id="PreviewWire" class="tool" title="Wireframe overlay"><span data-icon="wire" data-size="15"></span>Wire</button>
+        <button id="PreviewGrid" class="tool active" title="Ground grid"><span data-icon="grid" data-size="15"></span>Grid</button>
+        <button id="PreviewUv" class="tool" title="UV layout inset"><span data-icon="uv" data-size="15"></span>UV inset</button>
+        <button id="PreviewIcon" class="tool" title="Icon camera frame"><span data-icon="icon" data-size="15"></span>Icon frame</button>
+        <div class="spacer"></div>
+        <button id="PreviewFit" class="tool round" title="Frame" aria-label="Frame"><span data-icon="frame" data-size="15"></span></button>
+      </div>
+      <div class="canvas-well" id="CompileWell">
+        <canvas id="CompileCanvas" tabindex="0" aria-label="Compile preview"></canvas>
+        <div id="CompileReadout" class="readout"></div>
+        <div id="CompileLegend" class="legend" hidden></div>
+        <div id="UvInset" class="uv-inset" hidden><span>UV 0–1</span><canvas id="UvInsetCanvas"></canvas></div>
+        <div id="IconFrame" class="icon-frame" hidden><span>ICON CAMERA</span></div>
+        <div id="CompileBusy" class="overlay" hidden><div><b id="BusyLabel">Compiling…</b><div class="progress"><i id="BusyBar"></i></div><small id="BusyNote"></small></div></div>
+      </div>
+      <footer class="strip"><span id="CompileStrip">PREVIEW · NOT YET COMPILED</span><span class="grow"></span><span>GEOMETRY COMPILE</span></footer>
+      <div class="drawer-handles">
+        <button class="drawer-handle" data-drawer="LogDrawer"><svg class="trap" viewBox="0 0 170 30" preserveAspectRatio="none"><path d="M0 30 L18 0 L152 0 L170 30 Z"/></svg><span><span data-icon="compile" data-size="13"></span>Compile log</span></button>
+      </div>
+      <div id="LogDrawer" class="drawer">
+        <header><b>Compile log</b><small>Every step, its settings and timing</small><div class="spacer"></div><button class="tool" data-close-drawer>Close</button></header>
+        <div id="CompileLog" class="log"></div>
+      </div>
+    </section>
+
+    <section class="dock right" aria-label="Step inspector">
+      <div class="tab-strip"><div class="document-tab active">Import Inspector</div></div>
+      <div class="inspector-scroll" id="StepInspector"></div>
+      <div class="compile-actions">
+        <div class="btn-row"><button id="CompileCancel" class="tool">Cancel</button><button id="CompileRun" class="tool">Compile all</button></div>
+        <button id="CompileSave" class="go">Compile &amp; add to BP_ControlVehicle</button>
+        <small id="CompileHint">Enabled steps run in order. Disabled steps are skipped and can be baked later.</small>
+      </div>
+    </section>
+  </div>
+</div>
+
+<div id="Toast" class="toast" role="status"></div>
+<script type="module" src="./Source/App.js"></script>
+</body>
+</html>
