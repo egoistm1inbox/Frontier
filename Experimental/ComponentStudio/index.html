@@ -10,7 +10,7 @@
 
 <!-- ============================================================================================ Component Viewer -->
 <div id="Studio" class="workspace">
-  <div class="notch"><span>Frontier</span><i>·</i><b>Component Viewer</b></div>
+  <div class="notch"><span>Frontier</span><i>·</i><b>Component Viewer</b><i>·</i><button id="NotchFracture" class="fracture-link" title="Open the Fracture Editor (Shift+F)">Fracture Editor</button></div>
 
   <section class="dock left" aria-label="Components">
     <div class="tab-strip"><div class="document-tab active">Components</div></div>
@@ -35,7 +35,7 @@
   </section>
 
   <section class="dock centre" aria-label="Viewport">
-    <div class="tab-strip" id="DocumentTabs"><div class="document-tab active"><span class="tab-dot"></span><span id="DocTab">BP_ControlVehicle</span></div></div>
+    <div class="tab-strip" id="DocumentTabs"><div class="document-tab active"><span class="tab-dot"></span><span id="DocTab">BP_ControlVehicle</span><button id="WorkspaceMenu" class="tab-menu" aria-haspopup="menu" aria-expanded="false" title="Workspace menu" aria-label="Workspace menu"><span data-icon="chevron" data-size="12"></span></button></div></div>
     <header class="viewport-heading">
       <span class="scene-icon" data-icon="blueprint" data-size="20" data-accent="blue"></span>
       <div class="scene-title"><b id="ViewerTitle">—</b><small id="ViewerNote">—</small></div>
@@ -51,6 +51,7 @@
       <button id="ToolSimulate" class="tool" title="Drive preview: torque curve → wheel spin"><span data-icon="play" data-size="13"></span>Simulate</button>
       <button id="ToolWire" class="tool" title="Wireframe overlay (Z)"><span data-icon="wire" data-size="15"></span>Wire</button>
       <button id="ToolGrid" class="tool active" title="Ground grid (G)"><span data-icon="grid" data-size="15"></span>Grid</button>
+      <button id="ToolFracture" class="tool fracture-tool" title="Open the selected mesh component in the Fracture Editor (Shift+F)"><span data-icon="fracture" data-size="15"></span>Fracture</button>
       <span class="divider"></span>
       <div class="segmented" id="CameraPresets"><button data-cam="persp" class="active">Persp</button><button data-cam="side">Side</button><button data-cam="front">Front</button><button data-cam="top">Top</button></div>
       <div class="spacer"></div>
@@ -198,7 +199,7 @@
 <!-- ============================================================================================ Fracture Editor -->
 <div id="Fracture" class="compile-window fracture-window" hidden>
   <div class="workspace">
-    <div class="notch"><span>Component Viewer</span><i>·</i><b>Fracture Editor</b></div>
+    <div class="notch"><button id="FractureBack" title="Back to the Component Viewer (Esc)">Component Viewer</button><i>·</i><b>Fracture Editor</b></div>
 
     <section class="dock left" aria-label="Fracture targets">
       <div class="tab-strip"><div class="document-tab active">Targets</div></div>

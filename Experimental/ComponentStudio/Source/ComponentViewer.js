@@ -7,7 +7,7 @@ import { compose, multiply, identity, transformPoint, invert, boundsOf } from '.
 import { meshPayload, formatCount, ms } from './Compile.js';
 import { linearToHex, hexToLinear } from './MeshData.js';
 import { ControlVehicleSockets, VehicleGeometry, EngineSheet, TurbochargerSheet, TransmissionSheet, ChassisSheet, PacejkaParameters } from '../Vehicle/VehicleSpecification.js';
-import { $, h, heading, panel, cardHead, note, slider, segmented, tile, vecRow, rows, prop, toast, hydrate, labelled, bindDrawers, setFill } from './Kit.js';
+import { $, h, heading, panel, cardHead, note, slider, segmented, tile, vecRow, rows, prop, toast, hydrate, labelled, bindDrawers, setFill, popupMenu } from './Kit.js';
 
 const STORE_KEY = 'frontier.componentStudio.class.v1';
 const GROUND = VehicleGeometry.TyreRadius - ControlVehicleSockets.AxleMount[0][2]; // model origin above the ground
@@ -376,13 +376,15 @@ export function createComponentViewer({ library, openCompile, openImportMenu, op
       const row = h('button', { class: `tree-row${state.selected === c.id ? ' active' : ''}${c.visible === false ? ' hidden-row' : ''}`, role: 'treeitem', style: { '--depth': depth }, draggable: c.type !== 'root' ? 'true' : null, dataset: { id: c.id } },
         h('span', { class: 'caret' + (kids.length ? (closed ? ' closed' : '') : ' leaf') }), glyph,
         h('div', {}, h('b', {}, c.name), h('small', {}, sub)),
-        h('span', { class: 'tag' }, c.type === 'root' ? 'ROOT' : record ? formatCount(record.triangles) : '', eye));
+        h('span', { class: 'tag' }, fracturePill(c), c.type === 'root' ? 'ROOT' : record ? formatCount(record.triangles) : '', eye));
       if (c.type === 'mesh' && !record) row.querySelector('small').style.color = '#ff8a6b';
       row.addEventListener('click', (e) => {
         if (e.target.closest('.caret') && kids.length) { state.collapsed.has(c.id) ? state.collapsed.delete(c.id) : state.collapsed.add(c.id); renderTree(); return; }
         if (e.target.closest('.hide')) { c.visible = c.visible === false; changed(); return; }
+        if (e.target.closest('.state-pill')) { select(c.id); openFracture?.(c.id); return; }
         select(c.id);
       });
+      row.addEventListener('contextmenu', (e) => { e.preventDefault(); select(c.id); componentMenu(c, { x: e.clientX, y: e.clientY }); });
       row.addEventListener('dblclick', () => frameSelection());
       row.addEventListener('dragstart', (e) => { e.dataTransfer.setData('application/x-frontier-component', c.id); e.dataTransfer.effectAllowed = 'move'; });
       row.addEventListener('dragover', (e) => { if ([...e.dataTransfer.types].some((t) => t.startsWith('application/x-frontier'))) { e.preventDefault(); row.style.background = '#262118'; } });
@@ -408,6 +410,7 @@ export function createComponentViewer({ library, openCompile, openImportMenu, op
     $('SceneCount').textContent = scene.length;
     $('ActorCount').textContent = cls.components.length - scene.length;
     $('StatComponents').textContent = cls.components.length;
+    syncFractureTool();
     $('StatTriangles').innerHTML = formatCount(scene.filter((c) => c.type === 'mesh').reduce((a, c) => a + (library.get(c.props.meshId)?.triangles || 0), 0));
     $('ClassSummary').textContent = `${cls.name} · ${scene.length} scene`;
     $('FootClass').textContent = cls.name;
@@ -550,6 +553,81 @@ export function createComponentViewer({ library, openCompile, openImportMenu, op
       out.push(heading('CLUSTER LOD', state.lodMode === 'auto' ? `AUTO · ${current || '—'}` : `FORCED · ${current || '—'}`), panel(wrap, note('Auto picks the finest level with about one triangle per 6 px² of the mesh on screen. Click a level to force it.')));
     }
     return out;
+  }
+
+  // ------------------------------------------------------------------------------------------ Fracture Editor entry points
+  // The editor opens from the Details card, the Fracture tool, the workspace tab menu, the notch, the outliner context
+  // menu, a row's fracture pill and Shift+F. Non-mesh selections fall back to the last fracture target.
+  function fractureState(c) {
+    const f = c?.props?.fracture;
+    if (!f?.Enabled) return null;
+    if (f.Mode === 'baked') return f.Baked ? { cls: 'baked', text: 'BAKED' } : { cls: 'stale', text: 'UNBAKED' };
+    return { cls: 'dyn', text: 'DYN' };
+  }
+  function fracturePill(c) {
+    if (c.type !== 'mesh') return null;
+    const st = fractureState(c);
+    return st ? h('span', { class: 'state-pill ' + st.cls, title: `Fracture ${st.text.toLowerCase()} · click to edit` }, st.text) : null;
+  }
+  const selectedMesh = () => { const c = byId(state.selected); return c && c.type === 'mesh' && !c.actor ? c : null; };
+  function editFracture(c = selectedMesh()) { openFracture?.(c ? c.id : null); }
+  function setFractureEnabled(c, on) {
+    c.props.fracture = { Mode: 'dynamic', ...(c.props.fracture || {}), Enabled: on };
+    changed({ tree: true, details: true });
+    toast(on ? `Fracture enabled on ${c.name} · open the editor to author it` : `Fracture disabled · ${c.name} stays whole`);
+  }
+  function syncFractureTool() {
+    const c = selectedMesh(), b = $('ToolFracture');
+    if (!b) return;
+    b.classList.toggle('dim', !c);
+    b.title = c ? `Edit ${c.name} fracture in the Fracture Editor (Shift+F)` : 'Open the Fracture Editor (Shift+F) · select a mesh component to edit its fracture';
+  }
+  function fractureItems(c) {
+    const meshes = sceneComponents().filter((k) => k.type === 'mesh'), on = meshes.filter((k) => k.props.fracture?.Enabled).length;
+    if (!c) return [
+      { label: 'Selected component fracture…', icon: 'fracture', note: 'Select a mesh component first', disabled: true },
+      { label: 'Open Fracture Editor', icon: 'external', accent: 'teal', note: `${on} of ${meshes.length} meshes fracture`, hint: '⇧F', onClick: () => editFracture(null) },
+    ];
+    const st = fractureState(c);
+    return [
+      { label: `Edit ${c.name} fracture…`, icon: 'fracture', accent: 'teal', note: st ? `${st.text === 'DYN' ? 'Dynamic' : st.text === 'BAKED' ? 'Baked' : 'Baked · not yet baked'} · ${(c.props.fracture.Energy ?? 2500).toLocaleString('en-US')} J` : 'Fracture is off · stays whole', hint: '⇧F', onClick: () => editFracture(c) },
+      { label: st ? 'Disable fracture' : 'Enable fracture', icon: st ? 'close' : 'check', onClick: () => setFractureEnabled(c, !st) },
+    ];
+  }
+  function componentMenu(c, at) {
+    const editable = c.type !== 'root' && !c.actor;
+    popupMenu(at, [
+      { heading: c.name.toUpperCase() + ' · ' + TYPES[c.type].label.toUpperCase() },
+      { label: 'Frame', icon: 'frame', hint: 'F', onClick: () => { select(c.id); frameSelection(); } },
+      c.type === 'mesh' && library.get(c.props.meshId) ? { label: 'Open in Geometry Compile…', icon: 'compile', onClick: () => openCompile(library.get(c.props.meshId)) } : null,
+      'sep',
+      { heading: 'FRACTURE' },
+      ...(c.type === 'mesh' ? fractureItems(c) : [{ label: 'Fracture needs a mesh', icon: 'fracture', note: `${TYPES[c.type].label} components stay whole`, disabled: true }]),
+      'sep',
+      { label: c.visible === false ? 'Show' : 'Hide', icon: c.visible === false ? 'eye' : 'eyeOff', onClick: () => { c.visible = c.visible === false; changed(); } },
+      editable ? { label: 'Duplicate', icon: 'plus', hint: 'Ctrl+D', onClick: () => duplicate(c) } : null,
+      editable ? { label: 'Delete', icon: 'close', hint: 'Del', accent: 'danger', onClick: () => remove(c) } : null,
+    ], { width: 270, label: `${c.name} actions` });
+  }
+  function workspaceMenu() {
+    const btn = $('WorkspaceMenu'), c = selectedMesh();
+    btn.setAttribute('aria-expanded', 'true');
+    const menu = popupMenu(btn.closest('.document-tab').getBoundingClientRect(), [
+      { heading: 'WORKSPACE' },
+      { label: 'Content browser', icon: 'layers', onClick: () => drawers.open('ContentDrawer') },
+      { label: 'Curves', icon: 'curve', onClick: () => drawers.open('CurveDrawer') },
+      { label: 'Import into Geometry Compile…', icon: 'import', hint: 'Ctrl+I', onClick: () => openImportMenu($('ImportBtn')) },
+      'sep',
+      { heading: 'FRACTURE' },
+      ...fractureItems(c),
+      c ? { label: 'Open Fracture Editor', icon: 'external', note: 'Last target · all components and specimens', onClick: () => editFracture(null) } : null,
+      'sep',
+      { heading: 'VIEW' },
+      { label: 'Frame selection', icon: 'frame', hint: 'F', onClick: frameSelection },
+      { label: state.wire ? 'Hide wireframe' : 'Show wireframe', icon: 'wire', hint: 'Z', onClick: () => $('ToolWire').click() },
+      { label: state.grid ? 'Hide grid' : 'Show grid', icon: 'grid', hint: 'G', onClick: () => $('ToolGrid').click() },
+    ], { width: 300, label: 'Workspace menu' });
+    new MutationObserver((_, o) => { if (!menu.isConnected) { btn.setAttribute('aria-expanded', 'false'); o.disconnect(); } }).observe(document.body, { childList: true });
   }
 
   // Project Zero's per-object Fracture card: enable, pick Dynamic / Baked, and open the Fracture Editor for this component.
@@ -893,6 +971,10 @@ export function createComponentViewer({ library, openCompile, openImportMenu, op
     $('ToolWire').addEventListener('click', () => { state.wire = !state.wire; $('ToolWire').classList.toggle('active', state.wire); sync(); });
     $('ToolGrid').addEventListener('click', () => { state.grid = !state.grid; $('ToolGrid').classList.toggle('active', state.grid); sync(); });
     $('ToolFit').addEventListener('click', frameSelection);
+    $('ToolFracture').addEventListener('click', () => editFracture());
+    $('NotchFracture').addEventListener('click', () => editFracture());
+    $('WorkspaceMenu').addEventListener('click', (e) => { e.stopPropagation(); workspaceMenu(); });
+    $('DocumentTabs').addEventListener('contextmenu', (e) => { e.preventDefault(); workspaceMenu(); });
     $('ToolSimulate').addEventListener('click', toggleSim);
     $('CameraPresets').addEventListener('click', (e) => { const b = e.target.closest('[data-cam]'); if (b) cameraPreset(b.dataset.cam); });
     $('LodMode').addEventListener('change', () => { state.lodMode = $('LodMode').value; sync(); renderDetails(); });
@@ -913,7 +995,8 @@ export function createComponentViewer({ library, openCompile, openImportMenu, op
       if (!$('Compile').hidden || !$('Fracture').hidden || document.querySelector('dialog[open]')) return;
       const tag = (e.target.tagName || '').toLowerCase();
       if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
-      if (e.key === 'f' || e.key === 'F') frameSelection();
+      if (e.key === 'F' && e.shiftKey && !e.ctrlKey && !e.metaKey) editFracture();
+      else if (e.key === 'f' || e.key === 'F') frameSelection();
       else if (e.key === 'g' || e.key === 'G') $('ToolGrid').click();
       else if (e.key === 'z' || e.key === 'Z') $('ToolWire').click();
       else if (e.key === ' ') { e.preventDefault(); toggleSim(); }

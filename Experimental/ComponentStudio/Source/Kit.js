@@ -144,3 +144,46 @@ export function bindDrawers(root) {
   root.querySelectorAll('[data-close-drawer]').forEach((b) => b.addEventListener('click', close));
   return { close, open: (id) => { close(); $(id).classList.add('open'); handles.find((x) => x.dataset.drawer === id)?.classList.add('active'); $(id).dispatchEvent(new Event('drawer-open')); } };
 }
+
+// Project Zero popup menu (workspace tab menu, outliner context menu). Items: { heading } | 'sep' |
+// { label, icon, hint, note, disabled, accent, onClick }. `at` is a DOMRect (opens below it) or { x, y }.
+let openMenu = null;
+export function closeMenu() { if (openMenu) { openMenu.remove(); openMenu = null; } }
+export function popupMenu(at, items, { width = 248, label = 'Menu' } = {}) {
+  closeMenu();
+  const menu = h('div', { class: 'popup-menu', role: 'menu', 'aria-label': label, style: { width: width + 'px' } });
+  for (const it of items) {
+    if (!it) continue;
+    if (it === 'sep') { menu.append(h('hr')); continue; }
+    if (it.heading) { menu.append(h('label', {}, it.heading)); continue; }
+    const b = h('button', { role: 'menuitem', class: it.accent ? 'accent-' + it.accent : null, disabled: it.disabled ? true : null, title: it.title || null },
+      it.icon ? h('span', { class: 'glyph', dataset: { icon: it.icon, size: '14' } }) : h('span', { class: 'glyph' }),
+      h('span', { class: 'label' }, it.label, it.note ? h('small', {}, it.note) : null),
+      it.hint ? h('kbd', {}, it.hint) : null);
+    b.addEventListener('click', () => { closeMenu(); it.onClick?.(); });
+    menu.append(b);
+  }
+  document.body.append(menu);
+  hydrateIcons(menu);
+  const r = menu.getBoundingClientRect();
+  const below = 'bottom' in at; // DOMRect anchors open below the element; points open at the cursor
+  let x = below ? at.left : at.x, y = below ? at.bottom + 6 : at.y;
+  if (y + r.height > innerHeight - 8) y = Math.max(8, (below ? at.top : y) - r.height - 6);
+  menu.style.left = Math.max(8, Math.min(innerWidth - r.width - 8, x)) + 'px';
+  menu.style.top = y + 'px';
+  openMenu = menu;
+  menu.querySelector('button:not([disabled])')?.focus({ preventScroll: true });
+  return menu;
+}
+document.addEventListener('pointerdown', (e) => { if (openMenu && !openMenu.contains(e.target)) closeMenu(); }, true);
+document.addEventListener('keydown', (e) => {
+  if (!openMenu) return;
+  if (e.key === 'Escape') { e.stopImmediatePropagation(); closeMenu(); return; }
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    e.preventDefault();
+    const list = [...openMenu.querySelectorAll('button:not([disabled])')], i = list.indexOf(document.activeElement);
+    list[(i + (e.key === 'ArrowDown' ? 1 : -1) + list.length) % list.length]?.focus();
+  }
+}, true);
+addEventListener('resize', closeMenu);
+addEventListener('blur', closeMenu);

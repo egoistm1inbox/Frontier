@@ -90,7 +90,7 @@ async function boot() {
     library,
     openCompile: (record) => record && compile.open({ raw: record.raw, fileName: record.sourceFile, ext: record.sourceFile.split('.').pop(), existing: record }),
     openImportMenu: (anchor) => toggleImportMenu(anchor),
-    openFracture: (id) => fracture.open('component:' + id),
+    openFracture: (id) => fracture.open(id ? 'component:' + id : null),
   });
   fracture = createFractureEditor({ library, viewer });
   bindImport();

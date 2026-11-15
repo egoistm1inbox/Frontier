@@ -102,9 +102,19 @@ The rim's hub material is gone by LOD 3 with the toggle off. With it on, the hub
 
 A UI redesign, not a renderer. The viewport shows the recipe's result with flat colours. Its job is to make the recipe readable.
 
-**How to open it:**
-- **Component Viewer → Details → Fracture:** this is Project Zero's compact per-object card. It has an Enable switch, a Dynamic / Baked choice, a thumbnail and recipe summary, and an **Edit {Component} fracture ↗** button.
-- **URL:** `?fracture=body` opens a class component. `?fracture=specimen:pane` opens a test specimen.
+**How to open it.** As in the Project Zero Editor, the Component Viewer has several ways in:
+
+| Where | What |
+|---|---|
+| **Details → Fracture card** | Project Zero's compact per-object card. It has an Enable switch, a Dynamic / Baked choice, a thumbnail and recipe summary, and an **Edit {Component} fracture ↗** button. |
+| **Workspace tab menu** (the ▾ on the `BP_ControlVehicle` tab, or right-click the tab strip) | Has a FRACTURE section: **Edit {selected} fracture…**, Enable / Disable fracture, **Open Fracture Editor**. Also lists Content, Curves, Import and the View toggles. |
+| **Outliner right-click** | Per-component menu: Frame, Open in Geometry Compile, Edit fracture, Enable / Disable fracture, Hide, Duplicate, Delete. Non-mesh components say "Fracture needs a mesh". |
+| **Outliner pill** | Mesh rows with fracture on show `DYN` / `BAKED` / `UNBAKED`. Click the pill to open that component. |
+| **Toolbar** | The teal **Fracture** tool opens the selected mesh. With no mesh selected it opens the last target. |
+| **Notch** | Click `Frontier · Component Viewer · Fracture Editor` to switch to the Fracture Editor. Click `Component Viewer` there to come back. |
+| **Keys / URL** | `Shift+F` opens the editor. `?fracture=body` opens a class component, `?fracture=specimen:pane` opens a test specimen. |
+
+![Workspace menu with the Fracture section](Screenshots/fracture-entry.png)
 
 ![Component Viewer Fracture card](Screenshots/fracture-card.png)
 ![Fracture Editor, glass pane baked with piece SDF](Screenshots/fracture-baked.png)

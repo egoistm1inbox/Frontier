@@ -62,6 +62,8 @@ export function createFractureEditor({ library, viewer }) {
 
   // -------------------------------------------------------------------------------------------- open / close
   function open(key) {
+    // No key: reopen the last target, else the first class component.
+    if (!key) key = S.target?.key || allTargets()[0]?.key;
     const t = allTargets().find((x) => x.key === key) || allTargets().find((x) => x.key === 'component:' + key || x.key === 'specimen:' + key);
     if (!t) { toast(`No fracture target "${key}"`); return; }
     if ($('Fracture').hidden === false && S.target && S.target.key !== t.key && dirty() && !confirm(`Discard unsaved fracture changes to ${S.target.name}?`)) return;
@@ -267,6 +269,7 @@ export function createFractureEditor({ library, viewer }) {
     $('FractureAssemble').addEventListener('click', () => animateTo(0));
     $('FractureRun').addEventListener('click', runFracture);
     $('FractureClose').addEventListener('click', () => close());
+    $('FractureBack').addEventListener('click', () => close());
     $('FractureRevert').addEventListener('click', () => { if (!dirty()) return; S.recipe = JSON.parse(S.savedJson); log('revert  recipe restored to the saved version', 'warn'); solve(); renderAll(); });
     $('FractureSave').addEventListener('click', save);
     $('FractureExport').addEventListener('click', exportRecipe);
