@@ -97,22 +97,11 @@
 #left-panel .tr-act:hover { background: #ffffff10; color: var(--ol-ink); }
 #left-panel .tr-act.danger:hover { background: #f04d3d22; color: #f3a191; }
 #left-panel .tg-tools .tr-act { opacity: 1; width: 26px; height: 26px; }
-#left-panel .tr:hover .tr-act, #left-panel .tr.on .tr-act, #left-panel .tr.selected .tr-act, #left-panel .tr.hidden .tr-act.eye { opacity: 1; }
-#left-panel .tr.hidden .tr-text, #left-panel .tr.hidden .swatch { opacity: .35; }
 #left-panel .tr-mark { width: 18px; height: 18px; border-radius: 50%; flex: none; display: grid; place-items: center; }
 #left-panel .tr-mark svg { width: 11px; height: 11px; stroke-width: 2.6; }
 #left-panel .tr-mark.ok { background: var(--ol-green); color: #0b2412; }
-#left-panel .tr-mark.warn { background: var(--ol-amber); color: #2a1d06; }
-#left-panel .tr-mark.bad { background: var(--ol-red); color: #2a0905; }
-#left-panel .tr-mark.lock { background: #2a2620; color: var(--ol-amber-ink); }
-#left-panel .tr-mark.lock svg { stroke-width: 1.8; }
 #left-panel .tr-mark.idle { background: #262626; }
 #left-panel .tr-mark.idle::after { content: ''; width: 6px; height: 6px; border-radius: 50%; background: #5a5a58; }
-#left-panel .tile-chip { width: 20px; height: 20px; flex: none; border-radius: 6px; display: grid; place-items: center; font-size: 8.5px; color: #cfcfcd; background: linear-gradient(135deg, #2c2c2c, #1f1f1f); box-shadow: inset 0 0 0 1px #ffffff14; font-variant-numeric: tabular-nums; }
-#left-panel .tr.on .tile-chip { color: var(--ol-amber-ink); box-shadow: inset 0 0 0 1px #bfa27a66; }
-#left-panel .tile-fill { width: 38px; height: 4px; flex: none; border-radius: 2px; background: #262626; overflow: hidden; }
-#left-panel .tile-fill i { display: block; height: 100%; border-radius: 2px; background: #9b9b99; }
-#left-panel .tile-fill.over i { background: var(--ol-red); }
 #left-panel .tree-more { display: flex; align-items: center; justify-content: center; gap: 6px; width: calc(100% - 31px); margin: 4px 0 6px 31px; height: 30px; border-radius: 10px; border: 1px dashed #383838; color: #7c7c7a; font-size: 10px; }
 #left-panel .tree-more svg { width: 12px; height: 12px; }
 #left-panel .tree-more:hover { color: var(--ol-ink); border-color: #4a4a4a; }

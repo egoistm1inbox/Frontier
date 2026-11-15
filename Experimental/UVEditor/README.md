@@ -41,17 +41,17 @@ in `RenderOutliner` / `RenderUdimFilterBar` in `UVEditor.js`. The viewport and t
 
 ![Outliner](Screenshots/outliner.png)
 
-- **Header**: title, active surface and island count, *collapse all groups*, and **+** (new UV layer from the selection).
+- **Header**: title, object and UV layer counts, *collapse all groups*, and **+** (new UV layer from the selection).
 - **Issue tiles**: *Overlaps* and *Stretch Caution* as large glass tiles. The mark turns red or amber when there is a problem, and a click
   selects the offending faces or islands and switches the lens.
 - **Search + UDIM filter**: one search field filters every group; the dropdown shows all tiles or a single one.
-- **Tree**, four collapsible groups:
-  - *Surfaces*: every open document (click to switch); the active one has the check.
+- **Tree**, two collapsible groups:
+  - *Objects*: every open object (click to switch); the active one has the check.
   - *UV layers*: importance layers with a colour swatch (click to recolour) and a space share, plus hover actions to add
     the selection or delete. *Unassigned remainder* takes what is left. Stack / unstack / unassign sit on the group header.
-  - *UDIM tiles*: resolution, island count and a fill bar. Click to make a tile active and frame it; *Add UDIM tile*.
-  - *Islands*: layer colour, part, UDIM, faces and texel density; a health mark (clean, stretch, overlap, pinned) and an
-    eye to hide. Click selects (Shift adds or toggles) and double-click frames. Rows load 60 at a time.
+  - Islands are deliberately **not** listed: an object can have 1000+ of them, many just small faces. Pick them in the
+    viewport; the issue tiles and the status strip summarise them. UDIM tiles are chosen in the filter dropdown and the
+    Inspector's UDIM tab.
 - **Footer**: the UDIM space budget bar above a *Fill · Selected · Remainder* status strip (each one clickable).
 
 ## Running Locally & Validation

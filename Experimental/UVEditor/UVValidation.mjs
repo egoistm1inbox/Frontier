@@ -707,8 +707,11 @@ console.log('11. Testing Multi-Surface Engineering MatCaps, Stack Similar UVs, F
         'Outliner UV layer rows must be colour-coded and select their saved FaceGroupRef (+ in header), with UDIM selection cards + Inspector % SliderRow in Pack');
 
     // Outliner tree (Fracture Editor language): grouped Surfaces / UV layers / UDIM tiles / Islands with marks.
-    for (const Part of ["Group('surfaces'", "Group('layers'", "Group('tiles'", "Group('islands'", 'hiddenIslands.add(Isl.stableKey)', 'PickIsland(Isl', 'RefreshOutlinerSelection', 'ActivateDocument(D)'])
+    for (const Part of ["Group('objects'", "Group('layers'", 'RefreshOutlinerSelection', 'ActivateDocument(D)'])
         assert.ok(OutlinerSlice.includes(Part) || EditorJs.includes(Part), `Outliner tree must include ${Part}`);
+    // Islands are never listed (1000+ per object, many of them single small faces); UDIM tiles live in the filter + Inspector.
+    for (const Banned of ["Group('islands'", "Group('tiles'", 'data-island', 'islandLimit'])
+        assert.ok(!OutlinerSlice.includes(Banned), `Outliner tree must not list ${Banned}`);
     assert.ok(IndexHtml.includes('href="Outliner.css') && ReadText('Outliner.css').includes('#left-panel .tg-head'), 'Outliner.css must style the tree, scoped to #left-panel');
 
     // Benchmark & verify saved FaceGroupRef (zero ExtractIslands re-iteration + cross-object face references!)

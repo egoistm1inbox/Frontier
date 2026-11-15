@@ -789,7 +789,7 @@ function UpdateHeaderAndHud(Doc)
     if (OverlapCard) OverlapCard.classList.toggle('has-error', OverlapMetric > 0 || ErrorCharts > 0);
 
     const NodeSummary = document.getElementById('pz-outliner-node-summary');
-    if (NodeSummary) NodeSummary.textContent = `${Doc.name} · ${Doc.islands.length} islands`;
+    if (NodeSummary) NodeSummary.textContent = `${StudioState.documents.length} objects · ${Doc.importanceGroups.length} UV layers`;
 
     const ActiveTile = Doc.udimTiles.find(T => T.id === Doc.activeUdim) || Doc.udimTiles[0];
     const ResK = ActiveTile ? (ActiveTile.resolution >= 1024 ? `${ActiveTile.resolution / 1024}K` : `${ActiveTile.resolution}px`) : '2K';
@@ -878,7 +878,7 @@ function FrameFaceGroupRefBounds(Doc, FaceRef)
     if (Number.isFinite(MinU)) Canvas2D.FrameBounds(MinU, MinV, MaxU, MaxV, 0.18);
 }
 
-// Outliner selection marks without a rebuild: layer rows (active layer or fully selected) and island rows.
+// Outliner selection marks without a rebuild: layer rows (active layer or fully selected).
 function RefreshOutlinerSelection(Doc)
 {
     const FilterUdimNum = StudioState.udimFilter === 'all' ? null : Number(StudioState.udimFilter);
@@ -888,13 +888,11 @@ function RefreshOutlinerSelection(Doc)
         const Ref = Doc.surface.GetLayerFaceRef(Lid === '__unassigned__' ? null : Lid, Doc.islands, FilterUdimNum);
         Card.classList.toggle('selected', (Doc.activeLayerId === Lid) || IsFaceGroupRefSelected(Doc.surface, Ref));
     }
-    const Sel = Doc.surface.selectedIslands;
-    for (const Row of document.querySelectorAll('#outliner-list [data-island]')) Row.classList.toggle('on', Sel.has(Number(Row.dataset.island)));
 }
 
-// Outliner tree state: collapsed groups and how many island rows are listed.
-const OutlinerView = { shut: new Set(), islandLimit: 60 };
-const OL_GROUPS = ['surfaces', 'layers', 'tiles', 'islands'];
+// Outliner tree state: collapsed groups.
+const OutlinerView = { shut: new Set() };
+const OL_GROUPS = ['objects', 'layers'];
 
 function ActivateDocument(Doc)
 {
@@ -917,7 +915,7 @@ function RenderOutliner(Doc)
     const GrpSig = Doc.importanceGroups.map(G => `${G.id}:${G.name}:${G.targetPercent}:${G.color}:${G.udimTarget || 'auto'}`).join(';');
     const TileSig = Doc.udimTiles.map(T => `${T.id}:${T.resolution}`).join(',');
     const DocSig = StudioState.documents.map(D => `${D.id}:${D.name}`).join(',');
-    const ViewSig = `${[...OutlinerView.shut].join(',')}|${OutlinerView.islandLimit}|${Doc.activeUdim}|${Doc.diagnostics?.overlapCount ?? 0}|${Doc.surface.hiddenIslands.size}|${Doc.surface.pinned.size}`;
+    const ViewSig = `${[...OutlinerView.shut].join(',')}|${Doc.activeUdim}`;
     const OutlinerSig = `${Doc.id}|${DocSig}|${StudioState.udimFilter}|${StudioState.searchQuery.trim()}|${RefCache?.sig || ''}|${GrpSig}|${TileSig}|${ViewSig}`;
     if (_lastOutlinerSig === OutlinerSig) { RefreshOutlinerSelection(Doc); return; }
     _lastOutlinerSig = OutlinerSig;
@@ -950,13 +948,13 @@ function RenderOutliner(Doc)
     };
     const Empty = (Text) => Construct('div', 'tree-empty', Text);
 
-    // 1. Surfaces: every open document; the active one carries the check.
+    // 1. Objects: every open object; the active one carries the check.
     const DocRows = StudioState.documents.filter(D => !Query || D.name.toLowerCase().includes(Query)).map(D =>
     {
         const IsActive = D.id === Doc.id;
         const Row = Construct('div', `tr${IsActive ? ' on' : ''}`, [Icon('editor-mesh'), Text(D.name, `${D.surface.faces.length.toLocaleString()} faces · ${(D.islands?.length ?? 0)} islands · ${D.udimTiles.length} UDIM`), IsActive ? Mark('ok', 'Check') : null]);
         Row.dataset.doc = D.id;
-        Row.title = IsActive ? 'Active surface' : `Switch to ${D.name}`;
+        Row.title = IsActive ? 'Active object' : `Switch to ${D.name}`;
         if (!IsActive) Row.addEventListener('click', () => ActivateDocument(D));
         return Row;
     });
@@ -1066,101 +1064,11 @@ function RenderOutliner(Doc)
         ActBtn('Reset', 'Remove the selected faces from their layer', () => AssignSelectedToGroup(null))
     ];
 
-    // 3. UDIM tiles: resolution, islands and fill; click makes the tile active and frames it.
-    const TileRows = [...Doc.udimTiles].sort((A, B) => A.id - B.id).filter(T => !Query || `udim ${T.id}`.includes(Query)).map(T =>
-    {
-        const Totals = RefCache?.udimTotals?.get(T.id) || { islands: 0, uvArea: 0 };
-        const Fill = Totals.uvArea * 100, IsActive = T.id === Doc.activeUdim;
-        const Row = Construct('div', `tr tile-row${IsActive ? ' on' : ''}`, [
-            Construct('span', 'tile-chip', String(T.id).slice(-2)),
-            Text(`UDIM ${T.id}`, `${FormatTileRes(T.resolution)} · ${Totals.islands} islands · ${Fill.toFixed(1)} % filled`),
-            Construct('span', `tile-fill${Fill > 100 ? ' over' : ''}`, Construct('i')),
-            IsActive ? Mark('ok', 'Check') : Mark('idle')
-        ]);
-        Row.querySelector('.tile-fill i').style.width = `${Math.min(100, Fill).toFixed(1)}%`;
-        Row.addEventListener('click', () =>
-        {
-            Doc.activeUdim = T.id;
-            const O = UdimOrigin(T.id);
-            Canvas2D.FrameBounds(O.u, O.v, O.u + 1, O.v + 1, 0.14);
-            SyncAllViews(true);
-        });
-        return Row;
-    });
-    const AddTile = Construct('button', 'tree-more', [ConstructGlyph('Plus'), Construct('span', null, 'Add UDIM tile')]);
-    AddTile.type = 'button';
-    AddTile.addEventListener('click', () => document.getElementById('add-udim-quick').click());
-    if (!Query) TileRows.push(AddTile);
-
-    // 4. Islands: layer colour, health mark and visibility; click selects, double-click frames.
-    const GroupById = new Map(Doc.importanceGroups.map(G => [G.id, G]));
-    const Islands = Doc.islands.filter(Isl =>
-    {
-        if (FilterUdimNum !== null && Isl.udimTile !== FilterUdimNum) return false;
-        if (!Query) return true;
-        return `island ${String(Isl.id + 1).padStart(3, '0')} ${Isl.name || ''} ${Isl.materialName || ''}`.toLowerCase().includes(Query);
-    });
-    const Sel = Doc.surface.selectedIslands;
-    const HealthMark = { error: ['bad', 'Alert', 'Overlapping or flipped faces'], caution: ['warn', 'Alert', 'High angle stretch'], pinned: ['lock', 'Pin', 'Has pinned UVs'], ok: ['ok', 'Check', 'Clean'] };
-    // Direct by id / stable key: the surface's SelectIsland(s) / SetIslandHidden also match ids against stable keys
-    // (first face indices), which can pick a second island whose first face number equals the id.
-    const PickIsland = (Isl, Additive) =>
-    {
-        const S = Doc.surface;
-        if (!Additive) S.ClearSelection();
-        if (Additive && S.selectedIslands.has(Isl.id)) S.selectedIslands.delete(Isl.id);
-        else S.selectedIslands.add(Isl.id);
-        S.SyncSelectionsFromMode('island', Doc.islands);
-        S.activeIsland = Isl.id;
-    };
-    const IslandRows = Islands.slice(0, OutlinerView.islandLimit).map(Isl =>
-    {
-        const Grp = GroupById.get(Isl.importanceGroupId);
-        const Health = HealthMark[ClassifyIslandHealth(Doc, Isl)] || HealthMark.ok;
-        const Swatch = Construct('span', 'swatch');
-        Swatch.style.background = Grp?.color || '#6e6e6e';
-        const MarkEl = Mark(Health[0], Health[1]);
-        MarkEl.title = Health[2];
-        const Row = Construct('div', `tr${Sel.has(Isl.id) ? ' on' : ''}${Isl.hidden ? ' hidden' : ''}`, [
-            Swatch,
-            Text(`Island ${String(Isl.id + 1).padStart(3, '0')}`, `${Isl.name ? `${Isl.name} · ` : ''}UDIM ${Isl.udimTile} · ${Isl.faceIndices.length} faces · ${(Isl.texelDensity ?? 0).toFixed(1)} px/cm`),
-            ActBtn(Isl.hidden ? 'EyeOff' : 'Eye', Isl.hidden ? 'Show island' : 'Hide island', () =>
-            {
-                if (Isl.hidden) Doc.surface.hiddenIslands.delete(Isl.stableKey);
-                else Doc.surface.hiddenIslands.add(Isl.stableKey);
-                _lastOutlinerSig = null;
-                SyncAllViews(true);
-            }, ' eye'),
-            MarkEl
-        ]);
-        Row.dataset.island = Isl.id;
-        Row.addEventListener('click', E =>
-        {
-            PickIsland(Isl, E.shiftKey || E.ctrlKey || E.metaKey);
-            FastSyncSelectionViews(Doc, true);
-        });
-        Row.addEventListener('dblclick', () =>
-        {
-            PickIsland(Isl, false);
-            FrameFaceGroupRefBounds(Doc, { islandCount: 1, islandIds: [Isl.id] });
-            FastSyncSelectionViews(Doc, true);
-        });
-        return Row;
-    });
-    if (Islands.length > OutlinerView.islandLimit)
-    {
-        const More = Construct('button', 'tree-more', `Show ${Math.min(100, Islands.length - OutlinerView.islandLimit)} more of ${Islands.length - OutlinerView.islandLimit}`);
-        More.type = 'button';
-        More.addEventListener('click', () => { OutlinerView.islandLimit += 100; Rerender(); });
-        IslandRows.push(More);
-    }
-    const HiddenCount = Doc.surface.hiddenIslands.size;
-
+    // Islands are deliberately not listed: a surface can have 1000+ of them (many just small faces). They are picked in
+    // the viewport and summarised by the issue tiles and the status strip instead.
     Container.append(
-        Group('surfaces', 'folder-scene', 'Surfaces', `${StudioState.documents.length} open · ${Doc.name}`, DocRows.length ? DocRows : [Empty('No surfaces match')]),
-        Group('layers', 'editor-collection', 'UV layers', `${Doc.importanceGroups.length} layers · ${Math.min(100, ExplicitSum).toFixed(0)} % assigned`, LayerRows.length ? LayerRows : [Empty('No layers match')], LayerTools),
-        Group('tiles', 'editor-grid', 'UDIM tiles', `${Doc.udimTiles.length} tile${Doc.udimTiles.length === 1 ? '' : 's'} · active ${Doc.activeUdim}`, TileRows.length ? TileRows : [Empty('No tiles match')]),
-        Group('islands', 'collection-bracketed-objects', 'Islands', `${Doc.islands.length} islands${HiddenCount ? ` · ${HiddenCount} hidden` : ''}${Islands.length !== Doc.islands.length ? ` · showing ${Islands.length}` : ''}`, IslandRows.length ? IslandRows : [Empty('No islands match')])
+        Group('objects', 'folder-scene', 'Objects', `${StudioState.documents.length} open · ${Doc.name}`, DocRows.length ? DocRows : [Empty('No objects match')]),
+        Group('layers', 'editor-collection', 'UV layers', `${Doc.importanceGroups.length} layers · ${Math.min(100, ExplicitSum).toFixed(0)} % assigned`, LayerRows.length ? LayerRows : [Empty('No layers match')], LayerTools)
     );
 }
 
