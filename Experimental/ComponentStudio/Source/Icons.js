@@ -80,6 +80,25 @@ const OWN = {
   download: { main: p('M4.5 15.5V19a1 1 0 0 0 1 1h13a1 1 0 0 0 1-1v-3.5'), accent: p('M12 4v11M7.5 10.5L12 15l4.5-4.5') },
   help: { main: ring(12, 12, 8.5), accent: p('M9.5 9.5a2.6 2.6 0 1 1 3.8 2.3c-.8.4-1.3 1-1.3 2M12 16.8v.2') },
   reset: { main: p('M19.5 12a7.5 7.5 0 1 1-2.4-5.5M17.5 2.5v4.2h-4.2'), accent: '' },
+  // Fracture Editor
+  fracture: { main: p('M12 3l8 4.5v9L12 21l-8-4.5v-9z'), accent: p('M12 3l-1.5 6 3 2.5-2 4.5L12 21M10.5 9L4 7.5M13.5 11.5l6.5-4M11.5 16l-7.5.5') },
+  impact: { main: ring(12, 12, 7.5), accent: ring(12, 12, 2.4) + p('M12 2.5v4M12 17.5v4M2.5 12h4M17.5 12h4') },
+  seeds: { main: p('M4 4h16v16H4z', 'stroke-dasharray="2 2.6"'), accent: dot(8, 9, 1.5) + dot(15.5, 7.5, 1.5) + dot(11, 15, 1.5) + dot(17, 16.5, 1.5) },
+  explode: { main: p('M9 9L4.5 4.5M15 9l4.5-4.5M9 15l-4.5 4.5M15 15l4.5 4.5'), accent: rect(9.5, 9.5, 5, 5, 1) + p('M4.5 8V4.5H8M16 4.5h3.5V8M4.5 16v3.5H8M16 19.5h3.5V16') },
+  assemble: { main: p('M4.5 4.5L9 9M19.5 4.5L15 9M4.5 19.5L9 15M19.5 19.5L15 15'), accent: rect(9, 9, 6, 6, 1) },
+  cube: { main: p('M12 3l8 4.5v9L12 21l-8-4.5v-9z') + p('M4 7.5l8 4.5 8-4.5M12 12v9'), accent: '' },
+  sphere: { main: ring(12, 12, 8.5), accent: '<ellipse cx="12" cy="12" rx="3.6" ry="8.5"/><ellipse cx="12" cy="12" rx="8.5" ry="3.2"/>' },
+  cylinder: { main: '<ellipse cx="12" cy="6" rx="7" ry="2.6"/>' + p('M5 6v12c0 3.4 14 3.4 14 0V6'), accent: p('M5 18c0-3.4 14-3.4 14 0', 'stroke-dasharray="2 2.4"') },
+  cone: { main: p('M5 18L12 3.5 19 18'), accent: '<ellipse cx="12" cy="18" rx="7" ry="2.6"/>' },
+  pane: { main: p('M5 4.5h14v15H5z'), accent: p('M12 11l-4-4M12 11l5-2M12 11l-1 6M12 11l5 5') + dot(12, 11, 1.2) },
+  beam: { main: p('M3 9.5l4-3h14l-4 3zM3 9.5h14v8H3zM17 9.5l4-3v8l-4 3'), accent: p('M7 13.5h6', 'stroke-dasharray="2 2"') },
+  rock: { main: p('M4 15l2-6.5L11 4l6.5 2 3 6.5-2.5 6L11 20l-5-1.5z'), accent: p('M11 4l1 7-6 -2.5M12 11l6.5 1.5M12 11l-1 9') },
+  material: { main: p('M9 3.5h6M10 3.5v5L5 18a2 2 0 0 0 1.8 2.5h10.4A2 2 0 0 0 19 18l-5-9.5v-5'), accent: p('M7.5 14h9') },
+  quality: { main: p('M4 19L12 5l8 14z'), accent: p('M8 19l4-7 4 7M12 12V5') },
+  receipt: { main: p('M6 3h12v18l-2-1.5-2 1.5-2-1.5-2 1.5-2-1.5L6 21z'), accent: p('M9 8h6M9 11.5h6M9 15h3.5') },
+  bake: { main: rect(3.5, 6, 17, 13, 2.5), accent: p('M7 6V4M12 6V4M17 6V4') + p('M8 12.5h8M8 15.5h5') },
+  dice: { main: rect(4, 4, 16, 16, 3), accent: dot(8.5, 8.5) + dot(15.5, 15.5) + dot(12, 12) + dot(15.5, 8.5) + dot(8.5, 15.5) },
+  external: { main: p('M13 4.5h6.5V11M19.5 4.5L11 13'), accent: p('M17 14v4.5a1 1 0 0 1-1 1H5.5a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1H10') },
 };
 function filled(d) { return p(d, 'fill="currentColor" stroke="none" fill-opacity="0.35"'); }
 

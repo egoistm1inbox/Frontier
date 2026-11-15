@@ -101,7 +101,7 @@ function vehicleClass() {
 function defaultCurves() { return { Torque: EngineSheet.TorqueCurve.map((p) => [...p]), Boost: TurbochargerSheet.TorqueMultiplierCurve.map((p) => [...p]) }; }
 
 // ====================================================================================================================
-export function createComponentViewer({ library, openCompile, openImportMenu }) {
+export function createComponentViewer({ library, openCompile, openImportMenu, openFracture }) {
   let cls = load() || vehicleClass();
   const state = { selected: 'body', collapsed: new Set(), channel: 'none', mode: 'lit', wire: false, grid: true, lodMode: 'auto', camPreset: 'persp', search: '', drawnLods: {} };
   const sim = { running: false, speed: 0, rpm: 0, gear: 1, spin: 0, steer: 0, offset: 0, boost: 0, torque: 0, accel: 0, throttle: 0.6, brake: 0 };
@@ -449,7 +449,7 @@ export function createComponentViewer({ library, openCompile, openImportMenu }) 
       if (c.type !== 'root') sections.push(['Transform', () => transformPanel(c)]);
     }
     if (c.type === 'root') sections.push(['Class', () => classPanel()]);
-    if (c.type === 'mesh') { sections.push(['Static Mesh', () => meshPanel(c, record)]); if (record) { sections.push(['Baked data', () => bakePanel(record)]); sections.push(['Materials', () => materialPanel(c, record)]); } }
+    if (c.type === 'mesh') { sections.push(['Static Mesh', () => meshPanel(c, record)]); if (record) { sections.push(['Baked data', () => bakePanel(record)]); sections.push(['Materials', () => materialPanel(c, record)]); sections.push(['Fracture', () => fracturePanel(c, record)]); } }
     if (c.type === 'wheel') sections.push(['Wheel', () => wheelPanel(c)]);
     if (['camera', 'light', 'sensor', 'ballast', 'aero'].includes(c.type)) sections.push([T.label, () => simplePanel(c)]);
     if (c.type === 'movement') sections.push(['Movement', () => movementPanel(c)]);
@@ -549,6 +549,29 @@ export function createComponentViewer({ library, openCompile, openImportMenu }) 
       });
       out.push(heading('CLUSTER LOD', state.lodMode === 'auto' ? `AUTO · ${current || '—'}` : `FORCED · ${current || '—'}`), panel(wrap, note('Auto picks the finest level with about one triangle per 6 px² of the mesh on screen. Click a level to force it.')));
     }
+    return out;
+  }
+
+  // Project Zero's per-object Fracture card: enable, pick Dynamic / Baked, and open the Fracture Editor for this component.
+  function fracturePanel(c, r) {
+    const f = c.props.fracture || { Enabled: false, Mode: 'dynamic' };
+    const set = (patch) => { c.props.fracture = { ...f, ...patch }; changed({ tree: false, details: true }); };
+    const sw = h('button', { class: 'switch' + (f.Enabled ? ' on' : ''), role: 'switch', 'aria-checked': String(!!f.Enabled), 'aria-label': 'Enable fracture', onclick: () => set({ Enabled: !f.Enabled }) });
+    const out = [heading('FRACTURE', 'PER-COMPONENT GEOMETRY')];
+    const body = panel(h('div', { class: 'switch-line' }, h('span', {}, 'Enable fracture'), sw));
+    if (f.Enabled) {
+      const MAT = { concrete: 'Concrete', rock: 'Stone', wood: 'Wood', glass: 'Glass', tempered: 'Tempered glass', plastic: 'ABS plastic' };
+      const baked = f.Mode === 'baked' && f.Baked;
+      body.append(
+        h('div', { class: 'vcard-fracture' },
+          h('span', { class: 'thumb' }, f.Thumb ? h('img', { src: f.Thumb, alt: '' }) : h('span', { dataset: { icon: 'fracture', size: '28', accent: 'teal' } })),
+          rows([['Material', MAT[f.Material] || 'Concrete'], ['Pieces', f.Pieces ? String(f.Pieces) : 'not authored'], ['Impact', `${(f.Energy ?? 2500).toLocaleString('en-US')} J`]])),
+        h('h4', { style: { margin: '2px 0 0' } }, 'PRECOMPUTE'),
+        segmented([['dynamic', 'Dynamic'], ['baked', 'Baked']], f.Mode || 'dynamic', (v) => set({ Mode: v }), { label: 'Fracture execution' }),
+        note(f.Mode === 'baked' ? (baked ? `Baked geometry stored · ${f.Baked.pieces} pieces.` : 'Open the editor to bake the fragment geometry.') : 'Fragments are generated on demand from the recipe.'),
+        h('button', { class: 'primary', onclick: () => openFracture?.(c.id) }, h('span', { dataset: { icon: 'fracture', size: '15' } }), `Edit ${c.name} fracture`, h('span', { dataset: { icon: 'external', size: '13' } })));
+    } else body.append(note(`${c.name} stays whole. Enable fracture to author a recipe in the Fracture Editor.`));
+    out.push(body);
     return out;
   }
 
@@ -887,7 +910,7 @@ export function createComponentViewer({ library, openCompile, openImportMenu }) 
     well.addEventListener('drop', (e) => { const id = e.dataTransfer.getData('application/x-frontier-mesh'); if (id) { e.preventDefault(); e.stopPropagation(); addComponent({ type: 'mesh', parent: 'root', meshId: id }); } });
     $('ContentDrawer').addEventListener('drawer-open', renderLibrary);
     document.addEventListener('keydown', (e) => {
-      if (!$('Compile').hidden || document.querySelector('dialog[open]')) return;
+      if (!$('Compile').hidden || !$('Fracture').hidden || document.querySelector('dialog[open]')) return;
       const tag = (e.target.tagName || '').toLowerCase();
       if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
       if (e.key === 'f' || e.key === 'F') frameSelection();
@@ -915,6 +938,8 @@ export function createComponentViewer({ library, openCompile, openImportMenu }) 
   return {
     refresh, purgeGpu, viewport: () => viewport, className: () => cls.name,
     addMesh: (meshId) => addComponent({ type: 'mesh', parent: 'root', meshId }),
+    fractureTargets: () => sceneComponents().filter((c) => c.type === 'mesh').map((c) => ({ id: c.id, name: c.name, meshId: c.props.meshId, recipe: c.props.fracture || null })),
+    setFracture: (id, recipe) => { const c = byId(id); if (!c) return; c.props.fracture = recipe; changed({ tree: true, details: true }); },
     openContent: () => drawers.open('ContentDrawer'),
     frame: frameSelection,
   };

@@ -1,14 +1,16 @@
 # Component Studio
 
-One HTML demo with two workspaces in the Project Zero UI (the visual language of the Frontier-1 Cluster LOD Studio, branch `arena/453e172d-frontier-1`):
+One HTML demo with three workspaces in the Project Zero UI (the visual language of the Frontier-1 Cluster LOD Studio, branch `arena/453e172d-frontier-1`):
 
 | Workspace | What it is | Came from |
 |---|---|---|
 | **Component Viewer** | A Blueprint-class style editor and previewer for a component class, here `BP_ControlVehicle` | **Vehicle Lab** (Frontier-OLD, `Experimental Remastered/AssetInspector`), renamed and rebuilt |
 | **Geometry Compile** | The import inspector. Any imported object opens here first and goes through Source → Geometry → UV Charts → SDF Bake → Cluster LOD → Icon → Metadata | Frontier-1 Cluster LOD Studio "Hero Workspace" (geometry editor, UV charts, SDF baker, icon capture, cluster LOD) |
+| **Fracture Editor** | Per-component fracture authoring: material, impact, quality limits, Dynamic / Baked + piece SDF, fragment inspection | Frontier-OLD `arena/bc062d35-frontier-old` Project Zero Fracture card + the Fracture panel / Fracture Studio branches, redesigned |
 
 ![Component Viewer](Screenshots/component-viewer.png)
 ![Geometry Compile](Screenshots/geometry-compile.png)
+![Fracture Editor](Screenshots/fracture-editor.png)
 
 ## Run
 
@@ -96,6 +98,38 @@ Every triangle keeps its material through every LOD level. The simplifier only m
 
 The rim's hub material is gone by LOD 3 with the toggle off. With it on, the hub survives every level.
 
+## Fracture Editor
+
+A UI redesign, not a renderer. The viewport shows the recipe's result with flat colours. Its job is to make the recipe readable.
+
+**How to open it:**
+- **Component Viewer → Details → Fracture:** this is Project Zero's compact per-object card. It has an Enable switch, a Dynamic / Baked choice, a thumbnail and recipe summary, and an **Edit {Component} fracture ↗** button.
+- **URL:** `?fracture=body` opens a class component. `?fracture=specimen:pane` opens a test specimen.
+
+![Component Viewer Fracture card](Screenshots/fracture-card.png)
+![Fracture Editor, glass pane baked with piece SDF](Screenshots/fracture-baked.png)
+
+| Area | Contents |
+|---|---|
+| **Targets** (left) | Owner card, fragment and enabled stats, search. Class mesh components carry Off / Dynamic / Baked / Stale / Edited pills. There are seven analytical specimens (cube, sphere, cylinder, cone, thin pane, beam, rock) and four presets (Shatter, Crumble, Splinter, Dice). |
+| **Well** (centre) | Views: Source / Pieces / Material / Size / Priority. Tools: place impact, seeds, wire, grid. Cameras: persp / front / side / top. A live readout and legend. A fragment separation slider (inspection only), **Reassemble** and **Fracture object**. Metrics: Fragments, Occupied volume, Min triangle quality, Topology. |
+| **Inspector** (right) | An energy-budget hero (requested / ceiling / refused). **01 Material:** six fracture materials with Gc, density and impact focus. **02 Impact:** energy, seed, XYZ and a falloff graph. **03 Quality:** ceiling, minimum span, needle rejection, closed caps, quality triangulation. **04 Bake:** Dynamic / Baked, bake status, Rebake / Clear, piece SDF 32³/64³/128³ R16F with memory cost. **05 Receipt:** signature, size histogram, storage. |
+| **Drawers** | **Fragments:** a sortable table (volume, mass, faces/cut, span, min Q, distance, priority); click a row to select the piece. **Fracture log:** the solver log. |
+
+**Recipe rules:**
+- A limit is a ceiling, not a promise. Seeds closer than twice the minimum span are refused, and the editor shows the refused count instead of forcing bad fragments.
+- Specimens and convex parts are cut into closed cells.
+- Open compiled meshes, such as the vehicle body, are shown as surface patches split at Voronoi borders. A banner says their closed caps are pending the native bake.
+
+**Saving:**
+- Component recipes are saved on the class component (`props.fracture`, with a thumbnail) and appear on the Component Viewer card.
+- Specimen recipes are saved in the browser's localStorage.
+- **Export** writes `frontier.fracture.v1` JSON.
+
+**Keys:** `Esc` close · `I` impact tool · `F` fit · `Z` wire · `G` grid · `S` seeds · `R` re-solve · `Space` reassemble · `1`–`5` views · `Ctrl+S` save. Double-click or Alt-click in the well places the impact.
+
+**Check:** `node Tests/FractureEngineCheck.mjs` fractures every specimen × material combination. It checks that the pieces fill the source volume, that every piece is closed, and that the ceiling is respected.
+
 ## Layout
 
 ```
@@ -103,11 +137,14 @@ index.html, Studio.css      shell + Project Zero styles
 Source/App.js               boot, Content library (IndexedDB), import menu / drop, built-in vehicle meshes
 Source/ComponentViewer.js   Blueprint-class viewer (tree, details, channels, simulate, drawers)
 Source/GeometryCompile.js   Geometry Compile window controller
+Source/FractureEditor.js    Fracture Editor window controller (targets, well, inspector, drawers, save / export)
+Source/FractureEngine.js    headless Voronoi fracture planner: materials, energy budget, specimens, closed cells, surface patches
 Source/Compile.js           headless pipeline (also used to pre-compile the vehicle parts)
 Source/Renderer.js          WebGL2 viewport: lit / checker / debug / normal, picking, lines, SDF raymarch, icon capture
 Source/MeshData.js          OBJ / STL / FCT1 readers, topology, corner normals, material slots
 Source/Kit.js, Icons.js     inspector building blocks, icon set (StudioIconSet definitions + component glyphs)
 Tests/MaterialLodCheck.mjs  Node check for material-preserving Cluster LOD
+Tests/FractureEngineCheck.mjs  Node check for the fracture planner
 Engine/                     Cluster LOD Studio engine (cluster hierarchy, QEM, UV charts, SDF bake, transforms) + workers
 Vehicle/                    FCT1 codec, material + vehicle specification sheets, ControlVehicle facet archive
 ```

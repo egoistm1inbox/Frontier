@@ -2,6 +2,7 @@
 // the Import menu / drag-and-drop, and the wiring between Geometry Compile and the Component Viewer.
 import { createComponentViewer } from './ComponentViewer.js';
 import { createGeometryCompile } from './GeometryCompile.js';
+import { createFractureEditor } from './FractureEditor.js';
 import { defaultSettings, buildGeometry, runUv, runLod } from './Compile.js';
 import { readFacet, readFile, readSample, SAMPLE_SOURCES, IMPORT_FORMATS, triangleColors } from './MeshData.js';
 import { $, h, toast, hydrate } from './Kit.js';
@@ -70,7 +71,7 @@ function captureIcon(viewport, record) {
 }
 
 // ---------------------------------------------------------------------------------------------------- boot
-let viewer, compile;
+let viewer, compile, fracture;
 
 async function boot() {
   hydrateIcons(document);
@@ -89,7 +90,9 @@ async function boot() {
     library,
     openCompile: (record) => record && compile.open({ raw: record.raw, fileName: record.sourceFile, ext: record.sourceFile.split('.').pop(), existing: record }),
     openImportMenu: (anchor) => toggleImportMenu(anchor),
+    openFracture: (id) => fracture.open('component:' + id),
   });
+  fracture = createFractureEditor({ library, viewer });
   bindImport();
 
   $('ViewerEmpty').hidden = false;
@@ -118,6 +121,7 @@ async function boot() {
   const params = new URLSearchParams(location.search);
   if (params.has('sample')) openSample(params.get('sample'));
   if (params.has('drawer')) viewer.openContent();
+  if (params.has('fracture')) fracture.open(params.get('fracture') || 'body');
 }
 
 // ---------------------------------------------------------------------------------------------------- import
@@ -162,7 +166,7 @@ function bindImport() {
   document.addEventListener('pointerdown', (e) => { const m = $('ImportMenu'); if (!m.hidden && !m.contains(e.target) && !e.target.closest('#ImportBtn') && !e.target.closest('.import-card') && !e.target.closest('[data-import-anchor]')) toggleImportMenu(null, false); });
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && !$('ImportMenu').hidden) toggleImportMenu(null, false);
-    if ((e.ctrlKey || e.metaKey) && (e.key === 'i' || e.key === 'I') && $('Compile').hidden) { e.preventDefault(); toggleImportMenu($('ImportBtn'), true); }
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'i' || e.key === 'I') && $('Compile').hidden && $('Fracture').hidden) { e.preventDefault(); toggleImportMenu($('ImportBtn'), true); }
   });
   // Files dropped anywhere open Geometry Compile.
   let depth = 0;
