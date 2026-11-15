@@ -26,7 +26,7 @@ void main(){
   if (dot(n, v) < 0.0) n = -n;
   vec3 base = vCol.rgb * uTint;
   if (uMode == 1) { vec2 c = floor(vUv * 16.0); float k = mod(c.x + c.y, 2.0); vec3 a = vec3(0.86,0.86,0.84), b = vec3(0.22,0.24,0.27); base = mix(a, b, k); if (vUv.x < 0.0 || vUv.y < 0.0) base = vec3(0.9,0.25,0.4); }
-  else if (uMode == 2) base = vDbg;
+  else if (uMode == 2) base = vDbg * uTint;
   else if (uMode == 3) base = n * 0.5 + 0.5;
   vec3 L = normalize(vec3(0.55, 0.85, 0.35)), F = normalize(vec3(-0.6, 0.35, -0.5));
   float key = max(dot(n, L), 0.0), fill = max(dot(n, F), 0.0);

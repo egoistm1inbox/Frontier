@@ -1,6 +1,7 @@
 // Material Workspace — inspector-only UI demo. The viewport is intentionally blank in this pass; every control edits a
 // real recipe model (MaterialRecipe.js), so the live-vs-structural split, drivers and the 256-byte block stay honest.
 import { $, h, segmented, vecRow, toast, hydrate, download, popupMenu, setFill } from './Kit.js';
+import { foldMemory, section as kitSection, field, sub, hint, mswitch, switchRow, select, numberBox, fmt, applySearch as kitSearch } from './InspectorKit.js';
 import {
   LAYER_TYPES, LOBES, CHANNELS, FIELD_PATTERNS, MASK_MODES, SPACES, BLENDS, DRIVERS, COLOUR_SLOTS, FINISHES, SPECS, AMOUNT,
   BLOCK_BYTES, presets, newLayer, liveParams, blockLayout, structure, signature, lobeSummary,
@@ -13,7 +14,7 @@ const params = new URLSearchParams(location.search);
 // ---------------------------------------------------------------------------------------------- session
 const library = presets();
 const saved = (() => { try { return JSON.parse(localStorage.getItem(STORE)) || {}; } catch { return {}; } })();
-const ui = (() => { try { return { collapsed: [], ...JSON.parse(localStorage.getItem(UI_STORE)) }; } catch { return { collapsed: [] }; } })();
+const folds = foldMemory(UI_STORE);
 const S = {
   recipe: null, savedJson: '', compiled: '', liveEdits: 0, active: 0, search: '',
   undo: [], redo: [], last: '',
@@ -52,41 +53,9 @@ function redo() { if (!S.redo.length) return; S.undo.push(S.last); restore(S.red
 function getVal(l, key) { if (key === 'opacity') return l.opacity; if (key.startsWith('amount.')) return l.targets[key.slice(7)]; return l.p[key]; }
 function setVal(l, key, v) { if (key === 'opacity') l.opacity = v; else if (key.startsWith('amount.')) l.targets[key.slice(7)] = v; else l.p[key] = v; }
 const driverKey = (l, key) => `${l.id}.${key}`;
-const fmt = (v, d) => (+v).toFixed(d);
 
 // ---------------------------------------------------------------------------------------------- widgets
-function section(id, { icon, title, tag, accent }, ...body) {
-  const closed = ui.collapsed.includes(id);
-  const toggle = h('button', { class: 'mi-fold', 'aria-expanded': String(!closed), 'aria-label': `${closed ? 'Expand' : 'Collapse'} ${title}`, dataset: { icon: 'chevron', size: '12' } });
-  const head = h('header', {}, h('span', { class: 'mi-section-ico', style: accent ? { color: accent } : null, dataset: { icon, size: '15' } }), h('b', {}, title), tag ? h('em', {}, tag) : null, toggle);
-  const node = h('section', { class: 'mi-section' + (closed ? ' closed' : ''), dataset: { sec: id } }, head, h('div', { class: 'mi-body' }, ...body));
-  head.addEventListener('click', (e) => {
-    if (e.target.closest('input,select,.mi-head-action')) return;
-    const c = node.classList.toggle('closed');
-    toggle.setAttribute('aria-expanded', String(!c));
-    ui.collapsed = c ? [...new Set([...ui.collapsed, id])] : ui.collapsed.filter((x) => x !== id);
-    localStorage.setItem(UI_STORE, JSON.stringify(ui));
-  });
-  return node;
-}
-const field = (label, control, extra = {}) => h('div', { class: 'mi-field', dataset: { search: (extra.search || label).toLowerCase() } }, h('label', {}, label), control);
-const sub = (text, tag) => h('div', { class: 'mi-sub' }, h('span', {}, text), tag ? h('em', {}, tag) : null);
-const hint = (text) => h('p', { class: 'mi-hint' }, text);
-
-function mswitch(on, onChange, label) {
-  const b = h('button', { class: 'mswitch' + (on ? ' on' : ''), role: 'switch', 'aria-checked': String(on), 'aria-label': label });
-  b.addEventListener('click', () => { on = !on; b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on)); onChange(on); });
-  return b;
-}
-function switchRow(label, on, onChange, note) {
-  return h('div', { class: 'mi-switch-row', dataset: { search: label.toLowerCase() } }, h('div', {}, h('span', {}, label), note ? h('small', {}, note) : null), mswitch(on, onChange, label));
-}
-function select(options, picked, onChange, label) {
-  const s = h('select', { class: 'mi-select', 'aria-label': label });
-  for (const [v, t] of options) s.append(h('option', { value: v, selected: v === picked ? true : null }, t));
-  s.addEventListener('change', () => onChange(s.value));
-  return s;
-}
+const section = (id, opts, ...body) => kitSection(folds, id, opts, ...body);
 function colourRow(label, hex, onInput, { tag, search } = {}) {
   const input = h('input', { type: 'color', value: hex, 'aria-label': label });
   const code = h('code', {}, hex);
@@ -125,26 +94,6 @@ function paramRow(l, key, spec, { label = spec.label, drivable = true } = {}) {
   range.addEventListener('change', () => commit());
   row.append(h('div', { class: 'mi-row-ctl' }, box, h('span', { class: 'mi-unit' }, spec.unit || '—'), range));
   return row;
-}
-function numberBox(amount, spec, onCommit, label) {
-  const input = h('input', { class: 'mi-box', type: 'text', inputmode: 'decimal', value: fmt(amount, spec.digits), 'aria-label': label });
-  // Drag horizontally to scrub (Shift = fine), click to type.
-  let drag = null;
-  input.addEventListener('pointerdown', (e) => { if (document.activeElement === input) return; drag = { x: e.clientX, v: parseFloat(input.value), moved: false }; input.setPointerCapture(e.pointerId); e.preventDefault(); });
-  input.addEventListener('pointermove', (e) => {
-    if (!drag) return;
-    const dx = e.clientX - drag.x; if (Math.abs(dx) > 2) drag.moved = true; if (!drag.moved) return;
-    const span = spec.max - spec.min, v = Math.max(spec.min, Math.min(spec.max, drag.v + (dx / 220) * span * (e.shiftKey ? 0.1 : 1)));
-    input.value = fmt(v, spec.digits);
-  });
-  input.addEventListener('pointerup', () => { if (drag) { if (drag.moved) onCommit(parseFloat(input.value)); else { input.focus(); input.select(); } } drag = null; });
-  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') input.blur(); if (e.key === 'Escape') { input.value = fmt(value, spec.digits); input.blur(); } });
-  input.addEventListener('change', () => {
-    const v = parseFloat(input.value);
-    if (!Number.isFinite(v)) { input.value = fmt(value, spec.digits); return; }
-    const c = Math.max(spec.min, Math.min(spec.max, v)); input.value = fmt(c, spec.digits); value = c; onCommit(c);
-  });
-  return input;
 }
 function driverMenu(l, key, spec, at) {
   const dk = driverKey(l, key), cur = R().drivers[dk];
@@ -305,21 +254,11 @@ function searchRow() {
   fold.addEventListener('click', () => {
     const sections = [...document.querySelectorAll('.mi-section')], close = sections.some((c) => !c.classList.contains('closed'));
     sections.forEach((c) => c.classList.toggle('closed', close));
-    ui.collapsed = close ? sections.map((c) => c.dataset.sec) : []; localStorage.setItem(UI_STORE, JSON.stringify(ui));
+    folds.setAll(sections.map((c) => c.dataset.sec), close);
   });
   return h('div', { class: 'mi-search' }, h('label', { class: 'search' }, h('span', { dataset: { icon: 'search', size: '14' } }), input), fold);
 }
-function applySearch() {
-  const q = S.search.trim().toLowerCase();
-  for (const c of document.querySelectorAll('.mi-section')) {
-    const rows = [...c.querySelectorAll('[data-search]')];
-    let any = !q || c.querySelector('header b').textContent.toLowerCase().includes(q);
-    for (const it of rows) { const hit = !q || any || it.dataset.search.includes(q); it.classList.toggle('mi-miss', !hit); if (q && it.dataset.search.includes(q)) any = true; }
-    if (q && any) rows.forEach((it) => it.classList.toggle('mi-miss', !(c.querySelector('header b').textContent.toLowerCase().includes(q) || it.dataset.search.includes(q))));
-    c.classList.toggle('mi-miss', !!q && !any);
-    if (q && any) c.classList.remove('closed');
-  }
-}
+function applySearch() { kitSearch($('MatInspector'), S.search); }
 
 // ---------------------------------------------------------------------------------------------- sections
 function layerSection(l) {

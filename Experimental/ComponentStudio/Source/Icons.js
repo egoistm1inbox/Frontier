@@ -110,6 +110,15 @@ const OWN = {
   snapshot: { main: rect(3.5, 6.5, 17, 13, 2.5) + p('M8.5 6.5l1.5-2.5h4l1.5 2.5'), accent: ring(12, 13, 3.2) },
   budget: { main: rect(3, 8, 18, 8, 2.5), accent: p('M6 12h7') },
   lobes: { main: ring(12, 12, 8.5), accent: p('M12 3.5v17M5 7.5c4 2 10 2 14 0M5 16.5c4-2 10-2 14 0') },
+  pause: { main: p('M8 5v14M16 5v14'), accent: '' },
+  edit: { main: p('M4 20l1-4.5L15.5 5a2.1 2.1 0 0 1 3 3L8 18.5z'), accent: p('M13.5 7l3 3') },
+  simulate: { main: rect(4, 13, 7, 7) + p('M3 21h18'), accent: p('M14 4.5l4 2-2 4-4-2z') + p('M9 9.5l2-3', 'stroke-dasharray="1.6 2"') },
+  toStart: { main: p('M17.5 5.5L9 12l8.5 6.5z'), accent: p('M6.5 5.5v13') },
+  stepAhead: { main: p('M6.5 5.5L15 12l-8.5 6.5z'), accent: p('M17.5 5.5v13') },
+  loop: { main: p('M4 12a6 6 0 0 1 6-6h8M20 12a6 6 0 0 1-6 6H6'), accent: p('M15.5 3.5L18 6l-2.5 2.5M8.5 15.5L6 18l2.5 2.5') },
+  energy: { main: p('M13 3L5.5 13.5H11L10 21l8-11h-5.5z'), accent: '' },
+  target: { main: ring(12, 12, 8) + ring(12, 12, 4), accent: dot(12, 12, 1.4) },
+  fragment: { main: p('M5 7.5L11 4l7 3.5-1.5 8L10 20l-5.5-4z'), accent: p('M11 4l-1 7 6.5 4.5M10 11l-5.5 5') },
 };
 function filled(d) { return p(d, 'fill="currentColor" stroke="none" fill-opacity="0.35"'); }
 

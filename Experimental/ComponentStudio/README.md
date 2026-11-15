@@ -119,7 +119,7 @@ The rim's hub material is gone by LOD 3 with the toggle off. With it on, the hub
 
 ## Fracture Editor
 
-A UI redesign, not a renderer. The viewport shows the recipe's result with flat colours. Its job is to make the recipe readable.
+Per-object fracture authoring with three modes in the header: **Edit** the recipe, **Simulate** its physics, **Play** it as a game would. The viewport uses flat colours; its job is to make the recipe and its consequences readable, not to be the final renderer.
 
 **How to open it.** As in the Project Zero Editor, the Component Viewer has several ways in:
 
@@ -138,12 +138,22 @@ A UI redesign, not a renderer. The viewport shows the recipe's result with flat 
 ![Component Viewer Fracture card](Screenshots/fracture-card.png)
 ![Fracture Editor, glass pane baked with piece SDF](Screenshots/fracture-baked.png)
 
+![Fracture Editor, simulating a concrete pane with the energy view](Screenshots/fracture-simulate.png)
+
 | Area | Contents |
 |---|---|
-| **Targets** (left) | Owner card, fragment and enabled stats, search. Class mesh components carry Off / Dynamic / Baked / Stale / Edited pills. There are seven analytical specimens (cube, sphere, cylinder, cone, thin pane, beam, rock) and four presets (Shatter, Crumble, Splinter, Dice). |
-| **Well** (centre) | Views: Source / Pieces / Material / Size / Priority. Tools: place impact, seeds, wire, grid. Cameras: persp / front / side / top. A live readout and legend. A fragment separation slider (inspection only), **Reassemble** and **Fracture object**. Metrics: Fragments, Occupied volume, Min triangle quality, Topology. |
-| **Inspector** (right) | An energy-budget hero (requested / ceiling / refused). **01 Material:** six fracture materials with Gc, density and impact focus. **02 Impact:** energy, seed, XYZ and a falloff graph. **03 Quality:** ceiling, minimum span, needle rejection, closed caps, quality triangulation. **04 Bake:** Dynamic / Baked, bake status, Rebake / Clear, piece SDF 32³/64³/128³ R16F with memory cost. **05 Receipt:** signature, size histogram, storage. |
-| **Drawers** | **Fragments:** a sortable table (volume, mass, faces/cut, span, min Q, distance, priority); click a row to select the piece. **Fracture log:** the solver log. |
+| **Outliner** (left) | **The object being fractured:** a picker card listing every class mesh component and the seven analytical specimens (cube, sphere, cylinder, cone, thin pane, beam, rock) with their Off / Dynamic / Baked / Stale / Edited state. Stats for fragments and released pieces. **Tree:** the root row selects the whole object; under it, **Fragments** lists every piece with its colour swatch, mass, energy (received in Edit, live kinetic in Simulate / Play), an energy meter, a 🔒 when it stays held, and a hide eye. Sort by Energy / Size / index. Search matches `fragment 04`, `#4`, `held`, `released`, `hidden`. Click selects (synced with the viewport pick and the fragment table); double-click focuses the camera on it. |
+| **Header** | `Edit · Simulate · Play` switch (`Shift+1/2/3`). Colour fragments by Source / Pieces / Material / Size / **Energy**. Tools: place impact, seeds, wire, grid, cameras, fit. |
+| **Below the well** | **Edit:** the fragment separation slider (inspection only), Reassemble, Fracture object. **Simulate / Play:** a transport with back-to-start, play / pause, step ahead, a timeline drawn over the total kinetic energy curve with IMPACT and AT REST marks, speed ¼× / ½× / 1× and loop. Metrics switch to Released / Kinetic now / Most energetic fragment / At rest by. |
+| **Inspector** (right) | Pattern-workspace look shared with the Material Workspace (`Inspector.css` + `Source/InspectorKit.js`): header with the enable switch and Fragments / Kinetic energy / Released tiles, a setting search, collapsible sections that remember their fold state. **Fragment** (when one is selected): mass, volume, faces, distance, cut priority, received energy, launch speed, energy rank; in Simulate / Play also speed, kinetic energy and height now; a **Break-off** override (Auto / Held / Released), hide, focus. **Energy budget:** impact split into crack surface, fragment motion and heat & sound; pieces against the ceiling. **Material**, **Impact** (log energy slider, seed, impact point, falloff graph), **Fragment quality** (size histogram), **Simulation** (duration, energy transfer, release energy, gravity, bounce, friction, fragment collisions, re-simulate), **Visualisation** (colour mode, log / linear energy scale, velocity vectors, seeds), **Recipe presets**, **Bake** (Dynamic / Baked, piece SDF), **Geometry receipt**. In Play the recipe is read-only. |
+| **Drawers** | **Fragments:** a sortable table (volume, mass, faces/cut, span, min Q, distance, priority, energy). **Fracture log:** solver and physics bakes. |
+
+**Modes.**
+- **Edit:** a static exploded preview. The Energy view shows each fragment's *share of the impact*.
+- **Simulate:** `Source/FractureSimulation.js` bakes rigid-body motion for every fragment (240 Hz, 60 Hz pose cache, ground contact with friction and rolling resistance, sphere collisions between fragments, sleeping) and the timeline scrubs it. The recipe stays editable; any change re-simulates. Velocity arrows show 60 ms of travel.
+- **Play:** the game view. The object sits whole for 0.6 s, a shock ring marks the hit and the fragments break away. Gizmos and the readout are hidden.
+
+**Energy.** After the crack surface is paid for (2·Gc per m²), the *energy transfer* fraction of what is left becomes kinetic energy, shared between fragments by cut priority². Fragments whose share is below the *release energy* stay held in the remaining body; Break-off overrides that per fragment. The Energy view paints the least energy blue and the most red on a log ramp (linear is available); in Simulate and Play it follows live kinetic energy, so fragments cool to blue as they come to rest.
 
 **Recipe rules:**
 - A limit is a ceiling, not a promise. Seeds closer than twice the minimum span are refused, and the editor shows the refused count instead of forcing bad fragments.
@@ -153,20 +163,27 @@ A UI redesign, not a renderer. The viewport shows the recipe's result with flat 
 **Saving:**
 - Component recipes are saved on the class component (`props.fracture`, with a thumbnail) and appear on the Component Viewer card.
 - Specimen recipes are saved in the browser's localStorage.
-- **Export** writes `frontier.fracture.v1` JSON.
+- **Export** writes `frontier.fracture.v2` JSON: recipe, signature, receipt, simulation settings and result (released, kinetic, settle time, overrides), and per-piece energy.
+- Simulation settings are part of the recipe (`Simulation`) but not of the bake signature, so tuning physics never makes a bake stale.
 
-**Keys:** `Esc` close · `I` impact tool · `F` fit · `Z` wire · `G` grid · `S` seeds · `R` re-solve · `Space` reassemble · `1`–`5` views · `Ctrl+S` save. Double-click or Alt-click in the well places the impact.
+**Keys:** `Shift+1/2/3` Edit / Simulate / Play · `Space` fracture object (Edit) or play / pause · `Home` back to start · `,` `.` step back / ahead · `L` loop · `1`–`5` colour modes (5 = Energy) · `I` impact tool · `F` fit (`Alt+F` focus fragment) · `Z` wire · `G` grid · `S` seeds · `R` reassemble · `Esc` leave Simulate / Play, then close · `Ctrl+S` save. Double-click or Alt-click in the well places the impact.
 
-**Check:** `node Tests/FractureEngineCheck.mjs` fractures every specimen × material combination. It checks that the pieces fill the source volume, that every piece is closed, and that the ceiling is respected.
+**Checks:**
+- `node Tests/FractureEngineCheck.mjs` fractures every specimen × material combination. It checks that the pieces fill the source volume, that every piece is closed, and that the ceiling is respected.
+- `node Tests/FractureSimulationCheck.mjs` simulates every specimen. It checks that fragment shares add up to the kinetic budget, held fragments never move, nothing ends up more than 5 cm underground, every pose is finite, a bake takes under 1.5 s, and more impact energy never releases fewer fragments.
 
 ## Layout
 
 ```
 index.html, Studio.css      shell + Project Zero styles
+Inspector.css               Pattern-workspace inspector look shared by the Material Workspace and the Fracture Editor
+material.html, Material.css Material Workspace page
 Source/App.js               boot, Content library (IndexedDB), import menu / drop, built-in vehicle meshes
 Source/ComponentViewer.js   Blueprint-class viewer (tree, details, channels, simulate, drawers)
 Source/GeometryCompile.js   Geometry Compile window controller
-Source/FractureEditor.js    Fracture Editor window controller (targets, well, inspector, drawers, save / export)
+Source/FractureEditor.js    Fracture Editor window (outliner, Edit / Simulate / Play, transport, energy view, inspector, drawers, save / export)
+Source/FractureSimulation.js  headless rigid-body preview: impact energy shares, baked pose cache, sampling
+Source/InspectorKit.js      shared inspector sections, rows, switches, number fields, tiles, facts, setting search
 Source/FractureEngine.js    headless Voronoi fracture planner: materials, energy budget, specimens, closed cells, surface patches
 Source/Compile.js           headless pipeline (also used to pre-compile the vehicle parts)
 Source/Renderer.js          WebGL2 viewport: lit / checker / debug / normal, picking, lines, SDF raymarch, icon capture
@@ -174,6 +191,7 @@ Source/MeshData.js          OBJ / STL / FCT1 readers, topology, corner normals, 
 Source/Kit.js, Icons.js     inspector building blocks, icon set (StudioIconSet definitions + component glyphs)
 Tests/MaterialLodCheck.mjs  Node check for material-preserving Cluster LOD
 Tests/FractureEngineCheck.mjs  Node check for the fracture planner
+Tests/FractureSimulationCheck.mjs  Node check for the fracture physics preview
 Engine/                     Cluster LOD Studio engine (cluster hierarchy, QEM, UV charts, SDF bake, transforms) + workers
 Vehicle/                    FCT1 codec, material + vehicle specification sheets, ControlVehicle facet archive
 ```

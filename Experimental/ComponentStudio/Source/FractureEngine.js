@@ -44,9 +44,10 @@ export function normalizeRecipe(input = {}) {
   return r;
 }
 
-// Everything that changes geometry. Mode / SDF / bake receipts are excluded so toggling them never makes a bake stale.
+// Everything that changes geometry. Mode, SDF, bake receipts and the Simulate settings are excluded, so changing them
+// never makes a bake stale.
 export function signature(source, recipe) {
-  const { Enabled, Mode, PieceSdf, SdfResolution, Baked, Thumb, EditedAt, Pieces, ...geo } = normalizeRecipe(recipe);
+  const { Enabled, Mode, PieceSdf, SdfResolution, Baked, Thumb, EditedAt, Pieces, Simulation, ...geo } = normalizeRecipe(recipe);
   return hash(JSON.stringify({ v: 1, source: source.key, geo }));
 }
 function hash(text) { let h = 2166136261; for (let i = 0; i < text.length; i++) { h ^= text.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0).toString(16).padStart(8, '0'); }

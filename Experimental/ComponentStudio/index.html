@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Frontier · Component Studio</title>
 <link rel="stylesheet" href="./Studio.css">
+<link rel="stylesheet" href="./Inspector.css">
 </head>
 <body>
 
@@ -201,37 +202,36 @@
   <div class="workspace">
     <div class="notch"><button id="FractureBack" title="Back to the Component Viewer (Esc)">Component Viewer</button><i>·</i><b>Fracture Editor</b></div>
 
-    <section class="dock left" aria-label="Fracture targets">
-      <div class="tab-strip"><div class="document-tab active">Targets</div></div>
+    <section class="dock left" aria-label="Fracture outliner">
+      <div class="tab-strip"><div class="document-tab active">Outliner</div></div>
       <div class="outliner-heading"><h1>Fracture</h1><small id="FractureClass">—</small></div>
-      <div class="file-card" id="FractureOwner"></div>
+      <button class="file-card fx-target" id="FractureOwner" title="Choose the object to fracture" aria-haspopup="menu"></button>
       <div class="stats" style="margin-top:10px">
-        <div class="stat-tile"><span class="disc teal" data-icon="fracture" data-size="13"></span><small>Fragments</small><strong id="FractureStatPieces">—</strong></div>
-        <div class="stat-tile"><span class="disc ok" data-icon="check" data-size="13"></span><small>Enabled</small><strong id="FractureStatEnabled">0</strong></div>
+        <div class="stat-tile"><span class="disc teal" data-icon="fragment" data-size="13"></span><small>Fragments</small><strong id="FractureStatPieces">—</strong></div>
+        <div class="stat-tile"><span class="disc amber" data-icon="energy" data-size="13"></span><small>Released</small><strong id="FractureStatReleased">—</strong></div>
       </div>
       <div class="search-row">
-        <label class="search"><span data-icon="search" data-size="14"></span><input id="FractureSearch" type="search" placeholder="Search targets" autocomplete="off"></label>
+        <label class="search"><span data-icon="search" data-size="14"></span><input id="FractureSearch" type="search" placeholder="Search fragments" autocomplete="off"></label>
       </div>
-      <div class="outliner-scroll">
-        <div class="collection"><b>CLASS COMPONENTS</b><span class="count" id="FractureComponentCount">0</span></div>
-        <div id="FractureComponents"></div>
-        <div class="collection"><b>SPECIMENS</b><span class="count" id="FractureSpecimenCount">0</span></div>
-        <div id="FractureSpecimens"></div>
-        <div class="collection"><b>RECIPE PRESETS</b><span class="count">APPLY</span></div>
-        <div id="FracturePresets"></div>
-      </div>
+      <div class="outliner-scroll" id="FractureTree" role="tree" aria-label="Object and fragments"></div>
       <div class="dock-footer"><span><i>OWNER</i><b id="FractureOwnerId">—</b></span><span><i>STORAGE</i><b id="FractureStorage">—</b></span><span class="live" id="FractureSaved">SAVED</span></div>
     </section>
 
     <section class="dock centre" aria-label="Fracture preview">
-      <div class="tab-strip"><div class="document-tab active"><span class="tab-dot"></span><span id="FractureTab">Fracture</span></div></div>
+      <div class="tab-strip"><div class="document-tab active"><span class="tab-dot"></span><span id="FractureTab">Fracture</span></div>
+        <div class="phase-switch" id="FracturePhase" role="radiogroup" aria-label="Editor mode">
+          <button data-phase="edit" class="active" role="radio" aria-checked="true" title="Edit the recipe with a static exploded preview (Shift+1)"><span data-icon="edit" data-size="13"></span>Edit</button>
+          <button data-phase="simulate" role="radio" aria-checked="false" title="Run rigid-body physics on the fragments. The recipe stays editable (Shift+2)"><span data-icon="simulate" data-size="13"></span>Simulate</button>
+          <button data-phase="play" role="radio" aria-checked="false" title="Play the impact the way a game would: whole object, hit, break (Shift+3)"><span data-icon="play" data-size="13"></span>Play</button>
+        </div>
+      </div>
       <header class="viewport-heading">
         <span class="scene-icon" data-icon="fracture" data-size="20" data-accent="teal"></span>
         <div class="scene-title"><b id="FractureTitle">—</b><small id="FractureNote">—</small></div>
         <span id="FractureState" class="state-tag">DYNAMIC</span>
         <div class="spacer"></div>
-        <div id="FractureModes" class="segmented" role="radiogroup" aria-label="Preview mode">
-          <button data-fmode="source">Source</button><button data-fmode="pieces" class="active">Pieces</button><button data-fmode="material">Material</button><button data-fmode="size">Size</button><button data-fmode="priority">Priority</button>
+        <div id="FractureModes" class="segmented" role="radiogroup" aria-label="Colour fragments by">
+          <button data-fmode="source">Source</button><button data-fmode="pieces" class="active">Pieces</button><button data-fmode="material">Material</button><button data-fmode="size">Size</button><button data-fmode="energy"><span data-icon="energy" data-size="12"></span>Energy</button>
         </div>
       </header>
       <div class="viewport-tools">
@@ -249,22 +249,40 @@
         <div id="FractureReadout" class="readout"></div>
         <div id="FractureLegend" class="legend" hidden></div>
         <div id="FractureBanner" class="well-banner" hidden></div>
+        <div id="FracturePhaseBadge" class="phase-badge" hidden></div>
         <div class="chips"><span>ORBIT <b>LEFT DRAG</b></span><span>PAN <b>RIGHT DRAG</b></span><span>ZOOM <b>SCROLL</b></span><span>IMPACT <b>DOUBLE-CLICK</b></span><span>PIECE <b>CLICK</b></span></div>
         <div id="FractureOff" class="off-card" hidden></div>
       </div>
-      <div class="fracture-bar">
+      <div class="fracture-bar" id="FractureEditBar">
         <div class="sep-field">
-          <div class="sep-label"><b>Fragment separation</b><small>INSPECTION ONLY · NOT SIMULATION</small></div>
+          <div class="sep-label"><b>Fragment separation</b><small>INSPECTION ONLY · USE SIMULATE FOR PHYSICS</small></div>
           <span class="value-pill"><input id="FractureSepNumber" type="number" min="0" max="100" step="1" value="18" aria-label="Fragment separation value"><span>%</span></span>
           <input id="FractureSep" type="range" class="cream" min="0" max="100" step="1" value="18" aria-label="Fragment separation">
         </div>
         <button id="FractureAssemble" class="tool" title="Reassemble (R)"><span data-icon="assemble" data-size="15"></span>Reassemble</button>
         <button id="FractureRun" class="mint" title="Fracture and separate (Space)"><span data-icon="explode" data-size="15"></span>Fracture object</button>
       </div>
+      <div class="fracture-bar transport" id="FractureTransport" hidden>
+        <div class="transport-keys">
+          <button id="FractureToStart" class="tool round" title="Back to the start (Home)" aria-label="Back to the start"><span data-icon="toStart" data-size="14"></span></button>
+          <button id="FracturePlay" class="play-btn" title="Play / pause (Space)" aria-label="Play or pause"><span data-icon="pause" data-size="16"></span></button>
+          <button id="FractureStepAhead" class="tool round" title="Step ahead (.) · step back (,)" aria-label="Step ahead"><span data-icon="stepAhead" data-size="14"></span></button>
+        </div>
+        <div class="scrub">
+          <div class="scrub-time"><b id="FractureTime">0.00 s</b><small id="FractureTimeNote">of 4.00 s</small></div>
+          <div class="scrub-track">
+            <svg id="FractureEnergyCurve" viewBox="0 0 1000 40" preserveAspectRatio="none" aria-hidden="true"></svg>
+            <i id="FractureImpactMark" class="mark impact" title="Impact"></i><i id="FractureSettleMark" class="mark settle" title="All fragments at rest"></i>
+            <input id="FractureScrub" type="range" min="0" max="1000" step="1" value="0" aria-label="Simulation time">
+          </div>
+        </div>
+        <div class="segmented" id="FractureSpeed" aria-label="Playback speed"><button data-speed="0.25">¼×</button><button data-speed="0.5">½×</button><button data-speed="1" class="active">1×</button></div>
+        <button id="FractureLoop" class="tool round active" title="Loop (L)" aria-label="Loop"><span data-icon="loop" data-size="14"></span></button>
+      </div>
       <div class="fracture-metrics" id="FractureMetrics"></div>
-      <footer class="strip"><span id="FractureStrip">—</span><span class="grow"></span><span>FRACTURE EDITOR</span></footer>
+      <footer class="strip"><span id="FractureStrip">—</span><span class="grow"></span><span id="FracturePhaseStrip">FRACTURE EDITOR · EDIT</span></footer>
       <div class="drawer-handles">
-        <button class="drawer-handle" data-drawer="FragmentDrawer"><svg class="trap" viewBox="0 0 170 30" preserveAspectRatio="none"><path d="M0 30 L18 0 L152 0 L170 30 Z"/></svg><span><span data-icon="fracture" data-size="13"></span>Fragments</span></button>
+        <button class="drawer-handle" data-drawer="FragmentDrawer"><svg class="trap" viewBox="0 0 170 30" preserveAspectRatio="none"><path d="M0 30 L18 0 L152 0 L170 30 Z"/></svg><span><span data-icon="fracture" data-size="13"></span>Fragment table</span></button>
         <button class="drawer-handle" data-drawer="FractureLogDrawer"><svg class="trap" viewBox="0 0 170 30" preserveAspectRatio="none"><path d="M0 30 L18 0 L152 0 L170 30 Z"/></svg><span><span data-icon="receipt" data-size="13"></span>Fracture log</span></button>
       </div>
       <div id="FragmentDrawer" class="drawer">
@@ -272,14 +290,14 @@
         <div class="fragment-table" id="FragmentTable"></div>
       </div>
       <div id="FractureLogDrawer" class="drawer">
-        <header><b>Fracture log</b><small>Budget, refused candidates and timings for every solve</small><div class="spacer"></div><button class="tool" data-close-drawer>Close</button></header>
+        <header><b>Fracture log</b><small>Budget, refused candidates, simulation bakes and timings</small><div class="spacer"></div><button class="tool" data-close-drawer>Close</button></header>
         <div id="FractureLog" class="log"></div>
       </div>
     </section>
 
     <section class="dock right" aria-label="Fracture inspector">
-      <div class="tab-strip"><div class="document-tab active">Fracture Inspector</div></div>
-      <div class="inspector-scroll" id="FractureInspector"></div>
+      <div class="tab-strip"><div class="document-tab active">Inspector</div></div>
+      <div class="mi-scroll fx-inspector" id="FractureInspector"></div>
       <div class="compile-actions">
         <div class="btn-row"><button id="FractureClose" class="tool">Close</button><button id="FractureRevert" class="tool">Revert</button><button id="FractureExport" class="tool"><span data-icon="export" data-size="14"></span>Export</button></div>
         <button id="FractureSave" class="go mint">Save fracture</button>
