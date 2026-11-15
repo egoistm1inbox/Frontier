@@ -1,0 +1,248 @@
+<!doctype html>
+<!-- Particle Studio · inspector categories (static mockup). Same shell and kit as studio.html. -->
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Particle Studio · inspector categories</title>
+<link rel="stylesheet" href="redesign.css?v=2" />
+<style>
+body { background: #060606; }
+.board { height: 100vh; display: grid; grid-template-columns: repeat(3, 344px) minmax(0, 1fr); gap: 22px; padding: 14px 22px 16px; }
+.col { min-height: 0; display: flex; flex-direction: column; gap: 8px; }
+.col-title { flex: none; display: flex; align-items: baseline; gap: 9px; font-size: 9.5px; letter-spacing: 1.2px; text-transform: uppercase; color: #6c6c6a; }
+.col-title b { font-weight: 400; font-size: 13px; letter-spacing: .2px; text-transform: none; color: #ecebe8; }
+.col .dock { flex: 1; border-radius: 4px; }
+.hero.sm { height: 96px; }
+.hero.sm .hero-t { bottom: 22px; font-size: 15px; }
+/* spawn tiles (General UI "Tomography" folders) */
+.spawn { position: relative; height: 104px; padding: 10px 11px; border-radius: 16px; background: var(--glass), var(--tile); border: 1px solid var(--line); }
+.spawn b { display: block; font-weight: 400; font-size: 11.5px; color: var(--ink); }
+.spawn em { display: block; font-style: normal; font-size: 9.5px; color: #6c6c6a; margin-top: 1px; }
+.spawn img { position: absolute; left: 50%; bottom: 10px; width: 40px; height: 40px; margin-left: -20px; }
+.spawn.on { border-color: #dec19366; background: linear-gradient(160deg, #dec19318, #ffffff05 50%), var(--tile); }
+.spawn.on::after { content: ''; position: absolute; right: 11px; bottom: 11px; width: 16px; height: 16px; border-radius: 50%; background: #34c759 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4.5 8.3l2.3 2.2 4.7-4.8' fill='none' stroke='%23062b12' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E") center / 12px no-repeat; }
+.limepill { height: 34px; display: flex; align-items: center; gap: 8px; padding: 0 14px; border-radius: 17px; background: #d6f06a; color: #2a3010; font-size: 11px; }
+.limepill b { font-weight: 500; color: #12160a; }
+.limepill .ic { margin-left: auto; }
+/* node menu */
+.menu { position: absolute; z-index: 9; right: 14px; top: 76px; width: 206px; padding: 6px; border-radius: 16px; background: #1b1b1b; border: 1px solid #ffffff1c; box-shadow: 0 20px 40px #000c; }
+.menu div { height: 32px; display: flex; align-items: center; gap: 10px; padding: 0 10px; border-radius: 10px; font-size: 11px; font-weight: 400; color: #d4d4d2; }
+.menu div:first-child { background: #262626; }
+.menu div kbd { margin-left: auto; }
+.menu div .ic { color: #8a8a88; }
+.menu hr { border: 0; border-top: 1px solid #ffffff10; margin: 4px 6px; }
+.menu .danger, .menu .danger .ic { color: #f0968c; }
+/* look */
+.well { padding: 10px; border-radius: 18px; background: #141414; border: 1px solid var(--line); }
+.well-h { display: flex; align-items: center; font-size: 12px; font-weight: 400; color: var(--ink); }
+.well-h .pill { margin-left: auto; height: 24px; padding: 0 10px; font-size: 9.5px; }
+.lens { margin-top: 9px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; padding: 5px; border-radius: 13px; background: #0b0b0b; }
+.lens span { height: 64px; position: relative; border-radius: 9px; background: #161616; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; padding-bottom: 6px; font-size: 9px; color: #8a8a88; }
+.lens span i { position: absolute; top: 9px; left: 50%; margin-left: -13px; width: 26px; height: 26px; border-radius: 50%; }
+.lens span.on { background: #f1f0ed; color: #111; }
+.ramp { position: relative; margin-top: 12px; height: 14px; border-radius: 7px; background: var(--ramp); }
+.ramp i { position: absolute; top: -3px; width: 8px; height: 20px; margin-left: -4px; border-radius: 4px; background: #fff; box-shadow: 0 0 0 2px #0b0b0b; }
+.ramp-l { margin-top: 7px; display: flex; justify-content: space-between; font-size: 9px; color: #6c6c6a; }
+/* lifespan */
+.big { position: relative; padding: 12px 13px 10px; border-radius: 18px; background: var(--glass), var(--tile); border: 1px solid var(--line); }
+.big small { font-size: 11px; font-weight: 400; color: #c4c4c2; }
+.big b { display: block; margin-top: 6px; font-weight: 300; font-size: 38px; letter-spacing: -1.2px; line-height: 1; }
+.big b u { text-decoration: none; font-size: 13px; letter-spacing: 0; color: #7a7a78; }
+.age { margin-top: 10px; position: relative; height: 70px; }
+.age-l { position: absolute; font-size: 8.5px; color: #6c6c6a; }
+.seg2 { display: grid; grid-template-columns: 1fr 1fr; gap: 3px; padding: 3px; border-radius: 14px; background: #0b0b0b; border: 1px solid var(--line); }
+.seg2 span { height: 28px; display: grid; place-items: center; border-radius: 11px; font-size: 10.5px; font-weight: 400; color: #8a8a88; }
+.seg2 span.on { background: #f1f0ed; color: #111; }
+/* notes */
+.notes { padding: 22px 6px 0 4px; }
+.notes h1 { font-weight: 300; font-size: 22px; letter-spacing: -.3px; }
+.notes p { margin-top: 8px; font-size: 10.5px; line-height: 1.55; color: #8e8e8c; }
+.notes p b { font-weight: 400; color: #ecebe8; }
+.notes h2 { margin-top: 18px; font-weight: 400; font-size: 9px; letter-spacing: 1.4px; text-transform: uppercase; color: #8e8e8c; }
+.map { margin-top: 7px; font-size: 10.5px; color: #8e8e8c; }
+.map div { display: flex; justify-content: space-between; gap: 10px; padding: 5px 0; border-bottom: 1px solid #ffffff0a; }
+.map div span:last-child { color: #d4d4d2; text-align: right; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+    <symbol id="i-search" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.6"/><path d="M10.5 10.5L14 14"/></symbol>
+    <symbol id="i-chev" viewBox="0 0 16 16"><path d="M4 6l4 4 4-4"/></symbol>
+    <symbol id="i-up" viewBox="0 0 16 16"><path d="M4 10l4-4 4 4"/></symbol>
+    <symbol id="i-arrow" viewBox="0 0 16 16"><path d="M5 11l6-6M6 5h5v5"/></symbol>
+    <symbol id="i-check" viewBox="0 0 16 16"><path d="M4 8.3l2.6 2.5L12 5.5"/></symbol>
+    <symbol id="i-spark" viewBox="0 0 16 16"><path d="M8 2l1.3 3.7L13 7l-3.7 1.3L8 12l-1.3-3.7L3 7l3.7-1.3z"/><path d="M12.5 11.5l.5 1.5 1.5.5-1.5.5-.5 1.5-.5-1.5-1.5-.5 1.5-.5z"/></symbol>
+    <symbol id="i-filter" viewBox="0 0 16 16"><path d="M3 4.5h10M5 8h6M7 11.5h2"/></symbol>
+    <symbol id="i-dots" viewBox="0 0 16 16"><circle cx="4" cy="8" r=".9"/><circle cx="8" cy="8" r=".9"/><circle cx="12" cy="8" r=".9"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 16 16"><path d="M8 3.5v9M3.5 8h9"/></symbol>
+    <symbol id="i-play" viewBox="0 0 16 16"><path d="M5.5 3.8v8.4L12 8z" fill="currentColor"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 16 16"><path d="M5.5 4v8M10.5 4v8" stroke-width="2.2"/></symbol>
+    <symbol id="i-step" viewBox="0 0 16 16"><path d="M5 4.5v7L10 8zM11.5 4.5v7"/></symbol>
+    <symbol id="i-loop" viewBox="0 0 16 16"><path d="M3.5 8a4.5 4.5 0 0 1 7.8-3M12.5 8a4.5 4.5 0 0 1-7.8 3"/><path d="M11.5 2.5v2.8H8.7M4.5 13.5v-2.8h2.8"/></symbol>
+    <symbol id="i-burst" viewBox="0 0 16 16"><path d="M8 1.8v3M8 11.2v3M1.8 8h3M11.2 8h3M3.6 3.6l2.1 2.1M10.3 10.3l2.1 2.1M3.6 12.4l2.1-2.1M10.3 5.7l2.1-2.1"/></symbol>
+    <symbol id="i-orbit" viewBox="0 0 16 16"><ellipse cx="8" cy="8" rx="6" ry="2.6"/><circle cx="8" cy="8" r="1.6"/></symbol>
+    <symbol id="i-target" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5"/><circle cx="8" cy="8" r="1.5"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2"/></symbol>
+    <symbol id="i-ball" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.2"/><path d="M3 6.5c3 1.5 7 1.5 10 0M5 12c1-3 1-6 0-9"/></symbol>
+    <symbol id="i-reset" viewBox="0 0 16 16"><path d="M3.5 8a4.5 4.5 0 1 0 1.4-3.3"/><path d="M3.5 2.8v2.6h2.6"/></symbol>
+    <symbol id="i-max" viewBox="0 0 16 16"><path d="M3 6V3h3M13 6V3h-3M3 10v3h3M13 10v3h-3"/></symbol>
+    <symbol id="i-map" viewBox="0 0 16 16"><path d="M2.5 4l3.5-1.5 4 1.5 3.5-1.5v9.5L10 13.5l-4-1.5-3.5 1.5z"/><path d="M6 2.5v9.5M10 4v9.5"/></symbol>
+    <symbol id="i-help" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.6"/><path d="M6.4 6.4a1.7 1.7 0 1 1 2.3 1.6c-.5.2-.7.6-.7 1.1M8 11.2v.1"/></symbol>
+    <symbol id="i-export" viewBox="0 0 16 16"><path d="M8 10V2.5M5 5.5l3-3 3 3M3 10v3.5h10V10"/></symbol>
+    <symbol id="i-rec" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5"/><circle cx="8" cy="8" r="2.4" fill="currentColor"/></symbol>
+    <symbol id="i-wind" viewBox="0 0 16 16"><path d="M2 6h8a2 2 0 1 0-2-2M2 10h10a2 2 0 1 1-2 2"/></symbol>
+</svg>
+<div class="board">
+
+<!-- ═════════ SOURCE + node menu ═════════ -->
+<section class="col">
+    <div class="col-title">Inspector <b>Source</b> · ··· menu open</div>
+    <div class="dock">
+        <div class="tabs"><span class="tab on">Inspector <span class="x">×</span></span></div>
+        <div class="ins" style="position:relative">
+            <div class="crumbs"><span>Inspector / Effects / <b>Silk &amp; Curl</b></span><span class="tools"><span class="toggle"></span><span class="round" style="border-color:#ffffff40;color:#fff"><svg class="ic"><use href="#i-dots"/></svg></span></span></div>
+            <div class="menu">
+                <div><svg class="ic"><use href="#i-plus"/></svg>Duplicate<kbd>Ctrl D</kbd></div>
+                <div><svg class="ic"><use href="#i-loop"/></svg>Clear particles</div>
+                <div><svg class="ic"><use href="#i-reset"/></svg>Reset to preset</div>
+                <div><svg class="ic"><use href="#i-target"/></svg>Frame in viewport<kbd>F</kbd></div>
+                <hr />
+                <div class="danger"><svg class="ic"><use href="#i-plus" transform="rotate(45 8 8)"/></svg>Delete<kbd>Del</kbd></div>
+            </div>
+            <div class="ins-title">Object Surface Pour Ribbons</div>
+            <div class="ins-sub">VFX · additive · <i>running</i></div>
+            <div class="hero sm" style="background-size:1200px 720px;background-position:-414px -306px">
+                <span class="hero-live">LIVE</span>
+                <div class="hero-t num">3,186 <span style="color:#ffffff80;font-size:11px">alive</span></div>
+                <div class="hero-s"><span>620 / S</span><span>94 % POOL</span><span>LIFE 3.4–5.2 S</span></div>
+            </div>
+            <div class="navpills" style="margin-top:12px"><span class="on">Source</span><span>Motion</span><span>Look</span><span>Lifespan</span></div>
+            <div class="sec" style="margin-top:12px"><span>Particles start on</span><em>4 shapes</em></div>
+            <div class="grid2" style="margin-top:8px">
+                <div class="spawn on"><b>Object surface</b><em>Ground_Mesh_02</em><img src="icons/editor-material.svg" alt="" /></div>
+                <div class="spawn"><svg class="ic arrow"><use href="#i-arrow"/></svg><b>Box volume</b><em>1.65 m</em><img src="icons/editor-cube.svg" alt="" /></div>
+                <div class="spawn"><svg class="ic arrow"><use href="#i-arrow"/></svg><b>Sphere shell</b><em>r 1.2 m</em><img src="icons/editor-sphere.svg" alt="" /></div>
+                <div class="spawn"><svg class="ic arrow"><use href="#i-arrow"/></svg><b>Ring</b><em>r 0.5 m</em><img src="icons/editor-torus.svg" alt="" /></div>
+            </div>
+            <div class="limepill" style="margin-top:8px">Surface: <b>Ground_Mesh_02</b><svg class="ic"><use href="#i-chev"/></svg></div>
+            <div class="grid2" style="margin-top:8px">
+                <div class="mt"><svg class="ic arrow"><use href="#i-arrow"/></svg><span class="delta">+120</span><b class="num">620<u>/s</u></b><small>Rate</small><div class="bar" style="--f:41%"><i></i></div></div>
+                <div class="mt"><svg class="ic arrow"><use href="#i-arrow"/></svg><b class="num">3,40<span class="frac">0</span></b><small>Pool · 94 % used</small><div class="bar" style="--f:94%;--c:#e8b86a"><i></i></div></div>
+            </div>
+            <div class="sec"><span>Pattern</span><em>how they arrive</em></div>
+            <div class="seg2" style="margin-top:8px"><span class="on">Steady stream</span><span>Bursts</span></div>
+        </div>
+        <div class="ins-foot">Revision 3 · 2 changes<b>Revert</b></div>
+    </div>
+</section>
+
+<!-- ═════════ LOOK ═════════ -->
+<section class="col">
+    <div class="col-title">Inspector <b>Look</b></div>
+    <div class="dock">
+        <div class="tabs"><span class="tab on">Inspector <span class="x">×</span></span></div>
+        <div class="ins">
+            <div class="crumbs"><span>Inspector / Effects / <b>Silk &amp; Curl</b></span><span class="tools"><span class="toggle"></span><span class="round"><svg class="ic"><use href="#i-dots"/></svg></span></span></div>
+            <div class="ins-title">Object Surface Pour Ribbons</div>
+            <div class="ins-sub">VFX · additive · <i>running</i></div>
+            <div class="hero sm" style="background-size:1200px 720px;background-position:-414px -306px">
+                <span class="hero-live">LIVE</span>
+                <div class="hero-t num">3,186 <span style="color:#ffffff80;font-size:11px">alive</span></div>
+                <div class="hero-s"><span>620 / S</span><span>94 % POOL</span><span>LIFE 3.4–5.2 S</span></div>
+            </div>
+            <div class="navpills" style="margin-top:12px"><span>Source</span><span>Motion</span><span class="on">Look</span><span>Lifespan</span></div>
+            <div class="well" style="margin-top:12px">
+                <div class="well-h">Bokeh head<span class="pill">All styles<svg class="ic" style="width:11px;height:11px"><use href="#i-chev"/></svg></span></div>
+                <div class="lens">
+                    <span class="on"><i style="background:radial-gradient(circle at 40% 40%,#333 0 4px,#888 5px 10px,#0000 11px)"></i>Mixed</span>
+                    <span><i style="background:radial-gradient(#eee 0 3px,#0000 4px)"></i>Sharp</span>
+                    <span><i style="background:radial-gradient(#bbb,#0000 70%)"></i>Creamy</span>
+                    <span><i style="background:radial-gradient(#0000 0 8px,#ddd 9px 10px,#0000 11px)"></i>Rim</span>
+                </div>
+            </div>
+            <div class="mt" style="margin-top:8px"><svg class="ic arrow"><use href="#i-arrow"/></svg><small style="margin-top:0">Colour over life</small>
+                <div class="ramp"><i style="left:0"></i><i style="left:40%"></i><i style="left:75%"></i><i style="left:100%"></i></div>
+                <div class="ramp-l"><span>born</span><span>4 stops · click to add</span><span>gone</span></div></div>
+            <div class="grid2" style="margin-top:6px">
+                <div class="mt"><svg class="ic arrow"><use href="#i-arrow"/></svg><b class="num">0.6<span class="frac"> – 1.4</span></b><small>Size</small><div class="bar" style="--f:70%"><i></i></div></div>
+                <div class="mt"><svg class="ic arrow"><use href="#i-arrow"/></svg><b class="num">0.8<span class="frac">5</span></b><small>Opacity</small><div class="bar" style="--f:85%"><i></i></div></div>
+            </div>
+            <div class="grid2" style="margin-top:6px">
+                <div class="qt on"><span class="seat"><svg class="ic" style="width:16px;height:16px"><use href="#i-spark"/></svg></span><span>Additive glow</span><small>On</small></div>
+                <div class="qt"><span class="seat"><svg class="ic" style="width:16px;height:16px"><use href="#i-orbit"/></svg></span><span>Face camera</span><small>Off</small></div>
+            </div>
+        </div>
+        <div class="ins-foot">Revision 3 · 2 changes<b>Revert</b></div>
+    </div>
+</section>
+
+<!-- ═════════ LIFESPAN (pool full) ═════════ -->
+<section class="col">
+    <div class="col-title">Inspector <b>Lifespan</b> · pool full</div>
+    <div class="dock">
+        <div class="tabs"><span class="tab on">Inspector <span class="x">×</span></span></div>
+        <div class="ins">
+            <div class="crumbs"><span>Inspector / Effects / <b>Silk &amp; Curl</b></span><span class="tools"><span class="toggle"></span><span class="round"><svg class="ic"><use href="#i-dots"/></svg></span></span></div>
+            <div class="ins-title">Object Surface Pour Ribbons</div>
+            <div class="ins-sub">VFX · additive · <i style="color:#f0968c">pool full</i></div>
+            <div class="hero sm" style="background-size:1200px 720px;background-position:-414px -306px">
+                <span class="hero-live full" style="color:#f0968c">FULL</span>
+                <div class="hero-t num">3,400 <span style="color:#ffffff80;font-size:11px">alive</span></div>
+                <div class="hero-s"><span>980 / S</span><span>100 % POOL</span><span>LIFE 3.4–5.2 S</span></div>
+            </div>
+            <div class="alert" style="margin-top:12px">
+                <div class="alert-h"><span class="badge-n">1</span><div><b>~180 particles dropped</b><em>4 s ago</em></div><svg class="ic chev"><use href="#i-up"/></svg></div>
+                <div class="alert-list"><div>Adding 980 per second<em>needs room for about 4,400</em></div><div>Pool holds 3,400<em>full for the last 4 s</em></div></div>
+                <div class="rec"><svg class="ic"><use href="#i-spark"/></svg><div>Recommend<em>Raise the pool to 4,500</em></div><span class="go">Apply</span></div>
+            </div>
+            <div class="navpills" style="margin-top:12px"><span>Source</span><span>Motion</span><span>Look</span><span class="on">Lifespan</span></div>
+            <div class="big" style="margin-top:12px"><svg class="ic arrow"><use href="#i-arrow"/></svg><small>Each particle lives</small><b class="num">3.4 <span class="frac">– 5.2</span> <u>s</u></b>
+                <div class="age">
+                    <svg width="100%" height="56" viewBox="0 0 300 56" preserveAspectRatio="none">
+                        <line x1="0" y1="10" x2="300" y2="10" stroke="#ffffff30" stroke-dasharray="3 3"/>
+                        <line x1="0" y1="30" x2="300" y2="30" stroke="#ffffff18" stroke-dasharray="3 3"/>
+                        <rect x="196" y="0" width="104" height="56" fill="#ffffff07"/>
+                        <path d="M0 14 C40 12 80 13 120 15 S180 16 196 18 C230 26 260 42 300 54" fill="none" stroke="#e4e4e2" stroke-width="1.2" vector-effect="non-scaling-stroke"/>
+                        <circle cx="196" cy="18" r="2.5" fill="#fff"/><circle cx="270" cy="45" r="2.5" fill="#fff"/>
+                    </svg>
+                    <span class="age-l" style="left:0;bottom:0">born</span><span class="age-l" style="left:58%;bottom:0">3.4 s</span><span class="age-l" style="right:0;bottom:0">5.2 s</span><span class="age-l" style="right:0;top:-2px">alive</span>
+                </div></div>
+            <div class="grid2" style="margin-top:6px">
+                <div class="mt"><svg class="ic arrow"><use href="#i-arrow"/></svg><span class="delta">+0.2</span><b class="num">0.8<u>s</u></b><small>Fade out</small><div class="bar" style="--f:40%"><i></i></div></div>
+                <div class="qt" style="height:auto"><span class="seat"><img src="icons/editor-lock.svg" alt="" style="width:16px;height:16px;opacity:.7" /></span><span>Floor bounce</span><small>Stays airborne</small></div>
+            </div>
+            <div class="sec"><span>When the pool is full</span></div>
+            <div class="seg2" style="margin-top:8px"><span class="on">Drop new</span><span>Recycle oldest</span></div>
+        </div>
+        <div class="ins-foot">Revision 3 · 2 changes<b>Revert</b></div>
+    </div>
+</section>
+
+<!-- ═════════ NOTES ═════════ -->
+<section class="notes">
+    <h1>Particle Studio redesign</h1>
+    <p>Built on the <b>Project Zero editor</b> shell (docks, dock tabs, notches, isometric icons, quick tiles) and the <b>General UI</b> references: count chips, status pair, tinted alert with a numbered badge and Recommend, pill nav with one filled item, metric tiles with ↗, dashed target lines, white primary pill, viewport callouts.</p>
+
+    <h2>Inspector categories</h2>
+    <div class="map">
+        <div><span>Source</span><span>where particles start, rate, pool</span></div>
+        <div><span>Motion</span><span>curl, wind, gravity, drag, forces acting</span></div>
+        <div><span>Look</span><span>bokeh head, colour over life, size, glow</span></div>
+        <div><span>Lifespan</span><span>life, fade, floor, when full</span></div>
+    </div>
+    <p>The live preview sits above the categories on every page, so the <b>Overview page is gone</b>. Problems show up as an alert at the top, with a fix.</p>
+
+    <h2>Layout changes</h2>
+    <div class="map">
+        <div><span>Outliner filter dropdown</span><span>count chips</span></div>
+        <div><span>Visible / Hidden tiles</span><span>Running / Needs a look</span></div>
+        <div><span>Pool warnings</span><span>alert in the list + inspector</span></div>
+        <div><span>Inspector Burst</span><span>one Burst all pill</span></div>
+        <div><span>Duplicate, Clear, Delete row</span><span>··· menu</span></div>
+        <div><span>Modules &amp; Record tab</span><span>Record in the header</span></div>
+        <div><span>Transport + timeline</span><span>one bar with particle-count line</span></div>
+        <div><span>Stat chips in viewport</span><span>metric tiles + callout</span></div>
+    </div>
+</section>
+</div>
+</body>
+</html>
