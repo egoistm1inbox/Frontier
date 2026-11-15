@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Frontier · UV Workspace (Project-Zero UI)</title>
 <link rel="stylesheet" href="UVEditor.css">
+<link rel="stylesheet" href="Outliner.css">
 <script type="importmap">
 {
   "imports": {
@@ -40,93 +41,54 @@
   <!-- 3-COLUMN PROJECT-ZERO DOCK WORKSPACE (Starts at y = 0 with Unrounded Trapezoidal Tabs) -->
   <main class="workspace" id="workspace">
     <!-- LEFT DOCK PANE: UV SPACE & IMPORTANCE ALLOCATION -->
-    <aside class="left-panel" id="left-panel">
+    <aside class="left-panel uvo" id="left-panel">
       <div class="pz-dock-tabbar">
-        <div class="pz-trap-tab active"><span>UV Space</span><i class="pz-tab-x">×</i></div>
-        <button class="pz-tab-plus" id="compact-outliner" type="button" title="Toggle Compact UV Space Panel">+</button>
+        <div class="pz-trap-tab active"><span>Outliner</span><i class="pz-tab-x">×</i></div>
+        <button class="pz-tab-plus" id="compact-outliner" type="button" title="Compact Outliner (hide the issue tiles)"></button>
       </div>
 
-      <div class="outliner-heading">
-        <div class="pz-outliner-title-row">
-          <h1>UV Space</h1>
-          <span class="outliner-subtitle" id="pz-outliner-node-summary">0 total islands</span>
-        </div>
-        <div class="outliner-heading-actions">
-          <button class="pz-outliner-plus-btn" id="pz-new-folder-btn" type="button" title="Add UV Layer" aria-label="Add UV Layer">+</button>
-          <button class="icon-button" id="add-udim-quick" type="button" title="Add UDIM Tile" hidden></button>
-        </div>
+      <div class="ol-head">
+        <h1>Outliner</h1><span class="ol-scope" id="pz-outliner-node-summary">0 islands</span>
+        <button class="ol-round" id="ol-collapse-all" type="button" title="Collapse or expand all groups"></button>
+        <button class="ol-round pz-outliner-plus-btn" id="pz-new-folder-btn" type="button" title="New UV layer from the selected islands" aria-label="New UV layer"></button>
+        <button class="icon-button" id="add-udim-quick" type="button" title="Add UDIM Tile" hidden></button>
       </div>
 
-      <label class="search">
-        <span class="search-icon" id="search-icon"></span>
-        <input id="outliner-search" type="search" placeholder="Search layers Ctrl+F">
-        <kbd>Ctrl+F</kbd>
-      </label>
-
-      <!-- ONLY Search + UDIM Filters -->
-      <div class="scene-filters pz-udim-filter-bar" id="outliner-filters">
-        <button class="active" data-udim="all" type="button">All UDIMs</button>
-        <button data-udim="1001" type="button">1001</button>
+      <div class="ol-stats">
+        <button class="ol-stat" id="stat-overlap-card" type="button" title="Select overlapping or flipped UV faces">
+          <span class="ol-stat-mark" id="stat-islands-icon"></span><span class="ol-stat-label">Overlaps</span><b id="stat-islands-count">0</b>
+        </button>
+        <button class="ol-stat" id="stat-issues-card" type="button" title="Select islands with high angle stretch">
+          <span class="ol-stat-mark" id="stat-udim-icon"></span><span class="ol-stat-label" id="stat-issues-label">Stretch Caution</span><b id="stat-udim-count">0</b>
+        </button>
       </div>
 
-      <!-- Legacy UDIM Strip Hidden -->
-      <div class="udim-strip-header" hidden>
-        <span>UDIM TILES</span>
-        <button class="text-pill-btn" id="frame-udims-btn" type="button">Frame</button>
+      <div class="ol-tools">
+        <label class="ol-search"><span class="search-icon" id="search-icon"></span><input id="outliner-search" type="search" placeholder="Search" autocomplete="off" spellcheck="false"><kbd>Ctrl+F</kbd></label>
+        <div class="ol-drop" id="outliner-filters"><button class="active" data-udim="all" type="button">All UDIMs</button></div>
       </div>
+
+      <!-- Kept for the shortcuts that still reference them -->
+      <div class="udim-strip-header" hidden><button class="text-pill-btn" id="frame-udims-btn" type="button">Frame</button></div>
       <div class="udim-chip-strip" id="udim-chip-strip" hidden></div>
-
-      <!-- Scrollable UV Space Stack: 5 Infographic Cards + Frontier Editor Unrounded Layer Boxes -->
-      <div class="panel-scroll outliner-scroll" id="outliner-scroll">
-        <div class="panel-content" id="outliner-scroll-content">
-          <!-- 1. 5 Infographic Cards: 3 Pack Allocation Tiles + Stretch Caution (Amber) + Overlaps (Red) -->
-          <div class="kpi-trio pz-left-kpi-trio">
-            <button class="kpi-card highlight pz-kpi-btn" id="lp-kpi-util" type="button" title="Active UDIM tile pack utilization (click to open Pack settings)">
-              <span class="kpi-label">Utilization</span>
-              <strong class="kpi-value" id="lp-kpi-util-val">0%</strong>
-              <small class="kpi-sub" id="lp-kpi-util-sub">UDIM 1001</small>
-            </button>
-            <button class="kpi-card pz-kpi-btn" id="lp-kpi-selected" type="button" title="Selected UV islands">
-              <span class="kpi-label">Selected</span>
-              <strong class="kpi-value" id="lp-kpi-sel-val">0</strong>
-              <small class="kpi-sub" id="lp-kpi-sel-sub">Click islands</small>
-            </button>
-            <button class="kpi-card pz-kpi-btn" id="lp-kpi-remaining" type="button" title="Select unassigned Auto-Remainder islands">
-              <span class="kpi-label">Remaining</span>
-              <strong class="kpi-value" id="lp-kpi-rem-val">100%</strong>
-              <small class="kpi-sub" id="lp-kpi-rem-sub">Auto-fill</small>
-            </button>
-          </div>
-
-          <div class="scene-statistics pz-in-scroll-stats">
-            <button class="scene-stat pz-bento-stat pz-stretch-card" id="stat-issues-card" type="button" title="Select high UV stretch caution charts">
-              <div class="stat-symbol pz-stretch-amber-symbol" id="stat-udim-icon">α</div>
-              <span class="stat-label" id="stat-issues-label">Stretch Caution</span>
-              <strong id="stat-udim-count">0</strong>
-            </button>
-            <button class="scene-stat pz-bento-stat pz-overlap-card" id="stat-overlap-card" type="button" title="Select overlapping or flipped UV faces">
-              <div class="stat-symbol pz-overlap-red-symbol" id="stat-islands-icon">!</div>
-              <span class="stat-label">Overlaps</span>
-              <strong id="stat-islands-count">0</strong>
-            </button>
-          </div>
-
-          <!-- 2. Frontier Editor Unrounded Colour-Coded Layer Boxes -->
-          <div id="outliner-list"></div>
-        </div>
-      </div>
-
-      <!-- Hidden Legacy Quick Unwrap Drawer (Moved cleanly into Unwrap Inspector Tab to declutter Outliner) -->
       <div class="library" id="quick-unwrap-drawer" hidden>
-        <div class="panel-heading">
-          <span>Quick Unwrap &amp; Projections</span>
-          <button class="text-pill-btn" id="btn-smart-project-quick" type="button">Smart UV</button>
-        </div>
+        <button class="text-pill-btn" id="btn-smart-project-quick" type="button">Smart UV</button>
         <div class="preset-list" id="quick-unwrap-list"></div>
       </div>
 
-      <!-- Sticky Footer: UDIM Space Budget (No redundant layer % text chips) -->
-      <footer class="pz-outliner-budget-footer" id="lp-udim-budget-card"></footer>
+      <!-- Tree: Surfaces · UV layers · UDIM tiles · Islands -->
+      <div class="panel-scroll outliner-scroll ol-tree" id="outliner-scroll">
+        <div class="panel-content" id="outliner-scroll-content"><div id="outliner-list"></div></div>
+      </div>
+
+      <div class="ol-foot">
+        <footer class="pz-outliner-budget-footer" id="lp-udim-budget-card"></footer>
+        <div class="ol-status">
+          <button id="lp-kpi-util" type="button" title="Active UDIM tile utilisation (opens Pack)"><span>Fill</span><b id="lp-kpi-util-val">0%</b><small id="lp-kpi-util-sub">UDIM 1001</small></button>
+          <button id="lp-kpi-selected" type="button" title="Selected islands (frames them)"><span>Selected</span><b id="lp-kpi-sel-val">0</b><small id="lp-kpi-sel-sub"></small></button>
+          <button id="lp-kpi-remaining" type="button" title="Share left for unassigned islands (selects them)"><span>Remainder</span><b id="lp-kpi-rem-val">100%</b><small id="lp-kpi-rem-sub"></small></button>
+        </div>
+      </div>
       <span id="left-footer-text" hidden></span>
       <div class="pz-col-resizer pz-resizer-left" id="pz-resizer-left" title="Drag to resize Outliner"></div>
     </aside>

@@ -279,15 +279,7 @@ function FastSyncSelectionViews(Doc = ActiveDoc(), RefreshInspector = true)
     }
     ScheduleFast2DRender(Doc);
 
-    const FilterUdimNum = StudioState.udimFilter === 'all' ? null : Number(StudioState.udimFilter);
-    const Cards = document.querySelectorAll('#outliner-list .pz-uv-layer-card[data-layer-id]');
-    for (const Card of Cards)
-    {
-        const Lid = Card.dataset.layerId;
-        const Ref = Doc.surface.GetLayerFaceRef(Lid === '__unassigned__' ? null : Lid, Doc.islands, FilterUdimNum);
-        const IsActiveOrSel = (Doc.activeLayerId === Lid) || IsFaceGroupRefSelected(Doc.surface, Ref);
-        Card.classList.toggle('selected', IsActiveOrSel);
-    }
+    RefreshOutlinerSelection(Doc);
 
     const SelIslCount = Doc.surface.selectedIslands.size;
     const SelVal = document.getElementById('lp-kpi-sel-val');
@@ -652,13 +644,14 @@ function RenderUdimFilterBar(Doc)
     _lastUdimFilterSig = Sig;
 
     Bar.textContent = '';
-    const MakeBtn = (Label, Val) =>
+    const MakeBtn = (Label, Val, Sub) =>
     {
-        const Btn = Construct('button', String(StudioState.udimFilter) === String(Val) ? 'active' : '', Label);
+        const Btn = Construct('button', String(StudioState.udimFilter) === String(Val) ? 'active' : '', [Construct('span', null, Label), Sub ? Construct('small', null, Sub) : null]);
         Btn.type = 'button';
         Btn.dataset.udim = String(Val);
         Btn.addEventListener('click', () =>
         {
+            Bar.classList.remove('open');
             StudioState.udimFilter = String(Val);
             if (Val !== 'all')
             {
@@ -673,12 +666,17 @@ function RenderUdimFilterBar(Doc)
         return Btn;
     };
 
-    Bar.append(MakeBtn('All UDIMs', 'all'));
-    for (const Tile of [...Doc.udimTiles].sort((A, B) => A.id - B.id))
-    {
-        Bar.append(MakeBtn(`UDIM ${Tile.id}`, String(Tile.id)));
-    }
+    const Face = Construct('button', 'ol-drop-face', [ConstructGlyph('Grid'), Construct('span', null, StudioState.udimFilter === 'all' ? 'All' : String(StudioState.udimFilter)), ConstructGlyph('ChevronDown', 'glyph ol-drop-chev')]);
+    Face.type = 'button';
+    Face.title = 'Show every UDIM tile or only one';
+    Face.addEventListener('click', E => { E.stopPropagation(); Bar.classList.toggle('open'); });
+    const List = Construct('div', 'ol-drop-list');
+    List.append(MakeBtn('All UDIM tiles', 'all', `${Doc.udimTiles.length}`));
+    for (const Tile of [...Doc.udimTiles].sort((A, B) => A.id - B.id)) List.append(MakeBtn(`UDIM ${Tile.id}`, String(Tile.id), FormatTileRes(Tile.resolution)));
+    Bar.append(Face, List);
 }
+
+function FormatTileRes(Res) { return Res >= 1024 ? `${Res / 1024}K` : `${Res}px`; }
 
 let _lastBudgetCardSig = null;
 function RenderUdimSpaceBudgetCard(Doc)
@@ -770,6 +768,7 @@ function UpdateHeaderAndHud(Doc)
     const SelSub = document.getElementById('lp-kpi-sel-sub');
     if (SelVal) SelVal.textContent = `${SelIslCount} / ${Doc.islands.length}`;
     if (SelSub) SelSub.textContent = SelIslCount ? 'Selected islands' : 'Total islands';
+    const UtilCell = document.getElementById('lp-kpi-util'); if (UtilCell) UtilCell.classList.toggle('over', DisplayOcc > 100);
 
     const RemVal = document.getElementById('lp-kpi-rem-val');
     const RemSub = document.getElementById('lp-kpi-rem-sub');
@@ -790,7 +789,7 @@ function UpdateHeaderAndHud(Doc)
     if (OverlapCard) OverlapCard.classList.toggle('has-error', OverlapMetric > 0 || ErrorCharts > 0);
 
     const NodeSummary = document.getElementById('pz-outliner-node-summary');
-    if (NodeSummary) NodeSummary.textContent = `${Doc.islands.length} total islands · ${Doc.udimTiles.length} UDIM${Doc.udimTiles.length === 1 ? '' : 's'}`;
+    if (NodeSummary) NodeSummary.textContent = `${Doc.name} · ${Doc.islands.length} islands`;
 
     const ActiveTile = Doc.udimTiles.find(T => T.id === Doc.activeUdim) || Doc.udimTiles[0];
     const ResK = ActiveTile ? (ActiveTile.resolution >= 1024 ? `${ActiveTile.resolution / 1024}K` : `${ActiveTile.resolution}px`) : '2K';
@@ -848,14 +847,7 @@ function RenderDocumentTabs()
             Construct('span', 'document-label', Doc.name)
         ]);
         Btn.type = 'button';
-        Btn.addEventListener('click', () =>
-        {
-            StudioState.activeDocId = Doc.id;
-            SyncAllViews(true);
-            Canvas2D.FrameUdimTiles(Doc.udimTiles);
-            Viewport3D.CameraPreset('Persp');
-            LogEvent('DOC', `Switched to "${Doc.name}"`);
-        });
+        Btn.addEventListener('click', () => ActivateDocument(Doc));
         Box.append(Btn);
     }
 }
@@ -886,6 +878,34 @@ function FrameFaceGroupRefBounds(Doc, FaceRef)
     if (Number.isFinite(MinU)) Canvas2D.FrameBounds(MinU, MinV, MaxU, MaxV, 0.18);
 }
 
+// Outliner selection marks without a rebuild: layer rows (active layer or fully selected) and island rows.
+function RefreshOutlinerSelection(Doc)
+{
+    const FilterUdimNum = StudioState.udimFilter === 'all' ? null : Number(StudioState.udimFilter);
+    for (const Card of document.querySelectorAll('#outliner-list .pz-uv-layer-card[data-layer-id]'))
+    {
+        const Lid = Card.dataset.layerId;
+        const Ref = Doc.surface.GetLayerFaceRef(Lid === '__unassigned__' ? null : Lid, Doc.islands, FilterUdimNum);
+        Card.classList.toggle('selected', (Doc.activeLayerId === Lid) || IsFaceGroupRefSelected(Doc.surface, Ref));
+    }
+    const Sel = Doc.surface.selectedIslands;
+    for (const Row of document.querySelectorAll('#outliner-list [data-island]')) Row.classList.toggle('on', Sel.has(Number(Row.dataset.island)));
+}
+
+// Outliner tree state: collapsed groups and how many island rows are listed.
+const OutlinerView = { shut: new Set(), islandLimit: 60 };
+const OL_GROUPS = ['surfaces', 'layers', 'tiles', 'islands'];
+
+function ActivateDocument(Doc)
+{
+    StudioState.activeDocId = Doc.id;
+    _lastOutlinerSig = null;
+    SyncAllViews(true);
+    Canvas2D.FrameUdimTiles(Doc.udimTiles);
+    Viewport3D.CameraPreset('Persp');
+    LogEvent('DOC', `Switched to "${Doc.name}"`);
+}
+
 function RenderOutliner(Doc)
 {
     RenderUdimFilterBar(Doc);
@@ -895,50 +915,56 @@ function RenderOutliner(Doc)
     if (!Doc.activeLayerId && Doc.importanceGroups.length > 0) Doc.activeLayerId = Doc.importanceGroups[0].id;
 
     const GrpSig = Doc.importanceGroups.map(G => `${G.id}:${G.name}:${G.targetPercent}:${G.color}:${G.udimTarget || 'auto'}`).join(';');
-    const TileSig = Doc.udimTiles.map(T => T.id).join(',');
-    const OutlinerSig = `${Doc.id}|${StudioState.udimFilter}|${StudioState.searchQuery.trim()}|${RefCache?.sig || ''}|${GrpSig}|${TileSig}`;
-    if (_lastOutlinerSig === OutlinerSig)
-    {
-        const Cards = document.querySelectorAll('#outliner-list .pz-uv-layer-card[data-layer-id]');
-        for (const Card of Cards)
-        {
-            const Lid = Card.dataset.layerId;
-            const Ref = Doc.surface.GetLayerFaceRef(Lid === '__unassigned__' ? null : Lid, Doc.islands, FilterUdimNum);
-            const IsActiveOrSel = (Doc.activeLayerId === Lid) || IsFaceGroupRefSelected(Doc.surface, Ref);
-            Card.classList.toggle('selected', IsActiveOrSel);
-        }
-        return;
-    }
+    const TileSig = Doc.udimTiles.map(T => `${T.id}:${T.resolution}`).join(',');
+    const DocSig = StudioState.documents.map(D => `${D.id}:${D.name}`).join(',');
+    const ViewSig = `${[...OutlinerView.shut].join(',')}|${OutlinerView.islandLimit}|${Doc.activeUdim}|${Doc.diagnostics?.overlapCount ?? 0}|${Doc.surface.hiddenIslands.size}|${Doc.surface.pinned.size}`;
+    const OutlinerSig = `${Doc.id}|${DocSig}|${StudioState.udimFilter}|${StudioState.searchQuery.trim()}|${RefCache?.sig || ''}|${GrpSig}|${TileSig}|${ViewSig}`;
+    if (_lastOutlinerSig === OutlinerSig) { RefreshOutlinerSelection(Doc); return; }
     _lastOutlinerSig = OutlinerSig;
 
     const Container = document.getElementById('outliner-list');
     Container.textContent = '';
     const Query = StudioState.searchQuery.trim().toLowerCase();
+    const Rerender = () => { _lastOutlinerSig = null; RenderOutliner(ActiveDoc()); };
 
-    const MakeToolIconBtn = (GlyphName, Tip, OnClick) =>
+    const Icon = (Name) => { const Img = Construct('img'); Img.src = `Icons/${Name}.svg`; Img.alt = ''; return Img; };
+    const Mark = (Kind, GlyphName) => Construct('span', `tr-mark ${Kind}`, GlyphName ? ConstructGlyph(GlyphName) : null);
+    const ActBtn = (GlyphName, Tip, OnClick, Extra = '') =>
     {
-        const B = Construct('button', 'pz-icon-btn', [ConstructGlyph(GlyphName)]);
+        const B = Construct('button', `tr-act${Extra}`, ConstructGlyph(GlyphName));
         B.type = 'button';
         B.title = Tip;
-        B.addEventListener('click', OnClick);
+        B.addEventListener('click', E => { E.stopPropagation(); OnClick(E); });
         return B;
     };
-
-    // Frontier Editor Outliner Section Header (NO duplicate Add Layer button — '+' lives in Outliner header!)
-    Container.append(Construct('div', 'pz-outliner-sec-head', [
-        Construct('span', null, `LAYERS (${String(Doc.importanceGroups.length).padStart(2, '0')})`),
-        Construct('div', 'pz-prio-tools', [
-            MakeToolIconBtn('StackUv', 'Stack duplicate/similar UV islands onto one shared footprint', RunStackSimilarOp),
-            MakeToolIconBtn('UnstackUv', 'Unstack overlapping duplicate UV islands', RunUnstackOp),
-            MakeToolIconBtn('Reset', 'Unassign selected faces from layer', () => AssignSelectedToGroup(null))
-        ])
-    ]));
-
-    const StackWrap = Construct('div', 'pz-layer-stack pz-frontier-outliner-boxes');
-
-    for (let LayerIdx = 0; LayerIdx < Doc.importanceGroups.length; LayerIdx++)
+    const Text = (Title, Sub) => Construct('span', 'tr-text', [Construct('b', null, Title), Construct('small', null, Sub)]);
+    const Group = (Id, IconName, Title, Sub, Rows, Tools = []) =>
     {
-        const Grp = Doc.importanceGroups[LayerIdx];
+        const Shut = OutlinerView.shut.has(Id);
+        const Head = Construct('button', 'tg-head', [Construct('i', 'tg-chev', ConstructGlyph('ChevronDown')), Icon(IconName), Construct('span', 'tg-title', [Construct('b', null, Title), Construct('small', null, Sub)])]);
+        Head.type = 'button';
+        Head.addEventListener('click', () => { Shut ? OutlinerView.shut.delete(Id) : OutlinerView.shut.add(Id); Rerender(); });
+        const Group = Construct('div', `tg${Shut ? ' shut' : ''}`, [Construct('div', 'tg-bar', [Head, Tools.length ? Construct('div', 'tg-tools', Tools) : null]), Construct('div', 'tg-rows', Rows)]);
+        Group.dataset.group = Id;
+        return Group;
+    };
+    const Empty = (Text) => Construct('div', 'tree-empty', Text);
+
+    // 1. Surfaces: every open document; the active one carries the check.
+    const DocRows = StudioState.documents.filter(D => !Query || D.name.toLowerCase().includes(Query)).map(D =>
+    {
+        const IsActive = D.id === Doc.id;
+        const Row = Construct('div', `tr${IsActive ? ' on' : ''}`, [Icon('editor-mesh'), Text(D.name, `${D.surface.faces.length.toLocaleString()} faces · ${(D.islands?.length ?? 0)} islands · ${D.udimTiles.length} UDIM`), IsActive ? Mark('ok', 'Check') : null]);
+        Row.dataset.doc = D.id;
+        Row.title = IsActive ? 'Active surface' : `Switch to ${D.name}`;
+        if (!IsActive) Row.addEventListener('click', () => ActivateDocument(D));
+        return Row;
+    });
+
+    // 2. UV layers: importance groups with their space share; the remainder takes what is left.
+    const LayerRows = [];
+    for (const Grp of Doc.importanceGroups)
+    {
         if (Query && !Grp.name.toLowerCase().includes(Query)) continue;
 
         const SavedRef = Grp.faceRef || Doc.surface.GetLayerFaceRef(Grp.id, Doc.islands, FilterUdimNum);
@@ -946,21 +972,18 @@ function RenderOutliner(Doc)
         if (FilterUdimNum !== null && SavedRef.faceCount === 0 && AssignedUdim !== FilterUdimNum && Doc.importanceGroups.length > 1) continue;
 
         const IsSel = (Doc.activeLayerId === Grp.id) || IsFaceGroupRefSelected(Doc.surface, SavedRef);
-        const UdimTag = Grp.udimTarget && Grp.udimTarget !== 'auto'
-            ? `UDIM ${Grp.udimTarget}`
-            : (SavedRef.udims.length === 1 ? `UDIM ${SavedRef.udims[0]}` : 'Auto UDIM');
+        const UdimTag = AssignedUdim ? `UDIM ${AssignedUdim}` : (SavedRef.udims.length === 1 ? `UDIM ${SavedRef.udims[0]}` : 'Auto UDIM');
 
-        // Sharp unrounded (0px) colour-coded rectangular box matching Frontier Editor OutlinerPanel
-        const LayerBox = Construct('div', `pz-uv-layer-card pz-frontier-layer-box${IsSel ? ' selected' : ''}`);
+        const LayerBox = Construct('div', `tr pz-uv-layer-card pz-frontier-layer-box${IsSel ? ' selected' : ''}`);
         LayerBox.dataset.layerId = Grp.id;
         LayerBox.style.setProperty('--layer-color', Grp.color);
 
         const ColorInput = Construct('input', 'pz-layer-color-native');
         ColorInput.type = 'color';
         ColorInput.value = /^#[0-9a-fA-F]{6}$/.test(Grp.color || '') ? Grp.color : '#eff4cf';
-        const ColorSquare = Construct('label', 'pz-layer-sq-swatch', [ColorInput]);
+        const ColorSquare = Construct('label', 'swatch pz-layer-sq-swatch', [ColorInput]);
         ColorSquare.style.background = ColorInput.value;
-        ColorSquare.title = 'Click to pick layer colour';
+        ColorSquare.title = 'Layer colour';
         ColorSquare.addEventListener('click', E => E.stopPropagation());
         ColorInput.addEventListener('input', () =>
         {
@@ -978,35 +1001,14 @@ function RenderOutliner(Doc)
         });
         ColorInput.addEventListener('change', () => { _lastOutlinerSig = null; });
 
-        const TitleEl = Construct('strong', 'pz-layer-box-title', Grp.name);
+        const TitleEl = Construct('b', 'pz-layer-box-title', Grp.name);
         TitleEl.dataset.layerTitle = Grp.id;
-        const SubEl = Construct('small', 'pz-layer-box-sub', `${UdimTag} · ${SavedRef.faceCount.toLocaleString()} faces`);
+        const SubEl = Construct('small', 'pz-layer-box-sub', `${UdimTag} · ${SavedRef.faceCount.toLocaleString()} faces · ${SavedRef.islandCount ?? 0} islands`);
         SubEl.dataset.layerSub = Grp.id;
-        const CopyCol = Construct('div', 'pz-layer-box-copy', [TitleEl, SubEl]);
 
-        const PctBadge = Construct('span', 'pz-layer-pct-box', `${Math.round(Grp.targetPercent)}%`);
+        const PctBadge = Construct('span', 'tr-share pz-layer-pct-box', `${Math.round(Grp.targetPercent)}%`);
         PctBadge.dataset.layerPct = Grp.id;
 
-        const AssignBtn = Construct('button', 'pz-prio-act', ConstructGlyph('Plus'));
-        AssignBtn.type = 'button';
-        AssignBtn.title = `Bind currently selected faces into "${Grp.name}"`;
-        AssignBtn.addEventListener('click', E =>
-        {
-            E.stopPropagation();
-            Doc.activeLayerId = Grp.id;
-            AssignSelectedToGroup(Grp.id);
-        });
-
-        const DelBtn = Construct('button', 'pz-prio-act danger', ConstructGlyph('Close'));
-        DelBtn.type = 'button';
-        DelBtn.title = `Delete "${Grp.name}"`;
-        DelBtn.addEventListener('click', E =>
-        {
-            E.stopPropagation();
-            RemoveImportanceGroup(Grp.id);
-        });
-
-        // Direct O(|faces|) selection from saved FaceGroupRef + focus in Pack Inspector!
         LayerBox.addEventListener('click', E =>
         {
             Doc.activeLayerId = Grp.id;
@@ -1017,62 +1019,149 @@ function RenderOutliner(Doc)
         LayerBox.addEventListener('dblclick', E =>
         {
             if (E.target.closest('input, button, label')) return;
-            Doc.activeLayerId = Grp.id;
             const Ref = Doc.surface.GetLayerFaceRef(Grp.id, Doc.islands, FilterUdimNum);
             Doc.surface.SelectFaceGroupRef(Ref, false);
             FrameFaceGroupRefBounds(Doc, Ref);
             FastSyncSelectionViews(Doc, true);
         });
 
-        LayerBox.append(ColorSquare, CopyCol, PctBadge, AssignBtn, DelBtn);
-        StackWrap.append(LayerBox);
+        LayerBox.append(ColorSquare, Construct('span', 'tr-text pz-layer-box-copy', [TitleEl, SubEl]), PctBadge,
+            ActBtn('Plus', `Add the selected faces to "${Grp.name}"`, () => { Doc.activeLayerId = Grp.id; AssignSelectedToGroup(Grp.id); }),
+            ActBtn('Close', `Delete "${Grp.name}"`, () => RemoveImportanceGroup(Grp.id), ' danger'));
+        LayerRows.push(LayerBox);
     }
 
-    // Remainder Box (unrounded Frontier Editor box when unassigned faces remain or shares < 100%)
     const ExplicitSum = Doc.importanceGroups.reduce((S, G) => S + G.targetPercent, 0);
     const RemTarget = Math.max(0, 100 - ExplicitSum);
     const RemRef = Doc.surface.GetLayerFaceRef(null, Doc.islands, FilterUdimNum);
-
-    if (RemRef.faceCount > 0 || Doc.importanceGroups.length === 0 || ExplicitSum < 100)
+    if ((RemRef.faceCount > 0 || Doc.importanceGroups.length === 0 || ExplicitSum < 100) && (!Query || 'unassigned remainder'.includes(Query)))
     {
-        const RemPctBadge = Construct('span', `pz-layer-pct-box${ExplicitSum > 100 ? ' warn' : ''}`,
-            ExplicitSum > 100 ? `${ExplicitSum.toFixed(0)}% !` : `${RemTarget.toFixed(0)}%`);
+        const RemSquare = Construct('span', 'swatch pz-layer-sq-swatch base');
+        const RemPctBadge = Construct('span', `tr-share pz-layer-pct-box${ExplicitSum > 100 ? ' warn' : ''}`, ExplicitSum > 100 ? `${ExplicitSum.toFixed(0)}% !` : `${RemTarget.toFixed(0)}%`);
         RemPctBadge.dataset.layerPct = '__unassigned__';
-
-        const RemSel = IsFaceGroupRefSelected(Doc.surface, RemRef);
-        const RemSquare = Construct('span', 'pz-layer-sq-swatch');
-        RemSquare.style.background = '#6e6e6e';
-
-        const BaseBox = Construct('div', `pz-uv-layer-card pz-frontier-layer-box base-layer${RemSel ? ' selected' : ''}`, [
-            RemSquare,
-            Construct('div', 'pz-layer-box-copy', [
-                Construct('strong', 'pz-layer-box-title', 'Unassigned Remainder'),
-                Construct('small', 'pz-layer-box-sub', `${RemRef.faceCount.toLocaleString()} faces`)
-            ]),
-            RemPctBadge
-        ]);
+        const BaseBox = Construct('div', `tr pz-uv-layer-card pz-frontier-layer-box base-layer${IsFaceGroupRefSelected(Doc.surface, RemRef) ? ' selected' : ''}`,
+            [RemSquare, Text('Unassigned remainder', `${RemRef.faceCount.toLocaleString()} faces · fills what the layers leave`), RemPctBadge]);
         BaseBox.dataset.layerId = '__unassigned__';
-        BaseBox.style.setProperty('--layer-color', '#6e6e6e');
-        BaseBox.title = `Click to select ${RemRef.faceCount.toLocaleString()} unassigned faces instantaneously`;
+        BaseBox.title = `Select ${RemRef.faceCount.toLocaleString()} unassigned faces`;
         BaseBox.addEventListener('click', E =>
         {
             const Ref = Doc.surface.GetLayerFaceRef(null, Doc.islands, FilterUdimNum);
-            if (Ref.faceCount === 0) return;
+            if (!Ref.faceCount) return;
             Doc.surface.SelectFaceGroupRef(Ref, E.shiftKey || E.ctrlKey || E.metaKey);
             FastSyncSelectionViews(Doc, true);
         });
         BaseBox.addEventListener('dblclick', () =>
         {
             const Ref = Doc.surface.GetLayerFaceRef(null, Doc.islands, FilterUdimNum);
-            if (Ref.faceCount === 0) return;
+            if (!Ref.faceCount) return;
             Doc.surface.SelectFaceGroupRef(Ref, false);
             FrameFaceGroupRefBounds(Doc, Ref);
             FastSyncSelectionViews(Doc, true);
         });
-        StackWrap.append(BaseBox);
+        LayerRows.push(BaseBox);
     }
+    const LayerTools = [
+        ActBtn('StackUv', 'Stack similar islands onto one footprint', RunStackSimilarOp),
+        ActBtn('UnstackUv', 'Unstack overlapping duplicates', RunUnstackOp),
+        ActBtn('Reset', 'Remove the selected faces from their layer', () => AssignSelectedToGroup(null))
+    ];
 
-    Container.append(StackWrap);
+    // 3. UDIM tiles: resolution, islands and fill; click makes the tile active and frames it.
+    const TileRows = [...Doc.udimTiles].sort((A, B) => A.id - B.id).filter(T => !Query || `udim ${T.id}`.includes(Query)).map(T =>
+    {
+        const Totals = RefCache?.udimTotals?.get(T.id) || { islands: 0, uvArea: 0 };
+        const Fill = Totals.uvArea * 100, IsActive = T.id === Doc.activeUdim;
+        const Row = Construct('div', `tr tile-row${IsActive ? ' on' : ''}`, [
+            Construct('span', 'tile-chip', String(T.id).slice(-2)),
+            Text(`UDIM ${T.id}`, `${FormatTileRes(T.resolution)} · ${Totals.islands} islands · ${Fill.toFixed(1)} % filled`),
+            Construct('span', `tile-fill${Fill > 100 ? ' over' : ''}`, Construct('i')),
+            IsActive ? Mark('ok', 'Check') : Mark('idle')
+        ]);
+        Row.querySelector('.tile-fill i').style.width = `${Math.min(100, Fill).toFixed(1)}%`;
+        Row.addEventListener('click', () =>
+        {
+            Doc.activeUdim = T.id;
+            const O = UdimOrigin(T.id);
+            Canvas2D.FrameBounds(O.u, O.v, O.u + 1, O.v + 1, 0.14);
+            SyncAllViews(true);
+        });
+        return Row;
+    });
+    const AddTile = Construct('button', 'tree-more', [ConstructGlyph('Plus'), Construct('span', null, 'Add UDIM tile')]);
+    AddTile.type = 'button';
+    AddTile.addEventListener('click', () => document.getElementById('add-udim-quick').click());
+    if (!Query) TileRows.push(AddTile);
+
+    // 4. Islands: layer colour, health mark and visibility; click selects, double-click frames.
+    const GroupById = new Map(Doc.importanceGroups.map(G => [G.id, G]));
+    const Islands = Doc.islands.filter(Isl =>
+    {
+        if (FilterUdimNum !== null && Isl.udimTile !== FilterUdimNum) return false;
+        if (!Query) return true;
+        return `island ${String(Isl.id + 1).padStart(3, '0')} ${Isl.name || ''} ${Isl.materialName || ''}`.toLowerCase().includes(Query);
+    });
+    const Sel = Doc.surface.selectedIslands;
+    const HealthMark = { error: ['bad', 'Alert', 'Overlapping or flipped faces'], caution: ['warn', 'Alert', 'High angle stretch'], pinned: ['lock', 'Pin', 'Has pinned UVs'], ok: ['ok', 'Check', 'Clean'] };
+    // Direct by id / stable key: the surface's SelectIsland(s) / SetIslandHidden also match ids against stable keys
+    // (first face indices), which can pick a second island whose first face number equals the id.
+    const PickIsland = (Isl, Additive) =>
+    {
+        const S = Doc.surface;
+        if (!Additive) S.ClearSelection();
+        if (Additive && S.selectedIslands.has(Isl.id)) S.selectedIslands.delete(Isl.id);
+        else S.selectedIslands.add(Isl.id);
+        S.SyncSelectionsFromMode('island', Doc.islands);
+        S.activeIsland = Isl.id;
+    };
+    const IslandRows = Islands.slice(0, OutlinerView.islandLimit).map(Isl =>
+    {
+        const Grp = GroupById.get(Isl.importanceGroupId);
+        const Health = HealthMark[ClassifyIslandHealth(Doc, Isl)] || HealthMark.ok;
+        const Swatch = Construct('span', 'swatch');
+        Swatch.style.background = Grp?.color || '#6e6e6e';
+        const MarkEl = Mark(Health[0], Health[1]);
+        MarkEl.title = Health[2];
+        const Row = Construct('div', `tr${Sel.has(Isl.id) ? ' on' : ''}${Isl.hidden ? ' hidden' : ''}`, [
+            Swatch,
+            Text(`Island ${String(Isl.id + 1).padStart(3, '0')}`, `${Isl.name ? `${Isl.name} · ` : ''}UDIM ${Isl.udimTile} · ${Isl.faceIndices.length} faces · ${(Isl.texelDensity ?? 0).toFixed(1)} px/cm`),
+            ActBtn(Isl.hidden ? 'EyeOff' : 'Eye', Isl.hidden ? 'Show island' : 'Hide island', () =>
+            {
+                if (Isl.hidden) Doc.surface.hiddenIslands.delete(Isl.stableKey);
+                else Doc.surface.hiddenIslands.add(Isl.stableKey);
+                _lastOutlinerSig = null;
+                SyncAllViews(true);
+            }, ' eye'),
+            MarkEl
+        ]);
+        Row.dataset.island = Isl.id;
+        Row.addEventListener('click', E =>
+        {
+            PickIsland(Isl, E.shiftKey || E.ctrlKey || E.metaKey);
+            FastSyncSelectionViews(Doc, true);
+        });
+        Row.addEventListener('dblclick', () =>
+        {
+            PickIsland(Isl, false);
+            FrameFaceGroupRefBounds(Doc, { islandCount: 1, islandIds: [Isl.id] });
+            FastSyncSelectionViews(Doc, true);
+        });
+        return Row;
+    });
+    if (Islands.length > OutlinerView.islandLimit)
+    {
+        const More = Construct('button', 'tree-more', `Show ${Math.min(100, Islands.length - OutlinerView.islandLimit)} more of ${Islands.length - OutlinerView.islandLimit}`);
+        More.type = 'button';
+        More.addEventListener('click', () => { OutlinerView.islandLimit += 100; Rerender(); });
+        IslandRows.push(More);
+    }
+    const HiddenCount = Doc.surface.hiddenIslands.size;
+
+    Container.append(
+        Group('surfaces', 'folder-scene', 'Surfaces', `${StudioState.documents.length} open · ${Doc.name}`, DocRows.length ? DocRows : [Empty('No surfaces match')]),
+        Group('layers', 'editor-collection', 'UV layers', `${Doc.importanceGroups.length} layers · ${Math.min(100, ExplicitSum).toFixed(0)} % assigned`, LayerRows.length ? LayerRows : [Empty('No layers match')], LayerTools),
+        Group('tiles', 'editor-grid', 'UDIM tiles', `${Doc.udimTiles.length} tile${Doc.udimTiles.length === 1 ? '' : 's'} · active ${Doc.activeUdim}`, TileRows.length ? TileRows : [Empty('No tiles match')]),
+        Group('islands', 'collection-bracketed-objects', 'Islands', `${Doc.islands.length} islands${HiddenCount ? ` · ${HiddenCount} hidden` : ''}${Islands.length !== Doc.islands.length ? ` · showing ${Islands.length}` : ''}`, IslandRows.length ? IslandRows : [Empty('No islands match')])
+    );
 }
 
 function RenderLegendStrip(Doc)
@@ -2659,14 +2748,14 @@ function RenderPackingTab(Body, Doc)
             if (Doc.surface.selectedIslands.has(Isl.id))
             {
                 SelInTile++;
-                SelFacesInTile += Isl.faces.length;
+                SelFacesInTile += Isl.faceIndices.length;
             }
             else if (Doc.surface.selectedFaces.size > 0)
             {
                 let HitFace = 0;
-                for (let k = 0; k < Isl.faces.length; k++)
+                for (let k = 0; k < Isl.faceIndices.length; k++)
                 {
-                    if (Doc.surface.selectedFaces.has(Isl.faces[k])) HitFace++;
+                    if (Doc.surface.selectedFaces.has(Isl.faceIndices[k])) HitFace++;
                 }
                 if (HitFace > 0)
                 {
@@ -4630,6 +4719,17 @@ function InitStudioIconsAndBindings()
     document.getElementById('compact-outliner').append(ConstructGlyph('Compact'));
     document.getElementById('add-udim-quick').append(ConstructGlyph('Plus'));
     document.getElementById('search-icon').append(ConstructGlyph('Search'));
+    document.getElementById('ol-collapse-all').append(ConstructGlyph('Sliders'));
+    document.getElementById('pz-new-folder-btn').append(ConstructGlyph('Plus'));
+    for (const Id of ['stat-islands-icon', 'stat-udim-icon']) document.getElementById(Id).append(ConstructGlyph('Check', 'glyph g-ok'), ConstructGlyph('Alert', 'glyph g-bad'));
+    document.getElementById('ol-collapse-all').addEventListener('click', () =>
+    {
+        const AllShut = OL_GROUPS.every(G => OutlinerView.shut.has(G));
+        OutlinerView.shut = AllShut ? new Set() : new Set(OL_GROUPS);
+        _lastOutlinerSig = null;
+        RenderOutliner(ActiveDoc());
+    });
+    document.addEventListener('click', E => { const Bar = document.getElementById('outliner-filters'); if (Bar && !Bar.contains(E.target)) Bar.classList.remove('open'); });
     document.getElementById('maximize-stage-btn').append(ConstructGlyph('Maximize'));
     document.getElementById('toggle-log-btn').append(ConstructGlyph('Terminal'));
     document.getElementById('inspector-object-icon').append(ConstructGlyph('Pack'));

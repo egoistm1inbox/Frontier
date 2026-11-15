@@ -686,16 +686,16 @@ console.log('11. Testing Multi-Surface Engineering MatCaps, Stack Similar UVs, F
     const OutlinerSlice = EditorJs.slice(EditorJs.indexOf('function RenderOutliner'), EditorJs.indexOf('function RenderLegendStrip'));
     const PackSlice = EditorJs.slice(EditorJs.indexOf('function RenderPackingTab'), EditorJs.indexOf('function RenderUnwrapTab'));
     assert.ok(EditorJs.includes('function RenderUdimSpaceBudgetCard') &&
-              IndexHtml.includes('<footer class="pz-outliner-budget-footer" id="lp-udim-budget-card"></footer>') &&
+              IndexHtml.includes('<footer class="pz-outliner-budget-footer" id="lp-udim-budget-card"></footer>') && IndexHtml.includes('class="ol-status"') &&
               !BudgetCardSlice.includes('alloc-chips-row') && !BudgetCardSlice.includes('alloc-chip') &&
               !PackSlice.includes('hero-card') && !PackSlice.includes('allocation-spectrum'),
-        'UDIM Space Budget must live in the UV Space footer with zero per-layer % text chips');
+        'UDIM Space Budget must live in the Outliner footer (above the status strip) with zero per-layer % text chips');
 
     assert.ok(EditorJs.indexOf('function DescribeHexColorName') > 0 &&
               EditorJs.indexOf('function DescribeHexColorName') < EditorJs.indexOf('function RenderShadingTab'),
         'DescribeHexColorName must be declared at module scope so RenderPackingTab never throws ReferenceError');
 
-    assert.ok(IndexHtml.includes('class="pz-outliner-plus-btn" id="pz-new-folder-btn"') &&
+    assert.ok(IndexHtml.includes('pz-outliner-plus-btn" id="pz-new-folder-btn"') &&
               OutlinerSlice.includes('pz-frontier-layer-box') && OutlinerSlice.includes('SelectFaceGroupRef') &&
               OutlinerSlice.includes('FastSyncSelectionViews') && !OutlinerSlice.includes('pz-prio-add-btn') &&
               !OutlinerSlice.includes('Surface Parts') && !OutlinerSlice.includes('pz-part-square') &&
@@ -704,7 +704,12 @@ console.log('11. Testing Multi-Surface Engineering MatCaps, Stack Similar UVs, F
               PackSlice.includes('Importance Space Allocation') && PackSlice.includes('SliderRow(AllocSec.Inner') &&
               PackSlice.includes("Unit: '%'") &&
               PackSlice.includes('pz-inspector-text-input') && PackSlice.includes('pz-cpp-color-picker'),
-        'UV Space must use unrounded colour-coded Frontier Editor Outliner boxes (+ in header), with UDIM selection cards + Inspector % SliderRow in Pack');
+        'Outliner UV layer rows must be colour-coded and select their saved FaceGroupRef (+ in header), with UDIM selection cards + Inspector % SliderRow in Pack');
+
+    // Outliner tree (Fracture Editor language): grouped Surfaces / UV layers / UDIM tiles / Islands with marks.
+    for (const Part of ["Group('surfaces'", "Group('layers'", "Group('tiles'", "Group('islands'", 'hiddenIslands.add(Isl.stableKey)', 'PickIsland(Isl', 'RefreshOutlinerSelection', 'ActivateDocument(D)'])
+        assert.ok(OutlinerSlice.includes(Part) || EditorJs.includes(Part), `Outliner tree must include ${Part}`);
+    assert.ok(IndexHtml.includes('href="Outliner.css"') && ReadText('Outliner.css').includes('#left-panel .tg-head'), 'Outliner.css must style the tree, scoped to #left-panel');
 
     // Benchmark & verify saved FaceGroupRef (zero ExtractIslands re-iteration + cross-object face references!)
     {
@@ -747,11 +752,11 @@ console.log('11. Testing Multi-Surface Engineering MatCaps, Stack Similar UVs, F
               !IndexHtml.includes('data-filter="selected"') && !IndexHtml.includes('data-filter="issues"'),
         'UV Space filters must strictly be Search + UDIM filters only');
 
-    assert.ok(IndexHtml.includes('<h1>UV Space</h1>') && !IndexHtml.includes('Clean Charts') &&
+    assert.ok(IndexHtml.includes('<h1>Outliner</h1>') && !IndexHtml.includes('Clean Charts') &&
               IndexHtml.includes('id="lp-kpi-util"') && IndexHtml.includes('id="lp-kpi-selected"') &&
               IndexHtml.includes('id="lp-kpi-remaining"') && IndexHtml.includes('id="stat-issues-card"') &&
               IndexHtml.includes('id="stat-overlap-card"') && IndexHtml.includes('>Stretch Caution<') && IndexHtml.includes('>Overlaps<'),
-        'UV Space left panel must be renamed from Outliner and show 5 infographic cards (3 Pack tiles + Stretch Caution + red Overlaps)');
+        'Outliner must show the Overlaps and Stretch Caution tiles and the Fill / Selected / Remainder status strip');
 
     const EditorCss = ReadText('UVEditor.css');
     for (const BlueHex of ['#262930', '#191a1d', '#131418', '#0d0e11', 'rgba(56, 189, 248'])
