@@ -3663,7 +3663,9 @@ function ConstructOutliner()
         const Tot = Scene.Effects.length + Scene.FieldScene.Sources.length;
         document.getElementById('visible-count').textContent = String(Vis);
         document.getElementById('hidden-count').textContent = String(Tot - Vis);
-        document.getElementById('status-effects').textContent = `${Scene.Effects.length} effects · ${Scene.FieldScene.Sources.length} force sources`;
+        document.getElementById('status-effects').textContent = String(Scene.Effects.length);
+        const ForceCell = document.getElementById('status-forces');
+        if (ForceCell) ForceCell.textContent = String(Scene.FieldScene.Sources.length);
     });
 
     C.CloseScope(OutlinerScope);
@@ -6444,8 +6446,8 @@ function RefreshLive()
 
     const Rb = Scene.Readback?.Status;
     document.getElementById('status-readback').textContent = Rb?.Count
-        ? `Lattice readback ${(Rb.Bytes / 1024).toFixed(0)} KB · ${Rb.Milliseconds.toFixed(1)} ms · ${FormatInteger(Rb.Count)}×`
-        : 'Lattice readback active';
+        ? `${(Rb.Bytes / 1024).toFixed(0)} KB · ${Rb.Milliseconds.toFixed(1)} ms`
+        : 'Active';
 }
 
 function ResizeCanvas()
@@ -6472,6 +6474,27 @@ function TogglePlay()
     PlayBtn.textContent = '';
     PlayBtn.append(C.ConstructGlyph(Scene.Playing ? 'Pause' : 'Play'));
     AppendLog('VIEW', Scene.Playing ? 'Simulation resumed' : 'Simulation paused', `t=${Scene.Time.toFixed(1)}s`, Scene.Playing ? 'live' : 'warm');
+}
+
+function SyncFilterFace(Btn)
+{
+    const Label = document.getElementById('scene-filter-label');
+    if (Label) Label.textContent = Btn.textContent;
+    document.getElementById('scene-filter-drop')?.classList.toggle('filtered', Btn.dataset.filter !== 'all');
+    document.getElementById('scene-filter-drop')?.classList.remove('open');
+}
+
+// One compact dropdown replaces the 18 always-visible chips; the [data-filter] buttons are unchanged.
+function ConstructFilterDrop()
+{
+    const Drop = document.getElementById('scene-filter-drop');
+    const Face = document.getElementById('scene-filter-face');
+    if (!Drop || !Face) return;
+    document.getElementById('scene-filter-glyph')?.append(C.ConstructGlyph('Sliders'));
+    document.getElementById('scene-filter-chev')?.append(C.ConstructGlyph('Chevron'));
+    Face.addEventListener('click', Ev => { Ev.stopPropagation(); Drop.classList.toggle('open'); });
+    document.addEventListener('pointerdown', Ev => { if (!Drop.contains(Ev.target)) Drop.classList.remove('open'); });
+    document.addEventListener('keydown', Ev => { if (Ev.key === 'Escape') Drop.classList.remove('open'); });
 }
 
 function SyncTopNav()
@@ -6651,6 +6674,7 @@ function WireStaticIconsAndControls()
         setTimeout(ResizeCanvas, 20);
     });
 
+    ConstructFilterDrop();
     document.getElementById('compact-outliner').addEventListener('click', Ev =>
     {
         const Compact = document.getElementById('left-panel').classList.toggle('compact');
@@ -6665,6 +6689,7 @@ function WireStaticIconsAndControls()
         {
             OutlinerFilter = Btn.dataset.filter;
             document.querySelectorAll('#scene-filters button').forEach(B => B.classList.toggle('active', B === Btn));
+            SyncFilterFace(Btn);
             ConstructOutliner();
             C.Broadcast();
         });
@@ -7141,7 +7166,7 @@ async function Boot()
         Scene.Readback = ConstructLatticeReadback(Scene.Engine);
         Scene.Engine.onLost = Lost => AppendLog('PARTICLES', 'WebGPU device lost', Lost.message || Lost.reason, 'warm');
         document.getElementById('engine-pill-text').textContent = 'WEBGPU · LIVE';
-        document.getElementById('status-ready').innerHTML = '<i></i>WebGPU ready';
+        document.getElementById('status-ready').textContent = 'WebGPU compute ready';
     }
     catch (GpuTrouble)
     {
@@ -7162,10 +7187,12 @@ async function Boot()
         const Pill = document.getElementById('engine-pill');
         Pill.classList.add('software');
         document.getElementById('engine-pill-text').textContent = 'PREVIEW · SOFTWARE 3D';
-        document.getElementById('status-ready').innerHTML = '<i></i>Software 3D preview active (open in WebGPU Chrome/Edge for GPU compute)';
+        document.getElementById('status-ready').textContent = 'Software 3D preview active (open in WebGPU Chrome/Edge for GPU compute)';
+        Pill.title = 'Software 3D preview active, open in WebGPU Chrome/Edge for GPU compute';
     }
 
     document.getElementById('status-adapter').textContent = Scene.AdapterName;
+    document.getElementById('status-adapter').title = Scene.AdapterName;
     const Query = new URLSearchParams(location.search).get('scene');
     const InitialIds = Query === null ? PE.defaultScene : (Query === 'none' || Query === '' ? [] : Query.split(','));
     for (const Id of InitialIds) if (PE.presetById(Id)) Scene.Effects.push(ConstructEffect(Id));

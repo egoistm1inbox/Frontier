@@ -10,129 +10,116 @@
     <meta name="theme-color" content="#0b0b0b" />
     <title>Particle Studio — Frontier Experimental</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23161616'/%3E%3Cpath d='M16 5l2.8 7.5L26 15.5l-7.2 3L16 26l-2.8-7.5L6 15.5l7.2-3z' fill='%23e8c27a'/%3E%3C/svg%3E" />
-    <link rel="stylesheet" href="./ParticleEditor.css" />
+    <link rel="stylesheet" href="./ParticleEditor.css?v=1" />
+    <link rel="stylesheet" href="./Shell.css?v=2" />
     <script src="Vendor/ForceFieldVisualization.js" defer></script>
-    <script type="module" src="./ParticleEditor.js"></script>
+    <script type="module" src="./ParticleEditor.js?v=1"></script>
 </head>
 <body>
     <div id="app">
-        <!-- Fluid-style top header: Frontier logomark, slanted scene tabs, pill workspace nav, live engine pill -->
-        <header class="app-header">
-            <div class="brand">
-                <span class="brand-mark">frontier<span class="brand-dot">.</span></span>
-                <span class="experimental">PARTICLE STUDIO</span>
-            </div>
+        <!-- Project Zero shell: three docks from y = 0, each with its own tab bar; no global header or status bar -->
+        <main class="workspace pz-docks" id="studio-workspace">
+            <!-- LEFT DOCK: Outliner -->
+            <aside class="left-panel pz-dock" id="left-panel">
+                <header class="dock-tabs"><span class="dock-tab">Outliner <i class="dock-x">×</i></span></header>
+                <div class="ol-head">
+                    <h1>Outliner</h1><span class="ol-scope" id="outliner-subtitle">Particle scene · 0 nodes</span>
+                    <button id="compact-outliner" class="round-btn" title="Compact outliner (hide the tiles)" aria-pressed="false"></button>
+                    <button id="add-button" class="round-btn accent" title="Add particle asset, force field, formula or layer" aria-expanded="false"></button>
+                </div>
 
-            <div class="document-dock">
-                <div id="scene-tabs" class="document-tabs" role="tablist" aria-label="Particle scenes"></div>
-                <button id="new-scene-btn" class="icon-button" title="New blank particle scene" aria-label="New scene">+</button>
-            </div>
+                <div class="ol-stats">
+                    <div class="ol-stat"><span class="ol-stat-mark ok" id="stat-visible-icon"></span><span class="ol-stat-label">Visible</span><b id="visible-count">0</b></div>
+                    <div class="ol-stat"><span class="ol-stat-mark idle" id="stat-hidden-icon"></span><span class="ol-stat-label">Hidden</span><b id="hidden-count">0</b></div>
+                </div>
 
-            <nav class="top-nav" aria-label="Workspace views">
-                <button class="nav-button active" id="nav-workspace" type="button">Workspace</button>
-                <button class="nav-button" id="nav-library" type="button">Assets <small id="nav-preset-total">92</small></button>
-                <button class="nav-button" id="nav-log" type="button">Log Stream <small id="nav-log-count">0</small></button>
-            </nav>
-
-            <div class="header-end">
-                <span class="live-engine-tag" id="engine-pill"><i></i><span id="engine-pill-text">INITIALIZING</span></span>
-                <button id="help-button" class="icon-button" title="Shortcuts &amp; engine notes" aria-label="Help"></button>
-                <button id="export-button" class="button export-button" type="button">Export TOML</button>
-            </div>
-        </header>
-
-        <!-- Three floating 22px Fluid + Sun workspace panels -->
-        <main class="workspace" id="studio-workspace">
-            <!-- LEFT: Project Zero / Fluid Outliner + Embedded Preset Library -->
-            <aside class="left-panel" id="left-panel">
-                <div class="outliner-heading">
-                    <div>
-                        <h1>Outliner</h1>
-                        <span class="outliner-subtitle" id="outliner-subtitle">Particle scene · 0 records</span>
-                    </div>
-                    <div class="outliner-heading-actions">
-                        <button id="compact-outliner" class="icon-button" title="Compact outliner" aria-pressed="false"></button>
-                        <button id="add-button" class="icon-button accent" title="Add force field, formula, layer or preset" aria-expanded="false"></button>
+                <div class="ol-tools">
+                    <label class="ol-search"><span id="search-icon-slot"></span><input type="search" id="scene-search" placeholder="Search" aria-label="Search scene" autocomplete="off" spellcheck="false" /><kbd>Ctrl F</kbd></label>
+                    <div class="ol-drop" id="scene-filter-drop">
+                        <button class="ol-drop-face" id="scene-filter-face" type="button" title="Show one part of the scene"><span id="scene-filter-glyph"></span><span id="scene-filter-label">All</span><span id="scene-filter-chev"></span></button>
+                        <div class="ol-drop-list" id="scene-filters" aria-label="Outliner category filters">
+                            <div class="ol-drop-label">Scene</div>
+                            <button data-filter="all" class="active" type="button">All</button>
+                            <button data-filter="effects" type="button">Effects</button>
+                            <button data-filter="forces" type="button">Forces</button>
+                            <div class="ol-drop-label">Effect category</div>
+                            <button data-filter="vfx:Motion &amp; Grids" type="button">MoGraph</button>
+                            <button data-filter="vfx:Cloth &amp; Rigging" type="button">Cloth</button>
+                            <button data-filter="vfx:Foliage &amp; Flora" type="button">Flora</button>
+                            <button data-filter="vfx:Ferrofluid &amp; Fields" type="button">Ferro</button>
+                            <button data-filter="vfx:Fracture &amp; Cracks" type="button">Fracture</button>
+                            <button data-filter="vfx:Silk &amp; Curl" type="button">Curl</button>
+                            <button data-filter="vfx:Ballistics &amp; Sparks" type="button">Sparks</button>
+                            <button data-filter="vfx:Pyro &amp; Water" type="button">Pyro</button>
+                            <button data-filter="vfx:Transitions" type="button">Derez</button>
+                            <button data-filter="vfx:Space &amp; Distortion" type="button">Lens</button>
+                            <button data-filter="vfx:Shields &amp; Tech" type="button">Shield</button>
+                            <button data-filter="vfx:Atmosphere &amp; Sky" type="button">Sky</button>
+                            <button data-filter="vfx:Wind-Blown" type="button">Wind</button>
+                            <button data-filter="vfx:Storms &amp; Weather" type="button">Weather</button>
+                            <button data-filter="vfx:Quarantine" type="button">Quarantine</button>
+                        </div>
                     </div>
                 </div>
 
-                <!-- Project Zero / Sun census tiles -->
-                <div class="scene-statistics">
-                    <div class="scene-stat">
-                        <span class="stat-symbol enabled-symbol" id="stat-visible-icon"></span>
-                        <span class="stat-label">Visible</span>
-                        <strong id="visible-count">0</strong>
-                    </div>
-                    <div class="scene-stat">
-                        <span class="stat-symbol disabled-symbol" id="stat-hidden-icon"></span>
-                        <span class="stat-label">Hidden</span>
-                        <strong id="hidden-count">0</strong>
-                    </div>
-                </div>
-
-                <label class="search scene-search">
-                    <span id="search-icon-slot"></span>
-                    <input type="search" id="scene-search" placeholder="Search scene…" aria-label="Search scene" />
-                    <kbd>Ctrl F</kbd>
-                </label>
-
-                <div class="scene-filters" id="scene-filters" aria-label="Outliner category filters">
-                    <button data-filter="all" class="active" type="button">All</button>
-                    <button data-filter="effects" type="button">Effects</button>
-                    <button data-filter="vfx:Motion &amp; Grids" type="button">MoGraph</button>
-                    <button data-filter="vfx:Cloth &amp; Rigging" type="button">Cloth</button>
-                    <button data-filter="vfx:Foliage &amp; Flora" type="button">Flora</button>
-                    <button data-filter="vfx:Ferrofluid &amp; Fields" type="button">Ferro</button>
-                    <button data-filter="vfx:Fracture &amp; Cracks" type="button">Fracture</button>
-                    <button data-filter="vfx:Silk &amp; Curl" type="button">Curl</button>
-                    <button data-filter="vfx:Ballistics &amp; Sparks" type="button">Sparks</button>
-                    <button data-filter="vfx:Pyro &amp; Water" type="button">Pyro</button>
-                    <button data-filter="vfx:Transitions" type="button">Derez</button>
-                    <button data-filter="vfx:Space &amp; Distortion" type="button">Lens</button>
-                    <button data-filter="vfx:Shields &amp; Tech" type="button">Shield</button>
-                    <button data-filter="vfx:Atmosphere &amp; Sky" type="button">Sky</button>
-                    <button data-filter="vfx:Wind-Blown" type="button">Wind</button>
-                    <button data-filter="vfx:Storms &amp; Weather" type="button">Weather</button>
-                    <button data-filter="vfx:Quarantine" type="button">Quarantine</button>
-                    <button data-filter="forces" type="button">Forces</button>
-                </div>
-
-                <div class="panel-scroll outliner-scroll" id="OutlinerScroll">
+                <div class="panel-scroll outliner-scroll ol-tree" id="OutlinerScroll">
                     <div class="panel-content" id="OutlinerContent"></div>
                 </div>
 
-                <div class="left-footer">
-                    <span class="footer-dot"></span>
-                    <span id="left-footer-label">eos WebGPU · ForceFieldVisualization Solver</span>
-                </div>
+                <footer class="ol-status">
+                    <div><span>Effects</span><b id="status-effects">0</b></div>
+                    <div><span>Forces</span><b id="status-forces">0</b></div>
+                    <div><span>Readback</span><b id="status-readback">—</b></div>
+                    <div class="wide"><span>Adapter</span><b id="status-adapter">—</b></div>
+                </footer>
             </aside>
 
-            <!-- CENTER: Rounded Viewport + Left Tool Rail + Fluid 52px Transport + Collapsible Log -->
-            <section class="center-panel" id="center-panel">
-                <div class="viewport-bar">
-                    <span id="viewport-title-icon"></span>
-                    <strong>Scene view</strong>
-                    <span class="bar-divider"></span>
-                    <select id="camera-view-select" aria-label="Camera projection view">
-                        <option value="orbit">Perspective orbit</option>
-                        <option value="top">Top lattice</option>
-                        <option value="front">Front axis</option>
-                        <option value="side">Side elevation</option>
-                    </select>
-                    <select id="overlay-channel-select" aria-label="Field overlay layer">
-                        <option value="Flow">Field · Flow (m/s)</option>
-                        <option value="Accelerate">Field · Accelerate (m/s²)</option>
-                        <option value="Damp">Field · Damp (1/s)</option>
-                        <option value="off" selected>Clean viewport (no overlay)</option>
-                    </select>
-                    <div class="viewport-bar-end">
-                        <button id="throw-ball-btn" class="button pill-btn" type="button" title="Toggle Throw Ball Tool (T) or throw sphere at selection (Alt+Click)">Throw Ball · T</button>
-                        <button id="toggle-overlay-btn" class="button pill-btn" type="button" title="Toggle field overlay (V)">Field · V</button>
-                        <button id="toggle-arrows-btn" class="icon-button" type="button" title="Toggle 3D vector field arrows"></button>
-                        <button id="toggle-minimap-btn" class="icon-button" type="button" title="Toggle lattice minimap"></button>
-                        <button id="toggle-log-btn" class="icon-button" type="button" title="Toggle Log Stream drawer"></button>
-                        <button id="focus-btn" class="icon-button" type="button" title="Reset camera focus"></button>
-                        <button id="maximize-btn" class="icon-button" type="button" title="Maximize viewport"></button>
+            <!-- CENTRE DOCK: scene tabs, notch, viewport header + tools, viewport, transport -->
+            <section class="center-panel pz-dock" id="center-panel">
+                <header class="dock-tabs scene-dock-tabs">
+                    <div id="scene-tabs" class="document-tabs" role="tablist" aria-label="Particle scenes"></div>
+                    <button id="new-scene-btn" class="dock-add" title="New blank particle scene" aria-label="New scene">+</button>
+                </header>
+                <div class="notch notch-top"><span>Particle Studio</span></div>
+
+                <div class="vp-bar">
+                    <div class="vp-row">
+                        <div class="vp-identity">
+                            <span class="vp-glyph" id="viewport-title-icon"></span>
+                            <div><strong id="viewport-object">Force Field</strong><small id="viewport-subtitle">Eulerian wind lattice · eos WebGPU</small></div>
+                            <span class="badge live" id="live-pill"><i></i><span id="live-pill-label">LIVE</span></span>
+                            <span class="badge" id="engine-pill" aria-describedby="status-ready"><span id="engine-pill-text">INITIALIZING</span><span class="sr-only" id="status-ready">Starting engine</span></span>
+                        </div>
+                        <nav class="modes" aria-label="Workspace views">
+                            <button class="nav-button active" id="nav-workspace" type="button">Scene</button>
+                            <button class="nav-button" id="nav-library" type="button">Assets <small id="nav-preset-total">92</small></button>
+                            <button class="nav-button" id="nav-log" type="button">Log <small id="nav-log-count">0</small></button>
+                        </nav>
+                        <button id="help-button" class="round-btn" title="Shortcuts &amp; engine notes" aria-label="Help"></button>
+                        <button id="export-button" class="ghost-btn" type="button" title="Export the scene as .levelspace TOML">Export TOML</button>
+                    </div>
+                    <div class="vp-row vp-actions viewport-bar">
+                        <select id="camera-view-select" class="pz-select" aria-label="Camera projection view">
+                            <option value="orbit">Perspective orbit</option>
+                            <option value="top">Top lattice</option>
+                            <option value="front">Front axis</option>
+                            <option value="side">Side elevation</option>
+                        </select>
+                        <select id="overlay-channel-select" class="pz-select" aria-label="Field overlay layer">
+                            <option value="Flow">Field · Flow (m/s)</option>
+                            <option value="Accelerate">Field · Accelerate (m/s²)</option>
+                            <option value="Damp">Field · Damp (1/s)</option>
+                            <option value="off" selected>Clean viewport (no overlay)</option>
+                        </select>
+                        <span class="divider"></span>
+                        <button id="throw-ball-btn" class="tool-pill" type="button" title="Toggle Throw Ball Tool (T) or throw sphere at selection (Alt+Click)">Throw ball <kbd>T</kbd></button>
+                        <button id="toggle-overlay-btn" class="tool-pill" type="button" title="Toggle field overlay (V)">Field <kbd>V</kbd></button>
+                        <span class="grow"></span>
+                        <button id="toggle-arrows-btn" class="round-btn" type="button" title="Toggle 3D vector field arrows"></button>
+                        <button id="toggle-minimap-btn" class="round-btn" type="button" title="Toggle lattice minimap"></button>
+                        <button id="toggle-log-btn" class="round-btn" type="button" title="Toggle Log Stream drawer"></button>
+                        <button id="focus-btn" class="round-btn" type="button" title="Reset camera focus"></button>
+                        <button id="maximize-btn" class="round-btn" type="button" title="Maximize viewport"></button>
                     </div>
                 </div>
 
@@ -140,11 +127,6 @@
                     <canvas id="ViewportCanvas" aria-label="Interactive 3D particle simulation viewport"></canvas>
                     <canvas id="OverlayCanvas"></canvas>
 
-                    <div class="viewport-caption">
-                        <span class="live-pill" id="live-pill"><i></i><span id="live-pill-label">LIVE</span></span>
-                        <span id="viewport-object">Force Field</span>
-                        <small id="viewport-subtitle">Eulerian wind lattice · eos WebGPU</small>
-                    </div>
 
                     <div class="viewport-tools" id="ViewportTools" aria-label="Viewport tools">
                         <button class="active icon-button" data-vtool="orbit" type="button" title="Orbit camera (Drag)"></button>
@@ -224,52 +206,38 @@
                 </section>
             </section>
 
-            <!-- RIGHT: Sun Inspector + Fluid Inspector Hybrid -->
-            <aside class="inspector-panel" id="inspector-panel">
-                <div class="panel-heading inspector-top-heading">
-                    <span class="inspector-crumb" id="inspector-crumb">Inspector / Environment</span>
-                    <button id="reset-selection-btn" class="reset-pill" type="button" title="Reset selection">Reset ↗</button>
-                </div>
-
-                <div class="object-heading" id="object-heading">
-                    <div class="object-symbol" id="object-symbol"></div>
-                    <div class="object-heading-copy">
-                        <input id="object-name" value="Force Field" maxlength="64" aria-label="Selected node name" />
-                        <span id="object-type">EULERIAN FIELD · GPU LATTICE</span>
+            <!-- RIGHT DOCK: Inspector -->
+            <aside class="inspector-panel pz-dock" id="inspector-panel">
+                <header class="dock-tabs"><span class="dock-tab">Inspector <i class="dock-x">×</i></span></header>
+                <div class="ins-head">
+                    <div class="ins-crumb-row">
+                        <span class="inspector-crumb" id="inspector-crumb">Inspector / Environment</span>
+                        <button id="reset-selection-btn" class="ghost-btn small" type="button" title="Reset selection to its preset">Reset</button>
                     </div>
-                    <label class="switch" title="Enable / show selected entity">
-                        <input type="checkbox" id="object-enabled" checked aria-label="Toggle enabled" />
-                        <span></span>
-                    </label>
+                    <div class="object-heading" id="object-heading">
+                        <div class="object-symbol" id="object-symbol"></div>
+                        <div class="object-heading-copy">
+                            <input id="object-name" value="Force Field" maxlength="64" aria-label="Selected node name" />
+                            <span id="object-type">EULERIAN FIELD · GPU LATTICE</span>
+                        </div>
+                        <label class="switch" title="Enable / show selected entity">
+                            <input type="checkbox" id="object-enabled" checked aria-label="Toggle enabled" />
+                            <span></span>
+                        </label>
+                    </div>
+                    <div class="inspector-tabs ins-tabs" id="inspector-tabs" role="tablist" aria-label="Inspector sections"></div>
                 </div>
-
-                <div class="inspector-tabs" id="inspector-tabs" role="tablist" aria-label="Inspector sections"></div>
 
                 <div class="panel-scroll inspector-scroll" id="InspectorScroll">
                     <div class="panel-content" id="InspectorContent"></div>
                 </div>
 
-                <div class="inspector-footer">
+                <footer class="ins-foot">
                     <span id="inspector-revision">Parameters · Revision 0</span>
-                    <span>Changes apply live ↗</span>
-                </div>
+                    <span id="inspector-hint">Changes apply live</span>
+                </footer>
             </aside>
         </main>
-
-        <!-- Crisp Bottom Status Bar -->
-        <footer class="status-bar">
-            <span class="status-ready" id="status-ready"><i></i>WebGPU ready</span>
-            <span class="status-divider"></span>
-            <span id="status-effects">0 effects · 0 forces</span>
-            <span class="status-divider"></span>
-            <span id="status-readback">Lattice readback —</span>
-            <span class="status-right">
-                <span class="gpu-dot" id="gpu-dot"></span>
-                <span id="status-adapter">—</span>
-                <span class="status-divider"></span>
-                FRONTIER / PARTICLES <span class="version">2.0</span>
-            </span>
-        </footer>
     </div>
 
     <!-- Add Popover Menu (Outliner + button: Particle Assets, 17 bounded force types, Custom Formula fx, visualization layers) -->
