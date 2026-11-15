@@ -5,6 +5,7 @@
 //    eos WebGPU compute particles seamlessly driven by the unified
 //    17-type ForceFieldCatalogue & shared ForceFieldVisualization library (3D Camera overlay + Inspector Map debug canvas).
 
+import { UI } from './UI/Shell.js';
 import { PE } from './Engine/pe.js';
 import './Engine/presets.js';
 import './Engine/shaders.js';
@@ -221,7 +222,6 @@ const LogEntries = [];
 let Selected = 'fx_1';
 let InspectorTab = 'overview';
 let OutlinerFilter = 'all';
-let OutlinerQuery = '';
 let AddMenuAssetQuery = '';
 let ModalGroup = 'All';
 let ModalQuery = '';
@@ -3469,17 +3469,11 @@ function RefreshLogDrawer()
 
 function ConstructSceneTabs()
 {
-    const Host = document.getElementById('scene-tabs');
-    Host.textContent = '';
-    for (const TabDef of SceneTabs)
+    UI.Header.SetScenes(SceneTabs.map(T => ({ Id: T.Id, Name: T.Name })), Scene.ActiveTab, Id =>
     {
-        const Btn = C.Construct('button', 'document-tab' + (Scene.ActiveTab === TabDef.Id ? ' active' : ''), [
-            C.Construct('span', 'document-label', TabDef.Name)
-        ]);
-        Btn.type = 'button';
-        Btn.addEventListener('click', () => LoadSceneTab(TabDef));
-        Host.append(Btn);
-    }
+        const TabDef = SceneTabs.find(T => T.Id === Id);
+        if (TabDef) LoadSceneTab(TabDef);
+    });
 }
 
 //------------------------------------------------------------------------------------------------------------------------
@@ -3501,171 +3495,91 @@ function ConstructOutliner()
 {
     if (OutlinerScope) C.ReleaseScope(OutlinerScope);
     OutlinerScope = C.OpenScope();
-    const Content = document.getElementById('OutlinerContent');
-    Content.textContent = '';
 
-    const MakeGroup = (Title, Count) => C.Construct('div', 'tree-group', [
-        C.Construct('div', 'tree-group-title', [C.ConstructGlyph('Chevron'), C.Construct('span', null, Title), C.Construct('span', 'group-count tabular', String(Count))])
-    ]);
-
-    const AddRow = (Host, Row) =>
+    const LogFlip = (Channel, Text) => AppendLog(Channel, Text, null, 'live');
+    const SourceRow = S =>
     {
-        const El = C.Construct('div', 'tree-row' + (Row.Depth ? ' nested' : '') + (Row.ExtraClass ? ` ${Row.ExtraClass}` : ''));
-        El.style.setProperty('--row-accent', Row.Colour());
-        const GlyphBox = C.Construct('div', 'row-glyph', C.ConstructGlyph(Row.Glyph));
-        const NameEl = C.Construct('div', 'row-name', Row.Name());
-        const MetaEl = C.Construct('div', 'row-meta', Row.Meta());
-        const Btn = C.Construct('button', 'row-select', [GlyphBox, C.Construct('div', 'row-copy', [NameEl, MetaEl])]);
-        Btn.type = 'button';
-        Btn.addEventListener('click', () => SelectNode(Row.Id));
-
-        const StatusEl = Row.Status ? C.Construct('span', 'row-status') : null;
-        const Dot = C.Construct('span', 'row-state-dot');
-        const EyeBtn = C.Construct('button', 'row-eye' + (Row.Locked ? ' locked' : ''), C.ConstructGlyph('Eye'));
-        EyeBtn.type = 'button';
-        EyeBtn.title = Row.Locked ? 'Permanent scene camera (cannot be hidden or deleted)' : 'Toggle visibility / active';
-        EyeBtn.addEventListener('click', Ev => { Ev.stopPropagation(); Row.Flip(); C.Broadcast(); });
-
-        El.append(Btn);
-        if (StatusEl) El.append(StatusEl);
-        El.append(Dot, EyeBtn);
-        Host.append(El);
-
-        C.Register(() =>
-        {
-            const On = Row.Enabled();
-            El.classList.toggle('selected', Selected === Row.Id);
-            El.classList.toggle('is-off', !On);
-            Dot.classList.toggle('live', On);
-            NameEl.textContent = Row.Name();
-            MetaEl.textContent = Row.Meta();
-            if (StatusEl && Row.Status)
-            {
-                const St = Row.Status();
-                StatusEl.textContent = StatusText[St] || 'off';
-                StatusEl.className = 'row-status ' + (StatusText[St] || 'off');
-            }
-            EyeBtn.textContent = '';
-            if (Row.Locked) EyeBtn.append(C.ConstructGlyph('Eye'), C.ConstructGlyph('Lock'));
-            else EyeBtn.append(C.ConstructGlyph(On ? 'Eye' : 'EyeOff'));
-            const Match = !OutlinerQuery || `${Row.Name()} ${Row.Meta()}`.toLowerCase().includes(OutlinerQuery);
-            El.hidden = !Match;
-        });
+        const Info = FC().TypeById[S.Type];
+        return {
+            Id: 'src:' + S.Token, Name: () => S.Name, Glyph: Info?.Glyph || 'Target', Depth: 1,
+            Colour: () => Info?.Colour || ContributionColours[Info?.Contribution] || ContributionColours.Flow,
+            Meta: () => SourceMetaSummary(S),
+            Status: () => FC().ResolveActivation(S, Scene.Time).Status,
+            Enabled: () => S.Enabled,
+            Flip: () => { S.Enabled = !S.Enabled; LogFlip('FORCES', `${S.Name} ${S.Enabled ? 'enabled' : 'disabled'}`); }
+        };
     };
 
     const Sources = Scene.FieldScene.Sources;
     const FlowSources = Sources.filter(S => FC().TypeById[S.Type]?.Contribution === 'Flow');
     const ZoneSources = Sources.filter(S => FC().TypeById[S.Type]?.Contribution !== 'Flow');
-    const TotalCount = Scene.Effects.length + Sources.length + 2;
-    document.getElementById('outliner-subtitle').textContent = `Particle & force scene · ${TotalCount} nodes`;
+    UI.Outliner.SetScope(`${Scene.Effects.length + Sources.length + 2} nodes`);
+    const Groups = [];
 
     if (OutlinerFilter === 'all' || OutlinerFilter === 'forces')
     {
-        const EnvGroup = MakeGroup('Environment', Sources.length + 2);
-        if (OutlinerFilter === 'all' || OutlinerFilter === 'forces')
-        {
-            AddRow(EnvGroup, {
+        const Items = [
+            {
                 Id: 'Field', Name: () => 'Force Field', Glyph: 'Field', Colour: () => '#8fd3c4', Depth: 0,
                 Meta: () => `${Sources.length} bounded forces · ${Scene.Overlay.Enabled ? Scene.Overlay.Contribution : 'overlay off'}`,
                 Enabled: () => Scene.Overlay.Enabled,
-                Flip: () => { Scene.Overlay.Enabled = !Scene.Overlay.Enabled; AppendLog('VIEW', `Field overlay ${Scene.Overlay.Enabled ? 'on' : 'off'}`, null, 'live'); }
-            });
-            AddRow(EnvGroup, {
-                Id: 'Wind', Name: () => 'Ambient Wind', Glyph: 'Wind', Colour: () => '#9fc7e8', Depth: 1,
+                Flip: () => { Scene.Overlay.Enabled = !Scene.Overlay.Enabled; LogFlip('VIEW', `Field overlay ${Scene.Overlay.Enabled ? 'on' : 'off'}`); }
+            },
+            {
+                Id: 'Wind', Name: () => 'Ambient Wind', Glyph: 'Wind', Colour: () => '#9fc7e8', Depth: 0,
                 Meta: () =>
                 {
                     const W = Scene.FieldScene.Wind;
-                    return W.Enabled ? `${W.Speed.toFixed(1)} m/s at ${Math.round(W.Bearing)}° (${FC().ResolveBeaufort(W.Speed).Name})` : 'Ambient wind off';
+                    return W.Enabled ? `${W.Speed.toFixed(1)} m/s at ${Math.round(W.Bearing)}° · ${FC().ResolveBeaufort(W.Speed).Name}` : 'Ambient wind off';
                 },
                 Enabled: () => Scene.FieldScene.Wind.Enabled,
-                Flip: () => { Scene.FieldScene.Wind.Enabled = !Scene.FieldScene.Wind.Enabled; AppendLog('WIND', `Ambient wind ${Scene.FieldScene.Wind.Enabled ? 'on' : 'off'}`, null, 'live'); }
-            });
-
-            if (FlowSources.length)
-            {
-                EnvGroup.append(C.Construct('div', 'outliner-subgroup', `Wind & Flow Generators (${FlowSources.length})`));
-                for (const S of FlowSources)
-                {
-                    const Info = FC().TypeById[S.Type];
-                    AddRow(EnvGroup, {
-                        Id: 'src:' + S.Token, Name: () => S.Name, Glyph: Info?.Glyph || 'Wind',
-                        Colour: () => Info?.Colour || ContributionColours.Flow, Depth: 1,
-                        Meta: () => SourceMetaSummary(S),
-                        Status: () => FC().ResolveActivation(S, Scene.Time).Status,
-                        Enabled: () => S.Enabled,
-                        Flip: () => { S.Enabled = !S.Enabled; AppendLog('FORCES', `${S.Name} ${S.Enabled ? 'enabled' : 'disabled'}`, null, 'live'); }
-                    });
-                }
+                Flip: () => { Scene.FieldScene.Wind.Enabled = !Scene.FieldScene.Wind.Enabled; LogFlip('WIND', `Ambient wind ${Scene.FieldScene.Wind.Enabled ? 'on' : 'off'}`); }
             }
-            if (ZoneSources.length)
-            {
-                EnvGroup.append(C.Construct('div', 'outliner-subgroup', `Accelerate & Damp Zones (${ZoneSources.length})`));
-                for (const S of ZoneSources)
-                {
-                    const Info = FC().TypeById[S.Type];
-                    AddRow(EnvGroup, {
-                        Id: 'src:' + S.Token, Name: () => S.Name, Glyph: Info?.Glyph || 'Target',
-                        Colour: () => Info?.Colour || ContributionColours[Info.Contribution], Depth: 1,
-                        Meta: () => SourceMetaSummary(S),
-                        Status: () => FC().ResolveActivation(S, Scene.Time).Status,
-                        Enabled: () => S.Enabled,
-                        Flip: () => { S.Enabled = !S.Enabled; AppendLog('FORCES', `${S.Name} ${S.Enabled ? 'enabled' : 'disabled'}`, null, 'live'); }
-                    });
-                }
-            }
-        }
-        Content.append(EnvGroup);
+        ];
+        if (FlowSources.length) Items.push({ Subhead: 'Wind & flow generators', Count: FlowSources.length }, ...FlowSources.map(SourceRow));
+        if (ZoneSources.length) Items.push({ Subhead: 'Accelerate & damp zones', Count: ZoneSources.length }, ...ZoneSources.map(SourceRow));
+        Groups.push({ Key: 'environment', Title: 'Environment', Subtitle: 'Field, wind & force sources', Glyph: 'Field', Count: Sources.length + 2, Items });
     }
 
-    const VfxCatEntries = (PE.VFX_CATEGORIES || [
-        { id: 'Silk & Curl', label: 'Silk & Curl' },
-        { id: 'Ballistics & Sparks', label: 'Ballistics & Sparks' },
-        { id: 'Pyro & Water', label: 'Pyro & Water' },
-        { id: 'Wind-Blown', label: 'Wind-Blown' },
-        { id: 'Storms & Weather', label: 'Storms & Weather' }
-    ]).map(V => typeof V === 'string' ? { id: V, label: V } : V);
-
-    const FilterVfxCat = OutlinerFilter.startsWith('vfx:') ? OutlinerFilter.slice(4) : null;
-    if (OutlinerFilter === 'all' || OutlinerFilter === 'effects' || FilterVfxCat)
+    const Categories = (PE.VFX_CATEGORIES || []).map(V => typeof V === 'string' ? { id: V, label: V } : V);
+    const FilterCategory = OutlinerFilter.startsWith('vfx:') ? OutlinerFilter.slice(4) : null;
+    if (OutlinerFilter === 'all' || OutlinerFilter === 'effects' || FilterCategory)
     {
         const CategoryOf = E => PE.vfxCategoryOf ? PE.vfxCategoryOf(PE.presetById(E.PresetId) || { p: E.P }) : 'Particles';
         const SublabelOf = E => PE.vfxSublabelOf ? PE.vfxSublabelOf(PE.presetById(E.PresetId) || { p: E.P }) : (CategoryLabels[E.P.kind] || 'Particles');
-        const FilteredEffects = FilterVfxCat ? Scene.Effects.filter(E => CategoryOf(E) === FilterVfxCat) : Scene.Effects;
-        const FxTitle = FilterVfxCat ? `VFX · ${(VfxCatEntries.find(C => C.id === FilterVfxCat)?.label || FilterVfxCat)}` : 'Particle Effects';
-        const FxGroup = MakeGroup(FxTitle, FilteredEffects.length);
-
-        for (const Cat of VfxCatEntries)
+        const Effects = FilterCategory ? Scene.Effects.filter(E => CategoryOf(E) === FilterCategory) : Scene.Effects;
+        const Items = [];
+        for (const Cat of Categories)
         {
-            const CatEffects = FilteredEffects.filter(E => CategoryOf(E) === Cat.id);
-            if (!CatEffects.length) continue;
-            FxGroup.append(C.Construct('div', 'outliner-subgroup', `${Cat.label} (${CatEffects.length})`));
-            for (const Effect of CatEffects)
+            const InCat = Effects.filter(E => CategoryOf(E) === Cat.id);
+            if (!InCat.length) continue;
+            Items.push({ Subhead: Cat.label, Count: InCat.length });
+            for (const Effect of InCat)
             {
                 const Preset = PE.presetById(Effect.PresetId);
-                AddRow(FxGroup, {
-                    Id: Effect.Token,
-                    Name: () => Effect.Name,
-                    Glyph: GlyphForPreset(Preset),
+                Items.push({
+                    Id: Effect.Token, Name: () => Effect.Name, Glyph: GlyphForPreset(Preset), Depth: 1,
                     Colour: () => DisplayColour(Effect.P.colA),
-                    Depth: 1,
                     Meta: () => `${SublabelOf(Effect)} · ${FormatInteger(Effect.Gpu?.stats_?.alive || 0)} alive`,
                     Enabled: () => Effect.P.visible,
-                    Flip: () => { Effect.P.visible = !Effect.P.visible; AppendLog('PARTICLES', `${Effect.Name} ${Effect.P.visible ? 'shown' : 'hidden'}`, null, 'live'); }
+                    Flip: () => { Effect.P.visible = !Effect.P.visible; LogFlip('PARTICLES', `${Effect.Name} ${Effect.P.visible ? 'shown' : 'hidden'}`); }
                 });
             }
         }
-        Content.append(FxGroup);
+        const Title = FilterCategory ? (Categories.find(Cat => Cat.id === FilterCategory)?.label || FilterCategory) : 'Particle Effects';
+        Groups.push({ Key: 'effects', Title, Subtitle: FilterCategory ? 'Filtered category' : 'Emitters by category', Glyph: 'Sparkles', Count: Effects.length, Items });
     }
+
+    UI.Outliner.Render(Groups);
 
     C.Register(() =>
     {
-        const Vis = Scene.Effects.filter(E => E.P.visible).length + Scene.FieldScene.Sources.filter(S => S.Enabled).length;
-        const Tot = Scene.Effects.length + Scene.FieldScene.Sources.length;
-        document.getElementById('visible-count').textContent = String(Vis);
-        document.getElementById('hidden-count').textContent = String(Tot - Vis);
-        document.getElementById('status-effects').textContent = String(Scene.Effects.length);
-        const ForceCell = document.getElementById('status-forces');
-        if (ForceCell) ForceCell.textContent = String(Scene.FieldScene.Sources.length);
+        const Visible = Scene.Effects.filter(E => E.P.visible).length + Scene.FieldScene.Sources.filter(S => S.Enabled).length;
+        const Total = Scene.Effects.length + Scene.FieldScene.Sources.length;
+        document.getElementById('visible-count').textContent = String(Visible);
+        document.getElementById('hidden-count').textContent = String(Total - Visible);
+        UI.Status.Set('status-effects', String(Scene.Effects.length));
+        UI.Status.Set('status-forces', String(Scene.FieldScene.Sources.length));
     });
 
     C.CloseScope(OutlinerScope);
@@ -3872,22 +3786,8 @@ const Range = (Host, Binding, Min, Max, Step, Digits, Unit, Extra) =>
 
 function RenderInspectorTabs(Defs)
 {
-    const Bar = document.getElementById('inspector-tabs');
-    Bar.textContent = '';
-    if (!Defs || !Defs.length)
-    {
-        Bar.hidden = true;
-        return;
-    }
-    Bar.hidden = false;
-    if (!Defs.some(D => D[0] === InspectorTab)) InspectorTab = Defs[0][0];
-    for (const [Id, Label] of Defs)
-    {
-        const Btn = C.Construct('button', InspectorTab === Id ? 'active' : '', Label);
-        Btn.type = 'button';
-        Btn.addEventListener('click', () => { InspectorTab = Id; ConstructInspectorPage(); C.Broadcast(); });
-        Bar.append(Btn);
-    }
+    if (Defs && Defs.length && !Defs.some(D => D[0] === InspectorTab)) InspectorTab = Defs[0][0];
+    UI.Inspector.SetTabs(Defs, InspectorTab, Id => { InspectorTab = Id; ConstructInspectorPage(); C.Broadcast(); });
 }
 
 //------------------------------------------------------------------------------------------------------------------------
@@ -4207,7 +4107,7 @@ function AddColorRampEditor(Host, Effect, P, Cls)
     });
     C.Register(() => RenderHandles());
 
-    const Meta = C.Construct('p', 'property-hint ramp-meta');
+    const Meta = C.Construct('p', 'ps-note ramp-meta');
     Wrap.append(Meta);
     C.Register(() =>
     {
@@ -4270,7 +4170,7 @@ function AddColorRampEditor(Host, Effect, P, Cls)
         RemoveBtn.disabled = N <= 2;
     });
 
-    const SelLabel = C.Construct('span', 'property-label ramp-sel-label');
+    const SelLabel = C.Construct('span', 'ps-label ramp-sel-label');
     Wrap.append(SelLabel);
     C.Register(() =>
     {
@@ -4304,7 +4204,7 @@ function AddColorRampEditor(Host, Effect, P, Cls)
         }
     }, 0, 1, 0.01, 2, '');
 
-    const PalLabel = C.Construct('span', 'property-label ramp-pal-label', 'Palette presets');
+    const PalLabel = C.Construct('span', 'ps-label ramp-pal-label', 'Palette presets');
     Wrap.append(PalLabel);
     const PalRow = C.Construct('div', 'ramp-palettes');
     Wrap.append(PalRow);
@@ -4426,7 +4326,7 @@ function ConstructEffectInspector(Page, Effect)
             Range(Sec, BindEffect(Effect, P, 'carTrackRadius', { Label: 'Figure-8 track radius' }), 1.2, 5.5, 0.1, 2, 'm');
         }
         Range(Sec, BindEffect(Effect, P, 'radius', { Label: 'Puddle pool radius' }), 0.6, 5.0, 0.05, 2, 'm');
-        const Sw = C.Construct('div', 'property-switches');
+        const Sw = C.TileGrid();
         Sec.append(Sw);
         C.ToggleTile(Sw, BindEffect(Effect, P, 'showObject', { Label: Cls.MudMode === 2 ? 'Show 3D car & puddle' : 'Show water puddle disc', Glyph: 'Layers' }));
     };
@@ -4470,7 +4370,7 @@ function ConstructEffectInspector(Page, Effect)
             if (!Array.isArray(P.effPos)) P.effPos = [P.origin[0] + 0.8, P.origin[1] + 0.65, P.origin[2]];
             C.VectorRow(Sec, BindEffect(Effect, P, 'effPos', { Label: 'Magnet pole XYZ (drag in 3D)', Unit: 'm', Step: 0.05, Digits: 2, Minimum: -10, Maximum: 10 }));
         }
-        const Sw = C.Construct('div', 'property-switches');
+        const Sw = C.TileGrid();
         Sec.append(Sw);
         C.ToggleTile(Sw, BindEffect(Effect, P, 'showObject', { Label: 'Show dish & magnet', Glyph: 'Layers' }));
     };
@@ -4494,9 +4394,9 @@ function ConstructEffectInspector(Page, Effect)
         C.SelectRow(Sec, ShapeBind);
 
         // Live editable custom Sky Text input + quick New Year's preset chips!
-        const TextRow = C.Construct('div', 'property-row');
+        const TextRow = C.Construct('div', 'ps-row');
         TextRow.style.cssText = 'display:flex;flex-direction:column;gap:6px;margin:8px 0 6px;';
-        const LabelEl = C.Construct('label', 'property-label');
+        const LabelEl = C.Construct('label', 'ps-label');
         LabelEl.textContent = 'Sky-writing firework text (used in Sky Text & Grand Finale)';
         LabelEl.style.cssText = 'font-size:11px;color:var(--text-muted,#a8b8d0);';
         const InputEl = document.createElement('input');
@@ -4534,7 +4434,7 @@ function ConstructEffectInspector(Page, Effect)
         Range(Sec, BindEffect(Effect, P, 'fireworkScale', { Label: 'Burst pattern scale' }), 1.2, 4.6, 0.05, 2, 'm');
         Range(Sec, BindEffect(Effect, P, 'burstEvery', { Label: 'Shell launch interval' }), 2.2, 6.0, 0.1, 1, 's');
         Range(Sec, BindEffect(Effect, P, 'gravity', { Label: 'Willow star droop gravity' }), 0.10, 1.2, 0.02, 2, 'g');
-        const Sw = C.Construct('div', 'property-switches');
+        const Sw = C.TileGrid();
         Sec.append(Sw);
         C.ToggleTile(Sw, BindEffect(Effect, P, 'showObject', { Label: 'Show ground 5-tube mortar rack', Glyph: 'Layers' }));
     };
@@ -4549,7 +4449,7 @@ function ConstructEffectInspector(Page, Effect)
         Range(Sec, BindEffect(Effect, P, 'gravity', { Label: 'Flare drop gravity' }), 0.2, 1.4, 0.02, 2, 'g');
         Range(Sec, BindEffect(Effect, P, 'drag', { Label: 'Aerodynamic braking drag' }), 0.4, 3.0, 0.05, 2, '/s');
         Range(Sec, BindEffect(Effect, P, 'buoyancy', { Label: 'Smoke plume thermal rise' }), 0.0, 1.2, 0.05, 2, 'm/s');
-        const Sw = C.Construct('div', 'property-switches');
+        const Sw = C.TileGrid();
         Sec.append(Sw);
         C.ToggleTile(Sw, BindEffect(Effect, P, 'showObject', { Label: 'Show aircraft twin-pod mount', Glyph: 'Layers' }));
     };
@@ -4574,7 +4474,7 @@ function ConstructEffectInspector(Page, Effect)
         }]);
         Range(Sec, BindEffect(Effect, P, 'crackSpeed', { Label: 'Crack propagation speed' }), 0.3, 4.0, 0.05, 2, '×');
         Range(Sec, BindEffect(Effect, P, 'crackDepth', { Label: 'Slab heave & tilt angle' }), 0.05, 1.2, 0.02, 2, 'm');
-        const Sw = C.Construct('div', 'property-switches');
+        const Sw = C.TileGrid();
         Sec.append(Sw);
         C.ToggleTile(Sw, BindEffect(Effect, P, 'showObject', { Label: 'Show abyssal glow underlayer', Glyph: 'Layers' }));
     };
@@ -4597,7 +4497,7 @@ function ConstructEffectInspector(Page, Effect)
         Range(Sec, BindEffect(Effect, P, 'dynHeight', { Label: 'Doorway / hanger drop span' }), 0.85, 5.2, 0.05, 2, 'm');
         Range(Sec, BindEffect(Effect, P, 'dynStiff', { Label: 'Restoring stiffness' }), 0.25, 3.0, 0.05, 2, '×');
         Range(Sec, BindEffect(Effect, P, 'dynWaveSpeed', { Label: 'Sway resonance speed' }), 0.35, 5.5, 0.05, 2, 'Hz');
-        const Sw = C.Construct('div', 'property-switches');
+        const Sw = C.TileGrid();
         Sec.append(Sw);
         C.ToggleTile(Sw, BindEffect(Effect, P, 'showObject', { Label: Cls.BeadsMode === 2 ? 'Show crown striker ring' : 'Show doorway lintel frame', Glyph: 'Layers' }));
     };
@@ -4751,7 +4651,7 @@ function ConstructEffectInspector(Page, Effect)
                 const InfoText = CustomEntry
                     ? `Loaded custom mesh: ${CustomEntry.name} (${CustomEntry.triCount.toLocaleString()} triangles · auto-normalized)`
                     : 'No custom file uploaded yet (showing Utah Teapot fallback). Click "Import 3D Mesh" or drop an .obj/.stl file onto the viewport.';
-                Sec.append(C.Construct('p', 'property-hint', InfoText));
+                Sec.append(C.Construct('p', 'ps-note', InfoText));
             }
             if (!Array.isArray(P.objRot)) P.objRot = [0, 0, 0];
             Range(Sec, BindEffect(Effect, P, 'radius', { Label: 'Object scale radius' }), 0.4, 5.0, 0.05, 2, 'm');
@@ -4790,7 +4690,7 @@ function ConstructEffectInspector(Page, Effect)
         Range(Sec, BindEffect(Effect, P, 'gridMinScale', { Label: 'Inactive scale / base height' }), 0.0, 0.90, 0.02, 2, '×');
         Range(Sec, BindEffect(Effect, P, 'gridMaxHeight', { Label: 'Active height extrusion (cubes)' }), 0.05, 2.8, 0.02, 2, 'm');
         Range(Sec, BindEffect(Effect, P, 'gridContrast', { Label: 'Mask contrast sharpness' }), 0.5, 3.5, 0.05, 2, '');
-        const GridSw = C.Construct('div', 'property-switches');
+        const GridSw = C.TileGrid();
         Sec.append(GridSw);
         C.ToggleTile(GridSw, BindEffect(Effect, P, 'showObject', { Label: 'Show backing object', Glyph: 'Layers' }));
         C.ToggleTile(GridSw, {
@@ -4863,8 +4763,8 @@ function ConstructEffectInspector(Page, Effect)
         C.SelectRow(Sec, FormB);
         if ((P.shieldForm ?? 0) >= 1)
             C.VectorRow(Sec, BindEffect(Effect, P, 'dir', { Label: 'Barrier facing normal', Step: 0.01, Digits: 2, Minimum: -1, Maximum: 1 }));
-        Sec.append(C.Construct('div', 'section-subhead', [C.Construct('span', null, 'Layered pattern shapes'), C.Construct('span', null, 'Stackable')]));
-        const MaskGrid = C.Construct('div', 'property-switches');
+        Sec.append(C.Construct('div', 'ps-subhead', [C.Construct('span', null, 'Layered pattern shapes'), C.Construct('span', null, 'Stackable')]));
+        const MaskGrid = C.TileGrid();
         Sec.append(MaskGrid);
         for (const [Label, Bit, Glyph] of [
             ['Hexagons', 1, 'Lattice'],
@@ -4992,8 +4892,8 @@ function ConstructEffectInspector(Page, Effect)
             { Label: 'Wind coupling', Highlight: true, Resolve: () => Cls.UsesWind ? [`${P.windCoupling.toFixed(2)} /s`, 'lattice coupling'] : ['Locked', Cls.IsAssembly ? 'analytic assembly' : Cls.IsGrid ? 'effector-driven' : (Cls.IsFerro || Cls.IsCrack) ? 'magnetic / seismic' : 'static HUD overlay'] }
         ]);
 
-        Page.append(C.Construct('div', 'section-subhead', [C.Construct('span', null, 'Quick controls'), C.Construct('span', null, Preset?.group || 'Particles')]));
-        const Grid = C.Construct('div', 'property-switches');
+        Page.append(C.Construct('div', 'ps-subhead', [C.Construct('span', null, 'Quick controls'), C.Construct('span', null, Preset?.group || 'Particles')]));
+        const Grid = C.TileGrid();
         C.ToggleTile(Grid, BindEffect(Effect, P, 'visible', { Label: 'Visible', Glyph: 'Eye' }));
         C.ToggleTile(Grid, {
             Label: 'Wind-driven', Glyph: 'Wind',
@@ -5248,7 +5148,7 @@ function ConstructEffectInspector(Page, Effect)
             }
             Range(ArcSrc, BindEffect(Effect, P, 'arcCount', { Label: (P.arcMode | 0) >= 2 ? 'Simultaneous plasma arcs' : 'Main discharge bolts' }), 1, 10, 1, 0, '');
             Range(ArcSrc, BindEffect(Effect, P, 'arcJitter', { Label: P.arcMode === 1 ? 'Filament curl' : 'Dielectric jaggedness' }), 0.08, 1.4, 0.02, 2, '');
-            const ElecGrid = C.Construct('div', 'property-switches');
+            const ElecGrid = C.TileGrid();
             ArcSrc.append(ElecGrid);
             C.ToggleTile(ElecGrid, BindEffect(Effect, P, 'showElectrodes', { Label: (P.arcMode | 0) >= 2 ? 'Show plasma nodes' : 'Show 3D spheres', Glyph: 'Target' }));
             if ((P.arcMode | 0) >= 2) AddBallInteractionCard(Page, '03 / INTERACTIVE BALL');
@@ -5262,7 +5162,7 @@ function ConstructEffectInspector(Page, Effect)
                 Range(BeamSec, BindEffect(Effect, P, 'targetRadius', { Label: 'Target ring radius' }), 0.08, 2.0, 0.01, 2, 'm');
             Range(BeamSec, BindEffect(Effect, P, 'beamWidth', { Label: 'Beam plasma core radius' }), 0.01, 0.25, 0.004, 3, 'm');
             Range(BeamSec, BindEffect(Effect, P, 'beamPulse', { Label: 'Plasma wave pulse speed' }), 0.5, 20, 0.25, 2, 'Hz');
-            const BGrid = C.Construct('div', 'property-switches');
+            const BGrid = C.TileGrid();
             BeamSec.append(BGrid);
             const ShowElecB = BindEffect(Effect, P, 'showElectrodes', { Label: 'Show muzzle/target rings', Glyph: 'Target' });
             const OrigElecW = ShowElecB.Write;
@@ -5473,7 +5373,7 @@ function ConstructEffectInspector(Page, Effect)
                         Range(CurlSec, BindEffect(Effect, P, 'pulseSpeed', { Label: 'Pour pulse speed' }), 0.08, 1.5, 0.02, 2, 'Hz');
                         Range(CurlSec, BindEffect(Effect, P, 'pulseWidth', { Label: 'Wave band thickness' }), 0.08, 0.65, 0.02, 2, '');
                     }
-                    const ObjGrid = C.Construct('div', 'property-switches');
+                    const ObjGrid = C.TileGrid();
                     CurlSec.append(ObjGrid);
                     C.ToggleTile(ObjGrid, BindEffect(Effect, P, 'showObject', { Label: 'Show inner 3D object', Glyph: 'Layers' }));
                 }
@@ -5581,7 +5481,7 @@ function ConstructEffectInspector(Page, Effect)
         C.Construct('div', 'stat-cell', [LatCell, C.Construct('span', null, 'Map latency')]),
         C.Construct('div', 'stat-cell', [CountCell, C.Construct('span', null, 'Completed maps')])
     ]));
-    const BenchMsg = C.Construct('p', 'property-hint', 'Run an async 80-byte-per-particle full-buffer DMA readback test on the active adapter.');
+    const BenchMsg = C.Construct('p', 'ps-note', 'Run an async 80-byte-per-particle full-buffer DMA readback test on the active adapter.');
     Rb.append(BenchMsg);
     C.ActionRow(Rb, [{
         Label: 'Benchmark Full Buffer Readback', Glyph: 'Gauge', Tone: 'accent',
@@ -5811,7 +5711,7 @@ function ConstructForcesFieldTab(Page, FocusMode, Src)
         const ActiveSec = C.SectionCard(Page, { Title: 'Placed force sources', Glyph: 'Target', Badge: `${Scene.FieldScene.Sources.length} IN SCENE` }).Inner;
         if (!Scene.FieldScene.Sources.length)
         {
-            ActiveSec.append(C.Construct('p', 'property-hint', 'No force sources placed yet. Click + in the Outliner header to add a Flow, Accelerate, Damp, or Formula source.'));
+            ActiveSec.append(C.Construct('p', 'ps-note', 'No force sources placed yet. Click + in the Outliner header to add a Flow, Accelerate, Damp, or Formula source.'));
         }
         else
         {
@@ -6008,7 +5908,7 @@ function ConstructForcesFormulaTab(Page, Src)
     if (!Target)
     {
         const Empty = C.SectionCard(Page, { Title: 'Symbolic Vector Language', Glyph: 'Zap', Badge: 'NO SOURCE' }).Inner;
-        Empty.append(C.Construct('p', 'property-hint', 'No force source exists yet. Use the Outliner + button to add a Custom Formula Field or any force type, then edit its equation here.'));
+        Empty.append(C.Construct('p', 'ps-note', 'No force source exists yet. Use the Outliner + button to add a Custom Formula Field or any force type, then edit its equation here.'));
         return;
     }
     if (!Number.isFinite(Target.Strength)) Target.Strength = 8;
@@ -6058,7 +5958,7 @@ function ConstructForcesFormulaTab(Page, Src)
         });
         PresetRow.append(Btn);
     }
-    Sec.append(C.Construct('div', 'section-subhead', [C.Construct('span', null, 'Presets'), C.Construct('span', null, 'VectorFieldLang')]), PresetRow);
+    Sec.append(C.Construct('div', 'ps-subhead', [C.Construct('span', null, 'Presets'), C.Construct('span', null, 'VectorFieldLang')]), PresetRow);
 
     const QuickSymbols = [
         ['·', ' · '], ['×', ' × '], ['r̂', 'r̂'], ['x̂', 'x̂'], ['ŷ', 'ŷ'], ['ẑ', 'ẑ'],
@@ -6184,8 +6084,8 @@ function ConstructForcesLayersTab(Page)
     Range(FlowSec, Object.assign(BindScene(Vz, 'FlowLineSpacing', { Label: 'Slice line separation' }, 'VIEW', 'FlowLines'), { Write: V => { Vz.FlowLineSpacing = Math.round(V); Visualization?.Invalidate(); InspectorViz?.Invalidate(); } }), 18, 96, 1, 0, 'px');
     C.SwitchRow(FlowSec, BindScene(Vz, 'Arrows', { Label: '2D ground slice arrows' }, 'VIEW', 'Arrows'));
 
-    Page.append(C.Construct('div', 'section-subhead', [C.Construct('span', null, 'Stage & chamber layers'), C.Construct('span', null, 'ForceFieldVisualization')]));
-    const Grid = C.Construct('div', 'property-switches');
+    Page.append(C.Construct('div', 'ps-subhead', [C.Construct('span', null, 'Stage & chamber layers'), C.Construct('span', null, 'ForceFieldVisualization')]));
+    const Grid = C.TileGrid();
     C.ToggleTile(Grid, BindScene(Scene.Overlay, 'Enabled', { Label: 'Field overlay', Glyph: 'Layers' }, 'VIEW', 'Overlay'));
     C.ToggleTile(Grid, BindScene(Vz, 'Heatmap', { Label: 'Heatmap', Glyph: 'Palette' }, 'VIEW', 'Heatmap'));
     C.ToggleTile(Grid, BindScene(Vz, 'ShowInfluence', { Label: 'Influence rings', Glyph: 'Target' }, 'VIEW', 'Sources'));
@@ -6314,75 +6214,60 @@ function ConstructInspectorPage()
 
     const Content = document.getElementById('InspectorContent');
     Content.textContent = '';
-    const Page = C.Construct('div', 'inspector-page');
+    const Page = C.Construct('div', 'ps-page');
     Content.append(Page);
 
-    const NameInput = document.getElementById('object-name');
-    const TypeLabel = document.getElementById('object-type');
-    const SymEl = document.getElementById('object-symbol');
-    const EnabledEl = document.getElementById('object-enabled');
-    const Crumb = document.getElementById('inspector-crumb');
     const VpObj = document.getElementById('viewport-object');
     const VpSub = document.getElementById('viewport-subtitle');
+    const Heading = Spec => { UI.Inspector.SetHeading(Spec); VpObj.textContent = Spec.Name; };
 
     const Effect = EffectByToken(Selected);
     const Source = SourceByToken(Selected);
-    EnabledEl.disabled = false;
 
     if (Effect)
     {
         const Preset = PE.presetById(Effect.PresetId);
-        Crumb.textContent = `Inspector / Effects / ${Preset?.group || 'Particles'}`;
-        NameInput.value = Effect.Name;
-        NameInput.disabled = false;
-        NameInput.onchange = () => { Effect.Name = NameInput.value.trim() || Effect.Name; ConstructOutliner(); C.Broadcast(); };
-        TypeLabel.textContent = `${(CategoryLabels[Effect.P.kind] || 'Particles').toUpperCase()} · ${Effect.P.blend.toUpperCase()}`;
-        SymEl.textContent = ''; SymEl.append(C.ConstructGlyph(GlyphForPreset(Preset)));
-        SymEl.style.color = DisplayColour(Effect.P.colA);
-        EnabledEl.checked = !!Effect.P.visible;
-        EnabledEl.onchange = () => { Effect.P.visible = EnabledEl.checked; C.Broadcast(); };
-        VpObj.textContent = Effect.Name;
+        Heading({
+            Crumb: `Inspector / Effects / ${Preset?.group || 'Particles'}`, Name: Effect.Name, Editable: true,
+            OnRename: Name => { Effect.Name = Name || Effect.Name; ConstructOutliner(); C.Broadcast(); },
+            Type: `${CategoryLabels[Effect.P.kind] || 'Particles'} · ${Effect.P.blend}`,
+            Glyph: GlyphForPreset(Preset), Colour: DisplayColour(Effect.P.colA),
+            Enabled: !!Effect.P.visible, OnToggle: On => { Effect.P.visible = On; C.Broadcast(); }
+        });
         VpSub.textContent = `${CategoryLabels[Effect.P.kind] || 'Particles'} · eos engine`;
         ConstructEffectInspector(Page, Effect);
     }
     else if (Source)
     {
         const Info = FC().TypeById[Source.Type];
-        Crumb.textContent = `Inspector / Environment / ${Info.Contribution}`;
-        NameInput.value = Source.Name;
-        NameInput.disabled = false;
-        NameInput.onchange = () => { Source.Name = NameInput.value.trim() || Source.Name; ConstructOutliner(); C.Broadcast(); };
-        TypeLabel.textContent = `${Info.Contribution.toUpperCase()} · ${Info.Name.toUpperCase()}`;
-        SymEl.textContent = ''; SymEl.append(C.ConstructGlyph(Info.Glyph || 'Target'));
-        SymEl.style.color = Info.Colour || ContributionColours[Info.Contribution];
-        EnabledEl.checked = !!Source.Enabled;
-        EnabledEl.onchange = () => { Source.Enabled = EnabledEl.checked; C.Broadcast(); };
-        VpObj.textContent = Source.Name;
+        Heading({
+            Crumb: `Inspector / Environment / ${Info.Contribution}`, Name: Source.Name, Editable: true,
+            OnRename: Name => { Source.Name = Name || Source.Name; ConstructOutliner(); C.Broadcast(); },
+            Type: `${Info.Contribution} · ${Info.Name}`,
+            Glyph: Info.Glyph || 'Target', Colour: Info.Colour || ContributionColours[Info.Contribution],
+            Enabled: !!Source.Enabled, OnToggle: On => { Source.Enabled = On; C.Broadcast(); }
+        });
         VpSub.textContent = `${Info.Name} · ${Source.Reach} (${Source.Radius.toFixed(1)} m)`;
         ConstructForcesInspector(Page, 'source', Source);
     }
     else if (Selected === 'Wind')
     {
-        Crumb.textContent = 'Inspector / Environment / Ambient Wind';
-        NameInput.value = 'Ambient Wind'; NameInput.disabled = true;
-        TypeLabel.textContent = 'CONTINUOUS DOMAIN BREEZE & TURBULENCE';
-        SymEl.textContent = ''; SymEl.append(C.ConstructGlyph('Wind')); SymEl.style.color = '#9fc7e8';
-        EnabledEl.checked = !!Scene.FieldScene.Wind.Enabled;
-        EnabledEl.onchange = () => { Scene.FieldScene.Wind.Enabled = EnabledEl.checked; C.Broadcast(); };
-        VpObj.textContent = 'Ambient Wind';
+        Heading({
+            Crumb: 'Inspector / Environment / Ambient Wind', Name: 'Ambient Wind', Editable: false,
+            Type: 'Continuous domain breeze & turbulence', Glyph: 'Wind', Colour: '#9fc7e8',
+            Enabled: !!Scene.FieldScene.Wind.Enabled, OnToggle: On => { Scene.FieldScene.Wind.Enabled = On; C.Broadcast(); }
+        });
         VpSub.textContent = `${Scene.FieldScene.Wind.Speed.toFixed(1)} m/s · ${Math.round(Scene.FieldScene.Wind.Bearing)}°`;
         ConstructForcesInspector(Page, 'wind', null);
     }
     else
     {
         Selected = 'Field';
-        Crumb.textContent = 'Inspector / Environment';
-        NameInput.value = 'Force Field'; NameInput.disabled = true;
-        TypeLabel.textContent = 'MASTER FORCE FIELD & VISUALIZATION';
-        SymEl.textContent = ''; SymEl.append(C.ConstructGlyph('Field')); SymEl.style.color = '#8fd3c4';
-        EnabledEl.checked = !!Scene.Overlay.Enabled;
-        EnabledEl.onchange = () => { Scene.Overlay.Enabled = EnabledEl.checked; C.Broadcast(); };
-        VpObj.textContent = 'Force Field';
+        Heading({
+            Crumb: 'Inspector / Environment / Force Field', Name: 'Force Field', Editable: false,
+            Type: 'Master force field & visualisation', Glyph: 'Field', Colour: '#8fd3c4',
+            Enabled: !!Scene.Overlay.Enabled, OnToggle: On => { Scene.Overlay.Enabled = On; C.Broadcast(); }
+        });
         VpSub.textContent = `${Scene.FieldScene.Sources.length} bounded force sources · ForceFieldVisualization`;
         ConstructForcesInspector(Page, 'field', null);
     }
@@ -6476,27 +6361,6 @@ function TogglePlay()
     AppendLog('VIEW', Scene.Playing ? 'Simulation resumed' : 'Simulation paused', `t=${Scene.Time.toFixed(1)}s`, Scene.Playing ? 'live' : 'warm');
 }
 
-function SyncFilterFace(Btn)
-{
-    const Label = document.getElementById('scene-filter-label');
-    if (Label) Label.textContent = Btn.textContent;
-    document.getElementById('scene-filter-drop')?.classList.toggle('filtered', Btn.dataset.filter !== 'all');
-    document.getElementById('scene-filter-drop')?.classList.remove('open');
-}
-
-// One compact dropdown replaces the 18 always-visible chips; the [data-filter] buttons are unchanged.
-function ConstructFilterDrop()
-{
-    const Drop = document.getElementById('scene-filter-drop');
-    const Face = document.getElementById('scene-filter-face');
-    if (!Drop || !Face) return;
-    document.getElementById('scene-filter-glyph')?.append(C.ConstructGlyph('Sliders'));
-    document.getElementById('scene-filter-chev')?.append(C.ConstructGlyph('Chevron'));
-    Face.addEventListener('click', Ev => { Ev.stopPropagation(); Drop.classList.toggle('open'); });
-    document.addEventListener('pointerdown', Ev => { if (!Drop.contains(Ev.target)) Drop.classList.remove('open'); });
-    document.addEventListener('keydown', Ev => { if (Ev.key === 'Escape') Drop.classList.remove('open'); });
-}
-
 function SyncTopNav()
 {
     const VeilOpen = document.getElementById('LibraryVeil').classList.contains('shown');
@@ -6508,19 +6372,8 @@ function SyncTopNav()
 function WireStaticIconsAndControls()
 {
     const SetGlyph = (Id, Name) => { const El = document.getElementById(Id); if (El) { El.textContent = ''; El.append(C.ConstructGlyph(Name)); } };
-    SetGlyph('help-button', 'Help');
-    SetGlyph('compact-outliner', 'Compact');
-    SetGlyph('add-button', 'Plus');
-    SetGlyph('stat-visible-icon', 'Check');
-    SetGlyph('stat-hidden-icon', 'EyeOff');
-    SetGlyph('search-icon-slot', 'Search');
+    // Header, outliner and inspector icons are owned by the UI/ components.
     SetGlyph('preset-search-icon-slot', 'Search');
-    SetGlyph('viewport-title-icon', 'Sparkles');
-    SetGlyph('toggle-arrows-btn', 'Wind');
-    SetGlyph('toggle-minimap-btn', 'Map');
-    SetGlyph('toggle-log-btn', 'Terminal');
-    SetGlyph('focus-btn', 'Focus');
-    SetGlyph('maximize-btn', 'Maximize');
     SetGlyph('reset-button', 'Reset');
     SetGlyph('play-button', 'Pause');
     SetGlyph('step-button', 'Step');
@@ -6674,26 +6527,20 @@ function WireStaticIconsAndControls()
         setTimeout(ResizeCanvas, 20);
     });
 
-    ConstructFilterDrop();
     document.getElementById('compact-outliner').addEventListener('click', Ev =>
     {
         const Compact = document.getElementById('left-panel').classList.toggle('compact');
         Ev.currentTarget.setAttribute('aria-pressed', String(Compact));
         Ev.currentTarget.classList.toggle('active', Compact);
     });
-    document.getElementById('scene-search').addEventListener('input', Ev => { OutlinerQuery = Ev.target.value.trim().toLowerCase(); C.Broadcast(); });
-    document.getElementById('add-menu-preset-search')?.addEventListener('input', Ev => { AddMenuAssetQuery = Ev.target.value.trim().toLowerCase(); ConstructAddMenuAssets(); });
-    document.querySelectorAll('#scene-filters button').forEach(Btn =>
-    {
-        Btn.addEventListener('click', () =>
-        {
-            OutlinerFilter = Btn.dataset.filter;
-            document.querySelectorAll('#scene-filters button').forEach(B => B.classList.toggle('active', B === Btn));
-            SyncFilterFace(Btn);
-            ConstructOutliner();
-            C.Broadcast();
-        });
-    });
+    const Categories = (PE.VFX_CATEGORIES || []).map(V => typeof V === 'string' ? { id: V, label: V } : V);
+    UI.Outliner.SetFilters([
+        { Title: 'Scene', Items: [['All nodes', 'all'], ['Particle effects', 'effects'], ['Force sources', 'forces']] },
+        { Title: 'Effect category', Columns: true, Items: Categories.map(Cat => [Cat.label, 'vfx:' + Cat.id]) }
+    ]);
+    UI.Outliner.OnFilter = Value => { OutlinerFilter = Value; ConstructOutliner(); C.Broadcast(); };
+    UI.Outliner.OnSelect = Token => SelectNode(Token);
+    UI.Outliner.IsSelected = Token => Selected === Token;
 
     const AddBtn = document.getElementById('add-button'), AddMenu = document.getElementById('add-menu');
     AddBtn.addEventListener('click', () =>
