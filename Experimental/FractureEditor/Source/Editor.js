@@ -4,7 +4,7 @@
 import { Viewport, LineBuilder } from './Renderer.js';
 import { invert } from './MathUtils.js';
 import { PRIMITIVES, primitiveById, defaultDims, normalizeDims, describe, DETAIL } from './Primitives.js';
-import { buildSource, fracture, defaultImpact, MATERIALS, MATERIAL_ORDER, normalizeRecipe, histogram, DEFAULT_RECIPE } from './Fracture.js';
+import { buildSource, fracture, defaultImpact, MATERIALS, MATERIAL_ORDER, normalizeRecipe, histogram, DEFAULT_RECIPE, METHODS, BUDGETS, rehit, realtimeCap, cellCost } from './Fracture.js';
 import { simulate, sample, totalAt, poseMatrix, impactShares, normalizeSimulation, SIMULATION_DEFAULTS } from './FractureSimulation.js';
 import { hydrateGlyphs, glyph } from './Glyphs.js';
 import { Diagnostics } from './Diagnostics.js';
@@ -20,7 +20,7 @@ const doc = {
   primitive: 'torus', dims: {}, detail: 'medium', recipe: { ...DEFAULT_RECIPE }, simulation: { ...SIMULATION_DEFAULTS },
   mode: 'edit', shading: 'energy', explode: 0, wire: false, seeds: false, grid: true, smooth: true, logScale: true,
   selected: null, hidden: new Set(), overrides: new Map(), filter: 'all', search: '', speed: 1, loop: true,
-  aiming: false, time: 0, playing: false, shutGroups: new Set(['recipe']), shutSections: new Set(['distribution']), library: false,
+  aiming: false, hit: null, time: 0, playing: false, shutGroups: new Set(['recipe']), shutSections: new Set(['distribution']), library: false,
 };
 for (const p of PRIMITIVES) doc.dims[p.id] = defaultDims(p.id);
 try {
@@ -45,6 +45,8 @@ function save() {
 
 // Derived
 let source = null, result = null, shares = null, cache = null, meshes = [], kineticPeak = 1, diagnostics = null;
+let authored = null; // the Edit fracture, kept while Sim / Play show a re-hit of it (doc.hit)
+const impactPoint = () => doc.hit || [doc.recipe.X, doc.recipe.Y, doc.recipe.Z];
 const pieceKinetic = []; // per piece: peak kinetic over the bake
 
 // ---------------------------------------------------------------------------------------------------- formatting
@@ -102,6 +104,7 @@ function rebuildSource(resetImpact) {
   viewport.settings.shadow = [B.centre[0], B.centre[2], B.size[0] * 0.75 + 0.1, B.size[2] * 0.75 + 0.1];
 }
 function refracture() {
+  authored = null; doc.hit = null;
   result = fracture(source, doc.recipe);
   doc.overrides = new Map([...doc.overrides].filter(([id]) => id < result.pieces.length));
   shares = impactShares(result, doc.simulation, doc.overrides);
@@ -134,6 +137,31 @@ function invalidateMotion() {
   if (doc.mode !== 'edit') ensureCache();
   sceneDirty = overlayDirty = treeDirty = true;
   refreshLive(); paintTrack(); save();
+}
+
+// Sim / Play: hit the object somewhere else. Baked keeps its pre-cut pieces and launches them from the hit; realtime
+// cuts new pieces there, timed against its budget.
+function hitAt(point) {
+  if (!authored) authored = result;
+  doc.hit = point.slice();
+  const realtime = authored.method === 'realtime';
+  result = realtime ? fracture(source, { ...doc.recipe, X: point[0], Y: point[1], Z: point[2] }) : rehit(authored, point);
+  doc.overrides.clear(); doc.hidden.clear(); doc.selected = null;
+  shares = impactShares(result, doc.simulation, doc.overrides);
+  if (realtime) { buildMeshes(); diagnostics?.bakeFracture(result); }
+  cache = null; ensureCache();
+  doc.time = doc.mode === 'play' ? -0.3 : 0; doc.playing = true;
+  sceneDirty = overlayDirty = treeDirty = true;
+  renderInspector(); paintTrack(); paintTransport();
+  $('Hint').textContent = realtime ? `Realtime · cut ${result.pieces.length} pieces at the hit in ${result.ms.toFixed(1)} ms (budget ${doc.recipe.Budget} ms) · click again to re-hit · Esc to stop` : `Baked · the same ${result.pieces.length} pieces, launched from the new hit · click again to re-hit · Esc to stop`;
+}
+function restoreAuthored() {
+  if (!authored) return;
+  const realtime = authored.method === 'realtime';
+  result = authored; authored = null; doc.hit = null; doc.overrides.clear();
+  shares = impactShares(result, doc.simulation, doc.overrides);
+  if (realtime) buildMeshes();
+  cache = null; treeDirty = sceneDirty = overlayDirty = true;
 }
 
 // Coalesce rapid edits (slider drags) into one fracture per ~70 ms.
@@ -174,6 +202,7 @@ function updateScene() {
   if (!result) return;
   const B = source.bounds, n = result.pieces.length, t = sceneTime(), moving = doc.mode !== 'edit' && cache;
   live.total = 0; live.awake = 0;
+  const intact = doc.mode === 'play' && doc.time < 0 && result.method === 'realtime';
   const objects = result.pieces.map((pc, i) => {
     let matrix;
     if (moving) {
@@ -185,7 +214,8 @@ function updateScene() {
       matrix = live.matrices[i] = m; live.kinetic[i] = 0;
     }
     let tint = [1, 1, 1], mode = 'lit';
-    if (doc.shading === 'energy') { tint = linear(ramp(energyNorm(i, live.kinetic[i]))); mode = 'debug'; }
+    if (intact) { /* realtime before the hit: one whole object, no cells to colour yet */ }
+    else if (doc.shading === 'energy') { tint = linear(ramp(energyNorm(i, live.kinetic[i]))); mode = 'debug'; }
     else if (doc.shading === 'cells') { tint = linear(hue(i)); mode = 'debug'; }
     else if (doc.shading === 'normal') mode = 'normal';
     return { mesh: meshes[i], matrix, tint, mode, selected: doc.selected === i, visible: !doc.hidden.has(i), pickId: i };
@@ -200,7 +230,7 @@ function updateScene() {
 }
 
 function paintLines() {
-  const L = new LineBuilder(), imp = [doc.recipe.X, doc.recipe.Y, doc.recipe.Z], nrm = source.sdf ? gradientAt(imp) : [0, 1, 0];
+  const L = new LineBuilder(), imp = impactPoint(), nrm = source.sdf ? gradientAt(imp) : [0, 1, 0];
   const size = Math.max(...source.bounds.size), r = size * 0.05;
   const orange = [1, 0.54, 0.24, 0.95];
   const showImpact = doc.mode === 'edit' || doc.time < 0.4;
@@ -252,6 +282,11 @@ function onPick(id, e) {
     if (hit) { doc.recipe.X = hit.point[0]; doc.recipe.Y = hit.point[1]; doc.recipe.Z = hit.point[2]; setAiming(false); aimHover = null; syncImpactInputs(); schedule('fracture'); }
     return;
   }
+  if (doc.aiming) { // Sim / Play: a runtime hit
+    const ray = rayAt(e.clientX, e.clientY), hit = source.trace(ray.origin, ray.dir);
+    if (hit) hitAt(hit.point);
+    return;
+  }
   select(id === null ? null : id);
 }
 let aimRaf = 0;
@@ -265,10 +300,10 @@ canvas.addEventListener('pointermove', (e) => {
 });
 canvas.addEventListener('pointerleave', () => { if (aimHover) { aimHover = null; paintLines(); viewport.dirty = true; } });
 function setAiming(on) {
-  doc.aiming = on && doc.mode === 'edit';
+  doc.aiming = on && !!result;
   $('ImpactBtn').classList.toggle('on', doc.aiming); $('Well').classList.toggle('aiming', doc.aiming);
   document.querySelectorAll('[data-act="aim"]').forEach((b) => b.classList.toggle('on', doc.aiming));
-  $('Hint').textContent = doc.aiming ? 'Click the surface to place the impact · Esc to cancel' : 'Drag to orbit · right-drag to pan · wheel to zoom · click a fragment to select';
+  $('Hint').textContent = doc.aiming ? (doc.mode === 'edit' ? 'Click the surface to place the impact · Esc to cancel' : result.method === 'realtime' ? 'Click the surface to hit it · realtime cuts new pieces where you hit · Esc to stop' : 'Click the surface to hit it · baked pieces release from where you hit · Esc to stop') : 'Drag to orbit · right-drag to pan · wheel to zoom · click a fragment to select';
   if (!doc.aiming) { aimHover = null; paintLines(); }
 }
 function select(id) {
@@ -293,7 +328,7 @@ function paintOverlay() {
   const w = canvas.clientWidth, h = canvas.clientHeight; if (!w || !result) return;
   const { viewProj } = viewport.matrices(w / h);
   const notes = [];
-  const imp = [doc.recipe.X, doc.recipe.Y, doc.recipe.Z];
+  const imp = impactPoint();
   if (doc.mode === 'edit' || doc.time < 0.4) {
     const p = project(imp, viewProj, w, h);
     if (p) notes.push({ p, cls: 'impact', title: `Impact · ${fmtJ(doc.recipe.Energy)}`, sub: `${imp.map((v) => v.toFixed(2)).join(', ')} m · ${MATERIALS[doc.recipe.Material].label}`, dx: 64, dy: -54 });
@@ -344,14 +379,15 @@ function paintChrome() {
   $('VpSub').textContent = result ? `${result.pieces.length} fragments · ${MATERIALS[doc.recipe.Material].label.toLowerCase()} · ${source.note}` : '';
   const badge = $('VpBadge');
   badge.className = 'badge' + (doc.mode === 'play' ? ' live' : '');
-  badge.textContent = doc.mode === 'edit' ? 'LIVE FRACTURE' : doc.mode === 'sim' ? `SIMULATED · ${cache ? cache.ms.toFixed(0) : 0} MS` : 'PLAYING';
+  const rt = result?.realtime, method = rt ? `REALTIME · ${result.ms.toFixed(1)} / ${rt.budget} MS` : 'BAKED';
+  badge.className = 'badge' + (doc.mode === 'play' ? ' live' : rt && rt.over ? ' warn' : '');
+  badge.textContent = doc.mode === 'edit' ? `${method} · LIVE PREVIEW` : `${doc.hit ? 'RE-HIT · ' : ''}${doc.mode === 'sim' ? `SIMULATED · ${cache ? cache.ms.toFixed(0) : 0} MS` : 'PLAYING'} · ${rt ? 'REALTIME' : 'BAKED'}`;
   document.querySelectorAll('.modes button').forEach((b) => b.classList.toggle('on', b.dataset.mode === doc.mode));
   const [label, key] = doc.mode === 'edit' ? ['Simulate', 'Shift+2'] : doc.mode === 'sim' ? ['Play', 'Shift+3'] : ['Restart', 'Home'];
   $('PrimaryLabel').textContent = label; $('PrimaryKey').textContent = key;
   $('PrimaryBtn').querySelector('img').src = doc.mode === 'edit' ? 'Icons/editor-simulate.svg' : doc.mode === 'sim' ? 'Icons/editor-play-mode.svg' : 'Icons/editor-pause.svg';
   $('ExplodeWrap').classList.toggle('off', doc.mode !== 'edit');
-  $('ImpactBtn').disabled = doc.mode !== 'edit';
-  $('ImpactBtn').style.opacity = doc.mode === 'edit' ? '' : '.35';
+  $('ImpactBtn').title = doc.mode === 'edit' ? 'Place impact · I' : 'Hit the object · I';
   $('WireBtn').classList.toggle('on', doc.wire); $('SeedsBtn').classList.toggle('on', doc.seeds); $('GridBtn').classList.toggle('on', doc.grid);
   $('ShadingLabel').textContent = { material: 'Material', energy: 'Energy', cells: 'Cells', normal: 'Normals' }[doc.shading];
   document.querySelectorAll('#ShadingDrop .drop-list button').forEach((b) => b.classList.toggle('on', b.dataset.value === doc.shading));
@@ -377,6 +413,7 @@ function renderTree() {
   const prims = PRIMITIVES.filter((p) => !q || p.label.toLowerCase().includes(q)).map((p) => `<button class="tr${p.id === doc.primitive ? ' on' : ''}" data-primitive="${p.id}"><img src="Icons/${p.icon}.svg" alt=""><span class="tr-text"><b>${p.label}</b><small>${describe(p.id, doc.dims[p.id])}${p.convex ? '' : ' · segmented'}</small></span>${p.id === doc.primitive ? `<span class="tr-mark ok">${glyph('check')}</span>` : ''}</button>`).join('');
   const m = MATERIALS[doc.recipe.Material];
   const recipeRows = [
+    ['method', doc.recipe.Method === 'realtime' ? 'lightning' : 'editor-bake', 'Method', doc.recipe.Method === 'realtime' ? `Realtime · ${doc.recipe.Budget} ms budget · ≤ ${realtimeCap(source, doc.recipe)} cells` : `Baked · ${(result.metrics.bytes / 1024).toFixed(0)} KB stored · ${result.pieces.length} pieces`],
     ['impact', 'lightning', 'Impact', `${fmtJ(doc.recipe.Energy)} · ${[doc.recipe.X, doc.recipe.Y, doc.recipe.Z].map((v) => v.toFixed(2)).join(', ')}`],
     ['material', 'material', 'Material', `Outside ${MATERIALS[doc.recipe.Surface].label.toLowerCase()} · inside ${m.label.toLowerCase()}`],
     ['pattern', 'dice', 'Pattern', `Seed ${doc.recipe.Seed} · ceiling ${doc.recipe.Ceiling} · min ${(doc.recipe.MinimumSize * 1000).toFixed(0)} mm`],
@@ -398,7 +435,7 @@ function renderTree() {
   }).join('') || `<div class="tree-more" style="display:grid;place-items:center;border-style:dashed">No fragments match</div>`;
   $('Tree').innerHTML =
     group('primitives', 'folder-scene', 'Primitives', `${PRIMITIVES.length} analytical shapes`, prims) +
-    group('recipe', 'editor-material', 'Recipe', `${m.label} · ${fmtJ(doc.recipe.Energy)}`, recipeRows) +
+    group('recipe', 'editor-material', 'Recipe', `${METHODS[doc.recipe.Method].label} · ${m.label} · ${fmtJ(doc.recipe.Energy)}`, recipeRows) +
     group('fragments', 'editor-collection', 'Fragments', `${result.pieces.length} pieces · ${shares.releasedCount} released${doc.filter !== 'all' ? ` · showing ${frags.length}` : ''}`, fragRows);
   for (const el of $('Tree').querySelectorAll('[data-swatch]')) swatchEls.set(+el.dataset.swatch, { swatch: el, energy: el.parentElement.querySelector('[data-energy]') });
   paintSwatches();
@@ -497,6 +534,29 @@ function materialPick(slot) {
   </div>`;
 }
 
+// Fracture method: Baked (pre-cut here at full quality, pattern fixed) or Realtime (cut at impact within a budget).
+function methodPicker() {
+  const r = doc.recipe, base = authored || result, cap = realtimeCap(source, r), cost = cellCost(source), per = cost.per, kb = (base.metrics.bytes / 1024).toFixed(0);
+  const rt = base.realtime, realtime = r.Method === 'realtime';
+  const opt = (id, icon, facts) => `<button class="method-opt${r.Method === id ? ' on' : ''}" data-method="${id}">
+      <span class="method-head"><img src="Icons/${icon}.svg" alt=""><span class="method-text"><b>${METHODS[id].label}</b><small>${METHODS[id].lead}</small></span><i class="method-check">${glyph('check')}</i></span>
+      <dl class="method-facts">${facts.map(([k, v, cls]) => `<div><dt>${k}</dt><dd class="${cls || ''}">${v}</dd></div>`).join('')}</dl></button>`;
+  const baked = opt('baked', 'editor-bake', [
+    ['Pattern', METHODS.baked.pattern], ['At impact', 'Release only · 0 ms', 'good'],
+    ['Stored', realtime ? 'Every piece' : `${kb} KB · ${base.pieces.length} pieces`], ['Bake', realtime ? 'Full quality' : `${base.ms.toFixed(0)} ms, ahead of time`],
+  ]);
+  const live = opt('realtime', 'lightning', [
+    ['Pattern', METHODS.realtime.pattern], ['At impact', realtime && rt ? `${(doc.hit ? result : base).ms.toFixed(1)} of ${r.Budget} ms` : `≈ ${(cost.base + cap * per).toFixed(0)} of ${r.Budget} ms`, realtime && rt ? ((doc.hit ? result.realtime : rt).over ? 'bad' : 'good') : ''],
+    ['Stored', 'Shape only'], ['Pieces', `≤ ${cap} cells · ${per.toFixed(2)} ms each`],
+  ]);
+  const budget = realtime ? `<div class="panel method-budget"><div class="field"><span>Frame budget</span><small>${rt && rt.over ? `over budget · the shape alone costs ≈ ${cost.base.toFixed(1)} ms` : `fits ${cap} cells`}</small></div>
+      <div class="seg" data-seg="budget">${BUDGETS.map((b) => `<button data-value="${b}" class="${r.Budget === b ? 'on' : ''}">${b} ms</button>`).join('')}</div>
+      <p class="note">One pass with plain fans and no needle re-cut. The cost per cell is measured on this machine, so the cap tracks what actually fits. In Sim and Play, the impact tool (I) hits the object and re-cuts where you hit.</p></div>`
+    : `<p class="note">Cut once here at full quality and stored. A hit at runtime only releases the stored pieces, so the pattern does not follow the hit; try the impact tool (I) in Sim or Play.</p>`;
+  return `<div class="method-pick">${baked}${live}</div>${budget}`;
+}
+function setMethod(id) { if (!METHODS[id] || doc.recipe.Method === id) return; doc.recipe.Method = id; renderInspector(); schedule('fracture'); }
+
 function primitiveInspector() {
   const spec = primitiveById(doc.primitive), m = MATERIALS[doc.recipe.Material], d = source.dims;
   const shape = `<div class="panel">${spec.dims.map(([key, label, unit]) => field('dim:' + key, label, unit)).join('')}
@@ -510,13 +570,15 @@ function primitiveInspector() {
   const pattern = `<div class="panel"><div class="field"><span>Seed</span><label class="amount"><input id="SeedBox" value="${doc.recipe.Seed}" inputmode="numeric"><em>#</em></label></div>
       ${field('Ceiling', 'Piece ceiling', 'pcs')}${field('MinimumSize', 'Minimum size', 'mm')}
       <button class="wide-btn" data-act="reroll"><img src="Icons/dice.svg" alt="">Reroll seed</button></div>`;
-  const quality = `<div class="tiles">${toggleTile('NeedleRejection', 'Needle rejection', doc.recipe.NeedleRejection, 'triangle')}${toggleTile('ClosedCaps', 'Closed caps', doc.recipe.ClosedCaps, 'wire')}${toggleTile('QualityTriangulation', 'Quality fans', doc.recipe.QualityTriangulation, 'grid')}${toggleTile('smooth', 'Exact normals', doc.smooth, 'sphere', doc.smooth ? 'Analytic' : 'Faceted')}</div>`;
+  const rtOff = doc.recipe.Method === 'realtime';
+  const quality = `<div class="tiles">${toggleTile('NeedleRejection', 'Needle rejection', doc.recipe.NeedleRejection && !rtOff, 'triangle', rtOff ? 'Off in realtime' : '')}${toggleTile('ClosedCaps', 'Closed caps', doc.recipe.ClosedCaps, 'wire')}${toggleTile('QualityTriangulation', 'Quality fans', doc.recipe.QualityTriangulation && !rtOff, 'grid', rtOff ? 'Off in realtime' : '')}${toggleTile('smooth', 'Exact normals', doc.smooth, 'sphere', doc.smooth ? 'Analytic' : 'Faceted')}</div>`;
   const sim = `<div class="panel">${field('Duration', 'Duration', 's')}${field('Transfer', 'Energy transfer', '%')}${field('Release', 'Release threshold', 'J')}</div>
     <div class="panel">${field('Gravity', 'Gravity', 'm/s²')}${field('Restitution', 'Restitution', '')}${field('Friction', 'Friction', 'μ')}</div>
     <div class="tiles" style="margin-top:8px">${toggleTile('Collisions', 'Collisions', doc.simulation.Collisions, 'dots', doc.simulation.Collisions ? 'Spheres' : 'Off')}<button class="qt" data-act="sim-reset"><span class="qt-seat" style="--qt-ink:#bbb">${glyph('reset')}</span><b>Defaults</b><small>Reset motion</small></button></div>`;
   return `<div class="ins-heading"><div class="crumbs">Inspector / Fracture / <b>${spec.label}</b></div><button class="notes-btn" data-act="reroll">${glyph('dice')}Reroll seed</button><h1>${spec.label}</h1><p>Analytical primitive · ${m.label} · ${describe(spec.id, d)}</p></div>
     ${heroHtml()}
     <div class="stats" id="InsStats"></div>
+    ${section('method', 'Fracture method', METHODS[doc.recipe.Method].lead, `<div id="MethodBody">${methodPicker()}</div>`)}
     ${section('shape', 'Shape', spec.formula, shape)}
     ${section('material', 'Material', 'Outside and interior', materials)}
     ${section('impact', 'Impact', 'Energy and point', impact)}
@@ -548,7 +610,7 @@ function refreshLive() {
   const stats = $('InsStats');
   const tile = (num, label, warn = false) => `<div class="stat${warn ? ' warn' : ''}"><i class="arrow">${glyph('arrow-ne')}</i><div class="num">${num}</div><label>${label}</label></div>`;
   if (sel === null) {
-    if (stats) stats.innerHTML = tile(`${m.cells}<span> / ${r.Ceiling}</span>`, result.plan.capped ? 'Cells · ceiling reached' : 'Cells / ceiling', result.plan.capped) + tile(split(m.cutArea, 2, 'm²'), 'New crack area') + tile(m.mass >= 1000 ? split(m.mass / 1000, 2, 't') : split(m.mass, 0, 'kg'), 'Mass') + tile(split(result.ms, 0, 'ms'), `Bake · ${m.cells} cells`);
+    if (stats) stats.innerHTML = tile(`${m.cells}<span> / ${r.Ceiling}</span>`, result.plan.capped ? 'Cells · ceiling reached' : 'Cells / ceiling', result.plan.capped) + tile(split(m.cutArea, 2, 'm²'), 'New crack area') + tile(m.mass >= 1000 ? split(m.mass / 1000, 2, 't') : split(m.mass, 0, 'kg'), 'Mass') + (result.realtime ? tile(`${split(result.ms, 1, 'ms')}<span> / ${result.realtime.budget}</span>`, result.realtime.over ? 'At impact · over budget' : 'At impact · in budget', result.realtime.over) : tile(split(result.ms, 0, 'ms'), `Bake · ${m.cells} cells`));
     const big = $('InsHeroBig'), small = $('InsHeroSmall'), tag = $('InsHeroTag');
     if (big) {
       big.innerHTML = `${m.pieces} <span>fragments</span>`;
@@ -556,6 +618,7 @@ function refreshLive() {
       small.innerHTML = `<span>${fmtJ(r.Energy)} impact · ${fmtJ(kin)} kinetic</span><span>${shares.releasedCount} released</span>`;
       tag.textContent = doc.mode === 'edit' ? 'Energy share' : 'Kinetic energy';
     }
+    const methodBody = $('MethodBody'); if (methodBody) methodBody.innerHTML = methodPicker();
     const facts = $('InsShapeFacts');
     if (facts) facts.innerHTML = `<dt>Exact volume</dt><dd>${(source.exactVolume * 1000).toFixed(1)} L</dd><dt>Faceted volume</dt><dd>${(source.volume * 1000).toFixed(1)} L</dd><dt>Faceting error</dt><dd class="${Math.abs(source.faceting) < 0.01 ? 'good' : ''}">${(source.faceting * 100).toFixed(2)} %</dd><dt>Surface area</dt><dd>${source.exactArea.toFixed(3)} m²</dd><dt>Convex parts</dt><dd>${source.segments}${source.segmented ? ' wedge segments' : ''}</dd><dt>Surface facets</dt><dd>${source.faces.toLocaleString()}</dd>`;
     const bars = $('InsBars');
@@ -760,6 +823,8 @@ ins.addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.tagNa
 ins.addEventListener('click', (e) => {
   const head = e.target.closest('.sec-head');
   if (head) { const s = head.parentElement, id = s.dataset.sec; s.classList.toggle('shut'); s.classList.contains('shut') ? doc.shutSections.add(id) : doc.shutSections.delete(id); save(); if (!s.classList.contains('shut')) refreshLive(); return; }
+  const method = e.target.closest('[data-method]');
+  if (method) { setMethod(method.dataset.method); return; }
   const face = e.target.closest('.mat-face');
   if (face) { const pick = face.parentElement, open = pick.classList.contains('open'); document.querySelectorAll('.mat-pick.open').forEach((p) => p.classList.remove('open')); pick.classList.toggle('open', !open); return; }
   const opt = e.target.closest('[data-pick-to]');
@@ -781,6 +846,7 @@ ins.addEventListener('click', (e) => {
     const kind = seg.parentElement.dataset.seg, v = seg.dataset.value;
     seg.parentElement.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b === seg));
     if (kind === 'detail') { doc.detail = v; schedule('source'); }
+    if (kind === 'budget') { doc.recipe.Budget = +v; schedule('fracture'); }
     if (kind === 'override') { v === 'auto' ? doc.overrides.delete(doc.selected) : doc.overrides.set(doc.selected, v); invalidateMotion(); renderTree(); }
     return;
   }
@@ -799,7 +865,7 @@ function reroll() { doc.recipe.Seed = 1 + Math.floor(Math.random() * 99999); con
 function setMode(mode) {
   if (mode !== 'edit' && !result) return;
   doc.mode = mode; setAiming(false);
-  if (mode === 'edit') { doc.playing = false; doc.time = 0; }
+  if (mode === 'edit') { restoreAuthored(); doc.playing = false; doc.time = 0; }
   else { ensureCache(); doc.explode = 0; $('Explode').value = 0; $('ExplodeValue').textContent = '0 %'; $('Explode').style.setProperty('--fill', '0%'); }
   if (mode === 'sim') { doc.playing = false; doc.time = Math.max(0, Math.min(doc.time, cache.duration)); }
   if (mode === 'play') { doc.time = -PREROLL; doc.playing = true; }
@@ -863,7 +929,7 @@ function paintTrack() {
     g.beginPath(); for (let f = 0; f < steps; f++) { const x = X(f / cache.rate), y = Y(cache.totals[f]); f ? g.lineTo(x, y) : g.moveTo(x, y); } g.strokeStyle = '#ececea'; g.lineWidth = 1.3; g.stroke();
     let pf = 0; for (let f = 0; f < steps; f++) if (cache.totals[f] > cache.totals[pf]) pf = f;
     const ev = (t, label, color) => `<span class="pb-event" style="left:${Math.max(44, Math.min(w - 54, X(t)))}px"><i style="background:${color}"></i>${label}</span>`;
-    events += ev(0, 'Impact 0.00', '#ff8a3d');
+    events += ev(0, result.realtime ? `Impact · cut in ${result.ms.toFixed(1)} ms` : doc.hit ? 'Re-hit 0.00' : 'Impact 0.00', '#ff8a3d');
     if (pf > 2) events += ev(pf / cache.rate, `Peak ${fmtJ(cache.totals[pf])}`, '#f04d3d');
     events += cache.settled !== null ? ev(cache.settled, `Settled ${cache.settled.toFixed(2)}`, '#5bdb87') : ev(duration, 'Still moving', '#f0c23d');
   }
@@ -936,6 +1002,7 @@ addEventListener('keydown', (e) => {
     case 'KeyL': doc.loop = !doc.loop; paintTransport(); break;
     case 'KeyF': frameSelection(); break;
     case 'KeyI': setAiming(!doc.aiming); break;
+    case 'KeyM': setMethod(doc.recipe.Method === 'baked' ? 'realtime' : 'baked'); break;
     case 'KeyR': if (doc.mode === 'edit') reroll(); break;
     case 'KeyW': doc.wire = !doc.wire; sceneDirty = true; paintChrome(); break;
     case 'KeyG': doc.grid = !doc.grid; sceneDirty = true; paintChrome(); break;
@@ -986,4 +1053,4 @@ paintLibrary(); renderInspector(); setFilter('all'); paintTransport(); paintTrac
 diagnostics = new Diagnostics(() => ({ mode: doc.mode, playing: doc.playing, time: sceneTime(), result, cache, source, recipe: doc.recipe, simulation: doc.simulation, live, shares }));
 diagnostics.bakeFracture(result);
 requestAnimationFrame(tick);
-window.fractureEditor = { doc, get result() { return result; }, get cache() { return cache; }, diagnostics, setMode, setPrimitive, select, setShading };
+window.fractureEditor = { doc, get result() { return result; }, get cache() { return cache; }, diagnostics, hitAt, setMethod, setMode, setPrimitive, select, setShading };

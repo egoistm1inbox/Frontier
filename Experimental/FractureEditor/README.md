@@ -10,6 +10,7 @@ oversized numerals with dimmed fractions, callouts with leader lines, warning ch
 ![Glass pane, radial pattern, exploded](Screenshots/glass-pane.png)
 ![Primitive library drawer](Screenshots/library.png)
 ![Diagnostics, fracture result · material pickers](Screenshots/diagnostics.png)
+![Realtime method · re-hit in Sim, cut at the hit within the 16 ms budget](Screenshots/realtime-hit.png)
 
 ## Run
 
@@ -54,6 +55,28 @@ Every face keeps its origin: *surface* (shaded with the exact normal), *cut* (th
 interior colour) or *seam* (internal, never drawn). Volume is conserved to 100.0000 % on every primitive, which the
 check script verifies.
 
+### Fracture method: Baked or Realtime
+
+| | **Baked** | **Realtime** |
+|---|---|---|
+| When it cuts | Ahead of time, in the editor | At the moment of impact |
+| Pattern | Fixed at bake; a hit elsewhere only releases the stored pieces | Follows every hit |
+| Cost at impact | Release only (0 ms) | The cut itself, within the frame budget (4 / 8 / 16 / 33 ms) |
+| Stored | Every piece | The shape only |
+| Quality | Full: needle rejection re-cut, quality fans | One pass, plain fans, piece count capped by the budget |
+
+The realtime cap comes from a cost model fitted per shape from the fractures this page has run: cutting time is a fixed
+cost for the shape plus a cost per cell, so the cap reflects the machine it runs on. The badge, the stat tile, the
+timeline's Impact chip and Diagnostics → Bake timing (whose reference line becomes the budget) all report the measured
+cut time against the budget. The log records the budget, the cap and whether the cut ran over.
+
+**Hitting in Sim / Play.** The impact tool (I) also works in Sim and Play: click the object to hit it there.
+- **Baked:** the same pre-cut pieces are re-ranked by distance from the hit (`rehit`) and launched from it.
+- **Realtime:** the object stays whole through the pre-roll, then it is cut where you hit, timed against the budget,
+  and re-simulated.
+
+Returning to Edit restores the authored fracture.
+
 The rigid-body preview (`Source/FractureSimulation.js`) is the same solver as Component Studio, copied so the page
 stands alone.
 
@@ -87,7 +110,7 @@ stands alone.
       - **Sim / Play:** kinetic energy over the bake, with the playhead, the peak, the settled stretch and the moving
         count. A selected fragment's curve is drawn over the faint total. Click to scrub.
     - Stat tiles.
-    - Sections: Shape (dimension sliders, facet detail, exact vs faceted volume), Material, Impact (log energy
+    - Sections: **Fracture method** (Baked / Realtime with facts for each, plus the frame budget for Realtime), Shape (dimension sliders, facet detail, exact vs faceted volume), Material, Impact (log energy
       slider, XYZ, place on surface), Pattern (seed, ceiling, minimum size), Quality toggles, Simulation, size
       distribution and the bake log.
   - **Material** has two pickers:
@@ -122,6 +145,8 @@ Keys:
 | `,` `.` | Step one frame |
 | L | Loop |
 | E | Energy shading |
+| M | Toggle Baked / Realtime |
+| I | Place the impact (Edit) · hit the object (Sim / Play) |
 | R | Reroll seed |
 | `[` `]` | Previous / next fragment |
 | H | Hide the selected fragment |

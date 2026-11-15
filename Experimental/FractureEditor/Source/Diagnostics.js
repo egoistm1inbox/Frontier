@@ -154,10 +154,10 @@ export class Diagnostics {
       return {
         number: last ? numberHtml(last.ms, last.ms < 100 ? 1 : 0, 'ms') : '—',
         source: 'Wall time of each fracture bake on the main thread (seeding, Voronoi cells with clipping and seams, needle rejection) and of each rigid-body bake.',
-        series: { kind: 'index', points: all.map((v, k) => [all.length > 1 ? k / (all.length - 1) : 1, v]) }, reference: [100, '100 ms interactive'], format: fmtMs,
+        series: { kind: 'index', points: all.map((v, k) => [all.length > 1 ? k / (all.length - 1) : 1, v]) }, reference: s.recipe.Method === 'realtime' ? [s.recipe.Budget, `${s.recipe.Budget} ms realtime budget`] : [100, '100 ms interactive'], format: fmtMs,
         split: last ? [['Seeding', last.seeds, '#7aa7e0'], ['Cells + seams', last.cells, '#589979'], ['Needle rejection', last.needles, '#b9a969'], ['Sort + totals', rest, '#8b9283'], ['Rigid-body bake', sim ? sim.ms : 0, '#d0574c']] : null,
         rows: [
-          ['Fracture bakes recorded', `${all.length}`], ['Average fracture', fmtMs(mean(all))], ['Slowest fracture', fmtMs(all.length ? Math.max(...all) : 0)],
+          ['Method', s.recipe.Method === 'realtime' ? `Realtime · ${s.recipe.Budget} ms budget` : 'Baked'], ['Fracture bakes recorded', `${all.length}`], ['Average fracture', fmtMs(mean(all))], ['Slowest fracture', fmtMs(all.length ? Math.max(...all) : 0)],
           ['Last rigid-body bake', sim ? `${fmtMs(sim.ms)} · ${sim.steps} steps` : 'Not baked · Shift+2'],
           ['Cells in last bake', last ? `${last.pieces} pieces` : '—'],
         ],
@@ -173,6 +173,7 @@ export class Diagnostics {
         source: 'The current bake as built: closed convex pieces, the Voronoi cells that made them, and how faithfully the facets keep the analytical volume.',
         series: { kind: 'index', points: pts.map((v, k) => [pts.length > 1 ? k / (pts.length - 1) : 1, v]) }, reference: [r.recipe.Ceiling, `ceiling ${r.recipe.Ceiling}`], format: (v) => `${Math.round(v)} pieces`,
         rows: [
+          ['Method', r.realtime ? `Realtime · ${r.ms.toFixed(1)} of ${r.realtime.budget} ms` : 'Baked · full quality', r.realtime ? (r.realtime.over ? 'bad' : 'good') : ''],
           ['Voronoi cells', `${m.cells}${r.plan.capped ? ' · ceiling reached' : ''}`, r.plan.capped ? 'bad' : ''],
           ['Requested by energy', `${r.plan.requested}`],
           ['Seam joins', `${st.rejoined || 0}${st.split ? ` · ${st.split} split` : ''}`],

@@ -29,16 +29,24 @@ export const MATERIALS = {
 };
 export const MATERIAL_ORDER = ['concrete', 'rock', 'wood', 'glass', 'tempered', 'plastic'];
 
+// Method: 'baked' cuts the pieces ahead of time at full quality (the pattern is fixed, nothing runs at impact);
+// 'realtime' cuts at the moment of impact in one pass, with the piece count capped to fit Budget milliseconds.
+export const METHODS = {
+  baked: { label: 'Baked', lead: 'Pre-fractured in the editor', pattern: 'Fixed at bake', quality: 'Full · needle rejection, quality fans' },
+  realtime: { label: 'Realtime', lead: 'Fractured at the moment of impact', pattern: 'Follows every hit', quality: 'One pass · plain fans · budget-capped' },
+};
+export const BUDGETS = [4, 8, 16, 33];
 // Material is the inside (bulk) material: it decides density, crack resistance and the pattern, and colours the cut
 // faces. Surface is the outside material: it colours the original surface only.
-export const DEFAULT_RECIPE = { Material: 'concrete', Surface: 'concrete', Energy: 2500, Seed: 42, Ceiling: 48, MinimumSize: 0.045, X: 0, Y: 0, Z: 0, NeedleRejection: true, ClosedCaps: true, QualityTriangulation: true };
-export const LIMITS = { Energy: [0, 50000], Seed: [1, 999999], Ceiling: [2, 160], MinimumSize: [0.002, 0.3] };
+export const DEFAULT_RECIPE = { Material: 'concrete', Surface: 'concrete', Energy: 2500, Seed: 42, Ceiling: 48, MinimumSize: 0.045, X: 0, Y: 0, Z: 0, NeedleRejection: true, ClosedCaps: true, QualityTriangulation: true, Method: 'baked', Budget: 16 };
+export const LIMITS = { Energy: [0, 50000], Seed: [1, 999999], Ceiling: [2, 160], MinimumSize: [0.002, 0.3], Budget: [1, 100] };
 
 export function normalizeRecipe(input = {}) {
   const r = { ...DEFAULT_RECIPE, ...(input && typeof input === 'object' ? input : {}) };
   if (!MATERIALS[r.Material]) r.Material = 'concrete';
   if (!MATERIALS[r.Surface]) r.Surface = r.Material;
   for (const [k, [lo, hi]] of Object.entries(LIMITS)) { const v = +r[k]; r[k] = Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : DEFAULT_RECIPE[k]; }
+  if (!METHODS[r.Method]) r.Method = 'baked';
   r.Seed = Math.round(r.Seed); r.Ceiling = Math.round(r.Ceiling);
   for (const k of ['X', 'Y', 'Z']) r[k] = Number.isFinite(+r[k]) ? +r[k] : 0;
   for (const k of ['NeedleRejection', 'ClosedCaps', 'QualityTriangulation']) r[k] = r[k] !== false;
@@ -201,12 +209,39 @@ export function budget(source, recipe) {
   return { energy, crackArea, requested, target, capped: requested > recipe.Ceiling, falloff: size * (0.22 + 0.45 * Math.min(1, recipe.Energy / 20000)) };
 }
 
+// ---------------------------------------------------------------------------------------------------- realtime cost
+// Cutting time is close to linear in the cell count: a fixed cost for the shape (clipping every convex part and its
+// facets) plus a cost per cell. Both are fitted per shape from the last fractures this page ran, so the realtime cap
+// reflects this machine. Until the counts vary enough to fit a slope, a typical slope is assumed.
+const COST_SAMPLES = new Map(); // source.key → [[cells, ms], …]
+const PRIOR_PER_CELL = 0.6;
+export function cellCost(source) {
+  const list = COST_SAMPLES.get(source.key) || [];
+  if (!list.length) return { base: 0.25 * source.parts.length + 0.5, per: PRIOR_PER_CELL };
+  const n = list.length, mx = list.reduce((a, p) => a + p[0], 0) / n, my = list.reduce((a, p) => a + p[1], 0) / n;
+  const sxx = list.reduce((a, p) => a + (p[0] - mx) ** 2, 0), sxy = list.reduce((a, p) => a + (p[0] - mx) * (p[1] - my), 0);
+  const per = sxx / n > 9 ? Math.max(0.05, sxy / sxx) : PRIOR_PER_CELL * Math.max(0.25, Math.min(4, my / (0.25 * source.parts.length + 0.5 + PRIOR_PER_CELL * mx)));
+  return { base: Math.max(0, my - per * mx), per };
+}
+function learnCost(source, ms, cells) {
+  const list = COST_SAMPLES.get(source.key) || [];
+  list.push([cells, ms]); if (list.length > 16) list.shift();
+  COST_SAMPLES.set(source.key, list);
+}
+// How many cells fit the realtime budget: 85 % of it for cutting, the rest for seeding and buffers.
+export function realtimeCap(source, recipe) { const c = cellCost(source); return Math.max(2, Math.floor((recipe.Budget * 0.85 - c.base) / c.per)); }
+
 // ---------------------------------------------------------------------------------------------------- fracture
 export function fracture(source, input) {
   const t0 = performance.now();
-  const recipe = normalizeRecipe(input), m = MATERIALS[recipe.Material], rnd = random(recipe.Seed);
+  const realtime = normalizeRecipe(input).Method === 'realtime';
+  // Realtime runs one pass: no needle-rejection re-cut, plain fans. Caps stay on so every piece is closed.
+  const recipe = normalizeRecipe(realtime ? { ...input, NeedleRejection: false, QualityTriangulation: false } : input);
+  const m = MATERIALS[recipe.Material], rnd = random(recipe.Seed);
   const B = source.bounds, size = Math.max(...B.size), impact = [recipe.X, recipe.Y, recipe.Z];
   const plan = budget(source, recipe);
+  const costBefore = cellCost(source), cap = realtime ? realtimeCap(source, recipe) : Infinity;
+  if (realtime && plan.target > cap) { plan.target = cap; plan.budgetCapped = true; }
   const grain = Math.sqrt(m.grain), S = [1 / grain, 1, 1]; // Voronoi metric: compress X so cells stretch along the grain
   const metric = (a, b) => Math.hypot((a[0] - b[0]) * S[0], (a[1] - b[1]) * S[1], (a[2] - b[2]) * S[2]);
   const stats = { candidates: 0, refusedOutside: 0, refusedSpan: 0, refusedNeedle: 0, chunks: 0, rejoined: 0, split: 0 };
@@ -231,7 +266,7 @@ export function fracture(source, input) {
   let tick = performance.now();
   let seeds = [];
   if (plan.target > 1) {
-    const candidates = [], want = Math.min(4000, plan.target * 14);
+    const candidates = [], want = Math.min(4000, plan.target * (realtime ? 6 : 14));
     for (let tries = 0; candidates.length < want && tries < want * 8; tries++) {
       const p = candidate(); stats.candidates++;
       if (!insideSolid(source, p)) { stats.refusedOutside++; continue; }
@@ -251,6 +286,7 @@ export function fracture(source, input) {
   timings.seeds = performance.now() - tick; tick = performance.now();
   let pieces = cells(source, seeds, S, recipe, stats);
   timings.cells = performance.now() - tick; tick = performance.now();
+  learnCost(source, timings.cells, seeds.length);
   if (recipe.NeedleRejection && pieces.length > 2) {
     const needles = pieces.filter((p) => p.span < recipe.MinimumSize);
     if (needles.length) {
@@ -273,6 +309,7 @@ export function fracture(source, input) {
   const ms = performance.now() - t0;
   const log = [
     `budget  ${plan.energy.toFixed(0)} J into surface → ${plan.crackArea.toFixed(3)} m² crack area → ${plan.requested} pieces requested${plan.capped ? ` · capped at ${recipe.Ceiling}` : ''}`,
+    realtime ? `method  realtime · ${recipe.Budget} ms budget fits ${cap} cells at ${costBefore.per.toFixed(2)} ms per cell + ${costBefore.base.toFixed(1)} ms for the shape${plan.budgetCapped ? ' · budget-capped' : ''} · cut in ${ms.toFixed(1)} ms${ms > recipe.Budget ? ' (over budget)' : ''}` : `method  baked · full quality, cut ahead of time`,
     `cells   ${seeds.length} Voronoi cells → ${pieces.length} closed pieces · ${tris.toLocaleString()} tris · ${ms.toFixed(0)} ms`,
   ];
   if (source.segmented) log.push(`seams   ${stats.chunks} convex chunks across ${source.segments} segments · ${stats.rejoined} rejoined at seams${stats.split ? ` · ${stats.split} cell(s) split into separate pieces` : ''}`);
@@ -280,6 +317,7 @@ export function fracture(source, input) {
   if (stats.refusedNeedle) log.push(`needles ${stats.refusedNeedle} cell(s) thinner than ${(recipe.MinimumSize * 1000).toFixed(0)} mm merged into their neighbours`);
   return {
     recipe, source, pieces, impact, plan, ms, log, stats, single, timings, seedCount: seeds.length,
+    method: recipe.Method, realtime: realtime ? { budget: recipe.Budget, cap, cost: costBefore, over: ms > recipe.Budget } : null,
     metrics: {
       pieces: pieces.length, cells: seeds.length, tris, minQ, occupied: (volume / source.volume) * 100, cutArea,
       smallest: Math.min(...volumes), largest: Math.max(...volumes), mass: volume * m.density, bytes: tris * 3 * 24 + pieces.length * 64,
@@ -380,4 +418,13 @@ export function defaultImpact(source) {
   }
   const hit = source.trace(origin, dir);
   return hit ? hit.point : c.slice();
+}
+
+// A baked fracture hit somewhere else: the same pre-cut pieces, re-ranked by distance from the new hit, so the
+// rigid-body preview releases and launches them from there. (A realtime fracture re-cuts instead.)
+export function rehit(result, point) {
+  const S = [1 / Math.sqrt(MATERIALS[result.recipe.Material].grain), 1, 1];
+  const metric = (a, b) => Math.hypot((a[0] - b[0]) * S[0], (a[1] - b[1]) * S[1], (a[2] - b[2]) * S[2]);
+  const pieces = result.pieces.map((pc) => { const distance = metric(pc.centre, point); return { ...pc, distance, priority: Math.exp(-distance / result.plan.falloff) }; });
+  return { ...result, pieces, impact: point.slice(), rehit: true };
 }
