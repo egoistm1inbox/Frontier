@@ -617,6 +617,7 @@ export function createComponentViewer({ library, openCompile, openImportMenu, op
       { label: 'Content browser', icon: 'layers', onClick: () => drawers.open('ContentDrawer') },
       { label: 'Curves', icon: 'curve', onClick: () => drawers.open('CurveDrawer') },
       { label: 'Import into Geometry Compile…', icon: 'import', hint: 'Ctrl+I', onClick: () => openImportMenu($('ImportBtn')) },
+      { label: 'Material Workspace', icon: 'material', note: 'Inspector pass · viewport deferred', onClick: () => { location.href = './material.html'; } },
       'sep',
       { heading: 'FRACTURE' },
       ...fractureItems(c),

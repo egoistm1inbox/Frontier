@@ -99,6 +99,17 @@ const OWN = {
   bake: { main: rect(3.5, 6, 17, 13, 2.5), accent: p('M7 6V4M12 6V4M17 6V4') + p('M8 12.5h8M8 15.5h5') },
   dice: { main: rect(4, 4, 16, 16, 3), accent: dot(8.5, 8.5) + dot(15.5, 15.5) + dot(12, 12) + dot(15.5, 8.5) + dot(8.5, 15.5) },
   external: { main: p('M13 4.5h6.5V11M19.5 4.5L11 13'), accent: p('M17 14v4.5a1 1 0 0 1-1 1H5.5a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1H10') },
+  // Material workspace
+  finish: { main: ring(12, 12, 8), accent: p('M7.2 9.2a5.6 5.6 0 0 1 4-3') + dot(15, 15, 1.2) },
+  field: { main: p('M12 3.5l3.5 2v4L12 11.5l-3.5-2v-4zM5.5 13.5l3.5 2v4L5.5 21.5 2 19.5v-4zM18.5 13.5l3.5 2v4l-3.5 2-3.5-2v-4z'), accent: dot(12, 7.5, 1.1) },
+  mask: { main: rect(3.5, 3.5, 17, 17, 3), accent: p('M3.5 15.5c4-1 6-6 9-8s5-1 8 0', 'fill="currentColor" fill-opacity="0.25"') },
+  transition: { main: ring(8.5, 12, 5.5), accent: ring(15.5, 12, 5.5) },
+  link: { main: p('M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1'), accent: p('M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1') },
+  clock: { main: ring(12, 12, 8.5), accent: p('M12 7.5V12l3 2') },
+  swatch: { main: rect(4, 4, 7, 7, 2) + rect(13, 4, 7, 7, 2) + rect(4, 13, 7, 7, 2), accent: rect(13, 13, 7, 7, 2) },
+  snapshot: { main: rect(3.5, 6.5, 17, 13, 2.5) + p('M8.5 6.5l1.5-2.5h4l1.5 2.5'), accent: ring(12, 13, 3.2) },
+  budget: { main: rect(3, 8, 18, 8, 2.5), accent: p('M6 12h7') },
+  lobes: { main: ring(12, 12, 8.5), accent: p('M12 3.5v17M5 7.5c4 2 10 2 14 0M5 16.5c4-2 10-2 14 0') },
 };
 function filled(d) { return p(d, 'fill="currentColor" stroke="none" fill-opacity="0.35"'); }
 

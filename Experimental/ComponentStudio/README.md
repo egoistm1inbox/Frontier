@@ -7,10 +7,12 @@ One HTML demo with three workspaces in the Project Zero UI (the visual language 
 | **Component Viewer** | A Blueprint-class style editor and previewer for a component class, here `BP_ControlVehicle` | **Vehicle Lab** (Frontier-OLD, `Experimental Remastered/AssetInspector`), renamed and rebuilt |
 | **Geometry Compile** | The import inspector. Any imported object opens here first and goes through Source → Geometry → UV Charts → SDF Bake → Cluster LOD → Icon → Metadata | Frontier-1 Cluster LOD Studio "Hero Workspace" (geometry editor, UV charts, SDF baker, icon capture, cluster LOD) |
 | **Fracture Editor** | Per-component fracture authoring: material, impact, quality limits, Dynamic / Baked + piece SDF, fragment inspection | Frontier-OLD `arena/bc062d35-frontier-old` Project Zero Fracture card + the Fracture panel / Fracture Studio branches, redesigned |
+| **Material Workspace** (`material.html`) | Inspector for dynamic layered materials: layer stack, OpenPBR lobes, procedural fields, masks and seams, transitions, colour slots, live drivers, the 256 B parameter block, snapshot and assign. The viewport is deliberately blank in this pass | Texture Studio Pattern workspace inspector look, applied to the Dynamic Material System plan (unassignedinbox `arena/6eeea758-frontier`) |
 
 ![Component Viewer](Screenshots/component-viewer.png)
 ![Geometry Compile](Screenshots/geometry-compile.png)
 ![Fracture Editor](Screenshots/fracture-editor.png)
+![Material Workspace inspector](Screenshots/material-inspector.png)
 
 ## Run
 
@@ -21,6 +23,23 @@ python3 Serve.py          # http://localhost:8090/
 Pure ES modules with a raw WebGL2 renderer. There is no build step and nothing is vendored. Serve the folder over HTTP: modules and workers do not load from `file://`.
 
 URL helpers: `?sample=vase|braid|torus|knot|asteroid|planet|terrain` opens Geometry Compile on a procedural sample. `?drawer` opens the Content drawer.
+
+## Material Workspace (inspector pass)
+
+Open `http://localhost:8090/material.html`. The page is also linked from the Component Viewer's Workspace menu. The viewport is left blank on purpose: this pass covers only the inspector.
+
+- **Head**: material name (editable), look swatch, and three tiles. **Live parameters** (cream) shows the count and bytes used out of 256 B. **Layers** shows enabled / total and how many are driven. **Variant** is the structural signature; it turns amber with **Rebuild** after a structural edit.
+- **Editing layer** strip, listed top → bottom. The eye toggles a layer, though the bottom finish is locked. `+` adds a Finish, Field, Mask or Transition layer above the current one. Right-click a layer to move, duplicate or delete it.
+- **Sections** follow the layer type:
+  - Finish: Surface response and OpenPBR lobes.
+  - Field: Procedural field and Channel targets.
+  - Mask: Mask and Leading-edge seam.
+  - Transition: Finish A/B with swap and seam path.
+  - Every layer also gets Colour slots, Live drivers, Parameter block and Snapshot & assign.
+- **Parameter rows**: a number box (drag to scrub), a unit and a slider. The link chip binds a driver (Clock, Ping-pong, Timeline, Impact, Weather, Particle link). A driven row shows its min / max range instead of the slider.
+- **Live vs structural**: sliders, colours and drivers are live uniforms. Layer type, lobes, patterns, mask mode, channels and enable states change the compiled variant.
+- **Keys**: Ctrl+Z / Ctrl+Shift+Z or Ctrl+Y, Ctrl+S saves to localStorage, `/` focuses search, `[` and `]` change layer. **Export** downloads `<id>.material.json`.
+- **URL**: `?material=hex-barrier|magma|transition|ocean|obsidian|asphalt|thin-film`, `?layer=<index from bottom>`, `?search=<text>`.
 
 ## Component Viewer (formerly Vehicle Lab)
 

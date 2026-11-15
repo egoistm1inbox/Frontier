@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Frontier · Material Workspace</title>
+<link rel="stylesheet" href="./Studio.css">
+<link rel="stylesheet" href="./Material.css">
+</head>
+<body>
+
+<div id="MaterialStudio" class="workspace material-workspace">
+  <div class="notch"><a href="./index.html" class="notch-link" title="Component Viewer">Frontier</a><i>·</i><b>Material Workspace</b></div>
+
+  <!-- Centre: viewport intentionally blank for this pass -->
+  <section class="dock centre" aria-label="Material viewport">
+    <div class="tab-strip"><div class="document-tab active"><span class="tab-dot"></span><span id="MatDocTab">Material</span></div></div>
+    <header class="mat-viewport-head">
+      <div>
+        <small id="MatGroup" class="mat-kicker">—</small>
+        <h1 id="MatTitle">—</h1>
+      </div>
+      <div class="spacer"></div>
+      <label class="mat-picker" title="Material">
+        <span data-icon="material" data-size="14"></span>
+        <select id="MatPicker" aria-label="Material"></select>
+      </label>
+    </header>
+    <div class="mat-well" aria-label="Viewport (deferred)">
+      <div class="mat-well-empty">
+        <span data-icon="sphere" data-size="22"></span>
+        <b>Viewport deferred</b>
+        <p>This pass is the inspector only. The preview renderer and content browser come later.</p>
+      </div>
+    </div>
+    <div class="dock-footer mat-foot"><span><i>LAYERS</i><b id="FootLayers">—</b></span><span><i>LIVE</i><b id="FootLive">—</b></span><span><i>VARIANT</i><b id="FootVariant">—</b></span><span class="live" id="MatSaveState">SAVED</span></div>
+  </section>
+
+  <!-- Right: the inspector -->
+  <section class="dock right mat-inspector" aria-label="Material inspector">
+    <div class="tab-strip"><div class="document-tab active">Inspector</div></div>
+    <div class="mi-scroll" id="MatInspector"></div>
+    <div class="mi-actions">
+      <button id="MatUndo" class="tool round" title="Undo (Ctrl+Z)" aria-label="Undo"><span data-icon="undo" data-size="14"></span></button>
+      <button id="MatRevert" class="tool">Revert</button>
+      <button id="MatExport" class="tool" title="Download the recipe as JSON"><span data-icon="export" data-size="14"></span>Export</button>
+      <button id="MatSave" class="mi-save">Save material</button>
+    </div>
+    <div class="dock-footer"><span class="mi-foot-note">Non-destructive layer stack</span><span class="mi-foot-note right" id="MatFootRight">Live uniforms · no recompile</span></div>
+  </section>
+</div>
+
+<div id="Toast" class="toast" role="status" aria-live="polite"></div>
+<script type="module" src="./Source/MaterialWorkspace.js"></script>
+</body>
+</html>
