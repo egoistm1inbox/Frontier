@@ -709,7 +709,7 @@ console.log('11. Testing Multi-Surface Engineering MatCaps, Stack Similar UVs, F
     // Outliner tree (Fracture Editor language): grouped Surfaces / UV layers / UDIM tiles / Islands with marks.
     for (const Part of ["Group('surfaces'", "Group('layers'", "Group('tiles'", "Group('islands'", 'hiddenIslands.add(Isl.stableKey)', 'PickIsland(Isl', 'RefreshOutlinerSelection', 'ActivateDocument(D)'])
         assert.ok(OutlinerSlice.includes(Part) || EditorJs.includes(Part), `Outliner tree must include ${Part}`);
-    assert.ok(IndexHtml.includes('href="Outliner.css"') && ReadText('Outliner.css').includes('#left-panel .tg-head'), 'Outliner.css must style the tree, scoped to #left-panel');
+    assert.ok(IndexHtml.includes('href="Outliner.css') && ReadText('Outliner.css').includes('#left-panel .tg-head'), 'Outliner.css must style the tree, scoped to #left-panel');
 
     // Benchmark & verify saved FaceGroupRef (zero ExtractIslands re-iteration + cross-object face references!)
     {
