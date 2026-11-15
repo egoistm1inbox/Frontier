@@ -36,10 +36,25 @@ export const METHODS = {
   realtime: { label: 'Realtime', lead: 'Fractured at the moment of impact', pattern: 'Follows every hit', quality: 'One pass · plain fans · budget-capped' },
 };
 export const BUDGETS = [4, 8, 16, 33];
+// Fracture algorithms. Each one only proposes convex cells (from seeds or from cutting planes); every cell then goes
+// through the same carving, seam rejoining and meshing, so volume is conserved whichever one is used. Some are only
+// offered for one method: Uniform and Brick fill the whole part (too many cells to cut at impact); Recursive split
+// spends cuts one at a time, which suits a realtime budget.
+export const ALGORITHMS = {
+  voronoi: { label: 'Clustered Voronoi', glyph: 'alg-voronoi', methods: ['baked', 'realtime'], seeded: true, lead: 'Cells crowd the hit; the material shapes them' },
+  uniform: { label: 'Uniform Voronoi', glyph: 'alg-uniform', methods: ['baked'], seeded: true, lead: 'Even cells through the whole part' },
+  radial: { label: 'Radial', glyph: 'alg-radial', methods: ['baked', 'realtime'], seeded: true, lead: 'Spokes and rings around the impact axis' },
+  slices: { label: 'Planar slices', glyph: 'alg-slices', methods: ['baked', 'realtime'], seeded: false, lead: 'Straight through-cuts crossing near the hit' },
+  brick: { label: 'Brick', glyph: 'alg-brick', methods: ['baked'], seeded: false, lead: 'Staggered courses, halved near the hit' },
+  split: { label: 'Recursive split', glyph: 'alg-split', methods: ['realtime'], seeded: false, lead: 'Halve the piece nearest the hit, repeat' },
+};
+export const algorithmsFor = (method) => Object.keys(ALGORITHMS).filter((k) => ALGORITHMS[k].methods.includes(method));
+export const IMPACTOR_DENSITY = 7850; // the impactor is a steel ball: its size and the energy give its mass and speed
 // Material is the inside (bulk) material: it decides density, crack resistance and the pattern, and colours the cut
 // faces. Surface is the outside material: it colours the original surface only.
-export const DEFAULT_RECIPE = { Material: 'concrete', Surface: 'concrete', Energy: 2500, Seed: 42, Ceiling: 48, MinimumSize: 0.045, X: 0, Y: 0, Z: 0, NeedleRejection: true, ClosedCaps: true, QualityTriangulation: true, Method: 'baked', Budget: 16 };
-export const LIMITS = { Energy: [0, 50000], Seed: [1, 999999], Ceiling: [2, 160], MinimumSize: [0.002, 0.3], Budget: [1, 100] };
+export const DEFAULT_RECIPE = { Material: 'concrete', Surface: 'concrete', Energy: 2500, Seed: 42, Ceiling: 48, MinimumSize: 0.045, X: 0, Y: 0, Z: 0, NeedleRejection: true, ClosedCaps: true, QualityTriangulation: true, Method: 'baked', Budget: 16,
+  Algorithm: 'voronoi', ImpactRadius: 0.05, DirMode: 'normal', DirYaw: 30, DirPitch: 25 };
+export const LIMITS = { Energy: [0, 50000], Seed: [1, 999999], Ceiling: [2, 160], MinimumSize: [0.002, 0.3], Budget: [1, 100], ImpactRadius: [0.005, 0.5], DirYaw: [-180, 180], DirPitch: [-89, 89] };
 
 export function normalizeRecipe(input = {}) {
   const r = { ...DEFAULT_RECIPE, ...(input && typeof input === 'object' ? input : {}) };
@@ -47,6 +62,8 @@ export function normalizeRecipe(input = {}) {
   if (!MATERIALS[r.Surface]) r.Surface = r.Material;
   for (const [k, [lo, hi]] of Object.entries(LIMITS)) { const v = +r[k]; r[k] = Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : DEFAULT_RECIPE[k]; }
   if (!METHODS[r.Method]) r.Method = 'baked';
+  if (!algorithmsFor(r.Method).includes(r.Algorithm)) r.Algorithm = algorithmsFor(r.Method)[0];
+  if (r.DirMode !== 'custom') r.DirMode = 'normal';
   r.Seed = Math.round(r.Seed); r.Ceiling = Math.round(r.Ceiling);
   for (const k of ['X', 'Y', 'Z']) r[k] = Number.isFinite(+r[k]) ? +r[k] : 0;
   for (const k of ['NeedleRejection', 'ClosedCaps', 'QualityTriangulation']) r[k] = r[k] !== false;
@@ -197,16 +214,40 @@ function insideSolid(source, p, margin = 1e-4) {
     && part.planes.every((pl) => pl.tag === 'seam' ? dot(pl.n, p) <= pl.d + 1e-12 : dot(pl.n, p) <= pl.d - margin));
 }
 
+// ---------------------------------------------------------------------------------------------------- impactor
+export function surfaceNormal(source, p) {
+  const e = 1e-4, f = (x, y, z) => source.sdf([x, y, z]);
+  return norm([f(p[0] + e, p[1], p[2]) - f(p[0] - e, p[1], p[2]), f(p[0], p[1] + e, p[2]) - f(p[0], p[1] - e, p[2]), f(p[0], p[1], p[2] + e) - f(p[0], p[1], p[2] - e)]);
+}
+// Travel direction from yaw (about Y; 0 = moving towards −Z) and pitch (positive = coming down from above).
+export function travelFromAngles(yawDeg, pitchDeg) {
+  const y = (yawDeg * Math.PI) / 180, p = (pitchDeg * Math.PI) / 180;
+  return [-Math.cos(p) * Math.sin(y), -Math.sin(p), -Math.cos(p) * Math.cos(y)];
+}
+export function anglesFromTravel(t) { return { yaw: (Math.atan2(-t[0], -t[2]) * 180) / Math.PI, pitch: (Math.asin(Math.max(-1, Math.min(1, -t[1]))) * 180) / Math.PI }; }
+// Where the blow goes: along the inward surface normal, or a custom travel direction. `cos` is the normal component
+// of the blow (1 = head-on, 0 = grazing); only that share of the energy opens cracks.
+export function impactDirection(source, recipe, point = [recipe.X, recipe.Y, recipe.Z]) {
+  const normal = surfaceNormal(source, point);
+  const travel = recipe.DirMode === 'custom' ? travelFromAngles(recipe.DirYaw, recipe.DirPitch) : mul(normal, -1);
+  return { travel, normal, cos: Math.max(0, -dot(travel, normal)) };
+}
+export function impactor(recipe) {
+  const mass = IMPACTOR_DENSITY * (4 / 3) * Math.PI * recipe.ImpactRadius ** 3;
+  return { mass, speed: Math.sqrt((2 * Math.max(0, recipe.Energy)) / mass) };
+}
+const basis = (n) => { const u = norm(Math.abs(n[1]) < 0.9 ? cross(n, [0, 1, 0]) : cross(n, [1, 0, 0])); return [u, cross(n, u)]; };
+
 // ---------------------------------------------------------------------------------------------------- budget
-export function budget(source, recipe) {
-  const m = MATERIALS[recipe.Material];
-  const energy = recipe.Energy * 0.02 + (recipe.Energy > 0 ? m.stored * source.volume * 0.02 : 0);
+export function budget(source, recipe, normalShare = 1) {
+  const m = MATERIALS[recipe.Material], blow = 0.25 + 0.75 * normalShare; // an oblique blow opens fewer cracks
+  const energy = recipe.Energy * 0.02 * blow + (recipe.Energy > 0 ? m.stored * source.volume * 0.02 : 0);
   const crackArea = energy / (2 * m.Gc);
   const unit = 0.0075 * Math.pow(Math.max(1e-6, source.volume), 2 / 3);
   const requested = recipe.Energy <= 0 ? 1 : Math.max(1, Math.round(1 + crackArea / unit));
   const target = Math.min(recipe.Ceiling, requested);
   const size = Math.max(...source.bounds.size);
-  return { energy, crackArea, requested, target, capped: requested > recipe.Ceiling, falloff: size * (0.22 + 0.45 * Math.min(1, recipe.Energy / 20000)) };
+  return { energy, crackArea, requested, target, capped: requested > recipe.Ceiling, blow, falloff: size * (0.15 + 0.42 * Math.min(1, recipe.Energy / 20000)) + recipe.ImpactRadius * 1.5 };
 }
 
 // ---------------------------------------------------------------------------------------------------- realtime cost
@@ -215,21 +256,21 @@ export function budget(source, recipe) {
 // reflects this machine. Until the counts vary enough to fit a slope, a typical slope is assumed.
 const COST_SAMPLES = new Map(); // source.key → [[cells, ms], …]
 const PRIOR_PER_CELL = 0.6;
-export function cellCost(source) {
-  const list = COST_SAMPLES.get(source.key) || [];
+export function cellCost(source, algorithm = 'voronoi') {
+  const list = COST_SAMPLES.get(`${source.key}|${algorithm}`) || [];
   if (!list.length) return { base: 0.25 * source.parts.length + 0.5, per: PRIOR_PER_CELL };
   const n = list.length, mx = list.reduce((a, p) => a + p[0], 0) / n, my = list.reduce((a, p) => a + p[1], 0) / n;
   const sxx = list.reduce((a, p) => a + (p[0] - mx) ** 2, 0), sxy = list.reduce((a, p) => a + (p[0] - mx) * (p[1] - my), 0);
   const per = sxx / n > 9 ? Math.max(0.05, sxy / sxx) : PRIOR_PER_CELL * Math.max(0.25, Math.min(4, my / (0.25 * source.parts.length + 0.5 + PRIOR_PER_CELL * mx)));
   return { base: Math.max(0, my - per * mx), per };
 }
-function learnCost(source, ms, cells) {
-  const list = COST_SAMPLES.get(source.key) || [];
+function learnCost(source, algorithm, ms, cells) {
+  const key = `${source.key}|${algorithm}`, list = COST_SAMPLES.get(key) || [];
   list.push([cells, ms]); if (list.length > 16) list.shift();
-  COST_SAMPLES.set(source.key, list);
+  COST_SAMPLES.set(key, list);
 }
 // How many cells fit the realtime budget: 85 % of it for cutting, the rest for seeding and buffers.
-export function realtimeCap(source, recipe) { const c = cellCost(source); return Math.max(2, Math.floor((recipe.Budget * 0.85 - c.base) / c.per)); }
+export function realtimeCap(source, recipe) { const c = cellCost(source, normalizeRecipe(recipe).Algorithm); return Math.max(2, Math.floor((recipe.Budget * 0.85 - c.base) / c.per)); }
 
 // ---------------------------------------------------------------------------------------------------- fracture
 export function fracture(source, input) {
@@ -239,8 +280,9 @@ export function fracture(source, input) {
   const recipe = normalizeRecipe(realtime ? { ...input, NeedleRejection: false, QualityTriangulation: false } : input);
   const m = MATERIALS[recipe.Material], rnd = random(recipe.Seed);
   const B = source.bounds, size = Math.max(...B.size), impact = [recipe.X, recipe.Y, recipe.Z];
-  const plan = budget(source, recipe);
-  const costBefore = cellCost(source), cap = realtime ? realtimeCap(source, recipe) : Infinity;
+  const dir = impactDirection(source, recipe, impact), travel = dir.travel, alg = ALGORITHMS[recipe.Algorithm];
+  const plan = budget(source, recipe, dir.cos);
+  const costBefore = cellCost(source, recipe.Algorithm), cap = realtime ? realtimeCap(source, recipe) : Infinity;
   if (realtime && plan.target > cap) { plan.target = cap; plan.budgetCapped = true; }
   const grain = Math.sqrt(m.grain), S = [1 / grain, 1, 1]; // Voronoi metric: compress X so cells stretch along the grain
   const metric = (a, b) => Math.hypot((a[0] - b[0]) * S[0], (a[1] - b[1]) * S[1], (a[2] - b[2]) * S[2]);
@@ -248,7 +290,8 @@ export function fracture(source, input) {
   const gauss = () => Math.sqrt(-2 * Math.log(Math.max(1e-9, rnd()))) * Math.cos(2 * Math.PI * rnd());
   const axes = [0, 1, 2].sort((a, b) => B.size[b] - B.size[a]);
   const uniform = () => B.lo.map((lo, k) => lo + rnd() * B.size[k]);
-  const candidate = () => {
+  const [tu, tv] = basis(travel);
+  const clustered = () => {
     if (rnd() > m.cluster) return uniform();
     if (m.mode === 'plate-brittle') {
       const theta = rnd() * Math.PI * 2, rMax = size * 0.62, step = rMax / 5;
@@ -258,20 +301,50 @@ export function fracture(source, input) {
       if (source.thin) p[axes[2]] = B.lo[axes[2]] + rnd() * B.size[axes[2]]; else p[axes[2]] += gauss() * plan.falloff * 0.3;
       return p;
     }
-    const sigma = plan.falloff * 0.55;
-    return [impact[0] + gauss() * sigma * grain, impact[1] + gauss() * sigma, impact[2] + gauss() * sigma];
+    // A cone into the part: spread across the blow, deeper along it.
+    const sigma = plan.falloff * 0.55, a = gauss() * sigma, b = gauss() * sigma, c = Math.abs(gauss()) * sigma * 1.3 - sigma * 0.15;
+    const p = [0, 1, 2].map((k) => impact[k] + tu[k] * a + tv[k] * b + travel[k] * c);
+    p[0] = impact[0] + (p[0] - impact[0]) * grain;
+    return p;
+  };
+  // Radial: a centre cell, then rings of spokes around the impact axis (the pane normal on thin parts), denser inside.
+  const radialSeeds = () => {
+    const axis = source.thin ? [0, 1, 2].map((k) => (k === axes[2] ? 1 : 0)) : travel, [u, v] = basis(axis);
+    // On solid parts the pattern repeats in a few layers along the blow, so most rings land inside the material.
+    const layers = source.thin ? [0] : [0.2, 0.55, 0.95], rMax = source.thin ? size * 0.62 : Math.min(size * 0.62, plan.falloff * 1.8);
+    const rings = Math.max(2, Math.round(Math.sqrt(plan.target / 3))), spokes = Math.max(5, Math.round((plan.target * (source.thin ? 1 : 1.6)) / rings));
+    const list = [{ p: impact.map((x, k) => x + travel[k] * plan.falloff * 0.15), priority: 2 }];
+    layers.forEach((depth, layer) => {
+      for (let k = 0; k < rings; k++) {
+        const r = rMax * Math.pow((k + 0.8) / rings, 1.5);
+        for (let j = 0; j < spokes; j++) {
+          const a = (2 * Math.PI * (j + ((k + layer) % 2) * 0.5 + (rnd() - 0.5) * 0.2)) / spokes, rr = r * (0.92 + rnd() * 0.16);
+          const p = [0, 1, 2].map((i) => impact[i] + (u[i] * Math.cos(a) + v[i] * Math.sin(a)) * rr + axis[i] * depth * plan.falloff);
+          if (source.thin) p[axes[2]] = B.centre[axes[2]];
+          list.push({ p, priority: 1 - k / rings - layer * 0.15 });
+        }
+      }
+    });
+    return list;
   };
 
   const timings = { seeds: 0, cells: 0, needles: 0 };
   let tick = performance.now();
-  let seeds = [];
-  if (plan.target > 1) {
-    const candidates = [], want = Math.min(4000, plan.target * (realtime ? 6 : 14));
-    for (let tries = 0; candidates.length < want && tries < want * 8; tries++) {
-      const p = candidate(); stats.candidates++;
-      if (!insideSolid(source, p)) { stats.refusedOutside++; continue; }
-      const dist = metric(p, impact), priority = Math.exp(-dist / plan.falloff) * (0.55 + 0.45 * rnd());
-      candidates.push({ p, priority });
+  let seeds = [], polys = null;
+  if (!alg.seeded) {
+    const args = { source, plan, impact, travel, rnd, gauss };
+    polys = plan.target <= 1 ? [tightBox(source)] : recipe.Algorithm === 'slices' ? slicePolys(args) : recipe.Algorithm === 'brick' ? brickPolys(args) : splitPolys(args);
+  } else if (plan.target > 1) {
+    let candidates = [];
+    if (recipe.Algorithm === 'radial') {
+      for (const c of radialSeeds()) { stats.candidates++; if (insideSolid(source, c.p)) candidates.push(c); else stats.refusedOutside++; }
+    } else {
+      const even = recipe.Algorithm === 'uniform', want = Math.min(4000, plan.target * (realtime ? 6 : 14));
+      for (let tries = 0; candidates.length < want && tries < want * 8; tries++) {
+        const p = even ? uniform() : clustered(); stats.candidates++;
+        if (!insideSolid(source, p)) { stats.refusedOutside++; continue; }
+        candidates.push({ p, priority: even ? rnd() : Math.exp(-metric(p, impact) / plan.falloff) * (0.55 + 0.45 * rnd()) });
+      }
     }
     candidates.sort((a, b) => b.priority - a.priority);
     for (const c of candidates) {
@@ -280,20 +353,21 @@ export function fracture(source, input) {
       seeds.push(c);
     }
   }
-  const single = seeds.length < 2;
-  if (single) seeds = [{ p: B.centre.slice(), priority: 1 }];
+  const single = alg.seeded ? seeds.length < 2 : polys.length < 2;
+  if (alg.seeded && single) seeds = [{ p: B.centre.slice(), priority: 1 }];
 
   timings.seeds = performance.now() - tick; tick = performance.now();
-  let pieces = cells(source, seeds, S, recipe, stats);
+  let pieces = alg.seeded ? cells(source, seeds, S, recipe, stats) : carveAll(source, polys, recipe, stats);
   timings.cells = performance.now() - tick; tick = performance.now();
-  learnCost(source, timings.cells, seeds.length);
-  if (recipe.NeedleRejection && pieces.length > 2) {
+  learnCost(source, recipe.Algorithm, timings.seeds + timings.cells, alg.seeded ? seeds.length : polys.length);
+  if (alg.seeded && recipe.NeedleRejection && pieces.length > 2) {
     const needles = pieces.filter((p) => p.span < recipe.MinimumSize);
     if (needles.length) {
       const drop = new Set(needles.map((p) => p.seed)), kept = seeds.filter((_, i) => !drop.has(i));
       if (kept.length >= 2) { stats.refusedNeedle = drop.size; seeds = kept; for (const k of ['chunks', 'rejoined', 'split']) stats[k] = 0; pieces = cells(source, seeds, S, recipe, stats); }
     }
   }
+  const cellCount = alg.seeded ? seeds.length : polys.length;
 
   timings.needles = performance.now() - tick;
   let minQ = 1, tris = 0, cutArea = 0, volume = 0;
@@ -309,17 +383,18 @@ export function fracture(source, input) {
   const ms = performance.now() - t0;
   const log = [
     `budget  ${plan.energy.toFixed(0)} J into surface → ${plan.crackArea.toFixed(3)} m² crack area → ${plan.requested} pieces requested${plan.capped ? ` · capped at ${recipe.Ceiling}` : ''}`,
-    realtime ? `method  realtime · ${recipe.Budget} ms budget fits ${cap} cells at ${costBefore.per.toFixed(2)} ms per cell + ${costBefore.base.toFixed(1)} ms for the shape${plan.budgetCapped ? ' · budget-capped' : ''} · cut in ${ms.toFixed(1)} ms${ms > recipe.Budget ? ' (over budget)' : ''}` : `method  baked · full quality, cut ahead of time`,
-    `cells   ${seeds.length} Voronoi cells → ${pieces.length} closed pieces · ${tris.toLocaleString()} tris · ${ms.toFixed(0)} ms`,
+    realtime ? `method  realtime · ${alg.label} · ${recipe.Budget} ms budget fits ${cap} cells at ${costBefore.per.toFixed(2)} ms per cell + ${costBefore.base.toFixed(1)} ms for the shape${plan.budgetCapped ? ' · budget-capped' : ''} · cut in ${ms.toFixed(1)} ms${ms > recipe.Budget ? ' (over budget)' : ''}` : `method  baked · ${alg.label} · full quality, cut ahead of time`,
+    `impact  ${recipe.Energy.toFixed(0)} J · Ø ${(recipe.ImpactRadius * 200).toFixed(0)} cm impactor · ${(dir.cos * 100).toFixed(0)} % head-on · ${recipe.DirMode === 'custom' ? `custom yaw ${recipe.DirYaw.toFixed(0)}° pitch ${recipe.DirPitch.toFixed(0)}°` : 'along the surface normal'}`,
+    `cells   ${cellCount} ${alg.label} cells → ${pieces.length} closed pieces · ${tris.toLocaleString()} tris · ${ms.toFixed(0)} ms`,
   ];
   if (source.segmented) log.push(`seams   ${stats.chunks} convex chunks across ${source.segments} segments · ${stats.rejoined} rejoined at seams${stats.split ? ` · ${stats.split} cell(s) split into separate pieces` : ''}`);
   if (stats.refusedSpan) log.push(`span    ${stats.refusedSpan} candidate seed(s) refused, closer than ${(recipe.MinimumSize * 2000).toFixed(0)} mm to an accepted seed`);
   if (stats.refusedNeedle) log.push(`needles ${stats.refusedNeedle} cell(s) thinner than ${(recipe.MinimumSize * 1000).toFixed(0)} mm merged into their neighbours`);
   return {
-    recipe, source, pieces, impact, plan, ms, log, stats, single, timings, seedCount: seeds.length,
+    recipe, source, pieces, impact, plan, ms, log, stats, single, timings, seedCount: cellCount, algorithm: recipe.Algorithm, travel, normal: dir.normal, headOn: dir.cos,
     method: recipe.Method, realtime: realtime ? { budget: recipe.Budget, cap, cost: costBefore, over: ms > recipe.Budget } : null,
     metrics: {
-      pieces: pieces.length, cells: seeds.length, tris, minQ, occupied: (volume / source.volume) * 100, cutArea,
+      pieces: pieces.length, cells: cellCount, tris, minQ, occupied: (volume / source.volume) * 100, cutArea,
       smallest: Math.min(...volumes), largest: Math.max(...volumes), mass: volume * m.density, bytes: tris * 3 * 24 + pieces.length * 64,
       refused: stats.refusedSpan + stats.refusedNeedle,
     },
@@ -343,32 +418,130 @@ function cells(source, seeds, S, recipe, stats) {
       if (!next) { cell = null; break; }
       if (next !== cell) { cell = next; R = reach(cell, seed.p, S); }
     }
-    if (!cell) return;
-    // 4. Cell ∩ each overlapping convex part.
-    const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
-    for (const f of cell) for (const p of f.pts) for (let k = 0; k < 3; k++) { lo[k] = Math.min(lo[k], p[k]); hi[k] = Math.max(hi[k], p[k]); }
-    const chunks = [];
-    for (const part of source.parts) {
-      if (part.lo[0] > hi[0] || part.hi[0] < lo[0] || part.lo[1] > hi[1] || part.hi[1] < lo[1] || part.lo[2] > hi[2] || part.hi[2] < lo[2]) continue;
-      const poly = clipPart(cell, part);
-      if (!poly) continue;
-      const { volume, centre } = polyCentroid(poly);
-      if (volume < 1e-10) continue;
-      const seams = new Set();
-      for (const f of poly) if (f.tag === 'seam' && len(faceNormal(f.pts)) > 2e-8) seams.add(f.group);
-      chunks.push({ poly, volume, centre, seams });
-    }
-    if (!chunks.length) return;
-    stats.chunks += chunks.length;
-    // Union-find across seams.
-    const parent = chunks.map((_, k) => k), find = (k) => (parent[k] === k ? k : (parent[k] = find(parent[k])));
-    const bySeam = new Map();
-    chunks.forEach((c, k) => { for (const s of c.seams) { if (bySeam.has(s)) { const a = find(bySeam.get(s)), b = find(k); if (a !== b) { parent[a] = b; stats.rejoined++; } } else bySeam.set(s, k); } });
-    const groups = new Map();
-    chunks.forEach((c, k) => { const r = find(k); if (!groups.has(r)) groups.set(r, []); groups.get(r).push(c); });
-    if (groups.size > 1) stats.split += 1;
-    for (const list of groups.values()) out.push(piece(source, list, i, seed.p, recipe));
+    if (cell) carveCell(source, cell, i, seed.p, recipe, stats, out);
   });
+  return out;
+}
+
+// 4–5. One convex cell ∩ every convex part it overlaps, chunks rejoined across seams, one piece per connected group.
+function carveCell(source, cell, i, seedPoint, recipe, stats, out) {
+  // 4. Cell ∩ each overlapping convex part.
+  const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
+  for (const f of cell) for (const p of f.pts) for (let k = 0; k < 3; k++) { lo[k] = Math.min(lo[k], p[k]); hi[k] = Math.max(hi[k], p[k]); }
+  const chunks = [];
+  for (const part of source.parts) {
+    if (part.lo[0] > hi[0] || part.hi[0] < lo[0] || part.lo[1] > hi[1] || part.hi[1] < lo[1] || part.lo[2] > hi[2] || part.hi[2] < lo[2]) continue;
+    const poly = clipPart(cell, part);
+    if (!poly) continue;
+    const { volume, centre } = polyCentroid(poly);
+    if (volume < 1e-10) continue;
+    const seams = new Set();
+    for (const f of poly) if (f.tag === 'seam' && len(faceNormal(f.pts)) > 2e-8) seams.add(f.group);
+    chunks.push({ poly, volume, centre, seams });
+  }
+  if (!chunks.length) return;
+  stats.chunks += chunks.length;
+  // Union-find across seams.
+  const parent = chunks.map((_, k) => k), find = (k) => (parent[k] === k ? k : (parent[k] = find(parent[k])));
+  const bySeam = new Map();
+  chunks.forEach((c, k) => { for (const s of c.seams) { if (bySeam.has(s)) { const a = find(bySeam.get(s)), b = find(k); if (a !== b) { parent[a] = b; stats.rejoined++; } } else bySeam.set(s, k); } });
+  const groups = new Map();
+  chunks.forEach((c, k) => { const r = find(k); if (!groups.has(r)) groups.set(r, []); groups.get(r).push(c); });
+  if (groups.size > 1) stats.split += 1;
+  for (const list of groups.values()) out.push(piece(source, list, i, seedPoint, recipe));
+}
+// ---------------------------------------------------------------------------------------------------- plane-cut cells
+function splitPoly(poly, n, d) { return [clip(poly, n, d, 'cut', 'cut'), clip(poly, mul(n, -1), -d, 'cut', 'cut')].filter(Boolean); }
+// Exact: does this region keep any volume after clipping by an overlapping convex part?
+function touchesSolid(source, poly) {
+  const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
+  for (const f of poly) for (const p of f.pts) for (let k = 0; k < 3; k++) { lo[k] = Math.min(lo[k], p[k]); hi[k] = Math.max(hi[k], p[k]); }
+  return source.parts.some((part) => !(part.lo[0] > hi[0] || part.hi[0] < lo[0] || part.lo[1] > hi[1] || part.hi[1] < lo[1] || part.lo[2] > hi[2] || part.hi[2] < lo[2])
+    && (() => { const c = clipPart(poly, part); return c && polyVolume(c) > 1e-10; })());
+}
+// Plane-cut cells start from the tight bounds (the Voronoi box is padded, which would waste cuts on empty space).
+const tightBox = (source) => { const B = source.bounds, e = 1e-4; return boxPoly(B.lo.map((v) => v - e), B.hi.map((v) => v + e)); };
+function cutBox(lo, hi) { return boxPoly(lo, hi).map((f) => ({ ...f, tag: 'cut', group: 'cut' })); }
+// Planar slices: random planes through the hit region, mostly running along the blow. Each plane splits the regions
+// it crosses, nearest the hit first, until the target count of regions inside the part is reached.
+function slicePolys({ source, plan, impact, travel, rnd, gauss }) {
+  const [u, v] = basis(travel), spread = plan.falloff * 0.45;
+  let items = [{ poly: tightBox(source), touch: true }], count = 1;
+  for (let k = 0; k < 60 && count < plan.target; k++) {
+    const a = rnd() * Math.PI, tilt = (rnd() - 0.5) * 0.6;
+    const n = norm([0, 1, 2].map((i) => u[i] * Math.cos(a) + v[i] * Math.sin(a) + travel[i] * tilt));
+    const c = [0, 1, 2].map((i) => impact[i] + (u[i] * gauss() + v[i] * gauss()) * spread + travel[i] * Math.abs(gauss()) * spread);
+    const order = items.map((it) => ({ it, dist: len(sub(polyCentroid(it.poly).centre, c)) })).sort((p, q) => p.dist - q.dist).map((o) => o.it);
+    const next = new Set(items);
+    for (const it of order) {
+      if (count >= plan.target) break;
+      const halves = splitPoly(it.poly, n, dot(n, c));
+      if (halves.length < 2) continue;
+      next.delete(it);
+      const parts = halves.map((poly) => ({ poly, touch: touchesSolid(source, poly) }));
+      for (const p of parts) next.add(p);
+      count += parts.filter((p) => p.touch).length - (it.touch ? 1 : 0);
+    }
+    items = [...next];
+  }
+  return items.map((it) => it.poly);
+}
+// Brick: courses along +Y, staggered by half a brick, sized from the part volume; bricks near the hit are halved.
+function brickPolys({ source, plan, impact }) {
+  const e = 1e-4, B = { lo: source.bounds.lo.map((v) => v - e), hi: source.bounds.hi.map((v) => v + e) }, [along, across] = [0, 2].sort((a, b) => (B.hi[b] - B.lo[b]) - (B.hi[a] - B.lo[a]));
+  const build = (s) => {
+    const h = s * 0.7, L = s * 1.7, W = Math.min(s * 0.85, B.hi[across] - B.lo[across]), out = [];
+    for (let row = 0, y = B.lo[1]; y < B.hi[1] - 1e-9; row++, y += h) {
+      for (let z = B.lo[across]; z < B.hi[across] - 1e-9; z += W) {
+        for (let x = B.lo[along] - (row % 2) * L * 0.5; x < B.hi[along] - 1e-9; x += L) {
+          const lo = [0, 0, 0], hi = [0, 0, 0];
+          lo[1] = y; hi[1] = Math.min(B.hi[1], y + h); lo[across] = z; hi[across] = Math.min(B.hi[across], z + W);
+          lo[along] = Math.max(B.lo[along], x); hi[along] = Math.min(B.hi[along], x + L);
+          const mid = lo.map((v, k) => (v + hi[k]) / 2);
+          if (len(sub(mid, impact)) < plan.falloff * 0.7) { const m2 = mid[along]; const a = hi.slice(); a[along] = m2; const b = lo.slice(); b[along] = m2; out.push([lo, a], [b, hi]); }
+          else out.push([lo, hi]);
+        }
+      }
+    }
+    return out;
+  };
+  let s = Math.cbrt(source.volume / Math.max(1, plan.target)), boxes = build(s);
+  for (let k = 0; k < 24; k++) {
+    const inside = boxes.filter(([lo, hi]) => touchesSolid(source, cutBox(lo, hi))).length;
+    if (inside <= plan.target) break;
+    s *= 1.1; boxes = build(s);
+  }
+  return boxes.map(([lo, hi]) => cutBox(lo, hi));
+}
+// Recursive split: halve the region that is biggest and closest to the hit, across its longest side and tilted by the
+// blow, until the target count is reached. Each cut is one plane, so the cost per piece is flat.
+function splitPolys({ source, plan, impact, travel, rnd }) {
+  let items = [{ poly: tightBox(source), touch: true }], count = 1;
+  for (let k = 0; k < plan.target * 6 && count < plan.target; k++) {
+    let best = null, score = -1;
+    for (const it of items) {
+      if (!it.touch) continue;
+      it.info ||= polyCentroid(it.poly);
+      const sc = it.info.volume * Math.exp(-len(sub(it.info.centre, impact)) / plan.falloff);
+      if (sc > score) { score = sc; best = it; }
+    }
+    if (!best) break;
+    const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
+    for (const f of best.poly) for (const p of f.pts) for (let i = 0; i < 3; i++) { lo[i] = Math.min(lo[i], p[i]); hi[i] = Math.max(hi[i], p[i]); }
+    const e = [0, 1, 2].reduce((a, i) => (hi[i] - lo[i] > hi[a] - lo[a] ? i : a), 0);
+    const n = norm([0, 1, 2].map((i) => (i === e ? 1 : 0) + travel[i] * 0.35 + (rnd() - 0.5) * 0.5));
+    const c = best.info.centre.map((v, i) => v + (rnd() - 0.5) * (hi[i] - lo[i]) * 0.2);
+    const halves = splitPoly(best.poly, n, dot(n, c));
+    if (halves.length < 2) { best.touch = false; continue; }
+    const parts = halves.map((poly) => ({ poly, touch: touchesSolid(source, poly) }));
+    items.splice(items.indexOf(best), 1, ...parts);
+    count += parts.filter((p) => p.touch).length - 1;
+  }
+  return items.map((it) => it.poly);
+}
+function carveAll(source, polys, recipe, stats) {
+  const out = [];
+  polys.forEach((poly, i) => carveCell(source, poly, i, polyCentroid(poly).centre, recipe, stats, out));
   return out;
 }
 
@@ -426,5 +599,6 @@ export function rehit(result, point) {
   const S = [1 / Math.sqrt(MATERIALS[result.recipe.Material].grain), 1, 1];
   const metric = (a, b) => Math.hypot((a[0] - b[0]) * S[0], (a[1] - b[1]) * S[1], (a[2] - b[2]) * S[2]);
   const pieces = result.pieces.map((pc) => { const distance = metric(pc.centre, point); return { ...pc, distance, priority: Math.exp(-distance / result.plan.falloff) }; });
-  return { ...result, pieces, impact: point.slice(), rehit: true };
+  const travel = result.recipe.DirMode === 'custom' ? result.travel : mul(surfaceNormal(result.source, point), -1);
+  return { ...result, pieces, impact: point.slice(), travel, rehit: true };
 }

@@ -83,7 +83,8 @@ export function simulate(result, simulation, { overrides = new Map(), ground = r
   const shares = impactShares(result, sim, overrides);
   const rnd = random(result.recipe.Seed * 7919 + 17);
   const B = result.source.bounds, impact = result.impact;
-  const hit = unit(B.centre.map((v, k) => v - impact[k]), [0, 0, -1]); // the push goes into the object, opposite the surface normal
+  // The push follows the impactor's travel direction when the fracture records one, else it goes into the object.
+  const hit = result.travel ? unit(result.travel) : unit(B.centre.map((v, k) => v - impact[k]), [0, 0, -1]);
 
   const bodies = pieces.map((pc, i) => {
     const s = pc.bounds.size, m = Math.max(1e-6, pc.mass), inertia = Math.max(1e-9, (m * (s[0] * s[0] + s[1] * s[1] + s[2] * s[2])) / 18);

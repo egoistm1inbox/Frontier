@@ -2,7 +2,7 @@
 // Checks every analytical primitive: faceted volume against the closed form, exact volume conservation after the
 // fracture, closed pieces, seam rejoining on the torus and pipe, and that the rigid-body preview settles.
 import { PRIMITIVES, defaultDims, signedDistance } from '../Source/Primitives.js';
-import { buildSource, fracture, defaultImpact, MATERIAL_ORDER, realtimeCap, rehit } from '../Source/Fracture.js';
+import { buildSource, fracture, defaultImpact, MATERIAL_ORDER, realtimeCap, rehit, ALGORITHMS, algorithmsFor, impactDirection } from '../Source/Fracture.js';
 import { simulate } from '../Source/FractureSimulation.js';
 
 let failures = 0;
@@ -42,6 +42,25 @@ for (const id of ['box', 'torus']) {
   const src = buildSource('box', defaultDims('box')), r = fracture(src, { Energy: 4000, Seed: 5, X: 0.5, Y: 0.5, Z: 0 });
   const moved = rehit(r, [-0.5, 0.5, 0]), sim = simulate(moved, { Duration: 2 });
   check(moved.pieces.length === r.pieces.length && moved.impact[0] === -0.5 && sim.totals.every(Number.isFinite), `box      baked re-hit keeps ${moved.pieces.length} pieces · nearest piece now ${moved.pieces.reduce((a, p) => (p.distance < a.distance ? p : a)).id}`);
+}
+// Every algorithm, for every method that offers it: closed pieces, exact volume, near the target count.
+for (const [id, mat] of [['box', 'concrete'], ['torus', 'concrete'], ['pane', 'glass'], ['sphere', 'rock']]) {
+  const src = buildSource(id, defaultDims(id)), hit = defaultImpact(src);
+  for (const Method of ['baked', 'realtime']) for (const Algorithm of algorithmsFor(Method)) {
+    const r = fracture(src, { Method, Algorithm, Budget: 33, Material: mat, Energy: 6000, Seed: 11, Ceiling: 40, X: hit[0], Y: hit[1], Z: hit[2] });
+    const vol = r.pieces.reduce((s, p) => s + p.volume, 0);
+    check(Math.abs(vol - src.volume) / src.volume < 1e-6 && r.pieces.length > 1 && r.pieces.every((p) => p.tris > 0),
+      `${id.padEnd(8)} ${Method.padEnd(8)} ${ALGORITHMS[Algorithm].label.padEnd(17)} ${String(r.pieces.length).padStart(3)} pieces from ${String(r.metrics.cells).padStart(3)} cells · volume ${(vol / src.volume * 100).toFixed(4)} % · ${r.ms.toFixed(1)} ms`);
+  }
+}
+{ // Impactor: a custom grazing direction is less head-on than the normal, opens fewer cracks, and drives the launch.
+  const src = buildSource('box', defaultDims('box')), hit = defaultImpact(src), base = { Energy: 6000, Seed: 4, X: hit[0], Y: hit[1], Z: hit[2] };
+  const head = fracture(src, base), n = impactDirection(src, { ...base, DirMode: 'normal' }).normal;
+  const yaw = Math.atan2(n[0], n[2]) * 180 / Math.PI + 90; // travel sideways across the face
+  const graze = fracture(src, { ...base, DirMode: 'custom', DirYaw: yaw, DirPitch: 5 });
+  check(head.headOn > 0.99 && graze.headOn < 0.6 && graze.plan.energy < head.plan.energy, `impactor head-on ${(head.headOn * 100).toFixed(0)} % → ${head.pieces.length} pieces · grazing ${(graze.headOn * 100).toFixed(0)} % → ${graze.pieces.length} pieces`);
+  const big = fracture(src, { ...base, ImpactRadius: 0.3 });
+  check(big.plan.falloff > head.plan.falloff, `impactor size widens the damage zone (${head.plan.falloff.toFixed(2)} → ${big.plan.falloff.toFixed(2)} m)`);
 }
 // Detail levels
 for (const detail of ['low', 'high']) { const s = buildSource('torus', defaultDims('torus'), detail); check(Math.abs(s.faceting) < 0.04, `torus ${detail} detail faceting ${(s.faceting * 100).toFixed(2)} %`); }

@@ -80,6 +80,35 @@ Returning to Edit restores the authored fracture.
 The rigid-body preview (`Source/FractureSimulation.js`) is the same solver as Component Studio, copied so the page
 stands alone.
 
+### Impactor
+
+The thing doing the hitting is a steel ball (7 850 kg/m³). You can set three things about it:
+
+| Control | Range | Effect |
+|---|---|---|
+| Energy | 0 – 50 kJ | Total energy of the blow |
+| Size (radius) | 0.5 – 50 cm | Mass follows the size; speed is √(2E/m). Its footprint adds 1.5 × radius to the damage zone. |
+| Direction | Surface normal, or Custom yaw/pitch | Only the share of the blow along the inward normal opens cracks. A glancing blow (about 0 % head-on) keeps 25 % of the energy, so it gives fewer, larger pieces. The cracks lean along the travel direction, and the launch impulse follows it. |
+
+In the viewport the impactor is a wire ball at its real size with its travel arrow, its footprint and the damage radius. *Aim along the view* points the blow down the camera ray.
+
+### Algorithms
+
+Each algorithm only proposes convex regions. All of them are carved against the same analytic solid, so the volume stays exact (checked on the box, torus, pane and sphere in `Tests/AnalyticFractureCheck.mjs`). Which algorithms you can pick depends on the method:
+
+| Algorithm | Baked | Realtime | Pattern |
+|---|---|---|---|
+| Clustered Voronoi | ✓ | ✓ | Cells crowd the hit and lean along the blow |
+| Uniform Voronoi | ✓ | | Even cells through the whole part (pre-scored shatter) |
+| Radial | ✓ | ✓ | Spokes and rings around the impact axis (glass, ice) |
+| Planar slices | ✓ | ✓ | Straight through-cuts crossing near the hit (wood, slate) |
+| Brick | ✓ | | Staggered courses, halved near the hit (masonry) |
+| Recursive split | | ✓ | Halve the biggest piece near the hit until the cap: cheapest per piece |
+
+![Radial algorithm on the pane](Screenshots/algorithms-radial-glass.png)
+
+Realtime learns a separate cut-time model per algorithm and shape, so the frame-budget cap reflects how fast each one actually is.
+
 ## Using it
 
 - **Outliner.**

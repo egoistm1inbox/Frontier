@@ -15,6 +15,7 @@ const METRICS = [
 ];
 const VIEWS = [['both', 'Plot + stats'], ['plot', 'Plot only'], ['list', 'Stats only']];
 const SECONDS = [15, 30, 60];
+const ALGORITHM_LABEL = { voronoi: 'Clustered Voronoi', uniform: 'Uniform Voronoi', radial: 'Radial', slices: 'Planar slices', brick: 'Brick', split: 'Recursive split' };
 
 const $ = (id) => document.getElementById(id);
 const esc = (t) => String(t).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]);
@@ -173,6 +174,7 @@ export class Diagnostics {
         source: 'The current bake as built: closed convex pieces, the Voronoi cells that made them, and how faithfully the facets keep the analytical volume.',
         series: { kind: 'index', points: pts.map((v, k) => [pts.length > 1 ? k / (pts.length - 1) : 1, v]) }, reference: [r.recipe.Ceiling, `ceiling ${r.recipe.Ceiling}`], format: (v) => `${Math.round(v)} pieces`,
         rows: [
+          ['Algorithm', ALGORITHM_LABEL[r.algorithm] || r.algorithm || '—'],
           ['Method', r.realtime ? `Realtime · ${r.ms.toFixed(1)} of ${r.realtime.budget} ms` : 'Baked · full quality', r.realtime ? (r.realtime.over ? 'bad' : 'good') : ''],
           ['Voronoi cells', `${m.cells}${r.plan.capped ? ' · ceiling reached' : ''}`, r.plan.capped ? 'bad' : ''],
           ['Requested by energy', `${r.plan.requested}`],

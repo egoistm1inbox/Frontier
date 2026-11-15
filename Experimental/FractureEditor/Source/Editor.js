@@ -4,7 +4,7 @@
 import { Viewport, LineBuilder } from './Renderer.js';
 import { invert } from './MathUtils.js';
 import { PRIMITIVES, primitiveById, defaultDims, normalizeDims, describe, DETAIL } from './Primitives.js';
-import { buildSource, fracture, defaultImpact, MATERIALS, MATERIAL_ORDER, normalizeRecipe, histogram, DEFAULT_RECIPE, METHODS, BUDGETS, rehit, realtimeCap, cellCost } from './Fracture.js';
+import { buildSource, fracture, defaultImpact, MATERIALS, MATERIAL_ORDER, normalizeRecipe, histogram, DEFAULT_RECIPE, METHODS, BUDGETS, rehit, realtimeCap, cellCost, ALGORITHMS, algorithmsFor, impactDirection, impactor, anglesFromTravel } from './Fracture.js';
 import { simulate, sample, totalAt, poseMatrix, impactShares, normalizeSimulation, SIMULATION_DEFAULTS } from './FractureSimulation.js';
 import { hydrateGlyphs, glyph } from './Glyphs.js';
 import { Diagnostics } from './Diagnostics.js';
@@ -235,8 +235,13 @@ function paintLines() {
   const orange = [1, 0.54, 0.24, 0.95];
   const showImpact = doc.mode === 'edit' || doc.time < 0.4;
   if (showImpact) {
-    ring(L, imp, nrm, r, orange); ring(L, imp, nrm, r * 0.45, orange);
-    L.arrow(imp.map((v, k) => v + nrm[k] * size * 0.32), imp.map((v, k) => v + nrm[k] * r * 0.4), orange);
+    // The impactor: a wire ball of its real radius just before contact, its travel arrow, its footprint and the damage radius.
+    const travel = doc.hit && result.travel ? result.travel : impactDirection(source, doc.recipe, imp).travel, R = doc.recipe.ImpactRadius;
+    const ball = imp.map((x, k) => x - travel[k] * R * 1.05), u = norm3(cross3(travel, Math.abs(travel[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0])), v = cross3(travel, u);
+    for (const axis of [travel, u, v]) ring(L, ball, axis, R, [1, 0.62, 0.32, 0.85], 32);
+    L.arrow(imp.map((x, k) => x - travel[k] * (R * 2.1 + size * 0.3)), imp.map((x, k) => x - travel[k] * R * 2.1), orange);
+    ring(L, imp, nrm, Math.max(R, r * 0.4), orange);
+    if (doc.mode === 'edit' && result?.plan) ring(L, imp, nrm, result.plan.falloff, [1, 0.54, 0.24, 0.28], 56);
   }
   if (doc.mode === 'play' && doc.time > -0.05 && doc.time < 0.55) { // shock ring
     const k = Math.max(0, doc.time) / 0.55;
@@ -331,7 +336,7 @@ function paintOverlay() {
   const imp = impactPoint();
   if (doc.mode === 'edit' || doc.time < 0.4) {
     const p = project(imp, viewProj, w, h);
-    if (p) notes.push({ p, cls: 'impact', title: `Impact · ${fmtJ(doc.recipe.Energy)}`, sub: `${imp.map((v) => v.toFixed(2)).join(', ')} m · ${MATERIALS[doc.recipe.Material].label}`, dx: 64, dy: -54 });
+    if (p) notes.push({ p, cls: 'impact', title: `Impact · ${fmtJ(doc.recipe.Energy)}`, sub: `Ø ${(doc.recipe.ImpactRadius * 200).toFixed(0)} cm · ${impactor(doc.recipe).speed.toFixed(1)} m/s · ${((result.headOn ?? 1) * 100).toFixed(0)} % head-on · ${ALGORITHMS[result.algorithm || doc.recipe.Algorithm].label}`, dx: 64, dy: -54 });
   }
   if (doc.selected !== null && result.pieces[doc.selected] && !doc.hidden.has(doc.selected)) {
     const i = doc.selected, pc = result.pieces[i], m = live.matrices[i];
@@ -413,8 +418,8 @@ function renderTree() {
   const prims = PRIMITIVES.filter((p) => !q || p.label.toLowerCase().includes(q)).map((p) => `<button class="tr${p.id === doc.primitive ? ' on' : ''}" data-primitive="${p.id}"><img src="Icons/${p.icon}.svg" alt=""><span class="tr-text"><b>${p.label}</b><small>${describe(p.id, doc.dims[p.id])}${p.convex ? '' : ' · segmented'}</small></span>${p.id === doc.primitive ? `<span class="tr-mark ok">${glyph('check')}</span>` : ''}</button>`).join('');
   const m = MATERIALS[doc.recipe.Material];
   const recipeRows = [
-    ['method', doc.recipe.Method === 'realtime' ? 'lightning' : 'editor-bake', 'Method', doc.recipe.Method === 'realtime' ? `Realtime · ${doc.recipe.Budget} ms budget · ≤ ${realtimeCap(source, doc.recipe)} cells` : `Baked · ${(result.metrics.bytes / 1024).toFixed(0)} KB stored · ${result.pieces.length} pieces`],
-    ['impact', 'lightning', 'Impact', `${fmtJ(doc.recipe.Energy)} · ${[doc.recipe.X, doc.recipe.Y, doc.recipe.Z].map((v) => v.toFixed(2)).join(', ')}`],
+    ['method', doc.recipe.Method === 'realtime' ? 'lightning' : 'editor-bake', 'Method', doc.recipe.Method === 'realtime' ? `Realtime · ${ALGORITHMS[doc.recipe.Algorithm].label} · ${doc.recipe.Budget} ms · ≤ ${realtimeCap(source, doc.recipe)} cells` : `Baked · ${ALGORITHMS[doc.recipe.Algorithm].label} · ${(result.metrics.bytes / 1024).toFixed(0)} KB`],
+    ['impact', 'lightning', 'Impactor', `${fmtJ(doc.recipe.Energy)} · Ø ${(doc.recipe.ImpactRadius * 200).toFixed(0)} cm · ${doc.recipe.DirMode === 'custom' ? `yaw ${doc.recipe.DirYaw.toFixed(0)}° pitch ${doc.recipe.DirPitch.toFixed(0)}°` : 'head-on'}`],
     ['material', 'material', 'Material', `Outside ${MATERIALS[doc.recipe.Surface].label.toLowerCase()} · inside ${m.label.toLowerCase()}`],
     ['pattern', 'dice', 'Pattern', `Seed ${doc.recipe.Seed} · ceiling ${doc.recipe.Ceiling} · min ${(doc.recipe.MinimumSize * 1000).toFixed(0)} mm`],
     ['simulation', 'editor-physics', 'Simulation', `${doc.simulation.Duration.toFixed(1)} s · transfer ${(doc.simulation.Transfer * 100).toFixed(0)} % · release ${doc.simulation.Release} J`],
@@ -495,6 +500,9 @@ function defineSliders() {
   }
   const r = doc.recipe, s = doc.simulation;
   sliderDef('Energy', { get: () => r.Energy, set: (v) => { r.Energy = v; }, lo: 20, hi: 50000, log: true, step: 10, decimals: 0, kind: 'fracture' });
+  sliderDef('ImpactRadius', { get: () => r.ImpactRadius, set: (v) => { r.ImpactRadius = v; }, lo: 0.005, hi: 0.5, log: true, step: 0.001, scale: 100, decimals: 1, kind: 'fracture' });
+  sliderDef('DirYaw', { get: () => r.DirYaw, set: (v) => { r.DirYaw = v; }, lo: -180, hi: 180, step: 1, decimals: 0, kind: 'fracture' });
+  sliderDef('DirPitch', { get: () => r.DirPitch, set: (v) => { r.DirPitch = v; }, lo: -89, hi: 89, step: 1, decimals: 0, kind: 'fracture' });
   sliderDef('Ceiling', { get: () => r.Ceiling, set: (v) => { r.Ceiling = Math.round(v); }, lo: 2, hi: 160, step: 1, decimals: 0, kind: 'fracture' });
   sliderDef('MinimumSize', { get: () => r.MinimumSize, set: (v) => { r.MinimumSize = v; }, lo: 0.002, hi: 0.3, log: true, step: 0.001, scale: 1000, decimals: 0, kind: 'fracture' });
   sliderDef('Duration', { get: () => s.Duration, set: (v) => { s.Duration = v; }, lo: 1, hi: 10, step: 0.1, decimals: 1, kind: 'motion' });
@@ -536,7 +544,7 @@ function materialPick(slot) {
 
 // Fracture method: Baked (pre-cut here at full quality, pattern fixed) or Realtime (cut at impact within a budget).
 function methodPicker() {
-  const r = doc.recipe, base = authored || result, cap = realtimeCap(source, r), cost = cellCost(source), per = cost.per, kb = (base.metrics.bytes / 1024).toFixed(0);
+  const r = doc.recipe, base = authored || result, cap = realtimeCap(source, r), cost = cellCost(source, r.Algorithm), per = cost.per, kb = (base.metrics.bytes / 1024).toFixed(0);
   const rt = base.realtime, realtime = r.Method === 'realtime';
   const opt = (id, icon, facts) => `<button class="method-opt${r.Method === id ? ' on' : ''}" data-method="${id}">
       <span class="method-head"><img src="Icons/${icon}.svg" alt=""><span class="method-text"><b>${METHODS[id].label}</b><small>${METHODS[id].lead}</small></span><i class="method-check">${glyph('check')}</i></span>
@@ -553,9 +561,15 @@ function methodPicker() {
       <div class="seg" data-seg="budget">${BUDGETS.map((b) => `<button data-value="${b}" class="${r.Budget === b ? 'on' : ''}">${b} ms</button>`).join('')}</div>
       <p class="note">One pass with plain fans and no needle re-cut. The cost per cell is measured on this machine, so the cap tracks what actually fits. In Sim and Play, the impact tool (I) hits the object and re-cuts where you hit.</p></div>`
     : `<p class="note">Cut once here at full quality and stored. A hit at runtime only releases the stored pieces, so the pattern does not follow the hit; try the impact tool (I) in Sim or Play.</p>`;
-  return `<div class="method-pick">${baked}${live}</div>${budget}`;
+  const algs = algorithmsFor(r.Method).map((k) => { const a = ALGORITHMS[k]; return `<button class="alg-opt${r.Algorithm === k ? ' on' : ''}" data-algorithm="${k}"><span class="alg-seat">${glyph(a.glyph)}</span><b>${a.label}</b><small>${a.lead}</small></button>`; }).join('');
+  const algBlock = `<div class="alg-head"><span>Algorithm</span><small>${algorithmsFor(r.Method).length} for ${METHODS[r.Method].label.toLowerCase()}</small></div><div class="alg-grid">${algs}</div>`;
+  return `<div class="method-pick">${baked}${live}</div>${algBlock}${budget}`;
 }
-function setMethod(id) { if (!METHODS[id] || doc.recipe.Method === id) return; doc.recipe.Method = id; renderInspector(); schedule('fracture'); }
+function setMethod(id) {
+  if (!METHODS[id] || doc.recipe.Method === id) return;
+  doc.recipe.Method = id; doc.recipe = normalizeRecipe(doc.recipe); // keeps the algorithm if the new method offers it
+  renderInspector(); schedule('fracture');
+}
 
 function primitiveInspector() {
   const spec = primitiveById(doc.primitive), m = MATERIALS[doc.recipe.Material], d = source.dims;
@@ -564,7 +578,13 @@ function primitiveInspector() {
       <div class="seg" style="margin-top:7px" data-seg="detail">${Object.entries(DETAIL).map(([k, v]) => `<button data-value="${k}" class="${doc.detail === k ? 'on' : ''}">${v.label}</button>`).join('')}</div></div>
     <div class="panel"><dl class="facts" id="InsShapeFacts"></dl></div>`;
   const materials = materialPick('Surface') + materialPick('Material');
-  const impact = `<div class="panel">${field('Energy', 'Impact energy', 'J')}
+  const custom = doc.recipe.DirMode === 'custom';
+  const impact = `<div class="panel">${field('Energy', 'Impact energy', 'J')}${field('ImpactRadius', 'Impactor size (radius)', 'cm')}
+      <dl class="facts impactor-facts" id="ImpactorFacts"></dl></div>
+    <div class="panel"><div class="field"><span>Direction of the blow</span></div>
+      <div class="seg" style="margin-top:7px" data-seg="dirmode"><button data-value="normal" class="${custom ? '' : 'on'}">Surface normal</button><button data-value="custom" class="${custom ? 'on' : ''}">Custom</button></div>
+      ${custom ? `<div style="margin-top:12px">${field('DirYaw', 'Yaw', '°')}${field('DirPitch', 'Pitch (down)', '°')}</div><button class="wide-btn" data-act="dir-view">${glyph('frame')}Aim along the view</button>` : `<p class="note">Head-on: the blow travels into the surface along its inward normal.</p>`}</div>
+    <div class="panel"><div class="field"><span>Point of impact</span></div>
       <div class="xyz" id="ImpactXYZ">${['X', 'Y', 'Z'].map((k) => `<label><em>${k}</em><input data-axis="${k}" value="${doc.recipe[k].toFixed(3)}"></label>`).join('')}</div>
       <div class="pair"><button class="wide-btn${doc.aiming ? ' on' : ''}" data-act="aim"><img src="Icons/lightning.svg" alt="">Place on surface</button><button class="wide-btn" data-act="impact-reset">${glyph('reset')}Default</button></div></div>`;
   const pattern = `<div class="panel"><div class="field"><span>Seed</span><label class="amount"><input id="SeedBox" value="${doc.recipe.Seed}" inputmode="numeric"><em>#</em></label></div>
@@ -581,8 +601,8 @@ function primitiveInspector() {
     ${section('method', 'Fracture method', METHODS[doc.recipe.Method].lead, `<div id="MethodBody">${methodPicker()}</div>`)}
     ${section('shape', 'Shape', spec.formula, shape)}
     ${section('material', 'Material', 'Outside and interior', materials)}
-    ${section('impact', 'Impact', 'Energy and point', impact)}
-    ${section('pattern', 'Pattern', 'Voronoi seeds', pattern)}
+    ${section('impact', 'Impactor', 'Energy, size, direction', impact)}
+    ${section('pattern', 'Pattern', ALGORITHMS[doc.recipe.Algorithm].label, pattern)}
     ${section('quality', 'Quality', 'Cells and shading', quality)}
     ${section('simulation', 'Simulation', 'Rigid-body preview', sim)}
     ${section('distribution', 'Size distribution', 'Log volume', `<div class="panel"><div class="bars" id="InsBars"></div><div class="bars-scale" id="InsBarsScale"></div></div>`)}
@@ -619,6 +639,8 @@ function refreshLive() {
       tag.textContent = doc.mode === 'edit' ? 'Energy share' : 'Kinetic energy';
     }
     const methodBody = $('MethodBody'); if (methodBody) methodBody.innerHTML = methodPicker();
+    const imf = $('ImpactorFacts');
+    if (imf) { const im = impactor(r), head = result.headOn ?? 1; imf.innerHTML = `<dt>Steel ball</dt><dd>Ø ${(r.ImpactRadius * 200).toFixed(1)} cm · ${fmtKg(im.mass)}</dd><dt>Speed at impact</dt><dd>${im.speed.toFixed(1)} m/s</dd><dt>Head-on share</dt><dd class="${head < 0.3 ? 'bad' : head > 0.9 ? 'good' : ''}">${(head * 100).toFixed(0)} %${head < 0.3 ? ' · glancing' : ''}</dd><dt>Damage radius</dt><dd>${fmtM(result.plan.falloff)}</dd>`; }
     const facts = $('InsShapeFacts');
     if (facts) facts.innerHTML = `<dt>Exact volume</dt><dd>${(source.exactVolume * 1000).toFixed(1)} L</dd><dt>Faceted volume</dt><dd>${(source.volume * 1000).toFixed(1)} L</dd><dt>Faceting error</dt><dd class="${Math.abs(source.faceting) < 0.01 ? 'good' : ''}">${(source.faceting * 100).toFixed(2)} %</dd><dt>Surface area</dt><dd>${source.exactArea.toFixed(3)} m²</dd><dt>Convex parts</dt><dd>${source.segments}${source.segmented ? ' wedge segments' : ''}</dd><dt>Surface facets</dt><dd>${source.faces.toLocaleString()}</dd>`;
     const bars = $('InsBars');
@@ -825,6 +847,8 @@ ins.addEventListener('click', (e) => {
   if (head) { const s = head.parentElement, id = s.dataset.sec; s.classList.toggle('shut'); s.classList.contains('shut') ? doc.shutSections.add(id) : doc.shutSections.delete(id); save(); if (!s.classList.contains('shut')) refreshLive(); return; }
   const method = e.target.closest('[data-method]');
   if (method) { setMethod(method.dataset.method); return; }
+  const alg = e.target.closest('[data-algorithm]');
+  if (alg) { doc.recipe.Algorithm = alg.dataset.algorithm; renderInspector(); schedule('fracture'); return; }
   const face = e.target.closest('.mat-face');
   if (face) { const pick = face.parentElement, open = pick.classList.contains('open'); document.querySelectorAll('.mat-pick.open').forEach((p) => p.classList.remove('open')); pick.classList.toggle('open', !open); return; }
   const opt = e.target.closest('[data-pick-to]');
@@ -847,13 +871,17 @@ ins.addEventListener('click', (e) => {
     seg.parentElement.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b === seg));
     if (kind === 'detail') { doc.detail = v; schedule('source'); }
     if (kind === 'budget') { doc.recipe.Budget = +v; schedule('fracture'); }
+    if (kind === 'dirmode') { doc.recipe.DirMode = v; renderInspector(); schedule('fracture'); }
     if (kind === 'override') { v === 'auto' ? doc.overrides.delete(doc.selected) : doc.overrides.set(doc.selected, v); invalidateMotion(); renderTree(); }
     return;
   }
   const act = e.target.closest('[data-act]')?.dataset.act;
   if (act === 'reroll') reroll();
   else if (act === 'aim') setAiming(!doc.aiming);
-  else if (act === 'impact-reset') { const hit = defaultImpact(source); doc.recipe.X = hit[0]; doc.recipe.Y = hit[1]; doc.recipe.Z = hit[2]; syncImpactInputs(); schedule('fracture'); }
+  else if (act === 'dir-view') {
+    const r = canvas.getBoundingClientRect(), ray = rayAt(r.left + r.width / 2, r.top + r.height / 2), a = anglesFromTravel(ray.dir);
+    doc.recipe.DirYaw = Math.round(a.yaw); doc.recipe.DirPitch = Math.round(Math.max(-89, Math.min(89, a.pitch))); renderInspector(); schedule('fracture');
+  } else if (act === 'impact-reset') { const hit = defaultImpact(source); doc.recipe.X = hit[0]; doc.recipe.Y = hit[1]; doc.recipe.Z = hit[2]; syncImpactInputs(); schedule('fracture'); }
   else if (act === 'sim-reset') { doc.simulation = { ...SIMULATION_DEFAULTS }; renderInspector(); schedule('motion'); }
   else if (act === 'back') select(null);
   else if (act === 'frame') frameSelection();
