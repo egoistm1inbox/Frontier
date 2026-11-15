@@ -1,0 +1,248 @@
+<!doctype html>
+<!-- Particle Studio · Inspector Overview layout proposal (static mockup, not wired to the engine).
+     Uses the real UI/Studio.css so what you see is what would ship. Open via Serve.py: /Mockups/overview.html -->
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Overview · layout proposal</title>
+<link rel="stylesheet" href="../ParticleEditor.css?v=m1" />
+<link rel="stylesheet" href="../UI/Studio.css?v=m1" />
+<style>
+    html, body { overflow: hidden; }
+    body { background: #070707; }
+    .board { height: 100vh; display: grid; grid-template-columns: 372px 360px 360px minmax(0, 1fr); gap: 18px; padding: 16px 18px; }
+    .col { min-height: 0; display: flex; flex-direction: column; gap: 8px; }
+    .col-title { flex: none; display: flex; align-items: baseline; gap: 8px; font-size: 10px; letter-spacing: 1.1px; text-transform: uppercase; color: #8e8e8c; }
+    .col-title b { font-weight: 400; color: #e4e4e2; letter-spacing: .4px; text-transform: none; font-size: 13px; }
+    .frame { position: relative; flex: 1; min-height: 0; border-radius: 14px; overflow: hidden; border: 1px solid #ffffff14; }
+    .today { background: url(../Screenshots/studio.png) no-repeat; background-position: -1228px -2px; background-size: 1600px 960px; filter: saturate(.9); }
+    .today::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, #0000 70%, #070707ee); }
+    .mark { position: absolute; z-index: 9; width: 17px; height: 17px; border-radius: 50%; display: grid; place-items: center; background: #f04d3d; color: #fff; font-size: 9px; font-weight: 500; box-shadow: 0 0 0 3px #070707; }
+    .ps-dock { height: 100%; }
+
+    /* proposal-only pieces (would move into UI/ when built) */
+    .head-tools { display: flex; align-items: center; gap: 8px; }
+    .ps-ins-crumbrow { padding-top: 14px; }
+    .ps-ins-heading { padding-top: 8px; }
+    .ps-ins-name { font-size: 20px !important; }
+    .more { width: 31px; height: 31px; flex: none; display: grid; place-items: center; border-radius: 50%; background: #1b1b1b; border: 1px solid var(--ps-line); color: #9a9a98; font-size: 15px; letter-spacing: 1px; line-height: 1; }
+    .more.open { border-color: #ffffff36; color: var(--ps-ink); }
+    .node-menu { position: absolute; right: 16px; top: 82px; z-index: 20; width: 214px; }
+    .node-menu .ps-menu-item svg { width: 13px; height: 13px; color: #8a8a88; }
+    .node-menu .ps-menu-item { justify-content: flex-start; gap: 10px; }
+    .node-menu .ps-menu-item kbd { margin-left: auto; font: inherit; font-size: 9px; color: #6d6d6b; }
+    .node-menu .danger, .node-menu .danger svg { color: var(--ps-red-ink); }
+    .node-menu hr { border: 0; border-top: 1px solid #ffffff10; margin: 4px 6px; }
+
+    .live { position: relative; border-radius: 22px; border: 1px solid #ffffff16; background: var(--ps-glass), radial-gradient(120% 100% at 100% 0%, #24302a 0%, #161816 55%, #141414 100%); padding: 14px 15px 0; overflow: hidden; }
+    .live.warn { background: var(--ps-glass), radial-gradient(120% 100% at 100% 0%, #3a3020 0%, #1a1814 55%, #141414 100%); border-color: #e8b86a33; }
+    .live-top { display: flex; align-items: center; gap: 8px; }
+    .state { display: inline-flex; align-items: center; gap: 7px; font-size: 10.5px; color: #b9d9c2; }
+    .state i { width: 7px; height: 7px; border-radius: 50%; background: var(--ps-green); box-shadow: 0 0 8px #34c759aa; }
+    .warn .state { color: #e8c98e; }
+    .warn .state i { background: #e8b86a; box-shadow: 0 0 8px #e8b86aaa; }
+    .live-top .grow { flex: 1; }
+    .trigger { height: 28px; display: inline-flex; align-items: center; gap: 6px; padding: 0 12px 0 10px; border-radius: 14px; background: #dededb; color: #151515; font-size: 10.5px; }
+    .trigger svg { width: 13px; height: 13px; }
+    .trigger kbd { font: inherit; font-size: 8.5px; color: #555; border: 1px solid #0002; border-radius: 4px; padding: 0 4px; }
+    .live-main { display: flex; align-items: flex-end; justify-content: space-between; margin-top: 12px; }
+    .alive b { display: block; font-weight: 300; font-size: 42px; letter-spacing: -1px; line-height: 1; color: #f2f2f0; font-variant-numeric: tabular-nums; }
+    .alive small { font-size: 10px; color: #8e8e8c; }
+    .side { text-align: right; display: grid; gap: 6px; }
+    .side div b { font-weight: 300; font-size: 15px; color: #e4e4e2; font-variant-numeric: tabular-nums; }
+    .side div b em { font-style: normal; font-size: 10px; color: #8a8a88; margin-left: 2px; }
+    .side div span { display: block; font-size: 8px; letter-spacing: 1px; text-transform: uppercase; color: #6f6f6d; }
+    .pool { margin-top: 14px; }
+    .pool-bar { height: 6px; border-radius: 3px; background: #0b0b0b; box-shadow: inset 0 0 0 1px #ffffff08; overflow: hidden; }
+    .pool-bar i { display: block; height: 100%; border-radius: 3px; background: linear-gradient(90deg, #3b7a52, #6fdc95); }
+    .warn .pool-bar i { background: linear-gradient(90deg, #8a6a37, #f0c27a); }
+    .pool-meta { display: flex; justify-content: space-between; margin-top: 5px; font-size: 9px; color: #7a7a78; font-variant-numeric: tabular-nums; }
+    .spark { display: block; width: calc(100% + 30px); height: 46px; margin: 8px -15px 0; }
+    .ramp { height: 4px; margin: 0 -15px; background: linear-gradient(90deg, #2a6b7a, #8fd3e8 45%, #f2f7ff 70%, #c9b7ff); }
+
+    .looks { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+    .look { height: 86px; border-radius: 15px; border: 1px solid #ffffff12; background: var(--ps-glass), #181818; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 7px; font-size: 10px; color: #c4c4c2; }
+    .look small { font-size: 7.5px; letter-spacing: .9px; text-transform: uppercase; color: #6d6d6b; margin-top: -4px; }
+    .look.on { border-color: #dec19366; background: var(--ps-glass), #1e1b16; color: #f3e3c4; }
+    .orb { width: 26px; height: 26px; border-radius: 50%; }
+    .orb.mixed { background: radial-gradient(circle at 40% 40%, #dcdcdc 0 30%, #6b6b6b 31% 60%, #0000 61%); box-shadow: 9px 6px 0 -6px #fff; }
+    .orb.sharp { background: radial-gradient(circle, #fff 0 22%, #555 23% 46%, #0000 47%); }
+    .orb.creamy { background: radial-gradient(circle, #cfd6d8 0%, #6f7a7c 45%, #0000 70%); }
+    .orb.rim { background: radial-gradient(circle, #0000 0 46%, #e8e8e8 48% 58%, #0000 60%); }
+
+    .beh { display: grid; gap: 0; }
+    .beh-row { display: flex; align-items: center; gap: 11px; padding: 10px 0; }
+    .beh-row + .beh-row, .beh-sub + .beh-row { border-top: 1px solid #ffffff0a; }
+    .beh-ico { width: 30px; height: 30px; flex: none; display: grid; place-items: center; border-radius: 10px; background: #242424; color: #8a8a88; }
+    .beh-ico svg { width: 15px; height: 15px; }
+    .beh-row.on .beh-ico { background: radial-gradient(circle at 50% 35%, #5bdb8740, #262626 75%); color: #7fd89a; }
+    .beh-copy { flex: 1; min-width: 0; }
+    .beh-copy b { display: block; font-weight: 300; font-size: 11.5px; color: #dcdcda; }
+    .beh-copy small { font-size: 9px; color: #6f6f6d; }
+    .beh-row.locked { opacity: .45; }
+    .beh-sub { padding: 0 0 12px 41px; }
+    .beh-sub .ps-field { gap: 6px 10px; }
+
+    .facts { display: grid; grid-template-columns: auto 1fr; gap: 9px 12px; margin: 0; font-size: 10.5px; }
+    .facts dt { color: #858583; }
+    .facts dd { margin: 0; text-align: right; color: #d4d4d2; }
+    .jump { display: flex; gap: 6px; margin-top: 14px; }
+    .jump span { flex: 1; height: 28px; display: flex; align-items: center; justify-content: center; gap: 6px; border-radius: 14px; background: #ffffff0a; border: 1px solid #ffffff0d; font-size: 10px; color: #b5b5b3; }
+
+    .notes { overflow: hidden; padding: 4px 4px 0 6px; }
+    .notes h2 { margin: 0 0 4px; font-weight: 300; font-size: 22px; color: #efefed; letter-spacing: -.2px; }
+    .notes > p { margin: 0 0 14px; font-size: 11px; color: #8e8e8c; line-height: 1.5; }
+    .notes h4 { margin: 16px 0 8px; font-weight: 400; font-size: 9.5px; letter-spacing: 1.1px; text-transform: uppercase; color: #9c9c9a; }
+    .note { display: grid; grid-template-columns: 20px 1fr; gap: 9px; margin-bottom: 9px; font-size: 10.5px; line-height: 1.45; color: #a9a9a7; }
+    .note b { font-weight: 400; color: #e4e4e2; }
+    .note .n { width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center; background: #dec193; color: #1a1712; font-size: 9px; font-weight: 500; margin-top: 1px; }
+    .note .n.red { background: #f04d3d; color: #fff; }
+    .gone { display: grid; grid-template-columns: 1fr auto; gap: 6px 12px; font-size: 10.5px; color: #8e8e8c; }
+    .gone span:nth-child(even) { color: #c8c8c6; text-align: right; }
+</style>
+</head>
+<body>
+<div class="board">
+
+    <!-- TODAY -->
+    <div class="col">
+        <div class="col-title">Today <b>Overview, 7 blocks, 4 repeats</b></div>
+        <div class="frame today">
+            <span class="mark" style="left: 290px; top: 62px">1</span>
+            <span class="mark" style="left: 334px; top: 98px">2</span>
+            <span class="mark" style="left: 12px; top: 206px">3</span>
+            <span class="mark" style="left: 12px; top: 540px">4</span>
+            <span class="mark" style="left: 12px; top: 668px">5</span>
+            <span class="mark" style="left: 12px; top: 752px">6</span>
+            <span class="mark" style="left: 12px; top: 834px">7</span>
+        </div>
+    </div>
+
+    <!-- PROPOSED: default -->
+    <div class="col">
+        <div class="col-title">Proposed <b>Live, then Look, Behaviour, Recipe</b></div>
+        <div class="frame"><aside class="ps-dock">
+            <header class="ps-docktabs"><span class="ps-docktab">Inspector <i class="ps-docktab-x">×</i></span></header>
+            <div class="ps-ins-head">
+                <div class="ps-ins-crumbrow"><span class="ps-crumbs"><span>Inspector</span><i>/</i><span>Effects</span><i>/</i><b>Silk &amp; Curl</b></span><span class="head-tools"><label class="ps-toggle ps-ins-toggle" title="Enabled"><input type="checkbox" checked /><i></i></label><button class="more">···</button></span></div>
+                <div class="ps-ins-heading">
+                    <span class="ps-ins-seat" style="--ink:#7aa8e8"><i data-icon="Sparkles"></i></span>
+                    <div class="ps-ins-copy"><input class="ps-ins-name" value="Object Surface Pour Ribbons" disabled /><span class="ps-ins-type">VFX · Additive</span></div>
+                </div>
+                <div class="ps-seg ps-ins-tabs"><button class="on">Overview</button><button>Source</button><button>Motion &amp; FX</button><button>Record</button></div>
+            </div>
+            <div class="ps-ins-scroll" style="overflow:hidden"><div class="ps-page">
+
+                <div class="live">
+                    <div class="live-top"><span class="state"><i></i>Running · within pool</span><span class="grow"></span><span class="trigger"><i data-icon="Sparkles"></i>Burst</span></div>
+                    <div class="live-main">
+                        <div class="alive"><b>3,186</b><small>particles alive</small></div>
+                        <div class="side"><div><span>Emission</span><b>620<em>/s</em></b></div><div><span>Lifetime</span><b>3.4–5.2<em>s</em></b></div></div>
+                    </div>
+                    <div class="pool"><div class="pool-bar"><i style="width:94%"></i></div><div class="pool-meta"><span>94 % of pool</span><span>3,400 max</span></div></div>
+                    <svg class="spark" viewBox="0 0 330 46" preserveAspectRatio="none"><defs><linearGradient id="g1" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6fdc95" stop-opacity=".28"/><stop offset="1" stop-color="#6fdc95" stop-opacity="0"/></linearGradient></defs><path d="M0 40 C30 38 40 30 70 26 S120 14 160 13 S220 10 250 9 S300 8 330 8 L330 46 L0 46Z" fill="url(#g1)"/><path d="M0 40 C30 38 40 30 70 26 S120 14 160 13 S220 10 250 9 S300 8 330 8" fill="none" stroke="#7fd89a" stroke-width="1.4"/></svg>
+                    <div class="ramp"></div>
+                </div>
+
+                <section class="ps-sec"><button class="ps-sec-head"><i data-icon="Chevron" class="chev"></i><span class="ps-sec-glyph"><i data-icon="Aperture"></i></span><h3>Look · Bokeh aperture</h3><small class="ps-sec-tag">Mixed</small></button>
+                    <div class="ps-sec-body"><div class="ps-panel"><div class="looks">
+                        <div class="look on"><span class="orb mixed"></span>Mixed<small>depth</small></div>
+                        <div class="look"><span class="orb sharp"></span>Sharp<small>pinpoint</small></div>
+                        <div class="look"><span class="orb creamy"></span>Creamy<small>soft disc</small></div>
+                        <div class="look"><span class="orb rim"></span>Rim ring<small>aperture</small></div>
+                    </div></div></div></section>
+
+                <section class="ps-sec"><button class="ps-sec-head"><i data-icon="Chevron" class="chev"></i><span class="ps-sec-glyph"><i data-icon="Activity"></i></span><h3>Behaviour</h3><small class="ps-sec-tag">2 of 3 on</small></button>
+                    <div class="ps-sec-body"><div class="ps-panel" style="padding-top:4px;padding-bottom:4px"><div class="beh">
+                        <div class="beh-row on"><span class="beh-ico"><i data-icon="Wind"></i></span><span class="beh-copy"><b>Wind-driven</b><small>follows the force lattice</small></span><label class="ps-toggle"><input type="checkbox" checked /><i></i></label></div>
+                        <div class="beh-sub"><div class="ps-field ps-field-slider"><span class="ps-label">Coupling</span><span class="ps-amount"><input class="ps-amount-in" value="0.25" /><em>/s</em></span><div class="ps-track" style="--f:.25"><span class="ps-track-rail"><i class="ps-track-fill"></i></span><b class="ps-track-knob"></b></div></div></div>
+                        <div class="beh-row on"><span class="beh-ico"><i data-icon="Sparkles"></i></span><span class="beh-copy"><b>Additive glow</b><small>light adds up where trails cross</small></span><label class="ps-toggle"><input type="checkbox" checked /><i></i></label></div>
+                        <div class="beh-row locked"><span class="beh-ico"><i data-icon="Lock"></i></span><span class="beh-copy"><b>Floor bounce</b><small>ribbons never touch the floor</small></span><label class="ps-toggle"><input type="checkbox" disabled /><i></i></label></div>
+                    </div></div></div></section>
+            </div></div>
+            <footer class="ps-ins-foot"><span>Revision 0</span><span>Changes apply live</span></footer>
+        </aside></div>
+    </div>
+
+    <!-- PROPOSED: states -->
+    <div class="col">
+        <div class="col-title">Same page <b>Pool full · node menu open</b></div>
+        <div class="frame"><aside class="ps-dock">
+            <header class="ps-docktabs"><span class="ps-docktab">Inspector <i class="ps-docktab-x">×</i></span></header>
+            <div class="ps-ins-head">
+                <div class="ps-ins-crumbrow"><span class="ps-crumbs"><span>Inspector</span><i>/</i><span>Effects</span><i>/</i><b>Silk &amp; Curl</b></span><span class="head-tools"><label class="ps-toggle ps-ins-toggle" title="Enabled"><input type="checkbox" checked /><i></i></label><button class="more open">···</button></span></div>
+                <div class="ps-ins-heading">
+                    <span class="ps-ins-seat" style="--ink:#7aa8e8"><i data-icon="Sparkles"></i></span>
+                    <div class="ps-ins-copy"><input class="ps-ins-name" value="Object Surface Pour Ribbons" disabled /><span class="ps-ins-type">VFX · Additive</span></div>
+                </div>
+                <div class="ps-seg ps-ins-tabs"><button class="on">Overview</button><button>Source</button><button>Motion &amp; FX</button><button>Record</button></div>
+            </div>
+            <div class="ps-menu node-menu" style="position:absolute">
+                <button class="ps-menu-item"><i data-icon="Copy"></i><span>Duplicate</span><kbd>Ctrl D</kbd></button>
+                <button class="ps-menu-item"><i data-icon="Reset"></i><span>Clear particles</span></button>
+                <button class="ps-menu-item"><i data-icon="Sliders"></i><span>Reset to preset</span></button>
+                <button class="ps-menu-item"><i data-icon="Focus"></i><span>Frame in viewport</span><kbd>F</kbd></button>
+                <hr />
+                <button class="ps-menu-item danger"><i data-icon="Trash"></i><span>Delete</span><kbd>Del</kbd></button>
+            </div>
+            <div class="ps-ins-scroll" style="overflow:hidden"><div class="ps-page">
+                <div class="live warn">
+                    <div class="live-top"><span class="state"><i></i>Pool full · drops new particles</span><span class="grow"></span><span class="trigger"><i data-icon="Sparkles"></i>Burst</span></div>
+                    <div class="live-main">
+                        <div class="alive"><b>3,400</b><small>particles alive</small></div>
+                        <div class="side"><div><span>Emission</span><b>980<em>/s</em></b></div><div><span>Lifetime</span><b>3.4–5.2<em>s</em></b></div></div>
+                    </div>
+                    <div class="pool"><div class="pool-bar"><i style="width:100%"></i></div><div class="pool-meta"><span>100 % of pool · raise in Source</span><span>3,400 max</span></div></div>
+                    <svg class="spark" viewBox="0 0 330 46" preserveAspectRatio="none"><path d="M0 34 C40 30 60 18 100 10 S150 5 180 5 L330 5" fill="none" stroke="#f0c27a" stroke-width="1.4"/></svg>
+                    <div class="ramp"></div>
+                </div>
+
+                <section class="ps-sec"><button class="ps-sec-head"><i data-icon="Chevron" class="chev"></i><span class="ps-sec-glyph"><i data-icon="Aperture"></i></span><h3>Look · Bokeh aperture</h3><small class="ps-sec-tag">Mixed</small></button></section>
+                <section class="ps-sec shut"><button class="ps-sec-head"><i data-icon="Chevron" class="chev"></i><span class="ps-sec-glyph"><i data-icon="Activity"></i></span><h3>Behaviour</h3><small class="ps-sec-tag">2 of 3 on</small></button></section>
+
+                <section class="ps-sec"><button class="ps-sec-head"><i data-icon="Chevron" class="chev"></i><span class="ps-sec-glyph"><i data-icon="Layers"></i></span><h3>Recipe</h3><small class="ps-sec-tag">read-only</small></button>
+                    <div class="ps-sec-body"><div class="ps-panel">
+                        <dl class="facts"><dt>Shape</dt><dd>Bokeh bead</dd><dt>Manifold</dt><dd>Bokeh ribbon</dd><dt>Flow</dt><dd>1.6 m/s curl</dd><dt>Emitter</dt><dd>Object surface · box 1.65 m</dd><dt>Category</dt><dd>Silk &amp; Curl</dd></dl>
+                        <div class="jump"><span>Edit source ›</span><span>Edit motion ›</span></div>
+                    </div></div></section>
+            </div></div>
+            <footer class="ps-ins-foot"><span>Revision 0</span><span>Changes apply live</span></footer>
+        </aside></div>
+    </div>
+
+    <!-- NOTES -->
+    <div class="col notes">
+        <h2>Overview: new layout</h2>
+        <p>The Overview answers three questions, in order: <b style="color:#ddd;font-weight:400">is it working, what does it look like, how does it behave.</b> Everything else is one click away in the other tabs or the node menu.</p>
+
+        <h4>Proposed order</h4>
+        <div class="note"><span class="n">A</span><span><b>Live block.</b> Status, particles alive, emission, lifetime, pool fill, a 10 s history line and the colour ramp. One block instead of a hero card, three stat tiles and a spectrum section. It turns amber and says why when the pool is full.</span></div>
+        <div class="note"><span class="n">B</span><span><b>One trigger.</b> The effect's own action sits in the live block and its label adapts: Burst, Throw ball, Next shell, Fire salvo, Replay. The transport button becomes <b>Burst all</b>, so the two no longer share a name.</span></div>
+        <div class="note"><span class="n">C</span><span><b>Look.</b> The effect's signature choice (aperture, firework shape, grid shape…) comes first, as plain choice tiles.</span></div>
+        <div class="note"><span class="n">D</span><span><b>Behaviour.</b> Three switches in one list. The wind coupling value appears under its switch only when wind is on. Locked rows say why.</span></div>
+        <div class="note"><span class="n">E</span><span><b>Recipe.</b> A read-only summary of the setup, with links straight to Source and Motion &amp; FX.</span></div>
+        <div class="note"><span class="n">F</span><span><b>Node menu.</b> The ··· button next to the switch holds Duplicate, Clear, Reset to preset, Frame and Delete, off the page. The switch and menu sit on the crumb row so the name gets the full width.</span></div>
+
+        <h4>Removed from the page (numbers on the left)</h4>
+        <div class="gone">
+            <span>1 · Reset button in crumbs</span><span>→ node menu</span>
+            <span>2 · Switch squeezing the name</span><span>→ crumb row</span>
+            <span>3 · "01 / LIVE SOLVER", "02 / SPECTRUM" tags</span><span>removed</span>
+            <span>4 · Shape / Manifold / Wind tiles</span><span>→ Recipe + Behaviour</span>
+            <span>5 · Visible tile (same as the switch)</span><span>removed</span>
+            <span>6 · Burst / Clear / Duplicate / Delete row</span><span>→ trigger + menu</span>
+            <span>7 · Colour spectrum section</span><span>→ ramp line</span>
+        </div>
+    </div>
+</div>
+
+<script type="module">
+    import { ConstructGlyph } from '../UI/Glyphs.js';
+    document.querySelectorAll('i[data-icon]').forEach(El =>
+    {
+        const Svg = ConstructGlyph(El.dataset.icon, 'glyph' + (El.classList.contains('chev') ? ' ps-sec-chev' : ''));
+        El.replaceWith(Svg);
+    });
+</script>
+</body>
+</html>
