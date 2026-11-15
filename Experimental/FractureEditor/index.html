@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Fracture Editor · Frontier</title>
+  <link rel="stylesheet" href="Editor.css">
+  <script type="module" src="Source/Editor.js"></script>
+</head>
+<body>
+  <main class="docks">
+    <!-- ───────────────────────────── left dock: outliner ───────────────────────────── -->
+    <section class="dock" id="OutlinerDock" aria-label="Outliner">
+      <header class="dock-tabs"><span class="dock-tab">Outliner <i data-glyph="close"></i></span><button class="dock-add" title="Add dock tab" data-glyph="plus"></button></header>
+      <div class="dock-body outliner">
+        <div class="ol-head">
+          <h1>Outliner</h1><span class="ol-scope" id="OlScope">Fracture · 0 fragments</span>
+          <button class="round-btn" id="OlCollapse" title="Collapse or expand all groups" data-glyph="sliders"></button>
+        </div>
+        <div class="ol-stats">
+          <button class="ol-stat" id="StatReleased" data-filter="released"><span class="ol-stat-mark ok" data-glyph="check"></span><span class="ol-stat-label">Released</span><b id="ReleasedCount">0</b></button>
+          <button class="ol-stat" id="StatHeld" data-filter="held"><span class="ol-stat-mark idle" data-glyph="triangle"></span><span class="ol-stat-label">Held</span><b id="HeldCount">0</b></button>
+        </div>
+        <div class="ol-tools">
+          <label class="search-field"><i data-glyph="search"></i><input id="OlSearch" placeholder="Search" autocomplete="off" spellcheck="false"><kbd>Ctrl+F</kbd></label>
+          <div class="drop" id="OlFilter">
+            <button class="drop-face" data-glyph-before="filter"><span id="OlFilterLabel">All</span><i data-glyph="chevron"></i></button>
+            <div class="drop-list" role="listbox">
+              <button data-value="all">All fragments</button><button data-value="released">Released</button><button data-value="held">Held</button><button data-value="hidden">Hidden</button><button data-value="seam">Rejoined at seams</button>
+            </div>
+          </div>
+        </div>
+        <div class="tree" id="Tree"></div>
+        <footer class="ol-status">
+          <div><span>Realtime</span><b id="StatusFps">— fps</b></div>
+          <div><span>Bake</span><b id="StatusBake">—</b></div>
+          <div><span>Tris</span><b id="StatusTris">—</b></div>
+          <div><span>Seed</span><b id="StatusSeed">—</b></div>
+        </footer>
+      </div>
+    </section>
+
+    <!-- ───────────────────────────── centre dock: viewport ───────────────────────────── -->
+    <section class="dock" id="ViewportDock" aria-label="Viewport">
+      <header class="dock-tabs"><span class="dock-tab">Viewport <i data-glyph="close"></i></span></header>
+      <div class="notch notch-top"><span>Fracture Editor</span></div>
+      <div class="dock-body viewport">
+        <div class="vp-bar">
+          <div class="vp-row">
+            <div class="vp-identity">
+              <img id="VpGlyph" src="Icons/editor-torus.svg" alt="">
+              <div><strong id="VpTitle">Torus</strong><small id="VpSub">0 fragments</small></div>
+              <span class="badge" id="VpBadge">EDIT</span>
+            </div>
+            <div class="modes" role="tablist" aria-label="Phase">
+              <button data-mode="edit" class="on" title="Edit · Shift+1"><i data-glyph="pencil"></i>Edit</button>
+              <button data-mode="sim" title="Simulate · Shift+2"><i data-glyph="flask"></i>Sim</button>
+              <button data-mode="play" title="Play · Shift+3"><i data-glyph="play"></i>Play</button>
+            </div>
+          </div>
+          <div class="vp-row vp-actions">
+            <button class="primary" id="PrimaryBtn"><img src="Icons/editor-simulate.svg" alt=""><span id="PrimaryLabel">Simulate</span><kbd id="PrimaryKey">Shift+2</kbd></button>
+            <button class="tool" id="FrameBtn" title="Frame · F" data-glyph="frame"></button>
+            <button class="tool" id="ImpactBtn" title="Place impact on the surface · I"><img src="Icons/lightning.svg" alt=""></button>
+            <span class="divider"></span>
+            <div class="drop" id="ShadingDrop">
+              <button class="drop-face wide" data-glyph-before="sphere"><span id="ShadingLabel">Material</span><i data-glyph="chevron"></i></button>
+              <div class="drop-list" role="listbox">
+                <button data-value="material">Material</button><button data-value="energy">Energy · blue → red</button><button data-value="cells">Cells</button><button data-value="normal">Normals</button>
+              </div>
+            </div>
+            <label class="explode" id="ExplodeWrap" title="Spread pieces apart (Edit)"><span>Explode</span><input type="range" id="Explode" min="0" max="1" step="0.01" value="0"><b id="ExplodeValue">0 %</b></label>
+            <span class="grow"></span>
+            <button class="round-btn" id="WireBtn" title="Wireframe · W" data-glyph="wire"></button>
+            <button class="round-btn" id="SeedsBtn" title="Show seeds and impact vectors · V" data-glyph="dots"></button>
+            <button class="round-btn" id="GridBtn" title="Ground grid · G" data-glyph="grid"></button>
+          </div>
+        </div>
+        <div class="well" id="Well">
+          <canvas id="Canvas"></canvas>
+          <svg class="leaders" id="Leaders"></svg>
+          <div class="callouts" id="Callouts"></div>
+          <div class="chips" id="Chips"></div>
+          <div class="legend" id="Legend" hidden>
+            <div class="legend-head"><span>Energy</span><button id="LegendScale">LOG</button></div>
+            <div class="legend-ramp"></div>
+            <div class="legend-scale"><span id="LegendLow">0 J</span><span id="LegendHigh">0 J</span></div>
+          </div>
+          <div class="hint" id="Hint">Drag to orbit · right-drag to pan · wheel to zoom · click a fragment to select</div>
+          <div class="library" id="Library" hidden>
+            <header><div><h2>Primitive library</h2><small>Analytical shapes · exact distance fields · closed-form volume</small></div><button class="round-btn" id="LibraryClose" data-glyph="close"></button></header>
+            <div class="library-grid" id="LibraryGrid"></div>
+          </div>
+        </div>
+        <footer class="vp-foot" id="VpFoot">HTML PREVIEW</footer>
+      </div>
+      <button class="notch notch-bottom" id="LibraryNotch"><span>Primitive Library</span></button>
+    </section>
+
+    <!-- ───────────────────────────── right dock: inspector ───────────────────────────── -->
+    <section class="dock" id="InspectorDock" aria-label="Inspector">
+      <header class="dock-tabs"><span class="dock-tab">Inspector <i data-glyph="close"></i></span></header>
+      <div class="dock-body inspector">
+        <div class="ins-scroll" id="Inspector"></div>
+        <footer class="ins-foot"><span id="InsFootLeft">Analytical primitive</span><span>HTML preview</span></footer>
+      </div>
+    </section>
+  </main>
+
+  <!-- ───────────────────────────── playback bar ───────────────────────────── -->
+  <footer class="playback" id="Playback">
+    <div class="pb-transport">
+      <button class="pb-btn" id="PbStart" title="To start · Home" data-glyph="skip-start"></button>
+      <button class="pb-play" id="PbPlay" title="Play / pause · Space" data-glyph="play"></button>
+      <button class="pb-btn" id="PbStep" title="Step one frame · ." data-glyph="skip-end"></button>
+    </div>
+    <div class="pb-time">
+      <div class="pb-clock"><b id="PbNow">0.00</b><span id="PbTotal">/ 4.00 s</span></div>
+      <small id="PbPhase">EDIT · NOT BAKED</small>
+    </div>
+    <div class="pb-track" id="Track">
+      <canvas id="TrackCanvas"></canvas>
+      <div class="pb-events" id="TrackEvents"></div>
+      <div class="pb-head" id="TrackHead"><i></i></div>
+      <div class="pb-empty" id="TrackEmpty"><span>Timeline bakes when you simulate · press </span><kbd>Shift+2</kbd><span> or </span><kbd>Space</kbd><span> to play</span></div>
+    </div>
+    <div class="pb-energy">
+      <small>Kinetic</small><b id="PbEnergy">0 J</b><small id="PbAwake">0 moving</small>
+    </div>
+    <div class="pb-speed">
+      <small>Playback speed</small>
+      <div class="seg" id="PbSpeed"><button data-speed="0.25">¼×</button><button data-speed="0.5">½×</button><button data-speed="1" class="on">1×</button><button data-speed="2">2×</button></div>
+    </div>
+    <button class="round-btn" id="PbLoop" title="Loop · L" data-glyph="loop"></button>
+  </footer>
+</body>
+</html>
