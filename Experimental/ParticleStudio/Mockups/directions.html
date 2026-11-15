@@ -1,0 +1,344 @@
+<!doctype html>
+<!-- Particle Studio · inspector redesign, three directions (static mockup, not wired to the engine).
+     Nothing here uses UI/Studio.css or the existing kit: every surface, control and grouping is new. -->
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Inspector · three directions</title>
+<style>
+@font-face { font-family: DM; font-weight: 300; src: url(../Fonts/dm-sans-latin-300-normal.woff2) format('woff2'); }
+@font-face { font-family: DM; font-weight: 400; src: url(../Fonts/dm-sans-latin-400-normal.woff2) format('woff2'); }
+@font-face { font-family: DM; font-weight: 500; src: url(../Fonts/dm-sans-latin-500-normal.woff2) format('woff2'); }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; overflow: hidden; }
+body { background: #060606; color: #e4e4e2; font: 400 11px/1.35 DM, sans-serif; -webkit-font-smoothing: antialiased; }
+.mono { font-family: 'DejaVu Sans Mono', ui-monospace, monospace; }
+.board { height: 100vh; display: grid; grid-template-columns: 384px 384px 384px minmax(0, 1fr); gap: 20px; padding: 16px 18px; }
+.col { min-height: 0; display: flex; flex-direction: column; gap: 8px; }
+.col-title { flex: none; display: flex; align-items: baseline; gap: 9px; font-size: 10px; letter-spacing: 1.2px; text-transform: uppercase; color: #7d7d7b; }
+.col-title b { font-weight: 400; font-size: 14px; letter-spacing: .2px; text-transform: none; color: #ecebe8; }
+.frame { position: relative; flex: 1; min-height: 0; overflow: hidden; }
+
+/* ═════════════ A · LIFELINE ═════════════ */
+.a { background: #101010; border-radius: 4px; border-left: 1px solid #ffffff10; padding: 16px 18px 0 18px; }
+.a-top { display: flex; align-items: center; gap: 10px; font-size: 10px; color: #6f6f6d; }
+.a-top span b { font-weight: 400; color: #a9a9a7; }
+.a-power { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 9px 0 7px; border-radius: 3px; background: #34c75914; color: #8fdca6; font-size: 9.5px; letter-spacing: .8px; text-transform: uppercase; }
+.a-power i { width: 7px; height: 7px; border-radius: 50%; border: 1.5px solid #34c759; box-shadow: 0 0 8px #34c75988; }
+.a-dots { width: 22px; height: 22px; display: grid; place-items: center; color: #8a8a88; font-size: 14px; letter-spacing: 1px; border-radius: 3px; background: #ffffff08; }
+.a-name { margin-top: 12px; font-weight: 300; font-size: 23px; line-height: 1.1; letter-spacing: -.3px; }
+.a-kind { margin-top: 5px; font-size: 10px; color: #7b7b79; }
+.a-live { margin: 18px -18px 0; padding: 14px 18px 12px; background: #0b0b0b; border-top: 1px solid #ffffff0a; border-bottom: 1px solid #ffffff0a; }
+.a-live-row { display: flex; align-items: baseline; gap: 8px; }
+.a-live-row strong { font-weight: 300; font-size: 30px; letter-spacing: -.8px; }
+.a-live-row em { font-style: normal; font-size: 10px; color: #8e8e8c; }
+.a-burst { margin-left: auto; font-size: 10px; color: #dec193; border-bottom: 1px dashed #dec19366; padding-bottom: 1px; }
+.a-hist { margin-top: 10px; height: 44px; display: flex; align-items: flex-end; gap: 2px; -webkit-mask: linear-gradient(#000, #000); }
+.a-hist i { flex: 1; background: linear-gradient(90deg, #7fd8c4, #7aa8e8 40%, #c79bf0 75%, #f0968c); background-size: 2600% 100%; border-radius: 1px 1px 0 0; opacity: .85; }
+.a-axis { margin-top: 5px; display: flex; justify-content: space-between; font-size: 9px; color: #6a6a68; }
+.a-life { position: relative; margin-top: 14px; padding-left: 30px; }
+.a-life::before { content: ''; position: absolute; left: 8px; top: 8px; bottom: -40px; width: 1px; background: linear-gradient(#7fd8c4, #7aa8e8 40%, #c79bf0 75%, #f0968c); opacity: .55; }
+.a-st { position: relative; padding: 0 0 14px; }
+.a-st::before { content: ''; position: absolute; left: -27px; top: 3px; width: 11px; height: 11px; border-radius: 50%; background: #101010; border: 1.5px solid var(--c); }
+.a-st.open::before { background: var(--c); box-shadow: 0 0 0 4px #101010, 0 0 12px var(--c); }
+.a-st-h { display: flex; align-items: baseline; gap: 8px; }
+.a-st-h b { font-weight: 500; font-size: 12px; letter-spacing: .2px; }
+.a-st-h small { font-size: 9px; letter-spacing: 1px; text-transform: uppercase; color: #6a6a68; }
+.a-st-h span { margin-left: auto; font-size: 10px; color: #6a6a68; }
+.a-sum { margin-top: 4px; font-size: 10.5px; color: #9a9a98; }
+.a-rows { margin-top: 8px; }
+.a-row { position: relative; display: flex; align-items: center; height: 29px; border-bottom: 1px solid #ffffff0b; font-size: 11px; color: #a9a9a7; }
+.a-row .v { margin-left: auto; color: #ecebe8; font-variant-numeric: tabular-nums; }
+.a-row .v u { text-decoration: none; color: #6f6f6d; margin-left: 3px; font-size: 9.5px; }
+.a-row.scrub::after { content: ''; position: absolute; left: 0; bottom: -1px; height: 1px; width: var(--f); background: var(--c); }
+.a-row.sub { padding-left: 14px; color: #8a8a88; }
+.a-row.sub::before { content: '└'; position: absolute; left: 0; color: #4a4a48; font-size: 10px; }
+.a-word { margin-left: auto; font-size: 9.5px; letter-spacing: .8px; text-transform: uppercase; }
+.a-word.on { color: #8fdca6; } .a-word.off { color: #5f5f5d; }
+.a-word.on::before { content: '● '; font-size: 7px; vertical-align: 1px; }
+.a-why { margin-left: 8px; font-size: 9px; color: #5f5f5d; }
+.a-lens { margin-left: auto; display: flex; gap: 9px; }
+.a-lens i { width: 18px; height: 18px; border-radius: 50%; border: 1px solid #ffffff22; display: block; }
+.a-lens i.on { box-shadow: 0 0 0 2px #101010, 0 0 0 3px #c79bf0; }
+.a-ramp { margin-left: auto; width: 120px; height: 6px; border-radius: 3px; background: linear-gradient(90deg, #7fd8c4, #7aa8e8 40%, #c79bf0 75%, #f0968c); }
+.a-foot { position: absolute; left: 0; right: 0; bottom: 0; height: 34px; display: flex; align-items: center; padding: 0 18px; background: #0b0b0b; border-top: 1px solid #ffffff0a; font-size: 9.5px; color: #6a6a68; }
+.a-foot b { font-weight: 400; color: #dec193; margin-left: auto; }
+
+/* ═════════════ B · BENCH ═════════════ */
+.b { background: #0c0c0c; border: 1px solid #1d1d1d; display: grid; grid-template-columns: 30px minmax(0, 1fr); }
+.b-rail { background: #090909; border-right: 1px solid #1d1d1d; display: flex; flex-direction: column; padding-top: 146px; }
+.b-rail span { flex: none; height: var(--h); display: grid; place-items: center; writing-mode: vertical-rl; transform: rotate(180deg); font-size: 9px; letter-spacing: 3px; text-transform: uppercase; color: #5a5a58; border-left: 2px solid transparent; }
+.b-rail span.on { color: var(--c); border-left-color: var(--c); background: linear-gradient(270deg, #0000, #ffffff05); }
+.b-main { padding: 12px 12px 0; min-width: 0; }
+.b-plate { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 6px; align-items: stretch; }
+.b-label { padding: 8px 10px; background: #141414; border-radius: 2px; box-shadow: inset 0 1px 0 #ffffff08, inset 0 -1px 0 #00000080; }
+.b-label small { display: block; font-size: 8.5px; letter-spacing: 1.6px; text-transform: uppercase; color: #6a6a68; }
+.b-label b { display: block; margin-top: 3px; font-weight: 400; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.b-key { width: 46px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; background: #161616; border-radius: 2px; box-shadow: inset 0 1px 0 #ffffff0a, 0 2px 0 #000; font-size: 8px; letter-spacing: 1.2px; text-transform: uppercase; color: #8a8a88; }
+.b-led { width: 14px; height: 3px; border-radius: 1px; background: #2a2a2a; }
+.b-led.g { background: #34c759; box-shadow: 0 0 6px #34c759; }
+.b-led.a { background: #e8b86a; box-shadow: 0 0 6px #e8b86a; }
+.b-vu { margin-top: 8px; padding: 9px 10px 8px; background: #070707; border-radius: 2px; box-shadow: inset 0 2px 6px #000; }
+.b-vu-top { display: flex; align-items: baseline; gap: 8px; }
+.b-vu-top strong { font-weight: 300; font-size: 22px; letter-spacing: -.4px; color: #e8f6ec; font-variant-numeric: tabular-nums; }
+.b-vu-top small { font-size: 8.5px; letter-spacing: 1.4px; text-transform: uppercase; color: #6a6a68; }
+.b-vu-top em { margin-left: auto; font-style: normal; font-size: 10px; color: #8a8a88; }
+.b-seg { margin-top: 7px; display: grid; grid-template-columns: repeat(32, 1fr); gap: 2px; }
+.b-seg i { height: 8px; border-radius: 1px; background: #1b1b1b; }
+.b-seg i.g { background: #2fae52; } .b-seg i.y { background: #c9a14a; } .b-seg i.r { background: #c4473a; }
+.b-grp { margin-top: 12px; display: flex; align-items: center; gap: 8px; font-size: 8.5px; letter-spacing: 1.8px; text-transform: uppercase; color: var(--c); }
+.b-grp::after { content: ''; flex: 1; height: 1px; background: repeating-linear-gradient(90deg, #ffffff18 0 2px, #0000 2px 5px); }
+.b-grid { margin-top: 6px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 5px; }
+.b-m { position: relative; min-height: 66px; padding: 7px 8px; background: #141414; border-radius: 2px; box-shadow: inset 0 1px 0 #ffffff08, inset 0 -1px 0 #00000080; }
+.b-m::before, .b-m::after { content: ''; position: absolute; width: 4px; height: 4px; border-color: #ffffff22; border-style: solid; }
+.b-m::before { left: 3px; top: 3px; border-width: 1px 0 0 1px; }
+.b-m::after { right: 3px; bottom: 3px; border-width: 0 1px 1px 0; }
+.b-m.w2 { grid-column: span 2; } .b-m.w4 { grid-column: span 4; }
+.b-m small { display: block; font-size: 8px; letter-spacing: 1.4px; text-transform: uppercase; color: #6a6a68; }
+.b-m b { display: block; margin-top: 4px; font-weight: 300; font-size: 16px; letter-spacing: -.2px; font-variant-numeric: tabular-nums; }
+.b-m b u { text-decoration: none; font-size: 9px; color: #6f6f6d; margin-left: 2px; }
+.b-m .t { font-size: 10.5px; font-weight: 400; color: #c8c8c6; margin-top: 5px; }
+.b-fader { margin-top: 7px; display: grid; grid-template-columns: repeat(16, 1fr); gap: 1px; }
+.b-fader i { height: 5px; background: #222; }
+.b-fader i.on { background: var(--c); opacity: .85; }
+.b-dial { position: absolute; right: 7px; top: 9px; width: 30px; height: 30px; }
+.b-latch { display: flex; align-items: center; gap: 7px; margin-top: 9px; font-size: 10px; color: #c8c8c6; }
+.b-latch.off { color: #5f5f5d; }
+.b-keys { margin-top: 6px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+.b-keys span { height: 34px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; background: #1a1a1a; border-radius: 2px; box-shadow: inset 0 1px 0 #ffffff0a, 0 2px 0 #000; font-size: 8.5px; color: #8a8a88; }
+.b-keys span.on { background: #221e18; color: #dec193; box-shadow: inset 0 1px 0 #ffffff0a, 0 1px 0 #000; }
+.b-keys span i { width: 10px; height: 10px; border-radius: 50%; display: block; }
+.b-ramp { margin-top: 8px; height: 12px; border-radius: 1px; background: linear-gradient(90deg, #7fd8c4, #7aa8e8 40%, #c79bf0 75%, #f0968c); box-shadow: inset 0 0 0 1px #00000060; }
+.b-box { position: absolute; right: 10px; top: 10px; }
+
+/* ═════════════ C · SPEC SHEET ═════════════ */
+.c { background: #121110; border-radius: 2px; padding: 22px 22px 0 22px; }
+.c-top { display: flex; align-items: center; gap: 8px; font-size: 9.5px; letter-spacing: 1.2px; text-transform: uppercase; color: #6f6c66; }
+.c-top .x { margin-left: auto; color: #8a8782; letter-spacing: 2px; font-size: 14px; }
+.c-title { margin-top: 10px; font-weight: 300; font-size: 25px; line-height: 1.12; letter-spacing: -.4px; color: #f0ede6; }
+.c-sub { margin-top: 7px; font-size: 11px; color: #8a8782; }
+.c-sub .tk { font-size: 11px; }
+.c-live { margin-top: 16px; padding: 10px 0; border-top: 1px solid #ffffff0e; border-bottom: 1px solid #ffffff0e; display: flex; align-items: center; gap: 10px; font-size: 12px; color: #b9b5ad; }
+.c-live b { font-weight: 400; color: #f0ede6; }
+.c-live svg { margin-left: auto; }
+.c-p { display: grid; grid-template-columns: 50px minmax(0, 1fr); gap: 0 10px; margin-top: 18px; }
+.c-p > small { padding-top: 4px; font-size: 8.5px; letter-spacing: 1.6px; text-transform: uppercase; color: var(--c); }
+.c-p p { font-weight: 300; font-size: 15.5px; line-height: 1.62; color: #a8a49c; }
+.tk { position: relative; color: #f0ede6; font-weight: 400; white-space: nowrap; border-bottom: 1px solid #dec19366; padding-bottom: 1px; cursor: pointer; }
+.tk.ch::after { content: ''; position: absolute; right: -4px; top: 0; width: 4px; height: 4px; border-radius: 50%; background: #e8b86a; }
+.tk.open { background: #dec1931c; border-bottom-color: #dec193; border-radius: 2px 2px 0 0; }
+.tk.off { color: #8a8782; border-bottom-style: dashed; border-bottom-color: #ffffff30; }
+.tk-ramp { display: inline-block; width: 46px; height: 7px; border-radius: 4px; vertical-align: 2px; background: linear-gradient(90deg, #7fd8c4, #7aa8e8 40%, #c79bf0 75%, #f0968c); }
+.c-pop { position: absolute; z-index: 5; left: 136px; top: 524px; width: 232px; padding: 12px 13px 11px; background: #1c1a17; border: 1px solid #dec19340; border-radius: 3px; box-shadow: 0 18px 40px #000a; }
+.c-pop-h { display: flex; align-items: baseline; font-size: 9px; letter-spacing: 1.2px; text-transform: uppercase; color: #8a8782; }
+.c-pop-h b { margin-left: auto; font-weight: 300; font-size: 20px; letter-spacing: -.3px; text-transform: none; color: #f0ede6; }
+.c-ruler { position: relative; margin-top: 10px; height: 24px; background: repeating-linear-gradient(90deg, #ffffff30 0 1px, #0000 1px 9px) bottom / 100% 7px no-repeat, repeating-linear-gradient(90deg, #ffffff50 0 1px, #0000 1px 45px) bottom / 100% 12px no-repeat; }
+.c-ruler i { position: absolute; left: 25%; bottom: 0; width: 1.5px; height: 24px; background: #dec193; }
+.c-ruler s { position: absolute; left: 20%; bottom: 0; width: 1px; height: 18px; background: #ffffff60; }
+.c-pop-f { margin-top: 8px; display: flex; font-size: 9.5px; color: #8a8782; }
+.c-pop-f span:last-child { margin-left: auto; color: #dec193; }
+.c-foot { position: absolute; left: 22px; right: 22px; bottom: 0; height: 40px; display: flex; align-items: center; gap: 14px; border-top: 1px solid #ffffff0e; font-size: 10.5px; color: #8a8782; }
+.c-foot b { font-weight: 400; color: #dec193; }
+.c-foot span:last-child { margin-left: auto; }
+
+/* ═════════════ NOTES ═════════════ */
+.notes { padding: 2px 4px 0 6px; overflow: hidden; }
+.notes h1 { font-weight: 300; font-size: 21px; letter-spacing: -.2px; color: #ecebe8; }
+.notes p { margin-top: 7px; font-size: 10.5px; line-height: 1.5; color: #8e8e8c; }
+.notes h2 { margin-top: 18px; font-weight: 400; font-size: 9px; letter-spacing: 1.4px; text-transform: uppercase; color: #8e8e8c; }
+.cats { margin-top: 8px; display: grid; grid-template-columns: 8px auto minmax(0, 1fr); gap: 6px 8px; align-items: baseline; font-size: 10.5px; color: #8e8e8c; }
+.cats i { width: 7px; height: 7px; border-radius: 50%; background: var(--c); align-self: center; }
+.cats b { font-weight: 500; color: #ecebe8; }
+.map { margin-top: 8px; font-size: 10.5px; color: #8e8e8c; }
+.map div { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid #ffffff0a; }
+.map div span:last-child { color: #c8c8c6; }
+.dir { margin-top: 10px; font-size: 10.5px; line-height: 1.5; color: #8e8e8c; }
+.dir b { color: #ecebe8; font-weight: 500; }
+</style>
+</head>
+<body>
+<div class="board">
+
+<!-- ════════ A ════════ -->
+<section class="col">
+    <div class="col-title">A <b>Lifeline</b> one particle's life, top to bottom</div>
+    <div class="frame a">
+        <div class="a-top"><span>Effects / <b>Silk &amp; Curl</b></span><span class="a-power"><i></i>Running</span><span class="a-dots">···</span></div>
+        <div class="a-name">Object Surface Pour Ribbons</div>
+        <div class="a-kind">VFX · additive · from the Silk &amp; Curl preset</div>
+
+        <div class="a-live">
+            <div class="a-live-row"><strong>3,186</strong><em>alive · 94% of pool</em><span class="a-burst">↯ Burst</span></div>
+            <div class="a-hist" id="hist"></div>
+            <div class="a-axis"><span>born</span><span>age of every live particle</span><span>gone · 5.2 s</span></div>
+        </div>
+
+        <div class="a-life">
+            <div class="a-st" style="--c:#7fd8c4">
+                <div class="a-st-h"><b>Emit</b><small>birth</small><span>›</span></div>
+                <div class="a-sum">Object surface, 1.65 m box · 620 per second · pool 3,400</div>
+            </div>
+            <div class="a-st open" style="--c:#7aa8e8">
+                <div class="a-st-h"><b>Move</b><small>flight</small><span>⌄</span></div>
+                <div class="a-rows">
+                    <div class="a-row scrub" style="--f:52%">Curl flow<span class="v">1.60<u>m/s</u></span></div>
+                    <div class="a-row">Wind-driven<span class="a-word on">on</span></div>
+                    <div class="a-row sub scrub" style="--f:25%">coupling<span class="v">0.25<u>/s</u></span></div>
+                    <div class="a-row scrub" style="--f:0%">Gravity<span class="v">0.00<u>g</u></span></div>
+                    <div class="a-row scrub" style="--f:30%">Drag<span class="v">0.30</span></div>
+                </div>
+            </div>
+            <div class="a-st open" style="--c:#c79bf0">
+                <div class="a-st-h"><b>Look</b><small>skin</small><span>⌄</span></div>
+                <div class="a-rows">
+                    <div class="a-row">Bokeh<span class="a-lens"><i class="on" style="background:radial-gradient(circle at 40% 40%,#ddd 0 3px,#555 4px 7px,#0000 8px)"></i><i style="background:radial-gradient(#eee 0 2px,#0000 3px)"></i><i style="background:radial-gradient(#bbb,#0000 70%)"></i><i style="background:radial-gradient(#0000 0 5px,#ddd 6px 7px,#0000 8px)"></i></span></div>
+                    <div class="a-row">Additive glow<span class="a-word on">on</span></div>
+                    <div class="a-row">Colour over life<span class="a-ramp"></span></div>
+                </div>
+            </div>
+            <div class="a-st" style="--c:#f0968c">
+                <div class="a-st-h"><b>End</b><small>death</small><span>›</span></div>
+                <div class="a-sum">Lives 3.4–5.2 s · fades 0.8 s · passes the floor · drops new when full</div>
+            </div>
+        </div>
+        <div class="a-foot">2 changes from preset<b>Revert</b></div>
+    </div>
+</section>
+
+<!-- ════════ B ════════ -->
+<section class="col">
+    <div class="col-title">B <b>Bench</b> a rack of modules, all on one screen</div>
+    <div class="frame b">
+        <div class="b-rail">
+            <span class="on" style="--c:#7fd8c4;--h:94px">Emit</span>
+            <span style="--c:#7aa8e8;--h:95px">Move</span>
+            <span style="--c:#c79bf0;--h:166px">Look</span>
+            <span style="--c:#f0968c;--h:86px">End</span>
+        </div>
+        <div class="b-main">
+            <div class="b-plate">
+                <div class="b-label"><small>Silk &amp; Curl · VFX additive</small><b>Object Surface Pour Ribbons</b></div>
+                <div class="b-key"><span class="b-led g"></span>On</div>
+                <div class="b-key"><span style="font-size:13px;letter-spacing:1px;color:#aaa">···</span>Node</div>
+            </div>
+            <div class="b-vu">
+                <div class="b-vu-top"><strong>3,186</strong><small>alive</small><em>620 /s in · 3,400 max</em></div>
+                <div class="b-seg" id="seg"></div>
+            </div>
+
+            <div class="b-grp" style="--c:#7fd8c4">Emit</div>
+            <div class="b-grid" style="--c:#7fd8c4">
+                <div class="b-m w2"><small>Source</small><div class="t">Object surface</div><div class="t" style="color:#7b7b79;margin-top:2px">box 1.65 m</div>
+                    <svg class="b-box" width="34" height="34" viewBox="0 0 34 34" fill="none" stroke="#7fd8c4" stroke-width="1" opacity=".7"><path d="M6 11l11-6 11 6v13l-11 6-11-6z"/><path d="M6 11l11 6 11-6M17 17v13" opacity=".6"/></svg></div>
+                <div class="b-m"><small>Rate</small><b>620<u>/s</u></b><div class="b-fader" data-on="10"></div></div>
+                <div class="b-m"><small>Pool</small><b>3.4<u>k</u></b><div class="b-fader" data-on="7"></div></div>
+            </div>
+
+            <div class="b-grp" style="--c:#7aa8e8">Move</div>
+            <div class="b-grid" style="--c:#7aa8e8">
+                <div class="b-m w2"><small>Curl flow</small><b>1.60<u>m/s</u></b>
+                    <svg class="b-dial" viewBox="0 0 30 30"><circle cx="15" cy="15" r="11" fill="none" stroke="#242424" stroke-width="3" stroke-dasharray="52 70" transform="rotate(135 15 15)"/><circle cx="15" cy="15" r="11" fill="none" stroke="#7aa8e8" stroke-width="3" stroke-dasharray="27 70" transform="rotate(135 15 15)"/></svg>
+                    <div class="b-latch"><span class="b-led g"></span>Wind-driven · 0.25</div></div>
+                <div class="b-m"><small>Gravity</small><b>0.00<u>g</u></b><div class="b-fader" data-on="0"></div></div>
+                <div class="b-m"><small>Drag</small><b>0.30</b><div class="b-fader" data-on="5"></div></div>
+            </div>
+
+            <div class="b-grp" style="--c:#c79bf0">Look</div>
+            <div class="b-grid" style="--c:#c79bf0">
+                <div class="b-m w4"><small>Bokeh aperture</small>
+                    <div class="b-keys">
+                        <span class="on"><i style="background:radial-gradient(circle at 40% 40%,#eee 0 2px,#666 3px 5px,#0000 6px)"></i>Mixed</span>
+                        <span><i style="background:radial-gradient(#eee 0 2px,#0000 3px)"></i>Sharp</span>
+                        <span><i style="background:radial-gradient(#bbb,#0000 70%)"></i>Creamy</span>
+                        <span><i style="background:radial-gradient(#0000 0 3px,#ddd 3.5px 4.5px,#0000 5px)"></i>Rim</span>
+                    </div></div>
+                <div class="b-m w2"><small>Colour over life</small><div class="b-ramp"></div></div>
+                <div class="b-m"><small>Glow</small><div class="b-latch"><span class="b-led g"></span>Add</div></div>
+                <div class="b-m"><small>Size</small><b>0.6–1.4</b></div>
+            </div>
+
+            <div class="b-grp" style="--c:#f0968c">End</div>
+            <div class="b-grid" style="--c:#f0968c">
+                <div class="b-m w2"><small>Lifetime</small><b>3.4–5.2<u>s</u></b><div class="b-fader" data-on="9" data-from="5"></div></div>
+                <div class="b-m"><small>Fade</small><b>0.8<u>s</u></b></div>
+                <div class="b-m"><small>Floor</small><div class="b-latch off"><span class="b-led"></span>Pass</div></div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ════════ C ════════ -->
+<section class="col">
+    <div class="col-title">C <b>Spec sheet</b> the effect reads as one description</div>
+    <div class="frame c">
+        <div class="c-top"><span>Silk &amp; Curl</span><span>·</span><span>VFX</span><span class="x">···</span></div>
+        <div class="c-title">Object Surface Pour Ribbons</div>
+        <div class="c-sub">Additive, currently <span class="tk">running</span></div>
+        <div class="c-live"><span><b>3,186</b> alive, <b>94%</b> of the pool</span>
+            <svg width="80" height="18" viewBox="0 0 80 18"><path d="M0 15 C10 14 16 11 24 9 S40 5 50 5 S70 4 80 3" fill="none" stroke="#8fdca6" stroke-width="1.3"/></svg></div>
+
+        <div class="c-p" style="--c:#7fd8c4"><small>Emit</small>
+            <p>Pour from the <span class="tk">object surface</span> inside a <span class="tk">1.65 m box</span>, <span class="tk ch">620</span> every second, keeping at most <span class="tk">3,400</span> alive.</p></div>
+        <div class="c-p" style="--c:#7aa8e8"><small>Move</small>
+            <p>Drift along a <span class="tk">curl</span> at <span class="tk">1.6 m/s</span>, <span class="tk">pushed by wind</span> at <span class="tk ch">0.25</span>, with <span class="tk off">no gravity</span> and <span class="tk">0.30</span> drag.</p></div>
+        <div class="c-p" style="--c:#c79bf0"><small>Look</small>
+            <p>Draw as <span class="tk">mixed bokeh</span> with <span class="tk">additive glow</span>, shifting <span class="tk"><span class="tk-ramp"></span></span> from birth to death, sized <span class="tk">0.6–1.4</span>.</p></div>
+        <div class="c-p" style="--c:#f0968c"><small>End</small>
+            <p>Live <span class="tk">3.4–5.2 s</span>, fade over the last <span class="tk ch open">0.8 s</span> and <span class="tk off">pass through</span> the floor. When full, <span class="tk">drop new ones</span>.</p></div>
+
+        <div class="c-pop">
+            <div class="c-pop-h">Fade out<b>0.8 s</b></div>
+            <div class="c-ruler"><s></s><i></i></div>
+            <div class="c-pop-f"><span>drag to change · preset 0.6 s</span><span>Reset</span></div>
+        </div>
+        <div class="c-foot"><b>↯ Burst</b><span>2 changes from preset</span><span>Revert</span></div>
+    </div>
+</section>
+
+<!-- ════════ NOTES ════════ -->
+<section class="notes">
+    <h1>Three new directions</h1>
+    <p>None of these use the current cards, switches, sliders or tabs. Each one has its own surfaces, controls and layout. Pick one, or tell me what to mix.</p>
+
+    <h2>New categories (all three)</h2>
+    <div class="cats">
+        <i style="--c:#7fd8c4"></i><b>Emit</b><span>where and how many: source, rate, pool</span>
+        <i style="--c:#7aa8e8"></i><b>Move</b><span>flow, wind, gravity, drag</span>
+        <i style="--c:#c79bf0"></i><b>Look</b><span>bokeh, glow, colour, size</span>
+        <i style="--c:#f0968c"></i><b>End</b><span>lifetime, fade, floor, when full</span>
+    </div>
+    <p>Grouped by a particle's life, birth to death. The live readout is pinned at the top, so there is no Overview page any more.</p>
+
+    <h2>Old tabs → new</h2>
+    <div class="map">
+        <div><span>Overview</span><span>gone · live readout on top</span></div>
+        <div><span>Source</span><span>Emit</span></div>
+        <div><span>Motion &amp; FX</span><span>Move + Look</span></div>
+        <div><span>Lifetime, pool, floor</span><span>End</span></div>
+        <div><span>Modules &amp; Record</span><span>Record → viewport</span></div>
+        <div><span>Duplicate, Delete, Reset</span><span>··· menu</span></div>
+    </div>
+
+    <h2>What is new in each</h2>
+    <div class="dir"><b>A Lifeline.</b> No cards. One colour line runs from birth to death; each stage opens in place or shows a one-line summary. Rows are the sliders (the hairline fills). The live chart shows the age of every particle.</div>
+    <div class="dir"><b>B Bench.</b> Square modules on a 4-column rack, LED latches instead of switches, step faders, a level meter. Category rail on the left edge. Everything fits without scrolling.</div>
+    <div class="dir"><b>C Spec sheet.</b> Settings written as sentences. Each underlined value opens a ruler to drag. Amber dots mark changes from the preset.</div>
+</section>
+</div>
+<script>
+const hist = document.getElementById('hist');
+const n = 34;
+for (let k = 0; k < n; k++) {
+    const t = k / (n - 1);
+    const h = t < .62 ? 70 + 22 * Math.sin(k * 1.7) * .3 + 10 : 80 * Math.max(0, 1 - (t - .62) / .38) + 6;
+    const i = document.createElement('i'); i.style.height = h + '%'; i.style.backgroundPosition = (t * 100) + '% 0'; hist.appendChild(i);
+}
+const seg = document.getElementById('seg');
+for (let k = 0; k < 32; k++) { const i = document.createElement('i'); if (k < 30) i.className = k < 22 ? 'g' : k < 28 ? 'y' : 'r'; seg.appendChild(i); }
+document.querySelectorAll('.b-fader').forEach(f => {
+    const on = +f.dataset.on, from = +(f.dataset.from || 0);
+    for (let k = 0; k < 16; k++) { const i = document.createElement('i'); if (k >= from && k < from + on) i.className = 'on'; f.appendChild(i); }
+});
+</script>
+</body>
+</html>
