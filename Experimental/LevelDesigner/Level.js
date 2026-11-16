@@ -6,15 +6,18 @@ import { THREE } from '../Shared/Studio/Render.js';
 import { readGeometry, formatOf } from '../Shared/GeometryCompile/Engine/ImportFormats.js';
 import { Lobby, defaultLobbySettings } from './Lobby.js';
 import { ControlVehicle, geometryFromRaw } from './Vehicle.js';
+import { PROPS, SURFACES, defaultParams, surfaceMaterial } from './Props.js';
 import { Configurator, DEFAULT_HOTSPOTS, ZONES, applyDefaultFinish } from './Configurator.js';
 
-export const STORAGE_KEY = 'Frontier.LevelDesigner.Lobby.v1';
+export const STORAGE_KEY = 'Frontier.LevelDesigner.Lobby.v1';      // single-level save from the first build (migrated)
+export const LIBRARY_KEY = 'Frontier.LevelDesigner.Levels.v1';
 
 export const GROUPS = [
-  { id: 'environment', label: 'Environment', icon: 'sun', note: 'Sky, sun, floor and walls' },
+  { id: 'environment', label: 'Environment', icon: 'sun', note: 'Sky, sun, floor, walls, turntable' },
   { id: 'vehicle', label: 'Vehicle', icon: 'vehicle', note: 'Configurable car and its dots' },
+  { id: 'props', label: 'Props', icon: 'plinth', note: 'Lobby pieces · resize, restyle or swap' },
   { id: 'lights', label: 'Lights', icon: 'bulb', note: 'Added lights' },
-  { id: 'custom', label: 'Your placements', icon: 'sparkle', note: 'Premium · your own shapes and models' },
+  { id: 'custom', label: 'Your models', icon: 'sparkle', note: 'Premium · imported models' },
 ];
 
 // Things that can be added. `premium` ones need the Premium tier.
@@ -23,28 +26,32 @@ export const ADDABLE = [
   { kind: 'light-spot', label: 'Spot light', icon: 'spot', group: 'Lights', note: 'Cone with soft edge' },
   { kind: 'light-strip', label: 'Light strip', icon: 'strip', group: 'Lights', note: 'Glowing bar with a soft glow' },
   { kind: 'hotspot', label: 'Configurator dot', icon: 'dot', group: 'Vehicle', note: 'Another dot on the car' },
-  { kind: 'shape-plinth', label: 'Plinth', icon: 'plinth', group: 'Lobby pieces', premium: true, note: 'Round display base' },
-  { kind: 'shape-block', label: 'Block', icon: 'cube', group: 'Lobby pieces', premium: true, note: 'Box, any size' },
-  { kind: 'shape-sphere', label: 'Sphere', icon: 'sphere', group: 'Lobby pieces', premium: true, note: 'Ball or dome' },
-  { kind: 'shape-panel', label: 'Wall panel', icon: 'panel', group: 'Lobby pieces', premium: true, note: 'Thin standing slab' },
-  { kind: 'shape-arch', label: 'Arch', icon: 'arch', group: 'Lobby pieces', premium: true, note: 'Doorway frame' },
+  ...Object.entries(PROPS).map(([type, d]) => ({ kind: `prop:${type}`, label: d.label, icon: d.icon, group: 'Props', note: d.note })),
   { kind: 'import', label: 'Import model…', icon: 'upload', group: 'Your models', premium: true, note: 'OBJ · glTF · GLB · STL · PLY · FCT1' },
 ];
 
-const SHAPES = {
-  'shape-plinth': { name: 'Plinth', make: () => new THREE.CylinderGeometry(0.9, 0.9, 0.5, 64).translate(0, 0.25, 0), colour: '#f2f3f5' },
-  'shape-block': { name: 'Block', make: () => new THREE.BoxGeometry(1.2, 1.2, 1.2).translate(0, 0.6, 0), colour: '#e9ecf0' },
-  'shape-sphere': { name: 'Sphere', make: () => new THREE.SphereGeometry(0.6, 48, 24).translate(0, 0.6, 0), colour: '#dfe3e8' },
-  'shape-panel': { name: 'Wall panel', make: () => new THREE.BoxGeometry(3, 3.2, 0.18).translate(0, 1.6, 0), colour: '#f1f3f6' },
-  'shape-arch': { name: 'Arch', make: archFrame, colour: '#f1f3f6' },
+// Level templates: what a new level starts with.
+export const TEMPLATES = {
+  lobby: {
+    label: 'Lobby', note: 'Daylight cove, two leaning slabs, turntable', preset: 'cove',
+    props: [
+      { type: 'panel', name: 'Slab west', position: [-7.6, 0, 3.4], rotationY: 2.12, params: { width: 4.2, height: 6.2, thickness: 0.55, lean: -9 } },
+      { type: 'panel', name: 'Slab east', position: [6.4, 0, -6.2], rotationY: -0.42, params: { width: 7.5, height: 2.1, thickness: 0.5, lean: 0 } },
+    ],
+  },
+  gallery: {
+    label: 'Gallery', note: 'Overcast concrete room, stage, barriers, planters', preset: 'overcast',
+    props: [
+      { type: 'stage', name: 'Stage', position: [0, 0, 0], params: { width: 9, depth: 6, height: 0.03, corner: 1 }, surface: 'concrete' },
+      { type: 'barrier', name: 'Barrier front', position: [0, 0, 3.6], params: { span: 4.4 } },
+      { type: 'planter', name: 'Planter west', position: [-6.4, 0, -3.2] },
+      { type: 'planter', name: 'Planter east', position: [6.4, 0, -3.2] },
+      { type: 'screen', name: 'Wall screen', position: [0, 0, -7.4], params: { width: 4.2, height: 2.2, lift: 1.2 } },
+    ],
+  },
+  studio: { label: 'Night studio', note: 'Dark room with light arches', preset: 'studio', props: [] },
+  empty: { label: 'Empty cove', note: 'Walls, floor and the car only', preset: 'cove', props: [], turntable: false },
 };
-
-function archFrame() {
-  const s = new THREE.Shape();
-  s.moveTo(-1.6, 0); s.lineTo(-1.6, 2.2); s.absarc(0, 2.2, 1.6, Math.PI, 0, true); s.lineTo(1.6, 0); s.lineTo(1.2, 0); s.lineTo(1.2, 2.2);
-  s.absarc(0, 2.2, 1.2, 0, Math.PI, false); s.lineTo(-1.2, 0); s.lineTo(-1.6, 0);
-  return new THREE.ExtrudeGeometry(s, { depth: 0.3, bevelEnabled: false, curveSegments: 32 }).translate(0, 0, -0.15);
-}
 
 const r3 = (v) => [+v.x.toFixed(4), +v.y.toFixed(4), +v.z.toFixed(4)];
 let serial = 1;
@@ -73,7 +80,13 @@ export class Level {
   on(fn) { this.listeners.add(fn); return () => this.listeners.delete(fn); }
   changed(what = 'scene') { for (const fn of this.listeners) fn(what); this.queueSave(); }
 
-  async load(report) {
+  // id: library entry to open. A saved snapshot wins; otherwise the entry's template dresses a fresh level.
+  async load(report, id = null) {
+    const library = readLibrary();
+    this.id = id && library.levels[id] ? id : library.active;
+    const entry = library.levels[this.id];
+    this.template = entry.template || 'lobby';
+    this.name = entry.name || 'Lobby';
     await this.vehicle.load(report);
     this.vehicle.root.position.y = this.lobby.turntableHeight;
     this.stage.content.add(this.vehicle.root);
@@ -81,8 +94,32 @@ export class Level {
     applyDefaultFinish(this.vehicle);
     this.registerBuiltIns();
     for (const def of DEFAULT_HOTSPOTS) this.addHotspot(def, { silent: true });
-    const saved = this.readSaved();
-    if (saved) { try { this.restore(saved); } catch (e) { console.warn('Saved level ignored', e); } }
+    let restored = false;
+    if (entry.snapshot) { try { this.restore(entry.snapshot); restored = true; } catch (e) { console.warn('Saved level ignored', e); } }
+    if (!restored) this.dress(this.template);
+    library.active = this.id;
+    writeLibrary(library);
+  }
+
+  // A fresh level from a template: environment preset and starting props.
+  dress(templateId) {
+    const t = TEMPLATES[templateId] || TEMPLATES.lobby;
+    this.lobby.usePreset(t.preset);
+    for (const prop of t.props) this.addProp(prop.type, { ...prop, silent: true });
+    if (t.turntable === false) { this.lobby.turntable.visible = false; }
+    this.seatVehicle();
+  }
+
+  // Large props block the view like walls do; small ones (plinths, lamps, benches) never push the camera in.
+  occluders() {
+    const list = [];
+    if (this.lobby.walls.visible) list.push(this.lobby.walls);
+    for (const p of this.byGroup('props')) {
+      if (!p.object.visible || !this.custom.visible) continue;
+      const box = new THREE.Box3().setFromObject(p.object);
+      if (box.max.y - box.min.y > 1.6 && Math.max(box.max.x - box.min.x, box.max.z - box.min.z) > 1.2) list.push(p.object);
+    }
+    return list;
   }
 
   // ------------------------------------------------------------------------------------------ built-ins
@@ -92,8 +129,7 @@ export class Level {
     env('sky', 'sky', 'Sky', L.sky, { icon: 'sky', note: 'Gradient dome' });
     env('sun', 'sun', 'Sun', L.sun, { icon: 'sun', note: 'Shadow-casting key light' });
     env('floor', 'floor', 'Floor', L.floor, { icon: 'floor', note: 'Glossy reflective floor' });
-    env('walls', 'walls', 'Cyclorama', L.walls, { icon: 'wall', note: 'Curved wall with floor cove', pick: [L.walls] });
-    L.slabs.forEach((s, i) => env(`slab-${i}`, 'slab', s.name, s, { icon: 'panel', note: 'Leaning slab', movable: true, rotatable: true, pick: [s] }));
+    env('walls', 'walls', 'Cyclorama', L.walls, { icon: 'wall', note: 'Curved wall with floor cove · turn to aim the opening', movable: true, rotatable: true, pick: [L.walls] });
     env('turntable', 'turntable', 'Turntable', L.turntable, { icon: 'turntable', note: 'Display disc with a light ring', movable: true, pick: [L.disc] });
     env('arches', 'arches', 'Light arches', L.arches, { icon: 'strip', note: 'Arched light strips' });
     this.placements.push({ id: 'vehicle', kind: 'vehicle', name: 'ControlVehicle', group: 'vehicle', object: this.vehicle.root, builtIn: true, icon: 'vehicle', note: 'Body · 4 wheels · rear wing', movable: true, rotatable: true, pick: this.vehicle.meshes });
@@ -171,24 +207,83 @@ export class Level {
     this.changed('edit');
   }
 
-  // ---------------------------------------------------------------------------------------------- shapes
-  addShape(kind, opts = {}) {
-    const def = SHAPES[kind];
-    const mat = new THREE.MeshPhysicalMaterial({ color: opts.colour || def.colour, roughness: opts.roughness ?? 0.6, metalness: opts.metalness ?? 0, clearcoat: 0.2 });
-    const mesh = new THREE.Mesh(def.make(), mat);
-    mesh.castShadow = true; mesh.receiveShadow = true;
+  // ----------------------------------------------------------------------------------------------- props
+  // A prop is a holder (transform, picked as one) around the built geometry; edits rebuild the inside only.
+  addProp(type, opts = {}) {
+    const def = PROPS[type];
+    if (!def) return null;
     const holder = new THREE.Group();
-    holder.add(mesh);
     holder.position.set(...(opts.position || [-4.2, 0, 2.2]));
     if (opts.rotationY) holder.rotation.y = opts.rotationY;
     if (opts.scale) holder.scale.set(...opts.scale);
-    holder.name = def.name;
     this.custom.add(holder);
-    const p = { id: opts.id || newId(kind), kind, name: opts.name || def.name, group: 'custom', object: holder, mesh, icon: ADDABLE.find((a) => a.kind === kind).icon, note: 'Lobby piece', movable: true, rotatable: true, scalable: true, removable: true, premium: true, pick: [mesh] };
-    p.data = { colour: '#' + mat.color.getHexString(), roughness: mat.roughness, metalness: mat.metalness };
+    const p = { id: opts.id || newId('prop'), kind: 'prop', name: opts.name || def.label, group: 'props', object: holder, icon: def.icon, movable: true, rotatable: true, scalable: true, removable: true, pick: [holder] };
+    const surfaceId = opts.surface && SURFACES[opts.surface] ? opts.surface : opts.surface === 'custom' ? 'custom' : def.surface;
+    const base = SURFACES[surfaceId] || SURFACES[def.surface];
+    p.data = {
+      type,
+      params: { ...defaultParams(type), ...(opts.params || {}) },
+      surface: surfaceId,
+      colour: opts.colour || base.colour, roughness: opts.roughness ?? base.roughness, metalness: opts.metalness ?? base.metalness,
+    };
+    if (opts.shown === false) holder.visible = false;
+    this.buildProp(p);
     this.placements.push(p);
     if (!opts.silent) this.changed('add');
     return p;
+  }
+
+  buildProp(p) {
+    const def = PROPS[p.data.type];
+    for (const c of [...p.object.children]) { p.object.remove(c); c.traverse((o) => { if (o.isMesh) { o.geometry.dispose(); } }); }
+    const preset = SURFACES[p.data.surface] || {};
+    const mat = surfaceMaterial({ ...preset, colour: p.data.colour, roughness: p.data.roughness, metalness: p.data.metalness });
+    p.material = mat;
+    const built = def.build(p.data.params, mat, p);
+    p.object.add(built);
+    p.object.name = p.name;
+    p.icon = def.icon;
+    p.note = `${def.label} · ${Object.entries(def.params).slice(0, 3).map(([k, d]) => `${(+p.data.params[k]).toFixed(d.step < 0.1 ? 2 : 1)}${d.unit === 'm' ? '' : d.unit}`).join(' × ')}${def.params.width || def.params.radius ? ' m' : ''}`;
+  }
+
+  setPropType(p, type) {
+    if (!PROPS[type]) return;
+    const keepName = p.name !== PROPS[p.data.type].label;
+    p.data.type = type;
+    p.data.params = defaultParams(type);
+    if (!keepName) p.name = PROPS[type].label;
+    this.buildProp(p);
+    this.changed('rename');
+  }
+
+  setPropParam(p, key, value) { p.data.params[key] = value; this.buildProp(p); this.changed('edit'); }
+
+  setPropSurface(p, surfaceId) {
+    const s = SURFACES[surfaceId];
+    if (!s) return;
+    Object.assign(p.data, { surface: surfaceId, colour: s.colour, roughness: s.roughness, metalness: s.metalness });
+    this.buildProp(p);
+    this.changed('edit');
+  }
+
+  // Surface sliders/colour on a prop (or an imported model).
+  setSurface(p, key, value) {
+    p.data[key] = value;
+    if (p.kind === 'prop') {
+      p.data.surface = 'custom';
+      const m = p.material;
+      if (key === 'colour') m.color.set(value);
+      if (key === 'roughness') m.roughness = value;
+      if (key === 'metalness') m.metalness = value;
+    } else {
+      const mats = Array.isArray(p.mesh.material) ? p.mesh.material : [p.mesh.material];
+      for (const m of mats) {
+        if (key === 'colour') m.color.set(value);
+        if (key === 'roughness') m.roughness = value;
+        if (key === 'metalness') m.metalness = value;
+      }
+    }
+    this.changed('edit');
   }
 
   async importFile(file) {
@@ -220,17 +315,6 @@ export class Level {
     return p;
   }
 
-  setSurface(p, key, value) {
-    p.data[key] = value;
-    const mats = Array.isArray(p.mesh.material) ? p.mesh.material : [p.mesh.material];
-    for (const m of mats) {
-      if (key === 'colour') m.color.set(value);
-      if (key === 'roughness') m.roughness = value;
-      if (key === 'metalness') m.metalness = value;
-    }
-    this.changed('edit');
-  }
-
   remove(p) {
     if (!p || !p.removable && p.kind !== 'hotspot') return false;
     if (p.kind === 'hotspot') this.configurator.remove(p.spot);
@@ -245,7 +329,7 @@ export class Level {
 
   duplicate(p) {
     if (p.kind.startsWith('light-')) return this.addLight(p.kind, { ...p.data, position: r3(p.object.position.clone().add(new THREE.Vector3(0.6, 0, 0.6))), rotationY: p.object.rotation.y });
-    if (p.kind.startsWith('shape-')) return this.addShape(p.kind, { ...p.data, position: r3(p.object.position.clone().add(new THREE.Vector3(0.8, 0, 0.8))), rotationY: p.object.rotation.y, scale: r3(p.object.scale) });
+    if (p.kind === 'prop') return this.addProp(p.data.type, { ...JSON.parse(JSON.stringify(p.data)), name: p.name, position: r3(p.object.position.clone().add(new THREE.Vector3(0.8, 0, 0.8))), rotationY: p.object.rotation.y, scale: r3(p.object.scale) });
     if (p.kind === 'hotspot') return this.addHotspot({ id: newId('hs'), zone: p.spot.zone, anchor: r3(p.object.position.clone().add(new THREE.Vector3(-0.3, 0, 0))), view: { ...p.spot.view } });
     return null;
   }
@@ -320,19 +404,20 @@ export class Level {
       if (p.movable && p.builtIn && p.kind !== 'hotspot') transforms[p.id] = { position: r3(p.object.position), rotationY: +p.object.rotation.y.toFixed(4) };
     }
     return {
-      format: 'Frontier.Level', version: 1, name: this.name, tier: this.tier,
+      format: 'Frontier.Level', version: 2, name: this.name, template: this.template, tier: this.tier,
       lobby: this.lobby.settings,
       vehicle: { finish: v.finish, colours },
       transforms, visibility,
       hotspots: this.byGroup('vehicle').filter((p) => p.kind === 'hotspot').map((p) => ({ id: p.id, zone: p.spot.zone, anchor: r3(p.object.position), view: p.spot.view })),
       lights: this.byGroup('lights').map((p) => ({ id: p.id, kind: p.kind, name: p.name, position: r3(p.object.position), rotationY: p.object.rotation.y, ...p.data })),
-      shapes: this.byGroup('custom').filter((p) => !p.session).map((p) => ({ id: p.id, kind: p.kind, name: p.name, position: r3(p.object.position), rotationY: p.object.rotation.y, scale: r3(p.object.scale), ...p.data })),
+      props: this.byGroup('props').map((p) => ({ id: p.id, name: p.name, type: p.data.type, params: p.data.params, surface: p.data.surface, colour: p.data.colour, roughness: p.data.roughness, metalness: p.data.metalness, position: r3(p.object.position), rotationY: +p.object.rotation.y.toFixed(4), scale: r3(p.object.scale), shown: p.object.visible })),
     };
   }
 
   restore(s) {
     if (!s || s.format !== 'Frontier.Level') return;
-    this.name = s.name || 'Lobby';
+    this.name = s.name || this.name;
+    this.template = s.template || this.template;
     this.tier = s.tier === 'premium' ? 'premium' : 'basic';
     const L = this.lobby;
     for (const k of Object.keys(L.settings)) if (s.lobby && s.lobby[k] !== undefined) L.settings[k] = typeof L.settings[k] === 'object' ? { ...L.settings[k], ...s.lobby[k] } : s.lobby[k];
@@ -347,7 +432,10 @@ export class Level {
       for (const h of s.hotspots) if (ZONES[h.zone]) this.addHotspot(h, { silent: true });
     }
     for (const l of s.lights || []) this.addLight(l.kind, { ...l, silent: true });
-    for (const sh of s.shapes || []) if (SHAPES[sh.kind]) this.addShape(sh.kind, { ...sh, silent: true });
+    // Version 1 saves kept premium "shapes"; they come back as props of the same type.
+    const legacy = (s.shapes || []).map((sh) => ({ ...sh, type: String(sh.kind).replace('shape-', ''), surface: 'custom' }));
+    for (const pr of [...(s.props || []), ...legacy]) if (PROPS[pr.type]) this.addProp(pr.type, { ...pr, silent: true });
+    if (!s.props) for (const prop of (TEMPLATES[s.template] || TEMPLATES.lobby).props) this.addProp(prop.type, { ...prop, silent: true });
     for (const [id, t] of Object.entries(s.transforms || {})) {
       const p = this.get(id);
       if (!p) continue;
@@ -363,16 +451,49 @@ export class Level {
     L.queueEnvironment();
   }
 
-  readSaved() {
-    try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null'); } catch { return null; }
+  save() {
+    const library = readLibrary();
+    const entry = library.levels[this.id] || (library.levels[this.id] = { template: this.template });
+    entry.name = this.name;
+    entry.snapshot = this.snapshot();
+    entry.summary = { preset: this.lobby.settings.preset, props: this.byGroup('props').length, dots: this.counts.hotspots, lights: this.byGroup('lights').length };
+    entry.saved = Date.now();
+    writeLibrary(library);
   }
 
   queueSave() {
     clearTimeout(this.saveTimer);
-    this.saveTimer = setTimeout(() => { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(this.snapshot())); } catch { /* storage full or blocked */ } }, 400);
+    this.saveTimer = setTimeout(() => this.save(), 400);
   }
 
   get counts() {
-    return { placements: this.placements.length, hotspots: this.placements.filter((p) => p.kind === 'hotspot').length, lights: this.byGroup('lights').length, custom: this.byGroup('custom').length };
+    return { placements: this.placements.length, hotspots: this.placements.filter((p) => p.kind === 'hotspot').length, lights: this.byGroup('lights').length, props: this.byGroup('props').length, custom: this.byGroup('custom').length };
   }
+}
+
+// ------------------------------------------------------------------------------------------------ level library
+// { active, order: [id], levels: { id: { name, template, snapshot, summary, saved } } } in localStorage.
+export function readLibrary() {
+  let lib = null;
+  try { lib = JSON.parse(localStorage.getItem(LIBRARY_KEY) || 'null'); } catch { lib = null; }
+  if (!lib || !lib.levels || !Object.keys(lib.levels).length) {
+    let legacy = null;
+    try { legacy = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null'); } catch { legacy = null; }
+    lib = { active: 'lobby', order: ['lobby'], levels: { lobby: { name: 'Lobby', template: 'lobby', snapshot: legacy && legacy.format === 'Frontier.Level' ? legacy : null } } };
+  }
+  lib.order = (lib.order || []).filter((id) => lib.levels[id]);
+  for (const id of Object.keys(lib.levels)) if (!lib.order.includes(id)) lib.order.push(id);
+  if (!lib.levels[lib.active]) lib.active = lib.order[0];
+  return lib;
+}
+
+export function writeLibrary(lib) {
+  try { localStorage.setItem(LIBRARY_KEY, JSON.stringify(lib)); } catch { /* storage full or blocked */ }
+}
+
+export function createLevelEntry(lib, { name, template = 'lobby', snapshot = null }) {
+  const id = `level-${Date.now().toString(36)}`;
+  lib.levels[id] = { name, template, snapshot };
+  lib.order.push(id);
+  return id;
 }

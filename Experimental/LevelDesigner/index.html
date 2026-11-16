@@ -15,6 +15,7 @@
     <div class="tab-strip">
       <button type="button" class="document-tab active" data-left="outliner">Outliner</button>
       <button type="button" class="document-tab" data-left="content">Content</button>
+      <button type="button" class="document-tab" data-left="levels">Levels</button>
     </div>
 
     <div id="LeftOutliner" class="left-pane">
@@ -28,7 +29,7 @@
         <label class="search-wrap"><span data-icon="search" data-icon-size="14"></span><input id="TreeSearch" type="search" placeholder="Search the level"></label>
       </div>
       <div id="AddMenu" class="add-menu" hidden>
-        <label class="search-wrap"><span data-icon="search" data-icon-size="14"></span><input id="AddSearch" type="search" placeholder="Search lights, dots and pieces"></label>
+        <label class="search-wrap"><span data-icon="search" data-icon-size="14"></span><input id="AddSearch" type="search" placeholder="Search lights, dots and props"></label>
         <div id="AddList" class="add-list"></div>
       </div>
       <div class="outliner-scroll" id="Tree" role="tree"></div>
@@ -36,22 +37,33 @@
     </div>
 
     <div id="LeftContent" class="left-pane" hidden>
-      <div class="outliner-heading"><h1>Content</h1><small>lobby pieces · your models</small></div>
-      <div class="drop-zone" id="ImportZone">
-        <button type="button" id="ImportBtn" class="primary wide" data-icon="upload" data-icon-size="14">Import model…</button>
-        <p>Bring your own showroom pieces. Models drop onto the floor beside the car, centred and scaled to metres.</p>
-        <div class="chips" id="ImportFormats"></div>
-      </div>
+      <div class="outliner-heading"><h1>Content</h1><small>props · your models</small></div>
       <div class="outliner-scroll">
-        <div class="collection"><span data-icon="sparkle"></span><div><b>Lobby pieces</b><small>Place one beside the car, then move it</small></div></div>
+        <div class="collection"><span data-icon="plinth"></span><div><b>Props</b><small>Place one, then resize, restyle or swap it in Details</small></div></div>
         <div id="PieceList" class="content-list"></div>
+        <div class="collection"><span data-icon="sparkle"></span><div><b>Your models</b><small>Premium · bring your own showroom pieces</small></div></div>
+        <div class="drop-zone" id="ImportZone">
+          <button type="button" id="ImportBtn" class="primary wide" data-icon="upload" data-icon-size="14">Import model…</button>
+          <p>Models drop onto the floor beside the car, centred and scaled to metres.</p>
+          <div class="chips" id="ImportFormats"></div>
+          <div id="ImportNote"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="LeftLevels" class="left-pane" hidden>
+      <div class="outliner-heading"><h1>Levels</h1><small>this project · saved in this browser</small></div>
+      <div class="outliner-scroll">
+        <div id="LevelList" class="level-list"></div>
+        <div class="collection"><span data-icon="plus"></span><div><b>New level</b><small>Start from a template, then make it yours</small></div></div>
+        <div id="TemplateList" class="template-list"></div>
       </div>
     </div>
   </section>
 
   <!-- ============================================================ CENTRE: viewport -->
   <section class="dock centre" aria-label="Level viewport">
-    <div class="tab-strip"><div class="document-tab active"><span data-icon="wall" data-icon-size="13"></span>Lobby</div></div>
+    <div class="tab-strip"><div class="document-tab active"><span data-icon="wall" data-icon-size="13"></span><span id="DocTab">Lobby</span></div></div>
     <div class="viewport-heading">
       <span class="scene-icon" data-icon="wall" data-icon-size="20"></span>
       <div class="scene-title"><b id="SceneTitle">Lobby</b><small id="SceneSubtitle">Level · ControlVehicle showroom</small></div>

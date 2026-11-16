@@ -7,7 +7,8 @@ import { $, el, section, panel, rangeField, segmentedField, toggle, selectField,
 import { IMPORT_FORMATS } from '../Shared/GeometryCompile/Engine/ImportFormats.js';
 import { icon, iconEl, hydrate } from './LevelIcons.js';
 import { TransformGizmo } from './Gizmo.js';
-import { GROUPS, ADDABLE, STORAGE_KEY } from './Level.js';
+import { GROUPS, ADDABLE, TEMPLATES, LIBRARY_KEY, readLibrary, writeLibrary, createLevelEntry } from './Level.js';
+import { PROPS, SURFACES } from './Props.js';
 import { LOBBY_PRESETS } from './Lobby.js';
 import { ZONES, sameColour } from './Configurator.js';
 import { FINISHES } from './Vehicle.js';
@@ -15,14 +16,14 @@ import { FINISHES } from './Vehicle.js';
 const KIND_LABEL = {
   sky: 'Sky dome', sun: 'Directional light', floor: 'Reflective floor', walls: 'Cyclorama wall', slab: 'Lobby slab', turntable: 'Turntable', arches: 'Light arches',
   vehicle: 'Configurable vehicle', hotspot: 'Configurator dot', 'light-point': 'Point light', 'light-spot': 'Spot light', 'light-strip': 'Light strip',
-  'shape-plinth': 'Plinth', 'shape-block': 'Block', 'shape-sphere': 'Sphere', 'shape-panel': 'Wall panel', 'shape-arch': 'Arch', import: 'Imported model',
+  prop: 'Prop', import: 'Imported model',
 };
 const deg = THREE.MathUtils.radToDeg, rad = THREE.MathUtils.degToRad;
 
 export function createLevelDesigner({ stage, level }) {
   const well = $('ViewportWell');
   const L = level.lobby;
-  const state = { selected: null, tool: 'select', search: '', playing: false, dots: true, helpers: true, idleOrbit: true };
+  const state = { selected: null, tool: 'select', search: '', playing: false, dots: true, helpers: true, idleOrbit: true, contain: true };
   let live = null; // inputs refreshed while the gizmo drags
 
   // ------------------------------------------------------------------------------------------------- gizmo
@@ -41,6 +42,8 @@ export function createLevelDesigner({ stage, level }) {
     },
     onCommit() {
       lastTurntable.copy(L.turntable.position);
+      if (state.selected && state.selected.kind === 'walls') L.queueEnvironment();
+      occluderClock = 0;
       level.changed('transform');
     },
   });
@@ -125,6 +128,42 @@ export function createLevelDesigner({ stage, level }) {
   $('ViewBar').append(viewBar);
   createCameraHud(stage.rig, well);
 
+  // ------------------------------------------------------------------------------------ camera containment
+  // Spring arm: after the rig places the camera, cast from the pivot to the camera against the walls and large props;
+  // if something is in between, the camera is pulled in front of it, so it can never end up behind a wall with the
+  // car hidden. The rig keeps its wanted distance, so orbiting back toward the opening lets the camera out again.
+  // The camera also stays above the floor. Always on in the Lobby; a switch in the Level details for the editor.
+  const arm = new THREE.Raycaster();
+  const rig = stage.rig, cam = stage.camera;
+  const rigApply = rig.apply.bind(rig);
+  let occluders = [], occluderClock = 0;
+  stage.frameCallbacks.add((dt) => { occluderClock -= dt; if (occluderClock <= 0) { occluders = level.occluders(); occluderClock = 0.5; } });
+  rig.apply = () => {
+    if (!(state.contain || state.playing)) return rigApply();
+    rig.goal.distance = Math.min(rig.goal.distance, 60);
+    const cp = Math.cos(rig.pitch);
+    const dir = new THREE.Vector3(Math.sin(rig.yaw) * cp, Math.sin(rig.pitch), Math.cos(rig.yaw) * cp);
+    const pivot = rig.target.clone().add(rig.kick.offset);
+    const want = rig.distance;
+    let reach = want;
+    if (occluders.length && want > 0.5) {
+      arm.set(pivot, dir);
+      arm.far = want + 0.4;
+      const hit = arm.intersectObjects(occluders, true)[0];
+      if (hit) reach = Math.max(0.35, Math.min(want, hit.distance - 0.45));
+    }
+    const minY = 0.12;
+    if (dir.y < 0 && pivot.y + dir.y * reach < minY) reach = Math.max(0.2, (pivot.y - minY) / -dir.y);
+    // Apply with the shortened arm (near plane, listeners and the HUD all see the real camera), then restore.
+    rig.distance = reach;
+    rigApply();
+    rig.distance = want;
+    state.armPulled = reach < want - 0.01;
+    // Zooming out against a wall shouldn't bank distance the camera can't use (the next zoom-in would do nothing).
+    if (state.armPulled && !rig.flight) rig.goal.distance = Math.min(rig.goal.distance, reach + 1.2);
+  };
+
+
   // ------------------------------------------------------------------------------------------------- tools
   function setTool(tool) {
     state.tool = tool;
@@ -174,9 +213,17 @@ export function createLevelDesigner({ stage, level }) {
     if (kind.startsWith('light-')) p = level.addLight(kind, { position: kind === 'light-strip' ? [t.x, 3.6, t.z + 2.4] : [t.x + 2.4, 3.2, t.z + 2.8], colour: kind === 'light-spot' ? '#fff1dc' : '#ffffff' });
     else if (kind === 'hotspot') p = level.addHotspot();
     else if (kind === 'import') { $('FileInput').click(); return; }
-    else p = level.addShape(kind, { position: [-4.4 + Math.random() * 0.6, 0, 2.6 + Math.random() * 0.6] });
+    else if (kind.startsWith('prop:')) p = level.addProp(kind.slice(5), { position: propSpot() });
     applyHelpers();
     if (p) { select(p); setTool('move'); toast(`${p.name} added · drag the arrows to place it`); }
+  }
+  // Somewhere on the floor beside the car, toward the camera's right, so a new prop is in view and not inside the car.
+  function propSpot() {
+    const right = new THREE.Vector3().setFromMatrixColumn(stage.camera.matrixWorld, 0).setY(0).normalize();
+    const toCam = stage.camera.position.clone().sub(stage.rig.target).setY(0).normalize();
+    const c = carCentre();
+    const at = c.addScaledVector(right, 4.4 + Math.random() * 0.4).addScaledVector(toCam, 1.2);
+    return [+at.x.toFixed(2), 0, +at.z.toFixed(2)];
   }
   function flashTier() { const c = $('TierChip'); c.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.15)' }, { transform: 'scale(1)' }], { duration: 380 }); }
 
@@ -222,6 +269,8 @@ export function createLevelDesigner({ stage, level }) {
       for (const t of document.querySelectorAll('[data-left]')) t.classList.toggle('active', t === tab);
       $('LeftOutliner').hidden = tab.dataset.left !== 'outliner';
       $('LeftContent').hidden = tab.dataset.left !== 'content';
+      $('LeftLevels').hidden = tab.dataset.left !== 'levels';
+      if (tab.dataset.left === 'levels') renderLevels();
     });
   }
   $('ImportFormats').append(...IMPORT_FORMATS.filter((f) => f.reads).map((f) => el('span', { class: 'chip' }, f.label)));
@@ -231,12 +280,14 @@ export function createLevelDesigner({ stage, level }) {
     list.replaceChildren();
     const locked = level.tier !== 'premium';
     $('ImportBtn').classList.toggle('stale', locked);
-    for (const a of ADDABLE.filter((x) => x.kind.startsWith('shape-'))) {
-      const place = el('button', { type: 'button', class: 'tool' }, locked ? iconEl('lock', 12) : null, 'Place');
+    for (const a of ADDABLE.filter((x) => x.kind.startsWith('prop:'))) {
+      const place = el('button', { type: 'button', class: 'tool' }, 'Place');
       place.addEventListener('click', () => addThing(a.kind));
-      list.append(el('div', { class: `piece-row${locked ? ' locked' : ''}` }, el('span', { class: 'piece-glyph', html: icon(a.icon, 22) }), el('div', {}, el('b', {}, a.label), el('small', {}, a.note)), place));
+      const n = level.byGroup('props').filter((p) => p.data.type === a.kind.slice(5)).length;
+      list.append(el('div', { class: 'piece-row' }, el('span', { class: 'piece-glyph', html: icon(a.icon, 22) }), el('div', {}, el('b', {}, a.label, n ? el('i', { class: 'in-level' }, `${n} in level`) : null), el('small', {}, a.note)), place));
     }
-    if (locked) list.append(el('div', { class: 'premium-note' }, iconEl('premium', 14), el('div', {}, 'Lobby pieces and imported models are part of Premium. Basic levels keep the built-in lobby, environment, lights and dots.', el('br'), unlockButton())));
+    if (locked) $('ImportNote').replaceChildren(el('div', { class: 'premium-note flat' }, iconEl('premium', 14), el('div', {}, 'Importing your own models is part of Premium. Props, lights, dots and the environment are open to every designer.', el('br'), unlockButton())));
+    else $('ImportNote').replaceChildren();
   }
   function unlockButton() {
     const b = el('button', { type: 'button' }, 'Switch to Premium');
@@ -285,14 +336,14 @@ export function createLevelDesigner({ stage, level }) {
       if (q && !items.length) continue;
       tree.append(el('div', { class: 'group-row' }, iconEl(g.icon, 16), el('div', {}, el('b', {}, g.label), el('small', {}, g.note)), locked ? el('span', { class: 'lock-tag', html: icon('lock', 13), title: 'Premium' }) : el('span', { class: 'count' }, String(level.byGroup(g.id).length))));
       if (locked) {
-        tree.append(el('div', { class: 'premium-note' }, iconEl('premium', 14), el('div', {}, 'Premium designers place their own pieces and models in the Lobby.', el('br'), unlockButton())));
+        tree.append(el('div', { class: 'premium-note' }, iconEl('premium', 14), el('div', {}, 'Premium designers import their own models into the level.', el('br'), unlockButton())));
         continue;
       }
       if (g.id === 'vehicle') {
         for (const p of items.filter((x) => x.kind === 'vehicle')) tree.append(row(p));
         for (const p of items.filter((x) => x.kind === 'hotspot')) tree.append(row(p, { child: true }));
       } else for (const p of items) tree.append(row(p));
-      if (!items.length) tree.append(el('p', { class: 'tree-empty' }, g.id === 'lights' ? 'No added lights. Add → Point, Spot or Light strip.' : 'Nothing placed yet. Add → Lobby pieces, or import a model from Content.'));
+      if (!items.length) tree.append(el('p', { class: 'tree-empty' }, { lights: 'No added lights. Add → Point, Spot or Light strip.', props: 'No props. Add → Props, or place one from Content.', custom: 'No models yet. Import one from Content.' }[g.id] || ''));
     }
     $('StatPlacements').textContent = String(level.placements.length);
     $('StatDots').textContent = String(level.counts.hotspots);
@@ -303,7 +354,7 @@ export function createLevelDesigner({ stage, level }) {
     const glyph = el('div', { class: 'detail-glyph', html: icon(p ? p.icon || 'dot' : 'root', 22) });
     const name = el('input', { class: 'name-input', value: p ? p.name : level.name, 'aria-label': 'Name' });
     name.addEventListener('change', () => {
-      if (p) p.name = name.value || p.name; else { level.name = name.value || 'Lobby'; $('LevelName').textContent = level.name; $('SceneTitle').textContent = level.name; }
+      if (p) p.name = name.value || p.name; else { level.name = name.value || 'Lobby'; for (const id of ['LevelName', 'SceneTitle', 'DocTab']) $(id).textContent = level.name; }
       level.changed('rename'); renderTree();
     });
     const actions = el('div', { class: 'detail-actions' });
@@ -426,8 +477,8 @@ export function createLevelDesigner({ stage, level }) {
       d.append(
         section('LEVEL'),
         panel(
-          metrics([[c.placements, 'PLACEMENTS'], [c.hotspots, 'CONFIGURATOR DOTS'], [c.lights, 'ADDED LIGHTS'], [level.tier === 'premium' ? c.custom : '—', 'YOUR PIECES']]),
-          segmentedField({ label: 'Account tier', value: level.tier, options: [{ id: 'basic', label: 'Basic' }, { id: 'premium', label: 'Premium' }], onChange: setTier, note: 'Basic: built-in lobby, environment, lights and dots. Premium: also your own pieces and imported models.' }),
+          metrics([[c.props, 'PROPS'], [c.hotspots, 'CONFIGURATOR DOTS'], [c.lights, 'ADDED LIGHTS'], [level.tier === 'premium' ? c.custom : '—', 'YOUR MODELS']]),
+          segmentedField({ label: 'Account tier', value: level.tier, options: [{ id: 'basic', label: 'Basic' }, { id: 'premium', label: 'Premium' }], onChange: setTier, note: 'Basic: environment, props, lights and dots. Premium: also imports your own models.' }),
         ),
         section('ENVIRONMENT'),
         panel(presetTiles(), el('p', {}, 'Neutral by default. Fine-tune the Sky, Sun, Floor and Cyclorama from the outliner, or add lights.')),
@@ -435,13 +486,15 @@ export function createLevelDesigner({ stage, level }) {
         panel(
           el('p', {}, 'Players see the Lobby without any interface: only the dots on the car. A dot flies the camera to its part and opens its colours.'),
           toggle({ label: 'Slow orbit when idle', value: state.idleOrbit, onChange: (v) => { state.idleOrbit = v; } }),
+          toggle({ label: 'Keep the camera inside', value: state.contain, note: 'Walls and tall props push the editor camera in front of them. Always on in the Lobby.', onChange: (v) => { state.contain = v; } }),
           (() => { const b = el('button', { type: 'button', class: 'primary wide', html: `${icon('play', 13)} Play lobby` }); b.addEventListener('click', () => setPlaying(true)); return b; })(),
         ),
         section('FILE'),
         panel(el('div', { class: 'action-row' },
           (() => { const b = el('button', { type: 'button', class: 'tool', html: `${icon('download', 13)} Export JSON` }); b.addEventListener('click', () => download(`${level.name.replace(/\W+/g, '')}.level.json`, JSON.stringify(level.snapshot(), null, 2), 'application/json')); return b; })(),
-          (() => { const b = el('button', { type: 'button', class: 'tool', html: `${icon('reset', 13)} Reset level` }); b.addEventListener('click', () => { localStorage.removeItem(STORAGE_KEY); location.search = '?fresh=1'; }); return b; })(),
-        ), el('p', {}, 'The level saves in this browser as you edit. Imported models stay for the session only.')),
+          (() => { const b = el('button', { type: 'button', class: 'tool', html: `${icon('reset', 13)} Reset` }); b.addEventListener('click', resetLevel); return b; })(),
+          (() => { const b = el('button', { type: 'button', class: 'tool', html: `${icon('layers', 13)} All levels` }); b.addEventListener('click', () => document.querySelector('[data-left="levels"]').click()); return b; })(),
+        ), el('p', {}, `Started from the ${(TEMPLATES[level.template] || TEMPLATES.lobby).label} template. Saves in this browser as you edit; imported models stay for the session only.`)),
       );
     } else if (p.kind === 'sky') {
       d.append(section('SKY'), panel(
@@ -527,6 +580,8 @@ export function createLevelDesigner({ stage, level }) {
         p.kind === 'light-spot' ? toggle({ label: 'Cast shadows', value: D.shadow, onChange: (v) => level.setLight(p, 'shadow', v) }) : null,
         p.kind === 'light-strip' ? rangeField({ label: 'Length', value: D.length, min: 0.5, max: 8, step: 0.1, unit: 'm', onChange: (v) => level.setLight(p, 'length', v) }) : null,
       ));
+    } else if (p.kind === 'prop') {
+      d.append(...transformPanel(p), ...propPanels(p));
     } else if (p.premium) {
       const D = p.data;
       d.append(...transformPanel(p), section('SURFACE'), panel(
@@ -539,6 +594,110 @@ export function createLevelDesigner({ stage, level }) {
     if (p && p.builtIn && p.kind !== 'hotspot') d.append(el('p', { class: 'muted-note' }, 'Built-in lobby placement: it can be hidden but not deleted.'));
     hydrate(d);
     d.scrollTop = scroll;
+  }
+
+  // Prop: swap the type in place, size it with the type's own parameters, pick a surface.
+  function propPanels(p) {
+    const D = p.data, def = PROPS[D.type];
+    const types = el('div', { class: 'prop-types' }, ...Object.entries(PROPS).map(([type, t]) => {
+      const b = el('button', { type: 'button', class: `prop-type${type === D.type ? ' active' : ''}`, title: `${t.label} · ${t.note}`, html: `${icon(t.icon, 18)}<span>${t.label}</span>` });
+      b.addEventListener('click', () => { if (type === D.type) return; level.setPropType(p, type); renderDetails(); toast(`Now a ${t.label.toLowerCase()} · same place and turn`); });
+      return b;
+    }));
+    const sizes = Object.entries(def.params).map(([key, q]) => rangeField({
+      label: q.label, value: D.params[key], min: q.min, max: q.max, step: q.step, unit: q.unit === 'm' ? ' m' : q.unit,
+      onInput: (v) => level.setPropParam(p, key, v), onChange: () => renderTree(),
+    }));
+    const reset = el('button', { type: 'button', class: 'tool', html: `${icon('reset', 13)} Default size` });
+    reset.addEventListener('click', () => { for (const [k, q] of Object.entries(def.params)) D.params[k] = q.value; level.buildProp(p); level.changed('edit'); renderDetails(); });
+    const surfaces = el('div', { class: 'surface-tiles' }, ...Object.entries(SURFACES).map(([id, s]) => {
+      const b = el('button', { type: 'button', class: `surface-tile${D.surface === id ? ' active' : ''}`, title: s.label, style: `--c:${s.colour};--sheen:${s.metalness ? '#ffffff88' : s.roughness < 0.3 ? '#ffffff55' : '#ffffff10'};--o:${s.opacity ?? 1}` }, el('i'), el('span', {}, s.label));
+      b.addEventListener('click', () => { level.setPropSurface(p, id); renderDetails(); });
+      return b;
+    }));
+    return [
+      section('PROP TYPE', el('small', { class: 'section-note' }, 'swap in place')), panel(types),
+      section('SIZE'), panel(...sizes, el('div', { class: 'action-row' }, reset)),
+      section('SURFACE', el('small', { class: 'section-note' }, D.surface === 'custom' ? 'custom' : SURFACES[D.surface].label)), panel(
+        surfaces,
+        colorField({ label: 'Colour', value: D.colour, onChange: (v) => { level.setSurface(p, 'colour', v); renderDetails(); } }),
+        rangeField({ label: 'Roughness', value: D.roughness, min: 0, max: 1, step: 0.01, onInput: (v) => level.setSurface(p, 'roughness', v), onChange: () => renderDetails() }),
+        rangeField({ label: 'Metalness', value: D.metalness, min: 0, max: 1, step: 0.01, onInput: (v) => level.setSurface(p, 'metalness', v), onChange: () => renderDetails() }),
+      ),
+    ];
+  }
+
+  // ---------------------------------------------------------------------------------------------- levels
+  // The level library lives in this browser. Opening another level saves this one and reloads into it.
+  function openLevel(id) {
+    level.save();
+    const lib = readLibrary();
+    lib.active = id;
+    writeLibrary(lib);
+    const q = new URLSearchParams(location.search); q.delete('fresh'); q.set('level', id);
+    location.search = q.toString();
+  }
+  function resetLevel() {
+    if (!confirm(`Reset “${level.name}” to its ${(TEMPLATES[level.template] || TEMPLATES.lobby).label} template? Props, lights, dots and colours go back to the start.`)) return;
+    const lib = readLibrary();
+    if (lib.levels[level.id]) lib.levels[level.id].snapshot = null;
+    writeLibrary(lib);
+    level.save = () => {};    // don't write this level back on the way out
+    location.reload();
+  }
+  function renderLevels() {
+    const lib = readLibrary();
+    const list = $('LevelList');
+    list.replaceChildren();
+    for (const id of lib.order) {
+      const e = lib.levels[id];
+      const current = id === level.id;
+      const sum = current ? { preset: L.settings.preset, props: level.counts.props, dots: level.counts.hotspots } : (e.summary || { preset: (TEMPLATES[e.template] || TEMPLATES.lobby).preset, props: (TEMPLATES[e.template] || TEMPLATES.lobby).props.length, dots: 6 });
+      const pr = LOBBY_PRESETS[sum.preset] || LOBBY_PRESETS.cove;
+      const thumb = el('span', { class: 'level-thumb', style: `--g:linear-gradient(180deg, ${pr.sky.zenith}, ${pr.sky.horizon} 48%, ${pr.walls.colour} 48%, ${pr.floor.colour} 76%)` });
+      const name = current ? level.name : e.name;
+      const tools = el('div', { class: 'level-tools' });
+      const mk = (ic, title, fn) => { const b = el('button', { type: 'button', class: 'tool round', title, html: icon(ic, 13) }); b.addEventListener('click', (ev) => { ev.stopPropagation(); fn(); }); return b; };
+      tools.append(
+        mk('copy', 'Duplicate', () => {
+          if (current) level.save();
+          const l2 = readLibrary();
+          const src = l2.levels[id];
+          const nid = createLevelEntry(l2, { name: `${src.name} copy`, template: src.template, snapshot: src.snapshot ? { ...src.snapshot, name: `${src.name} copy` } : null });
+          l2.levels[nid].summary = src.summary;
+          writeLibrary(l2); renderLevels(); toast(`${src.name} duplicated`);
+        }),
+        mk('trash', 'Delete', () => {
+          if (lib.order.length < 2) { toast('A project keeps at least one level'); return; }
+          if (!confirm(`Delete “${name}”?`)) return;
+          const l2 = readLibrary();
+          delete l2.levels[id];
+          l2.order = l2.order.filter((x) => x !== id);
+          writeLibrary(l2);
+          if (current) { level.save = () => {}; openLevel(l2.order[0]); } else renderLevels();
+        }),
+      );
+      const card = el('button', { type: 'button', class: `level-row${current ? ' active' : ''}` }, thumb,
+        el('div', {}, el('b', {}, name, current ? el('i', { class: 'root-tag' }, 'OPEN') : null), el('small', {}, `${pr.label} · ${sum.props} props · ${sum.dots} dots`)), tools);
+      card.addEventListener('click', () => { if (!current) openLevel(id); });
+      list.append(card);
+    }
+    const tiles = $('TemplateList');
+    tiles.replaceChildren();
+    for (const [tid, t] of Object.entries(TEMPLATES)) {
+      const pr = LOBBY_PRESETS[t.preset];
+      const b = el('button', { type: 'button', class: 'template-tile', title: t.note, style: `--g:linear-gradient(180deg, ${pr.sky.zenith}, ${pr.sky.horizon} 48%, ${pr.walls.colour} 48%, ${pr.floor.colour} 76%)` }, el('i'), el('b', {}, t.label), el('small', {}, t.note));
+      b.addEventListener('click', () => {
+        level.save();
+        const l2 = readLibrary();
+        const taken = new Set(Object.values(l2.levels).map((e) => e.name));
+        let n = t.label, k = 2; while (taken.has(n)) n = `${t.label} ${k++}`;
+        const nid = createLevelEntry(l2, { name: n, template: tid });
+        writeLibrary(l2);
+        openLevel(nid);
+      });
+      tiles.append(b);
+    }
   }
 
   function previewDot(p) { stage.rig.flyTo(level.configurator.viewOf(p.spot), { duration: 0.8 }); }
@@ -636,10 +795,15 @@ export function createLevelDesigner({ stage, level }) {
     $('Strip').textContent = `LEVEL DESIGNER · ${level.name.toUpperCase()} · ${(LOBBY_PRESETS[L.settings.preset] || { label: 'Custom' }).label.toUpperCase()} · ${level.counts.placements} PLACEMENTS · ${level.tier.toUpperCase()}`;
   }, 250);
 
-  level.on((what) => { if (['add', 'remove', 'visibility', 'rename', 'finish'].includes(what)) renderTree(); });
+  level.on((what) => {
+    if (['add', 'remove', 'visibility', 'rename', 'finish'].includes(what)) renderTree();
+    if (['add', 'remove', 'rename'].includes(what)) renderContent();
+    if (['add', 'remove', 'edit', 'transform'].includes(what)) occluderClock = 0;
+  });
 
   function renderAll() { renderTree(); renderDetails(); renderContent(); }
 
+  for (const id of ['LevelName', 'SceneTitle', 'DocTab']) $(id).textContent = level.name;
   hydrate(document);
   setTier(level.tier);
   renderAll();

@@ -1,5 +1,5 @@
 // The Lobby's environment: a neutral showroom built from a sky dome, a curved cyclorama wall with a floor cove,
-// leaning slabs, a mirror-glossy floor, a turntable and (for the studio preset) arched light strips. Everything the
+// a mirror-glossy floor, a turntable and (for the studio preset) arched light strips. Everything the
 // environment panel edits lives in `settings`; apply* methods push one group of settings into the scene, and the
 // reflection environment (PMREM of a cheap copy of the room) is rebuilt after edits so the paint reflects the room.
 import { THREE } from '../Shared/Studio/Render.js';
@@ -203,13 +203,6 @@ export class Lobby {
     this.walls.castShadow = false; this.walls.receiveShadow = true;
     this.group.add(this.walls);
 
-    // Leaning slabs (the angled white blocks of the reference shots)
-    this.slabMat = new THREE.MeshStandardMaterial({ color: '#f1f3f6', roughness: 0.85 });
-    this.slabs = [
-      this.slab('Slab West', [0.55, 6.2, 4.2], [-7.6, 0, 3.4], [0, 0.55, 0.16]),
-      this.slab('Slab East', [7.5, 2.1, 0.5], [6.4, 0, -6.2], [0, -0.42, 0]),
-    ];
-
     // Turntable
     this.turntable = new THREE.Group();
     this.turntable.name = 'Turntable';
@@ -246,17 +239,6 @@ export class Lobby {
     this.spin = 0;
     stage.frameCallbacks.add((dt) => this.tick(dt));
     this.applyAll();
-  }
-
-  slab(name, size, position, rotation) {
-    const m = new THREE.Mesh(new THREE.BoxGeometry(...size), this.slabMat);
-    m.geometry.translate(0, size[1] / 2, 0);
-    m.position.set(...position);
-    m.rotation.set(...rotation);
-    m.name = name;
-    m.castShadow = true; m.receiveShadow = true;
-    this.group.add(m);
-    return m;
   }
 
   // ------------------------------------------------------------------------------------------------ apply
@@ -312,7 +294,6 @@ export class Lobby {
   applyWalls() {
     const w = this.settings.walls;
     this.wallMat.color.set(w.colour);
-    this.slabMat.color.set(w.colour).offsetHSL(0, 0, 0.01);
     const geo = cycloramaGeometry(w);
     this.walls.geometry.dispose();
     this.walls.geometry = geo;
@@ -374,6 +355,8 @@ export class Lobby {
   bakeEnvironment() {
     const old = this.envTarget;
     this.envWalls.visible = this.walls.visible;
+    this.envWalls.position.copy(this.walls.position);
+    this.envWalls.rotation.copy(this.walls.rotation);
     this.envTarget = this.pmrem.fromScene(this.envScene, 0.035, 0.1, 200);
     this.stage.scene.environment = this.envTarget.texture;
     if (old) old.dispose();
