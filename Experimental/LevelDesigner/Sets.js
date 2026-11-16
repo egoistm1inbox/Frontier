@@ -195,35 +195,36 @@ function buildStudio() {
   const g = group('Studio set'), occluders = [];
   // L-shaped hard cove (back + left), studio grey.
   const coveMat = finish({ colour: '#8d9095', roughness: 0.82, texture: 'plaster', metres: 6 }, { side: THREE.DoubleSide });
-  const cove = mesh(coveWall([[-11, 9], [-11, -8.5], [13, -8.5]], { height: 7, cove: 1.4, corner: 3.2 }), coveMat, { cast: false });
+  const cove = mesh(coveWall([[-18, 14], [-18, -16.5], [20, -16.5]], { height: 8.4, cove: 1.8, corner: 4 }), coveMat, { cast: false });
   cove.name = 'Cove';
   g.add(cove); occluders.push(cove);
   // Black drapes on the open sides, ceiling and the lighting grid.
   const velvet = finish({ colour: '#101012', roughness: 1, sheen: 1 }, { side: THREE.DoubleSide });
-  const right = at(drape(19, 7.2, velvet), 13.2, 0, 0.3, -Math.PI / 2);
-  const front = at(drape(24.4, 7.2, velvet), 1, 0, 9.4, Math.PI);
+  const right = at(drape(31, 8.6, velvet), 20.2, 0, -1.2, -Math.PI / 2);
+  const front = at(drape(38.4, 8.6, velvet), 1, 0, 14.4, Math.PI);
   g.add(right, front); occluders.push(right, front);
-  const ceiling = mesh(new THREE.PlaneGeometry(26, 20).rotateX(Math.PI / 2), finish('paintCharcoal'), { cast: false });
-  at(ceiling, 1, 7.6, 0.4);
+  const ceiling = mesh(new THREE.PlaneGeometry(40, 32).rotateX(Math.PI / 2), finish('paintCharcoal'), { cast: false });
+  at(ceiling, 1, 9, -1.2);
   g.add(ceiling); occluders.push(ceiling);
   const steel = finish('blackSteel');
   const pipes = [];
-  for (let x = -9; x <= 12; x += 3) pipes.push(pipe([x, 6.6, -7.5], [x, 6.6, 8.5], 0.025, steel));
-  for (let z = -7.5; z <= 8.5; z += 2.666) pipes.push(pipe([-10, 6.55, z], [12.5, 6.55, z], 0.025, steel));
-  for (const [x, z] of [[-9, -7.5], [12, -7.5], [-9, 8.5], [12, 8.5]]) pipes.push(pipe([x, 6.6, z], [x, 7.6, z], 0.02, steel));
+  for (let x = -15; x <= 18; x += 3) pipes.push(pipe([x, 7.8, -14.5], [x, 7.8, 12.5], 0.025, steel));
+  for (let z = -14.5; z <= 12.5; z += 3) pipes.push(pipe([-16, 7.75, z], [18.5, 7.75, z], 0.025, steel));
+  for (const [x, z] of [[-15, -14.5], [18, -14.5], [-15, 12.5], [18, 12.5], [0, -14.5], [0, 12.5]]) pipes.push(pipe([x, 7.8, z], [x, 9, z], 0.02, steel));
   g.add(...pipes);
   // Cable runs drooping from the grid down the drape.
   const cable = new THREE.MeshStandardMaterial({ color: '#09090a', roughness: 0.6 });
   for (const z of [-4, 3]) {
-    const pts = [new THREE.Vector3(12, 6.6, z), new THREE.Vector3(12.6, 5.6, z + 0.3), new THREE.Vector3(12.9, 2, z + 0.5), new THREE.Vector3(12.9, 0.02, z + 0.9), new THREE.Vector3(11.5, 0.02, z + 1.5)];
+    const pts = [new THREE.Vector3(18, 7.8, z), new THREE.Vector3(18.8, 6.6, z + 0.3), new THREE.Vector3(19.8, 2, z + 0.5), new THREE.Vector3(19.8, 0.02, z + 0.9), new THREE.Vector3(18.3, 0.02, z + 1.5)];
     g.add(mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 40, 0.018, 6), cable));
   }
   return { group: g, occluders, floorSize: [80, 80] };
 }
 
+const GARAGE_SKYLIGHTS = [-12.5, 0, 12.5];
 function buildGarage() {
   const g = group('Garage workshop'), occluders = [];
-  const W = 26, D = 20, H = 6.4, x0 = -W / 2, z0 = -D / 2;
+  const W = 40, D = 34, H = 7.4, x0 = -W / 2, z0 = -D / 2;
   const blockMat = finish({ colour: '#ffffff', roughness: 0.88, texture: 'block', bump: 0.4 }, { w: 1, h: 1 });
   const dado = finish({ colour: '#3b3e43', roughness: 0.7 });
   const mkWall = (len, x, z, ry) => {
@@ -235,9 +236,9 @@ function buildGarage() {
   };
   void blockMat;
   // Back wall with two door openings: built as three piers and a header.
-  const doorW = 4.8, doorH = 4.4, doorX = [-6, 6];
+  const doorW = 5.4, doorH = 5, doorX = [-12.5, 0, 12.5];
   const backZ = z0;
-  const pierEdges = [x0, doorX[0] - doorW / 2, doorX[0] + doorW / 2, doorX[1] - doorW / 2, doorX[1] + doorW / 2, -x0];
+  const pierEdges = [x0, ...doorX.flatMap((x) => [x - doorW / 2, x + doorW / 2]), -x0];
   for (let i = 0; i < pierEdges.length; i += 2) { const a = pierEdges[i], b = pierEdges[i + 1]; mkWall(b - a, (a + b) / 2, backZ, 0); }
   for (const x of doorX) {
     const header = at(mesh(box(doorW, H - doorH, 0.3), finish({ colour: '#ffffff', roughness: 0.88, texture: 'block' }, { w: doorW, h: H - doorH })), x, doorH, backZ);
@@ -249,11 +250,11 @@ function buildGarage() {
   // Roll-up doors: left closed, right two-thirds open onto daylight.
   const panel = finish({ colour: '#c9ccd0', roughness: 0.45, metalness: 0.6 });
   const outside = new THREE.MeshBasicMaterial({ color: new THREE.Color('#dfe8f2').multiplyScalar(2.2) });
-  g.add(at(rollUpDoor(doorW, doorH, 0, panel, finish('blackSteel'), outside), doorX[0], 0, backZ + 0.2));
-  g.add(at(rollUpDoor(doorW, doorH, 0.62, panel, finish('blackSteel'), outside), doorX[1], 0, backZ + 0.2));
+  // Three roll-up doors: left and middle closed, right two-thirds open onto daylight.
+  doorX.forEach((x, i) => g.add(at(rollUpDoor(doorW, doorH, i === 2 ? 0.62 : 0, panel, finish('blackSteel'), outside), x, 0, backZ + 0.2)));
   // Portal frames: columns along the side walls and roof beams across.
   const steel = finish({ colour: '#2f5d8a', roughness: 0.45, metalness: 0.4, clearcoat: 0.3 });
-  for (const z of [-7.5, -2.5, 2.5, 7.5]) {
+  for (const z of [-14, -8.4, -2.8, 2.8, 8.4, 14]) {
     for (const s of [-1, 1]) {
       const col = iBeam(H + 0.3, 0.36, 0.2, steel);
       col.rotation.set(0, 0, Math.PI / 2);
@@ -269,30 +270,32 @@ function buildGarage() {
   deck.position.set(0, H + 0.42, 0);
   g.add(deck); occluders.push(deck);
   const sky = new THREE.MeshBasicMaterial({ color: new THREE.Color('#eef4ff').multiplyScalar(1.6) });
-  for (const x of [-6, 6]) { const s = new THREE.Mesh(new THREE.PlaneGeometry(2.2, D - 2).rotateX(Math.PI / 2), sky); s.position.set(x, H + 0.39, 0); g.add(s); }
+  for (const x of GARAGE_SKYLIGHTS) { const s = new THREE.Mesh(new THREE.PlaneGeometry(2.6, D - 3).rotateX(Math.PI / 2), sky); s.position.set(x, H + 0.39, 0); g.add(s); }
   // Floor markings: bay outline and a hatched no-park zone in front of the doors.
   const yellow = new THREE.MeshStandardMaterial({ color: '#e8b10c', roughness: 0.6, polygonOffset: true, polygonOffsetFactor: -2 });
   const line = (w, d, x, z) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d).rotateX(-Math.PI / 2), yellow); m.position.set(x, 0.003, z); m.receiveShadow = true; return m; };
+  // Host bay (the guest places paint their own circles), a walkway lane along each side wall, hatching at the doors.
   g.add(line(11, 0.12, 0, -4.6), line(11, 0.12, 0, 4.6), line(0.12, 9.2, -5.5, 0), line(0.12, 9.2, 5.5, 0));
-  for (const x of doorX) for (let k = -4; k <= 4; k++) { const m = line(0.14, 1.6, x + k * 0.55, backZ + 1.6); m.rotation.y = 0.6; g.add(m); }
+  for (const s of [-1, 1]) g.add(line(0.12, D - 4, s * (W / 2 - 2.6), 0));
+  for (const x of doorX) for (let k = -4; k <= 4; k++) { const m = line(0.14, 1.6, x + k * 0.6, backZ + 1.4); m.rotation.y = 0.6; g.add(m); }
   // Wall details: signage, pegboard, hose reel, extinguisher, cable tray.
-  const sign = new THREE.Mesh(new THREE.PlaneGeometry(3.2, 1.6), new THREE.MeshStandardMaterial({ map: signTexture(['BAY 01', 'FRONTIER WORKS · SERVICE']), roughness: 0.5 }));
-  sign.position.set(0, 4.95, backZ + 0.17);
+  const sign = new THREE.Mesh(new THREE.PlaneGeometry(3.2, 1.6), new THREE.MeshStandardMaterial({ map: signTexture(['BAYS 01–05', 'FRONTIER WORKS · SERVICE']), roughness: 0.5 }));
+  sign.position.set(-6.25, 5.2, backZ + 0.17);
   g.add(sign);
   const peg = new THREE.Mesh(new THREE.PlaneGeometry(4.5, 2), new THREE.MeshStandardMaterial({ map: pegboardTexture(), roughness: 0.8 }));
-  peg.position.set(x0 + 0.17, 2.4, -2); peg.rotation.y = Math.PI / 2;
+  peg.position.set(x0 + 0.17, 2.4, 6); peg.rotation.y = Math.PI / 2;
   g.add(peg);
   const red = finish('redEnamel');
   const ext = group('Extinguisher', mesh(cyl(0.09, 0.09, 0.55), red), at(mesh(cyl(0.03, 0.05, 0.12), finish('blackSteel')), 0, 0.55, 0));
-  at(ext, -x0 - 0.3, 0.9, -6);
+  at(ext, -x0 - 0.3, 0.9, -8);
   g.add(ext);
   const reel = group('Hose reel', at(mesh(cyl(0.32, 0.32, 0.18, { centre: true }), red), 0, 0, 0));
   reel.children[0].rotation.x = Math.PI / 2;
   reel.add(at(mesh(new THREE.TorusGeometry(0.24, 0.05, 10, 32), finish('rubber')), 0, 0, 0.02));
-  at(reel, x0 + 0.35, 3.4, 5); reel.rotation.y = Math.PI / 2;
+  at(reel, x0 + 0.35, 3.4, 11); reel.rotation.y = Math.PI / 2;
   g.add(reel);
   const tray = finish('aluminium');
-  g.add(at(mesh(box(0.3, 0.08, D - 2), tray), x0 + 0.5, 5.4, 0), at(mesh(box(0.3, 0.08, D - 2), tray), -x0 - 0.5, 5.4, 0));
+  g.add(at(mesh(box(0.3, 0.08, D - 2), tray), x0 + 0.5, H - 1, 0), at(mesh(box(0.3, 0.08, D - 2), tray), -x0 - 0.5, H - 1, 0));
   return { group: g, occluders, floorSize: [W, D] };
 }
 
@@ -315,13 +318,13 @@ function pegboardTexture() {
 
 function buildAtrium() {
   const g = group('Concrete atrium'), occluders = [];
-  const W = 24, D = 18, H = 7.2;
+  const W = 38, D = 34, H = 8;
   const concrete = (w, h) => finish('boardConcrete', { w, h });
   const add = (m, occ = true) => { g.add(m); if (occ) occluders.push(m); return m; };
   // Back wall (full), right wall (with a deep niche), left wall with a long low window slot.
   add(at(mesh(box(W + 0.8, H, 0.4), concrete(W, H)), 0, 0, -D / 2));
   add(at(mesh(box(D, H, 0.4), concrete(D, H)), W / 2 + 0.2, 0, 0, Math.PI / 2));
-  const slotY0 = 0.9, slotY1 = 2.9, slotZ0 = -6.5, slotZ1 = 5.5;
+  const slotY0 = 0.9, slotY1 = 3.1, slotZ0 = -11, slotZ1 = 9;
   const lx = -W / 2 - 0.2;
   add(at(mesh(box(D, slotY0, 0.4), concrete(D, slotY0)), lx, 0, 0, Math.PI / 2));
   add(at(mesh(box(D, H - slotY1, 0.4), concrete(D, H - slotY1)), lx, slotY1, 0, Math.PI / 2));
@@ -331,7 +334,7 @@ function buildAtrium() {
   pane.position.set(lx, (slotY0 + slotY1) / 2, (slotZ0 + slotZ1) / 2); pane.rotation.y = Math.PI / 2;
   g.add(pane);
   // Roof slab with a skylight over the car, timber slat ceiling under it.
-  const roofY = H, gapZ = 1.4, gapX = 7;
+  const roofY = H, gapZ = 1.8, gapX = 10;
   const roofMat = finish('concrete', { w: W, h: D });
   const roofParts = [
     [W + 0.8, (D / 2 - gapZ), 0, -(gapZ + (D / 2 - gapZ) / 2)], [W + 0.8, (D / 2 - gapZ), 0, gapZ + (D / 2 - gapZ) / 2],
@@ -355,34 +358,34 @@ function buildAtrium() {
   add(inst, false);
   // Reflecting pool along the back wall, with a stone coping.
   const coping = finish('stone', { w: 2, h: 2 });
-  const poolW = 16, poolD = 1.6, pz = -D / 2 + 0.2 + poolD / 2 + 0.25;
+  const poolW = 22, poolD = 1.6, pz = -D / 2 + 0.2 + poolD / 2 + 0.25;
   for (const [w, d, x, z] of [[poolW + 0.5, 0.25, 0, pz - poolD / 2 - 0.125], [poolW + 0.5, 0.25, 0, pz + poolD / 2 + 0.125], [0.25, poolD, -poolW / 2 - 0.125, pz], [0.25, poolD, poolW / 2 + 0.125, pz]]) g.add(at(mesh(box(w, 0.32, d), coping), x, 0, z));
   const water = mesh(new THREE.PlaneGeometry(poolW, poolD).rotateX(-Math.PI / 2), new THREE.MeshPhysicalMaterial({ color: '#0d1719', roughness: 0.02, metalness: 0.1, clearcoat: 1, envMapIntensity: 1.6 }), { cast: false });
   water.position.set(0, 0.24, pz);
   g.add(water);
   // Built-in bench along the right wall and a niche shelf.
-  g.add(at(mesh(box(5, 0.45, 0.7), finish('concrete', { w: 5, h: 1 })), W / 2 - 0.55, 0, 3.5, Math.PI / 2));
-  g.add(at(mesh(box(5.2, 0.06, 0.9), finish('oak', { w: 5, h: 1 })), W / 2 - 0.5, 0.45, 3.5, Math.PI / 2));
+  g.add(at(mesh(box(7, 0.45, 0.7), finish('concrete', { w: 7, h: 1 })), W / 2 - 0.55, 0, 7.5, Math.PI / 2));
+  g.add(at(mesh(box(7.2, 0.06, 0.9), finish('oak', { w: 7, h: 1 })), W / 2 - 0.5, 0.45, 7.5, Math.PI / 2));
   // Outside: courtyard gravel and a garden seen through the slot and the open front.
-  g.add(landscape({ inner: 18, outer: 60, trees: 70, seed: 9 }));
+  g.add(landscape({ inner: 26, outer: 70, trees: 80, seed: 9 }));
   return { group: g, occluders, floorSize: [W, D] };
 }
 
 function buildPavilion() {
   const g = group('Glass pavilion'), occluders = [];
-  const W = 22, D = 15, H = 4.3, plinth = 0.5;
+  const W = 36, D = 30, H = 4.8, plinth = 0.5;
   // Stone plinth with steps at the front.
   const stoneMat = finish('stone', { w: W, h: 1 });
   const base = mesh(slab(roundedRect(W + 1.2, D + 1.2, 0.05), plinth, 0.015), stoneMat);
   base.position.y = -plinth;
   g.add(base);
-  for (let k = 1; k <= 3; k++) g.add(at(mesh(box(6, plinth - k * (plinth / 3), 0.4), stoneMat), 0, -plinth, (D + 1.2) / 2 + k * 0.4 - 0.2));
+  for (let k = 1; k <= 3; k++) g.add(at(mesh(box(8, plinth - k * (plinth / 3), 0.4), stoneMat), 0, -plinth, (D + 1.2) / 2 + k * 0.4 - 0.2));
   // Columns and glass between them: slim black steel, frameless panes with top and bottom channels.
   const steel = finish('blackSteel');
   const glass = finish({ colour: '#e2edf2', roughness: 0.02, opacity: 0.12, clearcoat: 1 }, { side: THREE.DoubleSide });
   const xs = [], zs = [];
-  for (let i = 0; i <= 6; i++) xs.push(-W / 2 + (W / 6) * i);
-  for (let i = 0; i <= 4; i++) zs.push(-D / 2 + (D / 4) * i);
+  for (let i = 0; i <= 9; i++) xs.push(-W / 2 + (W / 9) * i);
+  for (let i = 0; i <= 8; i++) zs.push(-D / 2 + (D / 8) * i);
   const posts = [];
   for (const x of xs) for (const z of [-D / 2, D / 2]) posts.push([x, z]);
   for (const z of zs.slice(1, -1)) for (const x of [-W / 2, W / 2]) posts.push([x, z]);
@@ -403,10 +406,10 @@ function buildPavilion() {
   g.add(roof); occluders.push(roof);
   const fascia = mesh(box(W + 4.02, 0.12, D + 4.02), steel); fascia.position.y = H + 0.3; g.add(fascia);
   const downs = [];
-  for (let x = -W / 2 + 2; x <= W / 2 - 1.9; x += 3) for (let z = -D / 2 + 2; z <= D / 2 - 1.9; z += 2.75) downs.push([x, H - 0.002, z]);
+  for (let x = -W / 2 + 2; x <= W / 2 - 1.9; x += 3.2) for (let z = -D / 2 + 2; z <= D / 2 - 1.9; z += 3.25) downs.push([x, H - 0.002, z]);
   const disc = new THREE.CircleGeometry(0.11, 24).rotateX(Math.PI / 2);
   g.add(instances(disc, glow('#fff1df', 6), downs, { cast: false, receive: false }));
-  g.add(landscape({ inner: 16, outer: 70, trees: 110, seed: 5, ground: -plinth }));
+  g.add(landscape({ inner: 24, outer: 80, trees: 120, seed: 5, ground: -plinth }));
   return { group: g, occluders, floorSize: [W, D] };
 }
 
@@ -427,7 +430,7 @@ export const SETS = {
   garage: {
     label: 'Garage', note: 'Steel-framed workshop, roll-up doors, epoxy floor',
     build: buildGarage, floor: 'epoxy', rig: 'workshop',
-    skyFill: [{ at: [-6, 6.3, 0], w: 2.2, h: 17, intensity: 5 }, { at: [6, 6.3, 0], w: 2.2, h: 17, intensity: 5 }],
+    skyFill: GARAGE_SKYLIGHTS.map((x) => ({ at: [x, 7.3, 0], w: 2.6, h: 30, intensity: 5 })),
     sky: { zenith: '#5d8fc4', horizon: '#cfdced', ground: '#8b8f94', haze: 0.4 },
     sun: { on: true, azimuth: 200, elevation: 34, intensity: 2.4, colour: '#fff1df', softness: 3 },
     ambient: { sky: '#d8e0ea', ground: '#4a4d52', intensity: 0.4, reflections: 0.9, exposure: 1 },
@@ -436,7 +439,7 @@ export const SETS = {
   atrium: {
     label: 'Minimal architecture', note: 'Board concrete atrium, oak slats, skylight, pool',
     build: buildAtrium, floor: 'stone', rig: 'daylight',
-    skyFill: [{ at: [0, 6.9, 0], w: 14, h: 2.8, intensity: 9 }, { at: [-11.8, 1.9, -0.5], look: [0, 1.2, -0.5], w: 12, h: 2, intensity: 4, colour: '#e8f0e2' }],
+    skyFill: [{ at: [0, 7.7, 0], w: 20, h: 3.6, intensity: 9 }, { at: [-18.8, 2, -1], look: [0, 1.2, -1], w: 20, h: 2.2, intensity: 4, colour: '#e8f0e2' }],
     sky: { zenith: '#4c86c6', horizon: '#c9dbee', ground: '#9a9a94', haze: 0.35 },
     sun: { on: true, azimuth: 165, elevation: 66, intensity: 3.4, colour: '#fff3e4', softness: 2 },
     ambient: { sky: '#d3dcea', ground: '#6e6a62', intensity: 0.45, reflections: 0.85, exposure: 1 },
@@ -446,8 +449,8 @@ export const SETS = {
     label: 'Glass pavilion', note: 'Glass box on a stone plinth in a garden',
     build: buildPavilion, floor: 'marble', rig: 'gallery',
     skyFill: [
-      { at: [0, 2.1, 7.3], look: [0, 1, 0], w: 20, h: 3.4, intensity: 2.6, colour: '#e6efe0' }, { at: [0, 2.1, -7.3], look: [0, 1, 0], w: 20, h: 3.4, intensity: 2.2, colour: '#e6efe0' },
-      { at: [10.8, 2.1, 0], look: [0, 1, 0], w: 13, h: 3.4, intensity: 2.2, colour: '#e6efe0' }, { at: [-10.8, 2.1, 0], look: [0, 1, 0], w: 13, h: 3.4, intensity: 2.2, colour: '#e6efe0' },
+      { at: [0, 2.3, 14.8], look: [0, 1, 0], w: 34, h: 3.8, intensity: 2.6, colour: '#e6efe0' }, { at: [0, 2.3, -14.8], look: [0, 1, 0], w: 34, h: 3.8, intensity: 2.2, colour: '#e6efe0' },
+      { at: [17.8, 2.3, 0], look: [0, 1, 0], w: 28, h: 3.8, intensity: 2.2, colour: '#e6efe0' }, { at: [-17.8, 2.3, 0], look: [0, 1, 0], w: 28, h: 3.8, intensity: 2.2, colour: '#e6efe0' },
     ],
     sky: { zenith: '#3f7dc2', horizon: '#c4d9ee', ground: '#6d7a5c', haze: 0.3 },
     sun: { on: true, azimuth: 128, elevation: 38, intensity: 3, colour: '#fff4e6', softness: 2.5 },

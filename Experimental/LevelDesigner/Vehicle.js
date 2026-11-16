@@ -152,6 +152,43 @@ export class ControlVehicle {
     return this;
   }
 
+  // Another car sharing this one's geometry, with its own materials (other players' cars in the lobby).
+  shell() {
+    const car = new ControlVehicle();
+    const sourceMeshes = new Map(this.meshes.map((m) => [m, true]));
+    for (const [part, fams] of Object.entries(this.materials)) {
+      car.materials[part] = {};
+      for (const [f, m] of Object.entries(fams)) car.materials[part][f] = m.clone();
+    }
+    const copy = (src) => {
+      const mats = (Array.isArray(src.material) ? src.material : [src.material]).map((m) => {
+        for (const [part, fams] of Object.entries(this.materials)) for (const [f, x] of Object.entries(fams)) if (x === m) return car.materials[part][f];
+        return m;
+      });
+      const m = new THREE.Mesh(src.geometry, mats);
+      m.castShadow = true; m.receiveShadow = true;
+      m.userData.part = src.userData.part;
+      m.position.copy(src.position); m.rotation.copy(src.rotation);
+      car.meshes.push(m);
+      return m;
+    };
+    for (const child of this.body.children) {
+      if (child.isMesh && sourceMeshes.has(child)) { const m = copy(child); car.body.add(m); if (child === this.wing) car.wing = m; continue; }
+      if (this.wheels.includes(child)) {
+        const wheel = new THREE.Group();
+        wheel.position.copy(child.position); wheel.rotation.copy(child.rotation);
+        for (const c of child.children) if (c.isMesh) wheel.add(copy(c));
+        car.body.add(wheel); car.wheels.push(wheel);
+      }
+    }
+    car.finish = this.finish;
+    car.root.updateMatrixWorld(true);
+    car.bounds = new THREE.Box3().setFromObject(car.root);
+    return car;
+  }
+
+  dispose() { for (const fams of Object.values(this.materials)) for (const m of Object.values(fams)) m.dispose(); }
+
   material(part, family) { return this.materials[part] && this.materials[part][family]; }
 
   colour(part, family) {

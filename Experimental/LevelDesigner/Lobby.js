@@ -11,7 +11,7 @@ import { SETS, FLOORS, buildSet } from './Sets.js';
 import { tiled } from './Textures.js';
 
 export { SETS, FLOORS };
-export const SET_CEILING = { studio: 6.55, garage: 6.25, atrium: 6.85, pavilion: 4.28, horizon: null };
+export const SET_CEILING = { studio: 7.72, garage: 7.15, atrium: 7.55, pavilion: 4.78, horizon: null };
 
 const clone = (v) => JSON.parse(JSON.stringify(v));
 

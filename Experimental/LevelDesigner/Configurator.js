@@ -19,6 +19,37 @@ export function applyDefaultFinish(vehicle) {
     for (const [part, family] of row.targets) vehicle.setColour(part, family, row.swatches[0].hex);
   }
 }
+// A car's configuration as plain data (what a player shares with the lobby): one colour per swatch row + the finish.
+export function configOf(vehicle) {
+  const colours = {};
+  for (const zone of Object.values(ZONES)) for (const row of zone.rows) {
+    if (!row.targets) continue;
+    const [part, family] = row.targets[0];
+    colours[`${part}:${family}`] = vehicle.colour(part, family);
+  }
+  return { finish: vehicle.finish, colours };
+}
+export function applyConfig(vehicle, config) {
+  if (!config) return;
+  for (const zone of Object.values(ZONES)) for (const row of zone.rows) {
+    if (!row.targets) continue;
+    const [part, family] = row.targets[0];
+    const hex = config.colours && config.colours[`${part}:${family}`];
+    if (hex) for (const [p, f] of row.targets) vehicle.setColour(p, f, hex);
+  }
+  if (config.finish) vehicle.setFinish(config.finish);
+}
+// A plausible configuration a player might pick: a paint, matching rims and lamps, mostly showroom-tasteful.
+export function randomConfig(random = Math.random) {
+  const pick = (list) => list[Math.floor(random() * list.length)];
+  const colours = {};
+  for (const zone of Object.values(ZONES)) for (const row of zone.rows) {
+    if (!row.targets) continue;
+    const [part, family] = row.targets[0];
+    colours[`${part}:${family}`] = (zone === ZONES.lights && random() < 0.7 ? row.swatches[0] : pick(row.swatches)).hex;
+  }
+  return { finish: pick(['gloss', 'gloss', 'metallic', 'satin', 'matte']), colours };
+}
 export const ZONES = {
   paint: {
     label: 'Paint', kicker: 'Body colour',

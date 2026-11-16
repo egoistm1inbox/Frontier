@@ -10,7 +10,9 @@ import { ControlVehicle, geometryFromRaw } from './Vehicle.js';
 import { PIECES, CATEGORIES, defaultPieceParams } from './Items.js';
 import { FIXTURES, RIGS, defaultFixtureParams, aimAt, headHeight } from './Fixtures.js';
 import { FINISHES, finish } from './Kit.js';
-import { Configurator, DEFAULT_HOTSPOTS, ZONES, applyDefaultFinish } from './Configurator.js';
+import { Configurator, DEFAULT_HOTSPOTS, ZONES, applyDefaultFinish, configOf, applyConfig } from './Configurator.js';
+import { LobbySession, SimulatedTransport, MAX_PLAYERS } from './Session.js';
+import { DEFAULT_LAYOUT, GUEST_PLACES, arcLayout, buildPlace, sizePlace, carShadow } from './Places.js';
 
 export const STORAGE_KEY = 'Frontier.LevelDesigner.Lobby.v1';      // first build's single save (no longer read)
 export const LIBRARY_KEY = 'Frontier.LevelDesigner.Levels.v2';
@@ -18,6 +20,7 @@ export const LIBRARY_KEY = 'Frontier.LevelDesigner.Levels.v2';
 export const GROUPS = [
   { id: 'environment', label: 'Environment', icon: 'sun', note: 'Set, floor, sky, sun, turntable' },
   { id: 'vehicle', label: 'Vehicle', icon: 'vehicle', note: 'Configurable car and its dots' },
+  { id: 'places', label: 'Places', icon: 'places', note: `${MAX_PLAYERS} cars · you and up to ${MAX_PLAYERS - 1} players` },
   { id: 'lights', label: 'Lights', icon: 'softbox', note: 'Fixtures · area lights, spots, pendants' },
   { id: 'pieces', label: 'Scene', icon: 'tree', note: 'Trees, furniture, garage kit, architecture' },
   { id: 'custom', label: 'Your models', icon: 'sparkle', note: 'Premium · imported models' },
@@ -45,13 +48,13 @@ export const TEMPLATES = {
   garage: {
     label: 'Garage', note: 'Workshop with lift, tool chest, tyres and battens', set: 'garage', rig: 'workshop',
     pieces: [
-      { type: 'lift', name: 'Lift bay 2', position: [-7.8, 0, -1.5], rotationY: Math.PI / 2 },
-      { type: 'toolchest', name: 'Tool chest', position: [-11.9, 0, 4.5], rotationY: Math.PI / 2 },
-      { type: 'workbench', name: 'Workbench', position: [-12.2, 0, 1.2], rotationY: Math.PI / 2, params: { length: 2.6 } },
-      { type: 'tyres', name: 'Tyre stack', position: [10.8, 0, -6.5], params: { count: 5 } },
-      { type: 'tyres', name: 'Tyre stack 2', position: [11.6, 0, -4.9], params: { count: 3, seed: 7, leaning: false } },
-      { type: 'drum', name: 'Oil drum', position: [11.9, 0, 6.6] },
-      { type: 'drum', name: 'Oil drum 2', position: [11.3, 0, 7.3], finish: 'redEnamel', params: { label: false } },
+      { type: 'lift', name: 'Service lift', position: [-14.6, 0, 7.5], rotationY: Math.PI / 2 },
+      { type: 'toolchest', name: 'Tool chest', position: [-18.9, 0, 1.5], rotationY: Math.PI / 2 },
+      { type: 'workbench', name: 'Workbench', position: [-19.2, 0, -2.2], rotationY: Math.PI / 2, params: { length: 2.6 } },
+      { type: 'tyres', name: 'Tyre stack', position: [18.4, 0, -12.5], params: { count: 5 } },
+      { type: 'tyres', name: 'Tyre stack 2', position: [19.1, 0, -10.8], params: { count: 3, seed: 7, leaning: false } },
+      { type: 'drum', name: 'Oil drum', position: [18.9, 0, 9.6] },
+      { type: 'drum', name: 'Oil drum 2', position: [18.3, 0, 10.3], finish: 'redEnamel', params: { label: false } },
       { type: 'cone', name: 'Cone', position: [5.6, 0, 5.4] },
       { type: 'cone', name: 'Cone 2', position: [-5.6, 0, 5.4] },
     ],
@@ -59,24 +62,25 @@ export const TEMPLATES = {
   atrium: {
     label: 'Minimal architecture', note: 'Concrete atrium, skylight, tree, lounge corner', set: 'atrium', rig: 'daylight',
     pieces: [
-      { type: 'tree', name: 'Atrium tree', position: [-7.6, 0, -4.2], params: { height: 5.6, crown: 1.7, planter: true, seed: 3 } },
-      { type: 'lounge', name: 'Lounge chair', position: [8.4, 0, 5.4], rotationY: -2.4 },
-      { type: 'lounge', name: 'Lounge chair 2', position: [9.9, 0, 3.6], rotationY: -1.9 },
-      { type: 'coffee', name: 'Coffee table', position: [8.6, 0, 3.4] },
-      { type: 'rug', name: 'Rug', position: [9, 0, 4.2], rotationY: 0.5, params: { width: 3.4, depth: 2.6, round: true }, finish: 'fabricSlate' },
-      { type: 'grass', name: 'Grass', position: [-9.8, 0, 3.2], params: { spread: 1.6 } },
-      { type: 'rock', name: 'Boulder', position: [-8.7, 0, 2.2], params: { size: 1.1 } },
+      { type: 'tree', name: 'Atrium tree', position: [-14.6, 0, 4.6], params: { height: 6.4, crown: 2, planter: true, seed: 3 } },
+      { type: 'tree', name: 'Atrium tree 2', position: [0, 0, -14.2], params: { height: 5.2, crown: 1.6, planter: true, seed: 11 } },
+      { type: 'lounge', name: 'Lounge chair', position: [14.4, 0, 9.4], rotationY: -2.4 },
+      { type: 'lounge', name: 'Lounge chair 2', position: [15.9, 0, 7.6], rotationY: -1.9 },
+      { type: 'coffee', name: 'Coffee table', position: [14.6, 0, 7.4] },
+      { type: 'rug', name: 'Rug', position: [15, 0, 8.2], rotationY: 0.5, params: { width: 3.4, depth: 2.6, round: true }, finish: 'fabricSlate' },
+      { type: 'grass', name: 'Grass', position: [-16.6, 0, 8.4], params: { spread: 1.6 } },
+      { type: 'rock', name: 'Boulder', position: [-15.6, 0, 9.6], params: { size: 1.1 } },
     ],
   },
   pavilion: {
     label: 'Glass pavilion', note: 'Marble floor, gallery tracks, reception and plants', set: 'pavilion', rig: 'gallery',
     pieces: [
-      { type: 'desk', name: 'Reception', position: [-7, 0, -4.6], rotationY: 0.6 },
-      { type: 'sofa', name: 'Sofa', position: [7.4, 0, -5.4], rotationY: -0.4 },
-      { type: 'coffee', name: 'Coffee table', position: [7.2, 0, -3.9] },
-      { type: 'plant', name: 'Plant', position: [-9.6, 0, 5.6], params: { height: 1.8, pot: 0.6 } },
-      { type: 'plant', name: 'Plant 2', position: [9.6, 0, 5.6], params: { height: 1.5, seed: 8 } },
-      { type: 'screen', name: 'Screen', position: [0, 0, -6.8], params: { width: 3, lift: 0.9 } },
+      { type: 'desk', name: 'Reception', position: [-13.4, 0, 8.6], rotationY: 2.4 },
+      { type: 'sofa', name: 'Sofa', position: [14.4, 0, 6.8], rotationY: -1.9 },
+      { type: 'coffee', name: 'Coffee table', position: [13, 0, 7.6] },
+      { type: 'plant', name: 'Plant', position: [-16.4, 0, 12.6], params: { height: 1.8, pot: 0.6 } },
+      { type: 'plant', name: 'Plant 2', position: [16.4, 0, 12.6], params: { height: 1.5, seed: 8 } },
+      { type: 'screen', name: 'Screen', position: [0, 0, -14.2], params: { width: 3.6, lift: 0.9 } },
       { type: 'barrier', name: 'Barrier', position: [0, 0, 4.6], params: { span: 4.2 } },
     ],
   },
@@ -107,8 +111,12 @@ export class Level {
     this.custom = new THREE.Group();
     this.custom.name = 'Placements';
     stage.scene.add(this.custom);
+    this.placesRoot = new THREE.Group();
+    this.placesRoot.name = 'Places';
+    stage.scene.add(this.placesRoot);
+    this.layout = { ...DEFAULT_LAYOUT };
     this.hardware = true;                 // fixture housings and stands visible (the lights work either way)
-    stage.frameCallbacks.add(() => this.tick());
+    stage.frameCallbacks.add((dt) => this.tick(dt));
   }
 
   on(fn) { this.listeners.add(fn); return () => this.listeners.delete(fn); }
@@ -129,15 +137,22 @@ export class Level {
     this.stage.content.add(this.vehicle.root);
     for (const m of this.vehicle.meshes) m.layers.enable(SHADOW_LAYER);
     this.lobby.shadowTarget = this.vehicle.root;
-    this.lobby.bakeHidden = () => [this.vehicle.root, this.helpers];
-    this.configurator = new Configurator({ stage: this.stage, vehicle: this.vehicle, well: this.well, onChange: () => this.changed('finish') });
+    this.lobby.bakeHidden = () => [this.vehicle.root, this.helpers, this.placesRoot];
+    this.configurator = new Configurator({ stage: this.stage, vehicle: this.vehicle, well: this.well, onChange: () => { this.session.publish(configOf(this.vehicle)); this.changed('finish'); } });
     applyDefaultFinish(this.vehicle);
+    // The lobby session: you on place 1, other players on the guest places. Simulated players until there's a server.
+    this.session = new LobbySession({ self: { id: 'you', name: 'You', config: configOf(this.vehicle) } });
+    this.session.placeOpen = (i) => { const p = this.placeAt(i); return !!p && p.object.visible; };
+    this.session.on((e) => this.onSession(e));
+    this.sim = new SimulatedTransport({ seed: 11 });
+    this.session.connect(this.sim);
     this.registerBuiltIns();
     for (const def of DEFAULT_HOTSPOTS) this.addHotspot(def, { silent: true });
     let restored = false;
     if (entry.snapshot) { try { this.restore(entry.snapshot); restored = true; } catch (e) { console.warn('Saved level ignored', e); } }
     if (!restored) this.dress(this.template);
     this.refreshBuiltInNotes();
+    this.session.publish(configOf(this.vehicle));
     library.active = this.id;
     writeLibrary(library);
   }
@@ -150,6 +165,8 @@ export class Level {
     this.applyRig(t.rig, { silent: true });
     for (const piece of t.pieces) this.addPiece(piece.type, { ...piece, silent: true });
     if (t.turntableOnStage) this.lobby.turntable.position.y = 0.12;
+    this.layout = { ...DEFAULT_LAYOUT, ...(t.layout || {}) };
+    this.relayout({ silent: true });
     this.seatVehicle();
   }
 
@@ -191,9 +208,98 @@ export class Level {
     env('floor', 'floor', 'Floor', L.floor, { icon: 'floor', note: 'Finish over a live mirror' });
     env('sky', 'sky', 'Sky', L.sky, { icon: 'sky', note: 'Gradient dome' });
     env('sun', 'sun', 'Sun', L.sun, { icon: 'sun', note: 'Shadow-casting daylight' });
-    env('turntable', 'turntable', 'Turntable', L.turntable, { icon: 'turntable', note: 'Display disc with a light ring', movable: true, pick: [L.disc] });
+    this.placements.push({ id: 'turntable', kind: 'turntable', name: 'Place 1', group: 'places', object: L.turntable, builtIn: true, icon: 'turntable', note: 'You · host turntable', movable: true, pick: [L.disc], placeIndex: 0 });
     this.placements.push({ id: 'vehicle', kind: 'vehicle', name: 'ControlVehicle', group: 'vehicle', object: this.vehicle.root, builtIn: true, icon: 'vehicle', note: 'Body · 4 wheels · rear wing', movable: true, rotatable: true, pick: this.vehicle.meshes });
+    for (let i = 1; i <= GUEST_PLACES; i++) {
+      const holder = buildPlace(i, L, this.layout);
+      this.placesRoot.add(holder);
+      const disc = holder.userData.place.disc;
+      this.placements.push({ id: `place-${i + 1}`, kind: 'place', name: `Place ${i + 1}`, group: 'places', object: holder, builtIn: true, icon: 'place', note: 'Open', movable: true, rotatable: true, pick: [disc], placeIndex: i, data: { spin: false }, seat: null });
+    }
+    this.relayout({ silent: true });
     this.refreshBuiltInNotes();
+  }
+
+  // --------------------------------------------------------------------------------------------- places
+  placeAt(index) { return this.placements.find((p) => p.placeIndex === index) || null; }
+  guestPlaces() { return this.placements.filter((p) => p.kind === 'place'); }
+  get openPlaces() { return 1 + this.guestPlaces().filter((p) => p.object.visible).length; }
+
+  // Put the guest places back on the arc around the host turntable.
+  relayout({ silent = false } = {}) {
+    const spots = arcLayout(this.layout, this.lobby.turntable.position);
+    this.guestPlaces().forEach((p, i) => {
+      p.object.position.set(...spots[i].position);
+      p.object.rotation.y = spots[i].rotationY;
+      sizePlace(p.object, this.layout.discRadius, this.lobby.turntableHeight);
+    });
+    if (!silent) this.changed('transform');
+  }
+
+  setLayout(key, value) { this.layout[key] = value; this.relayout(); }
+  setPlaceSpin(p, on) { p.data.spin = on; if (!on && p.seat) p.seat.car.root.rotation.y = 0; this.changed('edit'); }
+
+  onSession(e) {
+    const { type, player } = e;
+    if (type === 'join' || type === 'move') this.seatPlayer(player);
+    else if (type === 'leave') this.unseat(player.id);
+    else if (type === 'config') { const p = this.placeOf(player.id); if (p && p.seat) applyConfig(p.seat.car, player.config); }
+    this.lastEvent = e;
+    for (const fn of this.listeners) fn('players');
+  }
+
+  placeOf(playerId) { return this.guestPlaces().find((p) => p.seat && p.seat.player.id === playerId) || null; }
+
+  seatPlayer(player) {
+    this.unseat(player.id);
+    const p = this.placeAt(player.place);
+    if (!p) return;
+    const car = this.vehicle.shell();
+    applyConfig(car, player.config);
+    car.root.add(carShadow());
+    p.object.userData.place.seat.add(car.root);
+    p.seat = { player, car };
+    p.note = player.name;
+    p.pick = [p.object.userData.place.disc, ...car.meshes];
+  }
+
+  unseat(playerId) {
+    const p = this.placeOf(playerId);
+    if (!p) return;
+    const { car } = p.seat;
+    car.root.parent && car.root.parent.remove(car.root);
+    car.root.traverse((o) => { if (o.name === 'Car shadow') { o.geometry.dispose(); o.material.dispose(); } });
+    car.dispose();
+    p.seat = null;
+    p.note = 'Open';
+    p.pick = [p.object.userData.place.disc];
+  }
+
+  // Test company in the editor; the simulated transport plays the other players.
+  addGuest() { if (this.session.full) return null; return this.sim.join(); }
+  fillLobby() { let guard = 8; while (!this.session.full && guard--) this.sim.join(); }
+  clearGuests() { this.sim.clear(); for (const g of this.session.guests) this.session.kick(g.id); }
+  kick(p) { if (!p.seat) return; const id = p.seat.player.id; if (this.sim.present.has(id)) this.sim.leave(id); else this.session.kick(id); }
+
+  // A closed place sends its player to another open one (or out, if there is none).
+  placeVisibilityChanged(p) {
+    if (p.object.visible || !p.seat) return;
+    const player = p.seat.player, free = this.session.freePlace();
+    if (free > 0) this.session.move(player.id, free);
+    else this.kick(p);
+  }
+
+  // Play-mode picking: which car is under the pointer — 'you', a guest place, or nothing.
+  pickCar(clientX, clientY) {
+    const rect = this.stage.canvas.getBoundingClientRect();
+    const ndc = new THREE.Vector2(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1);
+    const ray = new THREE.Raycaster();
+    ray.setFromCamera(ndc, this.stage.camera);
+    const targets = [...this.vehicle.meshes];
+    const owner = new Map(this.vehicle.meshes.map((m) => [m, 'you']));
+    for (const p of this.guestPlaces()) if (p.seat && p.object.visible) for (const m of p.seat.car.meshes) { targets.push(m); owner.set(m, p); }
+    const hit = ray.intersectObjects(targets, false)[0];
+    return hit ? owner.get(hit.object) : null;
   }
 
   refreshBuiltInNotes() {
@@ -392,6 +498,7 @@ export class Level {
     else if (p.kind === 'sun') { p.object.visible = on; this.lobby.applySun(); }
     else p.object.visible = on;
     if (p.kind === 'turntable') this.seatVehicle();
+    if (p.kind === 'place') this.placeVisibilityChanged(p);
     this.changed('visibility');
   }
 
@@ -407,13 +514,16 @@ export class Level {
     v.position.y = on ? t.position.y + this.lobby.turntableHeight : 0;
   }
 
-  tick() {
+  tick(dt = 0) {
     const spin = this.lobby.spin;
     if (spin) {
       const v = this.vehicle.root, t = this.lobby.turntable;
       const dx = v.position.x - t.position.x, dz = v.position.z - t.position.z;
       if (Math.hypot(dx, dz) < this.lobby.settings.turntable.radius) v.rotation.y += spin;
     }
+    const rate = THREE.MathUtils.degToRad(this.lobby.settings.turntable.speed) * dt;
+    for (const p of this.placements) if (p.kind === 'place' && p.data.spin && p.seat) p.seat.car.root.rotation.y += rate;
+    if (this.session) this.sim.tick(dt, this.session);
   }
 
   // ---------------------------------------------------------------------------------------------- picking
@@ -454,13 +564,14 @@ export class Level {
     }
     const kit = (p) => ({ id: p.id, name: p.name, type: p.data.type, params: p.data.params, finish: p.data.finish, colour: p.data.colour, position: r3(p.object.position), rotationY: +p.object.rotation.y.toFixed(4), scale: r3(p.object.scale), shown: p.object.visible });
     return {
-      format: 'Frontier.Level', version: 3, name: this.name, template: this.template, tier: this.tier, hardware: this.hardware,
+      format: 'Frontier.Level', version: 4, name: this.name, template: this.template, tier: this.tier, hardware: this.hardware,
       lobby: this.lobby.settings,
       vehicle: { finish: v.finish, colours },
       transforms, visibility,
       hotspots: this.byGroup('vehicle').filter((p) => p.kind === 'hotspot').map((p) => ({ id: p.id, zone: p.spot.zone, anchor: r3(p.object.position), view: p.spot.view, shown: p.spot.shown })),
       fixtures: this.byGroup('lights').map(kit),
       pieces: this.byGroup('pieces').map(kit),
+      places: { layout: this.layout, seats: this.guestPlaces().map((p) => ({ id: p.id, position: r3(p.object.position), rotationY: +p.object.rotation.y.toFixed(4), spin: p.data.spin, shown: p.object.visible })) },
     };
   }
 
@@ -498,6 +609,16 @@ export class Level {
       if (!p) continue;
       if (p.kind === 'hotspot') p.spot.shown = on; else { p.object.visible = on; if (p.kind === 'sun') L.applySun(); }
     }
+    this.layout = { ...DEFAULT_LAYOUT, ...((s.places && s.places.layout) || {}) };
+    this.relayout({ silent: true });
+    for (const seat of (s.places && s.places.seats) || []) {
+      const p = this.get(seat.id);
+      if (!p) continue;
+      p.object.position.set(...seat.position);
+      p.object.rotation.y = seat.rotationY || 0;
+      p.data.spin = !!seat.spin;
+      p.object.visible = seat.shown !== false;
+    }
     this.refreshBuiltInNotes();
     this.seatVehicle();
     L.queueEnvironment();
@@ -519,7 +640,7 @@ export class Level {
   }
 
   get counts() {
-    return { placements: this.placements.length, hotspots: this.placements.filter((p) => p.kind === 'hotspot').length, lights: this.byGroup('lights').length, pieces: this.byGroup('pieces').length, custom: this.byGroup('custom').length };
+    return { players: this.session ? this.session.count : 1, places: this.openPlaces, placements: this.placements.length, hotspots: this.placements.filter((p) => p.kind === 'hotspot').length, lights: this.byGroup('lights').length, pieces: this.byGroup('pieces').length, custom: this.byGroup('custom').length };
   }
 }
 

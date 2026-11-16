@@ -193,3 +193,32 @@ body.playing .ld-dot.selected i { background: #fff; }
 .piece-card .in-level { position: absolute; top: 12px; right: 12px; font-style: normal; font-size: 9px; color: #111; background: var(--amber); border-radius: 8px; padding: 1px 6px; }
 .piece-card:hover { border-color: var(--amber); }
 .piece-card:hover .piece-glyph { color: var(--amber); }
+
+/* ---------------------------------------------------------------- other players: name tags, visiting, places list */
+.ld-tags { position: absolute; inset: 0; z-index: 3; pointer-events: none; overflow: hidden; }
+.ld-tag { position: absolute; left: 0; top: 0; height: 24px; min-height: 24px; padding: 0 11px 0 7px; display: inline-flex; align-items: center; gap: 7px; border-radius: 12px; background: #0f0f10c4; backdrop-filter: blur(6px); border: 1px solid #ffffff14; color: #ececec; font-size: 11px; white-space: nowrap; pointer-events: auto; transition: background 0.15s; }
+.ld-tag:hover { background: #1c1c1ee8; color: #fff; }
+.ld-tag i { width: 10px; height: 10px; border-radius: 50%; box-shadow: 0 0 0 1.5px #ffffff40; flex: none; }
+.ld-tag::after { content: ''; position: absolute; left: 50%; bottom: -5px; width: 1px; height: 5px; background: #ffffff40; }
+body:not(.playing) .ld-tag { opacity: 0.85; }
+.ld-visit { position: absolute; left: 50%; bottom: 22px; transform: translateX(-50%); z-index: 6; display: flex; align-items: center; gap: 14px; padding: 7px 7px 7px 16px; border-radius: 20px; background: #0f0f10d0; backdrop-filter: blur(10px); border: 1px solid #ffffff14; color: #f0f0f0; animation: trayRise 0.35s cubic-bezier(0.16, 1, 0.3, 1); }
+.ld-visit[hidden] { display: none; }
+.ld-visit .who b { display: block; font-size: 13px; }
+.ld-visit .who small { font-size: 8px; letter-spacing: 1.4px; color: #8a8a8a; }
+.ld-visit button { height: 28px; min-height: 28px; padding: 0 12px; border-radius: 14px; background: #ffffff12; border: 0; color: #e0e0e0; font-size: 11px; display: inline-flex; gap: 6px; align-items: center; }
+.ld-visit button:hover { background: #ffffff24; color: #fff; }
+.ld-place-list { display: flex; flex-direction: column; gap: 2px; margin: 4px 0 8px; }
+.ld-place-row { width: 100%; justify-content: stretch; display: grid; grid-template-columns: 22px 12px 1fr auto; align-items: center; gap: 9px; height: 30px; min-height: 30px; padding: 0 10px; border-radius: 10px; background: transparent; border: 0; color: #d6d6d6; font-size: 12px; text-align: left; }
+.ld-place-row:hover { background: #ffffff0c; }
+.ld-place-row.active { background: #ffb2381a; color: #fff; }
+.ld-place-row .idx { font-size: 10px; color: #7a7a7a; font-variant-numeric: tabular-nums; }
+.ld-place-row i { width: 10px; height: 10px; border-radius: 50%; box-shadow: 0 0 0 1.5px #ffffff30; }
+.ld-place-row i.empty { background: transparent; box-shadow: inset 0 0 0 1.5px #ffffff30; }
+.ld-place-row small { font-size: 8px; letter-spacing: 1.2px; color: #7a7a7a; }
+.ld-place-row.closed .name { color: #6a6a6a; }
+.ld-seat { display: flex; gap: 10px; align-items: center; margin-bottom: 8px; }
+.ld-seat i { width: 22px; height: 22px; border-radius: 50%; box-shadow: 0 0 0 2px #ffffff26; }
+.ld-seat b { display: block; font-size: 13px; }
+.ld-seat small { font-size: 10px; color: #8a8a8a; }
+.action-row .tool:disabled { opacity: 0.4; pointer-events: none; }
+.action-row:has(> :nth-child(3)) { grid-template-columns: 1fr 1fr 1fr; }

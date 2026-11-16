@@ -26,7 +26,25 @@ python3 Experimental/LevelDesigner/Serve.py        # http://0.0.0.0:8096/
 ![Piece details](Screenshots/piece.png)
 ![Levels](Screenshots/levels.png)
 
+## Places: five cars in the lobby (`Session.js`, `Places.js`)
+![Five places in the garage](Screenshots/places-garage.png)
+![Looking at another player's car](Screenshots/places-visit.png)
+![Places in the editor](Screenshots/places-editor.png)
+
+- **Five places.** Place 01 is your own car on the centre turntable. Places 02–05 are guest discs in an arc behind it, each turned to face your car. Every guest place has its own disc and ring (sharing the turntable's materials), a painted circle and a floor number.
+- **In the Lobby:** your car keeps its dots. The other cars show a name tag and no dots. Tap another car (or its tag) to fly over and look at it. This is view only: a small pill shows the player's name and a **Your car** button. Esc or tapping your own car also brings you back.
+- **In the editor:** places are built-in placements under **Places** in the outliner, so you can move and turn them with the gizmo.
+  - Hiding a place closes it. Its player moves to a free place, or leaves if there isn't one.
+  - **Arc** sliders (distance, spread, disc radius) re-lay all four guest places.
+  - Each place has **Look**, **Repaint**, **Remove** and **Spin**.
+  - **Add / Fill / Clear** and **Automatic company** fill the lobby with test players.
+- **Networking: none yet; players are simulated.** `LobbySession` tracks who stands where (5 max; a sixth player is turned away with `full`). It talks to a transport with two methods, `send(message)` and `onMessage(handler)`, using four JSON messages: `hello`, `config`, `bye`, `full`. `SimulatedTransport` stands in for the server. A WebSocket or WebRTC transport on your backend only has to implement the same two methods. A car's paint travels as `configOf(vehicle)` (finish and the colour of each part).
+- Guest cars are `vehicle.shell()` copies: shared geometry, own materials, about 25k triangles each.
+- URL flags: `?guests=0..4` sets how many simulated players are already in the lobby (default 3). `?company=1` keeps players coming, repainting and leaving.
+
 ## Lobby designs (`Sets.js`)
+All roofed rooms were enlarged for five cars: **Studio** cove 38 × 30.5 m, 8.4 m high; **Garage** 40 × 34 × 7.4 m with three roll-up doors and three skylights; **Minimal architecture** 38 × 34 × 8 m; **Glass pavilion** 36 × 30 × 4.8 m. Template pieces sit clear of the arc.
+
 Each design is a complete room at real scale, with its own sky, sun, ambience, recommended floor and recommended light rig.
 
 | Design | What it is |
@@ -113,7 +131,7 @@ Each piece has its own shape parameters, such as height, crown, seed, count, wid
 - **Basic:** designs, floors, rigs, fixtures, pieces and dots.
 - **Premium:** also imported models (OBJ, glTF / GLB, STL, PLY, FCT1), for the session only.
 - Levels save to a `localStorage` library as you edit.
-- **Export JSON** writes a `Frontier.Level` v3 document. Older saves fall back to their template.
+- **Export JSON** writes a `Frontier.Level` v4 document (v4 adds the places and arc). v3 saves still open, with the default arc; older saves fall back to their template.
 
 ## Files
 | File | Purpose |
@@ -127,7 +145,9 @@ Each piece has its own shape parameters, such as height, crown, seed, count, wid
 | `Items.js` | Scene piece catalogue |
 | `Kit.js` | Finishes (materials) and geometry helpers shared by sets, fixtures and pieces |
 | `Textures.js` | Procedural surface textures and swatches |
-| `Vehicle.js`, `Configurator.js` | ControlVehicle and the dot configurator |
+| `Vehicle.js`, `Configurator.js` | ControlVehicle (plus `shell()` copies for guests) and the dot configurator (`configOf` / `applyConfig`) |
+| `Session.js` | Lobby session (5 places, join / repaint / leave) and the simulated transport |
+| `Places.js` | Guest place discs, the arc layout and parked-car shadows |
 | `Gizmo.js` | Move / turn gizmo |
 | `LevelIcons.js` | Shared studio icons plus level, piece and fixture glyphs |
 | `Vendor/` | three r187 addons: Reflector, RectAreaLight libs, RoundedBoxGeometry, BufferGeometryUtils |

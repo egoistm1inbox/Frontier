@@ -3,6 +3,7 @@
 // controls as the Component Viewer (Shared/Studio).
 import { THREE } from '../Shared/Studio/Render.js';
 import { createCameraHud } from '../Shared/Studio/Camera.js';
+import { MAX_PLAYERS } from './Session.js';
 import { $, el, section, panel, rangeField, segmentedField, toggle, selectField, vec3Field, colorField, textField, metrics, toast, download } from '../Shared/Studio/Ui.js';
 import { IMPORT_FORMATS } from '../Shared/GeometryCompile/Engine/ImportFormats.js';
 import { icon, iconEl, hydrate } from './LevelIcons.js';
@@ -18,7 +19,7 @@ import { FINISHES } from './Vehicle.js';
 
 const KIND_LABEL = {
   sky: 'Sky dome', sun: 'Directional light', floor: 'Floor finish', set: 'Lobby design', turntable: 'Turntable',
-  vehicle: 'Configurable vehicle', hotspot: 'Configurator dot', fixture: 'Light fixture', piece: 'Scene piece', import: 'Imported model',
+  vehicle: 'Configurable vehicle', hotspot: 'Configurator dot', fixture: 'Light fixture', piece: 'Scene piece', import: 'Imported model', place: 'Player place',
 };
 const deg = THREE.MathUtils.radToDeg, rad = THREE.MathUtils.degToRad;
 
@@ -89,7 +90,15 @@ export function createLevelDesigner({ stage, level }) {
     if (!press || press.button !== 0 || e.target !== stage.canvas) { press = null; return; }
     const moved = Math.hypot(e.clientX - press.x, e.clientY - press.y);
     press = null;
-    if (moved > 4 || state.playing) return;
+    if (moved > 4) return;
+    if (state.playing) {
+      // Lobby: tap another player's car to go and look at it; tap your own to come back.
+      if (level.configurator.active) return;
+      const hit = level.pickCar(e.clientX, e.clientY);
+      if (hit === 'you') { if (state.visiting) visit(null); }
+      else if (hit) visit(hit);
+      return;
+    }
     select(level.pick(e.clientX, e.clientY, { helpers: state.helpers }));
   });
   stage.canvas.addEventListener('dblclick', (e) => {
@@ -121,6 +130,106 @@ export function createLevelDesigner({ stage, level }) {
     if (box.isEmpty()) box.setFromCenterAndSize(p.object.getWorldPosition(new THREE.Vector3()), new THREE.Vector3(1, 1, 1));
     stage.rig.frame(box, { keepAngle: true });
   }
+  // ------------------------------------------------------------------------------------ other players' cars
+  // Visiting: the camera flies to another player's place and frames their car. View only — no dots, no colours.
+  function carCentreOf(root) {
+    const c = new THREE.Box3().setFromObject(root).getCenter(new THREE.Vector3());
+    c.y = Math.max(0.6, c.y - 0.1);
+    return c;
+  }
+  // Seen from in front (the side facing the host), at whichever quarter angle has no other car or wall in the way.
+  const viewRay = new THREE.Raycaster();
+  function viewOfPlace(p) {
+    const car = p.seat.car.root;
+    const yaw = p.object.rotation.y + car.rotation.y;
+    const target = carCentreOf(car), pitch = rad(11), distance = 9.5;
+    const blockers = [...level.vehicle.meshes, ...occluders];
+    for (const q of level.guestPlaces()) if (q !== p && q.seat && q.object.visible) blockers.push(...q.seat.car.meshes);
+    let best = null;
+    // A fan of rays per angle (the edges of the shot as well as its centre), so a neighbour can't sit in a corner.
+    for (const a of [32, -32, 0, 55, -55, 80, -80]) {
+      const y = yaw + rad(a);
+      let clear = distance;
+      for (const [dy, dp] of [[0, 0], [14, 0], [-14, 0], [9, -5], [-9, -5]]) {
+        const yy = y + rad(dy), pp = pitch + rad(dp), cp = Math.cos(pp);
+        viewRay.set(target, new THREE.Vector3(Math.sin(yy) * cp, Math.sin(pp), Math.cos(yy) * cp));
+        viewRay.far = distance;
+        const hit = viewRay.intersectObjects(blockers, true)[0];
+        if (hit) clear = Math.min(clear, hit.distance);
+      }
+      if (!best || clear > best.clear + 0.5) best = { yaw: y, clear };
+      if (clear >= distance) break;
+    }
+    return { target, yaw: best.yaw, pitch, distance: Math.max(5.5, Math.min(distance, best.clear - 0.6)) };
+  }
+  const visitTag = el('div', { class: 'ld-visit', hidden: true });
+  well.append(visitTag);
+  function visit(p) {
+    if (p && !(p.seat && p.object.visible)) p = null;
+    state.visiting = p;
+    level.configurator.close(false);
+    level.configurator.visible = !p && state.dots;
+    stage.rig.turntable = !p && state.playing && state.idleOrbit;
+    visitTag.hidden = !p;
+    visitTag.replaceChildren();
+    if (p) {
+      const back = el('button', { type: 'button', title: 'Back to your car (Esc)', html: `${icon('exit', 14)}<span>Your car</span>` });
+      back.addEventListener('click', () => visit(null));
+      visitTag.append(el('div', { class: 'who' }, el('b', {}, p.seat.player.name), el('small', {}, `PLACE ${String(p.placeIndex + 1).padStart(2, '0')} · VIEW ONLY`)), back);
+      stage.rig.flyTo(viewOfPlace(p), { duration: 1.1 });
+    } else if (state.playing) heroView(1);
+    for (const t of tags.values()) t.el.classList.toggle('current', !!p && t.place === p);
+  }
+
+  // Name tags over other players' cars, projected each frame like the dots (hidden behind walls and off-screen).
+  const tagLayer = el('div', { class: 'ld-tags' });
+  well.append(tagLayer);
+  const tags = new Map();   // placement id → { el, place }
+  const tagRay = new THREE.Raycaster(), tagPos = new THREE.Vector3();
+  let tagClock = 0;
+  function syncTags() {
+    const seen = new Set();
+    for (const p of level.guestPlaces()) {
+      if (!p.seat) continue;
+      seen.add(p.id);
+      let t = tags.get(p.id);
+      if (!t || t.player !== p.seat.player.id) {
+        if (t) t.el.remove();
+        const tag = el('button', { type: 'button', class: 'ld-tag' }, el('i', {}), el('span', {}, p.seat.player.name));
+        tag.addEventListener('click', (e) => { e.stopPropagation(); if (state.playing) visit(state.visiting === p ? null : p); else select(p); });
+        t = { el: tag, place: p, player: p.seat.player.id, hidden: false };
+        tags.set(p.id, t);
+        tagLayer.append(tag);
+      }
+      t.place = p;
+      t.el.querySelector('i').style.background = p.seat.car.colour('body', 6);
+    }
+    for (const [id, t] of tags) if (!seen.has(id)) { t.el.remove(); tags.delete(id); }
+    if (state.visiting && !state.visiting.seat) visit(null);
+  }
+  stage.frameCallbacks.add((dt) => {
+    const rect = well.getBoundingClientRect(), cam = stage.camera;
+    tagClock -= dt;
+    const checkWalls = tagClock <= 0;
+    if (checkWalls) tagClock = 0.15;
+    for (const t of tags.values()) {
+      const p = t.place;
+      if (!p.seat || !p.object.visible) { t.el.style.display = 'none'; continue; }
+      p.seat.car.root.getWorldPosition(tagPos);
+      tagPos.y += 2.15;
+      const v = tagPos.clone().project(cam);
+      if (v.z > 1 || Math.abs(v.x) > 1.05 || Math.abs(v.y) > 1.05) { t.el.style.display = 'none'; continue; }
+      if (checkWalls) {
+        const from = cam.getWorldPosition(new THREE.Vector3());
+        const dir = tagPos.clone().sub(from), len = dir.length();
+        tagRay.set(from, dir.normalize()); tagRay.far = len - 0.3;
+        t.hidden = occluders.length > 0 && tagRay.intersectObjects(occluders, true).length > 0;
+      }
+      t.el.style.display = t.hidden || state.visiting === p ? 'none' : '';
+      t.el.style.transform = `translate(${((v.x + 1) / 2) * rect.width}px, ${((1 - v.y) / 2) * rect.height}px) translate(-50%, -100%)`;
+    }
+  });
+
   const viewBar = el('div', { class: 'segmented' });
   for (const [id, label] of [['hero', 'Hero'], ['front', 'Front'], ['side', 'Side'], ['rear', 'Rear'], ['top', 'Top']]) {
     const b = el('button', { type: 'button' }, label);
@@ -507,6 +616,54 @@ export function createLevelDesigner({ stage, level }) {
     return panel(...blocks);
   }
 
+  // ---------------------------------------------------------------------------------------------- places
+  function button(glyph, label, onClick, disabled = false) {
+    const b = el('button', { type: 'button', class: 'tool', html: `${icon(glyph, 13)} ${label}` });
+    b.disabled = !!disabled;
+    b.addEventListener('click', onClick);
+    return b;
+  }
+  function lookAtPlace(p) {
+    if (!p.seat) return;
+    stage.rig.turntable = false;
+    stage.rig.flyTo(viewOfPlace(p), { duration: 0.9 });
+  }
+  // The five places, who stands where, test company and the arc.
+  function placesPanels() {
+    const S = level.session, open = S.capacity;
+    const rows = [];
+    for (let i = 0; i < MAX_PLAYERS; i++) {
+      const p = i === 0 ? level.get('turntable') : level.placeAt(i);
+      const who = S.playerAt(i), closed = i > 0 && p && !p.object.visible;
+      const swatch = el('i', { class: who ? '' : 'empty' });
+      if (who) swatch.style.background = i === 0 ? level.vehicle.colour('body', 6) : (p.seat ? p.seat.car.colour('body', 6) : '');
+      const row = el('button', { type: 'button', class: `ld-place-row${state.selected === p ? ' active' : ''}${closed ? ' closed' : ''}` },
+        el('span', { class: 'idx' }, String(i + 1).padStart(2, '0')), swatch,
+        el('span', { class: 'name' }, who ? (i === 0 ? 'You' : who.name) : closed ? 'Closed' : 'Open'),
+        el('small', {}, i === 0 ? 'HOST' : who ? 'GUEST' : ''));
+      row.addEventListener('click', () => p && select(p));
+      rows.push(row);
+    }
+    return [
+      panel(
+        metrics([[`${S.count}/${MAX_PLAYERS}`, 'CARS IN THE LOBBY'], [open, 'OPEN PLACES']]),
+        el('div', { class: 'ld-place-list' }, ...rows),
+        el('div', { class: 'action-row' },
+          button('plus', 'Add', () => { if (!level.addGuest()) toast('Every open place is taken'); }, S.full),
+          button('vehicle', 'Fill', () => level.fillLobby(), S.full),
+          button('x', 'Clear', () => level.clearGuests(), !S.guests.length)),
+        toggle({ label: 'Automatic company', value: level.sim.auto, note: 'Simulated players drift in, repaint and leave while you design.', onChange: (v) => { level.sim.auto = v; level.sim.timer = 1; } }),
+      ),
+      section('ARC', el('small', { class: 'section-note' }, 'guest places around yours')),
+      panel(
+        rangeField({ label: 'Distance', value: level.layout.radius, min: 7.5, max: 18, step: 0.1, unit: 'm', onInput: (v) => { level.layout.radius = v; level.relayout({ silent: true }); }, onChange: () => level.relayout() }),
+        rangeField({ label: 'Spread', value: level.layout.spread, min: 60, max: 220, step: 1, unit: '°', onInput: (v) => { level.layout.spread = v; level.relayout({ silent: true }); }, onChange: () => level.relayout() }),
+        rangeField({ label: 'Disc radius', value: level.layout.discRadius, min: 2.6, max: 4.2, step: 0.05, unit: 'm', onInput: (v) => { level.layout.discRadius = v; level.relayout({ silent: true }); }, onChange: () => level.relayout() }),
+        el('p', {}, 'Moving the arc puts every guest place back on it; move or turn a single place with the gizmo afterwards. Players are simulated until the lobby has a server — Session.js speaks a two-method transport a WebSocket can fill in.'),
+      ),
+    ];
+  }
+
   function renderDetails() {
     const d = $('Details');
     const scroll = d.scrollTop;
@@ -531,9 +688,11 @@ export function createLevelDesigner({ stage, level }) {
         panel(floorTiles(), rangeField({ label: 'Gloss', value: S.floor.gloss, min: 0, max: 1, step: 0.01, note: 'How much of the room the floor mirrors.', onInput: (v) => { S.floor.gloss = v; L.applyFloor(); }, onChange: () => level.changed('edit') })),
         section('LIGHTING', el('small', { class: 'section-note' }, RIGS[S.rig] ? RIGS[S.rig].label : 'custom')),
         panel(rigTiles(), el('p', {}, 'A rig replaces the fixtures with its own, aimed at the car. Every fixture stays editable under Lights; add more from Add → Lights.')),
+        section('PLACES', el('small', { class: 'section-note' }, `${level.session.count} of ${MAX_PLAYERS} cars`)),
+        ...placesPanels(),
         section('LOBBY'),
         panel(
-          el('p', {}, 'Players see the Lobby without any interface: only the dots on the car. A dot flies the camera to its part and opens its colours.'),
+          el('p', {}, 'Players see the Lobby without any interface: only the dots on their own car and name tags over the others. Tapping another car flies over to look at it.'),
           toggle({ label: 'Slow orbit when idle', value: state.idleOrbit, onChange: (v) => { state.idleOrbit = v; } }),
           toggle({ label: 'Keep the camera inside', value: state.contain, note: 'Walls and tall pieces push the editor camera in front of them. Always on in the Lobby.', onChange: (v) => { state.contain = v; } }),
           (() => { const b = el('button', { type: 'button', class: 'primary wide', html: `${icon('play', 13)} Play lobby` }); b.addEventListener('click', () => setPlaying(true)); return b; })(),
@@ -580,6 +739,19 @@ export function createLevelDesigner({ stage, level }) {
           rangeField({ label: 'Strength', value: S.shadow.strength, min: 0, max: 1, step: 0.01, onInput: (v) => { S.shadow.strength = v; L.applyShadow(); }, onChange: () => level.changed('edit') }),
           rangeField({ label: 'Softness', value: S.shadow.softness, min: 0.5, max: 6, step: 0.1, onInput: (v) => { S.shadow.softness = v; L.applyShadow(); }, onChange: () => level.changed('edit') }),
         ));
+    } else if (p.kind === 'place') {
+      const who = p.seat && p.seat.player;
+      d.append(...transformPanel(p), section('PLAYER'), panel(
+        who
+          ? el('div', { class: 'ld-seat' }, el('i', { style: { background: p.seat.car.colour('body', 6) } }), el('div', {}, el('b', {}, who.name), el('small', {}, `${FINISHES[who.config.finish] ? FINISHES[who.config.finish].label || who.config.finish : 'Gloss'} · simulated player`)))
+          : el('p', {}, p.object.visible ? 'Open: the next player to join stands here.' : 'Hidden: closed to players. Show it to open it again.'),
+        el('div', { class: 'action-row' }, ...(who ? [
+          button('eye', 'Look', () => lookAtPlace(p)),
+          button('palette', 'Repaint', () => level.sim.repaint(who.id), !level.sim.present.has(who.id)),
+          button('x', 'Remove', () => { level.kick(p); toast(`${who.name} left the lobby`); }),
+        ] : [button('plus', 'Add player', () => { if (!level.addGuest()) toast('No open place'); }, !p.object.visible || level.session.full)])),
+        toggle({ label: 'Spin', value: p.data.spin, note: 'Turns this player\'s car on its disc', onChange: (v) => level.setPlaceSpin(p, v) }),
+      ), section('ALL PLACES'), ...placesPanels());
     } else if (p.kind === 'turntable') {
       const T = S.turntable;
       d.append(...transformPanel(p), section('TURNTABLE'), panel(
@@ -589,7 +761,8 @@ export function createLevelDesigner({ stage, level }) {
         colorField({ label: 'Ring colour', value: T.ring, onChange: edit((v) => { T.ring = v; L.applyTurntable(); }) }),
         rangeField({ label: 'Ring glow', value: T.glow, min: 0, max: 1, step: 0.01, onInput: (v) => { T.glow = v; L.applyTurntable(); }, onChange: () => level.changed('edit') }),
         segmentedField({ label: 'Disc', value: T.finish || 'dark', options: [{ id: 'dark', label: 'Dark lacquer' }, { id: 'light', label: 'Light' }], onChange: (v) => { T.finish = v; L.applyTurntable(); level.changed('edit'); } }),
-      ));
+        el('p', {}, 'Place 01: your own car. The guest places share this disc, band and ring.'),
+      ), section('ALL PLACES'), ...placesPanels());
     } else if (p.kind === 'vehicle') {
       d.append(...transformPanel(p), section('CONFIGURATOR'), vehicleZones(), section('DOTS'), panel(
         toggle({ label: 'Show dots', value: state.dots, onChange: (v) => setDots(v) }),
@@ -785,6 +958,7 @@ export function createLevelDesigner({ stage, level }) {
   let exitTimer = 0;
   function setPlaying(on) {
     state.playing = on;
+    if (state.visiting) { state.visiting = null; visitTag.hidden = true; level.configurator.visible = state.dots; }
     document.body.classList.toggle('playing', on);
     $('StateTag').textContent = on ? 'LOBBY' : 'DESIGN';
     $('StateTag').classList.toggle('live', on);
@@ -814,12 +988,14 @@ export function createLevelDesigner({ stage, level }) {
     const k = e.key.toLowerCase();
     if (e.key === 'Escape') {
       if (level.configurator.active) level.configurator.close();
+      else if (state.visiting) visit(null);
       else if (state.playing) setPlaying(false);
       else if (!$('AddMenu').hidden) hideAddMenu();
       else select(null);
       return;
     }
     if (state.playing) {
+      if (state.visiting) return;
       if (e.key === 'ArrowRight') level.configurator.active ? level.configurator.step(1) : level.configurator.focus(level.configurator.spots.find((s) => s.shown));
       if (e.key === 'ArrowLeft') level.configurator.active ? level.configurator.step(-1) : level.configurator.focus(level.configurator.spots.find((s) => s.shown));
       return;
@@ -850,6 +1026,16 @@ export function createLevelDesigner({ stage, level }) {
   }, 250);
 
   level.on((what) => {
+    if (what === 'players') {
+      syncTags();
+      renderTree();
+      // Refresh the details if they show the places, unless the designer is mid-drag on one of its sliders.
+      const busy = document.activeElement && document.activeElement.closest && document.activeElement.closest('#Details input[type=range]');
+      const p = state.selected;
+      if (!busy && (!p || p.group === 'places')) renderDetails();
+      return;
+    }
+    if (what === 'visibility') syncTags();
     if (['add', 'remove', 'visibility', 'rename', 'finish'].includes(what)) renderTree();
     if (['add', 'remove', 'rename'].includes(what)) renderContent();
     if (['add', 'remove', 'edit', 'transform'].includes(what)) occluderClock = 0;
@@ -861,5 +1047,5 @@ export function createLevelDesigner({ stage, level }) {
   hydrate(document);
   setTier(level.tier);
   renderAll();
-  return { select, setPlaying, setTool, heroView, setTier, state, focusZone: (zone) => { const s = level.configurator.spots.find((x) => x.zone === zone); if (s) level.configurator.focus(s); }, level };
+  return { select, setPlaying, setTool, heroView, setTier, visit, state, focusZone: (zone) => { const s = level.configurator.spots.find((x) => x.zone === zone); if (s) level.configurator.focus(s); }, level };
 }
