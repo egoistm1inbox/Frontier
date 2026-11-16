@@ -1,55 +1,29 @@
-// The Lobby's environment: a neutral showroom built from a sky dome, a curved cyclorama wall with a floor cove,
-// a mirror-glossy floor, a turntable and (for the studio preset) arched light strips. Everything the
-// environment panel edits lives in `settings`; apply* methods push one group of settings into the scene, and the
-// reflection environment (PMREM of a cheap copy of the room) is rebuilt after edits so the paint reflects the room.
+// The Lobby's environment: a sky dome, the set (architecture from Sets.js), a floor finish over a real-time mirror, the
+// turntable, the sun, a soft contact shadow under the car, and the reflection environment. Everything the
+// environment panels edit lives in `settings`; apply* methods push one group of settings into the scene.
+//
+// Reflections: the floor is a planar mirror (Reflector) seen through the floor finish (gloss = how much of it shows);
+// paint, glass and every other surface use a PMREM environment baked from the actual room — set, floor, fixtures and
+// placed pieces, with the car and editor overlays hidden — so the car reflects the softboxes and windows around it.
 import { THREE } from '../Shared/Studio/Render.js';
 import { Reflector } from './Vendor/Reflector.js';
+import { SETS, FLOORS, buildSet } from './Sets.js';
+import { tiled } from './Textures.js';
 
-export const LOBBY_PRESETS = {
-  cove: {
-    label: 'Daylight cove',
-    note: 'White curved walls, clear blue sky, glossy floor',
-    sky: { zenith: '#3b7cc4', horizon: '#b4cfe9', ground: '#b9c0c9', haze: 0.3 },
-    sun: { azimuth: 118, elevation: 30, intensity: 3, colour: '#fff4e6', softness: 3 },
-    ambient: { sky: '#cfdcf0', ground: '#7d8794', intensity: 0.55, reflections: 0.7, exposure: 0.92 },
-    floor: { colour: '#bfc7d2', gloss: 0.42 },
-    walls: { colour: '#e4e9f0', height: 3.1, radius: 12, sweep: 230, wave: 0.38 },
-    turntable: { ring: '#ffffff', glow: 0.5 },
-    arches: { visible: false },
-  },
-  overcast: {
-    label: 'Overcast gallery',
-    note: 'Concrete floor, warm low sun, soft grey sky',
-    sky: { zenith: '#7f8790', horizon: '#ddd8cf', ground: '#7d7f82', haze: 0.8 },
-    sun: { azimuth: 62, elevation: 22, intensity: 2.8, colour: '#ffe2bd', softness: 4 },
-    ambient: { sky: '#e8e4dc', ground: '#6f7174', intensity: 1, reflections: 0.75, exposure: 1 },
-    floor: { colour: '#8d8f92', gloss: 0.28 },
-    walls: { colour: '#ebe6de', height: 5.2, radius: 11, sweep: 200, wave: 0.12 },
-    turntable: { ring: '#fff1dc', glow: 0.3 },
-    arches: { visible: false },
-  },
-  studio: {
-    label: 'Night studio',
-    note: 'Dark room, arched light strips, bright turntable ring',
-    sky: { zenith: '#050506', horizon: '#111215', ground: '#0b0b0d', haze: 0.2 },
-    sun: { azimuth: 20, elevation: 74, intensity: 1.6, colour: '#eef2ff', softness: 6 },
-    ambient: { sky: '#d5dceb', ground: '#202024', intensity: 0.8, reflections: 1.4, exposure: 1.05 },
-    floor: { colour: '#1d1e21', gloss: 0.6 },
-    walls: { colour: '#1c1d20', height: 4.6, radius: 9, sweep: 250, wave: 0 },
-    turntable: { ring: '#ffffff', glow: 1 },
-    arches: { visible: true },
-  },
-};
+export { SETS, FLOORS };
+export const SET_CEILING = { studio: 6.55, garage: 6.25, atrium: 6.85, pavilion: 4.28, horizon: null };
 
 const clone = (v) => JSON.parse(JSON.stringify(v));
 
-export function defaultLobbySettings() {
-  const p = clone(LOBBY_PRESETS.cove);
+export function defaultLobbySettings(setId = 'studio') {
+  const s = SETS[setId] || SETS.studio;
   return {
-    preset: 'cove',
-    sky: p.sky, sun: p.sun, ambient: p.ambient, floor: p.floor, walls: p.walls,
-    turntable: { radius: 3.3, spin: false, speed: 6, ...p.turntable },
-    arches: { count: 11, colour: '#ffffff', spacing: 0.95, ...p.arches },
+    set: setId,
+    rig: s.rig,
+    sky: clone(s.sky), sun: clone(s.sun), ambient: clone(s.ambient),
+    floor: { preset: s.floor, gloss: FLOORS[s.floor].gloss, tint: '#ffffff', scale: 1 },
+    turntable: { radius: 3.3, spin: false, speed: 6, ring: '#ffffff', glow: 0.6, finish: 'dark' },
+    shadow: { strength: 0.85, softness: 2.4 },
   };
 }
 
@@ -60,7 +34,7 @@ void main() {
   vDir = normalize(position);
   vec4 p = modelViewMatrix * vec4(position, 1.0);
   gl_Position = projectionMatrix * p;
-  gl_Position.z = gl_Position.w; // sits on the far plane
+  gl_Position.z = gl_Position.w;
 }`;
 const SKY_FRAG = `
 uniform vec3 uZenith, uHorizon, uGround, uSunDir, uSunColour;
@@ -89,50 +63,84 @@ function skyMaterial() {
   });
 }
 
-// ------------------------------------------------------------------------------------------------ cyclorama wall
-// Inner face of a curved wall around the origin: a quarter-circle cove rises from the floor into a vertical wall
-// whose top sweeps from high (left) to low (right). The arc is centred on −Z (behind a car facing +X seen from +Z).
-export function cycloramaGeometry({ radius = 12, height = 4.6, sweep = 230, wave = 0.28, cove = 1.4 } = {}) {
-  const nu = 160, nv = 26;
-  const pos = [], uv = [], idx = [];
-  const half = THREE.MathUtils.degToRad(sweep) / 2;
-  for (let i = 0; i <= nu; i++) {
-    const t = i / nu;
-    const a = -half + t * 2 * half;
-    const dx = Math.sin(a), dz = -Math.cos(a);
-    const h = Math.max(cove + 0.2, height * (1 + wave * Math.cos(Math.PI * t)));
-    const arc = (Math.PI / 2) * cove, length = arc + (h - cove);
-    for (let j = 0; j <= nv; j++) {
-      const s = (j / nv) * length;
-      let r, y;
-      if (s < arc) { const k = s / cove; r = radius - cove + cove * Math.sin(k); y = cove - cove * Math.cos(k); }
-      else { r = radius; y = cove + (s - arc); }
-      pos.push(dx * r, y, dz * r);
-      uv.push(t, s / length);
-    }
-  }
-  for (let i = 0; i < nu; i++) for (let j = 0; j < nv; j++) {
-    const a = i * (nv + 1) + j, b = a + nv + 1;
-    idx.push(a, a + 1, b, b, a + 1, b + 1);
-  }
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
-  geo.setIndex(idx);
-  geo.computeVertexNormals();
-  return geo;
-}
+// --------------------------------------------------------------------------------------------- contact shadow
+// The car seen from below by an orthographic camera, drawn as darkness-by-height into a small target, blurred twice
+// and laid on the floor under the car. Grounds the car under area lights (which cast no shadow maps).
+const BLUR_VERT = 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }';
+const BLUR_FRAG = `uniform sampler2D tMap; uniform vec2 uStep; varying vec2 vUv;
+void main(){ vec4 s = vec4(0.0);
+  s += texture2D(tMap, vUv - 4.0 * uStep) * 0.051; s += texture2D(tMap, vUv - 3.0 * uStep) * 0.0918; s += texture2D(tMap, vUv - 2.0 * uStep) * 0.12245;
+  s += texture2D(tMap, vUv - uStep) * 0.1531; s += texture2D(tMap, vUv) * 0.1633; s += texture2D(tMap, vUv + uStep) * 0.1531;
+  s += texture2D(tMap, vUv + 2.0 * uStep) * 0.12245; s += texture2D(tMap, vUv + 3.0 * uStep) * 0.0918; s += texture2D(tMap, vUv + 4.0 * uStep) * 0.051;
+  gl_FragColor = s; }`;
+export const SHADOW_LAYER = 6;
 
-// ------------------------------------------------------------------------------------------------ light arches
-// One strip: rises from the floor behind the car, bends over and runs overhead toward the viewer (like a light tunnel
-// seen from its open end).
-function archGeometry({ back = -5.2, front = 3.2, height = 4.4, corner = 1.8, thickness = 0.035 } = {}) {
-  const path = new THREE.CurvePath();
-  const v = (z, y) => new THREE.Vector3(0, y, z);
-  path.add(new THREE.LineCurve3(v(back, 0.9), v(back, height - corner)));
-  path.add(new THREE.QuadraticBezierCurve3(v(back, height - corner), v(back, height), v(back + corner, height)));
-  path.add(new THREE.LineCurve3(v(back + corner, height), v(front, height)));
-  return new THREE.TubeGeometry(path, 90, thickness, 6, false);
+class ContactShadow {
+  constructor(renderer, { size = 9, res = 512, height = 1.8 } = {}) {
+    this.renderer = renderer;
+    this.size = size; this.height = height;
+    const opts = { type: THREE.HalfFloatType };
+    this.rt = new THREE.WebGLRenderTarget(res, res, opts);
+    this.rtBlur = new THREE.WebGLRenderTarget(res, res, opts);
+    this.group = new THREE.Group();
+    this.group.name = 'Contact shadow';
+    this.material = new THREE.MeshBasicMaterial({ map: this.rt.texture, transparent: true, depthWrite: false, opacity: 0.85, color: '#000000' });
+    // The texture holds darkness in alpha; colour comes from the material (black).
+    this.material.onBeforeCompile = (shader) => {
+      shader.fragmentShader = shader.fragmentShader.replace('#include <map_fragment>', '#ifdef USE_MAP\n vec4 sampledDiffuseColor = texture2D( map, vMapUv );\n diffuseColor.a *= sampledDiffuseColor.a;\n#endif');
+    };
+    this.plane = new THREE.Mesh(new THREE.PlaneGeometry(size, size), this.material);
+    this.plane.rotation.x = -Math.PI / 2;
+    this.plane.scale.y = -1;
+    this.plane.renderOrder = 1;
+    this.plane.raycast = () => {};
+    this.group.add(this.plane);
+    this.camera = new THREE.OrthographicCamera(-size / 2, size / 2, size / 2, -size / 2, 0, height);
+    this.camera.rotation.x = Math.PI / 2;
+    this.camera.layers.set(SHADOW_LAYER);
+    this.group.add(this.camera);
+    this.depth = new THREE.MeshDepthMaterial();
+    this.depth.userData.darkness = { value: 1.6 };
+    this.depth.onBeforeCompile = (shader) => {
+      shader.uniforms.darkness = this.depth.userData.darkness;
+      shader.fragmentShader = 'uniform float darkness;\n' + shader.fragmentShader.replace('gl_FragColor = vec4( vec3( 1.0 - fragCoordZ ), opacity );', 'gl_FragColor = vec4( vec3( 0.0 ), ( 1.0 - fragCoordZ ) * darkness );');
+    };
+    this.depth.depthTest = false; this.depth.depthWrite = false;
+    this.blurScene = new THREE.Scene();
+    this.blurMat = new THREE.ShaderMaterial({ uniforms: { tMap: { value: null }, uStep: { value: new THREE.Vector2() } }, vertexShader: BLUR_VERT, fragmentShader: BLUR_FRAG, depthTest: false, depthWrite: false });
+    this.blurQuad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.blurMat);
+    this.blurQuad.frustumCulled = false;
+    this.blurScene.add(this.blurQuad);
+    this.blurCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+    this.softness = 2.4;
+    this.last = new THREE.Matrix4();
+    this.dirty = true;
+  }
+
+  render(scene) {
+    const r = this.renderer;
+    const prevTarget = r.getRenderTarget(), prevClear = r.getClearColor(new THREE.Color()), prevAlpha = r.getClearAlpha();
+    const prevBg = scene.background, prevOverride = scene.overrideMaterial, prevAuto = r.shadowMap.autoUpdate;
+    r.shadowMap.autoUpdate = false;
+    scene.background = null;
+    scene.overrideMaterial = this.depth;
+    r.setClearColor(0x000000, 0);
+    r.setRenderTarget(this.rt); r.clear();
+    r.render(scene, this.camera);
+    scene.overrideMaterial = prevOverride;
+    scene.background = prevBg;
+    const px = 1 / this.rt.width;
+    for (let pass = 0; pass < 2; pass++) {
+      const k = this.softness * (pass ? 0.5 : 1);
+      this.blurMat.uniforms.tMap.value = this.rt.texture; this.blurMat.uniforms.uStep.value.set(px * k, 0);
+      r.setRenderTarget(this.rtBlur); r.clear(); r.render(this.blurScene, this.blurCam);
+      this.blurMat.uniforms.tMap.value = this.rtBlur.texture; this.blurMat.uniforms.uStep.value.set(0, px * k);
+      r.setRenderTarget(this.rt); r.clear(); r.render(this.blurScene, this.blurCam);
+    }
+    r.setRenderTarget(prevTarget);
+    r.setClearColor(prevClear, prevAlpha);
+    r.shadowMap.autoUpdate = prevAuto;
+  }
 }
 
 // --------------------------------------------------------------------------------------------------------- Lobby
@@ -143,16 +151,16 @@ export class Lobby {
     const scene = stage.scene;
     this.hemi = scene.children.find((c) => c.isHemisphereLight);
     this.fill = scene.children.find((c) => c.isDirectionalLight && c !== stage.sun);
-    if (this.fill) this.fill.intensity = 0.25;
+    if (this.fill) this.fill.intensity = 0;
     stage.grid.visible = false;
     stage.ground.visible = false;
     scene.background = null;
 
-    // Sun: the stage's shadow-casting key light, aimed at the origin with a shadow frustum covering the room.
     this.sun = stage.sun;
     const cam = this.sun.shadow.camera;
-    cam.left = -15; cam.right = 15; cam.top = 15; cam.bottom = -15; cam.near = 1; cam.far = 80;
+    cam.left = -16; cam.right = 16; cam.top = 16; cam.bottom = -16; cam.near = 1; cam.far = 90;
     cam.updateProjectionMatrix();
+    this.sun.shadow.mapSize.set(2048, 2048);
     this.sun.shadow.normalBias = 0.02;
     this.sun.shadow.bias = -0.0002;
     this.sun.target.position.set(0, 0, 0);
@@ -161,22 +169,19 @@ export class Lobby {
     this.group.name = 'Lobby';
     scene.add(this.group);
 
-    // Sky
     this.skyMat = skyMaterial();
-    this.sky = new THREE.Mesh(new THREE.SphereGeometry(180, 48, 24), this.skyMat);
+    this.sky = new THREE.Mesh(new THREE.SphereGeometry(300, 48, 24), this.skyMat);
     this.sky.name = 'Sky';
     this.sky.frustumCulled = false;
     this.sky.renderOrder = -10;
     this.sky.raycast = () => {};
     this.group.add(this.sky);
 
-    // Floor: a mirror under a translucent satin coat (gloss = how much of the mirror shows through).
-    const size = 160;
+    // Floor: mirror under the floor finish.
     const w = Math.max(512, Math.round(stage.canvas.clientWidth * 0.6)), h = Math.max(512, Math.round(stage.canvas.clientHeight * 0.6));
-    this.mirror = new Reflector(new THREE.PlaneGeometry(size, size), { textureWidth: w, textureHeight: h, color: 0x7f8389, clipBias: 0.002 });
+    this.mirror = new Reflector(new THREE.PlaneGeometry(1, 1), { textureWidth: w, textureHeight: h, color: 0x7f8389, clipBias: 0.002 });
     this.mirror.rotation.x = -Math.PI / 2;
     this.mirror.raycast = () => {};
-    // Editor overlays (gizmo, light glyphs) are not part of the room: keep them out of the floor's reflection.
     this.hideInMirror = [];
     const mirrorPass = this.mirror.onBeforeRender;
     this.mirror.onBeforeRender = (...args) => {
@@ -185,57 +190,52 @@ export class Lobby {
       mirrorPass.apply(this.mirror, args);
       for (const o of hidden) o.visible = true;
     };
-    this.floorMat = new THREE.MeshStandardMaterial({ color: '#d3d9e1', roughness: 0.6, metalness: 0, transparent: true, opacity: 0.6, depthWrite: false });
-    this.floorCoat = new THREE.Mesh(new THREE.PlaneGeometry(size, size), this.floorMat);
+    this.floorMat = new THREE.MeshPhysicalMaterial({ color: '#ffffff', roughness: 0.5, transparent: true, opacity: 0.6, depthWrite: false });
+    this.floorCoat = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), this.floorMat);
     this.floorCoat.rotation.x = -Math.PI / 2;
     this.floorCoat.position.y = 0.001;
     this.floorCoat.receiveShadow = true;
     this.floorCoat.raycast = () => {};
+    // Opaque stand-in used only while baking reflections (the mirror can't render inside a cube camera).
+    this.floorProxyMat = new THREE.MeshStandardMaterial({ color: '#888888', roughness: 0.6 });
+    this.floorProxy = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), this.floorProxyMat);
+    this.floorProxy.rotation.x = -Math.PI / 2;
+    this.floorProxy.visible = false;
     this.floor = new THREE.Group();
     this.floor.name = 'Floor';
-    this.floor.add(this.mirror, this.floorCoat);
+    this.floor.add(this.mirror, this.floorCoat, this.floorProxy);
     this.group.add(this.floor);
 
-    // Cyclorama
-    this.wallMat = new THREE.MeshStandardMaterial({ color: '#eef1f5', roughness: 0.92, metalness: 0, side: THREE.DoubleSide, shadowSide: THREE.DoubleSide });
-    this.walls = new THREE.Mesh(cycloramaGeometry(settings.walls), this.wallMat);
-    this.walls.name = 'Cyclorama';
-    this.walls.castShadow = false; this.walls.receiveShadow = true;
-    this.group.add(this.walls);
+    // Set architecture (rebuilt by applySet).
+    this.set = new THREE.Group();
+    this.set.name = 'Set';
+    this.group.add(this.set);
+    this.occluders = [];
+    this.ceiling = null;
 
-    // Turntable
+    // Turntable: a low disc with a bevelled edge band and an LED groove.
     this.turntable = new THREE.Group();
     this.turntable.name = 'Turntable';
-    this.discMat = new THREE.MeshPhysicalMaterial({ color: '#f4f5f7', roughness: 0.3, metalness: 0, clearcoat: 0.8, clearcoatRoughness: 0.15 });
+    this.discMat = new THREE.MeshPhysicalMaterial({ color: '#1b1c1f', roughness: 0.35, metalness: 0.2, clearcoat: 1, clearcoatRoughness: 0.12 });
+    this.bandMat = new THREE.MeshPhysicalMaterial({ color: '#b9bcc1', roughness: 0.3, metalness: 1 });
     this.disc = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 1, 128), this.discMat);
-    this.disc.castShadow = false; this.disc.receiveShadow = true;
+    this.disc.receiveShadow = true;
+    this.band = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 1, 128, 1, true), this.bandMat);
     this.ringMat = new THREE.MeshBasicMaterial({ color: '#ffffff', toneMapped: false, transparent: true });
-    this.ring = new THREE.Mesh(new THREE.TorusGeometry(1, 0.01, 8, 192), this.ringMat);
+    this.ring = new THREE.Mesh(new THREE.TorusGeometry(1, 0.012, 8, 192), this.ringMat);
     this.ring.rotation.x = -Math.PI / 2;
-    this.turntable.add(this.disc, this.ring);
+    this.turntable.add(this.disc, this.band, this.ring);
     this.group.add(this.turntable);
-    this.turntableHeight = 0.05;
+    this.turntableHeight = 0.06;
 
-    // Light arches
-    this.archMat = new THREE.MeshBasicMaterial({ color: '#ffffff', toneMapped: false });
-    this.arches = new THREE.Group();
-    this.arches.name = 'Light arches';
-    this.group.add(this.arches);
+    this.shadow = new ContactShadow(stage.renderer, { size: 9, res: 512, height: 1.9 });
+    this.group.add(this.shadow.group);
+    this.shadowTarget = null;            // set by the level: the vehicle root
 
-    // Reflection environment
     this.pmrem = new THREE.PMREMGenerator(stage.renderer);
-    this.envScene = new THREE.Scene();
-    this.envSky = new THREE.Mesh(this.sky.geometry, this.skyMat);
-    this.envWallMat = new THREE.MeshBasicMaterial({ color: '#ffffff', side: THREE.DoubleSide });
-    this.envWalls = new THREE.Mesh(this.walls.geometry, this.envWallMat);
-    this.envFloorMat = new THREE.MeshBasicMaterial({ color: '#9aa0a8' });
-    const envFloor = new THREE.Mesh(new THREE.CircleGeometry(60, 48), this.envFloorMat);
-    envFloor.rotation.x = -Math.PI / 2;
-    this.envArches = new THREE.Group();
-    this.envScene.add(this.envSky, this.envWalls, envFloor, this.envArches);
     this.envTarget = null;
     this.envTimer = 0;
-
+    this.bakeHidden = () => [];          // set by the level: things to keep out of the reflection bake
     this.spin = 0;
     stage.frameCallbacks.add((dt) => this.tick(dt));
     this.applyAll();
@@ -243,13 +243,28 @@ export class Lobby {
 
   // ------------------------------------------------------------------------------------------------ apply
   applyAll() {
-    this.applySky(); this.applySun(); this.applyAmbient(); this.applyFloor(); this.applyWalls(); this.applyTurntable(); this.applyArches();
+    this.applySet(); this.applySky(); this.applySun(); this.applyAmbient(); this.applyFloor(); this.applyTurntable(); this.applyShadow();
+  }
+
+  applySet() {
+    for (const c of [...this.set.children]) { this.set.remove(c); dispose(c); }
+    const built = buildSet(this.settings.set);
+    this.set.add(built.group);
+    this.occluders = built.occluders;
+    this.floorSize = built.floorSize;
+    this.ceiling = SET_CEILING[this.settings.set] ?? null;
+    this.setLabel = (SETS[this.settings.set] || SETS.studio).label;
+    for (const m of [this.mirror, this.floorCoat, this.floorProxy]) m.scale.set(built.floorSize[0], built.floorSize[1], 1);
+    const open = this.settings.set === 'horizon';
+    this.stage.scene.fog = open ? new THREE.Fog(this.settings.sky.horizon, 40, 170) : new THREE.Fog(this.settings.sky.horizon, 90, 300);
+    this.applyFloor();
+    this.queueEnvironment();
   }
 
   applySky() {
     const s = this.settings.sky, u = this.skyMat.uniforms;
     u.uZenith.value.set(s.zenith); u.uHorizon.value.set(s.horizon); u.uGround.value.set(s.ground); u.uHaze.value = s.haze;
-    this.stage.scene.fog = new THREE.Fog(s.horizon, 45, 170);
+    if (this.stage.scene.fog) this.stage.scene.fog.color.set(s.horizon);
     this.queueEnvironment();
   }
 
@@ -262,15 +277,17 @@ export class Lobby {
   applySun() {
     const s = this.settings.sun;
     const d = this.sunDirection();
-    this.sun.position.copy(d).multiplyScalar(40);
+    this.sun.position.copy(d).multiplyScalar(45);
     this.sun.target.position.set(0, 0, 0);
-    this.sun.intensity = this.sun.visible ? s.intensity : 0;
+    const on = this.sun.visible && s.on !== false;
+    this.sun.intensity = on ? s.intensity : 0;
+    this.sun.castShadow = on;
     this.sun.color.set(s.colour);
     this.sun.shadow.radius = s.softness;
     this.sun.shadow.blurSamples = 16;
     const u = this.skyMat.uniforms;
     u.uSunDir.value.copy(d);
-    u.uSunColour.value.set(s.colour).multiplyScalar(Math.min(1.2, s.intensity / 3));
+    u.uSunColour.value.set(s.colour).multiplyScalar(on ? Math.min(1.2, s.intensity / 3) : 0);
     this.queueEnvironment();
   }
 
@@ -282,23 +299,27 @@ export class Lobby {
   }
 
   applyFloor() {
-    const f = this.settings.floor;
-    this.floorMat.color.set(f.colour);
-    this.floorMat.opacity = 1 - f.gloss * 0.72;
-    this.floorMat.roughness = 0.75 - f.gloss * 0.4;
-    this.envFloorMat.color.set(f.colour).multiplyScalar(0.8);
-    this.mirror.material.uniforms.color.value.set(f.colour).lerp(new THREE.Color('#808080'), 0.5);
-    this.queueEnvironment();
-  }
-
-  applyWalls() {
-    const w = this.settings.walls;
-    this.wallMat.color.set(w.colour);
-    const geo = cycloramaGeometry(w);
-    this.walls.geometry.dispose();
-    this.walls.geometry = geo;
-    this.envWalls.geometry = geo;
-    this.envWallMat.color.set(w.colour).multiplyScalar(0.92);
+    const f = this.settings.floor, def = FLOORS[f.preset] || FLOORS.concrete;
+    const m = this.floorMat;
+    for (const k of ['map', 'roughnessMap', 'bumpMap', 'emissiveMap']) { if (m[k]) m[k].dispose(); m[k] = null; }
+    const size = this.floorSize || [80, 80];
+    if (def.texture) {
+      const t = tiled(def.texture, size[0] / (f.scale || 1), size[1] / (f.scale || 1));
+      Object.assign(m, t);
+      if (t.bumpMap) m.bumpScale = 0.4;
+    }
+    m.color.set(def.colour).multiply(new THREE.Color(f.tint || '#ffffff'));
+    m.roughness = def.roughness;
+    m.emissive = new THREE.Color(def.emissive || '#000000');
+    m.emissiveIntensity = def.emissive ? 1.2 : 0;
+    m.opacity = 1 - f.gloss * 0.78;
+    m.needsUpdate = true;
+    // Mirror tint: the floor's average tone, so the reflection sits in the floor rather than on it.
+    const tone = def.texture ? averageTone(def.texture) : new THREE.Color(def.colour);
+    this.mirror.material.uniforms.color.value.copy(tone).lerp(new THREE.Color('#7a7a7a'), 0.35);
+    this.floorProxyMat.color.copy(tone);
+    this.floorProxyMat.map = m.map;
+    this.floorProxyMat.needsUpdate = true;
     this.queueEnvironment();
   }
 
@@ -307,59 +328,67 @@ export class Lobby {
     const h = this.turntableHeight;
     this.disc.scale.set(t.radius, h, t.radius);
     this.disc.position.y = h / 2;
-    this.ring.scale.setScalar(t.radius - 0.14);
+    this.band.scale.set(t.radius + 0.004, h * 0.8, t.radius + 0.004);
+    this.band.position.y = h * 0.45;
+    this.discMat.color.set(t.finish === 'light' ? '#eceef1' : '#1b1c1f');
+    this.ring.scale.setScalar(t.radius - 0.16);
     this.ring.position.y = h + 0.002;
     this.ringMat.color.set(t.ring);
     this.ringMat.opacity = t.glow;
     this.ring.visible = t.glow > 0.01;
+    this.shadow.dirty = true;
   }
 
-  applyArches() {
-    const a = this.settings.arches;
-    for (const g of [this.arches, this.envArches]) for (const c of [...g.children]) { g.remove(c); }
-    this.archMat.color.set(a.colour);
-    const geo = archGeometry();
-    const n = Math.max(1, Math.round(a.count));
-    for (let i = 0; i < n; i++) {
-      const x = (i - (n - 1) / 2) * a.spacing;
-      const m = new THREE.Mesh(geo, this.archMat);
-      m.position.x = x;
-      m.raycast = () => {};
-      this.arches.add(m);
-      const e = new THREE.Mesh(geo, this.archMat);
-      e.position.x = x;
-      this.envArches.add(e);
-    }
-    this.arches.visible = a.visible;
-    this.envArches.visible = a.visible;
-    this.queueEnvironment();
+  applyShadow() {
+    const s = this.settings.shadow;
+    this.shadow.material.opacity = s.strength;
+    this.shadow.softness = s.softness;
+    this.shadow.dirty = true;
   }
 
-  usePreset(name) {
-    const p = LOBBY_PRESETS[name];
-    if (!p) return;
+  // Switch to another set: architecture, sky, sun, ambience and its recommended floor.
+  useSet(id) {
+    const def = SETS[id];
+    if (!def) return;
     const s = this.settings;
-    s.preset = name;
-    Object.assign(s.sky, clone(p.sky)); Object.assign(s.sun, clone(p.sun)); Object.assign(s.ambient, clone(p.ambient));
-    Object.assign(s.floor, clone(p.floor)); Object.assign(s.walls, clone(p.walls));
-    Object.assign(s.turntable, clone(p.turntable)); Object.assign(s.arches, clone(p.arches));
+    s.set = id;
+    Object.assign(s.sky, clone(def.sky)); Object.assign(s.sun, clone(def.sun)); Object.assign(s.ambient, clone(def.ambient));
+    s.floor.preset = def.floor; s.floor.gloss = FLOORS[def.floor].gloss; s.floor.tint = '#ffffff'; s.floor.scale = 1;
     this.applyAll();
+  }
+
+  useFloor(id) {
+    const def = FLOORS[id];
+    if (!def) return;
+    Object.assign(this.settings.floor, { preset: id, gloss: def.gloss, tint: '#ffffff' });
+    this.applyFloor();
   }
 
   // ------------------------------------------------------------------------------------------- environment
   queueEnvironment() {
     clearTimeout(this.envTimer);
-    this.envTimer = setTimeout(() => this.bakeEnvironment(), 120);
+    this.envTimer = setTimeout(() => this.bakeEnvironment(), 160);
   }
 
+  // Bake the room as it is (set, floor, fixtures, pieces), from the car's position, without the car.
   bakeEnvironment() {
+    const scene = this.stage.scene;
+    const hidden = [this.mirror, this.floorCoat, this.shadow.group, this.turntable, ...this.hideInMirror, ...this.bakeHidden()].filter((o) => o && o.visible);
+    for (const o of hidden) o.visible = false;
+    this.floorProxy.visible = true;
+    const prevEnv = scene.environment;
+    scene.environment = null;
     const old = this.envTarget;
-    this.envWalls.visible = this.walls.visible;
-    this.envWalls.position.copy(this.walls.position);
-    this.envWalls.rotation.copy(this.walls.rotation);
-    this.envTarget = this.pmrem.fromScene(this.envScene, 0.035, 0.1, 200);
-    this.stage.scene.environment = this.envTarget.texture;
-    if (old) old.dispose();
+    try {
+      this.envTarget = this.pmrem.fromScene(scene, 0.02, 0.1, 400, { size: 256, position: new THREE.Vector3(0, 1.1, 0) });
+    } catch {
+      this.envTarget = this.pmrem.fromScene(scene, 0.02, 0.1, 400);
+    }
+    this.floorProxy.visible = false;
+    for (const o of hidden) o.visible = true;
+    scene.environment = this.envTarget.texture;
+    if (old && old !== this.envTarget) old.dispose();
+    void prevEnv;
   }
 
   tick(dt) {
@@ -369,5 +398,46 @@ export class Lobby {
       this.turntable.rotation.y += step;
       this.spin = step;
     } else this.spin = 0;
+    // Contact shadow follows the car; re-rendered only when the car moved.
+    const target = this.shadowTarget;
+    if (target && target.visible) {
+      this.shadow.group.visible = true;
+      target.updateMatrixWorld();
+      if (this.shadow.dirty || !this.shadow.last.equals(target.matrixWorld)) {
+        const p = new THREE.Vector3().setFromMatrixPosition(target.matrixWorld);
+        const box = new THREE.Box3().setFromObject(target);
+        this.shadow.group.position.set(p.x, box.min.y + 0.003, p.z);
+        this.shadow.group.updateMatrixWorld(true);
+        this.shadow.render(this.stage.scene);
+        this.shadow.last.copy(target.matrixWorld);
+        this.shadow.dirty = false;
+      }
+    } else this.shadow.group.visible = false;
   }
+}
+
+function dispose(object) {
+  object.traverse((o) => {
+    if (o.geometry) o.geometry.dispose();
+    const mats = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : [];
+    for (const m of mats) { for (const k of ['map', 'roughnessMap', 'bumpMap', 'emissiveMap']) if (m[k]) m[k].dispose(); m.dispose(); }
+  });
+}
+
+const tones = new Map();
+function averageTone(textureName) {
+  if (tones.has(textureName)) return tones.get(textureName).clone();
+  const t = tiled(textureName, 1, 1).map;
+  const img = t.image, c = document.createElement('canvas');
+  c.width = c.height = 8;
+  const ctx = c.getContext('2d');
+  ctx.drawImage(img, 0, 0, 8, 8);
+  const d = ctx.getImageData(0, 0, 8, 8).data;
+  let r = 0, g = 0, b = 0;
+  for (let i = 0; i < d.length; i += 4) { r += d[i]; g += d[i + 1]; b += d[i + 2]; }
+  const n = d.length / 4;
+  const col = new THREE.Color().setRGB(r / n / 255, g / n / 255, b / n / 255, THREE.SRGBColorSpace);
+  tones.set(textureName, col);
+  t.dispose();
+  return col.clone();
 }

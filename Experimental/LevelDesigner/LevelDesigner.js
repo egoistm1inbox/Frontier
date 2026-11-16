@@ -8,22 +8,24 @@ import { IMPORT_FORMATS } from '../Shared/GeometryCompile/Engine/ImportFormats.j
 import { icon, iconEl, hydrate } from './LevelIcons.js';
 import { TransformGizmo } from './Gizmo.js';
 import { GROUPS, ADDABLE, TEMPLATES, LIBRARY_KEY, readLibrary, writeLibrary, createLevelEntry } from './Level.js';
-import { PROPS, SURFACES } from './Props.js';
-import { LOBBY_PRESETS } from './Lobby.js';
+import { PIECES, CATEGORIES, PIECE_FINISHES } from './Items.js';
+import { FIXTURES, RIGS } from './Fixtures.js';
+import { FINISHES as SURFACE_FINISHES, kelvinColour } from './Kit.js';
+import { SETS, FLOORS } from './Lobby.js';
+import { surfaceSwatch } from './Textures.js';
 import { ZONES, sameColour } from './Configurator.js';
 import { FINISHES } from './Vehicle.js';
 
 const KIND_LABEL = {
-  sky: 'Sky dome', sun: 'Directional light', floor: 'Reflective floor', walls: 'Cyclorama wall', slab: 'Lobby slab', turntable: 'Turntable', arches: 'Light arches',
-  vehicle: 'Configurable vehicle', hotspot: 'Configurator dot', 'light-point': 'Point light', 'light-spot': 'Spot light', 'light-strip': 'Light strip',
-  prop: 'Prop', import: 'Imported model',
+  sky: 'Sky dome', sun: 'Directional light', floor: 'Floor finish', set: 'Lobby design', turntable: 'Turntable',
+  vehicle: 'Configurable vehicle', hotspot: 'Configurator dot', fixture: 'Light fixture', piece: 'Scene piece', import: 'Imported model',
 };
 const deg = THREE.MathUtils.radToDeg, rad = THREE.MathUtils.degToRad;
 
 export function createLevelDesigner({ stage, level }) {
   const well = $('ViewportWell');
   const L = level.lobby;
-  const state = { selected: null, tool: 'select', search: '', playing: false, dots: true, helpers: true, idleOrbit: true, contain: true };
+  const state = { selected: null, tool: 'select', search: '', playing: false, dots: true, helpers: level.hardware, idleOrbit: true, contain: true, contentCat: 'nature', withRig: true };
   let live = null; // inputs refreshed while the gizmo drags
 
   // ------------------------------------------------------------------------------------------------- gizmo
@@ -180,8 +182,7 @@ export function createLevelDesigner({ stage, level }) {
     applyHelpers();
   }
   function applyHelpers() {
-    const show = state.helpers && !state.playing;
-    for (const p of level.byGroup('lights')) if (p.glyph.userData.helper) p.glyph.visible = show;
+    if (level.hardware !== state.helpers) level.setHardware(state.helpers);
   }
   $('HelpersBtn').addEventListener('click', () => setHelpers(!state.helpers));
   $('FrameBtn').addEventListener('click', frameSelection);
@@ -210,19 +211,22 @@ export function createLevelDesigner({ stage, level }) {
     hideAddMenu();
     let p = null;
     const t = stage.rig.target;
-    if (kind.startsWith('light-')) p = level.addLight(kind, { position: kind === 'light-strip' ? [t.x, 3.6, t.z + 2.4] : [t.x + 2.4, 3.2, t.z + 2.8], colour: kind === 'light-spot' ? '#fff1dc' : '#ffffff' });
-    else if (kind === 'hotspot') p = level.addHotspot();
+    void t;
+    if (kind.startsWith('fixture:')) {
+      const type = kind.slice(8), hung = ['overhead', 'track', 'pendant', 'battens', 'halo'].includes(type);
+      p = level.addFixture(type, { position: hung ? (type === 'overhead' || type === 'halo' ? [carCentre().x, 0, carCentre().z] : propSpot(2.6)) : propSpot(4.6), aim: true, atCeiling: hung });
+    } else if (kind === 'hotspot') p = level.addHotspot();
     else if (kind === 'import') { $('FileInput').click(); return; }
-    else if (kind.startsWith('prop:')) p = level.addProp(kind.slice(5), { position: propSpot() });
+    else if (kind.startsWith('piece:')) p = level.addPiece(kind.slice(6), { position: propSpot() });
     applyHelpers();
     if (p) { select(p); setTool('move'); toast(`${p.name} added · drag the arrows to place it`); }
   }
   // Somewhere on the floor beside the car, toward the camera's right, so a new prop is in view and not inside the car.
-  function propSpot() {
+  function propSpot(reach = 4.4) {
     const right = new THREE.Vector3().setFromMatrixColumn(stage.camera.matrixWorld, 0).setY(0).normalize();
     const toCam = stage.camera.position.clone().sub(stage.rig.target).setY(0).normalize();
     const c = carCentre();
-    const at = c.addScaledVector(right, 4.4 + Math.random() * 0.4).addScaledVector(toCam, 1.2);
+    const at = c.addScaledVector(right, reach + Math.random() * 0.4).addScaledVector(toCam, 1.2);
     return [+at.x.toFixed(2), 0, +at.z.toFixed(2)];
   }
   function flashTier() { const c = $('TierChip'); c.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.15)' }, { transform: 'scale(1)' }], { duration: 380 }); }
@@ -280,13 +284,25 @@ export function createLevelDesigner({ stage, level }) {
     list.replaceChildren();
     const locked = level.tier !== 'premium';
     $('ImportBtn').classList.toggle('stale', locked);
-    for (const a of ADDABLE.filter((x) => x.kind.startsWith('prop:'))) {
-      const place = el('button', { type: 'button', class: 'tool' }, 'Place');
-      place.addEventListener('click', () => addThing(a.kind));
-      const n = level.byGroup('props').filter((p) => p.data.type === a.kind.slice(5)).length;
-      list.append(el('div', { class: 'piece-row' }, el('span', { class: 'piece-glyph', html: icon(a.icon, 22) }), el('div', {}, el('b', {}, a.label, n ? el('i', { class: 'in-level' }, `${n} in level`) : null), el('small', {}, a.note)), place));
+    const cats = [...CATEGORIES.map((c) => ({ ...c, kinds: Object.keys(PIECES).filter((t) => PIECES[t].category === c.id).map((t) => `piece:${t}`) })), { id: 'lights', label: 'Light fixtures', icon: 'softbox', kinds: Object.keys(FIXTURES).map((t) => `fixture:${t}`) }];
+    const chips = el('div', { class: 'cat-chips' }, ...cats.map((c) => {
+      const b = el('button', { type: 'button', class: `cat-chip${state.contentCat === c.id ? ' on' : ''}`, html: `${icon(c.icon, 14)}<span>${c.label}</span>` });
+      b.addEventListener('click', () => { state.contentCat = c.id; renderContent(); });
+      return b;
+    }));
+    list.append(chips);
+    const cat = cats.find((c) => c.id === state.contentCat) || cats[0];
+    const grid = el('div', { class: 'piece-grid' });
+    for (const kind of cat.kinds) {
+      const a = ADDABLE.find((x) => x.kind === kind);
+      const [k, type] = kind.split(':');
+      const n = level.placements.filter((p) => p.kind === k && p.data && p.data.type === type).length;
+      const b = el('button', { type: 'button', class: 'piece-card', title: `${a.label} · ${a.note} — click to place` }, el('span', { class: 'piece-glyph', html: icon(a.icon, 26) }), el('b', {}, a.label), el('small', {}, a.note), n ? el('i', { class: 'in-level' }, `${n}`) : null);
+      b.addEventListener('click', () => addThing(kind));
+      grid.append(b);
     }
-    if (locked) $('ImportNote').replaceChildren(el('div', { class: 'premium-note flat' }, iconEl('premium', 14), el('div', {}, 'Importing your own models is part of Premium. Props, lights, dots and the environment are open to every designer.', el('br'), unlockButton())));
+    list.append(grid);
+    if (locked) $('ImportNote').replaceChildren(el('div', { class: 'premium-note flat' }, iconEl('premium', 14), el('div', {}, 'Importing your own models is part of Premium. Lobby designs, floors, lights, scene pieces and dots are open to every designer.', el('br'), unlockButton())));
     else $('ImportNote').replaceChildren();
   }
   function unlockButton() {
@@ -307,7 +323,7 @@ export function createLevelDesigner({ stage, level }) {
       const zone = ZONES[p.spot.zone];
       const [part, fam] = zone.rows.find((r) => r.targets).targets[0];
       extra = el('i', { class: 'dot-swatch', style: `--c:${level.vehicle.colour(part, fam)}`, title: 'Current colour' });
-    } else if (p.kind.startsWith('light-')) extra = el('i', { class: 'dot-swatch', style: `--c:${p.data.colour}` });
+    } else if (p.kind === 'fixture' && p.data.params.kelvin) extra = el('i', { class: 'dot-swatch glow', style: `--c:#${kelvinHex(p.data.params.kelvin)}` });
     const b = el('button', { type: 'button', class: `entity comp-row${child ? ' child' : ''}${state.selected === p ? ' active' : ''}`, role: 'treeitem' },
       el('span', { class: 'tree-caret-sm' }, child ? '' : p.kind === 'vehicle' ? '▾' : ''),
       el('span', { class: 'entity-icon', html: icon(p.icon || 'dot', 16) }),
@@ -326,7 +342,7 @@ export function createLevelDesigner({ stage, level }) {
     // Level root
     const root = el('button', { type: 'button', class: `entity comp-row root${state.selected ? '' : ' active'}` },
       el('span', { class: 'tree-caret-sm' }, '▾'), el('span', { class: 'entity-icon', html: icon('root', 16) }),
-      el('div', {}, el('b', {}, level.name, el('i', { class: 'root-tag' }, 'LEVEL')), el('small', {}, `${LOBBY_PRESETS[L.settings.preset] ? LOBBY_PRESETS[L.settings.preset].label : 'Custom'} · ${level.tier}`)), el('span'), el('span'));
+      el('div', {}, el('b', {}, level.name, el('i', { class: 'root-tag' }, 'LEVEL')), el('small', {}, `${SETS[L.settings.set].label} · ${FLOORS[L.settings.floor.preset].label}`)), el('span'), el('span'));
     root.style.paddingLeft = '10px';
     root.addEventListener('click', () => select(null));
     tree.append(root);
@@ -343,7 +359,7 @@ export function createLevelDesigner({ stage, level }) {
         for (const p of items.filter((x) => x.kind === 'vehicle')) tree.append(row(p));
         for (const p of items.filter((x) => x.kind === 'hotspot')) tree.append(row(p, { child: true }));
       } else for (const p of items) tree.append(row(p));
-      if (!items.length) tree.append(el('p', { class: 'tree-empty' }, { lights: 'No added lights. Add → Point, Spot or Light strip.', props: 'No props. Add → Props, or place one from Content.', custom: 'No models yet. Import one from Content.' }[g.id] || ''));
+      if (!items.length) tree.append(el('p', { class: 'tree-empty' }, { lights: 'No fixtures. Pick a light rig in the level Details, or Add → Lights.', pieces: 'Nothing placed. Add → Nature, Garage, Lounge… or browse Content.', custom: 'No models yet. Import one from Content.' }[g.id] || ''));
     }
     $('StatPlacements').textContent = String(level.placements.length);
     $('StatDots').textContent = String(level.counts.hotspots);
@@ -399,11 +415,40 @@ export function createLevelDesigner({ stage, level }) {
 
   const edit = (apply) => (v) => { apply(v); level.changed('edit'); };
 
-  function presetTiles() {
-    const tiles = el('div', { class: 'preset-tiles' });
-    for (const [id, pr] of Object.entries(LOBBY_PRESETS)) {
-      const b = el('button', { type: 'button', class: `preset-tile${L.settings.preset === id ? ' active' : ''}`, title: pr.note, style: `--g:linear-gradient(180deg, ${pr.sky.zenith}, ${pr.sky.horizon} 45%, ${pr.walls.colour} 45%);--f:${pr.floor.colour}` }, el('i'), pr.label);
-      b.addEventListener('click', () => { L.usePreset(id); level.seatVehicle(); level.changed('preset'); renderAll(); toast(`${pr.label} · ${pr.note}`); });
+  // Lobby design (set), floor and light-rig pickers.
+  function designTiles() {
+    const tiles = el('div', { class: 'design-tiles' });
+    for (const [id, d] of Object.entries(SETS)) {
+      const b = el('button', { type: 'button', class: `design-tile${L.settings.set === id ? ' active' : ''}`, title: d.note, style: `--g:linear-gradient(160deg, ${d.sky.zenith}, ${d.sky.horizon})` },
+        el('span', { class: 'design-art', html: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">${d.icon}</svg>` }),
+        el('b', {}, d.label), el('small', {}, d.note));
+      b.addEventListener('click', () => {
+        L.useSet(id);
+        if (state.withRig) level.applyRig(d.rig, { silent: true });
+        level.refreshBuiltInNotes(); level.seatVehicle(); level.changed('preset'); renderAll();
+        toast(`${d.label} · ${FLOORS[d.floor].label}${state.withRig ? ` · ${RIGS[d.rig].label}` : ''}`);
+      });
+      tiles.append(b);
+    }
+    return tiles;
+  }
+  function floorTiles() {
+    const tiles = el('div', { class: 'floor-tiles' });
+    for (const [id, f] of Object.entries(FLOORS)) {
+      const img = f.texture ? `url(${surfaceSwatch(f.texture)})` : f.colour;
+      const b = el('button', { type: 'button', class: `floor-tile${L.settings.floor.preset === id ? ' active' : ''}`, title: f.label, style: `--img:${img};--gloss:${f.gloss}` }, el('i'), el('span', {}, f.label));
+      b.addEventListener('click', () => { L.useFloor(id); level.refreshBuiltInNotes(); level.changed('preset'); renderAll(); });
+      tiles.append(b);
+    }
+    return tiles;
+  }
+  function rigTiles() {
+    const tiles = el('div', { class: 'rig-tiles' });
+    for (const [id, r] of Object.entries(RIGS)) {
+      const b = el('button', { type: 'button', class: `rig-tile${L.settings.rig === id ? ' active' : ''}`, title: r.note },
+        el('span', { class: 'rig-art', html: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">${r.icon}</svg>` }),
+        el('div', {}, el('b', {}, r.label), el('small', {}, r.fixtures.length ? `${r.fixtures.length} fixtures · ${r.note}` : r.note)));
+      b.addEventListener('click', () => { level.applyRig(id); applyHelpers(); renderAll(); toast(`${r.label} · ${r.fixtures.length} fixtures aimed at the car`); });
       tiles.append(b);
     }
     return tiles;
@@ -477,16 +522,20 @@ export function createLevelDesigner({ stage, level }) {
       d.append(
         section('LEVEL'),
         panel(
-          metrics([[c.props, 'PROPS'], [c.hotspots, 'CONFIGURATOR DOTS'], [c.lights, 'ADDED LIGHTS'], [level.tier === 'premium' ? c.custom : '—', 'YOUR MODELS']]),
-          segmentedField({ label: 'Account tier', value: level.tier, options: [{ id: 'basic', label: 'Basic' }, { id: 'premium', label: 'Premium' }], onChange: setTier, note: 'Basic: environment, props, lights and dots. Premium: also imports your own models.' }),
+          metrics([[c.pieces, 'SCENE PIECES'], [c.lights, 'LIGHT FIXTURES'], [c.hotspots, 'CONFIGURATOR DOTS'], [level.tier === 'premium' ? c.custom : '—', 'YOUR MODELS']]),
+          segmentedField({ label: 'Account tier', value: level.tier, options: [{ id: 'basic', label: 'Basic' }, { id: 'premium', label: 'Premium' }], onChange: setTier, note: 'Basic: designs, floors, lights, scene pieces and dots. Premium: also imports your own models.' }),
         ),
-        section('ENVIRONMENT'),
-        panel(presetTiles(), el('p', {}, 'Neutral by default. Fine-tune the Sky, Sun, Floor and Cyclorama from the outliner, or add lights.')),
+        section('LOBBY DESIGN', el('small', { class: 'section-note' }, 'the room')),
+        panel(designTiles(), toggle({ label: 'Bring its light rig', value: state.withRig, note: 'Switching the design also swaps the fixtures for its own rig.', onChange: (v) => { state.withRig = v; } })),
+        section('FLOOR', el('small', { class: 'section-note' }, FLOORS[S.floor.preset].label)),
+        panel(floorTiles(), rangeField({ label: 'Gloss', value: S.floor.gloss, min: 0, max: 1, step: 0.01, note: 'How much of the room the floor mirrors.', onInput: (v) => { S.floor.gloss = v; L.applyFloor(); }, onChange: () => level.changed('edit') })),
+        section('LIGHTING', el('small', { class: 'section-note' }, RIGS[S.rig] ? RIGS[S.rig].label : 'custom')),
+        panel(rigTiles(), el('p', {}, 'A rig replaces the fixtures with its own, aimed at the car. Every fixture stays editable under Lights; add more from Add → Lights.')),
         section('LOBBY'),
         panel(
           el('p', {}, 'Players see the Lobby without any interface: only the dots on the car. A dot flies the camera to its part and opens its colours.'),
           toggle({ label: 'Slow orbit when idle', value: state.idleOrbit, onChange: (v) => { state.idleOrbit = v; } }),
-          toggle({ label: 'Keep the camera inside', value: state.contain, note: 'Walls and tall props push the editor camera in front of them. Always on in the Lobby.', onChange: (v) => { state.contain = v; } }),
+          toggle({ label: 'Keep the camera inside', value: state.contain, note: 'Walls and tall pieces push the editor camera in front of them. Always on in the Lobby.', onChange: (v) => { state.contain = v; } }),
           (() => { const b = el('button', { type: 'button', class: 'primary wide', html: `${icon('play', 13)} Play lobby` }); b.addEventListener('click', () => setPlaying(true)); return b; })(),
         ),
         section('FILE'),
@@ -508,7 +557,7 @@ export function createLevelDesigner({ stage, level }) {
         rangeField({ label: 'Ambient', value: S.ambient.intensity, min: 0, max: 3, step: 0.05, onInput: (v) => { S.ambient.intensity = v; L.applyAmbient(); }, onChange: () => level.changed('edit') }),
         rangeField({ label: 'Reflections', value: S.ambient.reflections, min: 0, max: 2, step: 0.05, onInput: (v) => { S.ambient.reflections = v; L.applyAmbient(); }, onChange: () => level.changed('edit') }),
         rangeField({ label: 'Exposure', value: S.ambient.exposure, min: 0.4, max: 2, step: 0.01, onInput: (v) => { S.ambient.exposure = v; L.applyAmbient(); }, onChange: () => level.changed('edit') }),
-      ), section('PRESETS'), panel(presetTiles()));
+      ));
     } else if (p.kind === 'sun') {
       d.append(section('SUN'), panel(
         sunDial(),
@@ -519,19 +568,18 @@ export function createLevelDesigner({ stage, level }) {
         colorField({ label: 'Colour', value: S.sun.colour, onChange: edit((v) => { S.sun.colour = v; L.applySun(); }) }),
       ));
     } else if (p.kind === 'floor') {
-      d.append(section('FLOOR'), panel(
-        colorField({ label: 'Colour', value: S.floor.colour, onChange: edit((v) => { S.floor.colour = v; L.applyFloor(); }) }),
+      d.append(section('FINISH'), panel(floorTiles()), section('FLOOR'), panel(
         rangeField({ label: 'Gloss', value: S.floor.gloss, min: 0, max: 1, step: 0.01, note: 'How much of the room the floor mirrors.', onInput: (v) => { S.floor.gloss = v; L.applyFloor(); }, onChange: () => level.changed('edit') }),
+        rangeField({ label: 'Pattern scale', value: S.floor.scale || 1, min: 0.25, max: 4, step: 0.05, unit: '×', onChange: edit((v) => { S.floor.scale = v; L.applyFloor(); }) }),
+        colorField({ label: 'Tint', value: S.floor.tint || '#ffffff', onChange: edit((v) => { S.floor.tint = v; L.applyFloor(); }) }),
       ));
-    } else if (p.kind === 'walls' || p.kind === 'slab') {
-      if (p.kind === 'slab') d.append(...transformPanel(p));
-      d.append(section('CYCLORAMA'), panel(
-        colorField({ label: 'Wall colour', value: S.walls.colour, onChange: edit((v) => { S.walls.colour = v; L.applyWalls(); }) }),
-        rangeField({ label: 'Height', value: S.walls.height, min: 2, max: 9, step: 0.1, unit: 'm', onChange: edit((v) => { S.walls.height = v; L.applyWalls(); }) }),
-        rangeField({ label: 'Radius', value: S.walls.radius, min: 6, max: 24, step: 0.1, unit: 'm', onChange: edit((v) => { S.walls.radius = v; L.applyWalls(); }) }),
-        rangeField({ label: 'Sweep', value: S.walls.sweep, min: 90, max: 330, step: 1, unit: '°', onChange: edit((v) => { S.walls.sweep = v; L.applyWalls(); }) }),
-        rangeField({ label: 'Top curve', value: S.walls.wave, min: 0, max: 0.6, step: 0.01, note: 'Sweeps the top edge from high to low.', onChange: edit((v) => { S.walls.wave = v; L.applyWalls(); }) }),
-      ));
+    } else if (p.kind === 'set') {
+      d.append(section('LOBBY DESIGN'), panel(designTiles(), toggle({ label: 'Bring its light rig', value: state.withRig, onChange: (v) => { state.withRig = v; } })),
+        section('LIGHTING'), panel(rigTiles()),
+        section('CONTACT SHADOW'), panel(
+          rangeField({ label: 'Strength', value: S.shadow.strength, min: 0, max: 1, step: 0.01, onInput: (v) => { S.shadow.strength = v; L.applyShadow(); }, onChange: () => level.changed('edit') }),
+          rangeField({ label: 'Softness', value: S.shadow.softness, min: 0.5, max: 6, step: 0.1, onInput: (v) => { S.shadow.softness = v; L.applyShadow(); }, onChange: () => level.changed('edit') }),
+        ));
     } else if (p.kind === 'turntable') {
       const T = S.turntable;
       d.append(...transformPanel(p), section('TURNTABLE'), panel(
@@ -540,15 +588,7 @@ export function createLevelDesigner({ stage, level }) {
         rangeField({ label: 'Radius', value: T.radius, min: 2, max: 6, step: 0.05, unit: 'm', onInput: (v) => { T.radius = v; L.applyTurntable(); }, onChange: () => { level.seatVehicle(); level.changed('edit'); } }),
         colorField({ label: 'Ring colour', value: T.ring, onChange: edit((v) => { T.ring = v; L.applyTurntable(); }) }),
         rangeField({ label: 'Ring glow', value: T.glow, min: 0, max: 1, step: 0.01, onInput: (v) => { T.glow = v; L.applyTurntable(); }, onChange: () => level.changed('edit') }),
-      ));
-    } else if (p.kind === 'arches') {
-      const A = S.arches;
-      d.append(section('LIGHT ARCHES'), panel(
-        toggle({ label: 'Show arches', value: A.visible, onChange: edit((v) => { A.visible = v; L.applyArches(); renderTree(); }) }),
-        rangeField({ label: 'Count', value: A.count, min: 1, max: 15, step: 1, onChange: edit((v) => { A.count = v; L.applyArches(); }) }),
-        rangeField({ label: 'Spacing', value: A.spacing, min: 0.5, max: 2, step: 0.05, unit: 'm', onChange: edit((v) => { A.spacing = v; L.applyArches(); }) }),
-        colorField({ label: 'Colour', value: A.colour, onChange: edit((v) => { A.colour = v; L.applyArches(); }) }),
-        el('p', {}, 'The studio preset turns these on with a dark room, like a night photo booth.'),
+        segmentedField({ label: 'Disc', value: T.finish || 'dark', options: [{ id: 'dark', label: 'Dark lacquer' }, { id: 'light', label: 'Light' }], onChange: (v) => { T.finish = v; L.applyTurntable(); level.changed('edit'); } }),
       ));
     } else if (p.kind === 'vehicle') {
       d.append(...transformPanel(p), section('CONFIGURATOR'), vehicleZones(), section('DOTS'), panel(
@@ -570,18 +610,8 @@ export function createLevelDesigner({ stage, level }) {
           (() => { const b = el('button', { type: 'button', class: 'tool', html: `${icon('camera', 13)} Use this view` }); b.addEventListener('click', () => captureView(p)); return b; })(),
         ),
       ));
-    } else if (p.kind.startsWith('light-')) {
-      const D = p.data;
-      d.append(...transformPanel(p), section('LIGHT'), panel(
-        colorField({ label: 'Colour', value: D.colour, onChange: (v) => { level.setLight(p, 'colour', v); } }),
-        rangeField({ label: 'Strength', value: D.intensity, min: 0, max: p.kind === 'light-spot' ? 300 : 120, step: 0.5, onInput: (v) => level.setLight(p, 'intensity', v) }),
-        rangeField({ label: 'Reach', value: D.range, min: 1, max: 40, step: 0.5, unit: 'm', onInput: (v) => level.setLight(p, 'range', v) }),
-        p.kind === 'light-spot' ? rangeField({ label: 'Cone', value: D.angle, min: 5, max: 80, step: 1, unit: '°', onInput: (v) => level.setLight(p, 'angle', v) }) : null,
-        p.kind === 'light-spot' ? toggle({ label: 'Cast shadows', value: D.shadow, onChange: (v) => level.setLight(p, 'shadow', v) }) : null,
-        p.kind === 'light-strip' ? rangeField({ label: 'Length', value: D.length, min: 0.5, max: 8, step: 0.1, unit: 'm', onChange: (v) => level.setLight(p, 'length', v) }) : null,
-      ));
-    } else if (p.kind === 'prop') {
-      d.append(...transformPanel(p), ...propPanels(p));
+    } else if (p.kind === 'fixture' || p.kind === 'piece') {
+      d.append(...transformPanel(p), ...kitPanels(p));
     } else if (p.premium) {
       const D = p.data;
       d.append(...transformPanel(p), section('SURFACE'), panel(
@@ -596,35 +626,52 @@ export function createLevelDesigner({ stage, level }) {
     d.scrollTop = scroll;
   }
 
-  // Prop: swap the type in place, size it with the type's own parameters, pick a surface.
-  function propPanels(p) {
-    const D = p.data, def = PROPS[D.type];
-    const types = el('div', { class: 'prop-types' }, ...Object.entries(PROPS).map(([type, t]) => {
+  // Fixture or piece: swap the type in place, its own parameters, and (pieces) a finish.
+  function kitPanels(p) {
+    const fixture = p.kind === 'fixture';
+    const lib = fixture ? FIXTURES : PIECES, D = p.data, def = lib[D.type];
+    const typeButton = ([type, t]) => {
       const b = el('button', { type: 'button', class: `prop-type${type === D.type ? ' active' : ''}`, title: `${t.label} · ${t.note}`, html: `${icon(t.icon, 18)}<span>${t.label}</span>` });
-      b.addEventListener('click', () => { if (type === D.type) return; level.setPropType(p, type); renderDetails(); toast(`Now a ${t.label.toLowerCase()} · same place and turn`); });
+      b.addEventListener('click', () => { if (type === D.type) return; level.setKitType(p, type); renderDetails(); toast(`Now a ${t.label.toLowerCase()} · same place`); });
       return b;
-    }));
-    const sizes = Object.entries(def.params).map(([key, q]) => rangeField({
-      label: q.label, value: D.params[key], min: q.min, max: q.max, step: q.step, unit: q.unit === 'm' ? ' m' : q.unit,
-      onInput: (v) => level.setPropParam(p, key, v), onChange: () => renderTree(),
-    }));
-    const reset = el('button', { type: 'button', class: 'tool', html: `${icon('reset', 13)} Default size` });
-    reset.addEventListener('click', () => { for (const [k, q] of Object.entries(def.params)) D.params[k] = q.value; level.buildProp(p); level.changed('edit'); renderDetails(); });
-    const surfaces = el('div', { class: 'surface-tiles' }, ...Object.entries(SURFACES).map(([id, s]) => {
-      const b = el('button', { type: 'button', class: `surface-tile${D.surface === id ? ' active' : ''}`, title: s.label, style: `--c:${s.colour};--sheen:${s.metalness ? '#ffffff88' : s.roughness < 0.3 ? '#ffffff55' : '#ffffff10'};--o:${s.opacity ?? 1}` }, el('i'), el('span', {}, s.label));
-      b.addEventListener('click', () => { level.setPropSurface(p, id); renderDetails(); });
-      return b;
-    }));
-    return [
-      section('PROP TYPE', el('small', { class: 'section-note' }, 'swap in place')), panel(types),
-      section('SIZE'), panel(...sizes, el('div', { class: 'action-row' }, reset)),
-      section('SURFACE', el('small', { class: 'section-note' }, D.surface === 'custom' ? 'custom' : SURFACES[D.surface].label)), panel(
-        surfaces,
-        colorField({ label: 'Colour', value: D.colour, onChange: (v) => { level.setSurface(p, 'colour', v); renderDetails(); } }),
-        rangeField({ label: 'Roughness', value: D.roughness, min: 0, max: 1, step: 0.01, onInput: (v) => level.setSurface(p, 'roughness', v), onChange: () => renderDetails() }),
-        rangeField({ label: 'Metalness', value: D.metalness, min: 0, max: 1, step: 0.01, onInput: (v) => level.setSurface(p, 'metalness', v), onChange: () => renderDetails() }),
-      ),
-    ];
+    };
+    const entries = Object.entries(lib).filter(([, t]) => fixture || t.category === def.category);
+    const types = el('div', { class: 'prop-types' }, ...entries.map(typeButton));
+    const fields = Object.entries(def.params).map(([key, q]) => {
+      if (q.kind === 'toggle') return toggle({ label: q.label, value: !!D.params[key], onChange: (v) => { level.setKitParam(p, key, v); } });
+      if (q.kind === 'colour') return colorField({ label: q.label, value: D.params[key], onChange: (v) => { level.setKitParam(p, key, v); renderTree(); } });
+      if (q.kind === 'seed') {
+        const row = el('div', { class: 'action-row' });
+        const b = el('button', { type: 'button', class: 'tool', html: `${icon('reset', 13)} ${q.label} ${D.params[key]}` });
+        b.addEventListener('click', () => { level.setKitParam(p, key, (D.params[key] % 99) + 1); renderDetails(); });
+        row.append(b);
+        return row;
+      }
+      return rangeField({ label: q.label, value: D.params[key], min: q.min, max: q.max, step: q.step, unit: q.unit === 'm' ? ' m' : q.unit, onInput: (v) => level.setKitParam(p, key, v), onChange: () => renderTree() });
+    });
+    const out = [section(fixture ? 'FIXTURE' : 'PIECE', el('small', { class: 'section-note' }, 'swap in place')), panel(types)];
+    if (fixture) {
+      const aim = el('button', { type: 'button', class: 'tool', html: `${icon('frame', 13)} Aim at car` });
+      aim.addEventListener('click', () => { level.aim(p); renderDetails(); });
+      out.push(section('LIGHT'), panel(...fields, el('div', { class: 'action-row' }, aim)));
+    } else {
+      out.push(section('SHAPE'), panel(...fields.length ? fields : [el('p', {}, 'This piece has a fixed shape; scale it in Transform.')]));
+      const current = D.finish === 'default' ? null : D.finish;
+      const swatches = el('div', { class: 'finish-tiles' }, ...PIECE_FINISHES.map((id) => {
+        const f = SURFACE_FINISHES[id];
+        const bg = f.texture ? `url(${surfaceSwatch(f.texture)})` : f.colour;
+        const b = el('button', { type: 'button', class: `finish-tile${current === id ? ' active' : ''}${f.metalness ? ' metal' : ''}${f.opacity ? ' clear' : ''}`, title: f.label, style: `--img:${bg};--tint:${f.texture ? f.colour : 'transparent'}` }, el('i'));
+        b.addEventListener('click', () => { level.setPieceFinish(p, id); renderDetails(); });
+        return b;
+      }));
+      const curLabel = current ? SURFACE_FINISHES[current].label : 'Original';
+      out.push(section('FINISH', el('small', { class: 'section-note' }, D.colour ? 'custom colour' : curLabel)), panel(
+        swatches,
+        colorField({ label: 'Colour', value: D.colour || (current && !SURFACE_FINISHES[current].texture ? SURFACE_FINISHES[current].colour : '#ffffff'), onChange: (v) => { level.setPieceColour(p, v); renderDetails(); } }),
+        (() => { const b = el('button', { type: 'button', class: 'tool', html: `${icon('reset', 13)} Original finish` }); b.addEventListener('click', () => { level.setPieceFinish(p, 'default'); renderDetails(); }); return el('div', { class: 'action-row' }, b); })(),
+      ));
+    }
+    return out;
   }
 
   // ---------------------------------------------------------------------------------------------- levels
@@ -638,7 +685,7 @@ export function createLevelDesigner({ stage, level }) {
     location.search = q.toString();
   }
   function resetLevel() {
-    if (!confirm(`Reset “${level.name}” to its ${(TEMPLATES[level.template] || TEMPLATES.lobby).label} template? Props, lights, dots and colours go back to the start.`)) return;
+    if (!confirm(`Reset “${level.name}” to its ${(TEMPLATES[level.template] || TEMPLATES.studio).label} template? Pieces, lights, dots and colours go back to the start.`)) return;
     const lib = readLibrary();
     if (lib.levels[level.id]) lib.levels[level.id].snapshot = null;
     writeLibrary(lib);
@@ -652,9 +699,10 @@ export function createLevelDesigner({ stage, level }) {
     for (const id of lib.order) {
       const e = lib.levels[id];
       const current = id === level.id;
-      const sum = current ? { preset: L.settings.preset, props: level.counts.props, dots: level.counts.hotspots } : (e.summary || { preset: (TEMPLATES[e.template] || TEMPLATES.lobby).preset, props: (TEMPLATES[e.template] || TEMPLATES.lobby).props.length, dots: 6 });
-      const pr = LOBBY_PRESETS[sum.preset] || LOBBY_PRESETS.cove;
-      const thumb = el('span', { class: 'level-thumb', style: `--g:linear-gradient(180deg, ${pr.sky.zenith}, ${pr.sky.horizon} 48%, ${pr.walls.colour} 48%, ${pr.floor.colour} 76%)` });
+      const tpl = TEMPLATES[e.template] || TEMPLATES.studio;
+      const sum = current ? { set: L.settings.set, pieces: level.counts.pieces, lights: level.counts.lights, dots: level.counts.hotspots } : (e.summary && e.summary.set ? e.summary : { set: tpl.set, pieces: tpl.pieces.length, lights: (RIGS[tpl.rig] || { fixtures: [] }).fixtures.length, dots: 6 });
+      const pr = SETS[sum.set] || SETS.studio;
+      const thumb = el('span', { class: 'level-thumb', style: setThumb(sum.set, current ? L.settings.floor.preset : pr.floor) }, el('span', { html: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">${pr.icon}</svg>` }));
       const name = current ? level.name : e.name;
       const tools = el('div', { class: 'level-tools' });
       const mk = (ic, title, fn) => { const b = el('button', { type: 'button', class: 'tool round', title, html: icon(ic, 13) }); b.addEventListener('click', (ev) => { ev.stopPropagation(); fn(); }); return b; };
@@ -678,15 +726,15 @@ export function createLevelDesigner({ stage, level }) {
         }),
       );
       const card = el('button', { type: 'button', class: `level-row${current ? ' active' : ''}` }, thumb,
-        el('div', {}, el('b', {}, name, current ? el('i', { class: 'root-tag' }, 'OPEN') : null), el('small', {}, `${pr.label} · ${sum.props} props · ${sum.dots} dots`)), tools);
+        el('div', {}, el('b', {}, name, current ? el('i', { class: 'root-tag' }, 'OPEN') : null), el('small', {}, `${pr.label} · ${sum.pieces} pieces · ${sum.lights} lights · ${sum.dots} dots`)), tools);
       card.addEventListener('click', () => { if (!current) openLevel(id); });
       list.append(card);
     }
     const tiles = $('TemplateList');
     tiles.replaceChildren();
     for (const [tid, t] of Object.entries(TEMPLATES)) {
-      const pr = LOBBY_PRESETS[t.preset];
-      const b = el('button', { type: 'button', class: 'template-tile', title: t.note, style: `--g:linear-gradient(180deg, ${pr.sky.zenith}, ${pr.sky.horizon} 48%, ${pr.walls.colour} 48%, ${pr.floor.colour} 76%)` }, el('i'), el('b', {}, t.label), el('small', {}, t.note));
+      const pr = SETS[t.set];
+      const b = el('button', { type: 'button', class: 'template-tile', title: t.note, style: setThumb(t.set, t.floor || pr.floor) }, el('i', { html: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">${pr.icon}</svg>` }), el('b', {}, t.label), el('small', {}, t.note));
       b.addEventListener('click', () => {
         level.save();
         const l2 = readLibrary();
@@ -700,6 +748,12 @@ export function createLevelDesigner({ stage, level }) {
     }
   }
 
+  function setThumb(setId, floorId) {
+    const s = SETS[setId] || SETS.studio, f = FLOORS[floorId] || FLOORS.concrete;
+    const floor = f.texture ? `url(${surfaceSwatch(f.texture, 64)}) center/cover` : f.colour;
+    return `--g:linear-gradient(180deg, ${s.sky.zenith}, ${s.sky.horizon});--f:${floor}`;
+  }
+  function kelvinHex(k) { return new THREE.Color(kelvinColour(k)).getHexString(); }
   function previewDot(p) { stage.rig.flyTo(level.configurator.viewOf(p.spot), { duration: 0.8 }); }
   function captureView(p) {
     const rig = stage.rig, v = level.vehicle;
@@ -792,7 +846,7 @@ export function createLevelDesigner({ stage, level }) {
       `sun ${Math.round(s.azimuth)}° / ${Math.round(s.elevation)}°`,
       pos ? `${p.name}  ${pos.x.toFixed(2)}  ${pos.y.toFixed(2)}  ${pos.z.toFixed(2)}` : '',
     ].join('\n');
-    $('Strip').textContent = `LEVEL DESIGNER · ${level.name.toUpperCase()} · ${(LOBBY_PRESETS[L.settings.preset] || { label: 'Custom' }).label.toUpperCase()} · ${level.counts.placements} PLACEMENTS · ${level.tier.toUpperCase()}`;
+    $('Strip').textContent = `LEVEL DESIGNER · ${level.name.toUpperCase()} · ${SETS[L.settings.set].label.toUpperCase()} · ${(RIGS[L.settings.rig] || { label: 'Custom light' }).label.toUpperCase()} · ${level.counts.placements} PLACEMENTS · ${level.tier.toUpperCase()}`;
   }, 250);
 
   level.on((what) => {
