@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Level Designer · Frontier</title>
+<link rel="stylesheet" href="../Shared/Studio/Studio.css">
+<link rel="stylesheet" href="./LevelDesigner.css">
+</head>
+<body>
+<div id="Studio" class="workspace">
+
+  <!-- ============================================================ LEFT: Outliner / Content -->
+  <section class="dock left" aria-label="Outliner and content">
+    <div class="tab-strip">
+      <button type="button" class="document-tab active" data-left="outliner">Outliner</button>
+      <button type="button" class="document-tab" data-left="content">Content</button>
+    </div>
+
+    <div id="LeftOutliner" class="left-pane">
+      <div class="outliner-heading"><h1 id="LevelName">Lobby</h1><small>level · car configurator</small></div>
+      <div class="stats">
+        <div class="stat-tile"><span class="status-disc" data-icon="layers" data-icon-size="12"></span><small>Placements</small><strong id="StatPlacements">0</strong></div>
+        <div class="stat-tile"><span class="muted-disc" data-icon="dot" data-icon-size="12"></span><small>Dots</small><strong id="StatDots">0</strong></div>
+      </div>
+      <div class="add-row">
+        <button type="button" id="AddBtn" class="primary add-btn" data-icon="plus" data-icon-size="14">Add</button>
+        <label class="search-wrap"><span data-icon="search" data-icon-size="14"></span><input id="TreeSearch" type="search" placeholder="Search the level"></label>
+      </div>
+      <div id="AddMenu" class="add-menu" hidden>
+        <label class="search-wrap"><span data-icon="search" data-icon-size="14"></span><input id="AddSearch" type="search" placeholder="Search lights, dots and pieces"></label>
+        <div id="AddList" class="add-list"></div>
+      </div>
+      <div class="outliner-scroll" id="Tree" role="tree"></div>
+      <footer class="dock-footer"><div><i>CLICK</i>select</div><div><i>DBL-CLICK</i>frame</div><div><i>DEL · CTRL D</i>remove · copy</div></footer>
+    </div>
+
+    <div id="LeftContent" class="left-pane" hidden>
+      <div class="outliner-heading"><h1>Content</h1><small>lobby pieces · your models</small></div>
+      <div class="drop-zone" id="ImportZone">
+        <button type="button" id="ImportBtn" class="primary wide" data-icon="upload" data-icon-size="14">Import model…</button>
+        <p>Bring your own showroom pieces. Models drop onto the floor beside the car, centred and scaled to metres.</p>
+        <div class="chips" id="ImportFormats"></div>
+      </div>
+      <div class="outliner-scroll">
+        <div class="collection"><span data-icon="sparkle"></span><div><b>Lobby pieces</b><small>Place one beside the car, then move it</small></div></div>
+        <div id="PieceList" class="content-list"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ CENTRE: viewport -->
+  <section class="dock centre" aria-label="Level viewport">
+    <div class="tab-strip"><div class="document-tab active"><span data-icon="wall" data-icon-size="13"></span>Lobby</div></div>
+    <div class="viewport-heading">
+      <span class="scene-icon" data-icon="wall" data-icon-size="20"></span>
+      <div class="scene-title"><b id="SceneTitle">Lobby</b><small id="SceneSubtitle">Level · ControlVehicle showroom</small></div>
+      <span class="state-tag" id="StateTag">DESIGN</span>
+      <span class="spacer"></span>
+      <div id="ViewBar"></div>
+      <button type="button" id="PlayBtn" class="primary play-btn" title="Open the Lobby as players see it (P)" data-icon="play" data-icon-size="13">Play lobby</button>
+    </div>
+    <div class="viewport-tools" id="ViewportTools">
+      <div class="segmented tool-modes" id="ToolModes" role="tablist">
+        <button type="button" data-tool="select" class="active" title="Select (Q)"><span data-icon="cursor" data-icon-size="14"></span>Select</button>
+        <button type="button" data-tool="move" title="Move (W)"><span data-icon="move" data-icon-size="14"></span>Move</button>
+        <button type="button" data-tool="rotate" title="Turn (E)"><span data-icon="turn" data-icon-size="14"></span>Turn</button>
+      </div>
+      <span class="divider"></span>
+      <button type="button" id="SnapBtn" class="tool round" title="Snap to 25 cm / 15° (hold Ctrl)" data-icon="magnet" data-icon-size="15"></button>
+      <button type="button" id="DotsBtn" class="tool round active" title="Configurator dots (H)" data-icon="dot" data-icon-size="15"></button>
+      <button type="button" id="HelpersBtn" class="tool round active" title="Light glyphs" data-icon="bulb" data-icon-size="15"></button>
+      <button type="button" id="FrameBtn" class="tool round" title="Frame selection (F)" data-icon="frame" data-icon-size="15"></button>
+      <span class="spacer"></span>
+      <span class="tier-chip" id="TierChip" title="Account tier"></span>
+    </div>
+    <div class="canvas-well" id="ViewportWell">
+      <canvas id="Viewport" tabindex="0" aria-label="Level viewport"></canvas>
+      <div class="readout" id="Readout"></div>
+      <button type="button" class="lobby-exit" id="LobbyExit" title="Back to the Level Designer (Esc)" data-icon="exit" data-icon-size="14">Level Designer</button>
+    </div>
+    <div class="strip" id="Strip">LEVEL DESIGNER · LOBBY</div>
+  </section>
+
+  <!-- ============================================================ RIGHT: Details -->
+  <section class="dock right" aria-label="Details">
+    <div class="tab-strip"><div class="document-tab active">Details</div></div>
+    <div class="inspector-scroll" id="Details"></div>
+  </section>
+</div>
+
+<!-- ============================================================ NOTCH: shortcuts -->
+<div id="Notch" class="notch-shell">
+  <div class="shade">
+    <div class="control-sheet">
+      <header><span>Frontier · Level Designer</span><kbd>?</kbd></header>
+      <div class="keys">
+        <div>Orbit · pan · zoom<span>Drag · right-drag · wheel</span></div>
+        <div>Select<span>Click in the viewport or the outliner · <kbd>Q</kbd></span></div>
+        <div>Move · turn<span><kbd>W</kbd> · <kbd>E</kbd> · drag a handle</span></div>
+        <div>Snap 25 cm / 15°<span>hold <kbd>Ctrl</kbd> while dragging</span></div>
+        <div>Fly to selection<span><kbd>F</kbd> · double-click</span></div>
+        <div>Configurator dots<span><kbd>H</kbd></span></div>
+        <div>Delete · duplicate<span><kbd>Del</kbd> · <kbd>Ctrl D</kbd></span></div>
+        <div>Play the Lobby<span><kbd>P</kbd> · <kbd>Esc</kbd> returns</span></div>
+        <div>Next / previous part in the Lobby<span><kbd>→</kbd> <kbd>←</kbd></span></div>
+        <div>Lens (dolly zoom)<span><kbd>Alt</kbd> wheel</span></div>
+        <div>Drift<span>hold right · <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></span></div>
+      </div>
+      <p>The Lobby is the car configurator players walk into: no interface, only small dots on the car. A dot flies the camera to its part and opens its colours. Basic levels can change the environment, add lights and place dots; Premium adds your own lobby pieces and imported models.</p>
+    </div>
+  </div>
+  <button id="NotchHandle" class="notch-handle" aria-expanded="false"><svg viewBox="0 0 200 36" preserveAspectRatio="none"><path d="M0 0 L22 36 L178 36 L200 0 Z"/></svg><span>Frontier · Level Designer</span></button>
+</div>
+
+<div class="boot" id="Boot"><div><b>Level Designer</b><small id="BootText">Loading…</small><div class="progress"><i id="BootBar"></i></div></div></div>
+<div class="toast" id="Toast" role="status"></div>
+<input type="file" id="FileInput" hidden accept=".obj,.gltf,.glb,.stl,.ply,.facet">
+<script>
+  document.getElementById('NotchHandle').addEventListener('click', () => {
+    const n = document.getElementById('Notch'); const open = !n.classList.contains('open');
+    n.classList.toggle('open', open); document.getElementById('NotchHandle').setAttribute('aria-expanded', String(open));
+  });
+  document.querySelector('#Notch .shade').addEventListener('click', (e) => { if (e.target.classList.contains('shade')) document.getElementById('NotchHandle').click(); });
+  addEventListener('keydown', (e) => { if (e.key === '?' && !e.target.matches('input, textarea, select')) document.getElementById('NotchHandle').click(); });
+</script>
+<script type="module" src="./Main.js"></script>
+</body>
+</html>

@@ -1,0 +1,109 @@
+/* Level Designer only: tool modes, tier chip, configurator dots and swatch strip, Lobby (play) mode.
+   Shared look: ../Shared/Studio/Studio.css (same docks, tabs, panels and controls as the Component Viewer). */
+
+.play-btn { height: 32px; padding: 0 14px; }
+.tool-modes button { display: inline-flex; gap: 6px; }
+.tool-modes button .ico, .tool-modes button svg { opacity: 0.85; }
+.tool.round.active { background: #e8e8e8; color: #111; }
+.tier-chip { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 10px; border-radius: 12px; font-size: 9px; letter-spacing: 1.2px; border: 1px solid #333; color: #9a9a9a; white-space: nowrap; }
+.tier-chip.premium { color: var(--amber); border-color: #6f5a1d; background: #261f10; }
+.canvas-well { background: #cfd8e2; }
+
+/* outliner extras */
+.group-row { display: flex; align-items: center; gap: 10px; padding: 12px 12px 6px; color: #9a9a9a; cursor: default; user-select: none; }
+.group-row b { display: block; font-size: 12px; color: #dedede; }
+.group-row small { color: #5c5c5c; }
+.group-row .count { margin-left: auto; font-size: 10px; color: #8a8a8a; background: #1c1c1c; border-radius: 10px; padding: 2px 8px; }
+.group-row .lock-tag { margin-left: auto; color: var(--amber); display: flex; }
+.comp-row.child { padding-left: 50px; }
+.comp-row .dot-swatch { width: 9px; height: 9px; border-radius: 50%; background: var(--c, #fff); box-shadow: 0 0 0 2px #121212, 0 0 0 3px #3a3a3a; }
+.premium-note { margin: 4px 10px 8px 30px; padding: 10px 12px; border-radius: 12px; border: 1px dashed #3a3220; background: #17140e; font-size: 10px; line-height: 1.5; color: #b9a47a; display: flex; gap: 10px; align-items: flex-start; }
+.premium-note .ico { color: var(--amber); margin-top: 1px; }
+.premium-note button { margin-top: 8px; min-height: 24px; height: 24px; font-size: 10px; padding: 0 10px; background: var(--amber); color: #111; border: 0; }
+.menu-item.locked { opacity: 0.55; }
+.menu-item .lock { color: var(--amber); display: flex; }
+
+/* content pieces */
+.piece-row { display: grid; grid-template-columns: 42px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 8px 10px; border-radius: 14px; background: #161616; border: 1px solid #232323; }
+.piece-row:hover { border-color: #333; }
+.piece-glyph { width: 42px; height: 42px; border-radius: 12px; background: #0d0d0f; color: #cfcfcf; display: flex; align-items: center; justify-content: center; }
+.piece-row b { display: block; font-size: 12px; }
+.piece-row small { display: block; color: #6e6e6e; }
+.piece-row .tool { height: 28px; font-size: 10px; padding: 0 12px; }
+.piece-row.locked .tool { color: var(--amber); }
+
+/* details extras */
+.preset-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.preset-tile { flex-direction: column; align-items: stretch; gap: 6px; height: auto; min-height: 0; padding: 6px; border-radius: 14px; border: 1px solid #262626; background: #141414; color: #9a9a9a; font-size: 10px; text-align: left; }
+.preset-tile i { display: block; height: 38px; border-radius: 9px; background: var(--g); box-shadow: inset 0 -10px 0 var(--f); }
+.preset-tile:hover { border-color: #3a3a3a; color: #eee; background: #181818; }
+.preset-tile.active { border-color: #6f5a1d; color: #f0f0f0; box-shadow: 0 0 0 1px #6f5a1d inset; }
+.sun-dial { position: relative; height: 120px; border-radius: 14px; background: radial-gradient(circle at 50% 100%, #1d2633 0 40%, #121418 41%); border: 1px solid #262626; overflow: hidden; cursor: crosshair; touch-action: none; }
+.sun-dial svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.sun-dial small { position: absolute; left: 10px; top: 8px; color: #6e6e6e; letter-spacing: 1px; font-size: 8px; }
+.sun-dial output { position: absolute; right: 10px; top: 7px; font: 400 10px ui-monospace, monospace; color: #cfcfcf; }
+.swatch-grid { display: flex; flex-wrap: wrap; gap: 6px; }
+.zone-block { display: flex; flex-direction: column; gap: 8px; padding-bottom: 10px; border-bottom: 1px solid #1f1f1f; }
+.zone-block:last-child { border-bottom: 0; padding-bottom: 0; }
+.zone-block header { display: flex; align-items: center; gap: 8px; font-size: 11px; color: #c4c4c4; }
+.zone-block header small { margin-left: auto; }
+.zone-line { display: grid; grid-template-columns: 58px minmax(0, 1fr) 30px; gap: 8px; align-items: center; font-size: 10px; color: #8a8a8a; }
+.mini-swatch { width: 18px; height: 18px; min-height: 18px; padding: 0; border-radius: 50%; background: var(--c); border: 2px solid #121212; box-shadow: 0 0 0 1px #333; }
+.mini-swatch.on { box-shadow: 0 0 0 2px #e8e8e8; }
+.detail-actions .tool { height: 30px; }
+.action-row { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.action-row .tool { width: 100%; border-radius: 12px; }
+.lock-card { display: flex; gap: 12px; align-items: flex-start; }
+.lock-card .ico { color: var(--amber); }
+.lock-card b { display: block; font-size: 12px; margin-bottom: 4px; }
+
+/* ---------------------------------------------------------------- configurator dots (Lobby UI) */
+.ld-spots { position: absolute; inset: 0; z-index: 4; pointer-events: none; overflow: hidden; }
+.ld-dot { position: absolute; left: 0; top: 0; width: 26px; height: 26px; min-height: 26px; margin: -13px 0 0 -13px; padding: 0; border: 0; border-radius: 50%; background: transparent; pointer-events: auto; display: block; transition: opacity 0.25s; }
+.ld-dot:hover { background: transparent; }
+.ld-dot i { position: absolute; left: 50%; top: 50%; width: 10px; height: 10px; margin: -5px 0 0 -5px; border-radius: 50%; background: #fff; box-shadow: 0 0 0 3px #ffffff40, 0 1px 6px #0006; transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1); }
+.ld-dot i::after { content: ''; position: absolute; inset: -7px; border-radius: 50%; border: 1px solid #ffffffb0; animation: dotPulse 2.4s ease-out infinite; }
+.ld-dot span { position: absolute; left: 22px; top: 50%; transform: translate(-4px, -50%); opacity: 0; padding: 4px 10px; border-radius: 11px; background: #0f0f10d9; backdrop-filter: blur(6px); color: #f2f2f2; font-size: 11px; white-space: nowrap; pointer-events: none; transition: opacity 0.18s, transform 0.18s; }
+.ld-dot:hover i { transform: scale(1.35); }
+.ld-dot:hover span { opacity: 1; transform: translate(0, -50%); }
+.ld-dot.occluded { opacity: 0.28; }
+.ld-dot.selected i { background: var(--amber); box-shadow: 0 0 0 3px #ffb23855, 0 1px 6px #0006; }
+.ld-spots.focused .ld-dot:not(.active) { opacity: 0; pointer-events: none; }
+.ld-spots.focused .ld-dot.active i { transform: scale(0.6); }
+.ld-spots.focused .ld-dot.active span { display: none; }
+@keyframes dotPulse { 0% { transform: scale(0.6); opacity: 0.9; } 70%, 100% { transform: scale(1.5); opacity: 0; } }
+
+.ld-config { position: absolute; left: 50%; bottom: 22px; transform: translateX(-50%); z-index: 6; min-width: 320px; max-width: calc(100% - 32px); padding: 10px 14px 12px; border-radius: 22px; background: #0f0f10d0; backdrop-filter: blur(10px); border: 1px solid #ffffff14; color: #f0f0f0; display: flex; flex-direction: column; gap: 8px; animation: trayRise 0.35s cubic-bezier(0.16, 1, 0.3, 1); }
+@keyframes trayRise { from { opacity: 0; transform: translate(-50%, 14px); } }
+.ld-config header { display: flex; align-items: center; gap: 8px; }
+.ld-config header > div { flex: 1; text-align: center; }
+.ld-config header small { display: block; font-size: 8px; letter-spacing: 1.4px; text-transform: uppercase; color: #8a8a8a; }
+.ld-config header b { font-size: 14px; }
+.ld-nav { width: 28px; height: 28px; min-height: 28px; padding: 0; border-radius: 50%; background: #ffffff10; border: 0; color: #d0d0d0; }
+.ld-nav:hover { background: #ffffff22; color: #fff; }
+.ld-nav.close { margin-left: 4px; }
+.ld-row { display: grid; grid-template-columns: 48px auto minmax(70px, auto); gap: 10px; align-items: center; }
+.ld-row small { font-size: 9px; letter-spacing: 1px; text-transform: uppercase; color: #8a8a8a; }
+.ld-row em { font-style: normal; font-size: 10px; color: #bdbdbd; white-space: nowrap; }
+.ld-swatches, .ld-pills { display: flex; gap: 6px; }
+.ld-swatch { width: 26px; height: 26px; min-height: 26px; padding: 0; border-radius: 50%; background: var(--c); border: 2px solid #0f0f10; box-shadow: 0 0 0 1px #ffffff26; transition: transform 0.15s; }
+.ld-swatch:hover { transform: scale(1.12); background: var(--c); }
+.ld-swatch.on { box-shadow: 0 0 0 2px #fff; }
+.ld-pill { min-height: 24px; height: 24px; padding: 0 11px; border-radius: 12px; font-size: 10px; background: #ffffff10; border: 0; color: #cfcfcf; }
+.ld-pill.on { background: #e8e8e8; color: #111; }
+
+/* ---------------------------------------------------------------- Lobby (play) mode: the level without the editor */
+.lobby-exit { position: absolute; left: 14px; top: 14px; z-index: 7; height: 28px; min-height: 28px; font-size: 11px; padding: 0 12px; border-radius: 14px; background: #0f0f10a0; backdrop-filter: blur(6px); color: #dcdcdc; border: 1px solid #ffffff14; display: none; opacity: 0; transition: opacity 0.4s; }
+body.playing .lobby-exit { display: inline-flex; }
+body.playing .lobby-exit.awake { opacity: 1; }
+body.playing .workspace { grid-template-columns: 1fr; gap: 0; }
+body.playing .dock.left, body.playing .dock.right { display: none; }
+body.playing .dock.centre > .tab-strip, body.playing .viewport-heading, body.playing .viewport-tools, body.playing .strip { display: none; }
+body.playing .canvas-well { margin: 0; border-radius: 0; }
+body.playing .readout, body.playing .cam-hud, body.playing .notch-shell { display: none; }
+body.playing .ld-dot.selected i { background: #fff; }
+
+/* add menu: icons and lock keep their size, labels stay on one line */
+.add-list .menu-item > .ico, .add-list .menu-item > .lock { flex: none; width: 18px; }
+.add-list .menu-item > span:not(.ico):not(.lock) { white-space: nowrap; }
+.add-list .menu-item small { white-space: nowrap; }
