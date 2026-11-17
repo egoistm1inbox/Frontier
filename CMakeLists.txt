@@ -216,6 +216,7 @@ set(FRONTIER_UI_COMPONENT_SOURCES
     Engine/Workspaces/Fracture/FractureViewportRenderer.cpp
     Engine/Workspaces/Fracture/FractureWorkspaceSession.cpp
     Engine/Workspaces/ParametricSketcher/ParametricSketcherWorkspaceSession.cpp
+    Engine/Workspaces/ParametricSketcher/ParametricSketcherWorkspaceHost.cpp
     Engine/Workspaces/Fracture/FractureOutlinerPanel.cpp
     Engine/Workspaces/Fracture/FractureViewportHost.cpp
     Engine/Workspaces/Fracture/FractureInspectorPanel.cpp
