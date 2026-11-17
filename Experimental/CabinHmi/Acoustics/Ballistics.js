@@ -1,7 +1,7 @@
 // BALLISTICS
 // 🧩 Synthesized weapon sounds: an energy LMG that spins up as you hold the trigger (Devotion-style, with or without the
 //    Turbocharger hop-up), a belt-fed LMG, an SMG, a bolt-action sniper rifle, an automated turret, a tank cannon and an
-//    autocannon; bullets passing by (supersonic crack with the distant report arriving later, subsonic whizz,
+//    autocannon; spent casings falling on concrete, wood, steel and dirt (Casings.js); bullets passing by (supersonic crack with the distant report arriving later, subsonic whizz,
 //    ricochet whine); and bullets hitting sand, dirt, rock, concrete, wood, metal, glass and water.
 // 📝 Every shot is layered from physics-shaped pieces (ImpactFoley helpers): the muzzle blast (Friedlander
 //    overpressure), propellant gas (shaped noise), the weapon's body thump, the action's struck modes (bolt, belt
@@ -12,6 +12,7 @@
 
 import { Tau, Clamp, Mix, Smoothstep, SeededNoise, OnePole, Biquad, Resonator, PanGains, Strike } from './SignalKit.js';
 import { Overpressure, Thump, Roar, Scatter, Bounce, Whine, Echoes, Distant, Settle } from './ImpactFoley.js';
+import { Shells, Floors, DropCasing, CasingRain } from './Casings.js';
 
 //------------------------------------------------------------------------------------------------------------------------
 //                                                    WEAPONS
@@ -20,44 +21,51 @@ import { Overpressure, Thump, Roar, Scatter, Bounce, Whine, Echoes, Distant, Set
 /**
  * Weapon recipes. Rate: [first, top] rounds per second; Spin: seconds to reach the top rate (0 = constant). Turbo
  * overrides for the hop-up. Shot layers: Blast (overpressure), Gas (noise roar), Body (thump), Action ([modes, gain,
- * delay]), Brass (casing bounce modes or null), Zap (energy discharge), Tail (long rolling echo).
+ * delay]), Brass (a Casings.js case, landing on concrete), Boom (low-mid barrel and air body: modes plus band noise), Crack
+ * (supersonic bullet N-wave at the muzzle), Arc (energy-cell crackle), Tail (rolling outdoor report per shot and after a burst),
+ * Level (live bench shot gain, so every weapon sits at a similar loudness).
  */
 export const Weapons = {
     EnergyLmg: {
-        Label: 'Energy LMG', Note: 'Devotion-style spin-up', Rate: [5, 15], Spin: 1.75, Magazine: 44, Motor: { Hz: 46, Barrels: 3, Gain: 0.06 },
+        // Voiced as a real full-power LMG (Follow-up 14): a long, heavy muzzle blast with a low-mid boom, the bullet's
+        // supersonic crack, a steel bolt carrier slamming, a rolling outdoor report and brass falling; the spin-up
+        // drive is a geared motor (mesh grind and barrel clatter), and the energy ammo only adds a faint arc crackle.
+        Label: 'Energy LMG', Note: 'Devotion-style spin-up', Rate: [5, 15], Spin: 1.75, Magazine: 44, Motor: { Hz: 24, Barrels: 3, Gain: 0.03, Grind: 1 },
         Turbo: { Rate: [6.8, 15], Spin: 0.85 },
-        Blast: { Lasts: 0.0012, Gain: 0.8, Low: 7000 }, Gas: { Seconds: 0.09, From: 9000, To: 1500, Floor: 400, Gain: 0.35, Grit: 0.5 },
-        Body: { Hz: 115, EndHz: 60, Decay: 0.14, Gain: 0.45, Drive: 1.6 },
-        Action: [[[1900, 0.03, 1], [3300, 0.02, 0.6], [5200, 0.012, 0.4]], 3, 0.006],
-        Zap: { From: 2600, To: 420, Seconds: 0.07, Gain: 0.2 }, Brass: null,
+        Blast: { Lasts: 0.0024, Gain: 1.25, Low: 5000 }, Gas: { Seconds: 0.22, From: 9000, To: 600, Floor: 120, Gain: 0.8, Grit: 0.7 },
+        Body: { Hz: 74, EndHz: 38, Decay: 0.2, Gain: 0.85, Drive: 2.4 },
+        Boom: { Modes: [[190, 0.07, 0.5], [310, 0.06, 0.4], [470, 0.045, 0.3], [760, 0.03, 0.2]], Gain: 2.4, Low: 150, High: 1200, Decay: 0.14, Noise: 2.2 },
+        Crack: { Lasts: 0.00024, Gain: 0.5 }, Arc: { Gain: 0.03 }, Tail: { Gain: 0.13 },
+        Action: [[[1050, 0.045, 1], [2300, 0.03, 0.6], [460, 0.06, 0.5], [3900, 0.015, 0.3]], 4, 0.011],
+        Brass: 'Rifle762', Level: 0.6,
     },
     Lmg: {
         Label: 'LMG', Note: 'belt-fed, 640 rounds/min', Rate: [10.7, 10.7], Spin: 0, Magazine: 100,
         Blast: { Lasts: 0.0022, Gain: 1.1, Low: 6000 }, Gas: { Seconds: 0.16, From: 7000, To: 700, Floor: 150, Gain: 0.45, Grit: 0.6 },
         Body: { Hz: 85, EndHz: 45, Decay: 0.25, Gain: 0.75, Drive: 2 },
         Action: [[[1250, 0.04, 1], [2600, 0.025, 0.6], [480, 0.05, 0.5]], 4, 0.012], Links: [[3100, 0.012, 1], [4700, 0.01, 0.6]],
-        Brass: [[4300, 0.05, 1], [7900, 0.03, 0.5]],
+        Brass: 'Rifle762',
     },
     Smg: {
         Label: 'SMG', Note: '900 rounds/min', Rate: [15, 15], Spin: 0, Magazine: 30,
         Blast: { Lasts: 0.0011, Gain: 0.8, Low: 9000 }, Gas: { Seconds: 0.08, From: 10000, To: 1800, Floor: 500, Gain: 0.32, Grit: 0.4 },
         Body: { Hz: 140, EndHz: 80, Decay: 0.08, Gain: 0.32, Drive: 1.4 },
         Action: [[[2100, 0.025, 1], [3800, 0.015, 0.6], [900, 0.03, 0.5]], 3, 0.008],
-        Brass: [[5200, 0.04, 1], [9100, 0.025, 0.5]],
+        Brass: 'Pistol',
     },
     Turret: {
         Label: 'Turret', Note: 'automated, 720 rounds/min', Rate: [12, 12], Spin: 0, Magazine: 200, Motor: { Hz: 38, Barrels: 0, Gain: 0.05 },
         Blast: { Lasts: 0.0018, Gain: 1.0, Low: 6500 }, Gas: { Seconds: 0.13, From: 8000, To: 900, Floor: 200, Gain: 0.4, Grit: 0.55 },
         Body: { Hz: 95, EndHz: 50, Decay: 0.2, Gain: 0.6, Drive: 1.8 },
         Action: [[[1500, 0.035, 1], [2900, 0.022, 0.6], [620, 0.045, 0.5]], 4, 0.01], Links: [[3600, 0.01, 1], [5400, 0.008, 0.5]],
-        Brass: [[4100, 0.05, 1], [7600, 0.03, 0.5]],
+        Brass: 'Rifle762',
     },
     AutoCannon: {
         Label: 'Autocannon', Note: '30 mm, 210 rounds/min', Rate: [3.5, 3.5], Spin: 0, Magazine: 40,
         Blast: { Lasts: 0.008, Gain: 1.4, Low: 3000 }, Gas: { Seconds: 0.6, From: 4000, To: 200, Floor: 40, Gain: 0.55, Grit: 0.6 },
         Body: { Hz: 60, EndHz: 30, Decay: 0.6, Gain: 1.0, Drive: 2.4 },
         Action: [[[420, 0.08, 1], [980, 0.05, 0.7], [2200, 0.03, 0.4]], 6, 0.05],
-        Brass: [[1250, 0.25, 1], [3300, 0.15, 0.6], [5600, 0.08, 0.3]],
+        Brass: 'Cannon30',
     },
 };
 
@@ -79,13 +87,34 @@ function DrawShot(Left, Right, Rate, Time, Name, Seed, { Pan = 0, Gain = 1 } = {
     const [Modes, Level, Delay] = W.Action;
     Strike(Left, Right, Rate, Time + Delay, { Modes: Modes.map(([Hz, Decay, Part]) => [Hz * Vary(), Decay, Part]), Burst: 0.0008, Gain: Level * Gain * Vary(), Pan, Seed: Seed + 2 });
     if (W.Links) Strike(Left, Right, Rate, Time + Delay * 2.6, { Modes: W.Links, Burst: 0.0004, Gain: 2.2 * Gain * Vary(), Pan: Pan + 0.2, Seed: Seed + 3 });
-    if (W.Zap)
+    if (W.Boom)
     {
-        // Energy discharge: a fast falling electric tone with a buzzy harmonic stack and a high capacitor tick.
-        Whine(Left, Right, Rate, Time, W.Zap.Seconds, { From: W.Zap.From * Vary(), To: W.Zap.To, Gain: W.Zap.Gain * Gain, Curve: 0.45, Harmonics: [1, 0.65, 0.45, 0.3, 0.22, 0.15], Shape: (P) => Math.pow(1 - P, 2) * Smoothstep(0, 0.02, P), Wobble: 0.02, Pan });
-        Strike(Left, Right, Rate, Time + 0.002, { Modes: [[7400, 0.004, 1], [10200, 0.003, 0.6]], Burst: 0.0002, Gain: 1.2 * Gain, Pan, Seed: Seed + 4 });
+        // The weight of a real report: the gas slug rings the barrel and the air around it in the low mids.
+        const B = W.Boom;
+        Strike(Left, Right, Rate, Time, { Modes: B.Modes.map(([Hz, Decay, Part]) => [Hz * Vary(), Decay, Part]), Burst: 0.0015, Gain: B.Gain * Gain * Vary(), Pan, Seed: Seed + 6, Breath: { Low: B.Low, High: B.High, Decay: B.Decay, Gain: B.Noise } });
     }
-    if (W.Brass) Bounce(Left, Right, Rate, Time + Noise.Range(0.32, 0.55), { Modes: W.Brass, Hits: 3, First: Noise.Range(0.06, 0.1), Ratio: 0.55, Gain: 0.9 * Gain, Pan: Pan + Noise.Range(0.3, 0.7), Seed: Seed + 5 });
+    if (W.Crack) Snap(Left, Right, Rate, Time + 0.0003, { Lasts: W.Crack.Lasts * Vary(), Gain: W.Crack.Gain * Gain, Pan });
+    if (W.Arc) Strike(Left, Right, Rate, Time + 0.001, { Modes: [], Burst: 0.0002, Gain: W.Arc.Gain * Gain, Pan, Seed: Seed + 4, Breath: { Low: 5000, High: 14000, Decay: 0.012, Gain: 1 } });
+    if (W.Tail) Roar(Left, Right, Rate, Time + 0.012, 0.55, { From: 1500, To: 160, Floor: 45, Gain: W.Tail.Gain * 0.5 * Gain, Attack: 0.012, Curve: 1.5, Width: 1, Grit: 0.3, Seed: Seed + 7 });
+    if (W.Brass) DropCasing(Left, Right, Rate, Time + Noise.Range(0.32, 0.5), W.Brass, 'Concrete', { Seed: Seed + 5, Gain: 0.4 * Gain, Pan: Pan + Noise.Range(0.3, 0.7), Height: Noise.Range(1.0, 1.3) });
+}
+
+/**
+ * One sample of a spin motor at shaft Phase (cycles). Without Grind: a harmonic whine (the turret's servo). With Grind
+ * (the energy LMG's geared drive): gear-mesh grind (band noise gated at the tooth rate) over a low drive hum, so it
+ * reads as machinery rather than a tone. State holds the filters (MotorState).
+ */
+function MotorState(Rate, Seed)
+{
+    return { Noise: new SeededNoise(Seed), Mesh: new Biquad(Rate).Shape('Band', 1300, 1.1), Mesh2: new Biquad(Rate).Shape('Band', 2900, 1.8), Clatter: new Resonator(Rate, 2600, 0.01), Clatter2: new Resonator(Rate, 4100, 0.008) };
+}
+
+function MotorSample(State, Motor, Phase)
+{
+    if (!Motor.Grind) return Math.sin(Tau * Phase) * 0.6 + Math.sin(Tau * Phase * 2) * 0.35 + Math.sin(Tau * Phase * 3) * 0.2 + Math.sin(Tau * Phase * 5) * 0.1;
+    const Tooth = Math.pow(0.5 + 0.5 * Math.sin(Tau * Phase), 3);
+    const Grind = (State.Mesh.Run(State.Noise.White()) * 2.2 + State.Mesh2.Run(State.Noise.White()) * 1.2) * (0.3 + Tooth) * Motor.Grind;
+    return Grind + Math.sin(Tau * Phase * 0.5) * 0.22 + Math.sin(Tau * Phase) * 0.12;
 }
 
 /**
@@ -97,7 +126,7 @@ function DrawMotor(Left, Right, Rate, Start, Stop, Name, Turbo)
 {
     const W = Weapons[Name], Motor = W.Motor, Noise = new SeededNoise(97);
     const From = Math.max(0, Start - 0.06), Count = Math.min(Left.length, Math.round((Stop + 1.0) * Rate)) - Math.round(From * Rate);
-    const Clatter = new Resonator(Rate, 2600, 0.01), Clatter2 = new Resonator(Rate, 4100, 0.008);
+    const State = MotorState(Rate, 96), { Clatter, Clatter2 } = State, Rattle = Motor.Grind ? 0.009 : 0.0045, Sing = Motor.Grind ? 0.01 : 0.022;
     let Phase = 0, Turn = 0, Whistle = 0;
     for (let Index = 0; Index < Count; Index++)
     {
@@ -108,17 +137,17 @@ function DrawMotor(Left, Right, Rate, Start, Stop, Name, Turbo)
         if (!Firing) Spin = FireRate(Name, Stop - Start, Turbo) * Math.exp(-(Time - Stop) / 0.32);
         const Level = Motor.Gain * Smoothstep(0, 0.05, Time - From) * (Firing ? 1 : Math.exp(-(Time - Stop) / 0.45));
         Phase += Spin * Motor.Hz / Rate;
-        let Out = (Math.sin(Tau * Phase) * 0.6 + Math.sin(Tau * Phase * 2) * 0.35 + Math.sin(Tau * Phase * 3) * 0.2 + Math.sin(Tau * Phase * 5) * 0.1) * Level;
+        let Out = MotorSample(State, Motor, Phase) * Level;
         if (Motor.Barrels)
         {
             Turn += Spin * Motor.Barrels / Rate;
             const Kick = Turn >= 1 ? (Turn -= 1, Noise.Range(0.6, 1)) : 0;
-            Out += (Clatter.Run(Kick) + Clatter2.Run(Kick) * 0.6) / Clatter.Norm * 0.0045 * Level / Motor.Gain;
+            Out += (Clatter.Run(Kick) + Clatter2.Run(Kick) * 0.6) / Clatter.Norm * Rattle * Level / Motor.Gain;
         }
         if (Turbo && W.Turbo)
         {
             Whistle += (2800 + Spin * 360) / Rate;
-            Out += Math.sin(Tau * Whistle) * 0.022 * Level / Motor.Gain * Smoothstep(0, 0.2, Held + (Firing ? 0 : 1));
+            Out += Math.sin(Tau * Whistle) * Sing * Level / Motor.Gain * Smoothstep(0, 0.2, Held + (Firing ? 0 : 1));
         }
         Left[Sample] += Out; Right[Sample] += Out * 0.92;
     }
@@ -134,6 +163,7 @@ function Burst(Left, Right, Rate, Start, Name, { Seconds = 3, Turbo = false, See
     Times.forEach((At, Index) => DrawShot(Left, Right, Rate, Start + At, Name, Seed + Index * 11, { Pan }));
     const Stop = Start + (Times.at(-1) ?? 0) + 0.04;
     if (W.Motor) DrawMotor(Left, Right, Rate, Start, Stop, Name, Turbo);
+    if (W.Tail) Roar(Left, Right, Rate, Stop - 0.02, 2.2, { From: 1100, To: 110, Floor: 40, Gain: W.Tail.Gain, Attack: 0.04, Curve: 1.3, Width: 1, Grit: 0.35, Seed: Seed + 777 });   // the report rolling away
     if (Times.length >= W.Magazine) Strike(Left, Right, Rate, Stop + 0.06, { Modes: [[2400, 0.02, 1], [4100, 0.012, 0.5]], Burst: 0.0004, Gain: 1.5, Pan, Seed: Seed + 999 });   // empty: dry click
     return { Times, Stop };
 }
@@ -301,7 +331,7 @@ function BoltCycle(Left, Right, Rate, Time)
     Roar(Left, Right, Rate, Time + 0.42, 0.13, { From: 5200, To: 3200, Floor: 1500, Gain: 0.11, Attack: 0.02, Curve: 0.6, Grit: 0.7, Seed: 504 });
     Strike(Left, Right, Rate, Time + 0.56, { Modes: [[1250, 0.035, 1], [2700, 0.025, 0.6]], Burst: 0.0008, Gain: 3, Pan: 0.3, Seed: 505 });
     Strike(Left, Right, Rate, Time + 0.66, { Modes: [[1650, 0.03, 1], [3500, 0.02, 0.5]], Burst: 0.0006, Gain: 2.4, Pan: 0.3, Seed: 506 });
-    Bounce(Left, Right, Rate, Time + 0.75, { Modes: [[3600, 0.08, 1], [6900, 0.05, 0.5], [1900, 0.05, 0.3]], Hits: 4, First: 0.11, Ratio: 0.58, Gain: 1.2, Pan: 0.7, Seed: 507 });
+    DropCasing(Left, Right, Rate, Time + 0.75, 'Rifle762', 'Concrete', { Seed: 507, Gain: 0.14, Pan: 0.7, Height: 1.0 });
 }
 
 export const Cues = {
@@ -373,7 +403,7 @@ export const Cues = {
             Strike(Left, Right, Rate, 0.12, { Modes: [[85, 0.4, 1], [190, 0.3, 0.7], [410, 0.2, 0.4]], Burst: 0.01, Gain: 2.5, Seed: 2302 });   // the hull rings
             Echoes(Left, Right, Rate, { Taps: [[0.42, 0.4, -0.7], [0.95, 0.28, 0.6], [1.6, 0.18, -0.3], [2.5, 0.1, 0.5]], Dark: 1300, Wash: 0.5 });
             Strike(Left, Right, Rate, 4.2, { Modes: [[260, 0.15, 1], [640, 0.09, 0.7], [1500, 0.05, 0.4]], Burst: 0.002, Gain: 4, Pan: 0.2, Seed: 2303 });
-            Bounce(Left, Right, Rate, 4.55, { Modes: [[520, 0.35, 1], [1380, 0.25, 0.6], [2650, 0.15, 0.4]], Hits: 4, First: 0.22, Ratio: 0.55, Gain: 3.2, Pan: 0.4, Seed: 2304 });
+            DropCasing(Left, Right, Rate, 4.55, 'TankStub', 'Metal', { Seed: 2304, Gain: 0.36, Pan: 0.4, Height: 0.8 });
             Settle(Left, Right, Rate);
         },
     },
@@ -429,6 +459,36 @@ export const Cues = {
             Settle(Left, Right, Rate);
         },
     },
+
+    // ── Shells: spent casings falling (Casings.js) ─────────────────────────────────────────────────────────────────
+    ...Object.fromEntries([
+        ['ShellsRifle', 'Rifle cases on concrete', 'Rifle762', 'Concrete', 6, 0.62, 4.6],
+        ['ShellsPistol', 'Pistol cases on concrete', 'Pistol', 'Concrete', 5, 0.55, 3.8],
+        ['ShellsWood', 'Rifle cases on a wooden deck', 'Rifle556', 'Wood', 6, 0.5, 3.8],
+        ['ShellsSteel', 'Rifle cases on a steel floor', 'Rifle762', 'Metal', 5, 0.7, 4.6],
+        ['ShellsDirt', 'Rifle cases on dirt', 'Rifle762', 'Dirt', 6, 0.45, 3.2],
+        ['ShellsShotgun', 'Shotgun shells on concrete', 'Shotgun', 'Concrete', 3, 0.95, 3.6],
+        ['ShellsFifty', '.50 cal cases on a steel deck', 'Fifty', 'Metal', 4, 0.85, 4.8],
+        ['ShellsCannon', '30 mm cannon cases on steel', 'Cannon30', 'Metal', 4, 0.7, 4.8],
+        ['ShellsTank', '120 mm case stub on the turret floor', 'TankStub', 'Metal', 1, 0, 3.0],
+    ].map(([Name, Label, Shell, Floor, Count, Gap, Seconds], Index) => [Name, {
+        Group: 'Shells', Label, Seconds, Peak: 0.85,
+        Draw(Left, Right, Rate)
+        {
+            for (let Case = 0; Case < Count; Case++)
+                DropCasing(Left, Right, Rate, 0.1 + Case * Gap, Shell, Floor, { Seed: 3100 + Index * 101 + Case * 17, Pan: Count > 1 ? -0.5 + Case / (Count - 1) : 0.2, Height: Shell === 'TankStub' ? 0.8 : 1.2 });
+            Settle(Left, Right, Rate);
+        },
+    }])),
+    ShellsBrassRain: {
+        Group: 'Shells', Label: 'LMG brass and links raining down', Seconds: 5.5, Peak: 0.85,
+        Draw(Left, Right, Rate)
+        {
+            // A 3-second burst's worth (640 rounds/min): cases and belt links pour out and pile up, the last ones roll.
+            CasingRain(Left, Right, Rate, Array.from({ length: 32 }, (_, Round) => 0.05 + Round / 10.7), 'Rifle762', 'Concrete', { Seed: 3300, Pan: 0.3, Links: true, Fall: 0.35 });
+            Settle(Left, Right, Rate);
+        },
+    },
     ...Object.fromEntries(Materials.map((Material, Index) => [`Hit${Material}`, {
         Group: 'Impacts', Label: `Bullet into ${Material.toLowerCase()}`, Seconds: Material === 'Metal' ? 1.6 : 1.2, Peak: 0.85,
         Draw(Left, Right, Rate) { DrawHit(Left, Right, Rate, 0.03, Material, 3000 + Index * 37); Settle(Left, Right, Rate); },
@@ -470,7 +530,8 @@ export function RenderShot(Name, Rate, Seed = 1)
     DrawShot(Left, Right, Rate, 0.005, Name, 5000 + Seed * 13);
     Echoes(Left, Right, Rate, { ...Outdoor, Taps: Outdoor.Taps.slice(0, 3), Wash: 0.18 });
     Settle(Left, Right, Rate);
-    for (let Index = 0; Index < Left.length; Index++) { Left[Index] *= 0.32; Right[Index] *= 0.32; }
+    const Level = 0.32 * (Weapons[Name].Level ?? 1);
+    for (let Index = 0; Index < Left.length; Index++) { Left[Index] *= Level; Right[Index] *= Level; }
     return { Left, Right };
 }
 
@@ -483,19 +544,19 @@ export function RenderMotor(Name, Rate, Turbo = false)
     const W = Weapons[Name], Motor = W.Motor, Top = (Turbo && W.Turbo ? W.Turbo.Rate : W.Rate)[1];
     const Left = new Float32Array(Rate), Right = new Float32Array(Rate);
     const Fundamental = Math.round(Top * Motor.Hz), Barrels = Math.round(Top * Motor.Barrels), Whistle = Math.round(2800 + Top * 360);
-    const Clatter = new Resonator(Rate, 2600, 0.01), Clatter2 = new Resonator(Rate, 4100, 0.008);
+    const State = MotorState(Rate, 95), { Clatter, Clatter2 } = State, Rattle = Motor.Grind ? 0.009 : 0.0045, Sing = Motor.Grind ? 0.01 : 0.022;
     // Run the clatter resonators one lap first so the loop seam carries their ringing.
     for (let Lap = 0; Lap < 2; Lap++)
         for (let Index = 0; Index < Rate; Index++)
         {
             const Time = Index / Rate;
-            let Out = (Math.sin(Tau * Fundamental * Time) * 0.6 + Math.sin(Tau * 2 * Fundamental * Time) * 0.35 + Math.sin(Tau * 3 * Fundamental * Time) * 0.2 + Math.sin(Tau * 5 * Fundamental * Time) * 0.1) * Motor.Gain;
+            let Out = MotorSample(State, Motor, Fundamental * Time) * Motor.Gain;
             if (Barrels)
             {
                 const Kick = Math.floor(Time * Barrels) !== Math.floor((Index - 1) / Rate * Barrels) ? 0.8 : 0;
-                Out += (Clatter.Run(Kick) + Clatter2.Run(Kick) * 0.6) / Clatter.Norm * 0.0045;
+                Out += (Clatter.Run(Kick) + Clatter2.Run(Kick) * 0.6) / Clatter.Norm * Rattle;
             }
-            if (Turbo && W.Turbo) Out += Math.sin(Tau * Whistle * Time) * 0.022;
+            if (Turbo && W.Turbo) Out += Math.sin(Tau * Whistle * Time) * Sing;
             if (Lap === 1) { Left[Index] = Out * 0.32; Right[Index] = Out * 0.3; }
         }
     return { Left, Right, Top };

@@ -18,12 +18,13 @@ Each step file clicks through every menu and its main interactions; every run re
 | `Acoustics-1…6` | Sound bench (`Scripts/AcousticsCheck.cjs`): woken bench, LaFerrari launch in 3rd at 128 km/h with KERS assist, gravel + cabin mic + cornering squeal with the xenon cue ringing and the indicator looping, GT-R NISMO pulling 3rd on full boost, GT-R ABS stop (ABS chip lit) after a kerb strike, impact pads ringing (explosion, window shatter, metal crash) |
 | `Acoustics-7-Weapons` | Weapons and Bullets panels mid-burst: energy LMG trigger lit (firing) with the Turbocharger hop-up on; bullet pass-by, ricochet and 8 impact pads |
 | `Acoustics-8-Power` | Forced induction and Electric panels: twin-screw supercharger picked on the GT-R, sport sound on, aircraft pads |
+| `Acoustics-9-Shells` | Shells panel with three casing cues ringing (brass rain, steel floor, 120 mm stub) under the Weapons and Bullets panels |
 | `Audio-*.png` | Spectrogram + waveform plates for every reel file in `Audio/` (cyan dots on engine plates = predicted firing frequency: rpm/10 for the V12, rpm/20 for the V6; on supercharger plates the predicted blower whine, rpm × drive ratio × lobes; on EV plates a predicted motor order) |
 | `Lucent-1…6` | Rejected first HMI C attempt (kept for reference) |
 
 ## Vehicle sound reel (`Audio/`)
 All synthesized in code — no recordings or samples anywhere. 192 kbps stereo MP3 at 44.1 kHz (lamejs), rendered by
-`Experimental/CabinHmi/Acoustics/Offline/RenderReel.mjs` (deterministic seeds; `--wav` also writes WAV). 56 files, 13 MB in total (the
+`Experimental/CabinHmi/Acoustics/Offline/RenderReel.mjs` (deterministic seeds; `--wav` also writes WAV). 59 files, 14 MB in total (the
 Follow-up 10 WAVs, 22 MB, were replaced). Peak is measured before encoding.
 
 | File | Length | Peak dBFS | RMS dBFS | Content |
@@ -51,18 +52,21 @@ Follow-up 10 WAVs, 22 MB, were replaced). Peak is measured before encoding.
 | `Impact-WindowShatter.mp3` | 2.4 s | −1.4 | −30.6 | Tempered side glass: tap, pop, crazing hiss, cubes pouring and tinkling |
 | `Impact-GlassBreak.mp3` | 2.6 s | −1.4 | −31.8 | Annealed pane: crack, ringing shards breaking away, landing, scattering, bouncing |
 | `Impact-MetalCrash.mp3` | 6.0 s | −0.5 | −28.9 | Impact, sheet buckling, lamps bursting, scrape, lurch, hubcap, settling creaks, coolant hiss |
-| `Weapon-EnergyLmg.mp3` | 5.6 s | −0.9 | −19.3 | Devotion-style energy LMG, full 44-round magazine: 5 → 15 rounds/s over 1.75 s, zap + blast per shot, spin whine and barrel clatter climbing, spin-down, dry click |
-| `Weapon-EnergyLmgTurbo.mp3` | 4.8 s | −0.9 | −17.7 | Same with the Turbocharger: 6.8 → 15 rounds/s over 0.85 s, turbine whistle and charge hiss on the pull |
+| `Weapon-EnergyLmg.mp3` | 5.6 s | −0.9 | −19.5 | Energy LMG voiced as a real full-power LMG (Follow-up 14), full 44-round magazine: 5 → 15 rounds/s over 1.75 s; heavy report with low-mid boom and supersonic crack, geared drive and barrel clatter, rolling outdoor tail, brass landing on concrete |
+| `Weapon-EnergyLmgTurbo.mp3` | 4.8 s | −0.9 | −19.3 | Same with the Turbocharger: 6.8 → 15 rounds/s over 0.85 s, turbine whistle and charge hiss on the pull |
 | `Weapon-Lmg.mp3` | 5.5 s | −0.9 | −15.4 | Belt-fed LMG, 640/min: long burst and two short, links and brass, outdoor slap-back |
-| `Weapon-Smg.mp3` | 4.5 s | −0.9 | −21.1 | SMG, 900/min: two short bursts, then the rest of a 30-round magazine |
+| `Weapon-Smg.mp3` | 4.5 s | −0.9 | −21.2 | SMG, 900/min: two short bursts, then the rest of a 30-round magazine |
 | `Weapon-Sniper.mp3` | 5.5 s | −0.5 | −25.5 | Heavy blast and thump, report rolling off the valley, bolt cycle, casing landing |
-| `Weapon-Turret.mp3` | 6.0 s | −0.9 | −18.0 | Servo traverse, lock-on pips, 720/min burst with feed motor, spin-down |
+| `Weapon-Turret.mp3` | 6.0 s | −0.9 | −17.9 | Servo traverse, lock-on pips, 720/min burst with feed motor, spin-down |
 | `Weapon-Cannon.mp3` | 7.0 s | −0.5 | −22.5 | 120 mm: blast wave, chest thump, fireball roar, hull ring, echoes, breech clank, case clang |
-| `Weapon-AutoCannon.mp3` | 5.0 s | −0.7 | −18.2 | 30 mm, 210/min: two bursts, heavy action, big cases ringing |
+| `Weapon-AutoCannon.mp3` | 5.0 s | −0.7 | −18.0 | 30 mm, 210/min: two bursts, heavy action, big cases ringing |
 | `Bullets-Supersonic.mp3` | 4.5 s | −0.9 | −30.1 | Downrange of a rifle 400 m away: crack first, muzzle report 0.67 s later |
 | `Bullets-Whizz.mp3` | 2.6 s | −1.4 | −24.4 | Three subsonic fly-bys: Doppler drop, vortex tone, panning across |
 | `Bullets-Ricochet.mp3` | 3.0 s | −1.4 | −22.9 | Glancing off rock, steel and concrete: strike then tumbling whine |
 | `Bullets-Impacts.mp3` | 11.0 s | −1.4 | −29.5 | Sand, dirt, rock, concrete, wood, metal, glass, water, 1.2 s apart |
+| `Shells-Floors.mp3` | 16.6 s | −1.4 | −28.1 | Spent cases (`Casings.js`): 7.62 mm on concrete, 5.56 mm on a wooden deck, 7.62 mm on a steel floor, 7.62 mm on dirt — ring, bounce series, roll |
+| `Shells-Calibres.mp3` | 20.4 s | −1.4 | −26.9 | 9 mm pistol, 12-gauge shotgun, .50 BMG on steel, 30 mm cannon on steel, 120 mm case stub on the turret floor |
+| `Shells-BrassRain.mp3` | 5.5 s | −1.4 | −26.7 | 32 cases and belt links from a 3 s LMG burst raining onto concrete, clinking on the pile, last ones rolling |
 | `Induction-SmallSingle.mp3` | 11.0 s | −2.6 | −17.0 | Every `Induction-*` scene: GT-R NISMO with the inducer swapped in, chase mic: two blips, pull from rest, lift, back on, lift. Small single turbo: quick spool, bright whistle, soft blow-off |
 | `Induction-BigSingle.mp3` | 11.0 s | −3.1 | −17.0 | Big single turbo: late, violent boost, deep whoosh, loud blow-off |
 | `Induction-TwinTurbo.mp3` | 11.0 s | −3.1 | −17.0 | Parallel twins: two detuned whistles beating, blow-off with a little flutter |
@@ -115,6 +119,15 @@ RMS −12.5. Live: Taycan 156 km/h in 2nd, both motors 9297 rpm, then regen to 1
 10.03 s; 11 induction and 7 electric pads; console errors 0. Model launches (`_ClaudeScratch/tmp/audio/launch.mjs`): Taycan 0–100 2.83 s,
 0–200 9.86 s, top 259 km/h; Next-Gen racer 3.43 / 7.27 s, 338 km/h; GT-R with each inducer 0–100 2.75–3.48 s. Supercharger whine
 lands on the predicted rpm × ratio line on every blower plate.
+
+**Real-gun Energy LMG and shells (Follow-up 14).** The old Energy LMG put 24 % of its energy at 1–6 kHz (a pitched "pew" zap falling
+2.6 kHz → 420 Hz and a sine-stack motor whine) and almost none at 150–400 Hz, where a real report has its weight. Now (`_ClaudeScratch/tmp/audio/gunbands.mjs`,
+full-magazine cue, share of energy): 0–150 Hz 44 %, 150–400 10 %, 400–1000 18 %, 1–2.5 k 15 %, 2.5–6 k 9 %, 6 k+ 4 % (before: 61 / 2 / 9 / 15 / 9 / 3).
+The zap is gone (only a faint arc crackle about 40 dB under the shot), the motor is a geared drive (mesh grind gated at the tooth rate), and a
+live shot peaks at −11.1 dBFS next to the LMG's −12.6 (`Level` 0.6). Brass now lands about 29 dB under each live shot's peak (`layers.mjs`; the
+old bounce sat about 50 dB under, inaudible). Shell plates show the case ring falling with calibre (9 mm ≈ 9.4 kHz, 7.62 mm ≈ 4.6 kHz,
+.50 ≈ 2.5 kHz, 30 mm ≈ 1.25 kHz, 120 mm ≈ 520 Hz), the shrinking bounce gaps, the steel floor's 740 Hz plate mode and dirt killing the
+ring. Headless check: 10 shell pads, three ringing at once, the three shell clips served (200); every earlier check unchanged; console errors 0.
 
 ## Reproduce
 ```

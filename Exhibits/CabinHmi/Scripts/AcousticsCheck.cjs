@@ -75,6 +75,13 @@ const sp = (({ default: Fresh, ...Older }) => Fresh ?? Older)(require('@sparticu
     await Page.evaluate(() => { Bench.Cue('Sniper'); Bench.Cue('Supersonic'); Bench.Cue('HitWater'); Bench.Cue('HitMetal'); });
     await Page.waitForTimeout(1500);
     console.log('bullet pads', await Page.evaluate(() => document.querySelectorAll('#PadsBullets .Pad').length), 'weapon pads', await Page.evaluate(() => document.querySelectorAll('#PadsWeapons .Pad').length));
+    // Shells: spent casings falling (pads ring while they play), and the reel serves the three shell clips.
+    await Page.evaluate(() => { Bench.Cue('ShellsBrassRain'); Bench.Cue('ShellsSteel'); Bench.Cue('ShellsTank'); });
+    await Page.waitForTimeout(900);
+    await Page.evaluate(() => document.querySelector('#PadsShells').scrollIntoView({ block: 'center' }));
+    console.log('shells ringing', JSON.stringify(await Page.evaluate(() => [...document.querySelectorAll('#PadsShells .Pad.Ring')].map((Pad) => Pad.dataset.cue))), 'pads', await Page.evaluate(() => document.querySelectorAll('#PadsShells .Pad').length));
+    await Page.screenshot({ path: `${Out}/Acoustics-9-Shells.png`, timeout: 120000 });
+    console.log('shell clips', JSON.stringify(await Page.evaluate(async () => Promise.all(['Shells-Floors', 'Shells-Calibres', 'Shells-BrassRain'].map(async (Name) => (await fetch(`../../../Exhibits/CabinHmi/Audio/${Name}.mp3`)).status)))));
     // Power: offline renders of the electric cars and an inducer through the real worklet, then live driving.
     // Electric cars start in 1st (a car in neutral is silent); combustion cars rev in neutral onto the limiter.
     for (const [Car, Inducer, Gear] of [['TaycanTurboS', null, 1], ['NextGenRacer', null, 1], ['GtrNismo', 'Roots', 0], ['LaFerrari', 'BigSingle', 0]])

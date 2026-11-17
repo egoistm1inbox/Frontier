@@ -1253,4 +1253,6 @@ in `Exhibits/LightCompute/Results/FogFacetRegression.txt`; this was a fixture-se
   spin-up and Turbocharger, LMG, SMG, sniper, turret, tank cannon, autocannon, hold-to-fire on the audio clock), bullet crack/whizz/ricochet
   and 8 impact materials. Follow-up 13: 10 swappable turbos/superchargers (`ForcedInduction`), electric cars (`ElectricDrive`: Porsche Taycan
   Turbo S, original Next-Gen racer in the style of Jackson Storm) and electric aircraft (`ElectricAviation`: trainer, racer, eVTOL).
-  Live AudioWorklet bench with car switch + offline MP3 reel (56 files, 13 MB) with spectrogram plates (`Exhibits/CabinHmi/Audio/`). Names unapproved.
+  Follow-up 14: Energy LMG re-voiced as a real gun (boom, crack, geared drive, rolling tail, brass), spent shell casings (`Casings`: 8 case
+  types on concrete/wood/steel/dirt, bounce physics, rolling, brass rain).
+  Live AudioWorklet bench with car switch + offline MP3 reel (59 files, 14 MB) with spectrogram plates (`Exhibits/CabinHmi/Audio/`). Names unapproved.

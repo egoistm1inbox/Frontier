@@ -42,6 +42,7 @@ const Reel = [
     ['Weapon-EnergyLmg', 'Energy LMG'], ['Weapon-EnergyLmgTurbo', 'Energy LMG + Turbo'], ['Weapon-Lmg', 'LMG'], ['Weapon-Smg', 'SMG'],
     ['Weapon-Sniper', 'Sniper rifle'], ['Weapon-Turret', 'Turret'], ['Weapon-Cannon', 'Tank cannon'], ['Weapon-AutoCannon', 'Autocannon'],
     ['Bullets-Supersonic', 'Supersonic crack'], ['Bullets-Whizz', 'Whizz-by'], ['Bullets-Ricochet', 'Ricochets'], ['Bullets-Impacts', 'Bullet impacts'],
+    ['Shells-Floors', 'Cases on four floors'], ['Shells-Calibres', 'Cases by calibre'], ['Shells-BrassRain', 'LMG brass rain'],
     ...Object.entries(Inducers).map(([Name, Model]) => [`Induction-${Name}`, `GT-R + ${Model.Label.toLowerCase()}`]),
     ['Taycan-Launch', 'Taycan launch'], ['Taycan-Onboard', 'Taycan onboard'], ['Taycan-SportSound', 'Taycan sport sound'], ['Taycan-FlyBy', 'Taycan fly-by'],
     ['NextGen-Launch', 'Next-Gen launch'], ['NextGen-Onboard', 'Next-Gen onboard'], ['NextGen-FlyBy', 'Next-Gen fly-by'],
@@ -73,7 +74,7 @@ async function Wake()
     Audio.Waking = (async () =>
     {
         const Context = new AudioContext({ latencyHint: 'interactive' });
-        await Context.audioWorklet.addModule(new URL('./VoiceRackWorklet.js', import.meta.url));
+        await Context.audioWorklet.addModule(new URL('./VoiceRackWorklet.js?v=14', import.meta.url));
         const Limiter = Context.createDynamicsCompressor();
         Limiter.threshold.value = -6; Limiter.knee.value = 4; Limiter.ratio.value = 12; Limiter.attack.value = 0.002; Limiter.release.value = 0.12;
         const Master = Context.createGain(); Master.gain.value = 0.8;
@@ -225,7 +226,7 @@ async function Fire(Name, Seconds = 1)
 async function RenderOffline(Seconds = 5, Car = CarName, Inducer = null, Gear = 0)
 {
     const Rate = 48000, Context = new OfflineAudioContext(2, Math.round(Seconds * Rate), Rate);
-    await Context.audioWorklet.addModule(new URL('./VoiceRackWorklet.js', import.meta.url));
+    await Context.audioWorklet.addModule(new URL('./VoiceRackWorklet.js?v=14', import.meta.url));
     const Rack = new AudioWorkletNode(Context, 'voice-rack', { numberOfInputs: 0, outputChannelCount: [2], processorOptions: { Start: true, Throttle: 1, Car, Induction: Inducer, Gear } });
     let Last = null; Rack.port.onmessage = (Message) => { Last = Message.data; };
     Rack.connect(Context.destination);
@@ -259,7 +260,7 @@ function BuildPanels()
         Pad.className = 'Pad'; Pad.dataset.cue = Name;
         Pad.innerHTML = `<b>${Spec.Label}</b><small>${Spec.Loop ? 'Loop · tap to toggle' : `${Spec.Seconds.toFixed(1)} s`}</small>`;
         Pad.onclick = () => Cue(Name);
-        const Shelf = { Lights: 'PadsLights', Cabin: 'PadsCabin', Bullets: 'PadsBullets', Impacts: 'PadsBullets' }[Spec.Group] ?? 'PadsImpacts';
+        const Shelf = { Lights: 'PadsLights', Cabin: 'PadsCabin', Bullets: 'PadsBullets', Impacts: 'PadsBullets', Shells: 'PadsShells' }[Spec.Group] ?? 'PadsImpacts';
         Find(Shelf).append(Pad);
     }
     for (const [Name, Spec] of Object.entries(Weapons))
