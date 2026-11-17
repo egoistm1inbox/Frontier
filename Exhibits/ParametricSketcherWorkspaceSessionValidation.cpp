@@ -3,8 +3,11 @@
 ============================================================================================================================================*/
 // 🧩 Native Parametric Sketcher workspace-session routing, authored feature, revision, .Sketch persistence, and display-network proof
 
+#include "Engine/ParametricSketcher/Selection/SketchSelection.h"
 #include "Engine/Workspaces/ParametricSketcher/ParametricSketcherWorkspaceSession.h"
 #include "Engine/Workspaces/WorkspaceCapabilityRegister.h"
+
+#include <array>
 
 #include <cstdio>
 #include <filesystem>
@@ -48,6 +51,25 @@ int main()
         !VerifyCondition(Session.InspectDerivedNetworks().size() == 1u, "Session derives one target PolygonNetwork") ||
         !VerifyCondition(Session.InspectDerivedNetworks().front().VerifyNetworkIntegrity(), "Derived session network keeps Frontier half-edge integrity") ||
         !VerifyCondition(!Session.InspectRevisionHistory().QueryModifiedSinceSave(), "Starter document starts at a saved revision cursor"))
+    {
+        return 1;
+    }
+
+    const std::array<uint32_t, 1u> BodyOrdinalsByInstanceSlot {{ Session.InspectDocument().Bodies.front().BodyOrdinal }};
+    GeometricRaster::ViewportPickHit FacePick{};
+    FacePick.InstanceSlot = 1u;
+    FacePick.FaceIndex    = 0u;
+    ParametricSketcher::PersistentSketchSelection FaceSelection{};
+    if (!VerifyCondition(
+            ParametricSketcher::TranslateViewportPickToSketchSelection(
+                Session.InspectDocument(),
+                BodyOrdinalsByInstanceSlot,
+                Session.InspectDerivedNetworks(),
+                FacePick,
+                FaceSelection) &&
+            FaceSelection.Category == ParametricSketcher::SketchSelectionCategory::BodyFace &&
+            FaceSelection.BodyOrdinal == BodyOrdinalsByInstanceSlot.front(),
+            "Translates target GPU face pick into a persistent Parametric Sketcher body reference"))
     {
         return 1;
     }

@@ -626,6 +626,7 @@ set(FRONTIER_ENGINE_SOURCES
     Engine/GeometrySpace/Fracture/ConvexPartitioning.cpp
     Engine/ParametricSketcher/Sketching/SketchProfile.cpp
     Engine/ParametricSketcher/Solids/PrismaticBody.cpp
+    Engine/ParametricSketcher/Selection/SketchSelection.cpp
     Engine/ParametricSketcher/ParametricSketcherDocument.cpp
     Engine/SpatialAcceleration/ClusterPyramid.cpp
     Engine/SpatialAcceleration/WideBoundingTree.cpp
