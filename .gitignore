@@ -53,3 +53,6 @@ _AgentScratch/
 **/Saved/
 
 Delivery/
+
+# npm installs (reinstall with npm install)
+node_modules/
