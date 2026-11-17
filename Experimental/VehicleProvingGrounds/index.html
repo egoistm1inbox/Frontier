@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<!--
+==============================================================================================================================================
+                                                                  INDEX.HTML
+==============================================================================================================================================
+ 🧩 Distance-field GI exhibit & dedicated in-world Road Studio workspace in the Frontier Editor.
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Frontier · Proving Grounds &amp; Road Studio</title>
+<link rel="stylesheet" href="Style/FrontierEditor.css">
+<link rel="stylesheet" href="Style/InspectorReference.css">
+</head>
+<body>
+    <header id="workspace-bar" aria-label="Frontier Workspaces">
+        <div class="workspace-brand">
+            <span class="workspace-brand-mark">frontier<span class="workspace-brand-dot">.</span></span>
+        </div>
+        <nav class="workspace-tabs" role="tablist">
+            <button type="button" class="workspace-tab active" data-workspace-tab="proving" role="tab" aria-selected="true">
+                <span class="workspace-tab-dot"></span>
+                <span class="workspace-tab-title">Proving Grounds</span>
+                <span class="workspace-tab-sub">3D Driving · GI · Physics</span>
+            </button>
+            <button type="button" class="workspace-tab" data-workspace-tab="roadstudio" role="tab" aria-selected="false">
+                <span class="workspace-tab-dot studio"></span>
+                <span class="workspace-tab-title">Road Studio</span>
+                <span class="workspace-tab-sub">In-World Spline &amp; Bridge Editor</span>
+            </button>
+        </nav>
+        <div class="workspace-bar-fill"></div>
+        <div class="workspace-meta" id="workspace-network-meta">Spline &amp; Highway Bridge Demo · 10 roads · 1 bridge</div>
+        <div class="workspace-actions">
+            <button type="button" class="workspace-action-btn" data-workspace-action="open-dday" title="Launch or reset the D-Day Assault level (Tanks, Bunkers, MG Turrets, Cannons, Bombers, Mines &amp; Atlantic Wall)">
+                D-Day Assault
+            </button>
+            <button type="button" class="workspace-action-btn" data-workspace-action="open-city-pursuit" title="Open the City Pursuit &amp; AI Self-Training Lab (Downtown Blocks + Alleys + Highway Interchange + Police Cruiser, Helicopter &amp; Drones)">
+                City Pursuit &amp; AI
+            </button>
+            <button type="button" class="workspace-action-btn" data-workspace-action="open-studio" title="Switch to the in-world Road Studio workspace">
+                Road Studio
+            </button>
+            <button type="button" class="workspace-action-btn primary" data-workspace-action="drive-network" title="Drive on the live Road Studio spline &amp; bridge network">
+                Drive Demo
+            </button>
+        </div>
+    </header>
+
+    <div id="shell">
+        <aside id="outliner" class="column editor-column">
+            <div class="column-tabs">
+                <div class="column-tab">Outliner <button data-overlay="Panel" title="Hide the editor columns (P)">×</button></div>
+                <div class="tab-fill"></div>
+            </div>
+            <div class="outliner-body" id="outliner-body"></div>
+        </aside>
+
+        <aside id="studio-outliner" class="column editor-column studio-only">
+            <div class="column-tabs">
+                <div class="column-tab">World Network</div>
+                <div class="tab-fill"></div>
+            </div>
+            <div class="studio-hierarchy" id="studio-hierarchy"></div>
+            <div class="studio-plan-dock">
+                <div class="studio-plan-header">
+                    <span>2D World Plan</span>
+                    <div class="studio-plan-actions">
+                        <button type="button" id="studio-plan-fit" title="Fit plan to network">Fit</button>
+                    </div>
+                </div>
+                <canvas id="studio-plan-canvas" width="272" height="224"></canvas>
+            </div>
+        </aside>
+
+        <section id="viewport-column" class="column">
+            <div class="column-tabs viewport-tabs">
+                <div class="column-tab">Viewport</div>
+                <div class="scene-pill" id="viewport-mode-pill">Proving Grounds</div>
+                <div class="tab-fill"></div>
+            </div>
+            <div class="viewport-bar" id="viewport-bar"></div>
+            <div class="viewport-bar studio-toolbar studio-only" id="studio-toolbar"></div>
+            <div id="stage">
+                <canvas id="viewport"></canvas>
+                <canvas id="capture" class="capture"></canvas>
+                <canvas id="road-studio-gizmo" class="studio-only"></canvas>
+                <div id="studio-viewport-hint" class="studio-only">
+                    Left-click: Draw / Drag nodes &amp; gold tangent handles (Shift = Height Z) · Right-drag + WASD / Q·E: Fly camera · Wheel: Dolly
+                </div>
+                <div id="hud"><button class="overlay-close" data-overlay="Hud" title="Hide the readout (H)">×</button><pre id="hud-text">Starting…</pre></div>
+                <div id="inset-frame" class="hidden">
+                    <button class="overlay-close" data-overlay="Inset" title="Hide the distance slice (J)">×</button>
+                    <div id="inset-legend">GDF slice · blue inside · amber outside · magenta = rewritten by a moving occupant · teal = scrolled · green = cascade 0</div>
+                </div>
+                <div id="overlay-dock" class="hidden"></div>
+                <div id="overlay-notice" class="hidden"></div>
+                <div id="event-notice" class="hidden"></div>
+                <div id="bring-up">
+                    <h2>Frontier · Proving Grounds</h2>
+                    <div class="bring-up-caption">Starting</div>
+                    <div class="bring-up-bar"><div></div></div>
+                </div>
+                <div id="failure" class="hidden"></div>
+            </div>
+        </section>
+
+        <aside id="inspector" class="column editor-column">
+            <div class="column-tabs">
+                <div class="column-tab">Inspector <button data-overlay="Panel" title="Hide the editor columns (P)">×</button></div>
+                <div class="tab-fill"></div>
+            </div>
+            <div class="inspector-top" id="inspector-top"></div>
+            <div class="inspector-content" id="inspector-content"></div>
+        </aside>
+
+        <aside id="studio-inspector" class="column editor-column studio-only">
+            <div class="column-tabs">
+                <div class="column-tab">Road Studio Inspector</div>
+                <div class="tab-fill"></div>
+            </div>
+            <div class="studio-inspector-tabs" id="studio-inspector-tabs"></div>
+            <div class="inspector-content studio-inspector-body" id="studio-inspector-body"></div>
+        </aside>
+
+        <footer id="status"></footer>
+    </div>
+
+    <script type="module" src="Source/IlluminationHost.js?v=road-studio-world-3"></script>
+</body>
+</html>

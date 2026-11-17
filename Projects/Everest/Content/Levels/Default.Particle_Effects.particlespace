@@ -1,0 +1,445 @@
+# Frontier particle space: the effects, force fields, wind and lightning of one Particles record.
+format = 'frontier.particlespace'
+next_number = 5
+rule = []
+version = 1
+
+[camera]
+distance_metres = 12.5
+pitch_radians = 0.29999999999999999
+target_metres = [ 0.0, 1.6000000000000001, 0.0 ]
+yaw_radians = 0.59999999999999998
+
+[clock]
+playing = true
+time_scale = 1.0
+
+[level_wind]
+anchor_metres = [ 0.0, 0.0, 2.0 ]
+follow = true
+
+[lightning]
+amplitude_metres = 2.0
+automatic = true
+branch_chance = 0.34999999999999998
+distance_metres = 1200.0
+interval_maximum_seconds = 9.0
+interval_minimum_seconds = 3.0
+levels = 6
+
+[lightning_web]
+enabled = false
+interval_seconds = 0.59999999999999998
+links = 2
+
+[mass]
+angular_damping = 0.050000000000000003
+density_kg_m3 = 2700.0
+dynamic_friction = 0.44
+linear_damping = 0.040000000000000001
+mass_kg = 12.5
+restitution = 0.41999999999999998
+static_friction = 0.57999999999999996
+volume_m3 = 0.0046299999999999996
+
+[probe]
+enabled = true
+position_metres = [ 0.0, 1.0, 0.0 ]
+
+[replication]
+authority = 1
+channel = 1
+enabled = false
+interpolate_proxy = true
+owner_peer_id = 0
+replicate_kinematics = true
+replicate_parameters = true
+replicate_spatial = true
+update_frequency_hz = 20.0
+
+[spatial]
+orientation_deg = [ 0.0, 0.0, 0.0 ]
+position_m = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+[wind]
+arrow_reference_mps = 6.0
+arrow_stride = 3.0
+show_arrows = false
+show_domain = true
+show_floor = true
+swirl = 1.2
+turbulence = 0.34999999999999998
+wind_scale = 1.0
+
+[[effect]]
+appearance = 'streak'
+behaviour = 'ballistic'
+blend = 'additive'
+bounce = 0.34999999999999998
+box_half_metres = [ 0.0, 0.0, 0.0 ]
+buoyancy = 0.0
+burst_at_origin = false
+burst_count = 120
+burst_every_seconds = 0.0
+capacity = 3000
+colour_a = [ 1.0, 0.92000000000000004, 0.55000000000000004, 1.0 ]
+colour_b = [ 1.0, 0.34999999999999998, 0.050000000000000003, 0.0 ]
+colour_c = [ 1.0, 1.0, 0.29999999999999999, 1.0 ]
+damping = 2.0
+direction = [ 0.0, 1.0, 0.0 ]
+dissociation = 0.29999999999999999
+drag = 0.5
+epsilon = 0.14999999999999999
+flutter = 0.0
+fraction_a = 0.5
+gravity = 1.0
+integration_step_seconds = 0.0040000000000000001
+leaf_surface = 'leaf'
+life_maximum_seconds = 1.6000000000000001
+life_minimum_seconds = 0.59999999999999998
+name = 'Sparks'
+number = 1
+origin_metres = [ -3.0, 0.40000000000000002, 0.0 ]
+preset = 'sparks'
+pulse_depth = 0.0
+pulse_hz = 0.0
+radius_metres = 0.10000000000000001
+react_radius = 0.12
+react_rate = 4.0
+release_rate = 160.0
+release_shape = 'point'
+sigma = 0.080000000000000002
+size_end_metres = 0.01
+size_scale = 1.0
+size_start_metres = 0.035000000000000003
+speed_maximum_mps = 6.0
+speed_minimum_mps = 2.0
+spread_radians = 0.59999999999999998
+swarm_radius_metres = 1.2
+temperature = 0.59999999999999998
+visible = true
+wind_coupling = 0.25
+
+    [effect.mass]
+    angular_damping = 0.050000000000000003
+    density_kg_m3 = 2700.0
+    dynamic_friction = 0.44
+    linear_damping = 0.040000000000000001
+    mass_kg = 12.5
+    restitution = 0.41999999999999998
+    static_friction = 0.57999999999999996
+    volume_m3 = 0.0046299999999999996
+
+    [effect.replication]
+    authority = 1
+    channel = 1
+    enabled = false
+    interpolate_proxy = true
+    owner_peer_id = 0
+    replicate_kinematics = true
+    replicate_parameters = true
+    replicate_spatial = true
+    update_frequency_hz = 20.0
+
+    [effect.spatial]
+    orientation_deg = [ 0.0, 0.0, 0.0 ]
+    position_m = [ 0.0, 0.0, 0.0 ]
+    scale = [ 1.0, 1.0, 1.0 ]
+
+[[effect]]
+appearance = 'leaf'
+behaviour = 'wind_driven'
+blend = 'alpha_over'
+bounce = 0.0
+box_half_metres = [ 0.0, 0.0, 0.0 ]
+buoyancy = 0.0
+burst_at_origin = false
+burst_count = 120
+burst_every_seconds = 0.0
+capacity = 1200
+colour_a = [ 0.41999999999999998, 0.71999999999999997, 0.22, 1.0 ]
+colour_b = [ 0.80000000000000004, 0.52000000000000002, 0.16, 1.0 ]
+colour_c = [ 1.0, 1.0, 0.29999999999999999, 1.0 ]
+damping = 2.0
+direction = [ 0.0, -1.0, 0.0 ]
+dissociation = 0.29999999999999999
+drag = 1.3999999999999999
+epsilon = 0.14999999999999999
+flutter = 1.2
+fraction_a = 0.5
+gravity = 0.34999999999999998
+integration_step_seconds = 0.0040000000000000001
+leaf_surface = 'leaf'
+life_maximum_seconds = 12.0
+life_minimum_seconds = 7.0
+name = 'Leaves'
+number = 2
+origin_metres = [ 0.0, 4.5999999999999996, 0.0 ]
+preset = 'leaves'
+pulse_depth = 0.0
+pulse_hz = 0.0
+radius_metres = 4.5
+react_radius = 0.12
+react_rate = 4.0
+release_rate = 20.0
+release_shape = 'disc'
+sigma = 0.080000000000000002
+size_end_metres = 0.12
+size_scale = 1.0
+size_start_metres = 0.14000000000000001
+speed_maximum_mps = 0.90000000000000002
+speed_minimum_mps = 0.20000000000000001
+spread_radians = 0.5
+swarm_radius_metres = 1.2
+temperature = 0.59999999999999998
+visible = true
+wind_coupling = 2.2000000000000002
+
+    [effect.mass]
+    angular_damping = 0.050000000000000003
+    density_kg_m3 = 2700.0
+    dynamic_friction = 0.44
+    linear_damping = 0.040000000000000001
+    mass_kg = 12.5
+    restitution = 0.41999999999999998
+    static_friction = 0.57999999999999996
+    volume_m3 = 0.0046299999999999996
+
+    [effect.replication]
+    authority = 1
+    channel = 1
+    enabled = false
+    interpolate_proxy = true
+    owner_peer_id = 0
+    replicate_kinematics = true
+    replicate_parameters = true
+    replicate_spatial = true
+    update_frequency_hz = 20.0
+
+    [effect.spatial]
+    orientation_deg = [ 0.0, 0.0, 0.0 ]
+    position_m = [ 0.0, 0.0, 0.0 ]
+    scale = [ 1.0, 1.0, 1.0 ]
+
+[[effect]]
+appearance = 'sphere'
+behaviour = 'lennard_jones'
+blend = 'alpha_over'
+bounce = 0.0
+box_half_metres = [ 0.90000000000000002, 0.90000000000000002, 0.90000000000000002 ]
+buoyancy = 0.0
+burst_at_origin = false
+burst_count = 120
+burst_every_seconds = 0.0
+capacity = 1024
+colour_a = [ 0.34999999999999998, 0.65000000000000002, 1.0, 1.0 ]
+colour_b = [ 1.0, 0.34999999999999998, 0.25, 1.0 ]
+colour_c = [ 1.0, 1.0, 0.29999999999999999, 1.0 ]
+damping = 2.0
+direction = [ 0.0, 1.0, 0.0 ]
+dissociation = 0.29999999999999999
+drag = 0.20000000000000001
+epsilon = 0.14999999999999999
+flutter = 0.0
+fraction_a = 0.5
+gravity = 1.0
+integration_step_seconds = 0.0040000000000000001
+leaf_surface = 'leaf'
+life_maximum_seconds = 2.0
+life_minimum_seconds = 1.0
+name = 'Atoms (LJ gas)'
+number = 3
+origin_metres = [ 3.2000000000000002, 1.0, -2.6000000000000001 ]
+preset = 'atoms'
+pulse_depth = 0.0
+pulse_hz = 0.0
+radius_metres = 0.10000000000000001
+react_radius = 0.12
+react_rate = 4.0
+release_rate = 0.0
+release_shape = 'box'
+sigma = 0.080000000000000002
+size_end_metres = 0.050000000000000003
+size_scale = 1.0
+size_start_metres = 0.050000000000000003
+speed_maximum_mps = 3.0
+speed_minimum_mps = 1.0
+spread_radians = 0.5
+swarm_radius_metres = 1.2
+temperature = 0.59999999999999998
+visible = true
+wind_coupling = 0.0
+
+    [effect.mass]
+    angular_damping = 0.050000000000000003
+    density_kg_m3 = 2700.0
+    dynamic_friction = 0.44
+    linear_damping = 0.040000000000000001
+    mass_kg = 12.5
+    restitution = 0.41999999999999998
+    static_friction = 0.57999999999999996
+    volume_m3 = 0.0046299999999999996
+
+    [effect.replication]
+    authority = 1
+    channel = 1
+    enabled = false
+    interpolate_proxy = true
+    owner_peer_id = 0
+    replicate_kinematics = true
+    replicate_parameters = true
+    replicate_spatial = true
+    update_frequency_hz = 20.0
+
+    [effect.spatial]
+    orientation_deg = [ 0.0, 0.0, 0.0 ]
+    position_m = [ 0.0, 0.0, 0.0 ]
+    scale = [ 1.0, 1.0, 1.0 ]
+
+[[effect]]
+appearance = 'sphere'
+behaviour = 'reactive'
+blend = 'alpha_over'
+bounce = 0.0
+box_half_metres = [ 0.90000000000000002, 0.90000000000000002, 0.90000000000000002 ]
+buoyancy = 0.0
+burst_at_origin = false
+burst_count = 120
+burst_every_seconds = 0.0
+capacity = 1024
+colour_a = [ 1.0, 0.38, 0.29999999999999999, 1.0 ]
+colour_b = [ 0.29999999999999999, 0.62, 1.0, 1.0 ]
+colour_c = [ 1.0, 0.85999999999999999, 0.29999999999999999, 1.0 ]
+damping = 2.0
+direction = [ 0.0, 1.0, 0.0 ]
+dissociation = 0.29999999999999999
+drag = 0.20000000000000001
+epsilon = 0.14999999999999999
+flutter = 0.0
+fraction_a = 0.5
+gravity = 1.0
+integration_step_seconds = 0.0040000000000000001
+leaf_surface = 'leaf'
+life_maximum_seconds = 2.0
+life_minimum_seconds = 1.0
+name = 'Chemicals A+B→C'
+number = 4
+origin_metres = [ 3.2000000000000002, 1.0, 2.6000000000000001 ]
+preset = 'chemicals'
+pulse_depth = 0.0
+pulse_hz = 0.0
+radius_metres = 0.10000000000000001
+react_radius = 0.12
+react_rate = 6.0
+release_rate = 0.0
+release_shape = 'box'
+sigma = 0.080000000000000002
+size_end_metres = 0.050000000000000003
+size_scale = 1.0
+size_start_metres = 0.050000000000000003
+speed_maximum_mps = 3.0
+speed_minimum_mps = 1.0
+spread_radians = 0.5
+swarm_radius_metres = 1.2
+temperature = 0.59999999999999998
+visible = true
+wind_coupling = 0.0
+
+    [effect.mass]
+    angular_damping = 0.050000000000000003
+    density_kg_m3 = 2700.0
+    dynamic_friction = 0.44
+    linear_damping = 0.040000000000000001
+    mass_kg = 12.5
+    restitution = 0.41999999999999998
+    static_friction = 0.57999999999999996
+    volume_m3 = 0.0046299999999999996
+
+    [effect.replication]
+    authority = 1
+    channel = 1
+    enabled = false
+    interpolate_proxy = true
+    owner_peer_id = 0
+    replicate_kinematics = true
+    replicate_parameters = true
+    replicate_spatial = true
+    update_frequency_hz = 20.0
+
+    [effect.spatial]
+    orientation_deg = [ 0.0, 0.0, 0.0 ]
+    position_m = [ 0.0, 0.0, 0.0 ]
+    scale = [ 1.0, 1.0, 1.0 ]
+
+[[force]]
+acts_on = []
+begins_seconds = 0.0
+category = 'prevailing'
+centre_metres = [ 0.0, 0.0, 0.0 ]
+direction = [ 0.93969262078590832, 0.0, 0.34202014332566882 ]
+enabled = true
+falloff = 'smooth'
+lasts_seconds = 0.0
+name = 'Prevailing wind'
+radius_metres = 6.0
+rate_hz = 0.29999999999999999
+reach = 'everywhere'
+repeats_seconds = 0.0
+strength = 3.0
+swallow_metres = 0.0
+swirl = 0.0
+
+[[force]]
+acts_on = []
+begins_seconds = 0.0
+category = 'gust'
+centre_metres = [ -4.0, 0.0, 0.0 ]
+direction = [ 0.93969262078590832, 0.0, 0.34202014332566882 ]
+enabled = true
+falloff = 'smooth'
+lasts_seconds = 0.0
+name = 'Passing gust'
+radius_metres = 4.0
+rate_hz = 0.29999999999999999
+reach = 'sphere'
+repeats_seconds = 0.0
+strength = 5.0
+swallow_metres = 0.0
+swirl = 0.0
+
+[[force]]
+acts_on = []
+begins_seconds = 0.0
+category = 'tornado'
+centre_metres = [ -2.0, 0.0, -4.0 ]
+direction = [ 0.0, 0.0, 1.0 ]
+enabled = false
+falloff = 'smooth'
+lasts_seconds = 0.0
+name = 'Tornado'
+radius_metres = 1.6000000000000001
+rate_hz = 0.0
+reach = 'sphere'
+repeats_seconds = 0.0
+strength = 6.0
+swallow_metres = 0.0
+swirl = 0.0
+
+[[force]]
+acts_on = []
+begins_seconds = 0.0
+category = 'outflow'
+centre_metres = [ 0.0, 0.0, -2.0 ]
+direction = [ 0.0, 0.0, 1.0 ]
+enabled = false
+falloff = 'smooth'
+lasts_seconds = 0.0
+name = 'Radial suction'
+radius_metres = 3.0
+rate_hz = 0.0
+reach = 'sphere'
+repeats_seconds = 0.0
+strength = -2.0
+swallow_metres = 0.0
+swirl = 0.0

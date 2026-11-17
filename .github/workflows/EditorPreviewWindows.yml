@@ -1,0 +1,104 @@
+name: Windows binaries (Frontier + SolidArc + TextureWorkspace)
+
+on:
+  push:
+    branches: ['main', 'arena/bfba53e1-frontier', 'arena/255c3b21-frontier']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  checks: write
+
+concurrency:
+  group: windows-binaries-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  WindowsBuild:
+    name: Build Frontier.exe, SolidArcWorkspace.exe and TextureWorkspace.exe (Windows x64, Release)
+    runs-on: windows-2022
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Prepare UI dependencies and fonts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python -m pip install --disable-pip-version-check -r Automation/FontRequirements.txt
+          python Automation/PrepareUI.py
+          python Automation/PrepareFonts.py
+      - name: Configure Windows x64 Release with ClangCL
+        run: cmake -S . -B Build/Windows -A x64 -T ClangCL -DBUILD_TESTING=OFF
+      - name: Build Frontier, SolidArc and TextureStudio
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $BuildLog = "Frontier-build.log"
+          cmake --build Build/Windows --config Release --target Frontier SolidArc TextureStudio --parallel 2 2>&1 |
+            Tee-Object -FilePath $BuildLog
+          $BuildExit = $LASTEXITCODE
+          if ($BuildExit -ne 0) {
+            Write-Output "Windows build command exit code: $BuildExit"
+            $BuildErrors = @(
+              Select-String -Path $BuildLog -Pattern '(?i)(fatal error|error C[0-9]+|error LNK[0-9]+|error MSB[0-9]+|CMake Error|FAILED:|error:)' |
+                Select-Object -First 25 |
+                ForEach-Object { $_.Line }
+            )
+            if ($BuildErrors.Count -eq 0) { $BuildErrors = @(Get-Content $BuildLog -Tail 100) }
+            $DiagnosticText = $BuildErrors -join "`n"
+            if ($DiagnosticText.Length -gt 40000) { $DiagnosticText = $DiagnosticText.Substring($DiagnosticText.Length - 40000) }
+            $SummaryText = "cmake --build exited with code $BuildExit.`n`n````text`n$DiagnosticText`n````"
+            Set-Content -Path $env:GITHUB_STEP_SUMMARY -Value $SummaryText -Encoding utf8
+            foreach ($LineText in $BuildErrors) {
+              $Message = ([string]$LineText).Replace('%', '%25').Replace("`r", '').Replace("`n", '%0A')
+              Write-Output "::error::$Message"
+            }
+            exit $BuildExit
+          }
+      - name: Package Frontier, SolidArcWorkspace and TextureWorkspace
+        shell: pwsh
+        run: |
+          python Automation/PackageEditorPreviewWindows.py `
+            --executable Build/Windows/Release/Frontier.exe `
+            --solidarc-executable Build/Windows/Release/SolidArcWorkspace.exe `
+            --texture-executable Build/Windows/Release/TextureWorkspace.exe `
+            --toolchain 'ClangCL, Visual Studio 2022, Windows x64 Release (GitHub windows-2022)' `
+            --omit-material-archives `
+            --output Binaries/FrontierSceneViewport-Windows-x64.zip
+          $ArtifactRoot = Join-Path $env:GITHUB_WORKSPACE 'WindowsArtifact'
+          New-Item -ItemType Directory -Path $ArtifactRoot -Force | Out-Null
+          Expand-Archive -LiteralPath 'Binaries/FrontierSceneViewport-Windows-x64.zip' -DestinationPath $ArtifactRoot -Force
+          $PackageRoot = Join-Path $ArtifactRoot 'FrontierSceneViewport-Windows-x64'
+          foreach ($Required in @(
+            'Frontier.exe',
+            'SolidArcWorkspace.exe',
+            'TextureWorkspace.exe',
+            'EngineContent/FontArchives/FontCatalogue.json',
+            'EngineContent/ShaderArchives/Surface/BrowserPreviewVertex.spv',
+            'Projects/Everest/Everest.projectspace',
+            'Projects/Everest/Content/Levels/Default.levelspace',
+            'Package.json',
+            'README.md'
+          )) {
+            if (-not (Test-Path -LiteralPath (Join-Path $PackageRoot $Required))) {
+              throw "Incomplete Frontier bundle: missing $Required"
+            }
+          }
+      - name: Upload Windows Release ZIP artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: FrontierSceneViewport-Windows-x64
+          path: WindowsArtifact/FrontierSceneViewport-Windows-x64/**
+          if-no-files-found: error
+          retention-days: 30
+      - name: Upload build log for diagnosis
+        if: failure() && hashFiles('Frontier-build.log') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: Frontier-Windows-build-log
+          path: Frontier-build.log
+          retention-days: 7

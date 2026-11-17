@@ -1,0 +1,10 @@
+IESNA:LM-63-2002
+[TEST] Native Type-C importer validation fixture
+[MANUFAC] Frontier Exhibits
+TILT=NONE
+1 1000 2 5 3 1 2 0 0 0 1 1 70
+0 30 60 90 180
+0 90 180
+1000 600 200 50 10
+200 250 400 500 450
+100 300 800 1000 200

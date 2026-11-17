@@ -1,0 +1,27 @@
+Particle overlay workspace capture — 2026-11-09
+
+Command:
+  VK_ICD_FILENAMES=ExternalPackages/VulkanCompute/SwiftShader/vk_swiftshader_icd.json \
+  LD_LIBRARY_PATH=ExternalPackages/VulkanCompute/SwiftShader \
+  build/SceneViewportWorkspaceCapture EngineContent Projects/Everest EngineContent/ShaderArchives \
+    Exhibits/SceneViewport/Images/EverestParticleOverlay.png 12
+
+Environment: Linux x64, SwiftShader Device (Subzero), real EverestWorkspace and SceneViewport bridge,
+1920 x 1080 interface capture. Scene renderer: ReSTIR GI RTX + PlanetaryAtmosphere.
+
+Results:
+  scene viewport extent:     1028 x 403 px
+  particle layer extent:     1028 x 403 px (same as actual scene render extent)
+  camera:                    live SceneViewportRequest pose + field of view, converted Z-up to Y-up
+  alpha-covered pixels:      121 (alpha > 8)
+  partial alpha pixels:      > 0 (asserted, 8 < alpha < 248)
+  transparent corners:       passed (both sampled image corners have alpha 0)
+  alpha composite:           122 screen pixels differ from the scene-only capture
+  Normals and Direct views:  captured with the same overlay
+  outcome:                   exit 0; all camera, extent, alpha, and composite assertions passed
+  runtime:                   826.7 s
+
+Images:
+  Images/EverestParticleOverlay.png
+  Images/EverestParticleOverlay-Normals.png
+  Images/EverestParticleOverlay-Direct.png

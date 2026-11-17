@@ -1,0 +1,70 @@
+{
+  "format": 1,
+  "set": "FluidSimulation",
+  "compiler": "slangc 2026.14.1",
+  "refresh": "python Automation/StoreShaderArchives.py --build <build> --compiler <slangc or slang-wasm.js> --sets FluidSimulation",
+  "entries": [
+    {
+      "file": "FluidAdvection.AdvectFluid.spv",
+      "spirv_sha256": "f0e166256debef52562bb88335a146dd8cb78271df51367acd58a85998a8667a"
+    },
+    {
+      "file": "FluidDiffusion.DiffuseFluidScalars.spv",
+      "spirv_sha256": "3b075423615f2a80748575cd85c4aecafd5ee6e3335a0bbbf2d38d3165837319"
+    },
+    {
+      "file": "FluidDivergence.ComputeFluidDivergence.spv",
+      "spirv_sha256": "2454745973b822b1a72ae54a97fdab67738b3c629b3f14a11b4b1a58cbaac678"
+    },
+    {
+      "file": "FluidForces.ApplyFluidForces.spv",
+      "spirv_sha256": "818af5b3d4ad7afd288d7d69ecb21346dc316fde5ce781efb089ce4459ec5149"
+    },
+    {
+      "file": "FluidPressureSolve.SolveFluidPressure.spv",
+      "spirv_sha256": "058c8c888e3174dfb14fa9820c57a34bd99faf41edf84e058d761f4794a0f8e2"
+    },
+    {
+      "file": "FluidPreview.RenderFluidPreview.spv",
+      "spirv_sha256": "88d30e522009a044b29be1578eb8fdd549893cc6c2744b07d03177ee2c71b993"
+    },
+    {
+      "file": "FluidProjection.ProjectFluidPressure.spv",
+      "spirv_sha256": "c370579a7d4f97717364516c25bca80077325de0f19e32c7d9b9147c79a0fb49"
+    }
+  ],
+  "sources": [
+    {
+      "file": "Frontier/Engine/Shaders/FluidSimulation/FluidAdvection.slang",
+      "sha256": "b5dba622e80fd141be889088a5e54752cd68fc3c5b729186e2347d55d26bdcd6"
+    },
+    {
+      "file": "Frontier/Engine/Shaders/FluidSimulation/FluidDiffusion.slang",
+      "sha256": "b999a095b5a0ec451878e87c251171f7d1a0d338dbc49b2348cc8f012c1ab88d"
+    },
+    {
+      "file": "Frontier/Engine/Shaders/FluidSimulation/FluidDivergence.slang",
+      "sha256": "45385f2d98c4d73012f1598a32834b82b2bd22def18a223734f5fa84ba3b3927"
+    },
+    {
+      "file": "Frontier/Engine/Shaders/FluidSimulation/FluidForces.slang",
+      "sha256": "ce002b70d7a15993575fb8b0288b4c244c743fb8462e5bae6e68f0b0703112f5"
+    },
+    {
+      "file": "Frontier/Engine/Shaders/FluidSimulation/FluidLayouts.slang",
+      "sha256": "8ff051c53f64a62e1dbb2af7c5e8dac13fc6e6bd2037fd884a862befa3848366"
+    },
+    {
+      "file": "Frontier/Engine/Shaders/FluidSimulation/FluidPressureSolve.slang",
+      "sha256": "6397de4217f0140e1aba28ac86e5e194388d3cb6627bb00fddfdca762fc183c0"
+    },
+    {
+      "file": "Frontier/Engine/Shaders/FluidSimulation/FluidPreview.slang",
+      "sha256": "b6e859e90d267701486e28081bd1102bd787f08523376ad0f64bda0c9e10b863"
+    },
+    {
+      "file": "Frontier/Engine/Shaders/FluidSimulation/FluidProjection.slang",
+      "sha256": "4b5f63f38873f906d444f7ddddafc4a193ac6feb24fe7dab2752cf288f3b25fa"
+    }
+  ]
+}

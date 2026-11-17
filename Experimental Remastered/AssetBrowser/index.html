@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Frontier. Asset Browser — Experimental Remastered</title>
+<link rel="stylesheet" href="AssetBrowser.css">
+</head>
+<body>
+<div id="app">
+  <!-- Placeholder editor viewport: the browser sheet docks over its bottom edge. -->
+  <section class="stage" id="stage">
+    <div class="stage-top">
+      <span class="brand-mark">Frontier<span class="brand-dot">.</span></span>
+      <span class="experimental">EXPERIMENTAL</span>
+      <span class="stage-title">Editor viewport · placeholder</span>
+    </div>
+    <div class="stage-center">
+      <h1>Viewport</h1>
+      <p>The asset browser lives in the bottom sheet.<br>Drag the notch up, or:</p>
+      <button class="button primary" id="stage-browse-btn" type="button">Browse assets</button>
+      <p class="stage-hint"><kbd>Esc</kbd> closes the sheet · <kbd>B</kbd> toggles it</p>
+    </div>
+  </section>
+
+  <!-- Trapezoidal expansion notch (PanelExpansionTab language): click toggles, drag travels. -->
+  <button class="notch" id="notch" type="button" aria-expanded="true" aria-controls="browser-sheet" title="Toggle asset browser (B)">
+    <span class="notch-grip"></span>
+    <span class="notch-caption" id="notch-caption">ASSETS · 150</span>
+    <span class="notch-chevron" id="notch-chevron">▾</span>
+  </button>
+
+  <!-- Bottom browser sheet: the generic 3-column asset browser. -->
+  <div class="browser-sheet open" id="browser-sheet">
+    <header class="app-header">
+      <div class="brand">
+        <a href="../index.html" class="brand-link" title="Back to Experimental Remastered Studio Suite">
+          <span class="brand-mark">Frontier<span class="brand-dot">.</span></span>
+        </a>
+        <span class="experimental">EXPERIMENTAL</span>
+        <span class="studio-pill">Asset Browser</span>
+      </div>
+      <label class="global-search">
+        <span class="search-icon" id="search-icon"></span>
+        <input id="global-search" type="search" placeholder="Search 150 assets, presets, rigs..." autocomplete="off">
+        <kbd>/</kbd>
+      </label>
+      <div class="header-end">
+        <div class="view-toggle" id="view-toggle" role="tablist" aria-label="Layout">
+          <button class="active" data-view="grid" type="button" title="Grid view (G)">Grid</button>
+          <button data-view="list" type="button" title="List view (L)">List</button>
+        </div>
+        <select id="sort-select" title="Sort order" aria-label="Sort order">
+          <option value="name">Name A–Z</option>
+          <option value="workspace">Library, then name</option>
+          <option value="kind">Kind, then name</option>
+        </select>
+        <button class="button ghost" id="import-btn" type="button" title="Import an asset package">Import…</button>
+      </div>
+    </header>
+
+    <main class="workspace">
+      <aside class="left-panel" id="left-panel">
+        <div class="panel-heading"><span>Libraries</span><span class="heading-count" id="lib-count"></span></div>
+        <div class="panel-scroll"><div class="panel-content" id="folder-tree"></div></div>
+        <div class="left-footer"><span class="footer-dot"></span><span>Favorites sync locally · Recents reset</span></div>
+      </aside>
+
+      <section class="center-panel" id="center-panel">
+        <div class="crumb-bar">
+          <nav class="crumbs" id="crumbs" aria-label="Breadcrumb"></nav>
+          <span class="result-count tabular" id="result-count"></span>
+        </div>
+        <div class="kind-chips" id="kind-chips" aria-label="Kind filter"></div>
+        <div class="panel-scroll items-scroll" id="items-scroll"><div class="panel-content" id="items"></div></div>
+      </section>
+
+      <aside class="inspector-panel" id="inspector-panel">
+        <div class="panel-heading"><span>Inspector</span><span class="heading-count" id="inspector-kind"></span></div>
+        <div class="panel-scroll"><div class="panel-content" id="inspector-body"></div></div>
+        <div class="inspector-footer"><span id="inspector-footer">Select an asset to inspect</span></div>
+      </aside>
+    </main>
+
+    <footer class="status-bar">
+      <span class="status-ready"><i></i><span id="status-text">Ready</span></span>
+      <span class="status-divider"></span>
+      <span id="status-counts" class="tabular"></span>
+      <span class="status-right">
+        <span id="status-selection" class="tabular"></span>
+        <span class="version">HTML prototype · actions are illustrative</span>
+      </span>
+    </footer>
+  </div>
+</div>
+<div class="toast-stack" id="toast-stack"></div>
+<script type="module" src="AssetBrowser.js"></script>
+</body>
+</html>
