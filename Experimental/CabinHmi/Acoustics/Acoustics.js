@@ -19,10 +19,11 @@ import { Cues as AviationCues } from './ElectricAviation.js';
 const Cues = { ...CabinCues, ...ImpactCues, ...BallisticCues };
 const RenderCue = (Name, Rate, Options) => (CabinCues[Name] ? RenderCabinCue : ImpactCues[Name] ? RenderImpactCue : RenderBallisticCue)(Name, Rate, Options);
 const Profiles = { ...EngineProfiles, ...ElectricCars };
-const CarOrder = ['LaFerrari', 'GtrNismo', 'TaycanTurboS', 'NextGenRacer'];
+const CarOrder = ['LaFerrari', 'GtrNismo', 'Demon', 'TaycanTurboS', 'NextGenRacer'];
 const Brands = {
     LaFerrari: { Label: 'LaFerrari', Spec: 'F140FE 6.3 L V12 · HY-KERS · 7-speed DCT · 100% synthesized', Dial: 10000, Assist: 'HY-KERS', Chip: 'KERS' },
     GtrNismo: { Label: 'GT-R NISMO', Spec: 'VR38DETT 3.8 L twin-turbo V6 · 600 PS · 6-speed DCT · AWD · 100% synthesized', Dial: 8000, Assist: 'BOOST', Chip: 'BOOST' },
+    Demon: { Label: 'Challenger SRT Demon', Spec: '6.2 L supercharged HEMI V8 · 2.7 L blower, 14.5 psi · 840 hp · 8-speed auto · TransBrake (hold B) · 100% synthesized', Dial: 8000, Assist: 'BOOST', Chip: 'BOOST' },
     TaycanTurboS: { Label: 'Taycan Turbo S', Spec: 'Two PSM motors · 800 V · 2-speed rear (15.5 / 8.05) · AWD · 100% synthesized', Dial: 16000, Assist: 'DRIVE / REGEN', Chip: 'REGEN', Electric: true },
     NextGenRacer: { Label: 'Next-Gen racer', Spec: 'Jackson Storm-style original · 634 kW motor · 6-speed sequential · V8 undertone · 100% synthesized', Dial: 18000, Assist: 'DRIVE / REGEN', Chip: 'REGEN', Electric: true },
 };
@@ -34,7 +35,7 @@ const Reel = [
     ['LaFerrari-ColdStart', 'LaFerrari cold start'], ['LaFerrari-Launch', 'LaFerrari launch'], ['LaFerrari-Onboard', 'LaFerrari onboard'],
     ['LaFerrari-Limiter', 'LaFerrari limiter'], ['LaFerrari-FlyBy', 'LaFerrari fly-by'], ['Tyres-Screech', 'Tyre screech'],
     ['GtrNismo-ColdStart', 'GT-R cold start'], ['GtrNismo-Launch', 'GT-R launch'], ['GtrNismo-Onboard', 'GT-R onboard'],
-    ['GtrNismo-FlyBy', 'GT-R fly-by'], ['Surfaces-Tour', 'Surfaces tour'], ['Chassis-Brakes', 'Disc brakes'],
+    ['GtrNismo-FlyBy', 'GT-R fly-by'], ['Demon-ColdStart', 'Demon cold start'], ['Demon-Launch', 'Demon TransBrake launch'], ['Demon-RollOn', 'Demon roll-on (no lag)'], ['TurboLag-Compare', 'Turbo lag compared'], ['Surfaces-Tour', 'Surfaces tour'], ['Chassis-Brakes', 'Disc brakes'],
     ['Chassis-Suspension', 'Suspension'], ['Lights-Cues', 'Lights'], ['Cabin-Cues', 'Cabin'],
     ['Impact-Explosion', 'Explosion 60 m'], ['Impact-ExplosionFar', 'Explosion 450 m'], ['Impact-Shockwave', 'Shockwave'],
     ['Impact-EmpPulse', 'EMP pulse'], ['Impact-SonicBlast', 'Sonic blast'], ['Impact-WindowShatter', 'Window shatter'],
@@ -74,7 +75,7 @@ async function Wake()
     Audio.Waking = (async () =>
     {
         const Context = new AudioContext({ latencyHint: 'interactive' });
-        await Context.audioWorklet.addModule(new URL('./VoiceRackWorklet.js?v=14', import.meta.url));
+        await Context.audioWorklet.addModule(new URL('./VoiceRackWorklet.js?v=15', import.meta.url));
         const Limiter = Context.createDynamicsCompressor();
         Limiter.threshold.value = -6; Limiter.knee.value = 4; Limiter.ratio.value = 12; Limiter.attack.value = 0.002; Limiter.release.value = 0.12;
         const Master = Context.createGain(); Master.gain.value = 0.8;
@@ -90,7 +91,7 @@ async function Wake()
     return Audio.Waking;
 }
 
-const Controls = { Throttle: 0, Brake: 0, Steer: 0, Handbrake: false, Automatic: true, Traction: true, Surface: 'Asphalt', Pickup: 'Chase', Turbocharger: false };
+const Controls = { Throttle: 0, Brake: 0, Steer: 0, Handbrake: false, Automatic: true, Traction: true, Surface: 'Asphalt', Pickup: 'Chase', Turbocharger: false, TransBrake: false, LagScale: 1 };
 const SendControls = () => { const { Turbocharger, ...Car } = Controls; Audio.Rack?.port.postMessage({ Controls: Car }); };
 const Command = async (Name) => { await Wake(); Audio.Rack.port.postMessage({ Command: Name }); };
 
@@ -226,7 +227,7 @@ async function Fire(Name, Seconds = 1)
 async function RenderOffline(Seconds = 5, Car = CarName, Inducer = null, Gear = 0)
 {
     const Rate = 48000, Context = new OfflineAudioContext(2, Math.round(Seconds * Rate), Rate);
-    await Context.audioWorklet.addModule(new URL('./VoiceRackWorklet.js?v=14', import.meta.url));
+    await Context.audioWorklet.addModule(new URL('./VoiceRackWorklet.js?v=15', import.meta.url));
     const Rack = new AudioWorkletNode(Context, 'voice-rack', { numberOfInputs: 0, outputChannelCount: [2], processorOptions: { Start: true, Throttle: 1, Car, Induction: Inducer, Gear } });
     let Last = null; Rack.port.onmessage = (Message) => { Last = Message.data; };
     Rack.connect(Context.destination);
@@ -476,6 +477,7 @@ function BindInputs()
         else if (Event.code === 'KeyK') Kick('Kerb');
         else if (Event.code === 'KeyF') PullTrigger(Picked);
         else if (Event.code === 'KeyR') ToggleTurbo();
+        else if (Event.code === 'KeyB') { Controls.TransBrake = true; SendControls(); }
         else if (Event.code === 'KeyP') Kick('Pothole');
         else if (Event.code === 'KeyG') Flip('Shifting', 'Automatic', ['Auto', 'Manual']);
         else if (Event.code === 'KeyT') Flip('Traction', 'Traction', ['On', 'Off']);
@@ -485,6 +487,7 @@ function BindInputs()
     {
         if (Keys[Event.code]) Held[Keys[Event.code]] = false;
         if (Event.code === 'Space') { Controls.Handbrake = false; SendControls(); }
+        if (Event.code === 'KeyB') { Controls.TransBrake = false; SendControls(); }
         if (Event.code === 'KeyF' && Trigger.Name) ReleaseTrigger();
     });
     addEventListener('blur', () => { for (const Key in Held) Held[Key] = false; ReleaseTrigger(); });
@@ -505,6 +508,7 @@ function BindInputs()
     Find('CarPick').onclick = () => PickCar(CarOrder[(CarOrder.indexOf(CarName) + 1) % CarOrder.length]);
     Find('Shifting').onclick = () => Flip('Shifting', 'Automatic', ['Auto', 'Manual']);
     Find('Traction').onclick = () => Flip('Traction', 'Traction', ['On', 'Off']);
+    Find('LagScale').oninput = (Event) => SetLag(Event.target.value);
 }
 
 //------------------------------------------------------------------------------------------------------------------------
@@ -554,7 +558,8 @@ function DrawTach(Seconds)
     Find('ChipLimiter').classList.toggle('On', !!Readout.Limiting);
     Find('ChipShift').classList.toggle('On', !!Readout.Shifting);
     Find('ChipSpin').classList.toggle('On', (Readout.Wheelspin ?? 0) > 0.05 || (Readout.Corner ?? 0) > 0.1 || (Readout.LockUp ?? 0) > 0.1);
-    const Boosted = CarName === 'GtrNismo' || (Induction && Inducers[Induction].Family === 'Turbo' && !Brands[CarName].Electric);
+    const Boosted = !Brands[CarName].Electric && (CarName !== 'LaFerrari' || !!Induction);
+    MeasureSpool(Readout.Throttle ?? 0, Readout.Boost ?? 0, Boosted);
     const Assist = Boosted ? (Readout.Boost ?? 0) : (Readout.Motor ?? 0);
     Find('ChipKers').classList.toggle('On', Brands[CarName].Electric ? Assist < -0.05 : Math.abs(Assist) > (Boosted ? 0.6 : 0.05));
     Find('ChipAbs').classList.toggle('On', !!Readout.Abs);
@@ -566,6 +571,31 @@ function DrawTach(Seconds)
     Find('PedalThrottle').querySelector('u').style.height = `${Controls.Throttle * 100}%`;
     Find('PedalBrake').querySelector('u').style.height = `${Controls.Brake * 100}%`;
     Find('SteerKnob').style.left = `${50 + Controls.Steer / 0.75 * 46}%`;
+}
+
+/**
+ * Turbo lag stopwatch: from a stab of throttle (pedal past 90% with boost still under 30%) to boost passing 80% of full.
+ * Belt-driven blowers read almost nothing; a big single from low rpm can read seconds or never get there.
+ */
+const Spool = { From: null, Shown: '' };
+function MeasureSpool(Throttle, Boost, Boosted)
+{
+    const Readout = Find('SpoolTime');
+    if (!Readout) return;
+    if (!Boosted) { Spool.From = null; Readout.textContent = 'no boost on this car'; return; }
+    const Now = performance.now();
+    if (Spool.From === null && Throttle > 0.9 && Boost < 0.3) Spool.From = Now;
+    if (Spool.From !== null && Throttle < 0.5) Spool.From = null;
+    if (Spool.From !== null && Boost >= 0.8) { Spool.Shown = `last tip-in: ${((Now - Spool.From) / 1000).toFixed(2)} s to 80% boost`; Spool.From = null; }
+    const Waiting = Spool.From !== null ? `spooling… ${((Now - Spool.From) / 1000).toFixed(1)} s` : '';
+    Readout.textContent = `boost ${Math.round(Boost * 100)}% · ${Waiting || Spool.Shown || 'stab the throttle from low rpm to time the lag'}`;
+}
+
+function SetLag(Value)
+{
+    Controls.LagScale = Math.min(3, Math.max(0, +Value));
+    Find('LagScale').value = Controls.LagScale; Find('LagShown').textContent = Controls.LagScale === 0 ? 'off' : `×${Controls.LagScale.toFixed(1)}`;
+    SendControls();
 }
 
 let Last = performance.now();
@@ -582,7 +612,7 @@ requestAnimationFrame(Tick);
 
 window.Bench = {
     Wake, Command, Cue, RenderOffline, Readout: () => Readout, Car: PickCar, Kick, Fire, Turbo: ToggleTurbo,
-    Induction: PickInduction, Sport: ToggleSport, Fly,
+    Induction: PickInduction, Sport: ToggleSport, Fly, Lag: SetLag, TransBrake: (On) => { Controls.TransBrake = !!On; SendControls(); },
     Hold: (Control, Amount) => { Forced = Amount === null ? null : { ...(Forced ?? {}), [Control]: Amount }; },
     Surface: PickSurface,
 };

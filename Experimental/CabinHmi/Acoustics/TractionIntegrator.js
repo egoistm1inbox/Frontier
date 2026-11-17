@@ -26,7 +26,7 @@ export class TractionIntegrator
         this.Traction = true;                                          // traction control: trims torque at the grip limit
         this.Abs = true;                                               // anti-lock brakes: pulse the pressure instead of locking
         this.AbsActive = false;
-        this.Boost = 0; this.Clunk = 0; this.LastGear = 0;
+        this.Boost = 0; this.Spool = 0; this.LagScale = 1; this.TransBrake = false; this.Clunk = 0; this.LastGear = 0;
         this.Accel = 0; this.Lateral = 0;
         this.Shift = null;                                             // { Way: 'Up' | 'Down', Age, To }
         this.Limiting = false;
@@ -124,11 +124,8 @@ export class TractionIntegrator
         // Torques (Nm). Engine torque blends between pumping drag (closed) and the full-load curve.
         const Full = FullTorque(P, Math.max(this.Rpm, 600));
         const Friction = this.Rpm > 50 ? 38 + this.Rpm * 0.021 : 0;
-        if (P.Turbo)
-        {
-            const Target = Alive ? BoostTarget(P, this.Rpm, Effective) : 0;
-            this.Boost += (Target - this.Boost) * Math.min(1, Seconds / (Target > this.Boost ? P.Turbo.Lag : 0.12));
-        }
+        if (P.Turbo) this.Turbo(Seconds, Effective, Alive);
+        else if (P.Stock || P.Induction) this.Boost = Alive ? Math.pow(Clamp(Effective, 0, 1), 1.5) * Smoothstep(600, 2200, this.Rpm) : 0;   // belt-driven blower: no lag
         const Charge = P.Turbo ? Mix(P.Turbo.Unboosted, 1, this.Boost) : 1;
         const Combustion = Alive ? (Full * Charge + Friction) * Math.pow(Effective, 0.75) * Ignition : 0;   // the curve is net of friction
         if (Alive && this.Gear > 0 && this.Running && P.Motor)
@@ -169,12 +166,38 @@ export class TractionIntegrator
         this.Rpm = Clamp(this.Rpm, 0, P.Limiter + 400);
 
         this.Road(DriveForce, Seconds);
+        // TransBrake (drag automatics): first and reverse engaged at once lock the output; the engine is held at the
+        // launch rpm against the converter and the car leaps forward the moment it is released.
+        if (this.TransBrake && this.Gear === 1) { this.Speed = 0; this.Accel = 0; this.Wheelspin = 0; }
 
         if (this.Gear !== this.LastGear) { if (this.LastGear !== 0 || this.Speed > 0.5) this.Clunk++; this.LastGear = this.Gear; }
 
         const Load = Alive ? Clamp((Combustion - Friction * 0.2) / Math.max(Full, 1), 0, 1) : 0;
-        Object.assign(Feed, { Rpm: this.Rpm, Throttle: Alive ? Effective : 0, Load, Ignition: Alive ? Ignition : 0, Motor, Boost: this.Boost, Gear: this.Gear, Clunk: this.Clunk });
+        Object.assign(Feed, { Rpm: this.Rpm, Throttle: Alive ? Effective : 0, Load, Ignition: Alive ? Ignition : 0, Motor, Boost: this.Boost, Spool: P.Turbo ? this.Spool : undefined, Gear: this.Gear, Clunk: this.Clunk });
         return Feed;
+    }
+
+
+    /**
+     * Turbo lag, from the shaft rather than a fixed delay. The turbine wheel has inertia and is driven by exhaust
+     * energy (engine speed × load, and more boost makes more exhaust: positive feedback), so from low rpm it spools
+     * slowly, then comes on with a rush as boost feeds itself. The compressor's pressure goes with shaft speed squared
+     * and the wastegate caps it at full boost. Lifting closes the throttle and the blow-off valve dumps the pressure at
+     * once, but the shaft coasts down over about a second, so a quick re-apply finds it still spinning and boost comes
+     * straight back. LagScale stretches (2 = twice the lag) or removes (0) the lag; Turbo.Lag sets the shaft's inertia.
+     */
+    Turbo(Seconds, Effective, Alive)
+    {
+        const T = this.Profile.Turbo, Inertia = T.Lag * this.LagScale;
+        const Steady = Alive ? BoostTarget(this.Profile, this.Rpm, Effective) : 0;                 // the steady-state map
+        const Exhaust = Alive ? Math.pow(Clamp(this.Rpm / T.Full, 0, 1.6), 1.7) * (0.15 + 0.85 * Effective) * (0.5 + 0.5 * this.Boost) : 0;
+        const Floor = Alive ? 0.12 * Smoothstep(600, 6000, this.Rpm) * (0.3 + 0.7 * Effective) : 0;   // exhaust always turns it a little
+        const Goal = Math.max(Math.sqrt(Steady), Floor);
+        const Rate = Goal > this.Spool ? (0.15 + 2.6 * Exhaust) / Math.max(Inertia, 0.004) : 0.8 / (Math.max(Inertia, 0.004) + 0.35);
+        this.Spool += (Goal - this.Spool) * Math.min(1, Seconds * Rate);
+        if (T.Assist && Alive && Effective > 0.1) this.Spool += (Math.max(this.Spool, 0.35 + 0.35 * Effective) - this.Spool) * Math.min(1, Seconds / 0.08);   // e-motor pre-spins it
+        const Pressure = Math.min(this.Spool * this.Spool, Math.pow(Clamp(Effective, 0, 1), 1.5) * Smoothstep(T.Onset * 0.6, T.Full, this.Rpm) * 1.02);
+        this.Boost += (Pressure - this.Boost) * Math.min(1, Seconds / (Pressure > this.Boost ? 0.05 : 0.08));
     }
 
     /** Tyres and road: traction limit on the driven axles, brakes with ABS, drag, rolling resistance, cornering slip. */
@@ -182,7 +205,7 @@ export class TractionIntegrator
     {
         // Tyres: traction limit on the driven rear axle, brakes with ABS, drag and rolling resistance.
         const P = this.Profile, Weight = P.Mass * Gravity;
-        const Grip = 1.5 * Weight * (P.Drive?.Share ?? 0.6) * (1 + this.Speed * this.Speed * 0.00012);
+        const Grip = (P.Drive?.Grip ?? 1.5) * Weight * (P.Drive?.Share ?? 0.6) * (1 + this.Speed * this.Speed * 0.00012);
         const Excess = DriveForce > Grip ? (DriveForce - Grip) / Grip : 0;
         const Spin = this.Traction ? Math.min(Excess * 1.5, 0.12) : Clamp(Excess * 2.5 + (this.Handbrake ? 0 : 0), 0, 1);
         this.Wheelspin = Spin > this.Wheelspin ? Spin : Math.max(Spin, this.Wheelspin - Seconds * 3);
@@ -211,7 +234,7 @@ export class TractionIntegrator
         return {
             Rpm: this.Rpm, Kmh: this.Speed * 3.6, Gear: this.Gear, Running: this.Running, Starting: this.Starting !== null,
             Throttle: this.Throttle, Brake: this.Brake, Motor: this.Feed.Motor, Wheelspin: this.Wheelspin, Corner: this.Corner,
-            LockUp: this.LockUp, Limiting: this.Limiting, Shifting: !!this.Shift, Boost: this.Boost, Abs: this.AbsActive,
+            LockUp: this.LockUp, Limiting: this.Limiting, Shifting: !!this.Shift, Boost: this.Boost, Spool: this.Spool, Abs: this.AbsActive,
             Accel: this.Accel, Lateral: this.Lateral, Car: this.Profile.Name,
         };
     }

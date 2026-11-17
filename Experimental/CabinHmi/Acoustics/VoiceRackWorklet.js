@@ -56,8 +56,11 @@ class VoiceRack extends AudioWorkletProcessor
         // Combustion: an inducer replaces the car's own induction (the GT-R's twin turbos go silent and its curve is redone).
         const Base = Profiles[this.CarName], Profile = this.Induction ? InductedProfile(Base, this.Induction) : Base;
         this.Car = new TractionIntegrator(Profile);
+        this.Car.LagScale = this.LagScale ?? 1;
         this.Engine = new PulseTrainEngine(sampleRate, Profile, { Pickup: this.Pickup });
-        if (this.Induction) this.Inducer = new InductionVoice(sampleRate, this.Induction, { Pickup: this.Pickup, Redline: Profile.Redline });
+        // A car with a stock blower (the Demon) keeps its own voice unless an inducer swap replaces it.
+        const Voice = this.Induction ?? Base.Stock ?? null;
+        if (Voice) this.Inducer = new InductionVoice(sampleRate, Voice, { Pickup: this.Pickup, Redline: Profile.Redline });
     }
 
     /** Swaps the inducer and keeps the car running if it was (a workshop swap, done instantly). */
@@ -79,8 +82,9 @@ class VoiceRack extends AudioWorkletProcessor
         const Car = this.Car;
         if (Controls)
         {
-            for (const Key of ['Throttle', 'Brake', 'Steer', 'Handbrake', 'Automatic', 'Traction']) if (Key in Controls) Car[Key] = Controls[Key];
+            for (const Key of ['Throttle', 'Brake', 'Steer', 'Handbrake', 'Automatic', 'Traction', 'TransBrake']) if (Key in Controls) Car[Key] = Controls[Key];
             if (Controls.Surface && Surfaces[Controls.Surface]) this.Surface = Controls.Surface;
+            if ('LagScale' in Controls) this.LagScale = Car.LagScale = Math.min(4, Math.max(0, Controls.LagScale));
             if (Controls.Pickup) { this.Pickup = this.Engine.Pickup = this.Roll.Pickup = this.Squeal.Pickup = this.Brakes.Pickup = this.Springs.Pickup = Controls.Pickup; if (this.Inducer) this.Inducer.Pickup = Controls.Pickup; }
         }
         if (Mix) Object.assign(this.Levels, Mix);
@@ -126,7 +130,7 @@ class VoiceRack extends AudioWorkletProcessor
         }
         // Safety knee: pops and the limiter can spike past full scale; above 0.6 the peaks fold softly towards 1.
         for (let Index = 0; Index < Size; Index++) { Left[Index] = Knee(Left[Index]); Right[Index] = Knee(Right[Index]); }
-        if ((this.Clock += Size) >= sampleRate / 30) { this.Clock = 0; this.port.postMessage({ ...Car.Readout(), Induction: this.Induction }); }
+        if ((this.Clock += Size) >= sampleRate / 30) { this.Clock = 0; this.port.postMessage({ ...Car.Readout(), Induction: this.Induction, Stock: Profiles[this.CarName]?.Stock ?? null }); }
         return true;
     }
 }

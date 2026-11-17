@@ -17,14 +17,14 @@ Each step file clicks through every menu and its main interactions; every run re
 | `Lobby-15…24` | Configurator (Follow-up 9): Photo Studio set view, Front ¾ with the hotspot dots (black cyc), Wheels close-up (bronze rims, tan tyres, yellow calipers), Tail lights close-up (purple, wing), Workshop with the lift at 1.2 m, Night tuning underglow close-up (magenta, splitter, skirts, light bar), drivetrain cutaways V8 AWD automatic, Inline-6 FWD manual and Electric dual-motor AWD, Workshop Old school with the door open |
 | `Acoustics-1…6` | Sound bench (`Scripts/AcousticsCheck.cjs`): woken bench, LaFerrari launch in 3rd at 128 km/h with KERS assist, gravel + cabin mic + cornering squeal with the xenon cue ringing and the indicator looping, GT-R NISMO pulling 3rd on full boost, GT-R ABS stop (ABS chip lit) after a kerb strike, impact pads ringing (explosion, window shatter, metal crash) |
 | `Acoustics-7-Weapons` | Weapons and Bullets panels mid-burst: energy LMG trigger lit (firing) with the Turbocharger hop-up on; bullet pass-by, ricochet and 8 impact pads |
-| `Acoustics-8-Power` | Forced induction and Electric panels: twin-screw supercharger picked on the GT-R, sport sound on, aircraft pads |
+| `Acoustics-8-Power` | Forced induction and Electric panels: twin-screw supercharger picked, the Demon's blower pad, the Turbo lag slider and tip-in stopwatch, sport sound on, aircraft pads |
 | `Acoustics-9-Shells` | Shells panel with three casing cues ringing (brass rain, steel floor, 120 mm stub) under the Weapons and Bullets panels |
 | `Audio-*.png` | Spectrogram + waveform plates for every reel file in `Audio/` (cyan dots on engine plates = predicted firing frequency: rpm/10 for the V12, rpm/20 for the V6; on supercharger plates the predicted blower whine, rpm × drive ratio × lobes; on EV plates a predicted motor order) |
 | `Lucent-1…6` | Rejected first HMI C attempt (kept for reference) |
 
 ## Vehicle sound reel (`Audio/`)
 All synthesized in code — no recordings or samples anywhere. 192 kbps stereo MP3 at 44.1 kHz (lamejs), rendered by
-`Experimental/CabinHmi/Acoustics/Offline/RenderReel.mjs` (deterministic seeds; `--wav` also writes WAV). 59 files, 14 MB in total (the
+`Experimental/CabinHmi/Acoustics/Offline/RenderReel.mjs` (deterministic seeds; `--wav` also writes WAV). 63 files, 16 MB in total (the
 Follow-up 10 WAVs, 22 MB, were replaced). Peak is measured before encoding.
 
 | File | Length | Peak dBFS | RMS dBFS | Content |
@@ -34,9 +34,9 @@ Follow-up 10 WAVs, 22 MB, were replaced). Peak is measured before encoding.
 | `LaFerrari-Onboard.mp3` | 14.0 s | −6.2 | −17.0 | Cabin mic, pull 3-4-5, hard braking (ABS, brakes, suspension) with blipped downshifts, corner, exit |
 | `LaFerrari-Limiter.mp3` | 7.5 s | −1.6 | −18.1 | Neutral on the 9250 rpm limiter, lift with pops, two sharp blips |
 | `LaFerrari-FlyBy.mp3` | 8.0 s | −1.0 | −18.4 | Trackside at 12 m, 262 km/h in 6th: Doppler, distance, air absorption, ground bounce, exhaust directivity |
-| `GtrNismo-ColdStart.mp3` | 10.0 s | −1.0 | −20.2 | VR38DETT: starter, catch, fast cold idle ~1150, three blips with turbo whistle and flutter |
-| `GtrNismo-Launch.mp3` | 13.5 s | −3.4 | −16.0 | Launch-control boost build, AWD launch (0–100 2.9 s), 6-speed DCT upshifts with clunks, lift with blow-off |
-| `GtrNismo-Onboard.mp3` | 14.0 s | −2.7 | −17.0 | Cabin mic, pull 3-4-5 on boost, ABS stop with blipped downshifts, corner, spool back up on exit |
+| `GtrNismo-ColdStart.mp3` | 10.0 s | −1.0 | −20.1 | VR38DETT: starter, catch, fast cold idle ~1150, three blips with turbo whistle and flutter |
+| `GtrNismo-Launch.mp3` | 13.5 s | −2.6 | −16.0 | Launch-control boost build, AWD launch (0–100 2.9 s), 6-speed DCT upshifts with clunks, lift with blow-off |
+| `GtrNismo-Onboard.mp3` | 14.0 s | −3.2 | −17.0 | Cabin mic, pull 3-4-5 on boost, ABS stop with blipped downshifts, corner, spool back up on exit |
 | `GtrNismo-FlyBy.mp3` | 8.0 s | −1.1 | −18.1 | Trackside at 12 m, 225 km/h in 5th on full boost |
 | `Tyres-Screech.mp3` | 12.0 s | −3.5 | −17.0 | Cornering squeal at the limit, panic stop with lock-up, standing burnout |
 | `Surfaces-Tour.mp3` | 28.0 s | −5.8 | −19.0 | 60 km/h over asphalt, wet, gravel, dirt, grass, cobbles, rumble strip (4 s each) |
@@ -67,12 +67,16 @@ Follow-up 10 WAVs, 22 MB, were replaced). Peak is measured before encoding.
 | `Shells-Floors.mp3` | 16.6 s | −1.4 | −28.1 | Spent cases (`Casings.js`): 7.62 mm on concrete, 5.56 mm on a wooden deck, 7.62 mm on a steel floor, 7.62 mm on dirt — ring, bounce series, roll |
 | `Shells-Calibres.mp3` | 20.4 s | −1.4 | −26.9 | 9 mm pistol, 12-gauge shotgun, .50 BMG on steel, 30 mm cannon on steel, 120 mm case stub on the turret floor |
 | `Shells-BrassRain.mp3` | 5.5 s | −1.4 | −26.7 | 32 cases and belt links from a 3 s LMG burst raining onto concrete, clinking on the pile, last ones rolling |
-| `Induction-SmallSingle.mp3` | 11.0 s | −2.6 | −17.0 | Every `Induction-*` scene: GT-R NISMO with the inducer swapped in, chase mic: two blips, pull from rest, lift, back on, lift. Small single turbo: quick spool, bright whistle, soft blow-off |
-| `Induction-BigSingle.mp3` | 11.0 s | −3.1 | −17.0 | Big single turbo: late, violent boost, deep whoosh, loud blow-off |
-| `Induction-TwinTurbo.mp3` | 11.0 s | −3.1 | −17.0 | Parallel twins: two detuned whistles beating, blow-off with a little flutter |
-| `Induction-Flutter.mp3` | 11.0 s | −3.3 | −17.0 | Turbo with no blow-off valve: compressor surge chatter on every lift |
-| `Induction-Vgt.mp3` | 11.0 s | −2.9 | −17.0 | Variable-geometry turbo: early boost, whistle sweeping with the vanes, no valve |
-| `Induction-ElectricTurbo.mp3` | 11.0 s | −3.3 | −17.0 | Electric-assist turbo: no lag, motor whine on the shaft, harvest whine on lift |
+| `Demon-ColdStart.mp3` | 10.5 s | −1.0 | −19.1 | Dodge Challenger SRT Demon (Follow-up 15): starter, catch and flare, lumpy cross-plane idle (each bank fires unevenly, firing order 1-8-4-3-6-5-7-2), three blips with the stock 2.7 L blower's scream, overrun pops |
+| `Demon-Launch.mp3` | 15.5 s | −2.4 | −16.0 | Staged on the TransBrake at 2350 rpm, released: 1.8 g, 8-speed upshifts, quarter mile in about 9.8 s at 142 mph, lift. Cyan dots: predicted blower whine (rpm × 0.157) |
+| `Demon-RollOn.mp3` | 16.5 s | −2.0 | −17.0 | Third gear from 2600 rpm, floored three times: the belt-driven blower makes boost the instant the throttle opens (no lag) |
+| `TurboLag-Compare.mp3` | 16.5 s | −1.7 | −17.0 | GT-R with parallel twin turbos, the same 3rd-gear roll-on from 2600 rpm with lag off, real lag and 2.5× lag; cyan dots: whistle pitch predicted from the simulated shaft speed |
+| `Induction-SmallSingle.mp3` | 11.0 s | −3.2 | −17.0 | Every `Induction-*` scene: GT-R NISMO with the inducer swapped in, chase mic: two blips, pull from rest, lift, back on, lift. Small single turbo: quick spool, bright whistle, soft blow-off |
+| `Induction-BigSingle.mp3` | 11.0 s | −2.4 | −17.0 | Big single turbo: late, violent boost, deep whoosh, loud blow-off |
+| `Induction-TwinTurbo.mp3` | 11.0 s | −2.9 | −17.0 | Parallel twins: two detuned whistles beating, blow-off with a little flutter |
+| `Induction-Flutter.mp3` | 11.0 s | −2.4 | −17.0 | Turbo with no blow-off valve: compressor surge chatter on every lift |
+| `Induction-Vgt.mp3` | 11.0 s | −3.1 | −17.0 | Variable-geometry turbo: early boost, whistle sweeping with the vanes, no valve |
+| `Induction-ElectricTurbo.mp3` | 11.0 s | −2.8 | −17.0 | Electric-assist turbo: no lag, motor whine on the shaft, harvest whine on lift |
 | `Induction-Roots.mp3` | 11.0 s | −3.9 | −17.0 | Roots blower: gear-driven whine with a chugging pocket pulse |
 | `Induction-TwistedLobe.mp3` | 11.0 s | −3.6 | −17.0 | Twisted 4-lobe supercharger: high smooth scream, bypass valve on the cruise |
 | `Induction-TwinScrew.mp3` | 11.0 s | −3.2 | −17.0 | Twin-screw supercharger: raspy harmonic-rich scream, timing-gear whine |
@@ -128,6 +132,20 @@ live shot peaks at −11.1 dBFS next to the LMG's −12.6 (`Level` 0.6). Brass n
 old bounce sat about 50 dB under, inaudible). Shell plates show the case ring falling with calibre (9 mm ≈ 9.4 kHz, 7.62 mm ≈ 4.6 kHz,
 .50 ≈ 2.5 kHz, 30 mm ≈ 1.25 kHz, 120 mm ≈ 520 Hz), the shrinking bounce gaps, the steel floor's 740 Hz plate mode and dirt killing the
 ring. Headless check: 10 shell pads, three ringing at once, the three shell clips served (200); every earlier check unchanged; console errors 0.
+
+**Dodge Demon and turbo lag (Follow-up 15).** The Demon is supercharged, not turbocharged: a 2.7 L twin-screw blower at 14.5 psi on
+the 6.2 L HEMI (Dodge press kit). `Demon` in `PulseTrainEngine.js` is a cross-plane V8: `BankAngles` gives each bank its real uneven
+firing gaps, so the side signal (L−R, chase mic) at 1800 rpm carries the 1.5× and 0.5× orders at −5 and −19 dB against the 4th
+(firing) order, while the summed signal stays even (`_ClaudeScratch/tmp/audio/demon.mjs`). Torque table: 1044 Nm at 4500, 840 hp at 6300,
+6500 limiter, the 8HP90's ratios, `TransBrake` input, `Drive.Grip` 2.9 (drag radials, 1.8 g). Model run (`lag.mjs`): 0–60 mph 2.16 s,
+quarter mile 9.77 s at 142 mph (Dodge: 2.3 s, 9.65 s at 140.09 mph). Turbo lag is now a shaft model in `TractionIntegrator.Turbo`
+(exhaust energy grows with rpm^1.7 × load × boost, shaft inertia from each turbo's `Lag`, pressure ∝ shaft speed², a slow coast-down
+so a quick re-apply comes back fast); the engine and inducer whistles follow the same shaft (`Spool`). Time to 90 % of the steady boost:
+GT-R stock 1.19 s at 2500 rpm, 0.62 s at 3500, 0.34 s at 5500; big single 1.23 s at 5500 and no boost below its 3600 rpm onset;
+electric-assist turbo 0.15–0.19 s; re-applying after a 0.4 s lift 0.22–0.37 s. Superchargers have no lag (boost follows throttle and rpm).
+Headless check: Demon staged at 2350 rpm, 0 km/h, boost 1; 106 km/h 2.5 s after release; stock blower voice confirmed (`Stock:
+DemonScrew`); the bench's lag stopwatch reads 0.10 s (lag off), 1.69 s (real lag) and 2.78 s (2.5×) for the same tip-in; build tag
+"build 15" shown; console errors 0. The nine turbo clips (GT-R and `Induction-*` turbos) were re-rendered with the new lag.
 
 ## Reproduce
 ```

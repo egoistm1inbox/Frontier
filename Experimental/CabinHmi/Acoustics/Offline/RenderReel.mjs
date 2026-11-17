@@ -10,7 +10,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { PulseTrainEngine, LaFerrari, GtrNismo } from '../PulseTrainEngine.js';
+import { PulseTrainEngine, LaFerrari, GtrNismo, Demon } from '../PulseTrainEngine.js';
 import { TractionIntegrator } from '../TractionIntegrator.js';
 import { SurfaceRoll, TyreSqueal, Surfaces } from '../ContactPatch.js';
 import { RenderCue as RenderCabinCue, Cues as CabinCues } from '../CabinFoley.js';
@@ -32,15 +32,17 @@ const AudioOut = join(Root, 'Exhibits/CabinHmi/Audio'), ImageOut = join(Root, 'E
 //------------------------------------------------------------------------------------------------------------------------
 
 /** Drives a car scene: Plan(Time, Car, Bus) sets inputs each block; the integrator feeds engine, rolling and squeal. */
-function DriveScene(Seconds, Pickup, Plan, { Surface = 'Asphalt', Roll = true, Squeal = true, EngineGain = 1, Profile = LaFerrari, Chassis = false, Induction = null, Sport } = {})
+function DriveScene(Seconds, Pickup, Plan, { Surface = 'Asphalt', Roll = true, Squeal = true, EngineGain = 1, Profile = LaFerrari, Chassis = false, Induction = null, Sport, LagScale = 1, Trace = null, TraceLabel = null } = {})
 {
     const Count = Math.ceil(Seconds * Rate), Left = new Float32Array(Count), Right = new Float32Array(Count);
     const EngineL = new Float32Array(Block), EngineR = new Float32Array(Block);
     if (Induction) Profile = InductedProfile(Profile, Induction);
+    else Induction = Profile.Stock ?? null;                                  // a stock blower (the Demon) keeps its voice
     const Car = Profile.Electric ? new ElectricIntegrator(Profile) : new TractionIntegrator(Profile);
+    Car.LagScale = LagScale;
     const Inducer = Induction ? new InductionVoice(Rate, Induction, { Pickup, Redline: Profile.Redline }) : null;
     // Electric cars: the cyan overlay is the motor's strongest electromagnetic order instead of the firing frequency.
-    const Lead = Profile.Electric ? Profile.Motors.at(-1) : null, Order = Lead ? Lead.PolePairs * 6 : 0;
+    const Lead = Profile.Electric ? Profile.Motors.at(-1) : null, Harmonic = Lead ? Lead.PolePairs * 6 : 0;
     // Superchargers: the overlay is the predicted blower whine (crank rpm × pulley ratio × pockets, or gear teeth).
     const Blower = Induction && Inducers[Induction].Family === 'Supercharger' ? Inducers[Induction] : null;
     const Whine = Blower ? Blower.Ratio * (Blower.GearTeeth ?? Blower.Pockets) / 60 : 0;
@@ -48,8 +50,8 @@ function DriveScene(Seconds, Pickup, Plan, { Surface = 'Asphalt', Roll = true, S
         Engine: Profile.Electric ? new DriveUnit(Rate, Profile, { Pickup, Sport }) : new PulseTrainEngine(Rate, Profile, { Pickup }),
         Roll: new SurfaceRoll(Rate, { Pickup }), Squeal: new TyreSqueal(Rate, { Pickup }),
         Brakes: Chassis ? new BrakeRotor(Rate, { Pickup }) : null, Springs: Chassis ? new SuspensionTravel(Rate, { Pickup }) : null,
-        Surface, Steer: 0, Kick: 0, Override: null, Telemetry: [], Firing: Lead ? Order / 60 : Blower ? Whine : Profile.Cylinders / 120,
-        Label: Lead ? `CYAN DOTS: PREDICTED ${Order}TH ORDER OF THE ${Lead.Axle.toUpperCase()} MOTOR` : Blower ? `CYAN DOTS: PREDICTED BLOWER WHINE (RPM X ${Whine.toFixed(3)})` : null,
+        Surface, Steer: 0, Kick: 0, Override: null, Telemetry: [], Firing: Lead ? Harmonic / 60 : Blower ? Whine : Profile.Cylinders / 120,
+        Label: TraceLabel ?? (Lead ? `CYAN DOTS: PREDICTED ${Harmonic}TH ORDER OF THE ${Lead.Axle.toUpperCase()} MOTOR` : Blower ? `CYAN DOTS: PREDICTED BLOWER WHINE (RPM X ${Whine.toFixed(3)})` : null),
     };
     for (let Index = 0; Index < Count; Index += Block)
     {
@@ -75,7 +77,7 @@ function DriveScene(Seconds, Pickup, Plan, { Surface = 'Asphalt', Roll = true, S
             Bus.Springs.Render(Left, Right, Index, Size);
             Bus.Kick = 0;
         }
-        if (Index % Math.round(Rate * 0.02) < Block) Bus.Telemetry.push({ Time, Rpm: (Bus.Override ?? Feed).Rpm, Kmh: Car.Speed * 3.6, Gear: Car.Gear, Firing: Bus.Firing, Label: Bus.Label });
+        if (Index % Math.round(Rate * 0.02) < Block) Bus.Telemetry.push({ Time, Rpm: (Bus.Override ?? Feed).Rpm, Kmh: Car.Speed * 3.6, Gear: Car.Gear, Firing: Bus.Firing, Label: Bus.Label, Hz: Trace ? Trace(Car) : undefined });
     }
     return { Left, Right, Telemetry: Bus.Telemetry };
 }
@@ -184,6 +186,49 @@ const Scenes = {
             if (Time >= 1.8 && Car.Gear === 0) Car.Gear = 1;
         }, { Profile: GtrNismo }),
         Rms: -16,
+    },
+    'Demon-ColdStart': {
+        Title: 'DODGE CHALLENGER SRT DEMON COLD START', Note: 'CHASE MIC. STARTER, CATCH AND FLARE, LUMPY CROSS-PLANE IDLE (EACH BANK FIRES UNEVENLY), THREE BLIPS WITH THE BLOWER SCREAM, OVERRUN POPS',
+        Marks: [[0.3, 'START'], [1.3, 'FLARE'], [5, 'BLIP'], [6.6, 'BLIP'], [7.8, 'BLIP']],
+        Build: () => DriveScene(10.5, 'Chase', (Time, Car) =>
+        {
+            if (Time >= 0.3) Car.Start();
+            Car.Throttle = (Time > 5 && Time < 5.3) || (Time > 6.6 && Time < 7.05) ? 1 : (Time > 7.8 && Time < 8.6 ? 0.85 : 0);
+        }, { Squeal: false, Profile: Demon }),
+        Rms: -19,
+    },
+    'Demon-Launch': {
+        Title: 'DODGE CHALLENGER SRT DEMON TRANSBRAKE LAUNCH', Note: 'CHASE MIC. STAGED ON THE TRANSBRAKE AT 2350 RPM, RELEASE, 1.8 G, 8-SPEED UPSHIFTS, QUARTER MILE IN ABOUT 9.8 S AT 142 MPH, LIFT',
+        Marks: [[0.8, 'STAGE'], [2.6, 'RELEASE'], [12.5, '1/4 MILE, LIFT']],
+        Build: () => DriveScene(15.5, 'Chase', (Time, Car) =>
+        {
+            if (Time < 0.01) { Car.Running = true; Car.Rpm = Demon.Idle; Car.Automatic = true; }
+            if (Time >= 0.8 && Time < 2.6) { Car.Gear = 1; Car.TransBrake = true; Car.Throttle = 1; }   // first + reverse locked: held at 2350
+            else if (Time >= 2.6) { Car.TransBrake = false; Car.Throttle = Time < 12.6 ? 1 : 0; }
+        }, { Profile: Demon }),
+        Rms: -16,
+    },
+    'Demon-RollOn': {
+        Title: 'DEMON ROLL-ON: SUPERCHARGER, NO LAG', Note: 'CHASE MIC. THIRD GEAR FROM 2600 RPM, FLOOR IT THREE TIMES: THE BELT-DRIVEN BLOWER MAKES FULL BOOST THE INSTANT THE THROTTLE OPENS (COMPARE TURBO LAG)',
+        Marks: [[1, 'FLOOR'], [6.5, 'FLOOR'], [12, 'FLOOR']],
+        Build: () => DriveScene(16.5, 'Chase', (Time, Car) =>
+        {
+            const Cycle = Time % 5.5;
+            if (Cycle < 0.02) { Car.Running = true; Car.Automatic = false; Car.Gear = 3; Car.Rpm = 2600; Car.Speed = 2600 / 60 / Demon.Ratios[2] / Demon.Final * 2 * Math.PI * Demon.TyreRadius; }
+            Car.Throttle = Cycle < 1 ? 0.12 : Cycle < 3.6 ? 1 : 0;
+        }, { Squeal: false, Profile: Demon }),
+        Rms: -17,
+    },
+    'TurboLag-Compare': {
+        Title: 'TURBO LAG: GT-R + TWIN TURBOS, SAME ROLL-ON THREE WAYS', Note: 'CHASE MIC. THIRD GEAR FROM 2600 RPM, FLOOR IT WITH LAG OFF, REAL LAG, THEN 2.5X LAG: THE WHISTLE AND THE SHOVE ARRIVE LATE, THEN BOOST HITS',
+        Marks: [[1, 'LAG OFF'], [6.5, 'REAL LAG'], [12, 'LAG X2.5']],
+        Build: () => DriveScene(16.5, 'Chase', (Time, Car) =>
+        {
+            const Cycle = Time % 5.5;
+            if (Cycle < 0.02) { Car.Running = true; Car.Automatic = false; Car.Gear = 3; Car.Rpm = 2600; Car.Speed = 2600 / 60 / GtrNismo.Ratios[2] / GtrNismo.Final * 2 * Math.PI * GtrNismo.TyreRadius; Car.Spool = 0.1; Car.Boost = 0; Car.LagScale = [0, 1, 2.5][Math.floor(Time / 5.5)]; }
+            Car.Throttle = Cycle < 1 ? 0.12 : Cycle < 3.6 ? 1 : 0;
+        }, { Squeal: false, Profile: GtrNismo, Induction: 'TwinTurbo', Trace: (Car) => 4200 + (9000 - 4200) * Car.Spool, TraceLabel: 'CYAN DOTS: TURBO WHISTLE PREDICTED FROM THE SIMULATED SHAFT SPEED' }),
+        Rms: -17,
     },
     'GtrNismo-Onboard': {
         Title: 'GT-R NISMO ONBOARD', Note: 'CABIN MIC. PULL 3-4-5 ON BOOST, ABS STOP WITH BLIPPED DOWNSHIFTS, CORNER, SPOOL BACK UP ON EXIT',
@@ -560,7 +605,7 @@ for (const [Name, Scene] of Object.entries(Scenes))
     Master(Left, Right, Scene.Rms);
     const Levels = WriteMp3(join(AudioOut, `${Name}.mp3`), Left, Right, Rate);
     if (AlsoWav) WriteWav(join(AudioOut, `${Name}.wav`), Left, Right, Rate);
-    const Overlay = Telemetry && !Telemetry[0]?.Doppler ? Telemetry.filter((Row, Index) => Row.Rpm > 300 && Index % 3 === 0).map((Row) => [Row.Time, Row.Rpm * Row.Firing]) : null;
+    const Overlay = Telemetry && !Telemetry[0]?.Doppler ? Telemetry.filter((Row, Index) => Row.Rpm > 300 && Index % 3 === 0).map((Row) => [Row.Time, Row.Hz ?? Row.Rpm * Row.Firing]) : null;
     const Divisor = Overlay ? Math.round(1 / Telemetry[0].Firing) : 0;
     const Legend = Telemetry?.[0]?.Label ?? `CYAN DOTS: PREDICTED FIRING FREQUENCY (RPM / ${Divisor})`;
     DrawSpectrogram(join(ImageOut, `Audio-${Name}.png`), Left, Right, Rate, { Title: Scene.Title, Subtitle: Scene.Note + (Overlay ? `   ${Legend}` : ''), Marks: Scene.Marks, Overlay });

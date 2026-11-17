@@ -3,7 +3,7 @@
 //    OfflineAudioContext (levels, NaN count, telemetry), then drives the real-time context (start, launch, shifts,
 //    surfaces, cues), then switches to the GT-R NISMO (offline render, launch, ABS stop, kerb, pothole, impact cues) and
 //    saves screenshots; then fires the weapons (energy LMG with and without the Turbocharger, SMG, LMG) and bullet cues; then renders and
-//    drives the electric cars (Taycan, Next-Gen racer), swaps turbos and superchargers live, and plays an aircraft clip. Run from a folder with playwright-core and @sparticuz/chromium installed:
+//    drives the electric cars (Taycan, Next-Gen racer), swaps turbos and superchargers live, plays an aircraft clip, stages and launches the Demon on its TransBrake and times turbo lag at three settings. Run from a folder with playwright-core and @sparticuz/chromium installed:
 //    AWS_EXECUTION_ENV=AWS_Lambda_nodejs20.x node AcousticsCheck.cjs <url> <outdir>
 const { chromium } = require('playwright-core');
 const sp = (({ default: Fresh, ...Older }) => Fresh ?? Older)(require('@sparticuz/chromium'));   // newer releases export default
@@ -115,6 +115,28 @@ const sp = (({ default: Fresh, ...Older }) => Fresh ?? Older)(require('@sparticu
     await Page.evaluate(() => Bench.Hold('Throttle', null));
     console.log('fly', await Page.evaluate(() => Bench.Fly('RacerFlyover')));
     console.log('power pads', await Page.evaluate(() => document.querySelectorAll('#PadsInduction .Pad').length), await Page.evaluate(() => document.querySelectorAll('#PadsElectric .Pad').length));
+    // Demon: stock blower voice through the real worklet, TransBrake staging and launch, then turbo lag timed live.
+    console.log('build tag', await Page.evaluate(() => document.querySelector('#Build')?.textContent));
+    console.log('offline demon', JSON.stringify(await Page.evaluate(() => Bench.RenderOffline(4, 'Demon', null, 0).then((R) => ({ Peak: R.Peak, Rms: R.Rms, NonFinite: R.NonFinite, Rpm: Math.round(R.Telemetry?.Rpm ?? 0) })))));
+    await Page.evaluate(() => { Bench.Induction(null); return Bench.Car('Demon'); });
+    await Page.evaluate(() => Bench.Command('Start'));
+    await Page.waitForTimeout(2200);
+    await Page.evaluate(() => { Bench.TransBrake(true); Bench.Command('ShiftUp'); Bench.Hold('Throttle', 1); });
+    await Page.waitForTimeout(1800);
+    console.log('demon staged', JSON.stringify(await Page.evaluate(() => { const R = Bench.Readout(); return { Car: R.Car, Stock: R.Stock, Kmh: Math.round(R.Kmh), Gear: R.Gear, Rpm: Math.round(R.Rpm), Boost: +R.Boost.toFixed(2), Spec: document.querySelector('#BrandSpec').textContent }; })));
+    await Page.evaluate(() => Bench.TransBrake(false));
+    await Page.waitForTimeout(2500);
+    console.log('demon launched', JSON.stringify(await Page.evaluate(() => { const R = Bench.Readout(); return { Kmh: Math.round(R.Kmh), Gear: R.Gear, Rpm: Math.round(R.Rpm), Boost: +R.Boost.toFixed(2), Spool: document.querySelector('#SpoolTime').textContent }; })));
+    for (const Lag of [0, 1, 2.5])
+    {
+        await Page.evaluate((L) => { Bench.Hold('Throttle', 0); Bench.Lag(L); return Bench.Induction('BigSingle'); }, Lag);
+        await Page.waitForTimeout(1800);
+        await Page.evaluate(() => Bench.Command('Neutral'));
+        await Page.evaluate(() => Bench.Hold('Throttle', 1));
+        await Page.waitForTimeout(3500);
+        console.log('lag', Lag, JSON.stringify(await Page.evaluate(() => ({ Rpm: Math.round(Bench.Readout().Rpm), Boost: +Bench.Readout().Boost.toFixed(2), Spool: document.querySelector('#SpoolTime').textContent, Shown: document.querySelector('#LagShown').textContent }))));
+    }
+    await Page.evaluate(() => { Bench.Hold('Throttle', null); Bench.Lag(1); });
     await Page.evaluate(() => Bench.Induction('TwinScrew'));
     await Page.evaluate(() => document.querySelector('#PadsInduction').scrollIntoView({ block: 'center' }));
     await Page.waitForTimeout(1500);

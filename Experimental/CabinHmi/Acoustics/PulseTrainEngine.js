@@ -57,7 +57,30 @@ export const GtrNismo = {
     Drive: { Share: 0.95, Launch: 3900 }, Pops: 0.4, Level: 0.5,
 };
 
-export const Profiles = { LaFerrari, GtrNismo };
+/**
+ * Dodge Challenger SRT Demon (2018): supercharged 6.2 L HEMI V8 with a 2.7 L twin-screw blower at 14.5 psi, 840 hp at
+ * 6300 rpm and 770 lb-ft (1044 Nm) at 4500 rpm on high-octane fuel, 6500 rpm limit, TorqueFlite 8HP90 eight-speed
+ * automatic with TransBrake (launch held at up to 2350 rpm), 0–60 mph 2.3 s, quarter mile 9.65 s at 140 mph (Dodge press
+ * kit). Cross-plane crank, firing order 1-8-4-3-6-5-7-2: each bank fires unevenly (90/180/270° gaps), which is the V8
+ * burble; long headers, little cross-feed. Stock names the blower voice (ForcedInduction), which the torque table includes.
+ * Gear ratios are the 8HP90's; final drive, drag area and pipe lengths are typical values.
+ */
+export const Demon = {
+    Name: 'Dodge Challenger SRT Demon', Code: '6.2 L supercharged HEMI V8',
+    Cylinders: 8, BankOffset: 0, BankAngles: [[0, 270, 450, 540], [90, 180, 360, 630]], Idle: 760, ColdIdle: 1150, Limiter: 6500, Redline: 6300,
+    Header: [0.82, 0.86], Tail: [2.7, 2.8], GasSpeed: 500, CrossFeed: 0.08,
+    Formants: [[85, 1.0, 4], [240, 1.2, 3.2], [600, 1.6, 2.5], [1300, 2.2, 2], [2700, 2.8, 1]],
+    ValveRpm: 2200, Intake: { Box: 80, Runner: 400, Howl: 900 },
+    Spread: 0.24, Lean: 3.8, Shape: 0.27, Jitter: [0.34, 0.12], Burble: 0.95,
+    Valvetrain: 0.04, Injector: 0.015, Space: 0.24,
+    Torque: [[760, 430], [1500, 640], [2500, 840], [3500, 975], [4500, 1044], [5500, 1010], [6300, 949], [6600, 820]],
+    Motor: null, Turbo: null, Stock: 'DemonScrew',
+    Gearbox: { Teeth: [37, 33, 30, 28, 26, 24, 23, 21], Whine: 0.004, Clunk: 0.5, Cut: 0.05, Swap: 0.11 },
+    Ratios: [4.71, 3.14, 2.10, 1.67, 1.29, 1.0, 0.84, 0.67], Final: 3.09, TyreRadius: 0.355, Mass: 1938 + 75, DragArea: 0.9,
+    Drive: { Share: 0.62, Launch: 2350, Grip: 2.9 }, Pops: 0.5, Level: 0.55,   // Grip: drag radials + weight transfer (1.8 g launch)
+};
+
+export const Profiles = { LaFerrari, GtrNismo, Demon };
 
 /** Engine torque (Nm) at full throttle (and full boost) for an engine speed, from the profile's table. */
 export function FullTorque(Profile, Rpm)
@@ -88,6 +111,9 @@ class Bank
         this.Slots = Profile.Cylinders / 2;
         this.SlotAngle = 720 / this.Slots;
         this.Offset = Side * Profile.BankOffset;
+        // Uneven firing (cross-plane V8): explicit slot angles per bank within the 720° cycle; else evenly spaced.
+        this.Angles = Profile.BankAngles ? Profile.BankAngles[Side] : Array.from({ length: this.Slots }, (_, Slot) => Slot * this.SlotAngle);
+        this.Gaps = this.Angles.map((Angle, Slot) => ((Angle - this.Angles[(Slot + this.Slots - 1) % this.Slots]) % 720 + 720) % 720 || 720);
         this.Slot = -1;
         this.Pulse = { Amp: 0, Shift: 0, Attack: 10, Decay: 30, Rough: 0 };
         this.Tail = { Amp: 0, Shift: 0, Attack: 10, Decay: 30, Rough: 0 };
@@ -126,7 +152,8 @@ function PulseAt(Pulse, Phase, Noise)
 /**
  * Live engine voice. Set the drive inputs with Feed(), then Render() adds stereo samples into the given buffers.
  * Feed: { Rpm, Throttle 0–1, Load 0–1 (delivered torque share), Ignition 0–1 (0 = cut), Motor −1–1 (electric torque,
- * negative = regeneration), Starter 0–1, Boost 0–1 (turbo; estimated here when absent), Gear (for whine), Clunk (a
+ * negative = regeneration), Starter 0–1, Boost 0–1 (turbo; estimated here when absent), Spool 0–1 (turbo shaft speed from
+ * the integrator, so the whistle carries the real lag), Gear (for whine), Clunk (a
  * counter that steps on every gear change) }. Pickup: 'Chase' (microphone behind the car), 'Cabin' (driver seat) or
  * 'Dry' (point source for the trackside fly-by, both channels equal, no reflections).
  */
@@ -150,7 +177,7 @@ export class PulseTrainEngine
         this.Overrun = 0;                                              // unburnt-fuel energy left after a lift, drives pops
         this.Banks = [0, 1].map((Side) => new Bank(Rate, Profile, Side, this.Noise));
         this.Blocks = [new DcBlock(Rate, 18), new DcBlock(Rate, 18)];
-        this.Gear = 0; this.Clunk = 0; this.ClunkHit = 0; this.ExternalBoost = null;
+        this.Gear = 0; this.Clunk = 0; this.ClunkHit = 0; this.ExternalBoost = null; this.ExternalSpool = null;
 
         // Muffler: two paths blended by the bypass valve, then the body formants.
         this.Quiet = [0, 1].map(() => [new Biquad(Rate).Shape('Low', 1100, 0.6), new Biquad(Rate).Shape('Peak', 95, 1.2, 5)]);
@@ -194,7 +221,7 @@ export class PulseTrainEngine
         this.Taps = [[0.0071, 0.0173, 0.0299], [0.0097, 0.0211, 0.0337]].map((Side) => Side.map((Seconds) => Seconds * Rate));
     }
 
-    Feed({ Rpm = 0, Throttle = 0, Load = Throttle, Ignition = 1, Motor = 0, Starter = 0, Boost, Gear, Clunk })
+    Feed({ Rpm = 0, Throttle = 0, Load = Throttle, Ignition = 1, Motor = 0, Starter = 0, Boost, Spool, Gear, Clunk })
     {
         this.Rpm.Target = Math.max(0, Rpm);
         this.Throttle.Target = Clamp(Throttle, 0, 1);
@@ -203,6 +230,7 @@ export class PulseTrainEngine
         this.Motor.Target = Clamp(Motor, -1, 1);
         this.Starter.Target = Clamp(Starter, 0, 1);
         this.ExternalBoost = Boost ?? null;
+        this.ExternalSpool = Spool ?? null;
         if (Gear !== undefined) this.Gear = Gear;
         if (Clunk !== undefined && Clunk !== this.Clunk) { this.ClunkHit = 1; this.Clunk = Clunk; }
     }
@@ -269,8 +297,8 @@ export class PulseTrainEngine
             {
                 this.Boost.Target = this.ExternalBoost ?? BoostTarget(P, Rpm, Throttle);
                 const Boost = this.ExternalBoost ?? this.Boost.Run();
-                this.Shaft.Target = Math.sqrt(Clamp(Boost, 0, 1)) * 0.85 + 0.15 * Smoothstep(800, 6000, Rpm);
-                Shaft = this.Shaft.Run();
+                if (this.ExternalSpool !== null) Shaft = this.Shaft.Current += (Clamp(this.ExternalSpool, 0, 1.1) - this.Shaft.Current) * 0.002;   // the integrator's shaft (real lag)
+                else { this.Shaft.Target = Math.sqrt(Clamp(Boost, 0, 1)) * 0.85 + 0.15 * Smoothstep(800, 6000, Rpm); Shaft = this.Shaft.Run(); }
                 Gate = Smoothstep(0.85, 1, Boost) * Smoothstep(4500, 6500, Rpm);
                 if (Held - Throttle > 0.35 && Boost > 0.3 && this.Vent < 0.15) { this.Vent = Boost; this.Surge = Boost; this.SurgePhase = 0; }
                 const Cutoff = Mix(Mix(5500, Turbo.Muffle, Shaft), 7500, Gate * 0.5);
@@ -283,9 +311,12 @@ export class PulseTrainEngine
             {
                 const Bank = this.Banks[Side];
                 const Local = ((this.Crank - Bank.Offset) % 720 + 720) % 720;
-                const Slot = Math.floor(Local / Bank.SlotAngle), Phase = Local - Slot * Bank.SlotAngle;
+                let Slot = Bank.Slots - 1;
+                while (Slot > 0 && Local < Bank.Angles[Slot]) Slot--;
+                if (Local < Bank.Angles[0]) Slot = Bank.Slots - 1;
+                const Phase = ((Local - Bank.Angles[Slot]) % 720 + 720) % 720;
                 if (Slot !== Bank.Slot) { if (Rpm > 30) this.Fire(Bank, Slot, Rpm, Throttle, Load, Shaft); Bank.Slot = Slot; }
-                let Excite = PulseAt(Bank.Pulse, Phase, Noise) + PulseAt(Bank.Tail, Phase + Bank.SlotAngle, Noise);
+                let Excite = PulseAt(Bank.Pulse, Phase, Noise) + PulseAt(Bank.Tail, Phase + Bank.Gaps[Slot], Noise);
                 if (Turbo) Excite = Bank.Turbine.Run(Excite) * 1.15;
                 let Crack = 0;
                 const Pop = Bank.Pop;

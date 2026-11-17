@@ -70,6 +70,13 @@ export const Inducers = {
         Gain: 1.8, Curve: 'Flat', Ratio: 2.9, Pockets: 4, Harmonics: [[1, 1], [2, 0.75], [3, 0.55], [4, 0.4], [5, 0.28], [1.5, 0.22]], Whine: 0.135,
         Pulsing: 0.25, Bypass: true, TimingGear: 23, Rattle: 0, Intake: 0.06,
     },
+    DemonScrew: {
+        // The SRT Demon's own blower: 2.7 L per rev IHI-type twin-screw on the 6.2 L HEMI, 14.5 psi (Dodge press kit).
+        // Drive ratio and lobe count are typical for this blower family, not Dodge data.
+        Label: '2.7 L twin-screw (SRT Demon)', Note: 'The Demon\'s stock blower, 14.5 psi: the Hellcat-family scream, bypass valve on the cruise', Family: 'Supercharger',
+        Gain: 1.73, Curve: 'Flat', Ratio: 2.36, Pockets: 4, Harmonics: [[1, 1], [2, 0.7], [3, 0.5], [4, 0.32], [5, 0.2], [1.5, 0.18]], Whine: 0.15,
+        Pulsing: 0.22, Bypass: true, TimingGear: 25, Rattle: 0, Intake: 0.08,
+    },
     Centrifugal: {
         Label: 'Centrifugal supercharger', Note: 'Belt-driven impeller: whine and boost climb with rpm squared, gear-drive zing, blow-off on lift', Family: 'Supercharger',
         Gain: 1.75, Curve: 'Square', Ratio: 3.1, StepUp: 3.6, Blades: 6, GearTeeth: 16, Whine: 0.12, Valve: 'Atmos', Vent: 0.8, Intake: 0.07,
@@ -81,13 +88,13 @@ export function InductedProfile(Base, Name)
 {
     const Model = Inducers[Name];
     if (!Model) return Base;
-    const Natural = Base.Turbo ? Base.Turbo.Unboosted : 1;                    // share of the base table made without boost
+    const Natural = Base.Turbo ? Base.Turbo.Unboosted : Base.Stock ? 1 / Inducers[Base.Stock].Gain : 1;   // share of the base table made without boost
     const Unboosted = Base.Torque.map(([Rpm, Torque]) => [Rpm, Torque * Natural]);
     const Profile = { ...Base, Name: `${Base.Name} + ${Model.Label}`, Induction: Name };
     if (Model.Family === 'Turbo')
     {
         Profile.Torque = Unboosted.map(([Rpm, Torque]) => [Rpm, Torque * Model.Gain]);
-        Profile.Turbo = { Onset: Model.Onset, Full: Model.Full, Lag: Model.Lag, Unboosted: 1 / Model.Gain, Whistle: Model.Whistle, Tone: 0, Spool: 0, Vent: 0, Flutter: 0, Muffle: Model.Muffle };
+        Profile.Turbo = { Onset: Model.Onset, Full: Model.Full, Lag: Model.Lag, Unboosted: 1 / Model.Gain, Whistle: Model.Whistle, Tone: 0, Spool: 0, Vent: 0, Flutter: 0, Muffle: Model.Muffle, Assist: !!Model.Assist };
     }
     else
     {
@@ -109,7 +116,7 @@ class Tone
 }
 
 /**
- * The inducer's own sound. Feed({ Rpm, Throttle, Boost }) each block (Boost from TractionIntegrator for turbos; the
+ * The inducer's own sound. Feed({ Rpm, Throttle, Boost, Spool }) each block (Boost and shaft Spool from TractionIntegrator for turbos; the
  * superchargers work out theirs from rpm), then Render() adds stereo samples. Lifting off sharply (throttle falling
  * well below its slow average) with boost up fires the blow-off valve or the surge chatter.
  */
@@ -120,7 +127,7 @@ export class InductionVoice
         this.Rate = Rate; this.Name = Name; this.Model = Inducers[Name]; this.Pickup = Pickup; this.Redline = Redline;
         this.Noise = new SeededNoise(Seed);
         this.Rpm = new Slew(Rate, 0.012, 0); this.Throttle = new Slew(Rate, 0.03, 0); this.Held = new Slew(Rate, 0.18, 0);
-        this.Boost = new Slew(Rate, 0.05, 0); this.FedBoost = 0;
+        this.Boost = new Slew(Rate, 0.05, 0); this.FedBoost = 0; this.FedSpool = null;
         this.Shaft = new Slew(Rate, this.Model.Lag ? Mix(0.18, 0.6, Clamp(this.Model.Lag, 0, 1)) : 0.2, 0);
         this.Tones = Array.from({ length: 8 }, (_, Index) => new Tone(Index * 0.173));
         this.Bands = Array.from({ length: 6 }, () => new Biquad(Rate));
@@ -134,11 +141,12 @@ export class InductionVoice
         this.Count = 0;
     }
 
-    Feed({ Rpm = 0, Throttle = 0, Boost })
+    Feed({ Rpm = 0, Throttle = 0, Boost, Spool })
     {
         this.Rpm.Target = Math.max(0, Rpm);
         this.Throttle.Target = Clamp(Throttle, 0, 1);
         if (Boost !== undefined) this.FedBoost = Clamp(Boost, 0, 1.2);
+        if (Spool !== undefined) this.FedSpool = Clamp(Spool, 0, 1.1);
     }
 
     Render(Left, Right, Offset = 0, Count = Left.length - Offset)
@@ -156,7 +164,7 @@ export class InductionVoice
                 let Spin = Math.sqrt(Boost) * 0.85 + 0.15 * Smoothstep(800, 6000, Rpm);
                 if (M.Assist && Throttle > 0.1) Spin = Math.max(Spin, 0.35 + 0.35 * Throttle);   // the e-motor pre-spins the shaft
                 this.Shaft.Target = Spin;
-                const Shaft = this.Shaft.Run();
+                const Shaft = this.FedSpool !== null ? (this.Shaft.Current += (Math.max(this.FedSpool, M.Assist ? Spin : 0) - this.Shaft.Current) * 0.002) : this.Shaft.Run();
 
                 // Whistle (one or two compressors), and for the VGT the vanes sweep it with boost.
                 const Pitch = Mix(M.Whistle[0], M.Whistle[1], M.Vanes ? Math.pow(Shaft, 0.7) * Mix(0.8, 1.1, Boost) : Shaft);
