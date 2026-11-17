@@ -24,7 +24,7 @@ Each step file clicks through every menu and its main interactions; every run re
 
 ## Vehicle sound reel (`Audio/`)
 All synthesized in code — no recordings or samples anywhere. 192 kbps stereo MP3 at 44.1 kHz (lamejs), rendered by
-`Experimental/CabinHmi/Acoustics/Offline/RenderReel.mjs` (deterministic seeds; `--wav` also writes WAV). 63 files, 16 MB in total (the
+`Experimental/CabinHmi/Acoustics/Offline/RenderReel.mjs` (deterministic seeds; `--wav` also writes WAV). 67 files, 17 MB in total (the
 Follow-up 10 WAVs, 22 MB, were replaced). Peak is measured before encoding.
 
 | File | Length | Peak dBFS | RMS dBFS | Content |
@@ -71,6 +71,10 @@ Follow-up 10 WAVs, 22 MB, were replaced). Peak is measured before encoding.
 | `Demon-Launch.mp3` | 15.5 s | −2.4 | −16.0 | Staged on the TransBrake at 2350 rpm, released: 1.8 g, 8-speed upshifts, quarter mile in about 9.8 s at 142 mph, lift. Cyan dots: predicted blower whine (rpm × 0.157) |
 | `Demon-RollOn.mp3` | 16.5 s | −2.0 | −17.0 | Third gear from 2600 rpm, floored three times: the belt-driven blower makes boost the instant the throttle opens (no lag) |
 | `TurboLag-Compare.mp3` | 16.5 s | −1.7 | −17.0 | GT-R with parallel twin turbos, the same 3rd-gear roll-on from 2600 rpm with lag off, real lag and 2.5× lag; cyan dots: whistle pitch predicted from the simulated shaft speed |
+| `Spyder918-Launch.mp3` | 16.0 s | −2.3 | −16.0 | Porsche 918 Spyder (Follow-up 16, the hybrid from Porsche's 2020 Super Bowl advert "The Heist"): launch control, both e-motors whining under the flat-plane V8, scream to 9150 rpm through the top pipes, PDK upshifts, front motor decoupling at 235 km/h, lift |
+| `Spyder918-FlyBy.mp3` | 8.0 s | −1.0 | −18.4 | 918 Spyder at 250 km/h in 5th past a trackside mic 12 m away: Doppler drop, exhaust pointing away after the pass |
+| `AgeraR-Launch.mp3` | 16.0 s | −2.0 | −16.0 | Koenigsegg Agera R (the Need for Speed film car): boost build at about 3800 rpm, launch, twin-turbo flat-plane V8 through 7 gears, dump-valve chirps, big blow-off on the lift |
+| `AgeraR-FlyBy.mp3` | 8.0 s | −1.0 | −18.5 | Agera R at 300 km/h in 5th on full boost: turbo whistle over the V8, Doppler drop |
 | `Induction-SmallSingle.mp3` | 11.0 s | −3.2 | −17.0 | Every `Induction-*` scene: GT-R NISMO with the inducer swapped in, chase mic: two blips, pull from rest, lift, back on, lift. Small single turbo: quick spool, bright whistle, soft blow-off |
 | `Induction-BigSingle.mp3` | 11.0 s | −2.4 | −17.0 | Big single turbo: late, violent boost, deep whoosh, loud blow-off |
 | `Induction-TwinTurbo.mp3` | 11.0 s | −2.9 | −17.0 | Parallel twins: two detuned whistles beating, blow-off with a little flutter |
@@ -146,6 +150,20 @@ electric-assist turbo 0.15–0.19 s; re-applying after a 0.4 s lift 0.22–0.37 
 Headless check: Demon staged at 2350 rpm, 0 km/h, boost 1; 106 km/h 2.5 s after release; stock blower voice confirmed (`Stock:
 DemonScrew`); the bench's lag stopwatch reads 0.10 s (lag off), 1.69 s (real lag) and 2.78 s (2.5×) for the same tip-in; build tag
 "build 15" shown; console errors 0. The nine turbo clips (GT-R and `Induction-*` turbos) were re-rendered with the new lag.
+
+**Porsche 918 Spyder and Koenigsegg Agera R (Follow-up 16).** The Spyder in Porsche's 2020 Super Bowl advert "The Heist" is the
+918 Spyder (Porsche Newsroom); the Need for Speed (2014) car is the Agera R (the Agera RS came later; the film's crash cars were
+replicas). Both are flat-plane V8s: each bank fires evenly every 180°, so the chase mic's side signal at 3000 rpm is led by the 2nd
+order with the half orders 18–31 dB down, against the cross-plane Demon whose side signal is led by 1.5× (0.5× 7 dB down)
+(`_ClaudeScratch/tmp/audio/cars.mjs`). `Spyder918`: 4.6 L, 608 hp at 8600, 530 Nm at 6600, 9150 limiter, short top-exit pipes,
+the press-kit PDK ratios and 3.09 final drive, rear hybrid motor on the crank and a new front-axle motor (`Motor.Front`: its own
+gear, 95 kW limit, decoupled at 235 km/h, a whine locked to wheel speed). Model: 0–100 2.46 s, 0–200 6.43 s, quarter mile 9.65 s at
+152 mph, top 351 km/h (Porsche: 2.6 s, 7.2 s, about 9.8 s, 345 km/h). `AgeraR`: 5.0 L twin turbo, 1200 Nm at 4100, 1140 hp at 7100,
+7500 limiter, 7-speed DCT, 3.364 final drive, loud dump valve. Model: 0–100 3.04 s, quarter mile 9.56 s at 169 mph, top 435 km/h
+(published 2.8–2.9 s, 9.5 s at 164 mph, about 440 km/h); its 0–300 km/h, 11.4 s, is quicker than the measured 14.53 s because the
+tyre model has no traction losses in the middle gears. Headless check: 918 live in 2nd at 126 km/h with the motors driving (0.99),
+Agera R 96 km/h in 2nd on full boost, both offline renders finite; earlier checks unchanged; console errors 0. `AcousticsCheck.cjs`
+now loads either export style of `@sparticuz/chromium`.
 
 ## Reproduce
 ```

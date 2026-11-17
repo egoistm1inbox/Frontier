@@ -80,7 +80,52 @@ export const Demon = {
     Drive: { Share: 0.62, Launch: 2350, Grip: 2.9 }, Pops: 0.5, Level: 0.55,   // Grip: drag radials + weight transfer (1.8 g launch)
 };
 
-export const Profiles = { LaFerrari, GtrNismo, Demon };
+/**
+ * Porsche 918 Spyder (2013–2015), the hybrid in Porsche's 2020 Super Bowl advert "The Heist": 4.6 L naturally aspirated
+ * V8 derived from the RS Spyder race engine, flat-plane crank (each bank fires evenly every 180°, the scream of two
+ * racing four-cylinders), 608 hp at 8600 rpm, 530 Nm at 6600 rpm, 9150 rpm limit, top-exit exhaust straight out of the
+ * engine deck (short pipes, bright and loud), 115 kW hybrid module between engine and the 7-speed PDK, 95 kW front-axle
+ * motor through its own gear, decoupled above 235 km/h; 887 hp combined (Porsche press kit; PDK ratios and 3.09 final
+ * drive from it). Front gear ratio, motor orders, pipe lengths and drag area are typical values.
+ */
+export const Spyder918 = {
+    Name: 'Porsche 918 Spyder', Code: '4.6 L flat-plane V8 + 2 motors',
+    Cylinders: 8, BankOffset: 90, Idle: 950, ColdIdle: 1350, Limiter: 9150, Redline: 9000,
+    Header: [0.46, 0.48], Tail: [0.95, 1.0], GasSpeed: 580, CrossFeed: 0.25,
+    Formants: [[150, 1.1, 2.5], [480, 1.5, 2], [1150, 2.0, 3.5], [2400, 2.6, 4], [4600, 3, 2]],
+    ValveRpm: 3600, Intake: { Box: 125, Runner: 820, Howl: 1800 },
+    Spread: 0.15, Lean: 2.4, Shape: 0.2, Jitter: [0.24, 0.07], Burble: 0.65,
+    Valvetrain: 0.06, Injector: 0.03, Space: 0.24,
+    Torque: [[900, 300], [2000, 380], [3000, 430], [4000, 470], [5000, 500], [6600, 530], [7500, 522], [8600, 496], [9300, 420]],
+    Motor: { Order: 8, Carrier: 10000, Torque: 230, Front: { Torque: 210, Ratio: 8.7, Power: 95000, Cutoff: 65.3, Order: 6 } }, Turbo: null,
+    Gearbox: { Teeth: [33, 29, 27, 25, 23, 22, 21], Whine: 0.005, Clunk: 0.3, Cut: 0.04, Swap: 0.065 },
+    Ratios: [3.91, 2.29, 1.58, 1.19, 0.97, 0.83, 0.67], Final: 3.09, TyreRadius: 0.355, Mass: 1674 + 75, DragArea: 0.92,
+    Drive: { Share: 0.95, Launch: 4200, Grip: 1.4 }, Pops: 0.7, Level: 0.6,
+};
+
+/**
+ * Koenigsegg Agera R (2011–2014), the car of the 2014 Need for Speed film (the hero's silver car and the De Leon racers;
+ * the crash cars were replicas): 5.0 L twin-turbo flat-plane V8, 1140 hp at 7100 rpm on E85, 1200 Nm at 4100 rpm,
+ * 7-speed paddle-shift dual-clutch, rear drive, 1435 kg, final drive 3.364 (spec sheets). Big dump valves chirp on every
+ * lift. Gear ratios are chosen to reach its ~440 km/h (Koenigsegg does not publish them); pipe lengths typical.
+ */
+export const AgeraR = {
+    Name: 'Koenigsegg Agera R', Code: '5.0 L twin-turbo flat-plane V8',
+    Cylinders: 8, BankOffset: 90, Idle: 900, ColdIdle: 1300, Limiter: 7500, Redline: 7250,
+    Header: [0.5, 0.53], Tail: [1.5, 1.56], GasSpeed: 540, CrossFeed: 0.4,
+    Formants: [[120, 1.0, 3.5], [380, 1.4, 3], [900, 1.9, 3], [1900, 2.5, 3], [3800, 3, 1.5]],
+    ValveRpm: 3000, Intake: { Box: 100, Runner: 600, Howl: 1400 },
+    Spread: 0.18, Lean: 3, Shape: 0.24, Jitter: [0.28, 0.1], Burble: 0.7,
+    Valvetrain: 0.05, Injector: 0.02, Space: 0.24,
+    Torque: [[850, 380], [1500, 560], [2500, 1000], [3400, 1150], [4100, 1200], [5800, 1200], [7100, 1143], [7600, 980]],
+    Motor: null,
+    Turbo: { Onset: 2000, Full: 3500, Lag: 0.55, Unboosted: 0.42, Whistle: [3800, 9200], Tone: 0.024, Spool: 0.08, Vent: 1.0, Flutter: 0.2, Muffle: 2600 },
+    Gearbox: { Teeth: [31, 28, 26, 24, 23, 22, 21], Whine: 0.008, Clunk: 0.6, Cut: 0.05, Swap: 0.09 },
+    Ratios: [2.92, 1.98, 1.50, 1.18, 0.95, 0.79, 0.65], Final: 3.364, TyreRadius: 0.35, Mass: 1435 + 75, DragArea: 0.72,
+    Drive: { Share: 0.6, Launch: 3800, Grip: 1.6 }, Pops: 0.6, Level: 0.5,
+};
+
+export const Profiles = { LaFerrari, GtrNismo, Demon, Spyder918, AgeraR };
 
 /** Engine torque (Nm) at full throttle (and full boost) for an engine speed, from the profile's table. */
 export function FullTorque(Profile, Rpm)
@@ -221,7 +266,7 @@ export class PulseTrainEngine
         this.Taps = [[0.0071, 0.0173, 0.0299], [0.0097, 0.0211, 0.0337]].map((Side) => Side.map((Seconds) => Seconds * Rate));
     }
 
-    Feed({ Rpm = 0, Throttle = 0, Load = Throttle, Ignition = 1, Motor = 0, Starter = 0, Boost, Spool, Gear, Clunk })
+    Feed({ Rpm = 0, Throttle = 0, Load = Throttle, Ignition = 1, Motor = 0, Starter = 0, Boost, Spool, Gear, Clunk, FrontRpm = 0 })
     {
         this.Rpm.Target = Math.max(0, Rpm);
         this.Throttle.Target = Clamp(Throttle, 0, 1);
@@ -231,6 +276,7 @@ export class PulseTrainEngine
         this.Starter.Target = Clamp(Starter, 0, 1);
         this.ExternalBoost = Boost ?? null;
         this.ExternalSpool = Spool ?? null;
+        this.FrontRpm = FrontRpm;
         if (Gear !== undefined) this.Gear = Gear;
         if (Clunk !== undefined && Clunk !== this.Clunk) { this.ClunkHit = 1; this.Clunk = Clunk; }
     }
@@ -391,6 +437,12 @@ export class PulseTrainEngine
                 this.CarrierPhase = (this.CarrierPhase + P.Motor.Carrier / Rate) % 1;
                 Electric = Drive * (Math.sin(Tau * this.MotorPhase) * 0.05 + Math.sin(Tau * this.MotorPhase * 3) * 0.02
                     + Math.sin(Tau * this.CarrierPhase) * Math.sin(Tau * this.MotorPhase) * 0.012) * (Motor < 0 ? 0.7 : 1);
+                // Front-axle motor (918): its own whine locked to wheel speed through its gear, silent once decoupled.
+                if (P.Motor.Front && this.FrontRpm > 1)
+                {
+                    this.FrontPhase = ((this.FrontPhase ?? 0) + this.FrontRpm / 60 * P.Motor.Front.Order / Rate) % 1;
+                    Electric += Drive * Math.sin(Tau * this.FrontPhase) * 0.035 * Math.min(1, (Rate * 0.4) / Math.max(1, this.FrontRpm / 60 * P.Motor.Front.Order));
+                }
             }
 
             // Turbo sounds: twin whistles (slightly detuned, beating), spool whoosh, blow-off vent, surge flutter, wastegate.

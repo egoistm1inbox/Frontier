@@ -10,7 +10,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { PulseTrainEngine, LaFerrari, GtrNismo, Demon } from '../PulseTrainEngine.js';
+import { PulseTrainEngine, LaFerrari, GtrNismo, Demon, Spyder918, AgeraR } from '../PulseTrainEngine.js';
 import { TractionIntegrator } from '../TractionIntegrator.js';
 import { SurfaceRoll, TyreSqueal, Surfaces } from '../ContactPatch.js';
 import { RenderCue as RenderCabinCue, Cues as CabinCues } from '../CabinFoley.js';
@@ -229,6 +229,42 @@ const Scenes = {
             Car.Throttle = Cycle < 1 ? 0.12 : Cycle < 3.6 ? 1 : 0;
         }, { Squeal: false, Profile: GtrNismo, Induction: 'TwinTurbo', Trace: (Car) => 4200 + (9000 - 4200) * Car.Spool, TraceLabel: 'CYAN DOTS: TURBO WHISTLE PREDICTED FROM THE SIMULATED SHAFT SPEED' }),
         Rms: -17,
+    },
+    'Spyder918-Launch': {
+        Title: 'PORSCHE 918 SPYDER LAUNCH', Note: 'CHASE MIC. LAUNCH CONTROL, BOTH E-MOTORS WHINING UNDER THE V8, FLAT-PLANE SCREAM TO 9150 RPM THROUGH THE TOP PIPES, PDK UPSHIFTS, FRONT MOTOR DECOUPLES AT 235 KM/H, LIFT',
+        Marks: [[0.8, 'LAUNCH CONTROL'], [2, 'GO'], [13, 'LIFT']],
+        Build: () => DriveScene(16, 'Chase', (Time, Car) =>
+        {
+            if (Time < 0.01) { Car.Running = true; Car.Rpm = Spyder918.Idle; Car.Automatic = true; }
+            if (Time > 0.8 && Time < 2) { Car.Gear = 0; Car.Throttle = 0.3; }      // launch control holds the revs
+            else Car.Throttle = Time >= 2 && Time < 13 ? 1 : 0;
+            if (Time >= 2 && Car.Gear === 0) Car.Gear = 1;
+        }, { Profile: Spyder918 }),
+        Rms: -16,
+    },
+    'Spyder918-FlyBy': {
+        Title: 'PORSCHE 918 SPYDER FLY-BY', Note: 'TRACKSIDE MIC, 12 M FROM THE LINE: 250 KM/H IN 5TH, V8 AT FULL THROTTLE WITH THE HYBRID MOTOR, DOPPLER DROP, TOP PIPES POINTING AWAY',
+        Marks: [[4, 'PASS']],
+        Build: () => FlyBy(8, 4, Spyder918, 250, 5, { Motor: 0.6 }),
+        Rms: -18,
+    },
+    'AgeraR-Launch': {
+        Title: 'KOENIGSEGG AGERA R LAUNCH', Note: 'CHASE MIC. BOOST BUILD AT ABOUT 3800 RPM, LAUNCH, TWIN-TURBO FLAT-PLANE V8 THROUGH 7 GEARS, DUMP-VALVE CHIRPS, LIFT WITH THE BIG BLOW-OFF',
+        Marks: [[0.8, 'BUILD'], [2, 'LAUNCH'], [13, 'LIFT']],
+        Build: () => DriveScene(16, 'Chase', (Time, Car) =>
+        {
+            if (Time < 0.01) { Car.Running = true; Car.Rpm = AgeraR.Idle; Car.Automatic = true; }
+            if (Time > 0.8 && Time < 2) { Car.Gear = 0; Car.Throttle = 0.3; }
+            else Car.Throttle = Time >= 2 && Time < 13 ? 1 : 0;
+            if (Time >= 2 && Car.Gear === 0) Car.Gear = 1;
+        }, { Profile: AgeraR }),
+        Rms: -16,
+    },
+    'AgeraR-FlyBy': {
+        Title: 'KOENIGSEGG AGERA R FLY-BY', Note: 'TRACKSIDE MIC, 12 M FROM THE LINE: 300 KM/H IN 5TH ON FULL BOOST, TURBO WHISTLE OVER THE V8, DOPPLER DROP',
+        Marks: [[4, 'PASS']],
+        Build: () => FlyBy(8, 4, AgeraR, 300, 5, { Boost: 1 }),
+        Rms: -18,
     },
     'GtrNismo-Onboard': {
         Title: 'GT-R NISMO ONBOARD', Note: 'CABIN MIC. PULL 3-4-5 ON BOOST, ABS STOP WITH BLIPPED DOWNSHIFTS, CORNER, SPOOL BACK UP ON EXIT',

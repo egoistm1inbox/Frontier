@@ -1257,4 +1257,6 @@ in `Exhibits/LightCompute/Results/FogFacetRegression.txt`; this was a fixture-se
   types on concrete/wood/steel/dirt, bounce physics, rolling, brass rain).
   Follow-up 15: Dodge Challenger SRT Demon (`Demon`: supercharged cross-plane V8 with uneven per-bank firing, stock 2.7 L blower,
   8-speed, TransBrake) and a turbo-lag shaft model (rpm/load-dependent spool, whistle follows the shaft, lag slider + stopwatch).
-  Live AudioWorklet bench with car switch + offline MP3 reel (63 files, 16 MB) with spectrogram plates (`Exhibits/CabinHmi/Audio/`). Names unapproved.
+  Follow-up 16: Porsche 918 Spyder (`Spyder918`, flat-plane V8 + rear and front e-motors, `Motor.Front`) and Koenigsegg Agera R
+  (`AgeraR`, twin-turbo flat-plane V8), launches and fly-bys.
+  Live AudioWorklet bench with car switch + offline MP3 reel (67 files, 17 MB) with spectrogram plates (`Exhibits/CabinHmi/Audio/`). Names unapproved.

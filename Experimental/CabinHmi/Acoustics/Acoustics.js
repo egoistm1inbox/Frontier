@@ -19,11 +19,13 @@ import { Cues as AviationCues } from './ElectricAviation.js';
 const Cues = { ...CabinCues, ...ImpactCues, ...BallisticCues };
 const RenderCue = (Name, Rate, Options) => (CabinCues[Name] ? RenderCabinCue : ImpactCues[Name] ? RenderImpactCue : RenderBallisticCue)(Name, Rate, Options);
 const Profiles = { ...EngineProfiles, ...ElectricCars };
-const CarOrder = ['LaFerrari', 'GtrNismo', 'Demon', 'TaycanTurboS', 'NextGenRacer'];
+const CarOrder = ['LaFerrari', 'GtrNismo', 'Demon', 'Spyder918', 'AgeraR', 'TaycanTurboS', 'NextGenRacer'];
 const Brands = {
     LaFerrari: { Label: 'LaFerrari', Spec: 'F140FE 6.3 L V12 · HY-KERS · 7-speed DCT · 100% synthesized', Dial: 10000, Assist: 'HY-KERS', Chip: 'KERS' },
     GtrNismo: { Label: 'GT-R NISMO', Spec: 'VR38DETT 3.8 L twin-turbo V6 · 600 PS · 6-speed DCT · AWD · 100% synthesized', Dial: 8000, Assist: 'BOOST', Chip: 'BOOST' },
     Demon: { Label: 'Challenger SRT Demon', Spec: '6.2 L supercharged HEMI V8 · 2.7 L blower, 14.5 psi · 840 hp · 8-speed auto · TransBrake (hold B) · 100% synthesized', Dial: 8000, Assist: 'BOOST', Chip: 'BOOST' },
+    Spyder918: { Label: '918 Spyder', Spec: '4.6 L flat-plane V8, 9150 rpm · 2 e-motors · 887 hp · 7-speed PDK · top pipes · 100% synthesized', Dial: 10000, Assist: 'E-MOTORS', Chip: 'E-BOOST' },
+    AgeraR: { Label: 'Agera R', Spec: '5.0 L twin-turbo flat-plane V8 · 1140 hp (E85) · 7-speed DCT · RWD · 100% synthesized', Dial: 8000, Assist: 'BOOST', Chip: 'BOOST' },
     TaycanTurboS: { Label: 'Taycan Turbo S', Spec: 'Two PSM motors · 800 V · 2-speed rear (15.5 / 8.05) · AWD · 100% synthesized', Dial: 16000, Assist: 'DRIVE / REGEN', Chip: 'REGEN', Electric: true },
     NextGenRacer: { Label: 'Next-Gen racer', Spec: 'Jackson Storm-style original · 634 kW motor · 6-speed sequential · V8 undertone · 100% synthesized', Dial: 18000, Assist: 'DRIVE / REGEN', Chip: 'REGEN', Electric: true },
 };
@@ -35,7 +37,7 @@ const Reel = [
     ['LaFerrari-ColdStart', 'LaFerrari cold start'], ['LaFerrari-Launch', 'LaFerrari launch'], ['LaFerrari-Onboard', 'LaFerrari onboard'],
     ['LaFerrari-Limiter', 'LaFerrari limiter'], ['LaFerrari-FlyBy', 'LaFerrari fly-by'], ['Tyres-Screech', 'Tyre screech'],
     ['GtrNismo-ColdStart', 'GT-R cold start'], ['GtrNismo-Launch', 'GT-R launch'], ['GtrNismo-Onboard', 'GT-R onboard'],
-    ['GtrNismo-FlyBy', 'GT-R fly-by'], ['Demon-ColdStart', 'Demon cold start'], ['Demon-Launch', 'Demon TransBrake launch'], ['Demon-RollOn', 'Demon roll-on (no lag)'], ['TurboLag-Compare', 'Turbo lag compared'], ['Surfaces-Tour', 'Surfaces tour'], ['Chassis-Brakes', 'Disc brakes'],
+    ['GtrNismo-FlyBy', 'GT-R fly-by'], ['Demon-ColdStart', 'Demon cold start'], ['Demon-Launch', 'Demon TransBrake launch'], ['Demon-RollOn', 'Demon roll-on (no lag)'], ['TurboLag-Compare', 'Turbo lag compared'], ['Spyder918-Launch', '918 Spyder launch'], ['Spyder918-FlyBy', '918 Spyder fly-by'], ['AgeraR-Launch', 'Agera R launch'], ['AgeraR-FlyBy', 'Agera R fly-by'], ['Surfaces-Tour', 'Surfaces tour'], ['Chassis-Brakes', 'Disc brakes'],
     ['Chassis-Suspension', 'Suspension'], ['Lights-Cues', 'Lights'], ['Cabin-Cues', 'Cabin'],
     ['Impact-Explosion', 'Explosion 60 m'], ['Impact-ExplosionFar', 'Explosion 450 m'], ['Impact-Shockwave', 'Shockwave'],
     ['Impact-EmpPulse', 'EMP pulse'], ['Impact-SonicBlast', 'Sonic blast'], ['Impact-WindowShatter', 'Window shatter'],
@@ -75,7 +77,7 @@ async function Wake()
     Audio.Waking = (async () =>
     {
         const Context = new AudioContext({ latencyHint: 'interactive' });
-        await Context.audioWorklet.addModule(new URL('./VoiceRackWorklet.js?v=15', import.meta.url));
+        await Context.audioWorklet.addModule(new URL('./VoiceRackWorklet.js?v=16', import.meta.url));
         const Limiter = Context.createDynamicsCompressor();
         Limiter.threshold.value = -6; Limiter.knee.value = 4; Limiter.ratio.value = 12; Limiter.attack.value = 0.002; Limiter.release.value = 0.12;
         const Master = Context.createGain(); Master.gain.value = 0.8;
@@ -227,7 +229,7 @@ async function Fire(Name, Seconds = 1)
 async function RenderOffline(Seconds = 5, Car = CarName, Inducer = null, Gear = 0)
 {
     const Rate = 48000, Context = new OfflineAudioContext(2, Math.round(Seconds * Rate), Rate);
-    await Context.audioWorklet.addModule(new URL('./VoiceRackWorklet.js?v=15', import.meta.url));
+    await Context.audioWorklet.addModule(new URL('./VoiceRackWorklet.js?v=16', import.meta.url));
     const Rack = new AudioWorkletNode(Context, 'voice-rack', { numberOfInputs: 0, outputChannelCount: [2], processorOptions: { Start: true, Throttle: 1, Car, Induction: Inducer, Gear } });
     let Last = null; Rack.port.onmessage = (Message) => { Last = Message.data; };
     Rack.connect(Context.destination);
@@ -558,7 +560,7 @@ function DrawTach(Seconds)
     Find('ChipLimiter').classList.toggle('On', !!Readout.Limiting);
     Find('ChipShift').classList.toggle('On', !!Readout.Shifting);
     Find('ChipSpin').classList.toggle('On', (Readout.Wheelspin ?? 0) > 0.05 || (Readout.Corner ?? 0) > 0.1 || (Readout.LockUp ?? 0) > 0.1);
-    const Boosted = !Brands[CarName].Electric && (CarName !== 'LaFerrari' || !!Induction);
+    const Boosted = !Brands[CarName].Electric && (!!Profiles[CarName].Turbo || !!Profiles[CarName].Stock || !!Induction);
     MeasureSpool(Readout.Throttle ?? 0, Readout.Boost ?? 0, Boosted);
     const Assist = Boosted ? (Readout.Boost ?? 0) : (Readout.Motor ?? 0);
     Find('ChipKers').classList.toggle('On', Brands[CarName].Electric ? Assist < -0.05 : Math.abs(Assist) > (Boosted ? 0.6 : 0.05));

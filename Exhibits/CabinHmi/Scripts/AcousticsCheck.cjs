@@ -3,10 +3,10 @@
 //    OfflineAudioContext (levels, NaN count, telemetry), then drives the real-time context (start, launch, shifts,
 //    surfaces, cues), then switches to the GT-R NISMO (offline render, launch, ABS stop, kerb, pothole, impact cues) and
 //    saves screenshots; then fires the weapons (energy LMG with and without the Turbocharger, SMG, LMG) and bullet cues; then renders and
-//    drives the electric cars (Taycan, Next-Gen racer), swaps turbos and superchargers live, plays an aircraft clip, stages and launches the Demon on its TransBrake and times turbo lag at three settings. Run from a folder with playwright-core and @sparticuz/chromium installed:
+//    drives the electric cars (Taycan, Next-Gen racer), swaps turbos and superchargers live, plays an aircraft clip, stages and launches the Demon on its TransBrake and times turbo lag at three settings, and drives the 918 Spyder and Agera R. Run from a folder with playwright-core and @sparticuz/chromium installed:
 //    AWS_EXECUTION_ENV=AWS_Lambda_nodejs20.x node AcousticsCheck.cjs <url> <outdir>
 const { chromium } = require('playwright-core');
-const sp = (({ default: Fresh, ...Older }) => Fresh ?? Older)(require('@sparticuz/chromium'));   // newer releases export default
+const Loaded = require('@sparticuz/chromium'), sp = Loaded.default ?? Loaded;   // newer releases export default; older ones a class with static methods
 (async () =>
 {
     const [Url, Out] = process.argv.slice(2);
@@ -137,6 +137,18 @@ const sp = (({ default: Fresh, ...Older }) => Fresh ?? Older)(require('@sparticu
         console.log('lag', Lag, JSON.stringify(await Page.evaluate(() => ({ Rpm: Math.round(Bench.Readout().Rpm), Boost: +Bench.Readout().Boost.toFixed(2), Spool: document.querySelector('#SpoolTime').textContent, Shown: document.querySelector('#LagShown').textContent }))));
     }
     await Page.evaluate(() => { Bench.Hold('Throttle', null); Bench.Lag(1); });
+    // 918 Spyder (hybrid: both motors under the V8) and Agera R (twin turbo): offline renders and a live pull in 2nd.
+    for (const Car of ['Spyder918', 'AgeraR'])
+    {
+        console.log('offline', Car, JSON.stringify(await Page.evaluate((C) => Bench.RenderOffline(4, C, null, 0).then((R) => ({ Peak: R.Peak, Rms: R.Rms, NonFinite: R.NonFinite, Rpm: Math.round(R.Telemetry?.Rpm ?? 0) })), Car)));
+        await Page.evaluate((C) => { Bench.Induction(null); return Bench.Car(C); }, Car);
+        await Page.evaluate(() => Bench.Command('Start'));
+        await Page.waitForTimeout(2000);
+        await Page.evaluate(() => { Bench.Command('ShiftUp'); Bench.Hold('Throttle', 1); });
+        await Page.waitForTimeout(3000);
+        console.log('live', Car, JSON.stringify(await Page.evaluate(() => { const R = Bench.Readout(); return { Car: R.Car, Kmh: Math.round(R.Kmh), Gear: R.Gear, Rpm: Math.round(R.Rpm), Motor: +(R.Motor ?? 0).toFixed(2), Boost: +(R.Boost ?? 0).toFixed(2), Chip: document.querySelector('#ChipKers').textContent, Spec: document.querySelector('#BrandSpec').textContent }; })));
+        await Page.evaluate(() => Bench.Hold('Throttle', null));
+    }
     await Page.evaluate(() => Bench.Induction('TwinScrew'));
     await Page.evaluate(() => document.querySelector('#PadsInduction').scrollIntoView({ block: 'center' }));
     await Page.waitForTimeout(1500);

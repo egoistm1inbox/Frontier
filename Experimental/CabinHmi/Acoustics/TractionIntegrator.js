@@ -165,6 +165,15 @@ export class TractionIntegrator
         if (!Alive && this.Starting === null) this.Rpm = Math.max(0, this.Rpm - (this.Rpm * 2.5 + 200) * Seconds);
         this.Rpm = Clamp(this.Rpm, 0, P.Limiter + 400);
 
+        // Front-axle motor (918 Spyder): torque through its own gear, power-limited, decoupled at its cut-off speed.
+        let FrontRpm = 0;
+        const Front = P.Motor?.Front;
+        if (Front && this.Gear > 0)
+        {
+            const Engaged = 1 - Smoothstep(Front.Cutoff - 3, Front.Cutoff, this.Speed);
+            FrontRpm = Engaged > 0 ? this.Speed / P.TyreRadius * 60 / (2 * Math.PI) * Front.Ratio : 0;
+            if (Motor > 0) DriveForce += Motor * Engaged * Math.min(Front.Torque * Front.Ratio * 0.92 / P.TyreRadius, Front.Power / Math.max(this.Speed, 1));
+        }
         this.Road(DriveForce, Seconds);
         // TransBrake (drag automatics): first and reverse engaged at once lock the output; the engine is held at the
         // launch rpm against the converter and the car leaps forward the moment it is released.
@@ -173,7 +182,7 @@ export class TractionIntegrator
         if (this.Gear !== this.LastGear) { if (this.LastGear !== 0 || this.Speed > 0.5) this.Clunk++; this.LastGear = this.Gear; }
 
         const Load = Alive ? Clamp((Combustion - Friction * 0.2) / Math.max(Full, 1), 0, 1) : 0;
-        Object.assign(Feed, { Rpm: this.Rpm, Throttle: Alive ? Effective : 0, Load, Ignition: Alive ? Ignition : 0, Motor, Boost: this.Boost, Spool: P.Turbo ? this.Spool : undefined, Gear: this.Gear, Clunk: this.Clunk });
+        Object.assign(Feed, { Rpm: this.Rpm, Throttle: Alive ? Effective : 0, Load, Ignition: Alive ? Ignition : 0, Motor, Boost: this.Boost, Spool: P.Turbo ? this.Spool : undefined, Gear: this.Gear, Clunk: this.Clunk, FrontRpm });
         return Feed;
     }
 
