@@ -30,6 +30,7 @@ Thumbs.db
 _Build/
 Experimental/FrontierEditor/dist/
 
-# Local reference clones used for audited native migration work.
+# Local shallow sparse upstream source checkouts used for auditing and native migration work.
+# Keep them outside repository history; expand or refresh them independently.
 SolidArc-upstream/
 Frontier-1-upstream/
