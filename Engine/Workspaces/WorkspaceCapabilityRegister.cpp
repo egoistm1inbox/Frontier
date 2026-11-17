@@ -78,6 +78,13 @@ WorkspaceCapabilityRegister::WorkspaceCapabilityRegister()
         "FractureWorkspace · 6-solver brittle/ductile partitioning, fractography & JoltPhysics v5.6.0",
         true,
     });
+    RegisteredEntries.push_back({
+        HostWorkspaceTarget::ParametricSketcher,
+        "ParametricSketcher",
+        "Open with Parametric Sketcher",
+        "Parametric Sketcher · Native .Sketch planar profiles, exact prismatic bodies, MatCap assignments & revisions",
+        true,
+    });
 }
 
 std::span<const WorkspaceCapabilityEntry> WorkspaceCapabilityRegister::QueryAllCapabilities() const noexcept
@@ -89,6 +96,19 @@ std::vector<WorkspaceCapabilityEntry> WorkspaceCapabilityRegister::QueryPermitte
 {
     const std::string Ext = LowercaseAscii(FilePath.extension().string());
     std::vector<WorkspaceCapabilityEntry> Permitted {};
+
+    if (Ext == ".sketch")
+    {
+        if (const auto* Sketcher = FindByTarget(HostWorkspaceTarget::ParametricSketcher))
+        {
+            Permitted.push_back(*Sketcher);
+        }
+        if (const auto* World = FindByTarget(HostWorkspaceTarget::FrontierWorld))
+        {
+            Permitted.push_back(*World);
+        }
+        return Permitted;
+    }
 
     if (Ext == ".fracturespace" || Ext == ".fracture")
     {

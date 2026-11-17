@@ -215,6 +215,7 @@ set(FRONTIER_UI_COMPONENT_SOURCES
     Engine/Workspaces/Material/MaterialWorkspaceHost.cpp
     Engine/Workspaces/Fracture/FractureViewportRenderer.cpp
     Engine/Workspaces/Fracture/FractureWorkspaceSession.cpp
+    Engine/Workspaces/ParametricSketcher/ParametricSketcherWorkspaceSession.cpp
     Engine/Workspaces/Fracture/FractureOutlinerPanel.cpp
     Engine/Workspaces/Fracture/FractureViewportHost.cpp
     Engine/Workspaces/Fracture/FractureInspectorPanel.cpp
@@ -969,8 +970,9 @@ if(BUILD_TESTING)
         frontier_register_exhibit(FractureWorkspaceUIValidation Exhibits/FractureWorkspaceUIValidation.cpp)
     endif()
     frontier_register_exhibit(GeometryNetworkValidation              Exhibits/GeometryNetworkValidation.cpp)
-    frontier_register_exhibit(ParametricSketcherGeometryValidation   Exhibits/ParametricSketcherGeometryValidation.cpp)
-    frontier_register_exhibit(GeometryCompletionValidation           Exhibits/GeometryCompletionValidation.cpp)
+    frontier_register_exhibit(ParametricSketcherGeometryValidation          Exhibits/ParametricSketcherGeometryValidation.cpp)
+    frontier_register_exhibit(ParametricSketcherWorkspaceSessionValidation  Exhibits/ParametricSketcherWorkspaceSessionValidation.cpp)
+    frontier_register_exhibit(GeometryCompletionValidation                  Exhibits/GeometryCompletionValidation.cpp)
     frontier_register_exhibit(MaterialScatteringValidation   Exhibits/MaterialScatteringValidation.cpp)
     frontier_register_exhibit(DynamicMaterialRecipeValidation Exhibits/DynamicMaterialRecipeValidation.cpp)
     frontier_register_exhibit(DynamicMaterialVulkanValidation Exhibits/DynamicMaterialVulkanValidation.cpp)
