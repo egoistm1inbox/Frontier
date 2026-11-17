@@ -153,6 +153,8 @@ struct CascadeSampleOutcome
 [[nodiscard]] CascadeSampleOutcome SampleCascadePcf3x3(
     const OrthographicShadowCascade& Cascade,
     Mathematics::Axis3D              BiasedWorldPos,
+    Mathematics::Axis3D              SurfaceNormal,
+    float                            NdotL,
     float                            SlopeScale) noexcept
 {
     CascadeSampleOutcome Out {};
@@ -167,6 +169,10 @@ struct CascadeSampleOutcome
     const int BaseY    = static_cast<int>(std::floor(CY));
     const int MaxIdx   = static_cast<int>(Cascade.ResolutionTexels) - 1;
 
+    const float InvNdotL = 1.0f / std::max(0.08f, NdotL);
+    const float SlopeU   = Mathematics::EvaluateDot(Cascade.LightRightAxis, SurfaceNormal) * InvNdotL * TexelM;
+    const float SlopeV   = Mathematics::EvaluateDot(Cascade.LightUpAxis, SurfaceNormal) * InvNdotL * TexelM;
+
     constexpr float KernelW[3] { 0.25f, 0.50f, 0.25f };
     float VisSum = 0.0f;
     float BlkSum = 0.0f;
@@ -180,7 +186,8 @@ struct CascadeSampleOutcome
             const int TX = std::clamp(BaseX + DX, 0, MaxIdx);
             const float W = KernelW[DY + 1] * KernelW[DX + 1];
             const float ClosestD = Cascade.ClosestLightDepth[static_cast<std::size_t>(TY) * Cascade.ResolutionTexels + static_cast<uint32_t>(TX)];
-            const float Diff     = RecD - ClosestD;
+            const float PlaneExpectedD = RecD + (static_cast<float>(DX) * SlopeU - static_cast<float>(DY) * SlopeV);
+            const float Diff     = PlaneExpectedD - ClosestD;
             if (Diff > Bias)
             {
                 BlkSum += Diff * W;
@@ -200,6 +207,8 @@ struct CascadeSampleOutcome
 [[nodiscard]] CascadeSampleOutcome SampleCascadePcss(
     const OrthographicShadowCascade& Cascade,
     Mathematics::Axis3D              BiasedWorldPos,
+    Mathematics::Axis3D              SurfaceNormal,
+    float                            NdotL,
     float                            SlopeScale,
     float                            TanSunRadius,
     uint32_t                         RotationSeed) noexcept
@@ -216,6 +225,11 @@ struct CascadeSampleOutcome
     const float RotPhi = static_cast<float>(RotationSeed & 0xFFFFu) * (Constants::TauFloat / 65536.0f);
     constexpr float GoldenAngle = 2.39996323f;
 
+    // Receiver-plane slope correction eliminates planar self-shadow acne & false blocker dithering
+    const float InvNdotL = 1.0f / std::max(0.08f, NdotL);
+    const float SlopeU   = Mathematics::EvaluateDot(Cascade.LightRightAxis, SurfaceNormal) * InvNdotL * TexelM;
+    const float SlopeV   = Mathematics::EvaluateDot(Cascade.LightUpAxis, SurfaceNormal) * InvNdotL * TexelM;
+
     // 1. Vogel Blocker Search over light frustum cone
     constexpr uint32_t SearchTaps = 12u;
     const float SearchRadiusPx    = std::clamp((TanSunRadius * 3.5f) / TexelM, 2.0f, 18.0f);
@@ -225,10 +239,13 @@ struct CascadeSampleOutcome
     {
         const float R   = std::sqrt((static_cast<float>(Tap) + 0.5f) / static_cast<float>(SearchTaps)) * SearchRadiusPx;
         const float Ang = static_cast<float>(Tap) * GoldenAngle + RotPhi;
-        const int TX    = std::clamp(static_cast<int>(std::floor(CX + R * std::cos(Ang))), 0, MaxIdx);
-        const int TY    = std::clamp(static_cast<int>(std::floor(CY + R * std::sin(Ang))), 0, MaxIdx);
+        const float dx  = R * std::cos(Ang);
+        const float dy  = R * std::sin(Ang);
+        const int TX    = std::clamp(static_cast<int>(std::floor(CX + dx)), 0, MaxIdx);
+        const int TY    = std::clamp(static_cast<int>(std::floor(CY + dy)), 0, MaxIdx);
         const float D   = Cascade.ClosestLightDepth[static_cast<std::size_t>(TY) * Cascade.ResolutionTexels + static_cast<uint32_t>(TX)];
-        const float Diff = RecD - D;
+        const float PlaneExpectedD = RecD + (dx * SlopeU - dy * SlopeV);
+        const float Diff = PlaneExpectedD - D;
         if (Diff > Bias)
         {
             BlockerSum += Diff;
@@ -257,11 +274,14 @@ struct CascadeSampleOutcome
     {
         const float R   = std::sqrt((static_cast<float>(Tap) + 0.5f) / static_cast<float>(PcfTaps)) * FilterRadiusPx;
         const float Ang = static_cast<float>(Tap) * GoldenAngle + RotPhi + 0.71f;
-        const int TX    = std::clamp(static_cast<int>(std::floor(CX + R * std::cos(Ang))), 0, MaxIdx);
-        const int TY    = std::clamp(static_cast<int>(std::floor(CY + R * std::sin(Ang))), 0, MaxIdx);
+        const float dx  = R * std::cos(Ang);
+        const float dy  = R * std::sin(Ang);
+        const int TX    = std::clamp(static_cast<int>(std::floor(CX + dx)), 0, MaxIdx);
+        const int TY    = std::clamp(static_cast<int>(std::floor(CY + dy)), 0, MaxIdx);
         const float D   = Cascade.ClosestLightDepth[static_cast<std::size_t>(TY) * Cascade.ResolutionTexels + static_cast<uint32_t>(TX)];
+        const float PlaneExpectedD = RecD + (dx * SlopeU - dy * SlopeV);
         const float AdaptiveBias = Bias + TexelM * 0.16f * R;
-        if ((RecD - D) <= AdaptiveBias)
+        if ((PlaneExpectedD - D) <= AdaptiveBias)
         {
             LitSum += 1.0f;
         }
@@ -273,6 +293,8 @@ struct CascadeSampleOutcome
 [[nodiscard]] CascadeSampleOutcome SampleCascadeShadowRayMarch(
     const OrthographicShadowCascade& Cascade,
     Mathematics::Axis3D              BiasedWorldPos,
+    Mathematics::Axis3D              SurfaceNormal,
+    float                            NdotL,
     float                            SlopeScale,
     float                            TanSunRadius,
     uint32_t                         RotationSeed) noexcept
@@ -288,6 +310,10 @@ struct CascadeSampleOutcome
     const float Bias   = TexelM * (1.25f + 0.85f * SlopeScale);
     const float RotPhi = static_cast<float>(RotationSeed & 0xFFFFu) * (Constants::TauFloat / 65536.0f);
     constexpr float GoldenAngle = 2.39996323f;
+
+    const float InvNdotL = 1.0f / std::max(0.08f, NdotL);
+    const float SlopeU   = Mathematics::EvaluateDot(Cascade.LightRightAxis, SurfaceNormal) * InvNdotL * TexelM;
+    const float SlopeV   = Mathematics::EvaluateDot(Cascade.LightUpAxis, SurfaceNormal) * InvNdotL * TexelM;
 
     // EEVEE-Next Quadratic Shadow Map Ray March (SMRT): 4 rays x 14 quadratic steps with occlusion slope tracking
     constexpr uint32_t SmrtRays  = 4u;
@@ -314,16 +340,19 @@ struct CascadeSampleOutcome
         {
             const float TNorm = static_cast<float>(Step) / static_cast<float>(SmrtSteps);
             const float TQuad = TNorm * TNorm;
-            const int TX      = std::clamp(static_cast<int>(std::floor(CX + DirTX * TQuad)), 0, MaxIdx);
-            const int TY      = std::clamp(static_cast<int>(std::floor(CY + DirTY * TQuad)), 0, MaxIdx);
-            const float RayD      = RecD - StepZWorld * static_cast<float>(Step * Step);
+            const float dx    = DirTX * TQuad;
+            const float dy    = DirTY * TQuad;
+            const int TX      = std::clamp(static_cast<int>(std::floor(CX + dx)), 0, MaxIdx);
+            const int TY      = std::clamp(static_cast<int>(std::floor(CY + dy)), 0, MaxIdx);
+            const float PlaneExpectedD = RecD + (dx * SlopeU - dy * SlopeV);
+            const float RayD      = PlaneExpectedD - StepZWorld * static_cast<float>(Step * Step);
             const float CascadeD  = Cascade.ClosestLightDepth[static_cast<std::size_t>(TY) * Cascade.ResolutionTexels + static_cast<uint32_t>(TX)];
             const float Diff      = RayD - CascadeD;
 
             if (Diff > Bias && Diff < ThicknessM)
             {
                 Occluded    = true;
-                BestHitDist = std::max(0.02f, RecD - CascadeD);
+                BestHitDist = std::max(0.02f, PlaneExpectedD - CascadeD);
                 break;
             }
         }
@@ -442,10 +471,9 @@ SolarShadowFieldResult SolarShadowSequence::EvaluateSolarShadowFieldWithAlgorith
             {
                 // Deterministic Vogel Solar Disc Raytrace against 4-Wide WideBoundingTree!
                 const uint32_t RayCount = std::clamp(Sun.RtxSamplesPerPixel, 1u, 32u);
-                const float    RotPhi   = static_cast<float>(Seed & 0xFFFFu) * (Constants::TauFloat / 65536.0f);
                 constexpr float GoldenAngle = 2.39996323f;
 
-                const Mathematics::Axis3D RayOrigin = Hit.WorldPosition + Hit.TangentFrame.NormalZ * 1.5e-3f;
+                const Mathematics::Axis3D RayOrigin = Hit.WorldPosition + Hit.TangentFrame.NormalZ * 8.0e-3f;
                 float    UnoccludedSum     = 0.0f;
                 float    HarmonicInvDistS  = 0.0f;
                 uint32_t OccludedHits      = 0u;
@@ -453,7 +481,7 @@ SolarShadowFieldResult SolarShadowSequence::EvaluateSolarShadowFieldWithAlgorith
                 for (uint32_t RIdx = 0u; RIdx < RayCount; ++RIdx)
                 {
                     const float DiscR = std::sqrt((static_cast<float>(RIdx) + 0.5f) / static_cast<float>(RayCount)) * TanSunRadius;
-                    const float Angle = static_cast<float>(RIdx) * GoldenAngle + RotPhi;
+                    const float Angle = static_cast<float>(RIdx) * GoldenAngle;
                     const Mathematics::Axis3D JitteredSun = Mathematics::NormalizeAxis(
                         SunDir + DiscTangentU * (DiscR * std::cos(Angle)) + DiscTangentV * (DiscR * std::sin(Angle)),
                         SunDir);
@@ -461,7 +489,7 @@ SolarShadowFieldResult SolarShadowSequence::EvaluateSolarShadowFieldWithAlgorith
                     SpatialAcceleration::RaySegmentQuery ShadowRay {};
                     ShadowRay.Origin          = RayOrigin;
                     ShadowRay.UnitDirection   = JitteredSun;
-                    ShadowRay.MinimumDistance = 1.0e-3f;
+                    ShadowRay.MinimumDistance = 5.0e-3f;
                     ShadowRay.MaximumDistance = 150.0f;
 
                     const auto RayHit = SceneTree.TraceClosestRay(ShadowRay, false);
@@ -487,11 +515,11 @@ SolarShadowFieldResult SolarShadowSequence::EvaluateSolarShadowFieldWithAlgorith
                 CascadeSampleOutcome ClipSample {};
                 if (OptionalFineClip != nullptr)
                 {
-                    ClipSample = SampleCascadePcf3x3(*OptionalFineClip, BiasedOrigin, SlopeScale);
+                    ClipSample = SampleCascadePcf3x3(*OptionalFineClip, BiasedOrigin, Hit.TangentFrame.NormalZ, NdotL, SlopeScale);
                 }
                 if (!ClipSample.InsideCascade && OptionalCoarseClip != nullptr)
                 {
-                    ClipSample = SampleCascadePcf3x3(*OptionalCoarseClip, BiasedOrigin, SlopeScale);
+                    ClipSample = SampleCascadePcf3x3(*OptionalCoarseClip, BiasedOrigin, Hit.TangentFrame.NormalZ, NdotL, SlopeScale);
                 }
                 Result.RawVisibility[Off]         = ClipSample.InsideCascade ? ClipSample.Visibility : 1.0f;
                 Result.BlockerDistanceMeters[Off] = ClipSample.BlockerDistanceM;
@@ -501,11 +529,11 @@ SolarShadowFieldResult SolarShadowSequence::EvaluateSolarShadowFieldWithAlgorith
                 CascadeSampleOutcome ClipSample {};
                 if (OptionalFineClip != nullptr)
                 {
-                    ClipSample = SampleCascadeShadowRayMarch(*OptionalFineClip, BiasedOrigin, SlopeScale, TanSunRadius, Seed);
+                    ClipSample = SampleCascadeShadowRayMarch(*OptionalFineClip, BiasedOrigin, Hit.TangentFrame.NormalZ, NdotL, SlopeScale, TanSunRadius, Seed);
                 }
                 if (!ClipSample.InsideCascade && OptionalCoarseClip != nullptr)
                 {
-                    ClipSample = SampleCascadeShadowRayMarch(*OptionalCoarseClip, BiasedOrigin, SlopeScale, TanSunRadius, Seed);
+                    ClipSample = SampleCascadeShadowRayMarch(*OptionalCoarseClip, BiasedOrigin, Hit.TangentFrame.NormalZ, NdotL, SlopeScale, TanSunRadius, Seed);
                 }
                 Result.RawVisibility[Off]         = ClipSample.InsideCascade ? ClipSample.Visibility : 1.0f;
                 Result.BlockerDistanceMeters[Off] = ClipSample.BlockerDistanceM;
@@ -516,11 +544,11 @@ SolarShadowFieldResult SolarShadowSequence::EvaluateSolarShadowFieldWithAlgorith
                 CascadeSampleOutcome ClipSample {};
                 if (OptionalFineClip != nullptr)
                 {
-                    ClipSample = SampleCascadePcss(*OptionalFineClip, BiasedOrigin, SlopeScale, TanSunRadius, Seed);
+                    ClipSample = SampleCascadePcss(*OptionalFineClip, BiasedOrigin, Hit.TangentFrame.NormalZ, NdotL, SlopeScale, TanSunRadius, Seed);
                 }
                 if (!ClipSample.InsideCascade && OptionalCoarseClip != nullptr)
                 {
-                    ClipSample = SampleCascadePcss(*OptionalCoarseClip, BiasedOrigin, SlopeScale, TanSunRadius, Seed);
+                    ClipSample = SampleCascadePcss(*OptionalCoarseClip, BiasedOrigin, Hit.TangentFrame.NormalZ, NdotL, SlopeScale, TanSunRadius, Seed);
                 }
 
                 float FinalVis = ClipSample.InsideCascade ? ClipSample.Visibility : 1.0f;

@@ -1262,6 +1262,15 @@ bool VulkanWorldRenderSequence::RenderWorldViewportWithEngine(
     Uniforms.SolarIrradianceTier[2] = EffectiveSunIrrad.B;
     Uniforms.SolarIrradianceTier[3] = (Config.Engine == WorldRenderEngine::DdgiRaytracing && LatticeReady) ? 1.0f : 0.0f;
 
+    WorldSceneSpecification LocalScene = Scene;
+    LocalScene.Sun.DirectionToSun = SunDir;
+    LocalScene.Sun.SolarIrradiance = EffectiveSunIrrad;
+    const float DotSun = Mathematics::EvaluateDot(CachedSunCascade.LightForwardAxis, SunDir * -1.0f);
+    if (DotSun < 0.999f)
+    {
+        UploadSolarCascadeRadiosity(LocalScene);
+    }
+
     Uniforms.SkyRadianceBvhCount[0] = Scene.SkyRadiance.R;
     Uniforms.SkyRadianceBvhCount[1] = Scene.SkyRadiance.G;
     Uniforms.SkyRadianceBvhCount[2] = Scene.SkyRadiance.B;

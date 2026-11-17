@@ -73,7 +73,12 @@ void ContactClipComputeEntry(uint3 DispatchThreadID : SV_DispatchThreadID)
     float2 TexC    = float2((LocalU + ClipUniforms.HalfSpanMeters) * InvSpan2 * ResF,
                             (ClipUniforms.HalfSpanMeters - LocalV) * InvSpan2 * ResF);
     float RecvD    = LocalZ + ClipUniforms.DepthExtentMeters;
-    float BiasM    = (2.0 * ClipUniforms.HalfSpanMeters / ResF) * 1.8;
+    float TexelM   = 2.0 * ClipUniforms.HalfSpanMeters / ResF;
+    float BiasM    = TexelM * 1.8;
+
+    float InvNdotL = 1.0 / max(0.08, NdotL);
+    float SlopeU   = dot(ClipUniforms.LightRight, Nrm) * InvNdotL * TexelM;
+    float SlopeV   = dot(ClipUniforms.LightUp, Nrm) * InvNdotL * TexelM;
 
     // ContactClip Vogel PCSS Blocker Search & Continuous Penumbra Filtering (Zero SDF Shadows!)
     float LitSum  = 0.0;
@@ -84,9 +89,12 @@ void ContactClipComputeEntry(uint3 DispatchThreadID : SV_DispatchThreadID)
     {
         float R   = sqrt((float(Tap) + 0.5) / 12.0) * 1.85;
         float Ang = float(Tap) * 2.39996323;
-        int2  TC  = clamp(int2(TexC + float2(cos(Ang), sin(Ang)) * R), int2(0), int2(int(ClipUniforms.CascadeResolution) - 1));
+        float dx  = cos(Ang) * R;
+        float dy  = sin(Ang) * R;
+        int2  TC  = clamp(int2(TexC + float2(dx, dy)), int2(0), int2(int(ClipUniforms.CascadeResolution) - 1));
         float CD  = FineCascadeDepth.Load(int3(TC, 0));
-        float Df  = RecvD - CD;
+        float ExpectedD = RecvD + (dx * SlopeU - dy * SlopeV);
+        float Df  = ExpectedD - CD;
         if (Df > BiasM) { BlkSum += Df; ++BlkCnt; }
         else { LitSum += 1.0; }
     }

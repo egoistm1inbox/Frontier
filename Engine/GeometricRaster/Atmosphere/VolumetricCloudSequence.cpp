@@ -30,7 +30,7 @@ constexpr float ViewerAltM = 100.0f;
 
 [[nodiscard]] float HashInt3(int32_t IX, int32_t IY, int32_t IZ) noexcept
 {
-    uint32_t N = static_cast<uint32_t>(IX * 374761393 + IY * 668265263 + IZ * 2147483647);
+    uint32_t N = static_cast<uint32_t>(IX) * 73856093u ^ static_cast<uint32_t>(IY) * 19349663u ^ static_cast<uint32_t>(IZ) * 83492791u;
     N = (N ^ (N >> 13u)) * 1274126177u;
     N = N ^ (N >> 16u);
     return static_cast<float>(N) * (1.0f / 4294967296.0f);
@@ -44,9 +44,10 @@ constexpr float ViewerAltM = 100.0f;
     const float FX   = X - static_cast<float>(IX);
     const float FY   = Y - static_cast<float>(IY);
     const float FZ   = Z - static_cast<float>(IZ);
-    const float UX   = FX * FX * (3.0f - 2.0f * FX);
-    const float UY   = FY * FY * (3.0f - 2.0f * FY);
-    const float UZ   = FZ * FZ * (3.0f - 2.0f * FZ);
+    // Quintic polynomial interpolation (C2 continuous - zero 1st & 2nd boundary derivatives)
+    const float UX   = FX * FX * FX * (FX * (FX * 6.0f - 15.0f) + 10.0f);
+    const float UY   = FY * FY * FY * (FY * (FY * 6.0f - 15.0f) + 10.0f);
+    const float UZ   = FZ * FZ * FZ * (FZ * (FZ * 6.0f - 15.0f) + 10.0f);
 
     const auto Mix = [](float A, float B, float T) noexcept -> float { return A + (B - A) * T; };
     const float N000 = HashInt3(IX, IY, IZ),     N100 = HashInt3(IX + 1, IY, IZ);
@@ -155,13 +156,15 @@ constexpr float ViewerAltM = 100.0f;
 
     if (FormationIndex == 6u) // Lenticular: large organic wind-aligned stacked laminar mountain-wave lenses
     {
-        // Anisotropic macro envelope stretched along wind axis + smooth vertical laminar pancakes
-        const float MacroLobes = SmoothLatticeNoise3(WX * FScale * 0.22f, WY * FScale * 0.55f, 1.7f);
-        const float SubtleWarp = SmoothLatticeNoise3(WX * FScale * 0.65f, WY * FScale * 0.65f, WZ * FScale * 0.25f);
-        const float LaminarSlices = std::pow(0.5f + 0.5f * std::sin(H * Constants::PiFloat * 5.0f - 0.6f), 1.35f);
-        const float LensMask = SmoothStep(0.46f, 0.76f, MacroLobes + (SubtleWarp - 0.5f) * 0.22f);
-        NNorm   = std::clamp(LensMask * (0.45f + 0.55f * LaminarSlices), 0.0f, 1.0f);
-        Profile = SmoothStep(0.04f, 0.22f, H) * (1.0f - SmoothStep(0.75f, 0.96f, H));
+        // Anisotropic smooth organic envelope stretched along wind axis + aerodynamic lens curvature
+        const float MacroLobes = SmoothLatticeNoise3(WX * FScale * 0.22f, WY * FScale * 0.45f, 1.7f);
+        const float SubtleWarp = SmoothLatticeNoise3(WX * FScale * 0.65f, WY * FScale * 0.65f, WZ * FScale * 0.35f);
+        const float CenterDist = std::sqrt(std::pow(WX * FScale * 0.35f, 2.0f) + std::pow(WY * FScale * 0.65f, 2.0f));
+        const float LensShape  = SmoothStep(1.2f, 0.2f, CenterDist) * (1.0f - 4.0f * std::pow(H - 0.5f, 2.0f));
+        const float Laminar    = 0.70f + 0.30f * std::sin(H * Constants::PiFloat * 2.0f);
+        const float LensMask   = SmoothStep(0.38f, 0.72f, MacroLobes * 0.6f + LensShape * 0.4f + (SubtleWarp - 0.5f) * 0.15f);
+        NNorm   = std::clamp(LensMask * Laminar, 0.0f, 1.0f);
+        Profile = SmoothStep(0.04f, 0.25f, H) * (1.0f - SmoothStep(0.75f, 0.96f, H));
     }
     else if (FormationIndex == 7u) // Mammatus: dramatic cellular hanging pouches under storm deck
     {
@@ -175,14 +178,14 @@ constexpr float ViewerAltM = 100.0f;
     }
     else if (FormationIndex == 8u) // KelvinHelmholtz: localized breaking wave-crest curls
     {
-        const float MacroBand = SmoothStep(0.40f, 0.72f, SmoothLatticeNoise3(WX * FScale * 0.28f, WY * FScale * 0.28f, 3.1f));
-        const float CurlSkew  = 280.0f * std::sin(H * Constants::PiFloat) + 190.0f * H * H;
+        const float MacroBand = SmoothStep(0.38f, 0.68f, SmoothLatticeNoise3(WX * FScale * 0.25f, WY * FScale * 0.25f, 3.1f));
+        const float CurlSkew  = 160.0f * std::sin(H * Constants::PiFloat) + 80.0f * H;
         const float CurlX     = WX + CurlSkew;
-        const float WavePhase = CurlX * FScale * 4.4f + SmoothLatticeNoise3(WX * FScale * 0.9f, WY * FScale * 0.9f, 0.4f) * 2.4f;
-        const float Crest     = 0.5f + 0.5f * std::sin(WavePhase + H * 3.6f);
-        const float BreakCurl = SmoothStep(0.32f, 0.86f, Crest) * SmoothStep(0.12f, 0.65f, H + 0.24f * Crest);
-        const float Billow    = CloudFbm3(CurlX * FScale * 1.05f, WY * FScale * 0.85f, WZ * FScale * 1.4f, HighOctFade);
-        NNorm = std::clamp(MacroBand * (BreakCurl * 0.68f + ((Billow - 0.26f) / 0.46f) * 0.42f), 0.0f, 1.0f);
+        const float WavePhase = CurlX * FScale * 2.2f + SmoothLatticeNoise3(WX * FScale * 0.6f, WY * FScale * 0.6f, 0.4f) * 1.5f;
+        const float Crest     = 0.5f + 0.5f * std::sin(WavePhase + H * 2.8f);
+        const float BreakCurl = SmoothStep(0.30f, 0.80f, Crest) * SmoothStep(0.15f, 0.60f, H + 0.20f * Crest);
+        const float Billow    = CloudFbm3(CurlX * FScale * 0.85f, WY * FScale * 0.75f, WZ * FScale * 1.1f, HighOctFade);
+        NNorm = std::clamp(MacroBand * (BreakCurl * 0.55f + ((Billow - 0.25f) / 0.45f) * 0.50f), 0.0f, 1.0f);
     }
     else if (FormationIndex == 9u) // Asperitas: undulating gravity-wave undersides
     {
@@ -195,20 +198,20 @@ constexpr float ViewerAltM = 100.0f;
     }
     else if (FormationIndex == 10u) // Nacreous: smooth stratospheric mother-of-pearl ribbons
     {
-        const float MacroEnv = SmoothStep(0.36f, 0.72f, SmoothLatticeNoise3(WX * FScale * 0.35f, WY * FScale * 0.35f, 2.3f));
-        const float Ribbon   = 0.5f + 0.5f * std::sin((WX * 0.42f + WY * 0.88f) * FScale * 3.2f +
-                                                      SmoothLatticeNoise3(WX * FScale * 0.8f, WY * FScale * 0.8f, 0.5f) * 3.5f);
-        const float Silk     = SmoothLatticeNoise3(WX * FScale * 1.2f, WY * FScale * 1.2f, WZ * FScale);
-        NNorm = std::clamp(MacroEnv * (Ribbon * 0.68f + Silk * 0.38f), 0.0f, 1.0f);
+        const float MacroEnv = SmoothStep(0.32f, 0.68f, SmoothLatticeNoise3(WX * FScale * 0.28f, WY * FScale * 0.28f, 2.3f));
+        const float Ribbon   = 0.5f + 0.5f * std::sin((WX * 0.35f + WY * 0.75f) * FScale * 2.4f +
+                                                      SmoothLatticeNoise3(WX * FScale * 0.6f, WY * FScale * 0.6f, 0.5f) * 2.5f);
+        const float Silk     = CloudFbm3(WX * FScale * 0.85f, WY * FScale * 0.85f, WZ * FScale * 0.95f, HighOctFade);
+        NNorm = std::clamp(MacroEnv * (Ribbon * 0.52f + Silk * 0.48f), 0.0f, 1.0f);
     }
     else if (FormationIndex == 11u) // Pyrocumulus: isolated towering cauliflower thermal plumes
     {
-        const float PlumeColumn = SmoothLatticeNoise3(WX * FScale * 0.36f, WY * FScale * 0.36f, 4.7f);
-        const float PlumeMask   = SmoothStep(0.46f, 0.74f, PlumeColumn + H * 0.10f);
-        const float Base        = CloudFbm3(WX * FScale * 0.90f, WY * FScale * 0.90f, WZ * FScale * 1.15f, HighOctFade);
-        const float BillowRidge = 1.0f - std::abs(SmoothLatticeNoise3(WX * FScale * 2.1f, WY * FScale * 2.1f, WZ * FScale * 2.3f) * 2.0f - 1.0f);
-        NNorm    = std::clamp(PlumeMask * (((Base - 0.20f) / 0.44f) * 0.68f + BillowRidge * 0.38f), 0.0f, 1.0f);
-        ShapeCov = std::clamp(Cov + 0.14f * H, 0.0f, 1.0f);
+        const float PlumeColumn = SmoothLatticeNoise3(WX * FScale * 0.32f, WY * FScale * 0.32f, 4.7f);
+        const float PlumeMask   = SmoothStep(0.42f, 0.70f, PlumeColumn + H * 0.12f);
+        const float Base        = CloudFbm3(WX * FScale * 0.80f, WY * FScale * 0.80f, WZ * FScale * 1.05f, HighOctFade);
+        const float Billow      = CloudFbm3(WX * FScale * 1.6f, WY * FScale * 1.6f, WZ * FScale * 1.7f, HighOctFade);
+        NNorm    = std::clamp(PlumeMask * (((Base - 0.22f) / 0.44f) * 0.65f + ((Billow - 0.25f) / 0.45f) * 0.35f), 0.0f, 1.0f);
+        ShapeCov = std::clamp(Cov + 0.12f * H, 0.0f, 1.0f);
     }
     else // Classic 0..5 formations (Stratus, Stratocumulus, Cumulus, Cumulonimbus, Altostratus, Cirrus)
     {
@@ -357,11 +360,8 @@ Mathematics::LinearRGB VolumetricCloudSequence::EvaluateVolumetricClouds(
     OutTransmittance = 1.0f;
     Mathematics::LinearRGB TotalRad { 0.0f, 0.0f, 0.0f };
 
-    const float Ign = (PixelJitter01 >= 0.0f)
-        ? std::clamp(PixelJitter01, 0.0f, 1.0f)
-        : Frac(52.9829189f * Frac(RayDirection.X * 193.713f + RayDirection.Y * 371.419f + RayDirection.Z * 547.823f));
-    // Soft centered jitter eliminates contour slice banding without creating 1px salt-and-pepper stipple
-    const float Jitter = 0.5f + 0.72f * (Ign - 0.5f);
+    // Deterministic centered midpoint sampling eliminates salt-and-pepper pixel noise
+    const float Jitter = (PixelJitter01 >= 0.0f) ? (0.5f + 0.25f * (PixelJitter01 - 0.5f)) : 0.5f;
 
     const float BearRad = Deck.WindBearingDegrees * Constants::DegToRadFloat;
     const float WindVX  = std::cos(BearRad) * Deck.WindSpeedMetersPerSecond;

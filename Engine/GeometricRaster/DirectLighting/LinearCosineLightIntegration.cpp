@@ -361,16 +361,14 @@ DirectLightingFrameOutput LinearCosineLightIntegration::EvaluateDirectLightingFr
 
             // Evaluate 2-Scale Physical Ambient Occlusion (0.25 m micro-contact + 2.20 m chassis underbody)
             const uint32_t AoRays     = std::clamp(AoSettings.RaysPerPixel, 2u, 32u);
-            const uint32_t Seed       = PX * 1973u + PY * 9277u + 89173u;
-            const float    RotOffset  = static_cast<float>(Seed & 0xFFFFu) * (Constants::TauFloat / 65536.0f);
             float ContactUnoccluded   = 0.0f;
             float ChassisUnoccluded   = 0.0f;
-            const Mathematics::Axis3D AoOrigin = Hit.WorldPosition + Hit.TangentFrame.NormalZ * 2.0e-3f;
+            const Mathematics::Axis3D AoOrigin = Hit.WorldPosition + Hit.TangentFrame.NormalZ * 8.0e-3f;
 
             for (uint32_t RIdx = 0u; RIdx < AoRays; ++RIdx)
             {
                 const float U1    = (static_cast<float>(RIdx) + 0.5f) / static_cast<float>(AoRays);
-                const float Phi   = static_cast<float>(RIdx) * 2.39996323f + RotOffset;
+                const float Phi   = static_cast<float>(RIdx) * 2.39996323f;
                 const float SinT  = std::sqrt(U1);
                 const float CosT  = std::sqrt(std::max(0.0f, 1.0f - U1));
                 const Mathematics::Axis3D LocalRay { SinT * std::cos(Phi), SinT * std::sin(Phi), CosT };
@@ -379,7 +377,7 @@ DirectLightingFrameOutput LinearCosineLightIntegration::EvaluateDirectLightingFr
                 SpatialAcceleration::RaySegmentQuery AoQuery {};
                 AoQuery.Origin          = AoOrigin;
                 AoQuery.UnitDirection   = WorldRay;
-                AoQuery.MinimumDistance = 1.5e-3f;
+                AoQuery.MinimumDistance = 6.0e-3f;
                 AoQuery.MaximumDistance = AoSettings.ChassisRadiusMeters;
 
                 const auto AoHit = SceneTree.TraceClosestRay(AoQuery, false);

@@ -676,12 +676,12 @@ float EvaluateSolarShadow(RayHitReading Hit, float3 SunDir, uint2 PixelXY)
     {
         float3 T, B;
         ConstructOrthonormalBasis(SunDir, T, B);
-        float3 Orig = Hit.Position + Hit.GeomNormal * 0.010 + Hit.ShadingNormal * 0.004;
+        float3 Orig = Hit.Position + Hit.GeomNormal * 0.012 + Hit.ShadingNormal * 0.006;
         float  Vis  = 0.0;
         for (uint R = 0u; R < 4u; ++R)
         {
             float DiscR = sqrt((float(R) + 0.5) * 0.25) * TanSun;
-            float Ang   = float(R) * 2.39996323 + RotPhi;
+            float Ang   = float(R) * 2.39996323;
             float3 JDir = normalize(SunDir + T * (DiscR * cos(Ang)) + B * (DiscR * sin(Ang)));
             if (!TraceSceneAnyHit(Orig, JDir, 0.025, 90.0))
             {
@@ -736,7 +736,7 @@ float EvaluateSolarShadow(RayHitReading Hit, float3 SunDir, uint2 PixelXY)
         for (uint R = 0u; R < 4u; ++R)
         {
             float Rad   = sqrt((float(R) + 0.5) * 0.25);
-            float Ang   = float(R) * 2.39996323 + RotPhi;
+            float Ang   = float(R) * 2.39996323;
             float2 StepDir = float2(cos(Ang), sin(Ang)) * (Rad * MaxStepPx);
             bool Occ = false;
             for (uint S = 1u; S <= 14u; ++S)
@@ -763,14 +763,22 @@ float EvaluateSolarShadow(RayHitReading Hit, float3 SunDir, uint2 PixelXY)
     float SearchRadPx = clamp((TanSun * 3.5) / TexelM, 2.0, 18.0);
     float BlockerSum  = 0.0;
     uint  Blockers    = 0u;
+
+    float InvNdotL = 1.0 / max(0.08, NdotL);
+    float SlopeU   = dot(WorldUniforms.SunCascadeRightRes.xyz, Hit.ShadingNormal) * InvNdotL * TexelM;
+    float SlopeV   = dot(WorldUniforms.SunCascadeUpDepth.xyz, Hit.ShadingNormal) * InvNdotL * TexelM;
+
     for (uint Tap = 0u; Tap < 12u; ++Tap)
     {
         float R   = sqrt((float(Tap) + 0.5) / 12.0) * SearchRadPx;
         float Ang = float(Tap) * 2.39996323 + RotPhi;
-        int TX = clamp(int(floor(CenterTXY.x + R * cos(Ang))), 0, MaxIdx);
-        int TY = clamp(int(floor(CenterTXY.y + R * sin(Ang))), 0, MaxIdx);
+        float dx  = R * cos(Ang);
+        float dy  = R * sin(Ang);
+        int TX = clamp(int(floor(CenterTXY.x + dx)), 0, MaxIdx);
+        int TY = clamp(int(floor(CenterTXY.y + dy)), 0, MaxIdx);
         float D = SolarShadowDepthBuffer[uint(TY) * Res + uint(TX)];
-        float Diff = RecD - D;
+        float PlaneExpectedD = RecD + (dx * SlopeU - dy * SlopeV);
+        float Diff = PlaneExpectedD - D;
         if (Diff > Bias)
         {
             BlockerSum += Diff;
@@ -788,10 +796,13 @@ float EvaluateSolarShadow(RayHitReading Hit, float3 SunDir, uint2 PixelXY)
         {
             float R   = sqrt((float(Tap) + 0.5) / 16.0) * FilterPx;
             float Ang = float(Tap) * 2.39996323 + RotPhi + 0.71;
-            int TX = clamp(int(floor(CenterTXY.x + R * cos(Ang))), 0, MaxIdx);
-            int TY = clamp(int(floor(CenterTXY.y + R * sin(Ang))), 0, MaxIdx);
+            float dx  = R * cos(Ang);
+            float dy  = R * sin(Ang);
+            int TX = clamp(int(floor(CenterTXY.x + dx)), 0, MaxIdx);
+            int TY = clamp(int(floor(CenterTXY.y + dy)), 0, MaxIdx);
             float D = SolarShadowDepthBuffer[uint(TY) * Res + uint(TX)];
-            if ((RecD - D) <= (Bias + TexelM * 0.16 * R))
+            float PlaneExpectedD = RecD + (dx * SlopeU - dy * SlopeV);
+            if ((PlaneExpectedD - D) <= (Bias + TexelM * 0.16 * R))
             {
                 LitSum += 1.0;
             }
@@ -826,6 +837,48 @@ float2 EncodeUnitOctahedral(float3 Dir)
     return Oct * 0.5 + 0.5;
 }
 
+float3 SampleOctahedralBilinearIrr(uint CellId, float3 Dir)
+{
+    float2 Uv = EncodeUnitOctahedral(Dir);
+    float  FX = clamp(Uv.x * 8.0 - 0.5, 0.0, 7.0);
+    float  FY = clamp(Uv.y * 8.0 - 0.5, 0.0, 7.0);
+    uint   X0 = uint(floor(FX));
+    uint   Y0 = uint(floor(FY));
+    uint   X1 = min(7u, X0 + 1u);
+    uint   Y1 = min(7u, Y0 + 1u);
+    float  TX = FX - float(X0);
+    float  TY = FY - float(Y0);
+
+    uint Base = CellId * 64u;
+    float3 C00 = IrradianceLatticeTexels[Base + Y0 * 8u + X0].xyz;
+    float3 C10 = IrradianceLatticeTexels[Base + Y0 * 8u + X1].xyz;
+    float3 C01 = IrradianceLatticeTexels[Base + Y1 * 8u + X0].xyz;
+    float3 C11 = IrradianceLatticeTexels[Base + Y1 * 8u + X1].xyz;
+
+    return lerp(lerp(C00, C10, TX), lerp(C01, C11, TX), TY);
+}
+
+float2 SampleChebyshevMomentsBilinear(uint CellId, float3 Dir)
+{
+    float2 Uv = EncodeUnitOctahedral(Dir);
+    float  FX = clamp(Uv.x * 16.0 - 0.5, 0.0, 15.0);
+    float  FY = clamp(Uv.y * 16.0 - 0.5, 0.0, 15.0);
+    uint   X0 = uint(floor(FX));
+    uint   Y0 = uint(floor(FY));
+    uint   X1 = min(15u, X0 + 1u);
+    uint   Y1 = min(15u, Y0 + 1u);
+    float  TX = FX - float(X0);
+    float  TY = FY - float(Y0);
+
+    uint Base = CellId * 256u;
+    float2 M00 = IrradianceChebyshevDepth[Base + Y0 * 16u + X0];
+    float2 M10 = IrradianceChebyshevDepth[Base + Y0 * 16u + X1];
+    float2 M01 = IrradianceChebyshevDepth[Base + Y1 * 16u + X0];
+    float2 M11 = IrradianceChebyshevDepth[Base + Y1 * 16u + X1];
+
+    return lerp(lerp(M00, M10, TX), lerp(M01, M11, TX), TY);
+}
+
 float3 SampleRtxIrradianceLatticeChebyshev(float3 WorldPos, float3 Normal, float3 ViewDir)
 {
     uint3 Dims = WorldUniforms.LatticeDimsMaterialCount.xyz;
@@ -840,11 +893,6 @@ float3 SampleRtxIrradianceLatticeChebyshev(float3 WorldPos, float3 Normal, float
     int3   C0      = clamp(int3(floor(Rel)), int3(0), int3(Dims) - int3(1));
     int3   C1      = min(C0 + int3(1), int3(Dims) - int3(1));
     float3 Frac    = saturate(Rel - float3(C0));
-
-    float2 OctIrr  = EncodeUnitOctahedral(Normal);
-    uint   OX      = min(7u, uint(OctIrr.x * 8.0));
-    uint   OY      = min(7u, uint(OctIrr.y * 8.0));
-    uint   TexId   = OY * 8u + OX;
 
     uint SX  = Dims.x;
     uint SXY = Dims.x * Dims.y;
@@ -874,11 +922,8 @@ float3 SampleRtxIrradianceLatticeChebyshev(float3 WorldPos, float3 Normal, float
                 float Backface = max(1.0e-4, (dot(-DirFromC, Normal) + 1.0) * 0.5);
                 float VisW     = Backface * Backface + 1.0e-4;
 
-                // 16x16 Chebyshev depth upper-tail visibility weight eliminating wall leaks!
-                float2 OctD  = EncodeUnitOctahedral(DirFromC);
-                uint   DXId  = min(15u, uint(OctD.x * 16.0));
-                uint   DYId  = min(15u, uint(OctD.y * 16.0));
-                float2 Mom   = IrradianceChebyshevDepth[CellId * 256u + DYId * 16u + DXId];
+                // 16x16 Chebyshev depth upper-tail visibility weight eliminating wall leaks (bilinear)
+                float2 Mom = SampleChebyshevMomentsBilinear(CellId, DirFromC);
                 if (DistToCell > Mom.x + 1.0e-3 && Mom.y > 0.0)
                 {
                     float Variance = max(1.0e-4, abs(Mom.y - Mom.x * Mom.x));
@@ -888,7 +933,8 @@ float3 SampleRtxIrradianceLatticeChebyshev(float3 WorldPos, float3 Normal, float
                 }
 
                 float CombinedW = max(1.0e-7, TriW * VisW);
-                Accum          += IrradianceLatticeTexels[CellId * 64u + TexId].xyz * CombinedW;
+                float3 CellIrr  = SampleOctahedralBilinearIrr(CellId, Normal);
+                Accum          += CellIrr * CombinedW;
                 TotalW         += CombinedW;
             }
         }
@@ -1096,21 +1142,21 @@ float3 ShadePrimarySurface(RayHitReading Hit, float3 ViewDir, uint2 PixelXY)
     {
         float3 T, B;
         ConstructOrthonormalBasis(N, T, B);
-        float3 AoOrig = Hit.Position + Hit.GeomNormal * 0.008;
+        float3 AoOrig = Hit.Position + Hit.GeomNormal * 0.012;
         float  OccSum = 0.0;
-        for (uint R = 0u; R < 4u; ++R)
+        for (uint R = 0u; R < 8u; ++R)
         {
-            float U1 = (float(R) + 0.5) * 0.25;
-            float Phi = float(R) * 2.39996323 + float(PixelXY.x * 13u + PixelXY.y * 29u);
+            float U1   = (float(R) + 0.5) * 0.125;
+            float Phi  = float(R) * 2.39996323;
             float SinT = sqrt(U1);
             float CosT = sqrt(max(0.0, 1.0 - U1));
             float3 AoDir = T * (SinT * cos(Phi)) + B * (SinT * sin(Phi)) + N * CosT;
-            if (!TraceSceneAnyHit(AoOrig, AoDir, 0.006, 0.85))
+            if (!TraceSceneAnyHit(AoOrig, AoDir, 0.008, 0.85))
             {
-                OccSum += 0.25;
+                OccSum += 0.125;
             }
         }
-        DiffAo = saturate(0.28 + 0.72 * OccSum);
+        DiffAo = saturate(0.35 + 0.65 * OccSum);
     }
     float NdotV     = max(1.0e-3, dot(N, ViewDir));
     float SpecRough = clamp(Mat.SpecParams.x, 0.025, 1.0);
