@@ -1,0 +1,124 @@
+[
+ {
+  "wait": 5000,
+  "shot": "Visor-1-Cruise.png",
+  "eval": "VisorCondition.Jump(40, {Traffic: true})"
+ },
+ {
+  "eval": "VisorCondition.Jump(370)",
+  "wait": 3000,
+  "shot": "Visor-2-TeamPing.png"
+ },
+ {
+  "eval": "VisorCondition.Look(0.55, -0.08)",
+  "wait": 2500,
+  "shot": "Visor-2b-PingBeacon.png"
+ },
+ {
+  "eval": "VisorCondition.Look(0, -0.06); VisorCondition.Jump(925)",
+  "wait": 8500,
+  "shot": "Visor-3-Porcupine.png"
+ },
+ {
+  "wait": 3500,
+  "shot": "Visor-3b-PorcupineBrake.png"
+ },
+ {
+  "eval": "VisorCondition.Jump(1590, {Speed: 22}); VisorCondition.Signal('Green', 5.5)",
+  "wait": 2500,
+  "shot": "Visor-4a-SignalGreen.png"
+ },
+ {
+  "eval": "VisorCondition.Signal('Amber', 1.6)",
+  "wait": 1200,
+  "shot": "Visor-4b-SignalAmber.png"
+ },
+ {
+  "eval": "VisorCondition.Signal('Red', 6.5)",
+  "wait": 3500,
+  "shot": "Visor-4c-SignalRed.png"
+ },
+ {
+  "eval": "VisorCondition.Jump(2300, {Coolant: 117, Speed: 22})",
+  "wait": 3000,
+  "shot": "Visor-5-Overheat.png"
+ },
+ {
+  "eval": "VisorCondition.Jump(2250, {Fuel: 14, Coolant: 95, Hot: false, Speed: 22})",
+  "wait": 3000,
+  "shot": "Visor-6a-StationSuggest.png"
+ },
+ {
+  "eval": "VisorCondition.Act(); VisorCondition.Jump(3080, {Speed: 18})",
+  "wait": 4000,
+  "shot": "Visor-6b-StationRoute.png"
+ },
+ {
+  "eval": "VisorCondition.Jump(2950, {Oxygen: 87, Routed: false, Fuelling: 0, LaneGoal: 2.1, Z: 2.1, Fuel: 40, Coolant: 92})",
+  "wait": 3000,
+  "shot": "Visor-7-Oxygen.png"
+ },
+ {
+  "eval": "VisorCondition.Look(-1.0, -0.12)",
+  "wait": 2500,
+  "shot": "Visor-8-LookAround.png"
+ },
+ {
+  "eval": "VisorCondition.Pace(2); VisorCondition.Look(0,-0.06); VisorCondition.Jump(450, {Oxygen: 99, Fuel: 40, Speed: 20, Traffic: false}); VisorCondition.Press('a', 1.2)",
+  "wait": 1300,
+  "shot": "Visor-9a-LaneChange.png"
+ },
+ {
+  "wait": 2600,
+  "shot": "Visor-9b-FarLane.png"
+ },
+ {
+  "eval": "VisorCondition.Jump(450, {Speed: 20, Z: -2.1, LaneGoal: -2.1, Traffic: false}); VisorCondition.Press('d', 1.2)",
+  "wait": 1300,
+  "shot": "Visor-9c-SteerRight.png"
+ },
+ {
+  "eval": "VisorCondition.OpenWheel(900, 430, 2)",
+  "wait": 900,
+  "shot": "Visor-10a-PingWheel.png"
+ },
+ {
+  "eval": "VisorCondition.CloseWheel()",
+  "wait": 2600,
+  "shot": "Visor-10b-PingPlaced.png"
+ },
+ {
+  "eval": "VisorCondition.Jump(2760, {Speed: 15, Cruise: 90, Coolant: 85, Hot: false, Fuel: 60, Oxygen: 99, Routed: false, Fuelling: 0, Traffic: false}); VisorCondition.Place(1, 38, 52)",
+  "wait": 3500,
+  "shot": "Visor-11a-SlowCarAhead.png"
+ },
+ {
+  "eval": "VisorCondition.Act('Overtake')",
+  "wait": 2500,
+  "shot": "Visor-11b-Overtaking.png"
+ },
+ {
+  "wait": 3000,
+  "shot": "Visor-11c-Passing.png"
+ },
+ {
+  "eval": "VisorCondition.Jump(600, {Speed: 20, Z: -2.1, LaneGoal: -2.1, Auto: false, Traffic: false}); VisorCondition.Place(-1, 150, 85)",
+  "wait": 2200,
+  "shot": "Visor-12a-OncomingInLane.png"
+ },
+ {
+  "eval": "VisorCondition.Jump(620, {Speed: 20, Z: -2.1, LaneGoal: -2.1, Auto: true, Traffic: false}); VisorCondition.Place(-1, 190, 85)",
+  "wait": 1300,
+  "shot": "Visor-12b-AutoReturn.png"
+ },
+ {
+  "eval": "VisorCondition.Pace(0.25); VisorCondition.Jump(700, {Speed: 20, Auto: false, Traffic: false}); VisorCondition.Place(1, 9, 0)",
+  "wait": 2200,
+  "shot": "Visor-13-Crash.png"
+ },
+ {
+  "eval": "VisorCondition.Pace(2); VisorCondition.Jump(800, {Speed: 18, Auto: true, Traffic: false}); VisorCondition.Place(-1, 150, 80); VisorCondition.Place(-1, 280, 75); VisorCondition.Look(-0.3, -0.07)",
+  "wait": 2500,
+  "shot": "Visor-14-OncomingTraffic.png"
+ }
+]

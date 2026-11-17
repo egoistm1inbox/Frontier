@@ -1,0 +1,4 @@
+[ { "wait": 2500 }, { "eval": "ClusterCondition.SetDemo(true)" }, { "wait": 7000, "shot": "Cruise.png" },
+  { "eval": "ClusterCondition.SetMode('Eco')" }, { "wait": 4000, "shot": "Eco.png" },
+  { "eval": "ClusterCondition.SetMode('Sport')" }, { "wait": 4000, "shot": "Sport.png" },
+  { "eval": "ClusterCondition.SetMode('Race')" }, { "wait": 4000, "shot": "Race.png" } ]

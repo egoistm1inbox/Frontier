@@ -1,0 +1,133 @@
+[
+ {
+  "eval": "Lobby.Ready.then(()=>0)",
+  "wait": 3000,
+  "shot": "Lobby-1-CanopyGrove.png"
+ },
+ {
+  "eval": "Lobby.Use('MossStage')",
+  "wait": 4500,
+  "shot": "Lobby-2-MossStage.png"
+ },
+ {
+  "eval": "Lobby.Use('Lightbox')",
+  "wait": 4500,
+  "shot": "Lobby-3-Lightbox.png"
+ },
+ {
+  "eval": "Lobby.Use('Hangar')",
+  "wait": 4500,
+  "shot": "Lobby-4-RaceHangar.png"
+ },
+ {
+  "eval": "Lobby.Use('Monolith')",
+  "wait": 4500,
+  "shot": "Lobby-5-Monolith.png"
+ },
+ {
+  "eval": "Lobby.Use('ShadowCanopy')",
+  "wait": 4500,
+  "shot": "Lobby-6-ShadowCanopy.png"
+ },
+ {
+  "eval": "Lobby.Use('PitBox')",
+  "wait": 4500,
+  "shot": "Lobby-7-PitBox.png"
+ },
+ {
+  "eval": "Lobby.Tab('Car'); Lobby.Look({Paint:'Signal red', Rims:'Gunmetal', Calipers:'Yellow', Wing:true})",
+  "wait": 4500,
+  "shot": "Lobby-8-CarOptions.png"
+ },
+ {
+  "eval": "Lobby.Use('Hangar',{Lamp:'Ember'}); Lobby.Tab('Light'); Lobby.Rig({Azimuth:-40, Elevation:28, KeyTone:'Cyan', KeyPower:1.4})",
+  "wait": 4500,
+  "shot": "Lobby-9-LightPlot.png"
+ },
+ {
+  "eval": "Lobby.Use('Grove',{Mood:'Night'}); Lobby.Tab('Camera'); Lobby.View('Low')",
+  "wait": 4500,
+  "shot": "Lobby-10-GroveNightLow.png"
+ },
+ {
+  "eval": "Lobby.Tab('Garage'); Lobby.Use('MossStage',{Season:'Autumn', Haze:0.9}, 77)",
+  "wait": 4500,
+  "shot": "Lobby-11-MossAutumn.png"
+ },
+ {
+  "eval": "Lobby.Use('Monolith',{Time:'Dusk', Slabs:8}, 9); Lobby.Bare(true)",
+  "wait": 4500,
+  "shot": "Lobby-12-MonolithDusk.png"
+ },
+ {
+  "eval": "Lobby.Use('PitBox',{Time:'Night race', Stands:'Blue & white', Number:11})",
+  "wait": 4500,
+  "shot": "Lobby-13-PitBoxNight.png"
+ },
+ {
+  "eval": "Lobby.Bare(false); Lobby.Use('Lightbox',{Walls:'Night', Accent:'Lime', Floor:'Polished concrete'})",
+  "wait": 3500
+ },
+ {
+  "drag": [
+   "#Scene",
+   -260,
+   40
+  ],
+  "wait": 4000,
+  "shot": "Lobby-14-DragOrbit.png"
+ },
+ {
+  "eval": "document.title = JSON.stringify(Lobby.State()); console.log(document.title)"
+ },
+ {
+  "eval": "Lobby.Overview(); Lobby.Use('PhotoStudio')",
+  "wait": 5000,
+  "shot": "Lobby-15-PhotoStudio.png"
+ },
+ {
+  "eval": "Lobby.Use('PhotoStudio',{Cyc:'Black',Walls:'Black',Softbox:1.3}).then(()=>Lobby.View('Front'))",
+  "wait": 5000,
+  "shot": "Lobby-16-StudioHotspots.png"
+ },
+ {
+  "eval": "Lobby.Use('PhotoStudio',{Cyc:'White',Walls:'Concrete',Softbox:1}).then(()=>Lobby.Look({Rims:'Bronze',Tyres:'Tan',Calipers:'Yellow'})).then(()=>Lobby.Spot('Wheels'))",
+  "wait": 4500,
+  "shot": "Lobby-17-WheelsCloseUp.png"
+ },
+ {
+  "eval": "Lobby.Look({Taillights:'Purple',Wing:true}).then(()=>Lobby.Spot('Taillights'))",
+  "wait": 4500,
+  "shot": "Lobby-18-TailLights.png"
+ },
+ {
+  "eval": "Lobby.Overview(); Lobby.Use('Workshop',{Lift:1.2})",
+  "wait": 5000,
+  "shot": "Lobby-19-Workshop.png"
+ },
+ {
+  "eval": "Lobby.Use('Workshop',{Style:'Night tuning',Lift:0,Door:'Closed'}).then(()=>Lobby.Look({Glow:true,GlowColour:'Magenta',Splitter:true,Skirts:true,Bar:true,Paint:'Obsidian',Tyres:'Black',Rims:'Gloss black'})).then(()=>Lobby.Spot('Glow'))",
+  "wait": 5000,
+  "shot": "Lobby-20-Underglow.png"
+ },
+ {
+  "eval": "Lobby.Look({Engine:'V8',Layout:'AWD',Gearbox:'Automatic'}).then(()=>Lobby.Spot('Drive'))",
+  "wait": 5000,
+  "shot": "Lobby-21-CutawayV8.png"
+ },
+ {
+  "eval": "Lobby.Look({Engine:'Inline-6',Layout:'FWD',Gearbox:'Manual'})",
+  "wait": 3500,
+  "shot": "Lobby-22-CutawayFwd.png"
+ },
+ {
+  "eval": "Lobby.Look({Engine:'Electric',Layout:'AWD'})",
+  "wait": 3500,
+  "shot": "Lobby-23-CutawayEv.png"
+ },
+ {
+  "eval": "Lobby.Overview(); Lobby.Use('Workshop',{Style:'Old school',Door:'Open'})",
+  "wait": 5000,
+  "shot": "Lobby-24-WorkshopOpen.png"
+ }
+]

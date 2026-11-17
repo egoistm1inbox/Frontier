@@ -1223,3 +1223,32 @@ in `Exhibits/LightCompute/Results/FogFacetRegression.txt`; this was a fixture-se
   the temporal modes (-9.9% / -4.7%), confirming the harness detects the correlation it guards against.
   LightCompute 6/6 release + ASan/UBSan. GitHub Actions: user enabled "Allow all actions" in repo
   Settings; PR #4 merge into main is the remaining step before WindowsWorkspaces can be dispatched.
+
+## Viewer redesign track — 2026-11-16
+
+- Imported commit `1fef98c8` of `SultanAladin/Frontier` (`arena/19265b6e-frontier`) unchanged: Component Viewer,
+  Asset Viewer, Geometry Compiler and their shared folders under `Experimental/`. Checks 20/20; three jsdom smokes 0 errors.
+- Standing owner rules, repository registry and the pending engine-vocabulary rename table:
+  `Documentation/Rules/ViewerRedesignBrief.md`.
+- Prototype 01 Tier Descent (standalone infographic card, real cluster tiers) awaiting approval;
+  evidence in `Exhibits/ViewerRedesign/`.
+- Cabin HMI track (2026-11-17): three 3D centre-display prototypes on the ControlVehicle in `Experimental/CabinHmi/`
+  (A Contour off-road, B Afterglow ambient, C Nocturne night lake). Owner liked Afterglow; Contour recoloured purple/green;
+  Lucent rejected and replaced by Nocturne. Clusters moved off the HMIs onto separate dashboard pages (`Clusters/`: Ridge / Halo / Tide), each with
+  Cruise/Eco/Sport/Race modes and a fuel gauge, linked to their HMI over `CabinLink`. Each HMI keeps its own Lights menu. Nocturne Comfort =
+  seat slide + back angle (ring dot) + A/C; Nocturne Drive replaced by the Power Current hybrid flow view. Names unapproved; evidence in `Exhibits/CabinHmi/`; launcher via `ServeCabinHmi.py`.
+  Visor (`CabinHmi/Visor/`): separate windscreen HUD game demo, a cockpit drive on a night pass with porcupine, signal countdown, teammate ping,
+  fuel / overheat / O₂ warnings and a station suggestion with route chevrons. Name unapproved.
+  Visor follow-up: synthesised sound (SoundDesk), real bicycle-model steering with lane keeper, lane guides that follow the lane the car is in,
+  middle-mouse ping wheel (PingWheel, 8 calls) with teammate acks, same-direction + oncoming traffic (MakeTraffic) with ACC, emergency braking, overtake advice, collisions.
+  Lobby (`CabinHmi/Lobby/`): procedural garage configurator around the ControlVehicle. 9 seeded sets (Canopy Grove, Moss Stage, Lightbox, Race Hangar,
+  Monolith, Shadow Canopy, Pit Box, Photo Studio, Workshop) with per-set options, grouped car options (paint, wheels/tyres, light colours,
+  underglow, bolt-on components, drivetrain), white hotspot dots with close-up camera flights, see-through drivetrain cutaway with figures,
+  orbit camera with presets, key-light dial + light plot. Names unapproved.
+  Acoustics (`CabinHmi/Acoustics/`): synthesized vehicle sound library, no recordings. LaFerrari V12 + HY-KERS and Nissan GT-R NISMO
+  twin-turbo V6 (whistle, spool, blow-off, flutter) from per-cylinder pulse trains with firing-sequence chatter (valve/injector ticks, jitter,
+  gear clunks) through pipe waveguides, driven by a profile-aware DCT/limiter/boost/traction/ABS car model; 7 road surfaces, tyre squeal,
+  disc brakes (squeal, groan, ABS) and quarter-car suspension (`ChassisVoices`), 5 light and 11 cabin cues, 7 impact cues (`ImpactFoley`:
+  explosion, shockwave, EMP, sonic blast, window shatter, glass break, metal crash), weapons (`Ballistics`: Devotion-style energy LMG with
+  spin-up and Turbocharger, LMG, SMG, sniper, turret, tank cannon, autocannon, hold-to-fire on the audio clock), bullet crack/whizz/ricochet
+  and 8 impact materials. Live AudioWorklet bench with car switch + offline MP3 reel (35 files, 7.1 MB) with spectrogram plates (`Exhibits/CabinHmi/Audio/`). Names unapproved.

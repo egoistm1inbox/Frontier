@@ -1,0 +1,8 @@
+[
+  { "wait": 2500, "shot": "Lucent-1-Studio.png" },
+  { "click": "[data-menu='Route']" }, { "wait": 7000 }, { "click": "#GuideButton" }, { "wait": 1500, "shot": "Lucent-2-Route.png" },
+  { "click": "[data-menu='Access']" }, { "wait": 2500 }, { "click": "[data-lid='Frunk']" }, { "click": "[data-lid='Boot']" }, { "click": "#PortToggle" }, { "click": ".CardSet[data-set='Access'] [data-lock]" }, { "wait": 1200, "shot": "Lucent-3-Access.png" },
+  { "click": "[data-menu='Lighting']" }, { "wait": 1500 }, { "click": ".CardSet[data-set='Lighting'] [data-light='1']" }, { "wait": 3000, "shot": "Lucent-4-Lighting.png" },
+  { "click": "[data-menu='Seats']" }, { "wait": 1500 }, { "click": ".CardSet[data-set='Seats'] [data-preset='1']" }, { "click": "[data-massage='wave']" }, { "wait": 3000, "shot": "Lucent-5-Seats.png" },
+  { "click": "[data-menu='Studio']" }, { "click": ".CardSet[data-set='Studio'] [data-light='0']" }, { "wait": 3000 }, { "hover": [".CardSet[data-set='Studio'] .Card:nth-child(2)", 0.5, 0.2] }, { "wait": 800, "shot": "Lucent-6-StudioHover.png" }
+]
