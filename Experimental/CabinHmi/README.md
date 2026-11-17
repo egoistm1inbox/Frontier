@@ -118,7 +118,8 @@ the twin as the floor gets less glossy, and a contact shadow sits under the car.
 `window.Lobby` is the test hook: `Ready`, `Use(Key, Options, Seed)`, `Look`, `Rig`, `View`, `Orbit`, `Tab`, `Spot(Id)`, `Overview`, `Spots`, `Bare`, `State`.
 
 ## Vehicle sound library (Acoustics)
-`Acoustics/Acoustics.html` is a sound bench: drive a Ferrari LaFerrari or a Nissan GT-R NISMO live (keyboard or on-screen pedals), switch the
+`Acoustics/Acoustics.html` is a sound bench: drive a Ferrari LaFerrari, a Nissan GT-R NISMO, a Porsche Taycan Turbo S or an original Next-Gen
+racer (Jackson Storm style) live (keyboard or on-screen pedals), bolt any of 10 turbos and superchargers onto the petrol cars, switch the
 road surface and the microphone (Chase / Cabin), hit kerbs and potholes, fire light, cabin and impact cues, and play the pre-rendered reel.
 **No recordings**: every sound is synthesized sample by sample from a physical model. The same classes run live in an AudioWorklet and offline
 in Node (`Acoustics/Offline/RenderReel.mjs` → MP3s).
@@ -130,6 +131,10 @@ in Node (`Acoustics/Offline/RenderReel.mjs` → MP3s).
 | Drive model | `TractionIntegrator`: torque curve (700 Nm at 6750), inertia and friction, 7-speed DCT (45 ms ignition-cut upshifts, blipped downshifts), launch slip, 9250 rpm limiter, traction control, brakes with regeneration, drag. Overrun and cut afterfire pops. |
 | Surfaces | Asphalt, wet, gravel, dirt, grass, cobbles, rumble strip: tread-block tone, road roar, wind; water sizzle and splashes; discrete stone hits and underbody pings; periodic impacts through suspension and body modes. |
 | Tyres | Stick-slip squeal oscillator plus tread resonances with wandering pitch; lock-up scrub; wheelspin howl and smoke hiss; loose surfaces scrub instead of squealing. |
+| Forced induction | `ForcedInduction.js`: 10 inducers you can bolt onto the LaFerrari or the GT-R (they replace its stock induction; `InductedProfile` re-tunes the boost curve and lag, `InductionVoice` voices it). Turbos: small single (quick spool, bright whistle, soft recirculating blow-off), big single (late, violent boost, deep whoosh, loud blow-off), parallel twins (two detuned whistles beating), no blow-off valve (compressor surge "stu-tu-tu" on every lift), variable geometry (diesel-style low-rpm boost, whistle sweeping with the vanes), electric assist (a motor pre-spins the shaft: no lag, electric whine, harvest whine on lift). Superchargers are geared to the crank, so their whine is an exact order of engine rpm: Roots (3-lobe, chugging pocket pulse), twisted 4-lobe (high smooth scream, bypass valve on the cruise), twin-screw (raspy harmonic-rich scream, timing-gear whine), centrifugal (belt-driven impeller, whine and boost rising with rpm squared). Inducer levels sit about 8–12 dB under the engine. |
+| Taycan Turbo S | `ElectricDrive.js` (`TaycanTurboS`, `ElectricIntegrator`, `DriveUnit`): two permanent-magnet motors (front single-speed 8.05:1, rear two-speed 15.5 / 8.05:1, 16 000 rpm, 800 V), 560 kW overboost, 1050 Nm. Every tone is an order of the motor shaft (pole-pair torque ripple, slot order, gear mesh), so pitches follow real shaft speed; inverter switching tones with sidebands, rotor windage, rear-gearbox shift thunk with a torque dip (up at 28–100 km/h by load, kick-down to 1st below 60 km/h), regenerative braking (the whine keeps singing while slowing), ready chime and an optional synthetic sport-sound layer (`Sport`, like the speaker sound packs). Model 0–100 2.83 s, 0–200 9.86 s, top 259 km/h. |
+| Next-Gen racer | `NextGenRacer`: an **original** design in the spirit of Jackson Storm from Cars 3 (the film describes an electric-sounding whir with a gearbox). A twin-tone electric whir locked to the motor dominates, with a low V8 undertone, straight-cut gear whine on the overrun and a 6-speed sequential box that shifts up at 17 000 rpm (each shift drops the pitch) and blips down on the brakes. Nothing is taken from the film audio. Model 0–100 3.43 s, 0–200 7.27 s, top 338 km/h. |
+| Electric aircraft | `ElectricAviation.js`: `PropellerVoice` (blade-pass tone and harmonics that get richer as the tips approach Mach 1, broadband blade noise swishing at the blade rate, blade mismatch, gusts) plus motor whine and inverter tones; `Fly` moves the aircraft past a mic with Doppler, distance, air absorption and a ground bounce. Airframes (typical figures): 2-seat trainer (2-blade prop), speed-record racer (3-blade, tips near Mach 0.9), 6-rotor eVTOL air taxi (5-blade rotors at slightly different speeds, so they beat). On the bench these play as pre-rendered clips. |
 | Lights | Headlamp switch detents, lamp relay, xenon igniter snap with arc flutter and ballast whine, LED welcome ticks with levelling motors, indicator tick/tock relay (loop). |
 | Brakes | `BrakeRotor` (`ChassisVoices.js`): pad friction ringing two rotors' modes (louder with pressure × sliding speed), low-speed light-pressure squeal that comes and goes, stick-slip groan creeping to a stop, ABS at ~14 Hz with pump buzz and valve clicks (the integrator now models ABS). |
 | Suspension | `SuspensionTravel`: a quarter-car (body, wheel, spring, damper, tyre) integrated every sample under the road profile of each surface plus weight transfer; damper oil hiss, force thuds through body modes, bump-stop and top-out clunks, bushing creaks, trim rattles, and an extra slam from a kerb face or a pothole's far lip. |
@@ -138,12 +143,13 @@ in Node (`Acoustics/Offline/RenderReel.mjs` → MP3s).
 | Bullets | Supersonic crack (N-wave) with the muzzle report arriving later by distance (400 m → 0.67 s), subsonic whizz-by (Doppler, panned), ricochets (strike + tumbling whine), and impacts on sand, dirt, rock, concrete, wood, metal, glass and water (`Hit<Material>`). |
 | Cabin | Unlock actuators and mirror motors, butterfly door open (latch, seal pop, gas struts), door close thud, seatbelt ratchet and latch, belt chime, start button with wake chime, gear paddle, window, wipers, climate fan (loop). |
 
-Keys: W throttle · S brake · A D steer · Q E paddles · Space handbrake · Enter start / stop · V car · K kerb · P pothole · F fire (picked weapon) · R Turbocharger · C mic · G gearbox ·
+Keys: W throttle · S brake · A D steer · Q E paddles · Space handbrake · Enter start / stop · V car (4) · I induction · K kerb · P pothole · F fire (picked weapon) · R Turbocharger · C mic · G gearbox ·
 T traction · 1–7 surface.
 `window.Bench` is the test hook: `Wake`, `Command(Name)`, `Hold(Control, Amount)`, `Cue(Name)`, `Car(Name)`, `Kick(Kerb|Pothole)`, `Surface(Name)`,
-`Readout`, `RenderOffline(Seconds, Car)`, `Fire(Weapon, Seconds)` → `{ Fired, Seconds, Turbo }`, `Turbo(On)`.
+`Readout`, `RenderOffline(Seconds, Car, Inducer, Gear)`, `Fire(Weapon, Seconds)` → `{ Fired, Seconds, Turbo }`, `Turbo(On)`,
+`Induction(Name | null)`, `Sport(On)`, `Fly(Cue)` → seconds. If the worklet ever throws, it goes quiet and posts `{ Fault }` (logged as a console error).
 Re-render the reel: `cd Experimental/CabinHmi/Acoustics/Offline && npm install` once (lamejs), then
-`node Experimental/CabinHmi/Acoustics/Offline/RenderReel.mjs [Scene …] [--wav]` (about 140 s for all 35 scenes).
+`node Experimental/CabinHmi/Acoustics/Offline/RenderReel.mjs [Scene …] [--wav]` (about 260 s for all 56 scenes; pass scene names to render just those).
 
 ## Lights
 Each HMI has its own **Lights** menu on the shared `LampRig`. These are real lamps on the 3D car.
@@ -197,9 +203,12 @@ Each display is a fixed 1600 × 900 panel, scaled to fit the window. Drag to orb
 | `Acoustics/Ballistics.js` | `Weapons` (EnergyLmg, Lmg, Smg, Turret, AutoCannon recipes), `FireRate(Name, Held, Turbo)`, `Materials`, `Cues` (8 weapons, 3 bullet cues, 8 `Hit<Material>`), `RenderCue`, `RenderShot` (one shot for the live trigger), `RenderMotor` (seamless spin loop at top rate). |
 | `Acoustics/ContactPatch.js` | `Surfaces` (7 recipes), `SurfaceRoll` (rolling, road texture, wind), `TyreSqueal` (squeal, skid, wheelspin). |
 | `Acoustics/CabinFoley.js` | `Cues` (5 light cues, 11 cabin cues), `RenderCue`. |
-| `Acoustics/VoiceRackWorklet.js` | AudioWorklet `voice-rack`: runs the car live on the audio thread, posts telemetry. |
+| `Acoustics/ForcedInduction.js` | `Inducers` (10 turbo and supercharger models: SmallSingle, BigSingle, TwinTurbo, Flutter, Vgt, ElectricTurbo, Roots, TwistedLobe, TwinScrew, Centrifugal), `InductedProfile(Base, Name)`, `InductionVoice`. |
+| `Acoustics/ElectricDrive.js` | `TaycanTurboS`, `NextGenRacer`, `ElectricCars`, `ElectricIntegrator` (motor torque/power limits, multi-speed box, regen), `DriveUnit` (motors, inverter, gears, windage, whir, undertone, sport sound, chime). |
+| `Acoustics/ElectricAviation.js` | `Airframes` (ElectricTrainer, ElectricRacer, AirTaxi), `PropellerVoice`, `Cues` (TrainerRunUp, TrainerTakeoff, RacerFlyover, AirTaxiHover), `RenderCue`. |
+| `Acoustics/VoiceRackWorklet.js` | AudioWorklet `voice-rack`: runs the car live on the audio thread (petrol with an optional inducer, or electric), posts telemetry, reports a `Fault` instead of dying silently. |
 | `Acoustics/Acoustics.html` / `.css` / `.js` | The bench page: tachometer, pedals, paddles, surfaces, cue pads, mix, reel players. |
-| `Acoustics/Offline/RenderReel.mjs` | Scripts the 23 reel scenes, writes MP3s (and WAVs with `--wav`), spectrogram plates and levels. |
+| `Acoustics/Offline/RenderReel.mjs` | Scripts the 56 reel scenes, writes MP3s (and WAVs with `--wav`), spectrogram plates and levels. |
 | `Acoustics/Offline/SpectrumTools.mjs` | WAV and MP3 (`WriteMp3`, lamejs) writers, FFT, spectra, hand-rolled PNG plates (spectrogram + waveform). |
 | `Lobby/LobbyKit.js` | `Seeded` random, canvas-painted textures (tile, concrete, asphalt, moss, bark, shutter, sky, sign, forest wall), beams, halos, fronds, leaves, `Scatter` (instanced), `Release`. |
 
@@ -213,6 +222,7 @@ Locks are shown as callouts and axle bars (Contour).
 ⚠️ Visor traffic is two-lane only (no junctions). Other cars do not overtake, and they swerve for nothing but stop points. A software renderer (headless) draws about 1 fps with traffic; captures use `Pace(2)`.
 ⚠️ Lobby: the camera is clamped to a box, not collided with props, so it can pass through a pillar or plant. Rebuilding a set takes a short moment (hidden by a fade on set switches).
 ⚠️ Acoustics: synthesized, not sampled. Without reference recordings neither car is A/B-matched to the real thing: the LaFerrari and GT-R voices are tuned to published figures (power, torque, ratios, redlines) and by measurement (firing order lands on rpm/10 and rpm/20; spectrogram checks), so they read as "a high-revving V12 with hybrid whine" and "a twin-turbo V6 with whistle and blow-off" rather than forensic copies. Pipe lengths, formants, turbo whistle pitches and the impact recipes are informed guesses. The chase mic now has a few early reflections, but there is still no full reverb or room model; the impacts' outdoor echoes are simple taps plus a comb wash. Explosions, EMP and sonic blast are cinematic designs (real EMPs are silent; a real sonic weapon is mostly inaudible). Live audio needs a click first (browser rule). The weapons are stylised originals: the energy LMG borrows only the Devotion's published fire-rate behaviour (5 → 15 rounds/s, 1.75 s, 0.85 s with Turbocharger, 44 rounds), not its audio. Gunshots have no real muzzle blast level (they are normalized), and impacts are short procedural recipes. The reel is 192 kbps MP3 (7.1 MB).
+⚠️ Acoustics power sounds: the inducer and aircraft figures are typical values, not manufacturer data; Taycan pole pairs, gear teeth and inverter carrier are informed guesses. The Next-Gen racer is an original sound in the spirit of Jackson Storm, not film audio. An inducer replaces the car's stock induction. Aircraft are pre-rendered clips on the bench (too heavy to synthesize on demand).
 ⚠️ The Afterglow HMI still shows its old EV battery pill, while its Halo cluster runs a 3.0 petrol car.
 
 Evidence (screenshots and the capture script) lives in `Exhibits/CabinHmi/`.

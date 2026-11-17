@@ -1,7 +1,8 @@
 // RENDER REEL
 // 🧩 Offline renderer for the vehicle sound library: scripts each scene (LaFerrari and GT-R NISMO cold start, launch,
 //    onboard, fly-by; limiter, tyres, surfaces, brakes, suspension, lights, cabin; explosions, shockwave, EMP, sonic
-//    blast, glass and crash; weapons, bullet fly-bys and bullet impacts) against the same voices the live bench uses, writes MP3s (192 kbps; add --wav for WAV too)
+//    blast, glass and crash; weapons, bullet fly-bys and bullet impacts; ten turbo and supercharger types; the Taycan
+//    Turbo S and the Next-Gen racer; electric aircraft) against the same voices the live bench uses, writes MP3s (192 kbps; add --wav for WAV too)
 //    to Exhibits/CabinHmi/Audio and spectrogram plates to Exhibits/CabinHmi/Images, and prints a measurement table.
 // 📝 Run once: npm install (in this folder, for lamejs). Then: node Experimental/CabinHmi/Acoustics/Offline/RenderReel.mjs
 //    [SceneName …] [--wav]. Deterministic (seeded noise).
@@ -15,6 +16,9 @@ import { SurfaceRoll, TyreSqueal, Surfaces } from '../ContactPatch.js';
 import { RenderCue as RenderCabinCue, Cues as CabinCues } from '../CabinFoley.js';
 import { RenderCue as RenderImpactCue, Cues as ImpactCues } from '../ImpactFoley.js';
 import { RenderCue as RenderBallisticCue, Materials } from '../Ballistics.js';
+import { RenderCue as RenderAviationCue, Cues as AviationCues } from '../ElectricAviation.js';
+import { ElectricIntegrator, DriveUnit, TaycanTurboS, NextGenRacer } from '../ElectricDrive.js';
+import { Inducers, InductedProfile, InductionVoice } from '../ForcedInduction.js';
 import { BrakeRotor, SuspensionTravel } from '../ChassisVoices.js';
 import { OnePole, DelayLine, PanGains, Smoothstep, Mix } from '../SignalKit.js';
 import { WriteWav, WriteMp3, DrawSpectrogram, AverageSpectrum, LevelNear, Centroid } from './SpectrumTools.mjs';
@@ -28,16 +32,24 @@ const AudioOut = join(Root, 'Exhibits/CabinHmi/Audio'), ImageOut = join(Root, 'E
 //------------------------------------------------------------------------------------------------------------------------
 
 /** Drives a car scene: Plan(Time, Car, Bus) sets inputs each block; the integrator feeds engine, rolling and squeal. */
-function DriveScene(Seconds, Pickup, Plan, { Surface = 'Asphalt', Roll = true, Squeal = true, EngineGain = 1, Profile = LaFerrari, Chassis = false } = {})
+function DriveScene(Seconds, Pickup, Plan, { Surface = 'Asphalt', Roll = true, Squeal = true, EngineGain = 1, Profile = LaFerrari, Chassis = false, Induction = null, Sport } = {})
 {
     const Count = Math.ceil(Seconds * Rate), Left = new Float32Array(Count), Right = new Float32Array(Count);
     const EngineL = new Float32Array(Block), EngineR = new Float32Array(Block);
-    const Car = new TractionIntegrator(Profile);
+    if (Induction) Profile = InductedProfile(Profile, Induction);
+    const Car = Profile.Electric ? new ElectricIntegrator(Profile) : new TractionIntegrator(Profile);
+    const Inducer = Induction ? new InductionVoice(Rate, Induction, { Pickup, Redline: Profile.Redline }) : null;
+    // Electric cars: the cyan overlay is the motor's strongest electromagnetic order instead of the firing frequency.
+    const Lead = Profile.Electric ? Profile.Motors.at(-1) : null, Order = Lead ? Lead.PolePairs * 6 : 0;
+    // Superchargers: the overlay is the predicted blower whine (crank rpm × pulley ratio × pockets, or gear teeth).
+    const Blower = Induction && Inducers[Induction].Family === 'Supercharger' ? Inducers[Induction] : null;
+    const Whine = Blower ? Blower.Ratio * (Blower.GearTeeth ?? Blower.Pockets) / 60 : 0;
     const Bus = {
-        Engine: new PulseTrainEngine(Rate, Profile, { Pickup }),
+        Engine: Profile.Electric ? new DriveUnit(Rate, Profile, { Pickup, Sport }) : new PulseTrainEngine(Rate, Profile, { Pickup }),
         Roll: new SurfaceRoll(Rate, { Pickup }), Squeal: new TyreSqueal(Rate, { Pickup }),
         Brakes: Chassis ? new BrakeRotor(Rate, { Pickup }) : null, Springs: Chassis ? new SuspensionTravel(Rate, { Pickup }) : null,
-        Surface, Steer: 0, Kick: 0, Override: null, Telemetry: [], Firing: Profile.Cylinders / 120,
+        Surface, Steer: 0, Kick: 0, Override: null, Telemetry: [], Firing: Lead ? Order / 60 : Blower ? Whine : Profile.Cylinders / 120,
+        Label: Lead ? `CYAN DOTS: PREDICTED ${Order}TH ORDER OF THE ${Lead.Axle.toUpperCase()} MOTOR` : Blower ? `CYAN DOTS: PREDICTED BLOWER WHINE (RPM X ${Whine.toFixed(3)})` : null,
     };
     for (let Index = 0; Index < Count; Index += Block)
     {
@@ -47,6 +59,7 @@ function DriveScene(Seconds, Pickup, Plan, { Surface = 'Asphalt', Roll = true, S
         Bus.Engine.Feed(Bus.Override ?? Feed);
         EngineL.fill(0); EngineR.fill(0);
         Bus.Engine.Render(EngineL, EngineR, 0, Size);
+        if (Inducer) { Inducer.Feed(Bus.Override ?? Feed); Inducer.Render(EngineL, EngineR, 0, Size); }
         for (let Step = 0; Step < Size; Step++) { Left[Index + Step] += EngineL[Step] * EngineGain; Right[Index + Step] += EngineR[Step] * EngineGain; }
         if (Roll) { Bus.Roll.Feed({ Speed: Car.Speed, Surface: Bus.Surface }); Bus.Roll.Render(Left, Right, Index, Size); }
         if (Squeal)
@@ -62,7 +75,7 @@ function DriveScene(Seconds, Pickup, Plan, { Surface = 'Asphalt', Roll = true, S
             Bus.Springs.Render(Left, Right, Index, Size);
             Bus.Kick = 0;
         }
-        if (Index % Math.round(Rate * 0.02) < Block) Bus.Telemetry.push({ Time, Rpm: (Bus.Override ?? Feed).Rpm, Kmh: Car.Speed * 3.6, Gear: Car.Gear, Firing: Bus.Firing });
+        if (Index % Math.round(Rate * 0.02) < Block) Bus.Telemetry.push({ Time, Rpm: (Bus.Override ?? Feed).Rpm, Kmh: Car.Speed * 3.6, Gear: Car.Gear, Firing: Bus.Firing, Label: Bus.Label });
     }
     return { Left, Right, Telemetry: Bus.Telemetry };
 }
@@ -73,7 +86,7 @@ function CueScene(Seconds, Timeline)
     const Count = Math.ceil(Seconds * Rate), Left = new Float32Array(Count), Right = new Float32Array(Count);
     for (const [Time, Name, Options = {}] of Timeline)
     {
-        const Cue = (CabinCues[Name] ? RenderCabinCue : ImpactCues[Name] ? RenderImpactCue : RenderBallisticCue)(Name, Rate, Options), Start = Math.round(Time * Rate);
+        const Cue = (CabinCues[Name] ? RenderCabinCue : ImpactCues[Name] ? RenderImpactCue : AviationCues[Name] ? RenderAviationCue : RenderBallisticCue)(Name, Rate, Options), Start = Math.round(Time * Rate);
         for (let Index = 0; Index < Cue.Left.length && Start + Index < Count; Index++) { Left[Start + Index] += Cue.Left[Index]; Right[Start + Index] += Cue.Right[Index]; }
     }
     return { Left, Right };
@@ -151,7 +164,7 @@ const Scenes = {
         Rms: -18,
     },
     'GtrNismo-ColdStart': {
-        Title: 'GT-R NISMO COLD START', Note: 'CHASE MIC. STARTER, CATCH, FLARE, FAST COLD IDLE ~1150, THREE BLIPS WITH TURBO WHISTLE AND FLUTTER',
+        Title: 'GT-R NISMO COLD START', Note: 'CHASE MIC. STARTER, CATCH, FLARE, FAST COLD IDLE NEAR 1150, THREE BLIPS WITH TURBO WHISTLE AND FLUTTER',
         Marks: [[0.3, 'START'], [1.3, 'FLARE'], [5, 'BLIP'], [6.6, 'BLIP'], [7.8, 'BLIP']],
         Build: () => DriveScene(10, 'Chase', (Time, Car) =>
         {
@@ -272,6 +285,197 @@ const Scenes = {
     'Impact-SonicBlast': { Title: 'SONIC BLAST', Note: 'SPIN-UP, BEATING PRESSURE BEAM WITH INFRASONIC BODY, CUT-OFF INTO A RUSH', Marks: [[0.62, 'BEAM'], [2.6, 'RELEASE']], Build: () => CueScene(4.5, [[0, 'SonicBlast']]), Rms: null },
     'Impact-WindowShatter': { Title: 'SIDE WINDOW SHATTER', Note: 'TEMPERED GLASS: TAP, POP, CRAZING HISS, CUBES POURING AND TINKLING', Marks: [[0.05, 'TAP'], [0.09, 'POP']], Build: () => CueScene(2.4, [[0, 'WindowShatter']]), Rms: null },
     'Impact-GlassBreak': { Title: 'GLASS BREAKING', Note: 'ANNEALED PANE: CRACK, RINGING SHARDS BREAKING AWAY, LANDING, SCATTERING, BOUNCING', Marks: [[0.05, 'CRACK']], Build: () => CueScene(2.6, [[0, 'GlassBreak']]), Rms: null },
+    'Induction-SmallSingle': {
+        Title: `GT-R NISMO + ${Inducers.SmallSingle.Label.toUpperCase()}`, Note: `${Inducers.SmallSingle.Note.toUpperCase()}. CHASE MIC: TWO BLIPS, PULL FROM REST, LIFT, BACK ON, LIFT`,
+        Marks: [[0.5, 'BLIP'], [1.3, 'BLIP'], [2.2, 'PULL'], [7.4, 'LIFT'], [8.3, 'ON'], [9.6, 'LIFT']],
+        Build: () => DriveScene(11, 'Chase', (Time, Car) =>
+        {
+            if (Time < 0.01) { Car.Running = true; Car.Rpm = GtrNismo.Idle; }
+            // Two blips in neutral, then a pull from rest through the gears, a sharp lift, back on, lift again.
+            if (Time < 2.2) { Car.Gear = 0; Car.Throttle = (Time > 0.5 && Time < 0.8) || (Time > 1.3 && Time < 1.75) ? 1 : 0; }
+            else { if (Car.Gear === 0) Car.Gear = 1; Car.Throttle = (Time < 7.4) || (Time > 8.3 && Time < 9.6) ? 1 : 0; }
+        }, { Profile: GtrNismo, Induction: 'SmallSingle', Squeal: false }),
+        Rms: -17,
+    },
+    'Induction-BigSingle': {
+        Title: `GT-R NISMO + ${Inducers.BigSingle.Label.toUpperCase()}`, Note: `${Inducers.BigSingle.Note.toUpperCase()}. CHASE MIC: TWO BLIPS, PULL FROM REST, LIFT, BACK ON, LIFT`,
+        Marks: [[0.5, 'BLIP'], [1.3, 'BLIP'], [2.2, 'PULL'], [7.4, 'LIFT'], [8.3, 'ON'], [9.6, 'LIFT']],
+        Build: () => DriveScene(11, 'Chase', (Time, Car) =>
+        {
+            if (Time < 0.01) { Car.Running = true; Car.Rpm = GtrNismo.Idle; }
+            // Two blips in neutral, then a pull from rest through the gears, a sharp lift, back on, lift again.
+            if (Time < 2.2) { Car.Gear = 0; Car.Throttle = (Time > 0.5 && Time < 0.8) || (Time > 1.3 && Time < 1.75) ? 1 : 0; }
+            else { if (Car.Gear === 0) Car.Gear = 1; Car.Throttle = (Time < 7.4) || (Time > 8.3 && Time < 9.6) ? 1 : 0; }
+        }, { Profile: GtrNismo, Induction: 'BigSingle', Squeal: false }),
+        Rms: -17,
+    },
+    'Induction-TwinTurbo': {
+        Title: `GT-R NISMO + ${Inducers.TwinTurbo.Label.toUpperCase()}`, Note: `${Inducers.TwinTurbo.Note.toUpperCase()}. CHASE MIC: TWO BLIPS, PULL FROM REST, LIFT, BACK ON, LIFT`,
+        Marks: [[0.5, 'BLIP'], [1.3, 'BLIP'], [2.2, 'PULL'], [7.4, 'LIFT'], [8.3, 'ON'], [9.6, 'LIFT']],
+        Build: () => DriveScene(11, 'Chase', (Time, Car) =>
+        {
+            if (Time < 0.01) { Car.Running = true; Car.Rpm = GtrNismo.Idle; }
+            // Two blips in neutral, then a pull from rest through the gears, a sharp lift, back on, lift again.
+            if (Time < 2.2) { Car.Gear = 0; Car.Throttle = (Time > 0.5 && Time < 0.8) || (Time > 1.3 && Time < 1.75) ? 1 : 0; }
+            else { if (Car.Gear === 0) Car.Gear = 1; Car.Throttle = (Time < 7.4) || (Time > 8.3 && Time < 9.6) ? 1 : 0; }
+        }, { Profile: GtrNismo, Induction: 'TwinTurbo', Squeal: false }),
+        Rms: -17,
+    },
+    'Induction-Flutter': {
+        Title: `GT-R NISMO + ${Inducers.Flutter.Label.toUpperCase()}`, Note: `${Inducers.Flutter.Note.toUpperCase()}. CHASE MIC: TWO BLIPS, PULL FROM REST, LIFT, BACK ON, LIFT`,
+        Marks: [[0.5, 'BLIP'], [1.3, 'BLIP'], [2.2, 'PULL'], [7.4, 'LIFT'], [8.3, 'ON'], [9.6, 'LIFT']],
+        Build: () => DriveScene(11, 'Chase', (Time, Car) =>
+        {
+            if (Time < 0.01) { Car.Running = true; Car.Rpm = GtrNismo.Idle; }
+            // Two blips in neutral, then a pull from rest through the gears, a sharp lift, back on, lift again.
+            if (Time < 2.2) { Car.Gear = 0; Car.Throttle = (Time > 0.5 && Time < 0.8) || (Time > 1.3 && Time < 1.75) ? 1 : 0; }
+            else { if (Car.Gear === 0) Car.Gear = 1; Car.Throttle = (Time < 7.4) || (Time > 8.3 && Time < 9.6) ? 1 : 0; }
+        }, { Profile: GtrNismo, Induction: 'Flutter', Squeal: false }),
+        Rms: -17,
+    },
+    'Induction-Vgt': {
+        Title: `GT-R NISMO + ${Inducers.Vgt.Label.toUpperCase()}`, Note: `${Inducers.Vgt.Note.toUpperCase()}. CHASE MIC: TWO BLIPS, PULL FROM REST, LIFT, BACK ON, LIFT`,
+        Marks: [[0.5, 'BLIP'], [1.3, 'BLIP'], [2.2, 'PULL'], [7.4, 'LIFT'], [8.3, 'ON'], [9.6, 'LIFT']],
+        Build: () => DriveScene(11, 'Chase', (Time, Car) =>
+        {
+            if (Time < 0.01) { Car.Running = true; Car.Rpm = GtrNismo.Idle; }
+            // Two blips in neutral, then a pull from rest through the gears, a sharp lift, back on, lift again.
+            if (Time < 2.2) { Car.Gear = 0; Car.Throttle = (Time > 0.5 && Time < 0.8) || (Time > 1.3 && Time < 1.75) ? 1 : 0; }
+            else { if (Car.Gear === 0) Car.Gear = 1; Car.Throttle = (Time < 7.4) || (Time > 8.3 && Time < 9.6) ? 1 : 0; }
+        }, { Profile: GtrNismo, Induction: 'Vgt', Squeal: false }),
+        Rms: -17,
+    },
+    'Induction-ElectricTurbo': {
+        Title: `GT-R NISMO + ${Inducers.ElectricTurbo.Label.toUpperCase()}`, Note: `${Inducers.ElectricTurbo.Note.toUpperCase()}. CHASE MIC: TWO BLIPS, PULL FROM REST, LIFT, BACK ON, LIFT`,
+        Marks: [[0.5, 'BLIP'], [1.3, 'BLIP'], [2.2, 'PULL'], [7.4, 'LIFT'], [8.3, 'ON'], [9.6, 'LIFT']],
+        Build: () => DriveScene(11, 'Chase', (Time, Car) =>
+        {
+            if (Time < 0.01) { Car.Running = true; Car.Rpm = GtrNismo.Idle; }
+            // Two blips in neutral, then a pull from rest through the gears, a sharp lift, back on, lift again.
+            if (Time < 2.2) { Car.Gear = 0; Car.Throttle = (Time > 0.5 && Time < 0.8) || (Time > 1.3 && Time < 1.75) ? 1 : 0; }
+            else { if (Car.Gear === 0) Car.Gear = 1; Car.Throttle = (Time < 7.4) || (Time > 8.3 && Time < 9.6) ? 1 : 0; }
+        }, { Profile: GtrNismo, Induction: 'ElectricTurbo', Squeal: false }),
+        Rms: -17,
+    },
+    'Induction-Roots': {
+        Title: `GT-R NISMO + ${Inducers.Roots.Label.toUpperCase()}`, Note: `${Inducers.Roots.Note.toUpperCase()}. CHASE MIC: TWO BLIPS, PULL FROM REST, LIFT, BACK ON, LIFT`,
+        Marks: [[0.5, 'BLIP'], [1.3, 'BLIP'], [2.2, 'PULL'], [7.4, 'LIFT'], [8.3, 'ON'], [9.6, 'LIFT']],
+        Build: () => DriveScene(11, 'Chase', (Time, Car) =>
+        {
+            if (Time < 0.01) { Car.Running = true; Car.Rpm = GtrNismo.Idle; }
+            // Two blips in neutral, then a pull from rest through the gears, a sharp lift, back on, lift again.
+            if (Time < 2.2) { Car.Gear = 0; Car.Throttle = (Time > 0.5 && Time < 0.8) || (Time > 1.3 && Time < 1.75) ? 1 : 0; }
+            else { if (Car.Gear === 0) Car.Gear = 1; Car.Throttle = (Time < 7.4) || (Time > 8.3 && Time < 9.6) ? 1 : 0; }
+        }, { Profile: GtrNismo, Induction: 'Roots', Squeal: false }),
+        Rms: -17,
+    },
+    'Induction-TwistedLobe': {
+        Title: `GT-R NISMO + ${Inducers.TwistedLobe.Label.toUpperCase()}`, Note: `${Inducers.TwistedLobe.Note.toUpperCase()}. CHASE MIC: TWO BLIPS, PULL FROM REST, LIFT, BACK ON, LIFT`,
+        Marks: [[0.5, 'BLIP'], [1.3, 'BLIP'], [2.2, 'PULL'], [7.4, 'LIFT'], [8.3, 'ON'], [9.6, 'LIFT']],
+        Build: () => DriveScene(11, 'Chase', (Time, Car) =>
+        {
+            if (Time < 0.01) { Car.Running = true; Car.Rpm = GtrNismo.Idle; }
+            // Two blips in neutral, then a pull from rest through the gears, a sharp lift, back on, lift again.
+            if (Time < 2.2) { Car.Gear = 0; Car.Throttle = (Time > 0.5 && Time < 0.8) || (Time > 1.3 && Time < 1.75) ? 1 : 0; }
+            else { if (Car.Gear === 0) Car.Gear = 1; Car.Throttle = (Time < 7.4) || (Time > 8.3 && Time < 9.6) ? 1 : 0; }
+        }, { Profile: GtrNismo, Induction: 'TwistedLobe', Squeal: false }),
+        Rms: -17,
+    },
+    'Induction-TwinScrew': {
+        Title: `GT-R NISMO + ${Inducers.TwinScrew.Label.toUpperCase()}`, Note: `${Inducers.TwinScrew.Note.toUpperCase()}. CHASE MIC: TWO BLIPS, PULL FROM REST, LIFT, BACK ON, LIFT`,
+        Marks: [[0.5, 'BLIP'], [1.3, 'BLIP'], [2.2, 'PULL'], [7.4, 'LIFT'], [8.3, 'ON'], [9.6, 'LIFT']],
+        Build: () => DriveScene(11, 'Chase', (Time, Car) =>
+        {
+            if (Time < 0.01) { Car.Running = true; Car.Rpm = GtrNismo.Idle; }
+            // Two blips in neutral, then a pull from rest through the gears, a sharp lift, back on, lift again.
+            if (Time < 2.2) { Car.Gear = 0; Car.Throttle = (Time > 0.5 && Time < 0.8) || (Time > 1.3 && Time < 1.75) ? 1 : 0; }
+            else { if (Car.Gear === 0) Car.Gear = 1; Car.Throttle = (Time < 7.4) || (Time > 8.3 && Time < 9.6) ? 1 : 0; }
+        }, { Profile: GtrNismo, Induction: 'TwinScrew', Squeal: false }),
+        Rms: -17,
+    },
+    'Induction-Centrifugal': {
+        Title: `GT-R NISMO + ${Inducers.Centrifugal.Label.toUpperCase()}`, Note: `${Inducers.Centrifugal.Note.toUpperCase()}. CHASE MIC: TWO BLIPS, PULL FROM REST, LIFT, BACK ON, LIFT`,
+        Marks: [[0.5, 'BLIP'], [1.3, 'BLIP'], [2.2, 'PULL'], [7.4, 'LIFT'], [8.3, 'ON'], [9.6, 'LIFT']],
+        Build: () => DriveScene(11, 'Chase', (Time, Car) =>
+        {
+            if (Time < 0.01) { Car.Running = true; Car.Rpm = GtrNismo.Idle; }
+            // Two blips in neutral, then a pull from rest through the gears, a sharp lift, back on, lift again.
+            if (Time < 2.2) { Car.Gear = 0; Car.Throttle = (Time > 0.5 && Time < 0.8) || (Time > 1.3 && Time < 1.75) ? 1 : 0; }
+            else { if (Car.Gear === 0) Car.Gear = 1; Car.Throttle = (Time < 7.4) || (Time > 8.3 && Time < 9.6) ? 1 : 0; }
+        }, { Profile: GtrNismo, Induction: 'Centrifugal', Squeal: false }),
+        Rms: -17,
+    },
+    'Taycan-Launch': {
+        Title: 'PORSCHE TAYCAN TURBO S LAUNCH', Note: 'CHASE MIC. READY CHIME, LAUNCH 0-200 KM/H: BOTH MOTORS WHINE, REAR 2-SPEED SHIFTS NEAR 100 KM/H, LIFT TO COAST',
+        Marks: [[0.3, 'READY'], [1.5, 'LAUNCH'], [4.3, '1-2 SHIFT'], [11.5, 'LIFT']],
+        Build: () => DriveScene(14, 'Chase', (Time, Car) =>
+        {
+            if (Time >= 0.3) Car.Start();
+            if (Time > 1 && Car.Gear === 0) Car.Gear = 1;
+            Car.Throttle = Time > 1.5 && Time < 11.5 ? 1 : 0;
+        }, { Profile: TaycanTurboS }),
+        Rms: -18,
+    },
+    'Taycan-Onboard': {
+        Title: 'PORSCHE TAYCAN TURBO S ONBOARD', Note: 'CABIN MIC. GENTLE PULL-AWAY (INVERTER WHINE), CRUISE, FLOOR IT (STAYS IN 2ND: KICK-DOWN TO 1ST ONLY BELOW 60 KM/H), REGENERATIVE BRAKING TO A STOP',
+        Marks: [[0.5, 'PULL AWAY'], [4.5, 'CRUISE'], [6.5, 'FLOOR IT'], [10.5, 'REGEN BRAKE']],
+        Build: () => DriveScene(15, 'Cabin', (Time, Car) =>
+        {
+            if (Time < 0.01) { Car.Running = true; Car.Gear = 1; }
+            Car.Throttle = Time < 0.5 ? 0 : Time < 4.5 ? 0.35 : Time < 6.5 ? 0.12 : Time < 10.5 ? 1 : 0;
+            Car.Brake = Time > 10.5 ? 0.55 : 0;
+        }, { Profile: TaycanTurboS, Chassis: true }),
+        Rms: -20,
+    },
+    'Taycan-SportSound': {
+        Title: 'TAYCAN TURBO S WITH SPORT SOUND', Note: 'CABIN MIC. SAME CAR WITH A SYNTHETIC SPORT-SOUND LAYER (LIKE THE OPTIONAL SPEAKER SOUND PACKS): DEEP TONE RISING WITH SPEED',
+        Marks: [[0.5, 'LAUNCH'], [3.4, 'SHIFT'], [9, 'LIFT']],
+        Build: () => DriveScene(11.5, 'Cabin', (Time, Car) =>
+        {
+            if (Time < 0.01) { Car.Running = true; Car.Gear = 1; }
+            Car.Throttle = Time > 0.5 && Time < 9 ? 1 : 0;
+        }, { Profile: TaycanTurboS, Sport: 0.05 }),
+        Rms: -18,
+    },
+    'Taycan-FlyBy': {
+        Title: 'TAYCAN TURBO S FLY-BY', Note: 'TRACKSIDE MIC 12 M FROM THE LINE. 200 KM/H IN 2ND: MOTOR WHINE, TYRES AND WIND CARRY THE PASS',
+        Marks: [[4, 'ABEAM']],
+        Build: () => FlyBy(8, 4, TaycanTurboS, 200, 2, { Load: 0.7 }),
+        Rms: -20,
+    },
+    'NextGen-Launch': {
+        Title: 'NEXT-GEN RACER LAUNCH (JACKSON STORM STYLE)', Note: 'CHASE MIC. ORIGINAL DESIGN: TWIN-TONE ELECTRIC WHIR LOCKED TO THE MOTOR, V8 UNDERTONE, SEQUENTIAL UPSHIFTS DROP THE PITCH',
+        Marks: [[0.3, 'READY'], [1.2, 'LAUNCH'], [11.5, 'LIFT']],
+        Build: () => DriveScene(14, 'Chase', (Time, Car) =>
+        {
+            if (Time >= 0.3) Car.Start();
+            if (Time > 1 && Car.Gear === 0) Car.Gear = 1;
+            Car.Throttle = Time > 1.2 && Time < 11.5 ? 1 : 0;
+        }, { Profile: NextGenRacer }),
+        Rms: -17,
+    },
+    'NextGen-Onboard': {
+        Title: 'NEXT-GEN RACER ONBOARD', Note: 'CABIN MIC. PULL THROUGH 3-4-5, BRAKE WITH DOWNSHIFTS (STRAIGHT-CUT GEAR WHINE ON THE OVERRUN), CORNER, EXIT',
+        Marks: [[0.2, 'PULL'], [6.5, 'BRAKE'], [9.5, 'CORNER'], [10.8, 'EXIT']],
+        Build: () => DriveScene(14, 'Cabin', (Time, Car) =>
+        {
+            if (Time < 0.01) { Car.Running = true; Car.Gear = 3; Car.Speed = 120 / 3.6; }
+            Car.Throttle = Time < 6.5 ? 1 : Time > 10.8 ? 1 : Time > 9.5 ? 0.35 : 0;
+            Car.Brake = Time > 6.5 && Time < 9.3 ? 0.9 : 0;
+            Car.Steer = Time > 9.3 && Time < 12 ? 0.5 * Smoothstep(9.3, 9.9, Time) : 0;
+        }, { Profile: NextGenRacer, Chassis: true }),
+        Rms: -17,
+    },
+    'NextGen-FlyBy': {
+        Title: 'NEXT-GEN RACER FLY-BY', Note: 'TRACKSIDE MIC 12 M FROM THE LINE. 290 KM/H IN 6TH, FULL POWER: WHIR AND UNDERTONE WITH DOPPLER',
+        Marks: [[4, 'ABEAM']],
+        Build: () => FlyBy(8, 4, NextGenRacer, 290, 6, { Load: 1 }),
+        Rms: -18,
+    },
+    'Aircraft-TrainerRunUp': { Title: 'ELECTRIC TRAINER RUN-UP', Note: 'APRON, 9 M OFF THE NOSE: 2-BLADE PROP SPINS UP TO IDLE, FULL-POWER RUN-UP, IDLE, STOP. MOTOR WHINE + INVERTER UNDER THE PROP', Marks: [[0.6, 'SPIN UP'], [2.5, 'RUN-UP'], [6.2, 'IDLE'], [8.2, 'STOP']], Build: () => CueScene(10, [[0, 'TrainerRunUp']]), Rms: null },
+    'Aircraft-TrainerTakeoff': { Title: 'ELECTRIC TRAINER TAKE-OFF', Note: 'MIC 25 M BESIDE THE RUNWAY: FULL-POWER ROLL FROM 200 M, ROTATION, CLIMB-OUT PAST AND AWAY (DOPPLER, GROUND BOUNCE)', Marks: [[1.2, 'ROLL'], [12.6, 'ROTATE']], Build: () => CueScene(18, [[0, 'TrainerTakeoff']]), Rms: null },
+    'Aircraft-RacerFlyover': { Title: 'ELECTRIC RACER FLY-OVER', Note: '430 KM/H, 35 M UP: 3-BLADE PROP WITH TIPS NEAR MACH 0.9 (RICH BUZZ), STRONG DOPPLER DROP', Marks: [[5, 'OVERHEAD']], Build: () => CueScene(10, [[0, 'RacerFlyover']]), Rms: null },
+    'Aircraft-AirTaxi': { Title: 'EVTOL AIR TAXI', Note: '40 M FROM THE PAD: SIX 5-BLADE ROTORS SPIN UP, LIFT-OFF, HOVER (ROTOR TONES BEAT), TILT AND FLY AWAY', Marks: [[1, 'SPIN UP'], [3.5, 'LIFT-OFF'], [9, 'HOVER'], [12, 'TRANSITION']], Build: () => CueScene(18, [[0, 'AirTaxiHover']]), Rms: null },
     'Weapon-EnergyLmg': { Title: 'ENERGY LMG (DEVOTION-STYLE), FULL MAGAZINE', Note: 'SPIN-UP 5 TO 15 ROUNDS/S OVER 1.75 S, 44 ROUNDS: ZAP, BLAST, SPIN MOTOR AND BARREL CLATTER, SPIN-DOWN, DRY CLICK', Marks: [[0.15, 'TRIGGER'], [1.9, 'TOP RATE']], Build: () => CueScene(5.6, [[0, 'EnergyLmg']]), Rms: null },
     'Weapon-EnergyLmgTurbo': { Title: 'ENERGY LMG + TURBOCHARGER', Note: 'SPIN-UP 6.8 TO 15 ROUNDS/S OVER 0.85 S, 44 ROUNDS, TURBINE WHISTLE AND CHARGE HISS ON THE PULL', Marks: [[0.15, 'TRIGGER'], [1.0, 'TOP RATE']], Build: () => CueScene(4.8, [[0, 'EnergyLmgTurbo']]), Rms: null },
     'Weapon-Lmg': { Title: 'LMG', Note: 'BELT-FED, 640 ROUNDS/MIN: LONG BURST AND TWO SHORT, BELT LINKS, BRASS LANDING, OUTDOOR SLAP-BACK', Marks: [[0.1, 'BURST'], [2.6, 'SHORT'], [3.5, 'SHORT']], Build: () => CueScene(5.5, [[0, 'Lmg']]), Rms: null },
@@ -292,16 +496,20 @@ function FlyBy(Seconds, PassTime, Profile = LaFerrari, Kmh = 262, Gear = 6, Extr
 {
     const Lead = 1.2, Count = Math.ceil((Seconds + Lead) * Rate);            // covers the ~0.9 s travel time at the start
     const SourceL = new Float32Array(Count), SourceR = new Float32Array(Count);
-    const Engine = new PulseTrainEngine(Rate, Profile, { Pickup: 'Dry' });
+    const Engine = Profile.Electric ? new DriveUnit(Rate, Profile, { Pickup: 'Dry' }) : new PulseTrainEngine(Rate, Profile, { Pickup: 'Dry' });
     const Roll = new SurfaceRoll(Rate, { Pickup: 'Dry', Seed: 77 });
-    const Speed = Kmh / 3.6, Rpm = Speed / Profile.TyreRadius * Profile.Ratios[Gear - 1] * Profile.Final * 60 / (2 * Math.PI);
-    Engine.Rpm.Current = Rpm;
+    const Speed = Kmh / 3.6, Wheel = Speed / Profile.TyreRadius * 60 / (2 * Math.PI);
+    const Rpm = Profile.Electric ? Wheel * Profile.Motors.at(-1).Ratios[Gear - 1] : Wheel * Profile.Ratios[Gear - 1] * Profile.Final;
+    const MotorRpm = (Motor, Base) => Base / Profile.Motors.at(-1).Ratios[Gear - 1] * Motor.Ratios[Math.min(Gear, Motor.Ratios.length) - 1];
+    if (Profile.Electric) Engine.Units.forEach((Unit) => { Unit.Rpm.Current = MotorRpm(Unit.Motor, Rpm); Unit.Load.Current = Extra.Load ?? 0.8; });
+    else Engine.Rpm.Current = Rpm;
     const Telemetry = [];
     for (let Index = 0; Index < Count; Index += Block)
     {
         const Size = Math.min(Block, Count - Index);
         const Climb = Rpm + (Index / Rate) * 55;                         // still pulling in 6th
-        Engine.Feed({ Rpm: Climb, Throttle: 1, Load: 1, Gear, ...Extra });
+        if (Profile.Electric) Engine.Feed({ Gear, Throttle: 1, Speed, Motors: Profile.Motors.map((Motor) => ({ Rpm: MotorRpm(Motor, Climb), Load: Extra.Load ?? 0.8 })) });
+        else Engine.Feed({ Rpm: Climb, Throttle: 1, Load: 1, Gear, ...Extra });
         Engine.Render(SourceL, SourceR, Index, Size);
         Roll.Feed({ Speed });
         Roll.Render(SourceL, SourceR, Index, Size);
@@ -351,7 +559,8 @@ for (const [Name, Scene] of Object.entries(Scenes))
     if (AlsoWav) WriteWav(join(AudioOut, `${Name}.wav`), Left, Right, Rate);
     const Overlay = Telemetry && !Telemetry[0]?.Doppler ? Telemetry.filter((Row, Index) => Row.Rpm > 300 && Index % 3 === 0).map((Row) => [Row.Time, Row.Rpm * Row.Firing]) : null;
     const Divisor = Overlay ? Math.round(1 / Telemetry[0].Firing) : 0;
-    DrawSpectrogram(join(ImageOut, `Audio-${Name}.png`), Left, Right, Rate, { Title: Scene.Title, Subtitle: Scene.Note + (Overlay ? `   CYAN DOTS: PREDICTED FIRING FREQUENCY (RPM / ${Divisor})` : ''), Marks: Scene.Marks, Overlay });
+    const Legend = Telemetry?.[0]?.Label ?? `CYAN DOTS: PREDICTED FIRING FREQUENCY (RPM / ${Divisor})`;
+    DrawSpectrogram(join(ImageOut, `Audio-${Name}.png`), Left, Right, Rate, { Title: Scene.Title, Subtitle: Scene.Note + (Overlay ? `   ${Legend}` : ''), Marks: Scene.Marks, Overlay });
     const Whole = AverageSpectrum(Left, Right, Rate, 0, Left.length / Rate - 0.2, 8192);
     Rows.push({ Name, Seconds: (Left.length / Rate).toFixed(1), Peak: Levels.Peak.toFixed(1), Rms: Levels.Rms.toFixed(1), Centroid: Centroid(Whole, Rate).toFixed(0), Render: ((Date.now() - Clock) / 1000).toFixed(1), Kb: Math.round(Levels.Bytes / 1024) });
     console.log(`${Name}: ${Rows.at(-1).Seconds}s peak ${Rows.at(-1).Peak} dBFS rms ${Rows.at(-1).Rms} dBFS centroid ${Rows.at(-1).Centroid} Hz, ${Rows.at(-1).Kb} KB, rendered in ${Rows.at(-1).Render}s`);

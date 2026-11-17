@@ -1,23 +1,32 @@
 // ACOUSTICS
 // 🧩 Page logic for the vehicle sound bench: wakes WebAudio on the first gesture, loads VoiceRackWorklet (live car),
-//    switches the car (LaFerrari / GT-R NISMO), renders CabinFoley and ImpactFoley cues into buffers on demand, binds
+//    switches the car (LaFerrari / GT-R NISMO / Taycan Turbo S / Next-Gen racer), swaps turbos and superchargers, renders CabinFoley and ImpactFoley cues into buffers on demand, binds
 //    keys, pedals and pads, runs the weapons' hold-to-fire trigger (shots scheduled on the audio clock at FireRate,
 //    spin motor loop following the rate), and draws the tachometer from the worklet's telemetry.
 // 📝 Test hooks on window.Bench: Wake(), Command(Name), Hold(Control, Amount), Cue(Name), Car(Name), Readout(),
-//    RenderOffline(Seconds, Car), Fire(Weapon, Seconds) → { Fired, Seconds, Turbo }, Turbo(On).
+//    RenderOffline(Seconds, Car, Induction, Gear), Fire(Weapon, Seconds) → { Fired, Seconds, Turbo }, Turbo(On), Induction(Name),
+//    Sport(On), Fly(Aircraft) → seconds.
 
 import { Cues as CabinCues, RenderCue as RenderCabinCue } from './CabinFoley.js';
 import { Cues as ImpactCues, RenderCue as RenderImpactCue } from './ImpactFoley.js';
 import { Cues as BallisticCues, RenderCue as RenderBallisticCue, Weapons, FireRate, RenderShot, RenderMotor } from './Ballistics.js';
 import { Surfaces } from './ContactPatch.js';
-import { Profiles } from './PulseTrainEngine.js';
+import { Profiles as EngineProfiles } from './PulseTrainEngine.js';
+import { ElectricCars } from './ElectricDrive.js';
+import { Inducers } from './ForcedInduction.js';
+import { Cues as AviationCues } from './ElectricAviation.js';
 
 const Cues = { ...CabinCues, ...ImpactCues, ...BallisticCues };
 const RenderCue = (Name, Rate, Options) => (CabinCues[Name] ? RenderCabinCue : ImpactCues[Name] ? RenderImpactCue : RenderBallisticCue)(Name, Rate, Options);
+const Profiles = { ...EngineProfiles, ...ElectricCars };
+const CarOrder = ['LaFerrari', 'GtrNismo', 'TaycanTurboS', 'NextGenRacer'];
 const Brands = {
     LaFerrari: { Label: 'LaFerrari', Spec: 'F140FE 6.3 L V12 · HY-KERS · 7-speed DCT · 100% synthesized', Dial: 10000, Assist: 'HY-KERS', Chip: 'KERS' },
     GtrNismo: { Label: 'GT-R NISMO', Spec: 'VR38DETT 3.8 L twin-turbo V6 · 600 PS · 6-speed DCT · AWD · 100% synthesized', Dial: 8000, Assist: 'BOOST', Chip: 'BOOST' },
+    TaycanTurboS: { Label: 'Taycan Turbo S', Spec: 'Two PSM motors · 800 V · 2-speed rear (15.5 / 8.05) · AWD · 100% synthesized', Dial: 16000, Assist: 'DRIVE / REGEN', Chip: 'REGEN', Electric: true },
+    NextGenRacer: { Label: 'Next-Gen racer', Spec: 'Jackson Storm-style original · 634 kW motor · 6-speed sequential · V8 undertone · 100% synthesized', Dial: 18000, Assist: 'DRIVE / REGEN', Chip: 'REGEN', Electric: true },
 };
+let Induction = null, SportSound = false;
 let CarName = 'LaFerrari';
 
 const Find = (Id) => document.getElementById(Id);
@@ -33,7 +42,12 @@ const Reel = [
     ['Weapon-EnergyLmg', 'Energy LMG'], ['Weapon-EnergyLmgTurbo', 'Energy LMG + Turbo'], ['Weapon-Lmg', 'LMG'], ['Weapon-Smg', 'SMG'],
     ['Weapon-Sniper', 'Sniper rifle'], ['Weapon-Turret', 'Turret'], ['Weapon-Cannon', 'Tank cannon'], ['Weapon-AutoCannon', 'Autocannon'],
     ['Bullets-Supersonic', 'Supersonic crack'], ['Bullets-Whizz', 'Whizz-by'], ['Bullets-Ricochet', 'Ricochets'], ['Bullets-Impacts', 'Bullet impacts'],
+    ...Object.entries(Inducers).map(([Name, Model]) => [`Induction-${Name}`, `GT-R + ${Model.Label.toLowerCase()}`]),
+    ['Taycan-Launch', 'Taycan launch'], ['Taycan-Onboard', 'Taycan onboard'], ['Taycan-SportSound', 'Taycan sport sound'], ['Taycan-FlyBy', 'Taycan fly-by'],
+    ['NextGen-Launch', 'Next-Gen launch'], ['NextGen-Onboard', 'Next-Gen onboard'], ['NextGen-FlyBy', 'Next-Gen fly-by'],
+    ['Aircraft-TrainerRunUp', 'Trainer run-up'], ['Aircraft-TrainerTakeoff', 'Trainer take-off'], ['Aircraft-RacerFlyover', 'Racer fly-over'], ['Aircraft-AirTaxi', 'eVTOL air taxi'],
 ];
+const AircraftClips = { TrainerRunUp: 'Aircraft-TrainerRunUp', TrainerTakeoff: 'Aircraft-TrainerTakeoff', RacerFlyover: 'Aircraft-RacerFlyover', AirTaxiHover: 'Aircraft-AirTaxi' };
 const SurfaceLooks = {
     Asphalt: 'radial-gradient(circle at 30% 30%, #4a4b50 0 1px, transparent 1.5px) 0 0/7px 7px, linear-gradient(160deg, #2c2d31, #1a1b1e)',
     Wet: 'linear-gradient(100deg, transparent 40%, rgba(160,200,255,0.25) 50%, transparent 60%), linear-gradient(160deg, #1d2430, #0f1218)',
@@ -64,8 +78,8 @@ async function Wake()
         Limiter.threshold.value = -6; Limiter.knee.value = 4; Limiter.ratio.value = 12; Limiter.attack.value = 0.002; Limiter.release.value = 0.12;
         const Master = Context.createGain(); Master.gain.value = 0.8;
         const Foley = Context.createGain(); Foley.gain.value = 1;
-        const Rack = new AudioWorkletNode(Context, 'voice-rack', { numberOfInputs: 0, outputChannelCount: [2], processorOptions: { Car: CarName } });
-        Rack.port.onmessage = (Message) => { Readout = Message.data; };
+        const Rack = new AudioWorkletNode(Context, 'voice-rack', { numberOfInputs: 0, outputChannelCount: [2], processorOptions: { Car: CarName, Induction } });
+        Rack.port.onmessage = (Message) => { if (Message.data.Fault) { console.error('voice-rack fault', Message.data.Fault); return; } Readout = Message.data; };
         Rack.connect(Master); Foley.connect(Master); Master.connect(Limiter); Limiter.connect(Context.destination);
         Object.assign(Audio, { Context, Rack, Master, Foley });
         await Context.resume();
@@ -208,11 +222,11 @@ async function Fire(Name, Seconds = 1)
  * pressed and the throttle floored in neutral (it should end bouncing on the limiter), and returns peak / RMS levels,
  * the count of non-finite samples and the final telemetry.
  */
-async function RenderOffline(Seconds = 5, Car = CarName)
+async function RenderOffline(Seconds = 5, Car = CarName, Inducer = null, Gear = 0)
 {
     const Rate = 48000, Context = new OfflineAudioContext(2, Math.round(Seconds * Rate), Rate);
     await Context.audioWorklet.addModule(new URL('./VoiceRackWorklet.js', import.meta.url));
-    const Rack = new AudioWorkletNode(Context, 'voice-rack', { numberOfInputs: 0, outputChannelCount: [2], processorOptions: { Start: true, Throttle: 1, Car } });
+    const Rack = new AudioWorkletNode(Context, 'voice-rack', { numberOfInputs: 0, outputChannelCount: [2], processorOptions: { Start: true, Throttle: 1, Car, Induction: Inducer, Gear } });
     let Last = null; Rack.port.onmessage = (Message) => { Last = Message.data; };
     Rack.connect(Context.destination);
     const Rendered = await Context.startRendering();
@@ -272,6 +286,41 @@ function BuildPanels()
     Turbo.onclick = () => ToggleTurbo();
     Find('PadsWeapons').append(Turbo);
     ToggleTurbo(false); MarkPicked();
+    const Stock = document.createElement('button');
+    Stock.className = 'Pad'; Stock.dataset.induction = '';
+    Stock.innerHTML = '<b>Stock</b><small>the car as built</small>';
+    Stock.onclick = () => PickInduction(null);
+    Find('PadsInduction').append(Stock);
+    for (const [Name, Model] of Object.entries(Inducers))
+    {
+        const Pad = document.createElement('button');
+        Pad.className = 'Pad'; Pad.dataset.induction = Name; Pad.title = Model.Note;
+        Pad.innerHTML = `<b>${Model.Label}</b><small>${Model.Family === 'Turbo' ? 'turbo' : 'supercharger'} · ${Model.Note.split(':')[0].toLowerCase()}</small>`;
+        Pad.onclick = () => PickInduction(Name);
+        Find('PadsInduction').append(Pad);
+    }
+    for (const Name of ['TaycanTurboS', 'NextGenRacer'])
+    {
+        const Pad = document.createElement('button');
+        Pad.className = 'Pad'; Pad.dataset.car = Name;
+        Pad.innerHTML = `<b>${Brands[Name].Label}</b><small>${Name === 'TaycanTurboS' ? 'drive it · two motor whines, 2-speed shift' : 'drive it · Storm-style whir, sequential box'}</small>`;
+        Pad.onclick = () => PickCar(Name);
+        Find('PadsElectric').append(Pad);
+    }
+    const Sport = document.createElement('button');
+    Sport.className = 'Pad Hop'; Sport.id = 'SportSound';
+    Sport.innerHTML = '<b>Sport sound</b><small>synthetic speaker layer for the EVs</small>';
+    Sport.onclick = () => ToggleSport();
+    Find('PadsElectric').append(Sport);
+    for (const [Name, Spec] of Object.entries(AviationCues))
+    {
+        const Pad = document.createElement('button');
+        Pad.className = 'Pad'; Pad.dataset.fly = Name;
+        Pad.innerHTML = `<b>${Spec.Label}</b><small>aircraft · ${Spec.Seconds} s</small>`;
+        Pad.onclick = () => Fly(Name);
+        Find('PadsElectric').append(Pad);
+    }
+    MarkPower();
     for (const [Name, Label, Note] of [['Kerb', 'Kerb strike', 'K · 9 cm up'], ['Pothole', 'Pothole', 'P · 8 cm down']])
     {
         const Pad = document.createElement('button');
@@ -324,10 +373,55 @@ async function PickCar(Name)
     Button.dataset.on = Name; Button.querySelector('b').textContent = Brand.Label;
     Find('BrandName').textContent = Brand.Label; Find('BrandSpec').textContent = Brand.Spec;
     Find('KersLabel').textContent = Brand.Assist; Find('ChipKers').textContent = Brand.Chip;
+    Find('Start').querySelector('span').textContent = Brand.Electric ? 'POWER' : 'ENGINE';
     document.body.dataset.car = Name;
+    MarkPower();
     await Wake();
     Audio.Rack.port.postMessage({ Car: Name });
     SendControls();
+}
+
+/** Swaps the turbo or supercharger (null = stock). Combustion cars only; the car keeps running through the swap. */
+async function PickInduction(Name)
+{
+    Induction = Inducers[Name] ? Name : null;
+    if (Brands[CarName].Electric) await PickCar('GtrNismo');
+    MarkPower();
+    await Wake();
+    Audio.Rack.port.postMessage({ Induction: Induction ?? '' });
+}
+
+function ToggleSport(On = !SportSound)
+{
+    SportSound = On;
+    Audio.Rack?.port.postMessage({ Sport: On ? 0.05 : 0 });
+    MarkPower();
+}
+
+/** Plays a pre-rendered aircraft clip (the propeller synthesis is too heavy to run on the page thread on demand). */
+async function Fly(Name)
+{
+    await Wake();
+    const Pad = document.querySelector(`[data-fly="${Name}"]`);
+    if (!Audio.Buffers.has(Name))
+    {
+        const Bytes = await (await fetch(`../../../Exhibits/CabinHmi/Audio/${AircraftClips[Name]}.mp3`)).arrayBuffer();
+        Audio.Buffers.set(Name, await Audio.Context.decodeAudioData(Bytes));
+    }
+    const Source = Audio.Context.createBufferSource();
+    Source.buffer = Audio.Buffers.get(Name);
+    Pad?.classList.add('Ring'); Source.onended = () => Pad?.classList.remove('Ring');
+    Source.connect(Audio.Foley); Source.start();
+    return Source.buffer.duration;
+}
+
+function MarkPower()
+{
+    for (const Pad of document.querySelectorAll('[data-induction]')) Pad.classList.toggle('Picked', (Pad.dataset.induction || null) === Induction && !Brands[CarName].Electric);
+    for (const Pad of document.querySelectorAll('[data-car]')) Pad.classList.toggle('Picked', Pad.dataset.car === CarName);
+    Find('SportSound')?.classList.toggle('On', SportSound);
+    const Brand = Brands[CarName];
+    Find('BrandSpec').textContent = Induction && !Brand.Electric ? `${Brand.Spec.replace(' · 100% synthesized', '')} · + ${Inducers[Induction].Label.toLowerCase()}` : Brand.Spec;
 }
 
 function PickSurface(Name)
@@ -376,7 +470,8 @@ function BindInputs()
         else if (Event.code === 'KeyQ') Command('ShiftDown');
         else if (Event.code === 'KeyN') Command('Neutral');
         else if (Event.code === 'KeyC') Flip('Pickup', 'Pickup', ['Chase', 'Cabin']);
-        else if (Event.code === 'KeyV') PickCar(CarName === 'LaFerrari' ? 'GtrNismo' : 'LaFerrari');
+        else if (Event.code === 'KeyV') PickCar(CarOrder[(CarOrder.indexOf(CarName) + 1) % CarOrder.length]);
+        else if (Event.code === 'KeyI') { const Names = [null, ...Object.keys(Inducers)]; PickInduction(Names[(Names.indexOf(Induction) + 1) % Names.length]); }
         else if (Event.code === 'KeyK') Kick('Kerb');
         else if (Event.code === 'KeyF') PullTrigger(Picked);
         else if (Event.code === 'KeyR') ToggleTurbo();
@@ -406,7 +501,7 @@ function BindInputs()
     Find('PaddleDown').onclick = () => Command('ShiftDown');
     Find('Neutral').onclick = () => Command('Neutral');
     Find('Pickup').onclick = () => Flip('Pickup', 'Pickup', ['Chase', 'Cabin']);
-    Find('CarPick').onclick = () => PickCar(CarName === 'LaFerrari' ? 'GtrNismo' : 'LaFerrari');
+    Find('CarPick').onclick = () => PickCar(CarOrder[(CarOrder.indexOf(CarName) + 1) % CarOrder.length]);
     Find('Shifting').onclick = () => Flip('Shifting', 'Automatic', ['Auto', 'Manual']);
     Find('Traction').onclick = () => Flip('Traction', 'Traction', ['On', 'Off']);
 }
@@ -435,7 +530,8 @@ function DrawTach(Seconds)
     if (ShownRpm > 20) { Tach.beginPath(); Tach.arc(Centre, Centre, Radius, From, Angle(ShownRpm)); Tach.stroke(); }
     Tach.shadowBlur = 0;
     Tach.fillStyle = '#9aa0ab'; Tach.font = '500 22px DM Sans'; Tach.textAlign = 'center'; Tach.textBaseline = 'middle';
-    for (let Thousand = 0; Thousand <= Max / 1000; Thousand++)
+    const Step = Max > 10000 ? 2 : 1;                                  // electric dials (16–18k) label every 2000
+    for (let Thousand = 0; Thousand <= Max / 1000; Thousand += Step)
     {
         const At = Angle(Thousand * 1000), Cos = Math.cos(At), Sin = Math.sin(At);
         Tach.strokeStyle = Thousand * 1000 >= Profile.Redline ? '#ff2b1c' : '#4a4e58'; Tach.lineWidth = 3;
@@ -457,12 +553,13 @@ function DrawTach(Seconds)
     Find('ChipLimiter').classList.toggle('On', !!Readout.Limiting);
     Find('ChipShift').classList.toggle('On', !!Readout.Shifting);
     Find('ChipSpin').classList.toggle('On', (Readout.Wheelspin ?? 0) > 0.05 || (Readout.Corner ?? 0) > 0.1 || (Readout.LockUp ?? 0) > 0.1);
-    const Assist = CarName === 'GtrNismo' ? (Readout.Boost ?? 0) : (Readout.Motor ?? 0);
-    Find('ChipKers').classList.toggle('On', Math.abs(Assist) > (CarName === 'GtrNismo' ? 0.6 : 0.05));
+    const Boosted = CarName === 'GtrNismo' || (Induction && Inducers[Induction].Family === 'Turbo' && !Brands[CarName].Electric);
+    const Assist = Boosted ? (Readout.Boost ?? 0) : (Readout.Motor ?? 0);
+    Find('ChipKers').classList.toggle('On', Brands[CarName].Electric ? Assist < -0.05 : Math.abs(Assist) > (Boosted ? 0.6 : 0.05));
     Find('ChipAbs').classList.toggle('On', !!Readout.Abs);
     Find('Start').classList.toggle('Running', !!(Readout.Running || Readout.Starting));
     Find('Start').querySelector('b').textContent = Readout.Running || Readout.Starting ? 'STOP' : 'START';
-    const Kers = CarName === 'GtrNismo' ? (Readout.Boost ?? 0) * 2 - 1 : Assist, Bar = Find('KersBar');
+    const Kers = Boosted ? (Readout.Boost ?? 0) * 2 - 1 : Assist, Bar = Find('KersBar');
     Bar.style.width = `${Math.abs(Kers) * 50}%`; Bar.style.left = Kers >= 0 ? '50%' : `${50 - Math.abs(Kers) * 50}%`;
     Bar.style.background = Kers >= 0 ? 'var(--Cyan)' : '#7dff9a';
     Find('PedalThrottle').querySelector('u').style.height = `${Controls.Throttle * 100}%`;
@@ -484,6 +581,7 @@ requestAnimationFrame(Tick);
 
 window.Bench = {
     Wake, Command, Cue, RenderOffline, Readout: () => Readout, Car: PickCar, Kick, Fire, Turbo: ToggleTurbo,
+    Induction: PickInduction, Sport: ToggleSport, Fly,
     Hold: (Control, Amount) => { Forced = Amount === null ? null : { ...(Forced ?? {}), [Control]: Amount }; },
     Surface: PickSurface,
 };

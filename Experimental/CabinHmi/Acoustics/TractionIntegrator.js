@@ -168,8 +168,20 @@ export class TractionIntegrator
         if (!Alive && this.Starting === null) this.Rpm = Math.max(0, this.Rpm - (this.Rpm * 2.5 + 200) * Seconds);
         this.Rpm = Clamp(this.Rpm, 0, P.Limiter + 400);
 
+        this.Road(DriveForce, Seconds);
+
+        if (this.Gear !== this.LastGear) { if (this.LastGear !== 0 || this.Speed > 0.5) this.Clunk++; this.LastGear = this.Gear; }
+
+        const Load = Alive ? Clamp((Combustion - Friction * 0.2) / Math.max(Full, 1), 0, 1) : 0;
+        Object.assign(Feed, { Rpm: this.Rpm, Throttle: Alive ? Effective : 0, Load, Ignition: Alive ? Ignition : 0, Motor, Boost: this.Boost, Gear: this.Gear, Clunk: this.Clunk });
+        return Feed;
+    }
+
+    /** Tyres and road: traction limit on the driven axles, brakes with ABS, drag, rolling resistance, cornering slip. */
+    Road(DriveForce, Seconds)
+    {
         // Tyres: traction limit on the driven rear axle, brakes with ABS, drag and rolling resistance.
-        const Weight = P.Mass * Gravity;
+        const P = this.Profile, Weight = P.Mass * Gravity;
         const Grip = 1.5 * Weight * (P.Drive?.Share ?? 0.6) * (1 + this.Speed * this.Speed * 0.00012);
         const Excess = DriveForce > Grip ? (DriveForce - Grip) / Grip : 0;
         const Spin = this.Traction ? Math.min(Excess * 1.5, 0.12) : Clamp(Excess * 2.5 + (this.Handbrake ? 0 : 0), 0, 1);
@@ -191,11 +203,6 @@ export class TractionIntegrator
         const Lateral = Math.abs(this.Steer) * this.Speed * this.Speed / 18;
         this.Lateral = Lateral;
         this.Corner = Smoothstep(0.75, 1.25, Lateral / (1.25 * Gravity));
-        if (this.Gear !== this.LastGear) { if (this.LastGear !== 0 || this.Speed > 0.5) this.Clunk++; this.LastGear = this.Gear; }
-
-        const Load = Alive ? Clamp((Combustion - Friction * 0.2) / Math.max(Full, 1), 0, 1) : 0;
-        Object.assign(Feed, { Rpm: this.Rpm, Throttle: Alive ? Effective : 0, Load, Ignition: Alive ? Ignition : 0, Motor, Boost: this.Boost, Gear: this.Gear, Clunk: this.Clunk });
-        return Feed;
     }
 
     /** Telemetry for the bench readouts. */

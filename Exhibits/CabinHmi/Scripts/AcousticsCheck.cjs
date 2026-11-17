@@ -2,10 +2,11 @@
 // 🧩 Headless proof for the vehicle sound bench: loads the page, renders the live AudioWorklet through an
 //    OfflineAudioContext (levels, NaN count, telemetry), then drives the real-time context (start, launch, shifts,
 //    surfaces, cues), then switches to the GT-R NISMO (offline render, launch, ABS stop, kerb, pothole, impact cues) and
-//    saves screenshots; then fires the weapons (energy LMG with and without the Turbocharger, SMG, LMG) and bullet cues. Run from a folder with playwright-core and @sparticuz/chromium installed:
+//    saves screenshots; then fires the weapons (energy LMG with and without the Turbocharger, SMG, LMG) and bullet cues; then renders and
+//    drives the electric cars (Taycan, Next-Gen racer), swaps turbos and superchargers live, and plays an aircraft clip. Run from a folder with playwright-core and @sparticuz/chromium installed:
 //    AWS_EXECUTION_ENV=AWS_Lambda_nodejs20.x node AcousticsCheck.cjs <url> <outdir>
 const { chromium } = require('playwright-core');
-const sp = require('@sparticuz/chromium');
+const sp = (({ default: Fresh, ...Older }) => Fresh ?? Older)(require('@sparticuz/chromium'));   // newer releases export default
 (async () =>
 {
     const [Url, Out] = process.argv.slice(2);
@@ -74,6 +75,43 @@ const sp = require('@sparticuz/chromium');
     await Page.evaluate(() => { Bench.Cue('Sniper'); Bench.Cue('Supersonic'); Bench.Cue('HitWater'); Bench.Cue('HitMetal'); });
     await Page.waitForTimeout(1500);
     console.log('bullet pads', await Page.evaluate(() => document.querySelectorAll('#PadsBullets .Pad').length), 'weapon pads', await Page.evaluate(() => document.querySelectorAll('#PadsWeapons .Pad').length));
+    // Power: offline renders of the electric cars and an inducer through the real worklet, then live driving.
+    // Electric cars start in 1st (a car in neutral is silent); combustion cars rev in neutral onto the limiter.
+    for (const [Car, Inducer, Gear] of [['TaycanTurboS', null, 1], ['NextGenRacer', null, 1], ['GtrNismo', 'Roots', 0], ['LaFerrari', 'BigSingle', 0]])
+        console.log('offline power', Car, Inducer, JSON.stringify(await Page.evaluate(([C, I, G]) => Bench.RenderOffline(4, C, I, G).then((R) => ({ Peak: R.Peak, Rms: R.Rms, NonFinite: R.NonFinite, Rpm: Math.round(R.Telemetry?.Rpm ?? 0), Kmh: Math.round(R.Telemetry?.Kmh ?? 0), Gear: R.Telemetry?.Gear })), [Car, Inducer, Gear])));
+    await Page.evaluate(() => Bench.Car('TaycanTurboS'));
+    await Page.evaluate(() => Bench.Command('Start'));
+    await Page.waitForTimeout(900);
+    await Page.evaluate(() => { Bench.Command('ShiftUp'); Bench.Hold('Throttle', 1); });
+    await Page.waitForTimeout(4200);
+    console.log('taycan live', JSON.stringify(await Page.evaluate(() => { const R = Bench.Readout(); return { Car: R.Car, Kmh: Math.round(R.Kmh), Gear: R.Gear, Rpm: Math.round(R.Rpm), Motors: R.Motors, Motor: +R.Motor.toFixed(2) }; })));
+    await Page.evaluate(() => { Bench.Hold('Throttle', 0); Bench.Hold('Brake', 0.6); });
+    await Page.waitForTimeout(1500);
+    console.log('taycan regen', JSON.stringify(await Page.evaluate(() => { const R = Bench.Readout(); return { Kmh: Math.round(R.Kmh), Gear: R.Gear, Motor: +R.Motor.toFixed(2) }; })));
+    await Page.evaluate(() => { Bench.Hold('Brake', null); Bench.Hold('Throttle', null); Bench.Sport(true); Bench.Car('NextGenRacer'); });
+    await Page.evaluate(() => Bench.Command('Start'));
+    await Page.waitForTimeout(900);
+    await Page.evaluate(() => { Bench.Command('ShiftUp'); Bench.Hold('Throttle', 1); });
+    await Page.waitForTimeout(5000);
+    console.log('next-gen live', JSON.stringify(await Page.evaluate(() => { const R = Bench.Readout(); return { Car: R.Car, Kmh: Math.round(R.Kmh), Gear: R.Gear, Rpm: Math.round(R.Rpm) }; })));
+    await Page.evaluate(() => { Bench.Hold('Throttle', null); Bench.Induction('TwinScrew'); });
+    await Page.waitForTimeout(600);
+    await Page.evaluate(() => Bench.Command('Start'));
+    await Page.waitForTimeout(2000);
+    await Page.evaluate(() => { Bench.Command('ShiftUp'); Bench.Hold('Throttle', 1); });
+    await Page.waitForTimeout(3000);
+    await Page.evaluate(() => Bench.Induction('Flutter'));
+    await Page.waitForTimeout(1500);
+    console.log('induction live', JSON.stringify(await Page.evaluate(() => { const R = Bench.Readout(); return { Car: R.Car, Induction: R.Induction, Kmh: Math.round(R.Kmh), Gear: R.Gear, Rpm: Math.round(R.Rpm), Boost: +R.Boost.toFixed(2), Spec: document.querySelector('#BrandSpec').textContent }; })));
+    await Page.evaluate(() => Bench.Hold('Throttle', 0));
+    await Page.waitForTimeout(800);
+    await Page.evaluate(() => Bench.Hold('Throttle', null));
+    console.log('fly', await Page.evaluate(() => Bench.Fly('RacerFlyover')));
+    console.log('power pads', await Page.evaluate(() => document.querySelectorAll('#PadsInduction .Pad').length), await Page.evaluate(() => document.querySelectorAll('#PadsElectric .Pad').length));
+    await Page.evaluate(() => Bench.Induction('TwinScrew'));
+    await Page.evaluate(() => document.querySelector('#PadsInduction').scrollIntoView({ block: 'center' }));
+    await Page.waitForTimeout(1500);
+    await Page.screenshot({ path: `${Out}/Acoustics-8-Power.png`, timeout: 120000, animations: 'disabled' });
     console.log('errors', JSON.stringify(Errors));
     await Browser.close();
 })();

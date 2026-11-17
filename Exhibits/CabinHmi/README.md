@@ -17,12 +17,13 @@ Each step file clicks through every menu and its main interactions; every run re
 | `Lobby-15…24` | Configurator (Follow-up 9): Photo Studio set view, Front ¾ with the hotspot dots (black cyc), Wheels close-up (bronze rims, tan tyres, yellow calipers), Tail lights close-up (purple, wing), Workshop with the lift at 1.2 m, Night tuning underglow close-up (magenta, splitter, skirts, light bar), drivetrain cutaways V8 AWD automatic, Inline-6 FWD manual and Electric dual-motor AWD, Workshop Old school with the door open |
 | `Acoustics-1…6` | Sound bench (`Scripts/AcousticsCheck.cjs`): woken bench, LaFerrari launch in 3rd at 128 km/h with KERS assist, gravel + cabin mic + cornering squeal with the xenon cue ringing and the indicator looping, GT-R NISMO pulling 3rd on full boost, GT-R ABS stop (ABS chip lit) after a kerb strike, impact pads ringing (explosion, window shatter, metal crash) |
 | `Acoustics-7-Weapons` | Weapons and Bullets panels mid-burst: energy LMG trigger lit (firing) with the Turbocharger hop-up on; bullet pass-by, ricochet and 8 impact pads |
-| `Audio-*.png` | Spectrogram + waveform plates for every reel file in `Audio/` (cyan dots on engine plates = predicted firing frequency: rpm/10 for the V12, rpm/20 for the V6) |
+| `Acoustics-8-Power` | Forced induction and Electric panels: twin-screw supercharger picked on the GT-R, sport sound on, aircraft pads |
+| `Audio-*.png` | Spectrogram + waveform plates for every reel file in `Audio/` (cyan dots on engine plates = predicted firing frequency: rpm/10 for the V12, rpm/20 for the V6; on supercharger plates the predicted blower whine, rpm × drive ratio × lobes; on EV plates a predicted motor order) |
 | `Lucent-1…6` | Rejected first HMI C attempt (kept for reference) |
 
 ## Vehicle sound reel (`Audio/`)
 All synthesized in code — no recordings or samples anywhere. 192 kbps stereo MP3 at 44.1 kHz (lamejs), rendered by
-`Experimental/CabinHmi/Acoustics/Offline/RenderReel.mjs` (deterministic seeds; `--wav` also writes WAV). 35 files, 7.1 MB in total (the
+`Experimental/CabinHmi/Acoustics/Offline/RenderReel.mjs` (deterministic seeds; `--wav` also writes WAV). 56 files, 13 MB in total (the
 Follow-up 10 WAVs, 22 MB, were replaced). Peak is measured before encoding.
 
 | File | Length | Peak dBFS | RMS dBFS | Content |
@@ -62,6 +63,27 @@ Follow-up 10 WAVs, 22 MB, were replaced). Peak is measured before encoding.
 | `Bullets-Whizz.mp3` | 2.6 s | −1.4 | −24.4 | Three subsonic fly-bys: Doppler drop, vortex tone, panning across |
 | `Bullets-Ricochet.mp3` | 3.0 s | −1.4 | −22.9 | Glancing off rock, steel and concrete: strike then tumbling whine |
 | `Bullets-Impacts.mp3` | 11.0 s | −1.4 | −29.5 | Sand, dirt, rock, concrete, wood, metal, glass, water, 1.2 s apart |
+| `Induction-SmallSingle.mp3` | 11.0 s | −2.6 | −17.0 | Every `Induction-*` scene: GT-R NISMO with the inducer swapped in, chase mic: two blips, pull from rest, lift, back on, lift. Small single turbo: quick spool, bright whistle, soft blow-off |
+| `Induction-BigSingle.mp3` | 11.0 s | −3.1 | −17.0 | Big single turbo: late, violent boost, deep whoosh, loud blow-off |
+| `Induction-TwinTurbo.mp3` | 11.0 s | −3.1 | −17.0 | Parallel twins: two detuned whistles beating, blow-off with a little flutter |
+| `Induction-Flutter.mp3` | 11.0 s | −3.3 | −17.0 | Turbo with no blow-off valve: compressor surge chatter on every lift |
+| `Induction-Vgt.mp3` | 11.0 s | −2.9 | −17.0 | Variable-geometry turbo: early boost, whistle sweeping with the vanes, no valve |
+| `Induction-ElectricTurbo.mp3` | 11.0 s | −3.3 | −17.0 | Electric-assist turbo: no lag, motor whine on the shaft, harvest whine on lift |
+| `Induction-Roots.mp3` | 11.0 s | −3.9 | −17.0 | Roots blower: gear-driven whine with a chugging pocket pulse |
+| `Induction-TwistedLobe.mp3` | 11.0 s | −3.6 | −17.0 | Twisted 4-lobe supercharger: high smooth scream, bypass valve on the cruise |
+| `Induction-TwinScrew.mp3` | 11.0 s | −3.2 | −17.0 | Twin-screw supercharger: raspy harmonic-rich scream, timing-gear whine |
+| `Induction-Centrifugal.mp3` | 11.0 s | −3.2 | −17.0 | Centrifugal supercharger: whine and boost climbing with rpm squared, blow-off on lift |
+| `Taycan-Launch.mp3` | 14.0 s | −6.6 | −18.0 | Porsche Taycan Turbo S, chase mic: ready chime, launch 0–200 km/h, both motors whining, rear 2-speed shift near 100 km/h, coast |
+| `Taycan-Onboard.mp3` | 15.0 s | −5.3 | −20.0 | Cabin mic: gentle pull-away, cruise, floor it (stays in 2nd above 60 km/h), regenerative braking to a stop |
+| `Taycan-SportSound.mp3` | 11.5 s | −4.9 | −18.0 | Same car with the synthetic sport-sound layer on |
+| `Taycan-FlyBy.mp3` | 8.0 s | −1.1 | −20.1 | Trackside at 12 m, 200 km/h in 2nd: motor whine, tyres and wind |
+| `NextGen-Launch.mp3` | 14.0 s | −4.7 | −17.0 | Next-Gen racer (original, Jackson Storm style), chase mic: whir locked to the motor, V8 undertone, sequential upshifts dropping the pitch |
+| `NextGen-Onboard.mp3` | 14.0 s | −3.7 | −17.0 | Cabin mic: pull 3-4-5, brake with downshifts (8.06 s to 4th, 8.77 s to 3rd), corner with squeal, exit |
+| `NextGen-FlyBy.mp3` | 8.0 s | −1.0 | −18.6 | Trackside at 12 m, 290 km/h in 6th: whir and undertone with Doppler |
+| `Aircraft-TrainerRunUp.mp3` | 10.0 s | −0.9 | −20.3 | Electric trainer on the apron: 2-blade prop spin-up, full-power run-up, idle, stop |
+| `Aircraft-TrainerTakeoff.mp3` | 18.0 s | −0.9 | −20.7 | 25 m beside the runway: roll, rotation, climb-out past and away |
+| `Aircraft-RacerFlyover.mp3` | 10.0 s | −0.7 | −23.4 | Electric racer at 430 km/h, 35 m up: buzzy near-Mach tips, strong Doppler drop |
+| `Aircraft-AirTaxi.mp3` | 18.0 s | −0.9 | −19.9 | eVTOL: six rotors spin up, lift-off, hover with beating rotor tones, transition away |
 
 **"Less flat" LaFerrari (Follow-up 11).** `_ClaudeScratch/tmp/audio/flat.mjs` measures the firing order against the strongest half/low
 order (gap: smaller = more audible chatter), the cycle-to-cycle level variation (CV) and the crest factor, on the chase mic:
@@ -84,6 +106,15 @@ after 4.5 s → ABS stop (ABS chip lit) with a kerb strike → pothole, explosio
 each. Energy LMG timing from `FireRate`: the top rate (15 rounds/s) is reached after 17 rounds without the Turbocharger and 9 with it; the full
 44-round magazine empties in 3.56 s vs 3.19 s. Live trigger in headless Chromium (`Bench.Fire`, `Acoustics-7-Weapons.png`): a 1.75 s hold
 fired 19 rounds bare and 24 with the Turbocharger; SMG 1 s → 17 rounds; 8 weapon pads and 11 bullet pads; console errors 0.
+
+**Turbos, superchargers, EVs, aircraft (Follow-up 13).** Browser path (`Bench.RenderOffline` in headless Chromium, `Scripts/AcousticsCheck.cjs`),
+0 non-finite samples in every render: Taycan in 1st → 110 km/h in 2nd, peak −3.7 dBFS, RMS −17.5; Next-Gen racer → 99 km/h in 1st at
+15 898 rpm, peak −2.1, RMS −14.5; GT-R + Roots on the limiter (7065 rpm), peak −0.1, RMS −16.5; LaFerrari + big single (9204 rpm), peak 0,
+RMS −12.5. Live: Taycan 156 km/h in 2nd, both motors 9297 rpm, then regen to 112 km/h with motor torque −0.35; Next-Gen racer 146 km/h in
+2nd at 17 040 rpm; GT-R with a twin-screw swapped for the no-blow-off turbo while driving: 130 km/h in 3rd, boost 0.87; `Fly('RacerFlyover')`
+10.03 s; 11 induction and 7 electric pads; console errors 0. Model launches (`_ClaudeScratch/tmp/audio/launch.mjs`): Taycan 0–100 2.83 s,
+0–200 9.86 s, top 259 km/h; Next-Gen racer 3.43 / 7.27 s, 338 km/h; GT-R with each inducer 0–100 2.75–3.48 s. Supercharger whine
+lands on the predicted rpm × ratio line on every blower plate.
 
 ## Reproduce
 ```

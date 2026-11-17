@@ -1,14 +1,18 @@
 // VOICE RACK WORKLET
 // 🧩 AudioWorklet that runs the live car on the audio thread: TractionIntegrator steps every 128-sample block and feeds
-//    PulseTrainEngine (LaFerrari or GT-R NISMO), SurfaceRoll, TyreSqueal, BrakeRotor and SuspensionTravel, the same
-//    classes the offline reel renders with.
-// 📝 The page posts { Controls }, { Command }, { Mix } and { Car } messages (processorOptions { Start, Throttle, Car }
-//    preset them); the worklet posts a telemetry readout ~30 times a second. Registered as 'voice-rack'.
+//    PulseTrainEngine (LaFerrari or GT-R NISMO, optionally with an InductionVoice turbo or supercharger on top) or, for
+//    the electric cars (Taycan Turbo S, Next-Gen racer), ElectricIntegrator feeds DriveUnit; then SurfaceRoll,
+//    TyreSqueal, BrakeRotor and SuspensionTravel, the same classes the offline reel renders with.
+// 📝 The page posts { Controls }, { Command }, { Mix }, { Car } and { Induction } messages (processorOptions { Start,
+//    Throttle, Car, Induction } preset them); the worklet posts a telemetry readout ~30 times a second. Registered as
+//    'voice-rack'.
 
 import { PulseTrainEngine, Profiles } from './PulseTrainEngine.js';
 import { TractionIntegrator } from './TractionIntegrator.js';
 import { SurfaceRoll, TyreSqueal, Surfaces } from './ContactPatch.js';
 import { BrakeRotor, SuspensionTravel } from './ChassisVoices.js';
+import { ElectricCars, ElectricIntegrator, DriveUnit } from './ElectricDrive.js';
+import { Inducers, InductedProfile, InductionVoice } from './ForcedInduction.js';
 
 const Knee = (Sample) => { const Size = Math.abs(Sample); return Size <= 0.6 ? Sample : Math.sign(Sample) * (0.6 + 0.4 * Math.tanh((Size - 0.6) / 0.4)); };
 
@@ -19,6 +23,7 @@ class VoiceRack extends AudioWorkletProcessor
         super();
         const Rate = sampleRate;
         this.Pickup = 'Chase';
+        this.Induction = Inducers[processorOptions.Induction] ? processorOptions.Induction : null;
         this.Choose(processorOptions.Car ?? 'LaFerrari');
         this.Roll = new SurfaceRoll(Rate, { Pickup: 'Chase' });
         this.Squeal = new TyreSqueal(Rate, { Pickup: 'Chase' });
@@ -32,26 +37,51 @@ class VoiceRack extends AudioWorkletProcessor
         // Start-up inputs arrive with construction (offline renders cannot rely on port timing).
         if (processorOptions.Throttle) this.Car.Throttle = processorOptions.Throttle;
         if (processorOptions.Start) this.Car.Start();
+        if (processorOptions.Gear) this.Car.Gear = processorOptions.Gear;
+        this.Fault = null;
     }
 
     /** Swaps the car (engine voice and integrator); the new one waits switched off, like walking up to it. */
     Choose(Name)
     {
-        const Profile = Profiles[Name] ?? Profiles.LaFerrari;
-        this.CarName = Profiles[Name] ? Name : 'LaFerrari';
+        this.CarName = Profiles[Name] || ElectricCars[Name] ? Name : 'LaFerrari';
+        this.Inducer = null;
+        if (ElectricCars[this.CarName])
+        {
+            const Profile = ElectricCars[this.CarName];
+            this.Car = new ElectricIntegrator(Profile);
+            this.Engine = new DriveUnit(sampleRate, Profile, { Pickup: this.Pickup, Sport: this.Sport ?? 0 });
+            return;
+        }
+        // Combustion: an inducer replaces the car's own induction (the GT-R's twin turbos go silent and its curve is redone).
+        const Base = Profiles[this.CarName], Profile = this.Induction ? InductedProfile(Base, this.Induction) : Base;
         this.Car = new TractionIntegrator(Profile);
         this.Engine = new PulseTrainEngine(sampleRate, Profile, { Pickup: this.Pickup });
+        if (this.Induction) this.Inducer = new InductionVoice(sampleRate, this.Induction, { Pickup: this.Pickup, Redline: Profile.Redline });
     }
 
-    Receive({ Controls, Command, Mix, Car: Chosen })
+    /** Swaps the inducer and keeps the car running if it was (a workshop swap, done instantly). */
+    Induce(Name)
     {
+        this.Induction = Inducers[Name] ? Name : null;
+        if (ElectricCars[this.CarName]) return;
+        const Old = this.Car;
+        this.Choose(this.CarName);
+        if (this.Engine.Rpm) this.Engine.Rpm.Current = Old.Rpm;
+        Object.assign(this.Car, { Running: Old.Running, Rpm: Old.Rpm, Speed: Old.Speed, Gear: Old.Gear, LastGear: Old.Gear, Throttle: Old.Throttle, Automatic: Old.Automatic, Traction: Old.Traction });
+    }
+
+    Receive({ Controls, Command, Mix, Car: Chosen, Induction, Sport })
+    {
+        if (Sport !== undefined) { this.Sport = Sport; if (this.Engine instanceof DriveUnit) this.Engine.Sport = Sport; }
         if (Chosen) this.Choose(Chosen);
+        if (Induction !== undefined) this.Induce(Induction);
         const Car = this.Car;
         if (Controls)
         {
             for (const Key of ['Throttle', 'Brake', 'Steer', 'Handbrake', 'Automatic', 'Traction']) if (Key in Controls) Car[Key] = Controls[Key];
             if (Controls.Surface && Surfaces[Controls.Surface]) this.Surface = Controls.Surface;
-            if (Controls.Pickup) this.Pickup = this.Engine.Pickup = this.Roll.Pickup = this.Squeal.Pickup = this.Brakes.Pickup = this.Springs.Pickup = Controls.Pickup;
+            if (Controls.Pickup) { this.Pickup = this.Engine.Pickup = this.Roll.Pickup = this.Squeal.Pickup = this.Brakes.Pickup = this.Springs.Pickup = Controls.Pickup; if (this.Inducer) this.Inducer.Pickup = Controls.Pickup; }
         }
         if (Mix) Object.assign(this.Levels, Mix);
         if (Command === 'Start') Car.Running ? Car.Stop() : Car.Start();
@@ -62,20 +92,33 @@ class VoiceRack extends AudioWorkletProcessor
         if (Command === 'Pothole') this.Kick = -0.08;
     }
 
+    /** Runs one block; a fault in any voice is reported once and the block is silenced instead of killing the node. */
     process(Inputs, Outputs)
+    {
+        try { return this.Block(Outputs); }
+        catch (Error)
+        {
+            Outputs[0].forEach((Channel) => Channel.fill(0));
+            if (!this.Fault) { this.Fault = String(Error?.stack ?? Error); this.port.postMessage({ Fault: this.Fault }); }
+            return true;
+        }
+    }
+
+    Block(Outputs)
     {
         const [Left, Right = Left] = Outputs[0];
         const Size = Left.length;
         const Car = this.Car, Levels = this.Levels, [ScratchL, ScratchR] = this.Scratch;
         const Feed = Car.Step(Size / sampleRate);
         this.Engine.Feed(Feed);
+        this.Inducer?.Feed(Feed);
         this.Roll.Feed({ Speed: Car.Speed, Surface: this.Surface });
         this.Squeal.Feed({ Speed: Car.Speed, Corner: Car.Corner, LockUp: Car.LockUp, Wheelspin: Car.Wheelspin, Grip: Surfaces[this.Surface].Grip });
         this.Brakes.Feed({ Speed: Car.Speed, Brake: Car.Brake, Abs: Car.AbsActive, Handbrake: Car.Handbrake });
         this.Springs.Feed({ Speed: Car.Speed, Surface: this.Surface, Accel: Car.Accel, Lateral: Car.Lateral, Kick: this.Kick });
         this.Kick = 0;
         Left.fill(0); Right.fill(0);
-        for (const [Voice, Level] of [[this.Engine, Levels.Engine], [this.Roll, Levels.Road], [this.Squeal, Levels.Tyres], [this.Brakes, Levels.Chassis], [this.Springs, Levels.Chassis]])
+        for (const [Voice, Level] of [[this.Engine, Levels.Engine], ...(this.Inducer ? [[this.Inducer, Levels.Engine]] : []), [this.Roll, Levels.Road], [this.Squeal, Levels.Tyres], [this.Brakes, Levels.Chassis], [this.Springs, Levels.Chassis]])
         {
             ScratchL.fill(0); ScratchR.fill(0);
             Voice.Render(ScratchL, ScratchR, 0, Size);
@@ -83,7 +126,7 @@ class VoiceRack extends AudioWorkletProcessor
         }
         // Safety knee: pops and the limiter can spike past full scale; above 0.6 the peaks fold softly towards 1.
         for (let Index = 0; Index < Size; Index++) { Left[Index] = Knee(Left[Index]); Right[Index] = Knee(Right[Index]); }
-        if ((this.Clock += Size) >= sampleRate / 30) { this.Clock = 0; this.port.postMessage(Car.Readout()); }
+        if ((this.Clock += Size) >= sampleRate / 30) { this.Clock = 0; this.port.postMessage({ ...Car.Readout(), Induction: this.Induction }); }
         return true;
     }
 }

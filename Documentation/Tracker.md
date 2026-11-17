@@ -1251,4 +1251,6 @@ in `Exhibits/LightCompute/Results/FogFacetRegression.txt`; this was a fixture-se
   disc brakes (squeal, groan, ABS) and quarter-car suspension (`ChassisVoices`), 5 light and 11 cabin cues, 7 impact cues (`ImpactFoley`:
   explosion, shockwave, EMP, sonic blast, window shatter, glass break, metal crash), weapons (`Ballistics`: Devotion-style energy LMG with
   spin-up and Turbocharger, LMG, SMG, sniper, turret, tank cannon, autocannon, hold-to-fire on the audio clock), bullet crack/whizz/ricochet
-  and 8 impact materials. Live AudioWorklet bench with car switch + offline MP3 reel (35 files, 7.1 MB) with spectrogram plates (`Exhibits/CabinHmi/Audio/`). Names unapproved.
+  and 8 impact materials. Follow-up 13: 10 swappable turbos/superchargers (`ForcedInduction`), electric cars (`ElectricDrive`: Porsche Taycan
+  Turbo S, original Next-Gen racer in the style of Jackson Storm) and electric aircraft (`ElectricAviation`: trainer, racer, eVTOL).
+  Live AudioWorklet bench with car switch + offline MP3 reel (56 files, 13 MB) with spectrogram plates (`Exhibits/CabinHmi/Audio/`). Names unapproved.
