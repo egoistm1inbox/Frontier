@@ -11,6 +11,7 @@
 #include "Engine/Constants/MathConstants.h"
 #include "Engine/GeometricRaster/Atmosphere/LensFlareSequence.h"
 #include "Engine/GeometrySpace/Analysis/CurvatureAnalysis.h"
+#include "Engine/Mathematics/QuadratureSequence.h"
 
 #include <algorithm>
 #include <array>
@@ -867,8 +868,16 @@ WorldRenderFrameResult TieredWorldRenderSequence::RenderWorldFrameWithEngine(
     //====================================================================================================================
     if (Config.Engine == WorldRenderEngine::DeterministicPathTrace)
     {
-        const uint32_t Spp = std::clamp(Config.PathTraceSamples, 1u, 128u);
+        const uint32_t Spp  = std::clamp(Config.PathTraceSamples, 1u, 128u);
         const uint32_t MaxB = std::clamp(Config.PathTraceMaxBounces, 1u, 8u);
+
+        if (Config.PathTraceAccumIndex == 0u || LastPathTraceWidth != Result.WidthPx || LastPathTraceHeight != Result.HeightPx)
+        {
+            PathTraceAccumBuffer.assign(TotalPixels, { 0.0f, 0.0f, 0.0f });
+            PathTraceAccumCount = 0u;
+            LastPathTraceWidth  = Result.WidthPx;
+            LastPathTraceHeight = Result.HeightPx;
+        }
 
         for (uint32_t PY = 0u; PY < Result.HeightPx; ++PY)
         {
@@ -883,21 +892,29 @@ WorldRenderFrameResult TieredWorldRenderSequence::RenderWorldFrameWithEngine(
                     continue;
                 }
 
-                uint32_t Rng = (PX * 1973u + PY * 9277u + 26699u) | 1u;
-                Mathematics::LinearRGB Sum {};
+                const uint32_t PixelKey = Mathematics::AvalancheKey(PX * 0x1f1f1f1fu + PY * 0x5b5b5b5bu + 0x27d4eb2du);
+                Mathematics::LinearRGB FrameSum {};
                 for (uint32_t S = 0u; S < Spp; ++S)
                 {
-                    const float Jx = (static_cast<float>(PX) + PcgFloat01(Rng)) / static_cast<float>(Result.WidthPx);
-                    const float Jy = (static_cast<float>(PY) + PcgFloat01(Rng)) / static_cast<float>(Result.HeightPx);
-                    const float NdcX = Jx * 2.0f - 1.0f;
-                    const float NdcY = 1.0f - Jy * 2.0f;
+                    const uint32_t SampleIdx = Config.PathTraceAccumIndex * Spp + S;
+                    const auto [SubX, SubY]  = Mathematics::ScrambledQuadraturePair(SampleIdx, 0u, PixelKey);
+                    const float Jx           = (static_cast<float>(PX) + SubX) / static_cast<float>(Result.WidthPx);
+                    const float Jy           = (static_cast<float>(PY) + SubY) / static_cast<float>(Result.HeightPx);
+                    const float NdcX         = Jx * 2.0f - 1.0f;
+                    const float NdcY         = 1.0f - Jy * 2.0f;
                     const Mathematics::Axis3D RayDir = Mathematics::NormalizeAxis(
                         CurBasis.ForwardAxis + CurBasis.RightAxis * (NdcX * CurBasis.TanHalfFovX) + CurBasis.UpAxis * (NdcY * CurBasis.TanHalfFovY));
-                    Sum = Sum + TracePathSample(CurBasis.CameraOrigin, RayDir, PreparedScene, SkySequence, MaxB, Rng);
+
+                    uint32_t Rng = (PX * 1973u + PY * 9277u + SampleIdx * 26699u + 911u) | 1u;
+                    FrameSum = FrameSum + TracePathSample(CurBasis.CameraOrigin, RayDir, PreparedScene, SkySequence, MaxB, Rng);
                 }
-                Result.CompositeLinearHdr[Off] = Sum * (1.0f / static_cast<float>(Spp));
+
+                PathTraceAccumBuffer[Off] = PathTraceAccumBuffer[Off] + FrameSum;
+                const float TotalAccum = static_cast<float>((Config.PathTraceAccumIndex + 1u) * Spp);
+                Result.CompositeLinearHdr[Off] = PathTraceAccumBuffer[Off] * (1.0f / TotalAccum);
             }
         }
+        ++PathTraceAccumCount;
 
         if (Config.PathTraceDenoise && Config.DebugChannel == 0u)
         {

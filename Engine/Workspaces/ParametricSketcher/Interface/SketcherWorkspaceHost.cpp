@@ -268,7 +268,9 @@ void SketcherWorkspaceHost::UploadViewportPixels(const uint32_t* Pixels, uint32_
     const bool NeedsCreate =
         ViewportTexture.Width != static_cast<int>(Width) ||
         ViewportTexture.Height != static_cast<int>(Height) ||
-        ViewportTexture.Pixels == nullptr;
+        ViewportTexture.Pixels == nullptr ||
+        ViewportTexture.BackendUserData == nullptr ||
+        ViewportTexture.GetTexID() == ImTextureID_Invalid;
 
     if (NeedsCreate)
     {
@@ -280,6 +282,7 @@ void SketcherWorkspaceHost::UploadViewportPixels(const uint32_t* Pixels, uint32_
     if (ViewportTexture.Pixels != nullptr)
     {
         std::memcpy(ViewportTexture.GetPixels(), Pixels, static_cast<size_t>(Width) * Height * 4u);
+        ViewportTexture.UpdateRect = { 0u, 0u, static_cast<unsigned short>(Width), static_cast<unsigned short>(Height) };
         ViewportTexture.SetStatus(NeedsCreate ? ImTextureStatus_WantCreate : ImTextureStatus_WantUpdates);
     }
 }

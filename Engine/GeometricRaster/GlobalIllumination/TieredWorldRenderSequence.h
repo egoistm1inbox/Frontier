@@ -60,6 +60,7 @@ struct WorldRenderConfiguration
     uint32_t                 PathTraceMaxBounces = 5u;    // [cnt]  - Maximum bounce depth for DeterministicPathTrace
     bool                     PathTraceDenoise    = true;  // [-]    - 3-pass albedo/normal/depth A-Trous denoiser
     bool                     SdfGiBilateral      = true;  // [-]    - 7x7 joint bilateral spatial filter for SDF GI
+    uint32_t                 PathTraceAccumIndex = 0u;    // [spp]  - Progressive multi-frame accumulation index
 };
 
 struct WorldSceneSpecification
@@ -138,6 +139,10 @@ private:
     SignedDistanceRadiosityVolume RadiosityVolume   {};
     AtmosphericSkySequence        SkySequence       {};
     DepthPyramidSequence          PreviousHiZ       {};
+    std::vector<Mathematics::LinearRGB> PathTraceAccumBuffer {};
+    uint32_t                      PathTraceAccumCount = 0u;
+    uint32_t                      LastPathTraceWidth  = 0u;
+    uint32_t                      LastPathTraceHeight = 0u;
 };
 
 } // namespace Frontier::GeometricRaster

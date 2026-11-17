@@ -4,6 +4,18 @@
 // 🧩 Validation & Visual Proofs for Sun Ephemeris, Bruneton/Hillaire SkyView LUT, 4x Moons, Starfield & Raymarched Volumetric Clouds
 
 #include "Engine/Codecs/ImageCodec.h"
+#include <execinfo.h>
+#include <signal.h>
+#include <unistd.h>
+
+static void CrashHandler(int sig)
+{
+    void* array[20];
+    size_t size = backtrace(array, 20);
+    fprintf(stderr, "Error: signal %d:\n", sig);
+    backtrace_symbols_fd(array, size, STDERR_FILENO);
+    _exit(1);
+}
 #include "Engine/GeometricRaster/Atmosphere/AtmosphericSkySequence.h"
 #include "Engine/GeometricRaster/Atmosphere/CelestialEphemerisSolver.h"
 #include "Engine/GeometricRaster/Atmosphere/LunarStarfieldSequence.h"
@@ -224,6 +236,9 @@ void BlitTile(
 
 int main()
 {
+    signal(SIGSEGV, CrashHandler);
+    std::printf("[Validation] Starting step 1...\n");
+    std::fflush(stdout);
     using namespace Frontier;
     using namespace Frontier::GeometricRaster;
 
@@ -347,15 +362,19 @@ int main()
     // -----------------------------------------------------------------------------------------------------------------
     // 5. Initialize Vulkan + Render CPU/GPU Visual Proof Exhibits
     // -----------------------------------------------------------------------------------------------------------------
+    std::printf("[Validation] Step 5: Init Vulkan...\n"); std::fflush(stdout);
     VulkanInterchange VulkanDevice {};
     const bool VulkanOk = VulkanDevice.InitializeInterchange(RepoRoot);
+    std::printf("[Validation] VulkanOk = %d\n", (int)VulkanOk); std::fflush(stdout);
     VulkanWorldRenderSequence GpuRenderer {};
 #ifdef FRONTIER_COMPILED_SHADER_DIR
     const std::filesystem::path ShaderDir = std::filesystem::path(FRONTIER_COMPILED_SHADER_DIR);
 #else
     const std::filesystem::path ShaderDir = RepoRoot / "Build/CompiledShaders";
 #endif
+    std::printf("[Validation] Calling InitializeSequence with ShaderDir=%s...\n", ShaderDir.c_str()); std::fflush(stdout);
     const bool GpuOk = VulkanOk && GpuRenderer.InitializeSequence(VulkanDevice, ShaderDir);
+    std::printf("[Validation] GpuOk = %d\n", (int)GpuOk); std::fflush(stdout);
     Score.Verify(GpuOk, "VulkanWorldRenderSequence initialized with SkyViewTransmittanceCompute + WorldViewportRadiometricCompute");
 
     OutdoorGeometryAsset FloorBox {}, PedestalBox {}, GoldSphere {}, GlassSphere {};
@@ -372,6 +391,7 @@ int main()
     Cam.ViewportWidthPx  = TileW;
     Cam.ViewportHeightPx = TileH;
 
+    std::printf("[Validation] Exhibit 01...\n"); std::fflush(stdout);
     // Exhibit 01: 4-Time-of-Day Cycle Montage (Dawn, Noon, Golden Hour, Midnight Stars+Moon) on GPU
     {
         const std::array<float, 4u> Hours {{ 6.35f, 12.20f, 17.65f, 23.25f }};

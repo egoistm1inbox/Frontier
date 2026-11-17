@@ -4,6 +4,7 @@
 // 🧩 Multi-instance Lunar discs (real 2K texture atlas, 29.53-day phase, roll/pitch) and deterministic twinkling Starfield evaluation
 
 #include "Engine/GeometricRaster/Atmosphere/LunarStarfieldSequence.h"
+#include "Engine/GeometricRaster/Atmosphere/AstronomicalStarfieldCatalogue.h"
 
 #define STB_IMAGE_STATIC
 #define STB_IMAGE_IMPLEMENTATION
@@ -346,7 +347,7 @@ Mathematics::LinearRGB LunarStarfieldSequence::EvaluateCelestialField(
         }
     }
 
-    // 2. Deterministic procedural Starfield with daylight extinction & scintillation
+    // 2. Fixed Astronomical Starfield Catalogue with nocturnal scintillation & sidereal rotation
     if (Stars.StarfieldEnabled && RayDirection.Z > 0.005f)
     {
         const float DayFade = std::clamp(1.0f - (SunDirection.Z + 0.08f) * 5.0f, 0.0f, 1.0f);
@@ -355,48 +356,36 @@ Mathematics::LinearRGB LunarStarfieldSequence::EvaluateCelestialField(
             const float RotRad = Stars.CelestialRotationDegrees * Constants::DegToRadFloat;
             const float CR = std::cos(RotRad);
             const float SR = std::sin(RotRad);
-            const float RX = RayDirection.X * CR - RayDirection.Y * SR;
-            const float RY = RayDirection.X * SR + RayDirection.Y * CR;
-            const float RZ = RayDirection.Z;
+            const Mathematics::Axis3D CelDir = {
+                RayDirection.X * CR + RayDirection.Y * SR,
+                -RayDirection.X * SR + RayDirection.Y * CR,
+                RayDirection.Z
+            };
 
-            constexpr float GridScale = 175.0f;
-            const float GX = RX * GridScale;
-            const float GY = RY * GridScale;
-            const float GZ = RZ * GridScale;
-            const int32_t IX = static_cast<int32_t>(std::floor(GX));
-            const int32_t IY = static_cast<int32_t>(std::floor(GY));
-            const int32_t IZ = static_cast<int32_t>(std::floor(GZ));
+            const auto& StarTable = AstronomicalCatalogueTable::QueryStars();
+            const float Rad       = 0.014f * std::clamp(Stars.PointSizeScale, 0.4f, 3.0f);
+            const float MinCos    = std::cos(Rad);
+            const float AltFade   = std::clamp(RayDirection.Z * 4.0f, 0.0f, 1.0f);
 
-            const float H1 = HashInt3(IX, IY, IZ);
-            const float H2 = HashInt3(IX + 19, IY - 7, IZ + 31);
-            const float H3 = HashInt3(IX - 13, IY + 29, IZ - 5);
-            const float MagThresh = std::clamp(Stars.LimitingMagnitude / 8.5f, 0.05f, 0.98f);
-
-            if (H1 > 1.0f - 0.18f * MagThresh)
+            for (const auto& Star : StarTable)
             {
-                const float CX = static_cast<float>(IX) + 0.2f + 0.6f * H2;
-                const float CY = static_cast<float>(IY) + 0.2f + 0.6f * H3;
-                const float CZ = static_cast<float>(IZ) + 0.2f + 0.6f * std::fmod(H1 * 7.13f, 1.0f);
-                const float DX = GX - CX;
-                const float DY = GY - CY;
-                const float DZ = GZ - CZ;
-                const float Dist2 = DX * DX + DY * DY + DZ * DZ;
-                const float Rad   = 0.08f * std::clamp(Stars.PointSizeScale, 0.4f, 3.0f);
-                if (Dist2 < Rad * Rad)
+                if (Star.Magnitude > Stars.LimitingMagnitude) continue;
+
+                const float DotVal = CelDir.X * Star.DirX + CelDir.Y * Star.DirY + CelDir.Z * Star.DirZ;
+                if (DotVal > MinCos)
                 {
-                    const float Falloff = std::exp(-Dist2 / (Rad * Rad * 0.35f));
+                    const float Ang = std::acos(std::clamp(DotVal, -1.0f, 1.0f));
+                    const float Falloff = std::exp(-(Ang * Ang) / (Rad * Rad * 0.35f));
+                    const float Lum = std::pow(10.0f, -0.4f * Star.Magnitude) * 1.85f;
                     const float Twinkle = Stars.ScintillationEnabled
                         ? (1.0f - (Stars.ScintillationDepthPercent * 0.008f) *
-                              (0.5f + 0.5f * std::sin(SimulationSeconds * Stars.ScintillationRateHertz * 5.0f + H2 * 40.0f)))
+                              (0.5f + 0.5f * std::sin(SimulationSeconds * Stars.ScintillationRateHertz * 5.0f + Star.TwinkleSeed * 40.0f)))
                         : 1.0f;
-                    const float AltFade = std::clamp(RayDirection.Z * 4.0f, 0.0f, 1.0f);
-                    const float Intensity = (0.45f + 1.55f * H3 * H3) * Stars.BrightnessMultiplier * DayFade * Twinkle * Falloff * AltFade;
-                    const float TempR = 0.78f + 0.42f * H2;
-                    const float TempG = 0.88f + 0.12f * H2;
-                    const float TempB = 1.20f - 0.35f * H2;
-                    Out.R += TempR * Intensity;
-                    Out.G += TempG * Intensity;
-                    Out.B += TempB * Intensity;
+                    const float Intensity = Lum * Stars.BrightnessMultiplier * DayFade * Twinkle * Falloff * AltFade;
+
+                    Out.R += Star.ColorR * Intensity;
+                    Out.G += Star.ColorG * Intensity;
+                    Out.B += Star.ColorB * Intensity;
                 }
             }
         }

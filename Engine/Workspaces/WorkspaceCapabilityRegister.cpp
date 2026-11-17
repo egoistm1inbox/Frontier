@@ -85,6 +85,34 @@ WorkspaceCapabilityRegister::WorkspaceCapabilityRegister()
         "Parametric Sketcher · Exact NURBS / B-rep CAD, constraints, Vulkan matcaps & ISO 2D drawing sheets",
         true,
     });
+    RegisteredEntries.push_back({
+        HostWorkspaceTarget::FluidWorkspace,
+        "FluidWorkspace",
+        "Open with Fluid Studio",
+        "Fluid Studio · Eulerian thermodynamic smoke, flame, blackbody emissive buoyancy & obstacle coupling",
+        true,
+    });
+    RegisteredEntries.push_back({
+        HostWorkspaceTarget::MaterialWorkspace,
+        "MaterialWorkspace",
+        "Open with Material Studio",
+        "Material Studio · Layered OpenPBR substrate authoring, metallic/roughness & multi-lobe preview",
+        true,
+    });
+    RegisteredEntries.push_back({
+        HostWorkspaceTarget::ParticleWorkspace,
+        "ParticleWorkspace",
+        "Open with Particle Studio",
+        "Particle Studio · GPU compute particle dynamics, vortex ribbons, collisions & radiometric rendering",
+        true,
+    });
+    RegisteredEntries.push_back({
+        HostWorkspaceTarget::ForceFieldWorkspace,
+        "ForceFieldWorkspace",
+        "Open with ForceField Studio",
+        "ForceField Studio · Spatial physics forcefield authoring, curl telemetry & atmospheric wind coupling",
+        true,
+    });
 }
 
 std::span<const WorkspaceCapabilityEntry> WorkspaceCapabilityRegister::QueryAllCapabilities() const noexcept
@@ -145,6 +173,58 @@ std::vector<WorkspaceCapabilityEntry> WorkspaceCapabilityRegister::QueryPermitte
         if (const auto* St = FindByTarget(HostWorkspaceTarget::StampWorkspace))
         {
             Permitted.push_back(*St);
+        }
+        if (const auto* World = FindByTarget(HostWorkspaceTarget::FrontierWorld))
+        {
+            Permitted.push_back(*World);
+        }
+        return Permitted;
+    }
+
+    if (Ext == ".fluid" || Ext == ".fluidspace")
+    {
+        if (const auto* Fl = FindByTarget(HostWorkspaceTarget::FluidWorkspace))
+        {
+            Permitted.push_back(*Fl);
+        }
+        if (const auto* World = FindByTarget(HostWorkspaceTarget::FrontierWorld))
+        {
+            Permitted.push_back(*World);
+        }
+        return Permitted;
+    }
+
+    if (Ext == ".material" || Ext == ".matspace" || Ext == ".openpbr")
+    {
+        if (const auto* Mat = FindByTarget(HostWorkspaceTarget::MaterialWorkspace))
+        {
+            Permitted.push_back(*Mat);
+        }
+        if (const auto* World = FindByTarget(HostWorkspaceTarget::FrontierWorld))
+        {
+            Permitted.push_back(*World);
+        }
+        return Permitted;
+    }
+
+    if (Ext == ".particles" || Ext == ".particle" || Ext == ".particlespace")
+    {
+        if (const auto* Part = FindByTarget(HostWorkspaceTarget::ParticleWorkspace))
+        {
+            Permitted.push_back(*Part);
+        }
+        if (const auto* World = FindByTarget(HostWorkspaceTarget::FrontierWorld))
+        {
+            Permitted.push_back(*World);
+        }
+        return Permitted;
+    }
+
+    if (Ext == ".forcefield" || Ext == ".fieldspace")
+    {
+        if (const auto* Ff = FindByTarget(HostWorkspaceTarget::ForceFieldWorkspace))
+        {
+            Permitted.push_back(*Ff);
         }
         if (const auto* World = FindByTarget(HostWorkspaceTarget::FrontierWorld))
         {

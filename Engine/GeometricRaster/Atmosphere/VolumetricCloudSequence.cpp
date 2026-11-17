@@ -104,7 +104,9 @@ constexpr float ViewerAltM = 100.0f;
     uint32_t FormationIndex,
     float    DistanceMeters,
     float    VeerRadPerKm = 0.0f,
-    float    TurbulenceAmp = 0.0f) noexcept
+    float    TurbulenceAmp = 0.0f,
+    const SimulationSpace::ForceFields::ForceFieldAccumulator* OptionalForceFields = nullptr,
+    float    SimulationSeconds = 0.0f) noexcept
 {
     const float Alt     = std::sqrt(PX * PX + PY * PY + PZ * PZ) - PlanetR;
     const float H       = std::clamp((Alt - FloorM) / std::max(1.0f, ThickM), 0.0f, 1.0f);
@@ -124,14 +126,28 @@ constexpr float ViewerAltM = 100.0f;
     const float VeeredWX    = WindX * CsV - WindY * SnV;
     const float VeeredWY    = WindX * SnV + WindY * CsV;
     const float ShearShift  = AltKm * ShearPerKm * 45.0f;
+
+    // Authentic C++ Forcefield Dynamics advection & curl/vorticity deformation
+    float FfAdvectX  = 0.0f;
+    float FfAdvectY  = 0.0f;
+    float FfCurlWarp = 0.0f;
+    if (OptionalForceFields != nullptr && OptionalForceFields->QueryActiveSourceCount() > 0u)
+    {
+        const auto Diag = OptionalForceFields->QueryAnemometerDiagnostics(
+            { PX, PY, PZ, 0.0f }, static_cast<double>(SimulationSeconds));
+        FfAdvectX  = (Diag.TotalForce.AdvectionVelocity.X + Diag.TotalForce.LinearAcceleration.X * 0.5f) * SimulationSeconds;
+        FfAdvectY  = (Diag.TotalForce.AdvectionVelocity.Y + Diag.TotalForce.LinearAcceleration.Y * 0.5f) * SimulationSeconds;
+        FfCurlWarp = Diag.CurlMagnitude * 45.0f;
+    }
+
     const float TurbWarpX   = (TurbulenceAmp > 1.0e-4f)
         ? (SmoothLatticeNoise3((PX + VeeredWX) * FScale * 0.45f, (PY + VeeredWY) * FScale * 0.45f, AltKm * 0.8f) - 0.5f) * (TurbulenceAmp * 160.0f)
         : 0.0f;
     const float TurbWarpY   = (TurbulenceAmp > 1.0e-4f)
         ? (SmoothLatticeNoise3((PY + VeeredWY) * FScale * 0.45f + 7.3f, (PX + VeeredWX) * FScale * 0.45f, AltKm * 0.8f) - 0.5f) * (TurbulenceAmp * 160.0f)
         : 0.0f;
-    const float WX = PX + VeeredWX + ShearShift + TurbWarpX;
-    const float WY = PY + VeeredWY + TurbWarpY;
+    const float WX = PX + VeeredWX + ShearShift + TurbWarpX + FfAdvectX + FfCurlWarp;
+    const float WY = PY + VeeredWY + TurbWarpY + FfAdvectY - FfCurlWarp;
     const float WZ = Alt - FloorM;
 
     float ShapeCov = std::clamp(Cov + Anvil * H * H * 0.22f, 0.0f, 1.0f);
@@ -335,7 +351,8 @@ Mathematics::LinearRGB VolumetricCloudSequence::EvaluateVolumetricClouds(
     const AtmosphericMediumConfiguration& Medium,
     float                                 SimulationSeconds,
     float&                                OutTransmittance,
-    float                                 PixelJitter01) noexcept
+    float                                 PixelJitter01,
+    const SimulationSpace::ForceFields::ForceFieldAccumulator* OptionalForceFields) noexcept
 {
     OutTransmittance = 1.0f;
     Mathematics::LinearRGB TotalRad { 0.0f, 0.0f, 0.0f };
@@ -449,7 +466,7 @@ Mathematics::LinearRGB VolumetricCloudSequence::EvaluateVolumetricClouds(
         const float PZ = OrigZ + RayDirection.Z * T;
         const float D  = SampleDeckDensity(
             PX, PY, PZ, PlanetR, FloorM, ThickM, Cov, Anvil, DensMul, FScale, WindX, WindY, Deck.WindShearPerKilometer, FmtIdx, T,
-            Deck.WindVeerDegreesPerKm * Constants::DegToRadFloat, Deck.WindTurbulence);
+            Deck.WindVeerDegreesPerKm * Constants::DegToRadFloat, Deck.WindTurbulence, OptionalForceFields, SimulationSeconds);
         if (D > 1.0e-6f)
         {
             float SunTau = 0.0f;
@@ -464,7 +481,7 @@ Mathematics::LinearRGB VolumetricCloudSequence::EvaluateVolumetricClouds(
                         PY + SunDirection.Y * KS,
                         PZ + SunDirection.Z * KS,
                         PlanetR, FloorM, ThickM, Cov, Anvil, DensMul, FScale, WindX, WindY, Deck.WindShearPerKilometer, FmtIdx, T,
-                        Deck.WindVeerDegreesPerKm * Constants::DegToRadFloat, Deck.WindTurbulence) *
+                        Deck.WindVeerDegreesPerKm * Constants::DegToRadFloat, Deck.WindTurbulence, OptionalForceFields, SimulationSeconds) *
                         (SunWeights[K] * ConeReach);
                 }
             }
@@ -838,7 +855,8 @@ Mathematics::LinearRGB VolumetricCloudSequence::EvaluateVolumetricCloudsWithWind
     float DeckTrans = 1.0f;
     const Mathematics::LinearRGB DeckRad = EvaluateVolumetricClouds(
         RayOriginWorld, RayDirection, SunDirection, SolarIrradiance, SkyRadiance,
-        EffectiveDeck, DisabledLocal, Atmosphere.Medium, Atmosphere.SimulationSeconds, DeckTrans, PixelJitter01);
+        EffectiveDeck, DisabledLocal, Atmosphere.Medium, Atmosphere.SimulationSeconds, DeckTrans, PixelJitter01,
+        Atmosphere.ForceFieldSource);
 
     TotalRad.R += OutTransmittance * DeckRad.R;
     TotalRad.G += OutTransmittance * DeckRad.G;

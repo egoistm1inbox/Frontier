@@ -1197,6 +1197,34 @@ int LaunchDesktopWorkspace(
                     CurrentSurface = ActiveHostSurface::SketcherWorkspaceSurface;
                 }
             }
+            else if (Directive.TargetWorkspace == Workspaces::HostWorkspaceTarget::FluidWorkspace)
+            {
+                if (EnsureFluidHostReady())
+                {
+                    CurrentSurface = ActiveHostSurface::FluidWorkspaceSurface;
+                }
+            }
+            else if (Directive.TargetWorkspace == Workspaces::HostWorkspaceTarget::MaterialWorkspace)
+            {
+                if (EnsureMaterialHostReady())
+                {
+                    CurrentSurface = ActiveHostSurface::MaterialWorkspaceSurface;
+                }
+            }
+            else if (Directive.TargetWorkspace == Workspaces::HostWorkspaceTarget::ParticleWorkspace)
+            {
+                if (EnsureParticleHostReady())
+                {
+                    CurrentSurface = ActiveHostSurface::ParticleWorkspaceSurface;
+                }
+            }
+            else if (Directive.TargetWorkspace == Workspaces::HostWorkspaceTarget::ForceFieldWorkspace)
+            {
+                if (EnsureForceFieldHostReady())
+                {
+                    CurrentSurface = ActiveHostSurface::ForceFieldWorkspaceSurface;
+                }
+            }
             else
             {
                 if (EnsureEditorLifecycleReady(Directive.SelectedFilePath, Directive.ProjectTitle))

@@ -127,7 +127,9 @@ void BakingViewportPane::UploadTexturePixels(
     const bool NeedsCreate =
         TargetTex.Width != static_cast<int>(WidthPx) ||
         TargetTex.Height != static_cast<int>(HeightPx) ||
-        TargetTex.Pixels == nullptr;
+        TargetTex.Pixels == nullptr ||
+        TargetTex.BackendUserData == nullptr ||
+        TargetTex.GetTexID() == ImTextureID_Invalid;
     if (NeedsCreate)
     {
         TargetTex.DestroyPixels();

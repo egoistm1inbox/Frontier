@@ -455,7 +455,10 @@ void EditorLifecycle::AttachForceFieldAuthoringToActivePanes()
                     InvalidateRtxLattice();
                     if (GpuActive)
                     {
-                        GpuWorldRenderer->SynchronizeSceneResources(ShowcaseBundle->Scene, nullptr, true);
+                        GpuWorldRenderer->SynchronizeSceneResources(
+                            ShowcaseBundle->Scene,
+                            (ShowcaseRenderer != nullptr && RtxLatticePrepared) ? &ShowcaseRenderer->InspectIrradianceLattice() : nullptr,
+                            true);
                     }
                     else if (ShowcaseRenderer != nullptr)
                     {
@@ -689,14 +692,17 @@ void EditorLifecycle::PopulateShowcaseGallerySession(uint32_t RenderWidthPx, uin
             ShowcaseRenderer->SynchronizeWorldAtmosphere(ShowcaseBundle->Scene);
         }
     }
-    if (GpuActive)
-    {
-        GpuWorldRenderer->SynchronizeSceneResources(ShowcaseBundle->Scene, nullptr, true);
-    }
-    else
+    if (ShowcaseRenderer != nullptr)
     {
         ShowcaseRenderer->PrepareWorldScene(ShowcaseBundle->Scene);
         RtxLatticePrepared = true;
+    }
+    if (GpuActive)
+    {
+        GpuWorldRenderer->SynchronizeSceneResources(
+            ShowcaseBundle->Scene,
+            (ShowcaseRenderer != nullptr && RtxLatticePrepared) ? &ShowcaseRenderer->InspectIrradianceLattice() : nullptr,
+            true);
     }
     GeometricRaster::RegisterShowcaseGalleryInOutliner(Panes->Outliner, *ShowcaseBundle, true);
     Panes->Viewport.ConfigureSceneTitle(
@@ -1078,7 +1084,10 @@ void EditorLifecycle::ProcessShowcaseViewportInteraction(
             if (GpuReady)
             {
                 // GPU compute shader builds SDF grid in < 1 ms on release; during active drag skip SDF dispatch
-                GpuWorldRenderer->SynchronizeSceneResources(ShowcaseBundle->Scene, nullptr, !FastDrag);
+                GpuWorldRenderer->SynchronizeSceneResources(
+                    ShowcaseBundle->Scene,
+                    (ShowcaseRenderer != nullptr && RtxLatticePrepared) ? &ShowcaseRenderer->InspectIrradianceLattice() : nullptr,
+                    !FastDrag);
             }
             else if (ShowcaseRenderer != nullptr)
             {
@@ -1131,7 +1140,10 @@ void EditorLifecycle::SynchronizeContentBrowserColourTargets()
             InvalidateRtxLattice();
             if (GpuWorldRenderer != nullptr && GpuWorldRenderer->QueryReady())
             {
-                GpuWorldRenderer->SynchronizeSceneResources(ShowcaseBundle->Scene, nullptr, false);
+                GpuWorldRenderer->SynchronizeSceneResources(
+                    ShowcaseBundle->Scene,
+                    (ShowcaseRenderer != nullptr && RtxLatticePrepared) ? &ShowcaseRenderer->InspectIrradianceLattice() : nullptr,
+                    false);
             }
             else if (ShowcaseRenderer != nullptr)
             {
@@ -1365,6 +1377,7 @@ void EditorLifecycle::RefreshShowcaseViewportRaster()
     uint32_t             OutHeightPx    = ShowcaseBundle->EditorCamera.ViewportHeightPx;
     bool                 RenderedOnGpu  = false;
 
+    RenderConfig.PathTraceAccumIndex = PathTraceAccumIndex;
     if (GpuReady)
     {
         RenderedOnGpu = GpuWorldRenderer->RenderWorldViewportWithEngine(
@@ -1373,10 +1386,6 @@ void EditorLifecycle::RefreshShowcaseViewportRaster()
             ShowcaseBundle->EditorCamera,
             ShowcaseBundle->Scene,
             CleanWorldRgba);
-        if (RenderedOnGpu && RenderConfig.Engine == GeometricRaster::WorldRenderEngine::DeterministicPathTrace && !CameraInteractiveDrag)
-        {
-            ++PathTraceAccumIndex;
-        }
     }
 
     if (!RenderedOnGpu)
@@ -1389,6 +1398,11 @@ void EditorLifecycle::RefreshShowcaseViewportRaster()
         OutWidthPx     = CpuOutput.WidthPx;
         OutHeightPx    = CpuOutput.HeightPx;
         CleanWorldRgba = std::move(CpuOutput.DisplayRgba8);
+    }
+
+    if (RenderConfig.Engine == GeometricRaster::WorldRenderEngine::DeterministicPathTrace && !CameraInteractiveDrag)
+    {
+        ++PathTraceAccumIndex;
     }
 
     CachedWorldRgba8    = CleanWorldRgba;
@@ -1586,7 +1600,7 @@ bool EditorLifecycle::ExecuteExternalDesktopTick(double Δt)
                 {
                     GpuWorldRenderer->SynchronizeSceneResources(
                         ShowcaseBundle->Scene,
-                        nullptr,
+                        (ShowcaseRenderer != nullptr && RtxLatticePrepared) ? &ShowcaseRenderer->InspectIrradianceLattice() : nullptr,
                         !WorldTransformGizmo.QueryDragging());
                 }
                 else if (ShowcaseRenderer != nullptr)
@@ -1596,7 +1610,7 @@ bool EditorLifecycle::ExecuteExternalDesktopTick(double Δt)
                 }
             }
             const bool ProgressivePathTraceTick =
-                GpuReady && DisplayCfg.RenderEngineIndex == 4u && PathTraceAccumIndex < 64u && !CameraInteractiveDrag;
+                DisplayCfg.RenderEngineIndex == 4u && PathTraceAccumIndex < 64u && !CameraInteractiveDrag;
             if (SceneMutated || DisplayChanged || LatticeUpdated || ProgressivePathTraceTick)
             {
                 RefreshShowcaseViewportRaster();

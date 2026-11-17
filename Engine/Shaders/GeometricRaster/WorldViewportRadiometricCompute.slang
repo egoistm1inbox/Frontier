@@ -12,6 +12,7 @@
 #include "../Atmosphere/CelestialDiscStarCompute.slang"
 #include "../Atmosphere/LensFlareCompute.slang"
 #include "../Fluid/FluidVolumetricRaymarch.slang"
+#include "../DeterministicPathTracer/QuadratureSequence.slang"
 
 struct GpuAreaQuadLight
 {
@@ -896,40 +897,53 @@ float3 SampleRtxIrradianceLatticeChebyshev(float3 WorldPos, float3 Normal, float
 }
 
 // Strictly reserved for EngineMode == 3 (SdfGlobalIllumination) GI only!
+// Fast 4-cone stratified diffuse GI with 2-step iso-surface root polish & narrow-band surface radiosity
 float3 EvaluateSdfRadiosityConeGi(float3 WorldPos, float3 Normal, uint2 PixelXY)
 {
     float3 T, B;
     ConstructOrthonormalBasis(Normal, T, B);
 
-    float IgnPhase  = frac(52.9829189 * frac(0.06711056 * float(PixelXY.x) + 0.00583715 * float(PixelXY.y)));
-    float RotOffset = IgnPhase * TauConst;
-    float Spacing   = max(0.05, WorldUniforms.SdfMinSpacing.w);
-    float3 Origin   = WorldPos + Normal * (Spacing * 0.90);
+    float Spacing = max(0.05, WorldUniforms.SdfMinSpacing.w);
+    float3 Origin = WorldPos + Normal * (Spacing * 0.90);
+
+    // 4 Stratified diffuse cones: Cone 0 = Normal, Cones 1..3 = 120-deg azimuthal spread at 45-deg elevation
+    static const float3 ConeDirs[4] = {
+        float3(0.0, 0.0, 1.0),
+        float3(0.70710678, 0.0, 0.70710678),
+        float3(-0.35355339, 0.61237243, 0.70710678),
+        float3(-0.35355339, -0.61237243, 0.70710678),
+    };
+    static const float ConeWeights[4] = { 0.34, 0.22, 0.22, 0.22 };
 
     float3 Accum = float3(0.0);
-    for (uint C = 0u; C < 16u; ++C)
+    [unroll]
+    for (uint C = 0u; C < 4u; ++C)
     {
-        float U1   = (float(C) + 0.5) / 16.0;
-        float Phi  = float(C) * 2.39996323 + RotOffset;
-        float SinT = sqrt(U1);
-        float CosT = sqrt(max(0.0, 1.0 - U1));
-        float3 Dir = T * (SinT * cos(Phi)) + B * (SinT * sin(Phi)) + Normal * CosT;
+        float3 LocalDir = ConeDirs[C];
+        float3 Dir      = normalize(T * LocalDir.x + B * LocalDir.y + Normal * LocalDir.z);
 
         float  DistM   = max(0.06, Spacing * 0.65);
         float  SkyVis  = 1.0;
         float3 BounceR = float3(0.0);
-        for (uint Step = 0u; Step < 20u && DistM < 7.0; ++Step)
+
+        for (uint Step = 0u; Step < 10u && DistM < 6.5; ++Step)
         {
-            float3 SPos   = Origin + Dir * DistM;
-            float  SdfD   = SampleSdfGrid(SPos);
-            float  ConeR  = max(0.04, DistM * 0.42);
+            float3 SPos  = Origin + Dir * DistM;
+            float  SdfD  = SampleSdfGrid(SPos);
+            float  ConeR = max(0.04, DistM * 0.38);
+
             if (SdfD < ConeR)
             {
-                float  Occ   = saturate(1.0 - SdfD / ConeR);
-                float3 VRad  = SampleSdfRadiosityTrilinear(SPos);
-                BounceR     += VRad * (Occ * SkyVis);
-                SkyVis      *= (1.0 - Occ * 0.68);
-                if (SkyVis < 0.04)
+                // 2-Step Iso-Surface Root Polish snapping hit to zero-level-set
+                float3 PolishP = SPos + Dir * SdfD;
+                float  RefineD = SampleSdfGrid(PolishP);
+                PolishP += Dir * RefineD;
+
+                float  Occ  = saturate(1.0 - SdfD / ConeR);
+                float3 VRad = SampleSdfRadiosityTrilinear(PolishP);
+                BounceR    += VRad * (Occ * SkyVis);
+                SkyVis     *= (1.0 - Occ * 0.72);
+                if (SkyVis < 0.03)
                 {
                     SkyVis = 0.0;
                     break;
@@ -937,7 +951,7 @@ float3 EvaluateSdfRadiosityConeGi(float3 WorldPos, float3 Normal, uint2 PixelXY)
             }
             DistM += max(Spacing * 0.55, abs(SdfD) * 0.85);
         }
-        Accum += (EvaluateSkyDome(Dir) * SkyVis + BounceR) * (1.0 / 16.0);
+        Accum += (EvaluateSkyDome(Dir) * SkyVis + BounceR) * ConeWeights[C];
     }
     return clamp(Accum, float3(0.0), float3(6.5));
 }
@@ -1168,7 +1182,7 @@ float3 SampleGgxVndfLocal(float3 LocalWo, float AlphaX, float AlphaY, float U1, 
 
 float3 TraceDeterministicPathSample(float3 CamOrigin, float3 CamRayDir, uint2 PixelXY, uint SampleIdx)
 {
-    uint   Rng        = (PixelXY.x * 1973u + PixelXY.y * 9277u + SampleIdx * 26699u + 911u) | 1u;
+    uint   PixelKey   = AvalancheKey(PixelXY.x * 0x1f1f1f1fu + PixelXY.y * 0x5b5b5b5bu + 0x27d4eb2du);
     uint   MaxBounces = clamp(uint(WorldUniforms.SunCascadeForwardPad.w + 0.5), 1u, 6u);
     uint   MatCount   = max(1u, WorldUniforms.LatticeDimsMaterialCount.w);
     float3 SunDir     = WorldUniforms.SunDirConeTan.xyz;
@@ -1198,27 +1212,29 @@ float3 TraceDeterministicPathSample(float3 CamOrigin, float3 CamRayDir, uint2 Pi
         float3 T, BVec;
         ConstructOrthonormalBasis(N, T, BVec);
 
-        // NEE: Solar Disc
+        // NEE: Solar Disc with Sobol Pair (1 + B * 3)
         {
-            float JR = sqrt(PcgFloat01(Rng)) * TanSun;
-            float JA = PcgFloat01(Rng) * TauConst;
-            float3 L = normalize(SunDir + SunT * (JR * cos(JA)) + SunB * (JR * sin(JA)));
+            float2 SunPair = ScrambledQuadraturePair(SampleIdx, 1u + B * 3u, PixelKey);
+            float  JR      = sqrt(SunPair.x) * TanSun;
+            float  JA      = SunPair.y * TauConst;
+            float3 L       = normalize(SunDir + SunT * (JR * cos(JA)) + SunB * (JR * sin(JA)));
             if (dot(N, L) > 0.0 && !TraceSceneAnyHit(Hit.Position + Hit.GeomNormal * 0.008, L, 0.010, 90.0))
             {
                 Radiance += Throughput * EvaluateSurfaceBrdf(Mat, N, V, L) * SunIrr * EvaluateSolarCloudTransmittanceGpu(Hit.Position, L);
             }
         }
 
-        // NEE: Area Quad Lights
+        // NEE: Area Quad Lights with Sobol Pair (2 + B * 3)
         uint LightCnt = min(4u, WorldUniforms.SdfDimsLightCount.w);
         for (uint LIdx = 0u; LIdx < LightCnt; ++LIdx)
         {
             GpuAreaQuadLight Q = WorldUniforms.AreaLights[LIdx];
-            float LU = PcgFloat01(Rng) * 2.0 - 1.0;
-            float LV = PcgFloat01(Rng) * 2.0 - 1.0;
-            float3 Target = Q.CenterHalfWidth.xyz
-                          + Q.RightHalfHeight.xyz * (Q.CenterHalfWidth.w * LU)
-                          + Q.UpTwoSided.xyz      * (Q.RightHalfHeight.w * LV);
+            float2 AreaPair = ScrambledQuadraturePair(SampleIdx, 2u + B * 3u + LIdx * 17u, PixelKey);
+            float  LU       = AreaPair.x * 2.0 - 1.0;
+            float  LV       = AreaPair.y * 2.0 - 1.0;
+            float3 Target   = Q.CenterHalfWidth.xyz
+                            + Q.RightHalfHeight.xyz * (Q.CenterHalfWidth.w * LU)
+                            + Q.UpTwoSided.xyz      * (Q.RightHalfHeight.w * LV);
             float3 ToL = Target - Hit.Position;
             float  D2  = dot(ToL, ToL);
             float  D   = sqrt(max(1.0e-6, D2));
@@ -1234,17 +1250,18 @@ float3 TraceDeterministicPathSample(float3 CamOrigin, float3 CamRayDir, uint2 Pi
             }
         }
 
-        // MIS Next-Bounce: Heitz GGX VNDF vs Cosine Hemisphere
-        float3 LocalWo = float3(dot(V, T), dot(V, BVec), max(1.0e-4, dot(V, N)));
-        float  Rough   = clamp(Mat.SpecParams.x, 0.025, 1.0);
-        float  Alpha   = max(0.0015, Rough * Rough);
-        float  DiffP   = clamp((1.0 - saturate(Mat.SpecParams.y)) * 0.65, 0.10, 0.85);
-        float  SpecP   = 1.0 - DiffP;
-        float  U1      = PcgFloat01(Rng);
-        float  U2      = PcgFloat01(Rng);
+        // MIS Next-Bounce: Heitz GGX VNDF vs Cosine Hemisphere with Sobol Pair (3 + B * 3)
+        float3 LocalWo    = float3(dot(V, T), dot(V, BVec), max(1.0e-4, dot(V, N)));
+        float  Rough      = clamp(Mat.SpecParams.x, 0.025, 1.0);
+        float  Alpha      = max(0.0015, Rough * Rough);
+        float  DiffP      = clamp((1.0 - saturate(Mat.SpecParams.y)) * 0.65, 0.10, 0.85);
+        float  SpecP      = 1.0 - DiffP;
+        float2 BouncePair = ScrambledQuadraturePair(SampleIdx, 3u + B * 3u, PixelKey);
+        float  U1         = BouncePair.x;
+        float  U2         = BouncePair.y;
 
         float3 LocalWi;
-        if (PcgFloat01(Rng) < DiffP)
+        if (frac(U1 * 7.13 + U2 * 3.41) < DiffP)
         {
             float R   = sqrt(U1);
             float Phi = U2 * TauConst;
@@ -1416,8 +1433,8 @@ void ComputeEntry(uint3 DispatchThreadID : SV_DispatchThreadID)
     float2 JitterPx = float2(0.5, 0.5);
     if (EngineMode == 4u && DebugMode == 0u)
     {
-        uint JSeed = (DispatchThreadID.x * 1973u + DispatchThreadID.y * 9277u + SampleIdx * 7919u + 17u) | 1u;
-        JitterPx   = float2(PcgFloat01(JSeed), PcgFloat01(JSeed));
+        uint PixelKey = AvalancheKey(DispatchThreadID.x * 0x1f1f1f1fu + DispatchThreadID.y * 0x5b5b5b5bu + 0x27d4eb2du);
+        JitterPx      = ScrambledQuadraturePair(SampleIdx, 0u, PixelKey);
     }
 
     float2 PixelUv = (float2(DispatchThreadID.xy) + JitterPx) / float2(float(Width), float(Height));

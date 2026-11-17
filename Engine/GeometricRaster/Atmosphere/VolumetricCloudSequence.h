@@ -179,7 +179,8 @@ public:
         const AtmosphericMediumConfiguration& Medium,
         float                                 SimulationSeconds,
         float&                                OutTransmittance,
-        float                                 PixelJitter01 = -1.0f) noexcept;
+        float                                 PixelJitter01 = -1.0f,
+        const SimulationSpace::ForceFields::ForceFieldAccumulator* OptionalForceFields = nullptr) noexcept;
 
     // Overload taking full WorldAtmosphereConfiguration (Global Wind + ForceFields + multi-volume LocalClouds)
     [[nodiscard]] static Mathematics::LinearRGB EvaluateVolumetricCloudsWithWind(

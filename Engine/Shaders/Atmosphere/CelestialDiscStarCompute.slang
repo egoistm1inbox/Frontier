@@ -1,7 +1,9 @@
 /*============================================================================================================================================
                                                       CELESTIALDISCSTARCOMPUTE.SLANG
 ============================================================================================================================================*/
-// 🧩 Analytical Sun Disc + Corona, 4x Multi-Moon Real 2K Atlas Discs & Deterministic Nocturnal Starfield
+// 🧩 Analytical Sun Disc + Corona, 4x Multi-Moon Real 2K Atlas Discs & Fixed Astronomical Starfield Catalogue (512 Stars)
+
+#include "AstronomicalStarfieldCatalogue.slang"
 
 static const float CelestialPiConst  = 3.14159265359;
 static const float CelestialTauConst = 6.28318530718;
@@ -146,7 +148,7 @@ float3 EvaluateCelestialBodiesGpu(
         }
     }
 
-    // 3. Deterministic Nocturnal Starfield
+    // 3. Fixed Astronomical Starfield Catalogue (48 prominent navigation stars)
     if (Cfg.StarParams.x > 0.5 && RayDir.z > 0.005)
     {
         float DayFade = clamp(1.0 - (SunDir.z + 0.08) * 5.0, 0.0, 1.0);
@@ -154,31 +156,29 @@ float3 EvaluateCelestialBodiesGpu(
         {
             float CR = cos(Cfg.StarScintillationRot.w);
             float SR = sin(Cfg.StarScintillationRot.w);
-            float3 RotDir = float3(RayDir.x * CR - RayDir.y * SR, RayDir.x * SR + RayDir.y * CR, RayDir.z);
-            float3 G = RotDir * 175.0;
-            int3   I = int3(floor(G));
+            float3 CelDir = float3(RayDir.x * CR + RayDir.y * SR, -RayDir.x * SR + RayDir.y * CR, RayDir.z);
 
-            float H1 = HashCelestial3(I.x, I.y, I.z);
-            float H2 = HashCelestial3(I.x + 19, I.y - 7, I.z + 31);
-            float H3 = HashCelestial3(I.x - 13, I.y + 29, I.z - 5);
-            float MagThresh = clamp(Cfg.StarParams.y / 8.5, 0.05, 0.98);
+            float Rad    = 0.014 * clamp(Cfg.StarParams.w, 0.4, 3.0);
+            float MinCos = cos(Rad);
+            float AltFade = clamp(RayDir.z * 4.0, 0.0, 1.0);
 
-            if (H1 > 1.0 - 0.18 * MagThresh)
+            for (uint K = 0u; K < AstroStarCount; ++K)
             {
-                float3 StarC = float3(I) + float3(0.2 + 0.6 * H2, 0.2 + 0.6 * H3, 0.2 + 0.6 * frac(H1 * 7.13));
-                float3 Delta = G - StarC;
-                float  D2    = dot(Delta, Delta);
-                float  Rad   = 0.08 * clamp(Cfg.StarParams.w, 0.4, 3.0);
-                if (D2 < Rad * Rad)
+                AstroGpuStar Star = FixedAstroStars[K];
+                if (Star.DirMag.w > Cfg.StarParams.y) continue;
+
+                float DotVal = dot(CelDir, Star.DirMag.xyz);
+                if (DotVal > MinCos)
                 {
-                    float Falloff = exp(-D2 / (Rad * Rad * 0.35));
+                    float Ang     = acos(clamp(DotVal, -1.0, 1.0));
+                    float Falloff = exp(-(Ang * Ang) / (Rad * Rad * 0.35));
+                    float Lum     = pow(10.0, -0.4 * Star.DirMag.w) * 1.85;
                     float Twinkle = (Cfg.StarScintillationRot.x > 0.5)
                         ? (1.0 - (Cfg.StarScintillationRot.y * 0.008) *
-                              (0.5 + 0.5 * sin(Cfg.ClockViewportDims.x * Cfg.StarScintillationRot.z * 5.0 + H2 * 40.0)))
+                              (0.5 + 0.5 * sin(Cfg.ClockViewportDims.x * Cfg.StarScintillationRot.z * 5.0 + Star.ColorTwinkle.w * 40.0)))
                         : 1.0;
-                    float AltFade   = clamp(RayDir.z * 4.0, 0.0, 1.0);
-                    float Intensity = (0.45 + 1.55 * H3 * H3) * Cfg.StarParams.z * DayFade * Twinkle * Falloff * AltFade;
-                    OutRgb += float3(0.78 + 0.42 * H2, 0.88 + 0.12 * H2, 1.20 - 0.35 * H2) * Intensity;
+                    float Intensity = Lum * Cfg.StarParams.z * DayFade * Twinkle * Falloff * AltFade;
+                    OutRgb += Star.ColorTwinkle.xyz * Intensity;
                 }
             }
         }

@@ -650,6 +650,7 @@ set(FRONTIER_ENGINE_SOURCES
     Engine/GeometricRaster/Atmosphere/CelestialEphemerisSolver.cpp
     Engine/GeometricRaster/Atmosphere/AtmosphericWindSolver.cpp
     Engine/GeometricRaster/Atmosphere/AtmosphericSkySequence.cpp
+    Engine/GeometricRaster/Atmosphere/AstronomicalStarfieldCatalogue.cpp
     Engine/GeometricRaster/Atmosphere/LunarStarfieldSequence.cpp
     Engine/GeometricRaster/Atmosphere/VolumetricCloudSequence.cpp
     Engine/GeometricRaster/Atmosphere/VolumetricFogSequence.cpp
@@ -1129,6 +1130,7 @@ if(BUILD_TESTING)
     frontier_register_exhibit(SolarShadowValidation          Exhibits/SolarShadowValidation.cpp)
     frontier_register_exhibit(TieredWorldRenderValidation    Exhibits/TieredWorldRenderValidation.cpp)
     frontier_register_exhibit(CelestialCloudsValidation      Exhibits/CelestialCloudsValidation.cpp)
+    frontier_register_exhibit(StarfieldRotationProof          Exhibits/StarfieldRotationProof.cpp)
     frontier_register_exhibit(LensFlareValidation            Exhibits/LensFlareValidation.cpp)
     if(FRONTIER_PROFILE STREQUAL "Editor")
         frontier_register_exhibit(DrawerGestureWorldValidation   Exhibits/DrawerGestureWorldValidation.cpp)

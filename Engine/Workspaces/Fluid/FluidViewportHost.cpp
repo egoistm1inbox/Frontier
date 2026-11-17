@@ -111,7 +111,9 @@ void FluidViewportHost::UploadPreviewTexture(
     const bool NeedsCreate =
         PreviewTexture.Width != static_cast<int>(WidthPx) ||
         PreviewTexture.Height != static_cast<int>(HeightPx) ||
-        PreviewTexture.Pixels == nullptr;
+        PreviewTexture.Pixels == nullptr ||
+        PreviewTexture.BackendUserData == nullptr ||
+        PreviewTexture.GetTexID() == ImTextureID_Invalid;
 
     if (NeedsCreate)
     {
@@ -123,6 +125,10 @@ void FluidViewportHost::UploadPreviewTexture(
     if (PreviewTexture.Pixels != nullptr)
     {
         std::memcpy(PreviewTexture.GetPixels(), RgbaPixels.data(), static_cast<size_t>(WidthPx) * HeightPx * 4u);
+        PreviewTexture.UpdateRect.x = 0;
+        PreviewTexture.UpdateRect.y = 0;
+        PreviewTexture.UpdateRect.w = static_cast<unsigned short>(WidthPx);
+        PreviewTexture.UpdateRect.h = static_cast<unsigned short>(HeightPx);
         PreviewTexture.SetStatus(NeedsCreate ? ImTextureStatus_WantCreate : ImTextureStatus_WantUpdates);
     }
 }

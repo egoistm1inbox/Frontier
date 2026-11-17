@@ -951,19 +951,31 @@ bool ImGuiOverlayRasterization::PresentImGuiBatches(
         {
             return 0u;
         }
+        if (Texture->Status == ImTextureStatus_WantUpdates &&
+            (Texture->BackendUserData == nullptr || Texture->GetTexID() == ImTextureID_Invalid))
+        {
+            Texture->SetStatus(ImTextureStatus_WantCreate);
+        }
+        if (Texture->Status == ImTextureStatus_WantUpdates && (Texture->UpdateRect.w == 0 || Texture->UpdateRect.h == 0))
+        {
+            Texture->UpdateRect.x = 0;
+            Texture->UpdateRect.y = 0;
+            Texture->UpdateRect.w = static_cast<unsigned short>(std::max(0, Texture->Width));
+            Texture->UpdateRect.h = static_cast<unsigned short>(std::max(0, Texture->Height));
+        }
         if (Texture->Status == ImTextureStatus_WantCreate &&
             (Texture->BackendUserData != nullptr || Texture->GetTexID() != ImTextureID_Invalid))
         {
             vkDeviceWaitIdle(BoundDevice->AccessDevice());
             Texture->SetStatus(ImTextureStatus_WantDestroy);
             Texture->UnusedFrames = 64;
-            ImGui_ImplVulkan_UpdateTexture(Texture);
-            Texture->SetStatus(ImTextureStatus_WantCreate);
+                    ImGui_ImplVulkan_UpdateTexture(Texture);
+                    Texture->SetStatus(ImTextureStatus_WantCreate);
         }
         const bool UploadRequested =
             Texture->Status == ImTextureStatus_WantCreate || Texture->Status == ImTextureStatus_WantUpdates;
-        ImGui_ImplVulkan_UpdateTexture(Texture);
-        return UploadRequested ? 1u : 0u;
+                ImGui_ImplVulkan_UpdateTexture(Texture);
+                return UploadRequested ? 1u : 0u;
     };
 
     uint32_t TextureRequests = 0u;

@@ -111,7 +111,9 @@ void MaterialViewportHost::UploadPreviewTexture(
     const bool NeedsCreate =
         PreviewTexture.Width != static_cast<int>(WidthPx) ||
         PreviewTexture.Height != static_cast<int>(HeightPx) ||
-        PreviewTexture.Pixels == nullptr;
+        PreviewTexture.Pixels == nullptr ||
+        PreviewTexture.BackendUserData == nullptr ||
+        PreviewTexture.GetTexID() == ImTextureID_Invalid;
 
     if (NeedsCreate)
     {

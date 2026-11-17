@@ -203,7 +203,9 @@ void FractureViewportHost::UploadRgbaTexture(
     const bool NeedsCreate =
         ViewportTexture.Width != static_cast<int>(WidthPx) ||
         ViewportTexture.Height != static_cast<int>(HeightPx) ||
-        ViewportTexture.Pixels == nullptr;
+        ViewportTexture.Pixels == nullptr ||
+        ViewportTexture.BackendUserData == nullptr ||
+        ViewportTexture.GetTexID() == ImTextureID_Invalid;
 
     if (NeedsCreate)
     {
@@ -215,6 +217,7 @@ void FractureViewportHost::UploadRgbaTexture(
     if (ViewportTexture.Pixels != nullptr)
     {
         std::memcpy(ViewportTexture.GetPixels(), RgbaPixels.data(), static_cast<size_t>(WidthPx) * HeightPx * 4u);
+        ViewportTexture.UpdateRect = { 0u, 0u, static_cast<unsigned short>(WidthPx), static_cast<unsigned short>(HeightPx) };
         ViewportTexture.SetStatus(NeedsCreate ? ImTextureStatus_WantCreate : ImTextureStatus_WantUpdates);
     }
 }

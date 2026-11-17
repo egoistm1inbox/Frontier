@@ -18,6 +18,7 @@
 
 int main(int Argc, char** Argv)
 {
+
     Frontier::Lifecycle::DesktopLaunchOptions Options {};
     Options.DefaultLaunchMode          = Frontier::Configuration::HostLaunchMode::StandaloneWorkspace;
     Options.InitialWorkspace           = Frontier::WorkspaceCategory::Fluid;
