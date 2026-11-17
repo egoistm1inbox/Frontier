@@ -1,0 +1,3 @@
+# Local shallow sparse upstream source checkout used for SolidArc auditing and integration work.
+# Keep it outside this repository's history; expand/refresh it independently.
+SolidArc-upstream/
