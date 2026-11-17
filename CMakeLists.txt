@@ -623,6 +623,9 @@ set(FRONTIER_ENGINE_SOURCES
     Engine/GeometrySpace/Fracture/FastRuntimeFracture.cpp
     Engine/GeometrySpace/Fracture/EngineeringBakedFracture.cpp
     Engine/GeometrySpace/Fracture/ConvexPartitioning.cpp
+    Engine/ParametricSketcher/Sketching/SketchProfile.cpp
+    Engine/ParametricSketcher/Solids/PrismaticBody.cpp
+    Engine/ParametricSketcher/ParametricSketcherDocument.cpp
     Engine/SpatialAcceleration/ClusterPyramid.cpp
     Engine/SpatialAcceleration/WideBoundingTree.cpp
     Engine/DistanceFieldSpace/SignedDistanceVolume.cpp
@@ -668,6 +671,7 @@ set(FRONTIER_ENGINE_SOURCES
     Engine/Threading/Threads/Workspace/WorkspaceThread.cpp
     Engine/Threading/Threads/Streaming/AssetStreamThread.cpp
     Engine/Codecs/SpaceContainerCodec.cpp
+    Engine/Codecs/SketchCodec.cpp
     Engine/Codecs/RevisionCodec.cpp
     Engine/Codecs/ProjectCodec.cpp
     Engine/Codecs/InputCodec.cpp
@@ -964,8 +968,9 @@ if(BUILD_TESTING)
     if(FRONTIER_PROFILE STREQUAL "Editor")
         frontier_register_exhibit(FractureWorkspaceUIValidation Exhibits/FractureWorkspaceUIValidation.cpp)
     endif()
-    frontier_register_exhibit(GeometryNetworkValidation      Exhibits/GeometryNetworkValidation.cpp)
-    frontier_register_exhibit(GeometryCompletionValidation   Exhibits/GeometryCompletionValidation.cpp)
+    frontier_register_exhibit(GeometryNetworkValidation              Exhibits/GeometryNetworkValidation.cpp)
+    frontier_register_exhibit(ParametricSketcherGeometryValidation   Exhibits/ParametricSketcherGeometryValidation.cpp)
+    frontier_register_exhibit(GeometryCompletionValidation           Exhibits/GeometryCompletionValidation.cpp)
     frontier_register_exhibit(MaterialScatteringValidation   Exhibits/MaterialScatteringValidation.cpp)
     frontier_register_exhibit(DynamicMaterialRecipeValidation Exhibits/DynamicMaterialRecipeValidation.cpp)
     frontier_register_exhibit(DynamicMaterialVulkanValidation Exhibits/DynamicMaterialVulkanValidation.cpp)
