@@ -225,8 +225,12 @@ export class TractionIntegrator
         this.LockUp = (this.AbsActive ? 0.08 : 0.6) * Locking + (this.Handbrake ? Smoothstep(1, 5, this.Speed) : 0);
         const Resist = 0.5 * AirDensity * P.DragArea * this.Speed * this.Speed + 0.012 * Weight;
         const Net = DriveForce - (this.Speed > 0.05 ? BrakeForce + Resist : 0) * Math.sign(this.Speed || 1);
+        // Drive.Rotating (opt-in): wheels, driveline and flywheel add effective mass, most in the low gears (the usual
+        // mass factor 1.04 + 0.0025 × overall ratio²; 1.37 in a Mustang's 1st, 1.07 in 4th).
+        const Overall = P.Drive?.Rotating && this.Gear > 0 ? P.Ratios[this.Gear - 1] * P.Final : 0;   // EVs share Road() and have no Ratios
+        const Spun = P.Drive?.Rotating ? 1.04 + 0.0025 * Overall * Overall : 1;
         const Before = this.Speed;
-        this.Speed = Math.max(0, this.Speed + Net / P.Mass * Seconds);
+        this.Speed = Math.max(0, this.Speed + Net / (P.Mass * Spun) * Seconds);
         this.Accel += ((this.Speed - Before) / Math.max(Seconds, 1e-4) - this.Accel) * Math.min(1, Seconds * 20);
         if (DriveForce <= 0 && this.Speed < 0.05 && this.Brake > 0) this.Speed = 0;
         this.Distance += this.Speed * Seconds;

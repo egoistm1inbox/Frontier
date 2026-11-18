@@ -10,7 +10,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { PulseTrainEngine, LaFerrari, GtrNismo, Demon, Spyder918, AgeraR } from '../PulseTrainEngine.js';
+import { PulseTrainEngine, LaFerrari, GtrNismo, Demon, Spyder918, AgeraR, MustangGt, Gt350, MustangGt3, LigierJsP320 } from '../PulseTrainEngine.js';
 import { TractionIntegrator } from '../TractionIntegrator.js';
 import { SurfaceRoll, TyreSqueal, Surfaces } from '../ContactPatch.js';
 import { RenderCue as RenderCabinCue, Cues as CabinCues } from '../CabinFoley.js';
@@ -82,6 +82,20 @@ function DriveScene(Seconds, Pickup, Plan, { Surface = 'Asphalt', Roll = true, S
         if (Index % Math.round(Rate * 0.02) < Block) Bus.Telemetry.push({ Time, Rpm: (Bus.Override ?? Feed).Rpm, Kmh: Car.Speed * 3.6, Gear: Car.Gear, Firing: Bus.Firing, Label: Bus.Label, Hz: Trace ? Trace(Car) : undefined });
     }
     return { Left, Right, Telemetry: Bus.Telemetry };
+}
+
+/** Joins scenes end to end (Telemetry times shifted so the firing overlay follows each part). */
+function Join(Parts)
+{
+    const Count = Parts.reduce((Sum, Part) => Sum + Part.Left.length, 0), Left = new Float32Array(Count), Right = new Float32Array(Count), Telemetry = [];
+    let At = 0;
+    for (const Part of Parts)
+    {
+        Left.set(Part.Left, At); Right.set(Part.Right, At);
+        for (const Row of Part.Telemetry ?? []) Telemetry.push({ ...Row, Time: Row.Time + At / Rate });
+        At += Part.Left.length;
+    }
+    return { Left, Right, Telemetry };
 }
 
 /** Lays one-shot cues on a timeline: [[Time, CueName, Options], …]. */
@@ -277,6 +291,80 @@ const Scenes = {
             Car.Throttle = 1;
             [Bus.Roll.RoadLevel, Bus.Roll.WindLevel] = Time < 5 ? [1, 1] : Time < 10 ? [0.4, 0.8] : [0, 0.8];
         }, { Profile: AgeraR }),
+        Rms: -18,
+    },
+    'MustangGt-StartLaunch': {
+        Title: 'FORD MUSTANG GT START AND LAUNCH', Note: 'CHASE MIC. COYOTE 5.0 CROSS-PLANE V8: STARTER, FLARE, LUMPY IDLE (EACH BANK FIRES UNEVENLY), TWO BLIPS, REVS HELD, LAUNCH THROUGH THE 6-SPEED MANUAL, LIFT WITH OVERRUN CRACKLE',
+        Marks: [[0.3, 'START'], [3.6, 'BLIP'], [4.8, 'BLIP'], [6.2, 'HOLD'], [7, 'LAUNCH'], [14, 'LIFT']],
+        Build: () => DriveScene(16.5, 'Chase', (Time, Car) =>
+        {
+            if (Time >= 0.3 && Time < 0.4) Car.Start();
+            if (Time < 7) { Car.Gear = 0; Car.Automatic = true; Car.Throttle = (Time > 3.6 && Time < 3.9) || (Time > 4.8 && Time < 5.25) ? 1 : Time > 6.2 ? 0.32 : 0; }
+            else Car.Throttle = Time < 14 ? 1 : 0;
+            if (Time >= 7 && Car.Gear === 0) Car.Gear = 1;
+        }, { Profile: MustangGt }),
+        Rms: -17,
+    },
+    'Gt350-Launch': {
+        Title: 'SHELBY GT350 LAUNCH', Note: 'CHASE MIC. 5.2 VOODOO FLAT-PLANE V8: REVS HELD, LAUNCH, SCREAM TO 8250 RPM THROUGH THE TREMEC 6-SPEED, LIFT. NO BURBLE: EACH BANK FIRES EVENLY',
+        Marks: [[0.8, 'HOLD'], [2, 'LAUNCH'], [13, 'LIFT']],
+        Build: () => DriveScene(16, 'Chase', (Time, Car) =>
+        {
+            if (Time < 0.01) { Car.Running = true; Car.Rpm = Gt350.Idle; Car.Automatic = true; }
+            if (Time > 0.8 && Time < 2) { Car.Gear = 0; Car.Throttle = 0.35; }
+            else Car.Throttle = Time >= 2 && Time < 13 ? 1 : 0;
+            if (Time >= 2 && Car.Gear === 0) Car.Gear = 1;
+        }, { Profile: Gt350 }),
+        Rms: -16,
+    },
+    'MustangGt3-Onboard': {
+        Title: 'FORD MUSTANG GT3 ONBOARD (LMGT3)', Note: 'CABIN MIC. 5.4 RACE COYOTE, SIDE EXHAUSTS, XTRAC SEQUENTIAL: PULL 3-4-5 WITH STRAIGHT-CUT WHINE AND CUT SHIFTS, HARD STOP WITH BLIPPED DOWNSHIFTS AND OVERRUN BANGS, CORNER, EXIT',
+        Marks: [[0.2, 'PULL'], [7.4, 'BRAKE'], [10.2, 'CORNER'], [11.6, 'EXIT']],
+        Build: () => DriveScene(14, 'Cabin', (Time, Car) =>
+        {
+            if (Time < 0.01) { Car.Running = true; Car.Gear = 3; Car.Speed = 110 / 3.6; Car.Rpm = Car.WheelRpm(); Car.Automatic = false; }
+            const Pull = Time > 0.2 && Time < 7.4;
+            Car.Throttle = Pull ? 1 : Time > 11.6 ? 1 : Time > 10.2 ? 0.3 : 0;
+            if (Pull && Car.Rpm > 7500) Car.ShiftUp();
+            Car.Brake = Time > 7.4 && Time < 10 ? 1 : 0;
+            if (Time > 7.4 && Time < 10.2 && Car.Gear > 2 && Car.WheelRpm(Car.Gear - 1) < 6200) Car.ShiftDown();
+            if (Time > 11.6 && Car.Rpm > 7500) Car.ShiftUp();
+            Car.Steer = Time > 10 && Time < 12.6 ? 0.5 * Smoothstep(10, 10.6, Time) : 0;
+        }, { Profile: MustangGt3, Chassis: true }),
+        Rms: -17,
+    },
+    'MustangGt3-FlyBy': {
+        Title: 'FORD MUSTANG GT3 FLY-BY', Note: 'TRACKSIDE MIC, 12 M FROM THE LINE: 265 KM/H IN 6TH AT FULL THROTTLE, CROSS-PLANE BARK FROM THE SIDE PIPES, DOPPLER DROP',
+        Marks: [[4, 'PASS']],
+        Build: () => FlyBy(8, 4, MustangGt3, 265, 6, {}),
+        Rms: -18,
+    },
+    'Mustang-Compare': {
+        Title: 'THREE MUSTANGS, SAME PULL', Note: 'CHASE MIC. 3RD GEAR FROM 60 KM/H TO THE LIMITER: MUSTANG GT (CROSS-PLANE COYOTE, BURBLE), SHELBY GT350 (FLAT-PLANE VOODOO, SCREAM), MUSTANG GT3 (RACE COYOTE, OPEN SIDE PIPES)',
+        Marks: [[0.3, 'MUSTANG GT'], [5.3, 'GT350'], [10.3, 'MUSTANG GT3']],
+        Build: () => Join([DriveScene(5, 'Chase', (Time, Car) => { if (Time < 0.01) { Car.Running = true; Car.Gear = 3; Car.Speed = 60 / 3.6; Car.Rpm = Car.WheelRpm(); Car.Automatic = false; } Car.Throttle = Time > 0.3 && Time < 4.4 ? 1 : 0; }, { Profile: MustangGt, Squeal: false }), DriveScene(5, 'Chase', (Time, Car) => { if (Time < 0.01) { Car.Running = true; Car.Gear = 3; Car.Speed = 60 / 3.6; Car.Rpm = Car.WheelRpm(); Car.Automatic = false; } Car.Throttle = Time > 0.3 && Time < 4.4 ? 1 : 0; }, { Profile: Gt350, Squeal: false }), DriveScene(5, 'Chase', (Time, Car) => { if (Time < 0.01) { Car.Running = true; Car.Gear = 3; Car.Speed = 60 / 3.6; Car.Rpm = Car.WheelRpm(); Car.Automatic = false; } Car.Throttle = Time > 0.3 && Time < 4.4 ? 1 : 0; }, { Profile: MustangGt3, Squeal: false })]),
+        Rms: -17,
+    },
+    'LigierJsP320-Onboard': {
+        Title: 'LIGIER JS P320 LMP3 ONBOARD', Note: 'CABIN MIC. NISSAN VK56 5.6 V8 BEHIND THE DRIVER, XTRAC 1152 SEQUENTIAL: PULL 3-4-5, STRAIGHT-CUT WHINE, HARD STOP WITH BLIPPED DOWNSHIFTS, CORNER, EXIT',
+        Marks: [[0.2, 'PULL'], [7.4, 'BRAKE'], [10.2, 'CORNER'], [11.6, 'EXIT']],
+        Build: () => DriveScene(14, 'Cabin', (Time, Car) =>
+        {
+            if (Time < 0.01) { Car.Running = true; Car.Gear = 3; Car.Speed = 110 / 3.6; Car.Rpm = Car.WheelRpm(); Car.Automatic = false; }
+            const Pull = Time > 0.2 && Time < 7.4;
+            Car.Throttle = Pull ? 1 : Time > 11.6 ? 1 : Time > 10.2 ? 0.3 : 0;
+            if (Pull && Car.Rpm > 7200) Car.ShiftUp();
+            Car.Brake = Time > 7.4 && Time < 10 ? 1 : 0;
+            if (Time > 7.4 && Time < 10.2 && Car.Gear > 2 && Car.WheelRpm(Car.Gear - 1) < 6000) Car.ShiftDown();
+            if (Time > 11.6 && Car.Rpm > 7200) Car.ShiftUp();
+            Car.Steer = Time > 10 && Time < 12.6 ? 0.5 * Smoothstep(10, 10.6, Time) : 0;
+        }, { Profile: LigierJsP320, Chassis: true }),
+        Rms: -17,
+    },
+    'LigierJsP320-FlyBy': {
+        Title: 'LIGIER JS P320 LMP3 FLY-BY', Note: 'TRACKSIDE MIC, 12 M FROM THE LINE: 260 KM/H IN 6TH, NISSAN V8 AT FULL THROTTLE, DOPPLER DROP',
+        Marks: [[4, 'PASS']],
+        Build: () => FlyBy(8, 4, LigierJsP320, 260, 6, {}),
         Rms: -18,
     },
     'GtrNismo-Onboard': {

@@ -1261,4 +1261,6 @@ in `Exhibits/LightCompute/Results/FogFacetRegression.txt`; this was a fixture-se
   (`AgeraR`, twin-turbo flat-plane V8), launches and fly-bys.
   Follow-up 17: road noise switch (the loud layer was road/tyre roar, not wind; `RoadLevel`/`WindLevel`, Road 40 % default, M key,
   eased above 150 km/h), `FactoryFoley` (conveyor, metal works, creaks, sparks, electronics; 21 cues, hall reverb).
-  Live AudioWorklet bench with car switch + offline MP3 reel (73 files, 19 MB) with spectrogram plates (`Exhibits/CabinHmi/Audio/`). Names unapproved.
+  Follow-up 18: three Mustangs (`MustangGt` Coyote cross-plane, `Gt350` Voodoo flat-plane, `MustangGt3` LMGT3) and the Ligier JS P320
+  LMP3 (`LigierJsP320`, Nissan VK56), opt-in rotating mass (`Drive.Rotating`), 7 reel scenes.
+  Live AudioWorklet bench with car switch + offline MP3 reel (80 files, 22 MB) with spectrogram plates (`Exhibits/CabinHmi/Audio/`). Names unapproved.

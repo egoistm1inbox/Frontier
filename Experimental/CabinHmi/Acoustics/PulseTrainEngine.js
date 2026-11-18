@@ -125,7 +125,94 @@ export const AgeraR = {
     Drive: { Share: 0.6, Launch: 3800, Grip: 1.6 }, Pops: 0.6, Level: 0.5,
 };
 
-export const Profiles = { LaFerrari, GtrNismo, Demon, Spyder918, AgeraR };
+/**
+ * Ford Mustang GT (2024, S650): Gen 4 Coyote 5.0 L naturally aspirated cross-plane V8, port + direct injection, 486 hp at
+ * 7250 rpm, 418 lb-ft (567 Nm) at 4900 rpm, 7500 rpm redline, 6-speed manual, 3.55 final drive, ~1736 kg; 0–60 mph 4.3 s,
+ * quarter mile 12.6 s at 113 mph (MotorTrend; gear ratios as listed by auto123). Firing order 1-5-4-8-6-3-7-2 with cylinders
+ * 1–4 on the right bank: each bank fires at 180/270/180/90° gaps, the muscle-car burble; the active exhaust's X-pipe mixes
+ * the banks a little. Pipe lengths, formants and drag area are typical values; the 155 mph governor is not modelled.
+ */
+export const MustangGt = {
+    Name: 'Ford Mustang GT', Code: '5.0 L Coyote V8',
+    Cylinders: 8, BankOffset: 0, BankAngles: [[0, 180, 450, 630], [90, 270, 360, 540]], Idle: 700, ColdIdle: 1100, Limiter: 7500, Redline: 7250,
+    Header: [0.76, 0.8], Tail: [2.85, 2.95], GasSpeed: 510, CrossFeed: 0.2,
+    Formants: [[92, 1.0, 4], [260, 1.2, 3], [640, 1.6, 2.5], [1400, 2.2, 2], [2900, 2.8, 1]],
+    ValveRpm: 2500, Intake: { Box: 84, Runner: 430, Howl: 950 },
+    Spread: 0.22, Lean: 3.6, Shape: 0.26, Jitter: [0.32, 0.12], Burble: 0.9,
+    Valvetrain: 0.045, Injector: 0.02, Space: 0.24,
+    Torque: [[700, 330], [1500, 420], [2500, 500], [3500, 540], [4900, 567], [6000, 540], [7250, 477], [7700, 410]],
+    Motor: null, Turbo: null,
+    Gearbox: { Teeth: [31, 27, 24, 22, 21, 20], Whine: 0.004, Clunk: 0.6, Cut: 0.15, Swap: 0.2 },   // a quick manual shift
+    Ratios: [3.23, 2.10, 1.42, 1.00, 0.81, 0.62], Final: 3.55, TyreRadius: 0.343, Mass: 1736 + 75, DragArea: 1.15,
+    Drive: { Share: 0.62, Launch: 3200, Grip: 1.6, Rotating: true }, Pops: 0.45, Level: 0.55,
+};
+
+/**
+ * Ford Mustang Shelby GT350 (2016–2020): 5.2 L "Voodoo" naturally aspirated V8 with a flat-plane crank (each bank fires
+ * evenly every 180°, the exotic scream no other Mustang has), 526 hp at 7500 rpm, 429 lb-ft (582 Nm) at 4750 rpm, 8250
+ * rpm redline, 12:1 compression, Tremec TR-3160 6-speed manual (3.25/2.23/1.61/1.24/1.00/0.63), 3.73 final drive, ~1705 kg.
+ * Pipe lengths, formants and drag area are typical values.
+ */
+export const Gt350 = {
+    Name: 'Ford Mustang Shelby GT350', Code: '5.2 L Voodoo flat-plane V8',
+    Cylinders: 8, BankOffset: 90, Idle: 850, ColdIdle: 1250, Limiter: 8250, Redline: 8000,
+    Header: [0.58, 0.61], Tail: [2.55, 2.62], GasSpeed: 550, CrossFeed: 0.28,
+    Formants: [[128, 1.1, 3], [410, 1.5, 2.5], [1000, 2.0, 3.5], [2200, 2.6, 3.5], [4200, 3, 1.5]],
+    ValveRpm: 3200, Intake: { Box: 108, Runner: 700, Howl: 1550 },
+    Spread: 0.17, Lean: 2.8, Shape: 0.22, Jitter: [0.27, 0.09], Burble: 0.65,
+    Valvetrain: 0.055, Injector: 0.02, Space: 0.24,
+    Torque: [[850, 330], [2000, 430], [3000, 500], [4000, 560], [4750, 582], [6000, 562], [7500, 499], [8250, 440], [8500, 380]],
+    Motor: null, Turbo: null,
+    Gearbox: { Teeth: [32, 28, 25, 23, 21, 20], Whine: 0.005, Clunk: 0.6, Cut: 0.14, Swap: 0.19 },
+    Ratios: [3.25, 2.23, 1.61, 1.24, 1.00, 0.63], Final: 3.73, TyreRadius: 0.343, Mass: 1705 + 75, DragArea: 1.0,
+    Drive: { Share: 0.62, Launch: 3600, Grip: 1.6, Rotating: true }, Pops: 0.6, Level: 0.55,
+};
+
+/**
+ * Ford Mustang GT3 (2024–, built with Multimatic), the Mustang Ford races in LMGT3 at Le Mans and in IMSA GTD: race 5.4 L
+ * naturally aspirated cross-plane Coyote V8 developed with M-Sport, about 550 hp (set by Balance of Performance), Xtrac
+ * 6-speed sequential transaxle near the rear axle with straight-cut gears and a pneumatic paddle shift, 1289 kg (Wikipedia).
+ * Side exhausts exit ahead of the rear wheels, one per bank, with no silencing: the uneven per-bank firing comes through
+ * raw, overrun bangs on every lift. Torque curve, ratios (for ~285 km/h), pipe lengths and limiter are typical values.
+ */
+export const MustangGt3 = {
+    Name: 'Ford Mustang GT3', Code: '5.4 L race Coyote V8',
+    Cylinders: 8, BankOffset: 0, BankAngles: [[0, 180, 450, 630], [90, 270, 360, 540]], Idle: 1100, ColdIdle: 1500, Limiter: 7800, Redline: 7600,
+    Header: [0.62, 0.66], Tail: [1.15, 1.2], GasSpeed: 540, CrossFeed: 0.05,
+    Formants: [[105, 1.0, 3.5], [300, 1.3, 3], [720, 1.7, 3], [1600, 2.3, 3], [3300, 3, 1.5]],
+    ValveRpm: 2700, Intake: { Box: 96, Runner: 520, Howl: 1150 },
+    Spread: 0.2, Lean: 3.2, Shape: 0.25, Jitter: [0.3, 0.12], Burble: 0.95,
+    Valvetrain: 0.06, Injector: 0.025, Space: 0.24,
+    Torque: [[1100, 400], [2000, 480], [3000, 560], [4000, 615], [5500, 650], [6500, 605], [7200, 544], [7900, 460]],
+    Motor: null, Turbo: null,
+    Gearbox: { Teeth: [27, 25, 23, 22, 21, 20], Whine: 0.022, Clunk: 1.2, Cut: 0.035, Swap: 0.05 },   // straight-cut sequential
+    Ratios: [3.08, 2.17, 1.71, 1.41, 1.20, 1.04], Final: 3.5, TyreRadius: 0.355, Mass: 1289 + 75, DragArea: 0.95,
+    Drive: { Share: 0.64, Launch: 4500, Grip: 1.8, Rotating: true }, Pops: 1.2, Level: 0.6,
+};
+
+/**
+ * Ligier JS P320 (2020–2024), the Generation 2 LMP3 prototype (ELMS, Le Mans Cup, IMSA): Nissan VK56 5.6 L naturally
+ * aspirated V8, ~460 hp, Xtrac 1152 6-speed sequential with straight-cut gears and Megaline paddle shift, mid-engine, rear
+ * drive, traction control, 950 kg minimum, ~290 km/h top speed (Ligier / race-car listings). Cross-plane crank, firing order
+ * 1-8-7-3-6-5-4-2 with odd cylinders on the right bank; short race headers into the tail of a carbon prototype. Torque
+ * curve, limiter, ratios, pipe lengths and drag area are typical values.
+ */
+export const LigierJsP320 = {
+    Name: 'Ligier JS P320 LMP3', Code: 'Nissan VK56 5.6 L V8',
+    Cylinders: 8, BankOffset: 0, BankAngles: [[0, 180, 270, 450], [90, 360, 540, 630]], Idle: 1200, ColdIdle: 1600, Limiter: 7500, Redline: 7300,
+    Header: [0.48, 0.5], Tail: [0.72, 0.76], GasSpeed: 560, CrossFeed: 0.32,
+    Formants: [[112, 1.0, 3.5], [340, 1.3, 3], [820, 1.8, 3], [1750, 2.4, 3], [3500, 3, 1.5]],
+    ValveRpm: 2800, Intake: { Box: 104, Runner: 620, Howl: 1350 },
+    Spread: 0.19, Lean: 3, Shape: 0.24, Jitter: [0.29, 0.11], Burble: 0.85,
+    Valvetrain: 0.06, Injector: 0.025, Space: 0.24,
+    Torque: [[1200, 330], [2000, 420], [3000, 500], [4000, 545], [5000, 560], [6000, 540], [7000, 468], [7600, 400]],
+    Motor: null, Turbo: null,
+    Gearbox: { Teeth: [26, 24, 23, 22, 21, 20], Whine: 0.026, Clunk: 1.1, Cut: 0.03, Swap: 0.045 },   // straight-cut sequential
+    Ratios: [2.69, 1.94, 1.55, 1.29, 1.11, 0.99], Final: 3.45, TyreRadius: 0.355, Mass: 950 + 75, DragArea: 0.95,
+    Drive: { Share: 0.62, Launch: 5000, Grip: 1.7, Rotating: true }, Pops: 1.1, Level: 0.6,
+};
+
+export const Profiles = { LaFerrari, GtrNismo, Demon, Spyder918, AgeraR, MustangGt, Gt350, MustangGt3, LigierJsP320 };
 
 /** Engine torque (Nm) at full throttle (and full boost) for an engine speed, from the profile's table. */
 export function FullTorque(Profile, Rpm)

@@ -3,7 +3,7 @@
 //    OfflineAudioContext (levels, NaN count, telemetry), then drives the real-time context (start, launch, shifts,
 //    surfaces, cues), then switches to the GT-R NISMO (offline render, launch, ABS stop, kerb, pothole, impact cues) and
 //    saves screenshots; then fires the weapons (energy LMG with and without the Turbocharger, SMG, LMG) and bullet cues; then renders and
-//    drives the electric cars (Taycan, Next-Gen racer), swaps turbos and superchargers live, plays an aircraft clip, stages and launches the Demon on its TransBrake and times turbo lag at three settings, drives the 918 Spyder and Agera R, measures the road layer at full, default and off, flips the road-noise switch
+//    drives the electric cars (Taycan, Next-Gen racer), swaps turbos and superchargers live, plays an aircraft clip, stages and launches the Demon on its TransBrake and times turbo lag at three settings, drives the 918 Spyder, Agera R, Mustang GT, Shelby GT350, Mustang GT3 and Ligier JS P320, measures the road layer at full, default and off, flips the road-noise switch
 //    (hook and M key) and plays the factory and sparks/electronics pads. Run from a folder with playwright-core and @sparticuz/chromium installed:
 //    AWS_EXECUTION_ENV=AWS_Lambda_nodejs20.x node AcousticsCheck.cjs <url> <outdir>
 const { chromium } = require('playwright-core');
@@ -138,8 +138,9 @@ const Loaded = require('@sparticuz/chromium'), sp = Loaded.default ?? Loaded;   
         console.log('lag', Lag, JSON.stringify(await Page.evaluate(() => ({ Rpm: Math.round(Bench.Readout().Rpm), Boost: +Bench.Readout().Boost.toFixed(2), Spool: document.querySelector('#SpoolTime').textContent, Shown: document.querySelector('#LagShown').textContent }))));
     }
     await Page.evaluate(() => { Bench.Hold('Throttle', null); Bench.Lag(1); });
-    // 918 Spyder (hybrid: both motors under the V8) and Agera R (twin turbo): offline renders and a live pull in 2nd.
-    for (const Car of ['Spyder918', 'AgeraR'])
+    // 918 Spyder (hybrid: both motors under the V8), Agera R (twin turbo), and Follow-up 18's three Mustangs and the
+    // Ligier JS P320: offline renders and a live pull in 2nd.
+    for (const Car of ['Spyder918', 'AgeraR', 'MustangGt', 'Gt350', 'MustangGt3', 'LigierJsP320'])
     {
         console.log('offline', Car, JSON.stringify(await Page.evaluate((C) => Bench.RenderOffline(4, C, null, 0).then((R) => ({ Peak: R.Peak, Rms: R.Rms, NonFinite: R.NonFinite, Rpm: Math.round(R.Telemetry?.Rpm ?? 0) })), Car)));
         await Page.evaluate((C) => { Bench.Induction(null); return Bench.Car(C); }, Car);

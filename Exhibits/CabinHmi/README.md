@@ -26,7 +26,7 @@ Each step file clicks through every menu and its main interactions; every run re
 
 ## Vehicle sound reel (`Audio/`)
 All synthesized in code — no recordings or samples anywhere. 192 kbps stereo MP3 at 44.1 kHz (lamejs), rendered by
-`Experimental/CabinHmi/Acoustics/Offline/RenderReel.mjs` (deterministic seeds; `--wav` also writes WAV). 73 files, 19 MB in total (the
+`Experimental/CabinHmi/Acoustics/Offline/RenderReel.mjs` (deterministic seeds; `--wav` also writes WAV). 80 files, 22 MB in total (the
 Follow-up 10 WAVs, 22 MB, were replaced). Peak is measured before encoding.
 
 | File | Length | Peak dBFS | RMS dBFS | Content |
@@ -83,6 +83,13 @@ Follow-up 10 WAVs, 22 MB, were replaced). Peak is measured before encoding.
 | `AgeraR-Launch.mp3` | 16.0 s | −2.0 | −16.0 | Koenigsegg Agera R (the Need for Speed film car): boost build at about 3800 rpm, launch, twin-turbo flat-plane V8 through 7 gears, dump-valve chirps, big blow-off on the lift |
 | `AgeraR-FlyBy.mp3` | 8.0 s | −1.0 | −18.5 | Agera R at 300 km/h in 5th on full boost: turbo whistle over the V8, Doppler drop |
 | `Road-NoiseSwitch.mp3` | 15.0 s | −4.0 | −18.0 | Follow-up 17: Agera R flat out in 6th from 220 km/h, chase mic, road roar at 100 %, then the bench default (road 40 %, wind 80 %), then road switched off (wind only) |
+| `MustangGt-StartLaunch.mp3` | 16.5 s | −1.3 | −17.0 | Follow-up 18: 2024 Mustang GT, chase mic: start, idle burble, launch, cross-plane Coyote V8 through the 6-speed manual, lift |
+| `Gt350-Launch.mp3` | 16.0 s | −1.3 | −16.0 | Shelby GT350: revs held, launch, flat-plane Voodoo scream to 8250 rpm, no burble (each bank fires evenly) |
+| `MustangGt3-Onboard.mp3` | 14.0 s | −4.8 | −17.0 | Mustang GT3 (LMGT3), cockpit: sequential upshifts, straight-cut whine, downshift blips and overrun pops |
+| `MustangGt3-FlyBy.mp3` | 8.0 s | −1.0 | −18.5 | Mustang GT3 at 265 km/h in 6th, side pipes, Doppler drop |
+| `Mustang-Compare.mp3` | 15.0 s | −2.3 | −17.0 | The three Mustangs back to back: 3rd-gear pulls from 60 km/h, GT, then GT350, then GT3 |
+| `LigierJsP320-Onboard.mp3` | 14.0 s | −4.2 | −17.0 | Ligier JS P320 LMP3, cockpit: Nissan VK56 V8, paddle upshifts, gear whine, braking downshifts |
+| `LigierJsP320-FlyBy.mp3` | 8.0 s | −1.0 | −18.5 | Ligier JS P320 at 260 km/h in 6th, Doppler drop |
 | `Induction-SmallSingle.mp3` | 11.0 s | −3.2 | −17.0 | Every `Induction-*` scene: GT-R NISMO with the inducer swapped in, chase mic: two blips, pull from rest, lift, back on, lift. Small single turbo: quick spool, bright whistle, soft blow-off |
 | `Induction-BigSingle.mp3` | 11.0 s | −2.4 | −17.0 | Big single turbo: late, violent boost, deep whoosh, loud blow-off |
 | `Induction-TwinTurbo.mp3` | 11.0 s | −2.9 | −17.0 | Parallel twins: two detuned whistles beating, blow-off with a little flutter |
@@ -189,6 +196,22 @@ pipes dropped), creaks (steel beam, steel door, wooden floor, chain hoist), spar
 high-voltage arc, transformer hum loop, relay bank, robot arm servos, fluorescent tube, coil whine, loose wire). All 21 render
 with no NaN; 12 factory and 9 sparks pads on the bench; conveyor loop toggles on and off; console errors 0. Build tag "build 17".
 Clips rendered before Follow-up 17 keep the old road level (full, no high-speed easing).
+
+**Mustang GT, Shelby GT350, Mustang GT3 and Ligier JS P320 (Follow-up 18).** The Nissan-engined Ligier is the JS P320, an **LMP3**
+prototype (Nissan VK56 5.6 L V8, ~460 hp, 950 kg); the LMGT3 class car in this batch is the Mustang GT3. New profiles in
+`PulseTrainEngine.js`: `MustangGt` (Coyote 5.0 cross-plane, 486 hp, 567 Nm, 7500 rpm, MT82 manual), `Gt350` (Voodoo 5.2 flat-plane,
+526 hp, 582 Nm, 8250 rpm, TR-3160), `MustangGt3` (race Coyote 5.4, ~550 hp, 7800 rpm, Xtrac sequential, side pipes) and
+`LigierJsP320` (VK56, 7500 rpm, Xtrac sequential). Firing check (`_ClaudeScratch/tmp/audio/cars.mjs`, side-channel spectrum): the
+cross-plane cars carry a strong 1.5× firing component (GT 0 dB, GT3 0 dB, Ligier −6 dB against the firing line), the flat-plane
+GT350 −22 dB, so the burble and the scream come from firing order, not EQ. `TractionIntegrator` gained an opt-in rotating-mass factor
+(`Drive.Rotating`, only these four cars; it is skipped for electric cars, which share `Road()` and have no ratios). Sprints, model
+[real]: Mustang GT 0–100 km/h 4.90 s [0–60 mph 4.3 s], quarter mile 12.89 s at 116 mph [12.6 s at 113]; GT350 4.77 s, 12.61 s at
+122 mph; Mustang GT3 3.65 s, top 287 km/h [about 300]; Ligier 3.65 s [about 3.8], top 294 km/h [285–290]. Agera R and Demon sprints
+unchanged. The Mustang GT tops out at the 7500 limiter in 6th (278 km/h); the 155 mph governor is not modelled, and the manual cars
+shift quickly, like a magazine test. Headless check: every new car switches in with the V key, renders offline with no NaN (peaks
+−0.1 to −0.2 dBFS) and pulls live (GT 75 km/h at 6628 rpm, GT350 74 at 6943, GT3 92 at 7340, Ligier 89 at 6306 in 1st); Taycan and
+Next-Gen still drive; console errors 0. Build tag "build 18". Typical values stand in for the GT3 and Ligier gear ratios and torque
+curves and the race VK56 limiter.
 
 ## Reproduce
 ```
