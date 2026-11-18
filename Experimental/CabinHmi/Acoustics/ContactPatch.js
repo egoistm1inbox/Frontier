@@ -32,6 +32,8 @@ export class SurfaceRoll
         this.Pickup = Pickup;
         this.Noise = new SeededNoise(Seed);
         this.Speed = new Slew(Rate, 0.05, 0);
+        // Separate levels (bench Mix): Road = tyres on the surface (roar, hiss, tread, stones, water, knocks), Wind = air.
+        this.RoadLevel = 1; this.WindLevel = 1;
         this.Weights = Object.fromEntries(Object.keys(Surfaces).map((Name) => [Name, new Slew(Rate, 0.12, Name === 'Asphalt' ? 1 : 0)]));
         this.Surface = 'Asphalt';
 
@@ -83,7 +85,9 @@ export class SurfaceRoll
             const Speed = this.Speed.Run();
             const Kmh = Speed * 3.6;
             const Moving = Smoothstep(0.3, 3, Speed);
-            const Level = Math.pow(Kmh / 100, 1.4) * Moving;          // tyre noise grows ~4 dB per doubling at low speed
+            // Tyre roar grows ~8 dB per doubling of speed up to 150 km/h; above that it is eased to ~3 dB per doubling
+            // (a listening choice, not physics: at 300+ km/h the real roar buries the engine, which wears on the ear).
+            const Level = (Kmh <= 150 ? Math.pow(Kmh / 100, 1.4) : 1.763 * Math.pow(Kmh / 150, 0.5)) * Moving;
             this.Distance += Speed / Rate;
 
             // Blend surface recipes into a working set.
@@ -118,8 +122,8 @@ export class SurfaceRoll
 
             // Wind: rises with speed squared, gusting.
             const Wind = Math.pow(Kmh / 200, 2.2) * (0.8 + 0.25 * this.Gust.Run());
-            OutL += this.Wind[0].Run(Noise.Pink()) * Wind * 0.9;
-            OutR += this.Wind[1].Run(Noise.Pink()) * Wind * 0.9;
+            const WindL = this.Wind[0].Run(Noise.Pink()) * Wind * 0.9;
+            const WindR = this.Wind[1].Run(Noise.Pink()) * Wind * 0.9;
 
             // Wet: continuous sizzle and spray, irregular splashes from standing water.
             if (Water > 0.01)
@@ -178,6 +182,8 @@ export class SurfaceRoll
             const Bump = this.Bump.Run(Strike * 0.4) * Thump * Moving;
             const Knock = (Body * 6 + Bump * 3) * Math.min(1, 0.45 + Kmh / 80);
             OutL += Knock; OutR += Knock;
+            OutL = OutL * this.RoadLevel + WindL * this.WindLevel;
+            OutR = OutR * this.RoadLevel + WindR * this.WindLevel;
 
             if (this.Pickup === 'Cabin')
             {

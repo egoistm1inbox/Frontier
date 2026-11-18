@@ -3,7 +3,8 @@
 //    OfflineAudioContext (levels, NaN count, telemetry), then drives the real-time context (start, launch, shifts,
 //    surfaces, cues), then switches to the GT-R NISMO (offline render, launch, ABS stop, kerb, pothole, impact cues) and
 //    saves screenshots; then fires the weapons (energy LMG with and without the Turbocharger, SMG, LMG) and bullet cues; then renders and
-//    drives the electric cars (Taycan, Next-Gen racer), swaps turbos and superchargers live, plays an aircraft clip, stages and launches the Demon on its TransBrake and times turbo lag at three settings, and drives the 918 Spyder and Agera R. Run from a folder with playwright-core and @sparticuz/chromium installed:
+//    drives the electric cars (Taycan, Next-Gen racer), swaps turbos and superchargers live, plays an aircraft clip, stages and launches the Demon on its TransBrake and times turbo lag at three settings, drives the 918 Spyder and Agera R, measures the road layer at full, default and off, flips the road-noise switch
+//    (hook and M key) and plays the factory and sparks/electronics pads. Run from a folder with playwright-core and @sparticuz/chromium installed:
 //    AWS_EXECUTION_ENV=AWS_Lambda_nodejs20.x node AcousticsCheck.cjs <url> <outdir>
 const { chromium } = require('playwright-core');
 const Loaded = require('@sparticuz/chromium'), sp = Loaded.default ?? Loaded;   // newer releases export default; older ones a class with static methods
@@ -149,6 +150,30 @@ const Loaded = require('@sparticuz/chromium'), sp = Loaded.default ?? Loaded;   
         console.log('live', Car, JSON.stringify(await Page.evaluate(() => { const R = Bench.Readout(); return { Car: R.Car, Kmh: Math.round(R.Kmh), Gear: R.Gear, Rpm: Math.round(R.Rpm), Motor: +(R.Motor ?? 0).toFixed(2), Boost: +(R.Boost ?? 0).toFixed(2), Chip: document.querySelector('#ChipKers').textContent, Spec: document.querySelector('#BrandSpec').textContent }; })));
         await Page.evaluate(() => Bench.Hold('Throttle', null));
     }
+    // Road noise: the road layer alone (engine, tyres, chassis muted) at 100 %, the bench default and switched off;
+    // then the live switch through the hook and the M key; then the factory and sparks/electronics pads.
+    const Solo = { Engine: 0, Tyres: 0, Chassis: 0 };
+    for (const [Label, Mix] of [['road 100 wind 100', { ...Solo, Road: 1, Wind: 1 }], ['road 40 wind 80 (default)', { ...Solo, Road: 0.4, Wind: 0.8 }], ['road off wind 80', { ...Solo, Road: 0, Wind: 0.8 }]])
+        console.log('road layer', Label, JSON.stringify(await Page.evaluate((M) => Bench.RenderOffline(6, 'AgeraR', null, 2, M).then((R) => ({ Rms: R.Rms, Peak: R.Peak, NonFinite: R.NonFinite, Kmh: Math.round(R.Telemetry?.Kmh ?? 0) })), Mix)));
+    console.log('mix default', JSON.stringify(await Page.evaluate(() => Bench.Levels())));
+    await Page.evaluate(() => Bench.RoadNoise(false));
+    console.log('road switched off', JSON.stringify(await Page.evaluate(() => ({ ...Bench.Levels(), Switch: document.querySelector('#RoadNoise b').textContent, Muted: document.querySelector('[data-mix="Road"]').classList.contains('Muted') }))));
+    await Page.keyboard.press('KeyM');
+    await Page.waitForTimeout(200);
+    console.log('M key', JSON.stringify(await Page.evaluate(() => ({ ...Bench.Levels(), Switch: document.querySelector('#RoadNoise b').textContent }))));
+    await Page.evaluate(() => Bench.Mix('Wind', 0.3));
+    console.log('wind slider', JSON.stringify(await Page.evaluate(() => ({ Wind: Bench.Levels().Wind, Shown: document.querySelector('[data-mix="Wind"] output').textContent }))));
+    await Page.evaluate(() => Bench.Mix('Wind', 0.8));
+    console.log('factory pads', await Page.evaluate(() => document.querySelectorAll('#PadsFactory .Pad').length), 'sparks pads', await Page.evaluate(() => document.querySelectorAll('#PadsSparks .Pad').length));
+    await Page.evaluate(() => Promise.all(['Conveyor', 'Grinder', 'SparkShower', 'RelayClicks', 'BeamCreak'].map((Name) => Bench.Cue(Name))));
+    await Page.waitForTimeout(300);
+    console.log('factory playing', JSON.stringify(await Page.evaluate(() => ({ Looping: [...document.querySelectorAll('#PadsFactory .Pad.Looping, #PadsSparks .Pad.Looping')].map((Pad) => Pad.dataset.cue), Ringing: [...document.querySelectorAll('#PadsFactory .Pad.Ring, #PadsSparks .Pad.Ring')].map((Pad) => Pad.dataset.cue) }))));
+    await Page.evaluate(() => document.querySelector('#PadsFactory').scrollIntoView({ block: 'center' }));
+    await Page.screenshot({ path: `${Out}/Acoustics-10-Factory.png`, timeout: 120000, animations: 'disabled' });
+    await Page.evaluate(() => Bench.Cue('Conveyor'));
+    console.log('conveyor toggled off', await Page.evaluate(() => !document.querySelector('[data-cue="Conveyor"]').classList.contains('Looping')));
+    await Page.evaluate(() => document.querySelector('#Mix').scrollIntoView({ block: 'center' }));
+    await Page.screenshot({ path: `${Out}/Acoustics-11-Mix.png`, timeout: 120000, animations: 'disabled' });
     await Page.evaluate(() => Bench.Induction('TwinScrew'));
     await Page.evaluate(() => document.querySelector('#PadsInduction').scrollIntoView({ block: 'center' }));
     await Page.waitForTimeout(1500);

@@ -146,15 +146,20 @@ in Node (`Acoustics/Offline/RenderReel.mjs` → MP3s).
 | Weapons | `Ballistics.js`, hold to fire. Energy LMG in the style of Apex Legends' Devotion: the fire rate climbs 5 → 15 rounds/s over 1.75 s while held (Turbocharger hop-up: 6.8 → 15 in 0.85 s, with a turbine whistle and charge hiss), 44-round magazine, dry click when empty. Follow-up 14 voices it as a real full-power LMG: long muzzle blast, low-mid boom (barrel and air), supersonic crack, steel bolt carrier, rolling outdoor report, brass falling; the spin drive is a geared motor (mesh grind, barrel clatter) and the energy ammo only adds a faint arc crackle (the old pitched zap is gone). Also LMG (640/min, belt links, brass), SMG (900/min), sniper (heavy blast, valley echo, bolt cycle), turret (servo traverse, lock-on pips, burst), 120 mm tank cannon (blast wave, chest thump, breech, case clang) and 30 mm autocannon. Live shots are scheduled on the audio clock from `FireRate`; the spin loop follows the rate. |
 | Bullets | Supersonic crack (N-wave) with the muzzle report arriving later by distance (400 m → 0.67 s), subsonic whizz-by (Doppler, panned), ricochets (strike + tumbling whine), and impacts on sand, dirt, rock, concrete, wood, metal, glass and water (`Hit<Material>`). |
 | Shells | `Casings.js`: spent cases as thin tubes that ring their own modes (9 mm ≈ 9.4 kHz down to a 120 mm stub ≈ 520 Hz), land mouth-first (ring) or head-first (click), bounce with the floor's restitution using real drop physics (so the gaps shrink like a real bounce series), then roll with a rim tick per turn and a rough-floor rattle. Floors: concrete, wooden deck, steel (plate modes ring), dirt (kills the ring, crunches). 10 cues (rifle, pistol, shotgun, .50, 30 mm, 120 mm, four floors, an LMG brass-and-links rain piling up); every gun's live shots drop brass on concrete. |
+| Factory | `FactoryFoley.js`: conveyor line (loop: 4-pole motor at 24 Hz, 23-tooth reducer mesh at 552 Hz, roller rumble, drive chain, a dry roller bearing, belt splice clacks, boxes over the transfer plate), factory floor (loop: hall rumble, mains hum, far motor, clanks, air blasts, forklift beeps), blacksmith hammering and quench, angle grinder (universal motor ~11 000 rpm, bevel mesh, commutator, load sag, screech, sparks), hydraulic stamping press, MIG welding (short-circuit crackle, wire feed, gas), air impact wrench, steel pipes dropped (free-free beam modes). Every cue sits in a Freeverb-style factory hall; loop lengths hold whole cycles of their machine tones and the tail is cross-folded over the start. |
+| Creaks | Stick-slip trains ringing structural modes: steel beam under load, heavy steel door (dry hinge, slam, latch), wooden floorboards, chain hoist (pawl ratchet, links, beam creak). |
+| Sparks and electronics | Spark shower, short circuit (arc, bang, fizz, breaker trip, cooling ticks), high-voltage climbing arc (100 Hz buzz, three climbs), loose wire, transformer hum (loop: 100 Hz magnetostriction, loose lamination, fan), contactor and relay bank (contact bounce), robot arm servos and gripper, fluorescent tube starting, coil whine under a changing load. |
+| Road noise | The roar at speed is the tyres on the road (`SurfaceRoll` road layer); wind is 13–30 dB under it. Mix has a Road noise switch (M), a Road roar slider (40 % by default) and a separate Wind slider (80 %); above 150 km/h the roar grows ~3 dB per doubling instead of ~8 (a listening choice). |
 | Cabin | Unlock actuators and mirror motors, butterfly door open (latch, seal pop, gas struts), door close thud, seatbelt ratchet and latch, belt chime, start button with wake chime, gear paddle, window, wipers, climate fan (loop). |
 
 Keys: W throttle · S brake · A D steer · Q E paddles · Space handbrake · Enter start / stop · V car (4) · I induction · K kerb · P pothole · F fire (picked weapon) · R Turbocharger · C mic · G gearbox ·
-T traction · 1–7 surface.
+T traction · M road noise on/off · 1–7 surface.
 `window.Bench` is the test hook: `Wake`, `Command(Name)`, `Hold(Control, Amount)`, `Cue(Name)`, `Car(Name)`, `Kick(Kerb|Pothole)`, `Surface(Name)`,
 `Readout`, `RenderOffline(Seconds, Car, Inducer, Gear)`, `Fire(Weapon, Seconds)` → `{ Fired, Seconds, Turbo }`, `Turbo(On)`,
-`Induction(Name | null)`, `Sport(On)`, `Fly(Cue)` → seconds. If the worklet ever throws, it goes quiet and posts `{ Fault }` (logged as a console error).
+`Induction(Name | null)`, `Sport(On)`, `Fly(Cue)` → seconds, `Mix(Name, Level)`, `RoadNoise(On)`, `Levels()`; `RenderOffline` takes a fifth
+argument, a mix (e.g. `{ Engine: 0 }` to hear the road layer alone). If the worklet ever throws, it goes quiet and posts `{ Fault }` (logged as a console error).
 Re-render the reel: `cd Experimental/CabinHmi/Acoustics/Offline && npm install` once (lamejs), then
-`node Experimental/CabinHmi/Acoustics/Offline/RenderReel.mjs [Scene …] [--wav]` (about 310 s for all 67 scenes; pass scene names to render just those).
+`node Experimental/CabinHmi/Acoustics/Offline/RenderReel.mjs [Scene …] [--wav]` (about 340 s for all 73 scenes; pass scene names to render just those).
 
 ## Lights
 Each HMI has its own **Lights** menu on the shared `LampRig`. These are real lamps on the 3D car.
@@ -206,7 +211,8 @@ Each display is a fixed 1600 × 900 panel, scaled to fit the window. Drag to orb
 | `Acoustics/ChassisVoices.js` | `BrakeRotor` (pad roar, squeal, groan, ABS) and `SuspensionTravel` (quarter-car: dampers, thuds, bump stops, bushings, rattles, kerb / pothole). |
 | `Acoustics/ImpactFoley.js` | `Cues` (Explosion, Shockwave, EmpPulse, SonicBlast, WindowShatter, GlassBreak, MetalCrash), `RenderCue` (peak-normalized; `Distance` option); exports its layer helpers (Overpressure, Thump, Roar, Scatter, Bounce, Whine, Creak, Arcing, Echoes, Distant, Settle). |
 | `Acoustics/Ballistics.js` | `Weapons` (EnergyLmg, Lmg, Smg, Turret, AutoCannon recipes; `Boom`, `Crack`, `Arc`, `Tail`, `Level` layers; `Brass` names a `Casings` case), 10 `Shells*` cues, `FireRate(Name, Held, Turbo)`, `Materials`, `Cues` (8 weapons, 3 bullet cues, 8 `Hit<Material>`), `RenderCue`, `RenderShot` (one shot for the live trigger), `RenderMotor` (seamless spin loop at top rate). |
-| `Acoustics/ContactPatch.js` | `Surfaces` (7 recipes), `SurfaceRoll` (rolling, road texture, wind), `TyreSqueal` (squeal, skid, wheelspin). |
+| `Acoustics/ContactPatch.js` | `Surfaces` (7 recipes), `SurfaceRoll` (rolling, road texture, wind; separate `RoadLevel` and `WindLevel`), `TyreSqueal` (squeal, skid, wheelspin). |
+| `Acoustics/FactoryFoley.js` | `Cues` (8 factory, 4 creak, 9 sparks/electronics), `RenderCue` (hall reverb, loop fold, peak normalize), `Hall` (Freeverb-style reverb); internal layers `Air`, `Motor`, `Hum`, `Crackle`. |
 | `Acoustics/CabinFoley.js` | `Cues` (5 light cues, 11 cabin cues), `RenderCue`. |
 | `Acoustics/Casings.js` | `Shells` (Pistol, Rifle556, Rifle762, Fifty, Shotgun, Cannon30, TankStub, Link), `Floors` (Concrete, Wood, Metal, Dirt), `DropCasing`, `CasingRain`. |
 | `Acoustics/ForcedInduction.js` | `Inducers` (10 turbo and supercharger models: SmallSingle, BigSingle, TwinTurbo, Flutter, Vgt, ElectricTurbo, Roots, TwistedLobe, TwinScrew, Centrifugal), `InductedProfile(Base, Name)`, `InductionVoice`. |
@@ -214,7 +220,7 @@ Each display is a fixed 1600 × 900 panel, scaled to fit the window. Drag to orb
 | `Acoustics/ElectricAviation.js` | `Airframes` (ElectricTrainer, ElectricRacer, AirTaxi), `PropellerVoice`, `Cues` (TrainerRunUp, TrainerTakeoff, RacerFlyover, AirTaxiHover), `RenderCue`. |
 | `Acoustics/VoiceRackWorklet.js` | AudioWorklet `voice-rack`: runs the car live on the audio thread (petrol with an optional inducer, or electric), posts telemetry, reports a `Fault` instead of dying silently. |
 | `Acoustics/Acoustics.html` / `.css` / `.js` | The bench page: tachometer, pedals, paddles, surfaces, cue pads, mix, reel players. |
-| `Acoustics/Offline/RenderReel.mjs` | Scripts the 67 reel scenes, writes MP3s (and WAVs with `--wav`), spectrogram plates and levels. |
+| `Acoustics/Offline/RenderReel.mjs` | Scripts the 73 reel scenes, writes MP3s (and WAVs with `--wav`), spectrogram plates and levels. |
 | `Acoustics/Offline/SpectrumTools.mjs` | WAV and MP3 (`WriteMp3`, lamejs) writers, FFT, spectra, hand-rolled PNG plates (spectrogram + waveform). |
 | `Lobby/LobbyKit.js` | `Seeded` random, canvas-painted textures (tile, concrete, asphalt, moss, bark, shutter, sky, sign, forest wall), beams, halos, fronds, leaves, `Scatter` (instanced), `Release`. |
 

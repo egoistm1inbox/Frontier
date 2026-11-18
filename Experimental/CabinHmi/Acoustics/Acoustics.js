@@ -1,11 +1,12 @@
 // ACOUSTICS
 // 🧩 Page logic for the vehicle sound bench: wakes WebAudio on the first gesture, loads VoiceRackWorklet (live car),
-//    switches the car (LaFerrari / GT-R NISMO / Taycan Turbo S / Next-Gen racer), swaps turbos and superchargers, renders CabinFoley and ImpactFoley cues into buffers on demand, binds
+//    switches the car (LaFerrari / GT-R NISMO / Taycan Turbo S / Next-Gen racer), swaps turbos and superchargers, renders CabinFoley, ImpactFoley and FactoryFoley cues into buffers on demand, holds the Mix (road noise switch, separate wind), binds
 //    keys, pedals and pads, runs the weapons' hold-to-fire trigger (shots scheduled on the audio clock at FireRate,
 //    spin motor loop following the rate), and draws the tachometer from the worklet's telemetry.
 // 📝 Test hooks on window.Bench: Wake(), Command(Name), Hold(Control, Amount), Cue(Name), Car(Name), Readout(),
 //    RenderOffline(Seconds, Car, Induction, Gear), Fire(Weapon, Seconds) → { Fired, Seconds, Turbo }, Turbo(On), Induction(Name),
-//    Sport(On), Fly(Aircraft) → seconds.
+//    Sport(On), Fly(Aircraft) → seconds, Mix(Name, Level), RoadNoise(On) → on/off, Levels() → the mix as sent.
+//    RenderOffline(..., Mix) takes a mix too (e.g. { Engine: 0 } to hear the road layer alone).
 
 import { Cues as CabinCues, RenderCue as RenderCabinCue } from './CabinFoley.js';
 import { Cues as ImpactCues, RenderCue as RenderImpactCue } from './ImpactFoley.js';
@@ -15,9 +16,10 @@ import { Profiles as EngineProfiles } from './PulseTrainEngine.js';
 import { ElectricCars } from './ElectricDrive.js';
 import { Inducers } from './ForcedInduction.js';
 import { Cues as AviationCues } from './ElectricAviation.js';
+import { Cues as FactoryCues, RenderCue as RenderFactoryCue } from './FactoryFoley.js';
 
-const Cues = { ...CabinCues, ...ImpactCues, ...BallisticCues };
-const RenderCue = (Name, Rate, Options) => (CabinCues[Name] ? RenderCabinCue : ImpactCues[Name] ? RenderImpactCue : RenderBallisticCue)(Name, Rate, Options);
+const Cues = { ...CabinCues, ...ImpactCues, ...BallisticCues, ...FactoryCues };
+const RenderCue = (Name, Rate, Options) => (CabinCues[Name] ? RenderCabinCue : ImpactCues[Name] ? RenderImpactCue : FactoryCues[Name] ? RenderFactoryCue : RenderBallisticCue)(Name, Rate, Options);
 const Profiles = { ...EngineProfiles, ...ElectricCars };
 const CarOrder = ['LaFerrari', 'GtrNismo', 'Demon', 'Spyder918', 'AgeraR', 'TaycanTurboS', 'NextGenRacer'];
 const Brands = {
@@ -37,7 +39,7 @@ const Reel = [
     ['LaFerrari-ColdStart', 'LaFerrari cold start'], ['LaFerrari-Launch', 'LaFerrari launch'], ['LaFerrari-Onboard', 'LaFerrari onboard'],
     ['LaFerrari-Limiter', 'LaFerrari limiter'], ['LaFerrari-FlyBy', 'LaFerrari fly-by'], ['Tyres-Screech', 'Tyre screech'],
     ['GtrNismo-ColdStart', 'GT-R cold start'], ['GtrNismo-Launch', 'GT-R launch'], ['GtrNismo-Onboard', 'GT-R onboard'],
-    ['GtrNismo-FlyBy', 'GT-R fly-by'], ['Demon-ColdStart', 'Demon cold start'], ['Demon-Launch', 'Demon TransBrake launch'], ['Demon-RollOn', 'Demon roll-on (no lag)'], ['TurboLag-Compare', 'Turbo lag compared'], ['Spyder918-Launch', '918 Spyder launch'], ['Spyder918-FlyBy', '918 Spyder fly-by'], ['AgeraR-Launch', 'Agera R launch'], ['AgeraR-FlyBy', 'Agera R fly-by'], ['Surfaces-Tour', 'Surfaces tour'], ['Chassis-Brakes', 'Disc brakes'],
+    ['GtrNismo-FlyBy', 'GT-R fly-by'], ['Demon-ColdStart', 'Demon cold start'], ['Demon-Launch', 'Demon TransBrake launch'], ['Demon-RollOn', 'Demon roll-on (no lag)'], ['TurboLag-Compare', 'Turbo lag compared'], ['Spyder918-Launch', '918 Spyder launch'], ['Spyder918-FlyBy', '918 Spyder fly-by'], ['AgeraR-Launch', 'Agera R launch'], ['AgeraR-FlyBy', 'Agera R fly-by'], ['Road-NoiseSwitch', 'Road noise: full, default, off'], ['Surfaces-Tour', 'Surfaces tour'], ['Chassis-Brakes', 'Disc brakes'],
     ['Chassis-Suspension', 'Suspension'], ['Lights-Cues', 'Lights'], ['Cabin-Cues', 'Cabin'],
     ['Impact-Explosion', 'Explosion 60 m'], ['Impact-ExplosionFar', 'Explosion 450 m'], ['Impact-Shockwave', 'Shockwave'],
     ['Impact-EmpPulse', 'EMP pulse'], ['Impact-SonicBlast', 'Sonic blast'], ['Impact-WindowShatter', 'Window shatter'],
@@ -46,6 +48,7 @@ const Reel = [
     ['Weapon-Sniper', 'Sniper rifle'], ['Weapon-Turret', 'Turret'], ['Weapon-Cannon', 'Tank cannon'], ['Weapon-AutoCannon', 'Autocannon'],
     ['Bullets-Supersonic', 'Supersonic crack'], ['Bullets-Whizz', 'Whizz-by'], ['Bullets-Ricochet', 'Ricochets'], ['Bullets-Impacts', 'Bullet impacts'],
     ['Shells-Floors', 'Cases on four floors'], ['Shells-Calibres', 'Cases by calibre'], ['Shells-BrassRain', 'LMG brass rain'],
+    ['Factory-Line', 'Factory line'], ['Factory-MetalWorks', 'Metal works'], ['Factory-Creaks', 'Creaks'], ['Sparks-Arcs', 'Sparks and arcs'], ['Electronics-Bench', 'Electronics'],
     ...Object.entries(Inducers).map(([Name, Model]) => [`Induction-${Name}`, `GT-R + ${Model.Label.toLowerCase()}`]),
     ['Taycan-Launch', 'Taycan launch'], ['Taycan-Onboard', 'Taycan onboard'], ['Taycan-SportSound', 'Taycan sport sound'], ['Taycan-FlyBy', 'Taycan fly-by'],
     ['NextGen-Launch', 'Next-Gen launch'], ['NextGen-Onboard', 'Next-Gen onboard'], ['NextGen-FlyBy', 'Next-Gen fly-by'],
@@ -77,7 +80,7 @@ async function Wake()
     Audio.Waking = (async () =>
     {
         const Context = new AudioContext({ latencyHint: 'interactive' });
-        await Context.audioWorklet.addModule(new URL('./VoiceRackWorklet.js?v=16', import.meta.url));
+        await Context.audioWorklet.addModule(new URL('./VoiceRackWorklet.js?v=17', import.meta.url));
         const Limiter = Context.createDynamicsCompressor();
         Limiter.threshold.value = -6; Limiter.knee.value = 4; Limiter.ratio.value = 12; Limiter.attack.value = 0.002; Limiter.release.value = 0.12;
         const Master = Context.createGain(); Master.gain.value = 0.8;
@@ -88,13 +91,18 @@ async function Wake()
         Object.assign(Audio, { Context, Rack, Master, Foley });
         await Context.resume();
         Find('Wake').classList.add('Live'); Find('Wake').querySelector('span').textContent = `Sound live · ${Math.round(Context.sampleRate / 100) / 10} kHz synthesis`;
-        SendControls();
+        SendControls(); SendMix();
     })();
     return Audio.Waking;
 }
 
 const Controls = { Throttle: 0, Brake: 0, Steer: 0, Handbrake: false, Automatic: true, Traction: true, Surface: 'Asphalt', Pickup: 'Chase', Turbocharger: false, TransBrake: false, LagScale: 1 };
 const SendControls = () => { const { Turbocharger, ...Car } = Controls; Audio.Rack?.port.postMessage({ Controls: Car }); };
+// Mix sliders. Road (tyre roar on the surface) defaults to 40 % and has an on/off switch (M); Wind is its own slider (80 %).
+const Levels = { Master: 0.8, Engine: 1, Road: 0.4, Wind: 0.8, Tyres: 1, Chassis: 1, Foley: 1 };   // Foley also carries weapons and bullets
+let RoadOn = true;
+const SentMix = () => ({ Engine: Levels.Engine, Road: RoadOn ? Levels.Road : 0, Wind: Levels.Wind, Tyres: Levels.Tyres, Chassis: Levels.Chassis });
+const SendMix = () => Audio.Rack?.port.postMessage({ Mix: SentMix() });
 const Command = async (Name) => { await Wake(); Audio.Rack.port.postMessage({ Command: Name }); };
 
 /** Plays a cue (rendered once per sample rate, then cached). Loop cues toggle on and off. */
@@ -226,11 +234,11 @@ async function Fire(Name, Seconds = 1)
  * pressed and the throttle floored in neutral (it should end bouncing on the limiter), and returns peak / RMS levels,
  * the count of non-finite samples and the final telemetry.
  */
-async function RenderOffline(Seconds = 5, Car = CarName, Inducer = null, Gear = 0)
+async function RenderOffline(Seconds = 5, Car = CarName, Inducer = null, Gear = 0, Mix = null)
 {
     const Rate = 48000, Context = new OfflineAudioContext(2, Math.round(Seconds * Rate), Rate);
-    await Context.audioWorklet.addModule(new URL('./VoiceRackWorklet.js?v=16', import.meta.url));
-    const Rack = new AudioWorkletNode(Context, 'voice-rack', { numberOfInputs: 0, outputChannelCount: [2], processorOptions: { Start: true, Throttle: 1, Car, Induction: Inducer, Gear } });
+    await Context.audioWorklet.addModule(new URL('./VoiceRackWorklet.js?v=17', import.meta.url));
+    const Rack = new AudioWorkletNode(Context, 'voice-rack', { numberOfInputs: 0, outputChannelCount: [2], processorOptions: { Start: true, Throttle: 1, Car, Induction: Inducer, Gear, Mix } });
     let Last = null; Rack.port.onmessage = (Message) => { Last = Message.data; };
     Rack.connect(Context.destination);
     const Rendered = await Context.startRendering();
@@ -263,7 +271,7 @@ function BuildPanels()
         Pad.className = 'Pad'; Pad.dataset.cue = Name;
         Pad.innerHTML = `<b>${Spec.Label}</b><small>${Spec.Loop ? 'Loop · tap to toggle' : `${Spec.Seconds.toFixed(1)} s`}</small>`;
         Pad.onclick = () => Cue(Name);
-        const Shelf = { Lights: 'PadsLights', Cabin: 'PadsCabin', Bullets: 'PadsBullets', Impacts: 'PadsBullets', Shells: 'PadsShells' }[Spec.Group] ?? 'PadsImpacts';
+        const Shelf = { Lights: 'PadsLights', Cabin: 'PadsCabin', Bullets: 'PadsBullets', Impacts: 'PadsBullets', Shells: 'PadsShells', Factory: 'PadsFactory', Creaks: 'PadsFactory', Sparks: 'PadsSparks' }[Spec.Group] ?? 'PadsImpacts';
         Find(Shelf).append(Pad);
     }
     for (const [Name, Spec] of Object.entries(Weapons))
@@ -337,27 +345,53 @@ function BuildPanels()
     Hint.className = 'Hint';
     Hint.textContent = 'Brakes: hold S at speed for ABS (pump buzz, valve clicks), brush it gently below 40 km/h for squeal, creep to a stop for groan. Suspension: cobbles, dirt and the rumble strip drive the dampers; the cabin mic hears it best.';
     Find('PadsChassis').append(Hint);
-    const Levels = { Master: 0.8, Engine: 1, Road: 1, Tyres: 1, Chassis: 1, Foley: 1 };   // Foley also carries weapons and bullets
+    const Switch = document.createElement('button');
+    Switch.className = 'Toggle RoadSwitch'; Switch.id = 'RoadNoise'; Switch.dataset.on = 'On';
+    Switch.innerHTML = '<small>Road noise · M</small><b>On</b>';
+    Switch.onclick = () => SetRoadNoise(!RoadOn);
+    Find('Mix').append(Switch);
+    const Shown = { Road: 'Road roar', Wind: 'Wind' };
     for (const [Name, Start] of Object.entries(Levels))
     {
         const Row = document.createElement('label');
-        Row.innerHTML = `<span>${Name}</span><input type="range" min="0" max="1.5" step="0.01" value="${Start}"><output>${Math.round(Start * 100)}</output>`;
-        const [Slider, Shown] = [Row.querySelector('input'), Row.querySelector('output')];
-        Slider.oninput = () =>
-        {
-            const Level = +Slider.value; Shown.textContent = Math.round(Level * 100);
-            if (Name === 'Master') Audio.Master && (Audio.Master.gain.value = Level);
-            else if (Name === 'Foley') Audio.Foley && (Audio.Foley.gain.value = Level);
-            else Audio.Rack?.port.postMessage({ Mix: { [Name]: Level } });
-        };
+        Row.dataset.mix = Name;
+        Row.innerHTML = `<span>${Shown[Name] ?? Name}</span><input type="range" min="0" max="1.5" step="0.01" value="${Start}"><output>${Math.round(Start * 100)}</output>`;
+        const Slider = Row.querySelector('input');
+        Slider.oninput = () => SetLevel(Name, +Slider.value);
         Find('Mix').append(Row);
     }
+    const Note = document.createElement('p');
+    Note.className = 'Hint';
+    Note.textContent = 'The roar at speed is the tyres on the road, not the wind (wind sits 13–30 dB under it). Road starts at 40 % and eases off above 150 km/h; M switches it off entirely.';
+    Find('Mix').append(Note);
     Find('Reel').append(...Reel.map(([File, Label]) =>
     {
         const Row = document.createElement('div');
         Row.innerHTML = `<span>${Label}</span><audio controls preload="none" src="../../../Exhibits/CabinHmi/Audio/${File}.mp3"></audio><a href="../../../Exhibits/CabinHmi/Images/Audio-${File}.png" target="_blank">plate</a>`;
         return Row;
     }));
+}
+
+/** Sets one Mix level and moves its slider: Master and Foley are page gains, the rest go to the worklet. */
+function SetLevel(Name, Level)
+{
+    Levels[Name] = Level;
+    const Row = document.querySelector(`[data-mix="${Name}"]`);
+    if (Row) { Row.querySelector('input').value = Level; Row.querySelector('output').textContent = Math.round(Level * 100); }
+    if (Name === 'Master') Audio.Master && (Audio.Master.gain.value = Level);
+    else if (Name === 'Foley') Audio.Foley && (Audio.Foley.gain.value = Level);
+    else SendMix();
+}
+
+/** Road noise on/off (tyre roar, hiss, tread, stones, water, knocks); the Road slider keeps its level for when it returns. */
+function SetRoadNoise(On)
+{
+    RoadOn = !!On;
+    const Switch = Find('RoadNoise');
+    if (Switch) { Switch.dataset.on = RoadOn ? 'On' : 'Off'; Switch.querySelector('b').textContent = RoadOn ? 'On' : 'Off'; }
+    document.querySelector('[data-mix="Road"]')?.classList.toggle('Muted', !RoadOn);
+    SendMix();
+    return RoadOn;
 }
 
 /** Kerb or pothole: a one-off bump under the tyre (the worklet runs it through the quarter-car). */
@@ -481,6 +515,7 @@ function BindInputs()
         else if (Event.code === 'KeyR') ToggleTurbo();
         else if (Event.code === 'KeyB') { Controls.TransBrake = true; SendControls(); }
         else if (Event.code === 'KeyP') Kick('Pothole');
+        else if (Event.code === 'KeyM') SetRoadNoise(!RoadOn);
         else if (Event.code === 'KeyG') Flip('Shifting', 'Automatic', ['Auto', 'Manual']);
         else if (Event.code === 'KeyT') Flip('Traction', 'Traction', ['On', 'Off']);
         else if (/^Digit[1-7]$/.test(Event.code)) PickSurface(Object.keys(Surfaces)[+Event.code.slice(5) - 1]);
@@ -616,5 +651,5 @@ window.Bench = {
     Wake, Command, Cue, RenderOffline, Readout: () => Readout, Car: PickCar, Kick, Fire, Turbo: ToggleTurbo,
     Induction: PickInduction, Sport: ToggleSport, Fly, Lag: SetLag, TransBrake: (On) => { Controls.TransBrake = !!On; SendControls(); },
     Hold: (Control, Amount) => { Forced = Amount === null ? null : { ...(Forced ?? {}), [Control]: Amount }; },
-    Surface: PickSurface,
+    Surface: PickSurface, Mix: SetLevel, RoadNoise: SetRoadNoise, Levels: () => ({ ...SentMix(), RoadOn }),
 };

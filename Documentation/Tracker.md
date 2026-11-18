@@ -1259,4 +1259,6 @@ in `Exhibits/LightCompute/Results/FogFacetRegression.txt`; this was a fixture-se
   8-speed, TransBrake) and a turbo-lag shaft model (rpm/load-dependent spool, whistle follows the shaft, lag slider + stopwatch).
   Follow-up 16: Porsche 918 Spyder (`Spyder918`, flat-plane V8 + rear and front e-motors, `Motor.Front`) and Koenigsegg Agera R
   (`AgeraR`, twin-turbo flat-plane V8), launches and fly-bys.
-  Live AudioWorklet bench with car switch + offline MP3 reel (67 files, 17 MB) with spectrogram plates (`Exhibits/CabinHmi/Audio/`). Names unapproved.
+  Follow-up 17: road noise switch (the loud layer was road/tyre roar, not wind; `RoadLevel`/`WindLevel`, Road 40 % default, M key,
+  eased above 150 km/h), `FactoryFoley` (conveyor, metal works, creaks, sparks, electronics; 21 cues, hall reverb).
+  Live AudioWorklet bench with car switch + offline MP3 reel (73 files, 19 MB) with spectrogram plates (`Exhibits/CabinHmi/Audio/`). Names unapproved.

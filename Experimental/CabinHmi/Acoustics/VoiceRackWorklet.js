@@ -4,8 +4,8 @@
 //    the electric cars (Taycan Turbo S, Next-Gen racer), ElectricIntegrator feeds DriveUnit; then SurfaceRoll,
 //    TyreSqueal, BrakeRotor and SuspensionTravel, the same classes the offline reel renders with.
 // 📝 The page posts { Controls }, { Command }, { Mix }, { Car } and { Induction } messages (processorOptions { Start,
-//    Throttle, Car, Induction } preset them); the worklet posts a telemetry readout ~30 times a second. Registered as
-//    'voice-rack'.
+//    Throttle, Car, Induction, Gear, Mix } preset them); Mix.Road and Mix.Wind set SurfaceRoll's road and wind layers
+//    separately. The worklet posts a telemetry readout ~30 times a second. Registered as 'voice-rack'.
 
 import { PulseTrainEngine, Profiles } from './PulseTrainEngine.js';
 import { TractionIntegrator } from './TractionIntegrator.js';
@@ -30,7 +30,8 @@ class VoiceRack extends AudioWorkletProcessor
         this.Brakes = new BrakeRotor(Rate, { Pickup: 'Chase' });
         this.Springs = new SuspensionTravel(Rate, { Pickup: 'Chase' });
         this.Surface = 'Asphalt'; this.Kick = 0;
-        this.Levels = { Engine: 1, Road: 1, Tyres: 1, Chassis: 1 };
+        this.Levels = { Engine: 1, Road: 0.4, Wind: 0.8, Tyres: 1, Chassis: 1 };
+        this.Roll.RoadLevel = this.Levels.Road; this.Roll.WindLevel = this.Levels.Wind;   // bench defaults (the page sends its mix on wake)
         this.Scratch = [new Float32Array(128), new Float32Array(128)];
         this.Clock = 0;
         this.port.onmessage = (Message) => this.Receive(Message.data);
@@ -38,6 +39,7 @@ class VoiceRack extends AudioWorkletProcessor
         if (processorOptions.Throttle) this.Car.Throttle = processorOptions.Throttle;
         if (processorOptions.Start) this.Car.Start();
         if (processorOptions.Gear) this.Car.Gear = processorOptions.Gear;
+        if (processorOptions.Mix) this.Receive({ Mix: processorOptions.Mix });
         this.Fault = null;
     }
 
@@ -87,7 +89,13 @@ class VoiceRack extends AudioWorkletProcessor
             if ('LagScale' in Controls) this.LagScale = Car.LagScale = Math.min(4, Math.max(0, Controls.LagScale));
             if (Controls.Pickup) { this.Pickup = this.Engine.Pickup = this.Roll.Pickup = this.Squeal.Pickup = this.Brakes.Pickup = this.Springs.Pickup = Controls.Pickup; if (this.Inducer) this.Inducer.Pickup = Controls.Pickup; }
         }
-        if (Mix) Object.assign(this.Levels, Mix);
+        if (Mix)
+        {
+            Object.assign(this.Levels, Mix);
+            // Road and Wind are separate layers inside SurfaceRoll (road roar can be switched off and wind kept).
+            if (Mix.Road !== undefined) this.Roll.RoadLevel = Mix.Road;
+            if (Mix.Wind !== undefined) this.Roll.WindLevel = Mix.Wind;
+        }
         if (Command === 'Start') Car.Running ? Car.Stop() : Car.Start();
         if (Command === 'ShiftUp') Car.ShiftUp();
         if (Command === 'ShiftDown') Car.ShiftDown();
@@ -122,7 +130,7 @@ class VoiceRack extends AudioWorkletProcessor
         this.Springs.Feed({ Speed: Car.Speed, Surface: this.Surface, Accel: Car.Accel, Lateral: Car.Lateral, Kick: this.Kick });
         this.Kick = 0;
         Left.fill(0); Right.fill(0);
-        for (const [Voice, Level] of [[this.Engine, Levels.Engine], ...(this.Inducer ? [[this.Inducer, Levels.Engine]] : []), [this.Roll, Levels.Road], [this.Squeal, Levels.Tyres], [this.Brakes, Levels.Chassis], [this.Springs, Levels.Chassis]])
+        for (const [Voice, Level] of [[this.Engine, Levels.Engine], ...(this.Inducer ? [[this.Inducer, Levels.Engine]] : []), [this.Roll, 1], [this.Squeal, Levels.Tyres], [this.Brakes, Levels.Chassis], [this.Springs, Levels.Chassis]])
         {
             ScratchL.fill(0); ScratchR.fill(0);
             Voice.Render(ScratchL, ScratchR, 0, Size);

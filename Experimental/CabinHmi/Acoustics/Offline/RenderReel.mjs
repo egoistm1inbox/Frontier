@@ -17,6 +17,7 @@ import { RenderCue as RenderCabinCue, Cues as CabinCues } from '../CabinFoley.js
 import { RenderCue as RenderImpactCue, Cues as ImpactCues } from '../ImpactFoley.js';
 import { RenderCue as RenderBallisticCue, Materials } from '../Ballistics.js';
 import { RenderCue as RenderAviationCue, Cues as AviationCues } from '../ElectricAviation.js';
+import { RenderCue as RenderFactoryCue, Cues as FactoryCues } from '../FactoryFoley.js';
 import { ElectricIntegrator, DriveUnit, TaycanTurboS, NextGenRacer } from '../ElectricDrive.js';
 import { Inducers, InductedProfile, InductionVoice } from '../ForcedInduction.js';
 import { BrakeRotor, SuspensionTravel } from '../ChassisVoices.js';
@@ -32,7 +33,7 @@ const AudioOut = join(Root, 'Exhibits/CabinHmi/Audio'), ImageOut = join(Root, 'E
 //------------------------------------------------------------------------------------------------------------------------
 
 /** Drives a car scene: Plan(Time, Car, Bus) sets inputs each block; the integrator feeds engine, rolling and squeal. */
-function DriveScene(Seconds, Pickup, Plan, { Surface = 'Asphalt', Roll = true, Squeal = true, EngineGain = 1, Profile = LaFerrari, Chassis = false, Induction = null, Sport, LagScale = 1, Trace = null, TraceLabel = null } = {})
+function DriveScene(Seconds, Pickup, Plan, { Surface = 'Asphalt', Roll = true, Squeal = true, EngineGain = 1, Profile = LaFerrari, Chassis = false, Induction = null, Sport, LagScale = 1, Trace = null, TraceLabel = null, RoadLevel = 1, WindLevel = 1 } = {})
 {
     const Count = Math.ceil(Seconds * Rate), Left = new Float32Array(Count), Right = new Float32Array(Count);
     const EngineL = new Float32Array(Block), EngineR = new Float32Array(Block);
@@ -53,6 +54,7 @@ function DriveScene(Seconds, Pickup, Plan, { Surface = 'Asphalt', Roll = true, S
         Surface, Steer: 0, Kick: 0, Override: null, Telemetry: [], Firing: Lead ? Harmonic / 60 : Blower ? Whine : Profile.Cylinders / 120,
         Label: TraceLabel ?? (Lead ? `CYAN DOTS: PREDICTED ${Harmonic}TH ORDER OF THE ${Lead.Axle.toUpperCase()} MOTOR` : Blower ? `CYAN DOTS: PREDICTED BLOWER WHINE (RPM X ${Whine.toFixed(3)})` : null),
     };
+    Bus.Roll.RoadLevel = RoadLevel; Bus.Roll.WindLevel = WindLevel;
     for (let Index = 0; Index < Count; Index += Block)
     {
         const Time = Index / Rate, Size = Math.min(Block, Count - Index);
@@ -88,7 +90,7 @@ function CueScene(Seconds, Timeline)
     const Count = Math.ceil(Seconds * Rate), Left = new Float32Array(Count), Right = new Float32Array(Count);
     for (const [Time, Name, Options = {}] of Timeline)
     {
-        const Cue = (CabinCues[Name] ? RenderCabinCue : ImpactCues[Name] ? RenderImpactCue : AviationCues[Name] ? RenderAviationCue : RenderBallisticCue)(Name, Rate, Options), Start = Math.round(Time * Rate);
+        const Cue = (CabinCues[Name] ? RenderCabinCue : ImpactCues[Name] ? RenderImpactCue : AviationCues[Name] ? RenderAviationCue : FactoryCues[Name] ? RenderFactoryCue : RenderBallisticCue)(Name, Rate, Options), Start = Math.round(Time * Rate);
         for (let Index = 0; Index < Cue.Left.length && Start + Index < Count; Index++) { Left[Start + Index] += Cue.Left[Index]; Right[Start + Index] += Cue.Right[Index]; }
     }
     return { Left, Right };
@@ -264,6 +266,17 @@ const Scenes = {
         Title: 'KOENIGSEGG AGERA R FLY-BY', Note: 'TRACKSIDE MIC, 12 M FROM THE LINE: 300 KM/H IN 5TH ON FULL BOOST, TURBO WHISTLE OVER THE V8, DOPPLER DROP',
         Marks: [[4, 'PASS']],
         Build: () => FlyBy(8, 4, AgeraR, 300, 5, { Boost: 1 }),
+        Rms: -18,
+    },
+    'Road-NoiseSwitch': {
+        Title: 'ROAD NOISE: FULL, BENCH DEFAULT, OFF', Note: 'AGERA R, CHASE MIC, 6TH GEAR FLAT OUT FROM 220 KM/H. ROAD ROAR AT 100 %, THEN THE BENCH DEFAULT (ROAD 40 %, WIND 80 %), THEN ROAD SWITCHED OFF (WIND ONLY)',
+        Marks: [[0.1, 'ROAD 100 %'], [5, 'ROAD 40 % WIND 80 %'], [10, 'ROAD OFF']],
+        Build: () => DriveScene(15, 'Chase', (Time, Car, Bus) =>
+        {
+            if (Time < 0.01) { Car.Running = true; Car.Gear = 6; Car.Speed = 220 / 3.6; Car.Rpm = Car.WheelRpm(); Car.Automatic = false; Car.Boost = 1; }
+            Car.Throttle = 1;
+            [Bus.Roll.RoadLevel, Bus.Roll.WindLevel] = Time < 5 ? [1, 1] : Time < 10 ? [0.4, 0.8] : [0, 0.8];
+        }, { Profile: AgeraR }),
         Rms: -18,
     },
     'GtrNismo-Onboard': {
@@ -571,6 +584,11 @@ const Scenes = {
     'Bullets-Impacts': { Title: 'BULLET IMPACTS', Note: 'SAND, DIRT, ROCK, CONCRETE, WOOD, METAL, GLASS, WATER (1.2 S APART)', Marks: Materials.map((Material, Index) => [Index * 1.2, Material.toUpperCase()]), Build: () => CueScene(11, Materials.map((Material, Index) => [Index * 1.2, `Hit${Material}`])), Rms: null },
     'Shells-Floors': { Title: 'SPENT CASES ON FOUR FLOORS', Note: '7.62 MM CASES ON CONCRETE, 5.56 MM ON A WOODEN DECK, 7.62 MM ON A STEEL FLOOR, 7.62 MM ON DIRT: RING, BOUNCE SERIES, ROLL', Marks: [[0.1, 'CONCRETE'], [4.7, 'WOOD'], [8.6, 'STEEL'], [13.3, 'DIRT']], Build: () => CueScene(16.6, [[0, 'ShellsRifle'], [4.7, 'ShellsWood'], [8.6, 'ShellsSteel'], [13.3, 'ShellsDirt']]), Rms: null },
     'Shells-Calibres': { Title: 'SPENT CASES BY CALIBRE', Note: '9 MM PISTOL, 12-GAUGE SHOTGUN, .50 BMG ON STEEL, 30 MM CANNON ON STEEL, 120 MM CASE STUB ON THE TURRET FLOOR', Marks: [[0.1, '9 MM'], [3.9, '12 GA'], [7.6, '.50'], [12.5, '30 MM'], [17.4, '120 MM']], Build: () => CueScene(20.4, [[0, 'ShellsPistol'], [3.9, 'ShellsShotgun'], [7.6, 'ShellsFifty'], [12.5, 'ShellsCannon'], [17.4, 'ShellsTank']]), Rms: null },
+    'Factory-Line': { Title: 'FACTORY LINE', Note: 'HALL BED (RUMBLE, MAINS HUM, FAR MOTOR, CLANKS, AIR BLASTS, FORKLIFT BEEPS), CONVEYOR (MOTOR, 552 HZ GEAR MESH, ROLLERS, CHAIN, BOXES), STAMPING PRESS, IMPACT WRENCH', Marks: [[0.1, 'HALL'], [0.5, 'CONVEYOR'], [6.25, 'PRESS'], [10.6, 'WRENCH']], Build: () => CueScene(14, [[0, 'FactoryFloor', { Seconds: 14, Peak: 0.45 }], [0.5, 'Conveyor', { Seconds: 13.5, Peak: 0.6 }], [5, 'StampingPress', { Peak: 0.6 }], [10, 'ImpactWrench', { Peak: 0.35 }]]), Rms: -18 },
+    'Factory-MetalWorks': { Title: 'METAL WORKS', Note: 'BLACKSMITH ON THE ANVIL AND QUENCH, ANGLE GRINDER CUTTING STEEL (SPIN-UP, LOAD SAG, SPARKS), MIG WELDING TWO BEADS, STEEL PIPES DROPPED', Marks: [[0.1, 'HAMMER'], [5.8, 'GRINDER'], [12.5, 'MIG WELD'], [17.7, 'PIPES']], Build: () => CueScene(22.2, [[0, 'Hammering'], [5.8, 'Grinder'], [12.5, 'Welding'], [17.7, 'PipeDrop']]), Rms: null },
+    'Factory-Creaks': { Title: 'CREAKS', Note: 'STEEL BEAM UNDER LOAD (STICK-SLIP AT 26-46 HZ RINGING GIRDER MODES), HEAVY STEEL DOOR ON A DRY HINGE AND SLAM, WOODEN FLOORBOARDS, CHAIN HOIST RATCHET', Marks: [[0.4, 'BEAM'], [5.8, 'DOOR'], [10.2, 'FLOOR'], [13.6, 'HOIST']], Build: () => CueScene(18.6, [[0, 'BeamCreak'], [5.8, 'DoorCreak'], [10.2, 'FloorCreak'], [13.6, 'ChainHoist']]), Rms: null },
+    'Sparks-Arcs': { Title: 'SPARKS AND ARCS', Note: 'SPARK SHOWER, SHORT CIRCUIT WITH BREAKER TRIP, HIGH-VOLTAGE CLIMBING ARC (100 HZ BUZZ), LOOSE WIRE MAKING AND BREAKING', Marks: [[0.1, 'SHOWER'], [4.4, 'SHORT'], [9, 'ARC'], [14.3, 'LOOSE WIRE']], Build: () => CueScene(18.6, [[0, 'SparkShower'], [4.2, 'ShortCircuit'], [8.9, 'ArcBuzz'], [14.1, 'LooseWire']]), Rms: null },
+    'Electronics-Bench': { Title: 'ELECTRONICS', Note: 'TRANSFORMER HUM (100 HZ MAGNETOSTRICTION), CONTACTOR AND RELAY BANK, ROBOT ARM SERVOS AND GRIPPER, FLUORESCENT TUBE STARTING, COIL WHINE UNDER CHANGING LOAD', Marks: [[0.1, 'TRANSFORMER'], [6.3, 'RELAYS'], [9.9, 'SERVOS'], [15.6, 'TUBE'], [20.8, 'COIL WHINE']], Build: () => CueScene(25.2, [[0, 'TransformerHum', { Peak: 0.4 }], [6.2, 'RelayClicks'], [9.8, 'ServoArm'], [15.5, 'FluorescentFlicker', { Peak: 0.6 }], [20.7, 'CoilWhine']]), Rms: null },
     'Shells-BrassRain': { Title: 'LMG BRASS AND LINKS RAINING DOWN', Note: '32 CASES AND BELT LINKS FROM A 3 S BURST AT 640 ROUNDS/MIN LANDING ON CONCRETE, CLINKING ON THE PILE, LAST ONES ROLLING', Marks: [[0.4, 'FIRST CASE'], [3.4, 'LAST CASE']], Build: () => CueScene(5.5, [[0, 'ShellsBrassRain']]), Rms: null },
     'Impact-MetalCrash': { Title: 'METAL CRUMPLE / CRASH', Note: 'IMPACT, SHEET BUCKLING, LAMPS BURSTING, SCRAPE, LURCH, HUBCAP, SETTLING CREAKS, COOLANT HISS', Marks: [[0.08, 'IMPACT'], [0.43, 'SCRAPE'], [1.83, 'LURCH'], [2.1, 'SETTLE']], Build: () => CueScene(6, [[0, 'MetalCrash']]), Rms: null },
 };

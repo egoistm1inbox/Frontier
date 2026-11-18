@@ -19,12 +19,14 @@ Each step file clicks through every menu and its main interactions; every run re
 | `Acoustics-7-Weapons` | Weapons and Bullets panels mid-burst: energy LMG trigger lit (firing) with the Turbocharger hop-up on; bullet pass-by, ricochet and 8 impact pads |
 | `Acoustics-8-Power` | Forced induction and Electric panels: twin-screw supercharger picked, the Demon's blower pad, the Turbo lag slider and tip-in stopwatch, sport sound on, aircraft pads |
 | `Acoustics-9-Shells` | Shells panel with three casing cues ringing (brass rain, steel floor, 120 mm stub) under the Weapons and Bullets panels |
+| `Acoustics-10-Factory` | Factory and Sparks and electronics panels: conveyor looping, grinder, beam creak, spark shower and relay bank ringing |
+| `Acoustics-11-Mix` | Mix panel: road noise switch (M), Road roar at 40 %, separate Wind at 80 %, the note on what the roar is |
 | `Audio-*.png` | Spectrogram + waveform plates for every reel file in `Audio/` (cyan dots on engine plates = predicted firing frequency: rpm/10 for the V12, rpm/20 for the V6; on supercharger plates the predicted blower whine, rpm × drive ratio × lobes; on EV plates a predicted motor order) |
 | `Lucent-1…6` | Rejected first HMI C attempt (kept for reference) |
 
 ## Vehicle sound reel (`Audio/`)
 All synthesized in code — no recordings or samples anywhere. 192 kbps stereo MP3 at 44.1 kHz (lamejs), rendered by
-`Experimental/CabinHmi/Acoustics/Offline/RenderReel.mjs` (deterministic seeds; `--wav` also writes WAV). 67 files, 17 MB in total (the
+`Experimental/CabinHmi/Acoustics/Offline/RenderReel.mjs` (deterministic seeds; `--wav` also writes WAV). 73 files, 19 MB in total (the
 Follow-up 10 WAVs, 22 MB, were replaced). Peak is measured before encoding.
 
 | File | Length | Peak dBFS | RMS dBFS | Content |
@@ -67,6 +69,11 @@ Follow-up 10 WAVs, 22 MB, were replaced). Peak is measured before encoding.
 | `Shells-Floors.mp3` | 16.6 s | −1.4 | −28.1 | Spent cases (`Casings.js`): 7.62 mm on concrete, 5.56 mm on a wooden deck, 7.62 mm on a steel floor, 7.62 mm on dirt — ring, bounce series, roll |
 | `Shells-Calibres.mp3` | 20.4 s | −1.4 | −26.9 | 9 mm pistol, 12-gauge shotgun, .50 BMG on steel, 30 mm cannon on steel, 120 mm case stub on the turret floor |
 | `Shells-BrassRain.mp3` | 5.5 s | −1.4 | −26.7 | 32 cases and belt links from a 3 s LMG burst raining onto concrete, clinking on the pile, last ones rolling |
+| `Factory-Line.mp3` | 14.0 s | −4.9 | −18.0 | Follow-up 17 (`FactoryFoley.js`): factory hall bed (rumble, mains hum, far motor, clanks, air blasts, forklift beeps), conveyor (24 Hz motor, 552 Hz reducer mesh, rollers, chain, belt splice, boxes), stamping press, impact wrench |
+| `Factory-MetalWorks.mp3` | 22.2 s | −0.9 | −24.7 | Blacksmith on the anvil and quench, angle grinder cutting steel (spin-up, load sag, screech, sparks, wind-down), MIG welding two beads, steel pipes dropped |
+| `Factory-Creaks.mp3` | 18.6 s | −0.9 | −17.4 | Steel beam under load, heavy steel door on a dry hinge and slam, wooden floorboards, chain hoist ratchet |
+| `Sparks-Arcs.mp3` | 18.6 s | −0.9 | −23.6 | Spark shower, short circuit with breaker trip, high-voltage climbing arc, loose wire making and breaking |
+| `Electronics-Bench.mp3` | 25.2 s | −0.9 | −17.2 | Transformer hum, contactor and relay bank, robot arm servos and gripper, fluorescent tube starting, coil whine under a changing load |
 | `Demon-ColdStart.mp3` | 10.5 s | −1.0 | −19.1 | Dodge Challenger SRT Demon (Follow-up 15): starter, catch and flare, lumpy cross-plane idle (each bank fires unevenly, firing order 1-8-4-3-6-5-7-2), three blips with the stock 2.7 L blower's scream, overrun pops |
 | `Demon-Launch.mp3` | 15.5 s | −2.4 | −16.0 | Staged on the TransBrake at 2350 rpm, released: 1.8 g, 8-speed upshifts, quarter mile in about 9.8 s at 142 mph, lift. Cyan dots: predicted blower whine (rpm × 0.157) |
 | `Demon-RollOn.mp3` | 16.5 s | −2.0 | −17.0 | Third gear from 2600 rpm, floored three times: the belt-driven blower makes boost the instant the throttle opens (no lag) |
@@ -75,6 +82,7 @@ Follow-up 10 WAVs, 22 MB, were replaced). Peak is measured before encoding.
 | `Spyder918-FlyBy.mp3` | 8.0 s | −1.0 | −18.4 | 918 Spyder at 250 km/h in 5th past a trackside mic 12 m away: Doppler drop, exhaust pointing away after the pass |
 | `AgeraR-Launch.mp3` | 16.0 s | −2.0 | −16.0 | Koenigsegg Agera R (the Need for Speed film car): boost build at about 3800 rpm, launch, twin-turbo flat-plane V8 through 7 gears, dump-valve chirps, big blow-off on the lift |
 | `AgeraR-FlyBy.mp3` | 8.0 s | −1.0 | −18.5 | Agera R at 300 km/h in 5th on full boost: turbo whistle over the V8, Doppler drop |
+| `Road-NoiseSwitch.mp3` | 15.0 s | −4.0 | −18.0 | Follow-up 17: Agera R flat out in 6th from 220 km/h, chase mic, road roar at 100 %, then the bench default (road 40 %, wind 80 %), then road switched off (wind only) |
 | `Induction-SmallSingle.mp3` | 11.0 s | −3.2 | −17.0 | Every `Induction-*` scene: GT-R NISMO with the inducer swapped in, chase mic: two blips, pull from rest, lift, back on, lift. Small single turbo: quick spool, bright whistle, soft blow-off |
 | `Induction-BigSingle.mp3` | 11.0 s | −2.4 | −17.0 | Big single turbo: late, violent boost, deep whoosh, loud blow-off |
 | `Induction-TwinTurbo.mp3` | 11.0 s | −2.9 | −17.0 | Parallel twins: two detuned whistles beating, blow-off with a little flutter |
@@ -164,6 +172,23 @@ gear, 95 kW limit, decoupled at 235 km/h, a whine locked to wheel speed). Model:
 tyre model has no traction losses in the middle gears. Headless check: 918 live in 2nd at 126 km/h with the motors driving (0.99),
 Agera R 96 km/h in 2nd on full boost, both offline renders finite; earlier checks unchanged; console errors 0. `AcousticsCheck.cjs`
 now loads either export style of `@sparticuz/chromium`.
+
+**Road noise switch, factory, sparks and electronics (Follow-up 17).** The loud noise at speed was road/tyre roar, not wind: on a
+full-throttle run (`_ClaudeScratch/tmp/audio/noisefloor.mjs`, chase mic) the road layer alone measured −32/−19/−13/−9/−7 dBFS in the
+0–60/60–120/120–200/200–300/300–450 km/h windows and the wind alone −64/−45/−33/−25/−20, so wind is 13–30 dB quieter. The road
+matched the LaFerrari's engine (−8 dBFS) from 200 km/h and was louder than the Agera R's engine (−14 dBFS) above 300. Changes:
+`SurfaceRoll` now has separate `RoadLevel` and `WindLevel`; the roar still grows ~8 dB per doubling of speed up to 150 km/h but
+only ~3 dB per doubling above that (a listening choice, not physics); the bench Mix has a Road noise on/off switch (key M), a Road
+roar slider (default 40 %) and a separate Wind slider (default 80 %). At the defaults the engine leads the road by 12–19 dB below
+200 km/h and 2–8 dB above it on the chase mic (15–25 dB in the cabin). Headless check: the road layer alone (engine, tyres and
+chassis muted), Agera R in 2nd to 148 km/h, renders at −20.8 dBFS RMS at 100 %, −28.4 at the default and −46.4 with road off (wind
+only); the switch and the M key flip it off and on (row dims, level sent 0 then 0.4); the Wind slider moves on its own. New
+`FactoryFoley.js` (21 cues, a Freeverb-style factory-hall reverb, loops cross-folded so they repeat seamlessly): factory
+(conveyor and factory-floor loops, blacksmith hammering, angle grinder, hydraulic stamping press, MIG welding, air impact wrench,
+pipes dropped), creaks (steel beam, steel door, wooden floor, chain hoist), sparks and electronics (spark shower, short circuit,
+high-voltage arc, transformer hum loop, relay bank, robot arm servos, fluorescent tube, coil whine, loose wire). All 21 render
+with no NaN; 12 factory and 9 sparks pads on the bench; conveyor loop toggles on and off; console errors 0. Build tag "build 17".
+Clips rendered before Follow-up 17 keep the old road level (full, no high-speed easing).
 
 ## Reproduce
 ```

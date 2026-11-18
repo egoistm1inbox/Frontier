@@ -104,3 +104,9 @@ footer { color: #5c616c; font-size: 12px; text-align: center; }
 .LagRow label b { color: var(--Ink); font-weight: 600; margin-left: 4px; }
 .LagRow input[type=range] { width: 180px; accent-color: var(--Cyan); }
 .LagRow #SpoolTime { color: var(--Ink); font-variant-numeric: tabular-nums; }
+
+/* Road noise switch and a muted slider row */
+.Mix .RoadSwitch { justify-self: start; }
+.Mix .RoadSwitch[data-on="Off"] b { color: var(--Dim); }
+.Mix label.Muted { opacity: 0.4; }
+.Mix .Hint { margin: 0; }
