@@ -4,7 +4,7 @@
 //    surfaces, cues), then switches to the GT-R NISMO (offline render, launch, ABS stop, kerb, pothole, impact cues) and
 //    saves screenshots; then fires the weapons (energy LMG with and without the Turbocharger, SMG, LMG) and bullet cues; then renders and
 //    drives the electric cars (Taycan, Next-Gen racer), swaps turbos and superchargers live, plays an aircraft clip, stages and launches the Demon on its TransBrake and times turbo lag at three settings, drives the 918 Spyder, Agera R, Mustang GT, Shelby GT350, Mustang GT3 and Ligier JS P320, measures the road layer at full, default and off, flips the road-noise switch
-//    (hook and M key) and plays the factory and sparks/electronics pads. Run from a folder with playwright-core and @sparticuz/chromium installed:
+//    (hook and M key), plays the factory and sparks/electronics pads, fires the eight Follow-up 19 guns and plays the War pads. Run from a folder with playwright-core and @sparticuz/chromium installed:
 //    AWS_EXECUTION_ENV=AWS_Lambda_nodejs20.x node AcousticsCheck.cjs <url> <outdir>
 const { chromium } = require('playwright-core');
 const Loaded = require('@sparticuz/chromium'), sp = Loaded.default ?? Loaded;   // newer releases export default; older ones a class with static methods
@@ -173,6 +173,15 @@ const Loaded = require('@sparticuz/chromium'), sp = Loaded.default ?? Loaded;   
     await Page.screenshot({ path: `${Out}/Acoustics-10-Factory.png`, timeout: 120000, animations: 'disabled' });
     await Page.evaluate(() => Bench.Cue('Conveyor'));
     console.log('conveyor toggled off', await Page.evaluate(() => !document.querySelector('[data-cue="Conveyor"]').classList.contains('Looping')));
+    // Follow-up 19: the eight new guns fire on the hold-to-fire trigger, and the War shelf's pads render and play.
+    for (const [Gun, Hold] of [['Fifty', 1], ['Ak47', 1], ['M4', 1], ['Minigun', 1.2], ['Mg42', 1], ['Shotgun', 1.6], ['Pistol', 1], ['AntiMateriel', 1]])
+        console.log('fire', Gun, JSON.stringify(await Page.evaluate(([Name, Seconds]) => Bench.Fire(Name, Seconds), [Gun, Hold])));
+    console.log('weapon pads', await Page.evaluate(() => document.querySelectorAll('#PadsWeapons [data-weapon]').length), 'war pads', await Page.evaluate(() => [...document.querySelectorAll('#PadsWar .Pad')].map((Pad) => Pad.dataset.cue).join(',')));
+    const WarStart = Date.now();
+    await Page.evaluate(() => Promise.all(['SandBlast', 'MortarIncoming', 'Grenade', 'Helicopter', 'AirRaidSiren', 'TankDriveBy', 'Deafened', 'Battlefield'].map((Name) => Bench.Cue(Name))));
+    console.log('war cues rendered and started in', Date.now() - WarStart, 'ms');
+    await Page.evaluate(() => document.querySelector('#PadsWar').scrollIntoView({ block: 'center' }));
+    await Page.screenshot({ path: `${Out}/Acoustics-12-War.png`, timeout: 120000, animations: 'disabled' });
     await Page.evaluate(() => document.querySelector('#Mix').scrollIntoView({ block: 'center' }));
     await Page.screenshot({ path: `${Out}/Acoustics-11-Mix.png`, timeout: 120000, animations: 'disabled' });
     await Page.evaluate(() => Bench.Induction('TwinScrew'));

@@ -1263,4 +1263,6 @@ in `Exhibits/LightCompute/Results/FogFacetRegression.txt`; this was a fixture-se
   eased above 150 km/h), `FactoryFoley` (conveyor, metal works, creaks, sparks, electronics; 21 cues, hall reverb).
   Follow-up 18: three Mustangs (`MustangGt` Coyote cross-plane, `Gt350` Voodoo flat-plane, `MustangGt3` LMGT3) and the Ligier JS P320
   LMP3 (`LigierJsP320`, Nissan VK56), opt-in rotating mass (`Drive.Rotating`), 7 reel scenes.
-  Live AudioWorklet bench with car switch + offline MP3 reel (80 files, 22 MB) with spectrogram plates (`Exhibits/CabinHmi/Audio/`). Names unapproved.
+  Follow-up 19: 8 more guns (`Fifty` .50 cal, `Ak47`, `M4`, `Minigun`, `Mg42`, `Shotgun` pump, `Pistol`, `AntiMateriel`) and `WarFoley`
+  (12 cues: sand explosions, mortar, grenade, RPG, barrage, helicopter, siren, tank, shell shock, battlefield; Doppler `Flight`), 20 reel scenes.
+  Live AudioWorklet bench with car switch + offline MP3 reel (100 files, 26 MB) with spectrogram plates (`Exhibits/CabinHmi/Audio/`). Names unapproved.

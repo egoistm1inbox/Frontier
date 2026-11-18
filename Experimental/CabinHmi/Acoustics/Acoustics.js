@@ -1,6 +1,6 @@
 // ACOUSTICS
 // 🧩 Page logic for the vehicle sound bench: wakes WebAudio on the first gesture, loads VoiceRackWorklet (live car),
-//    switches the car (LaFerrari / GT-R NISMO / Taycan Turbo S / Next-Gen racer), swaps turbos and superchargers, renders CabinFoley, ImpactFoley and FactoryFoley cues into buffers on demand, holds the Mix (road noise switch, separate wind), binds
+//    switches the car (LaFerrari / GT-R NISMO / Taycan Turbo S / Next-Gen racer), swaps turbos and superchargers, renders CabinFoley, ImpactFoley, FactoryFoley and WarFoley cues into buffers on demand, holds the Mix (road noise switch, separate wind), binds
 //    keys, pedals and pads, runs the weapons' hold-to-fire trigger (shots scheduled on the audio clock at FireRate,
 //    spin motor loop following the rate), and draws the tachometer from the worklet's telemetry.
 // 📝 Test hooks on window.Bench: Wake(), Command(Name), Hold(Control, Amount), Cue(Name), Car(Name), Readout(),
@@ -17,9 +17,10 @@ import { ElectricCars } from './ElectricDrive.js';
 import { Inducers } from './ForcedInduction.js';
 import { Cues as AviationCues } from './ElectricAviation.js';
 import { Cues as FactoryCues, RenderCue as RenderFactoryCue } from './FactoryFoley.js';
+import { Cues as WarCues, RenderCue as RenderWarCue } from './WarFoley.js';
 
-const Cues = { ...CabinCues, ...ImpactCues, ...BallisticCues, ...FactoryCues };
-const RenderCue = (Name, Rate, Options) => (CabinCues[Name] ? RenderCabinCue : ImpactCues[Name] ? RenderImpactCue : FactoryCues[Name] ? RenderFactoryCue : RenderBallisticCue)(Name, Rate, Options);
+const Cues = { ...CabinCues, ...ImpactCues, ...BallisticCues, ...FactoryCues, ...WarCues };
+const RenderCue = (Name, Rate, Options) => (CabinCues[Name] ? RenderCabinCue : ImpactCues[Name] ? RenderImpactCue : FactoryCues[Name] ? RenderFactoryCue : WarCues[Name] ? RenderWarCue : RenderBallisticCue)(Name, Rate, Options);
 const Profiles = { ...EngineProfiles, ...ElectricCars };
 const CarOrder = ['LaFerrari', 'GtrNismo', 'Demon', 'Spyder918', 'AgeraR', 'MustangGt', 'Gt350', 'MustangGt3', 'LigierJsP320', 'TaycanTurboS', 'NextGenRacer'];
 const Brands = {
@@ -50,6 +51,11 @@ const Reel = [
     ['Impact-GlassBreak', 'Glass breaking'], ['Impact-MetalCrash', 'Metal crash'],
     ['Weapon-EnergyLmg', 'Energy LMG'], ['Weapon-EnergyLmgTurbo', 'Energy LMG + Turbo'], ['Weapon-Lmg', 'LMG'], ['Weapon-Smg', 'SMG'],
     ['Weapon-Sniper', 'Sniper rifle'], ['Weapon-Turret', 'Turret'], ['Weapon-Cannon', 'Tank cannon'], ['Weapon-AutoCannon', 'Autocannon'],
+    ['Weapon-Fifty', '.50 cal HMG'], ['Weapon-Ak47', 'AK-47'], ['Weapon-M4', 'M4 carbine'], ['Weapon-Minigun', 'Minigun'], ['Weapon-Mg42', 'MG 42'],
+    ['Weapon-Shotgun', 'Pump shotgun'], ['Weapon-Pistol', '9 mm pistol'], ['Weapon-AntiMateriel', '.50 anti-materiel rifle'],
+    ['War-SandBlast', 'Explosion in sand 30 m'], ['War-SandBlastFar', 'Explosion in sand 350 m'], ['War-MortarLaunch', 'Mortar launch'], ['War-MortarIncoming', 'Incoming mortar'],
+    ['War-Grenade', 'Frag grenade'], ['War-RpgRocket', 'RPG'], ['War-Barrage', 'Artillery barrage'], ['War-Helicopter', 'Helicopter fly-over'],
+    ['War-AirRaidSiren', 'Air-raid siren'], ['War-TankDriveBy', 'Tank passing'], ['War-Deafened', 'Shell shock'], ['War-Battlefield', 'Battlefield'],
     ['Bullets-Supersonic', 'Supersonic crack'], ['Bullets-Whizz', 'Whizz-by'], ['Bullets-Ricochet', 'Ricochets'], ['Bullets-Impacts', 'Bullet impacts'],
     ['Shells-Floors', 'Cases on four floors'], ['Shells-Calibres', 'Cases by calibre'], ['Shells-BrassRain', 'LMG brass rain'],
     ['Factory-Line', 'Factory line'], ['Factory-MetalWorks', 'Metal works'], ['Factory-Creaks', 'Creaks'], ['Sparks-Arcs', 'Sparks and arcs'], ['Electronics-Bench', 'Electronics'],
@@ -84,7 +90,7 @@ async function Wake()
     Audio.Waking = (async () =>
     {
         const Context = new AudioContext({ latencyHint: 'interactive' });
-        await Context.audioWorklet.addModule(new URL('./VoiceRackWorklet.js?v=18', import.meta.url));
+        await Context.audioWorklet.addModule(new URL('./VoiceRackWorklet.js?v=19', import.meta.url));
         const Limiter = Context.createDynamicsCompressor();
         Limiter.threshold.value = -6; Limiter.knee.value = 4; Limiter.ratio.value = 12; Limiter.attack.value = 0.002; Limiter.release.value = 0.12;
         const Master = Context.createGain(); Master.gain.value = 0.8;
@@ -241,7 +247,7 @@ async function Fire(Name, Seconds = 1)
 async function RenderOffline(Seconds = 5, Car = CarName, Inducer = null, Gear = 0, Mix = null)
 {
     const Rate = 48000, Context = new OfflineAudioContext(2, Math.round(Seconds * Rate), Rate);
-    await Context.audioWorklet.addModule(new URL('./VoiceRackWorklet.js?v=18', import.meta.url));
+    await Context.audioWorklet.addModule(new URL('./VoiceRackWorklet.js?v=19', import.meta.url));
     const Rack = new AudioWorkletNode(Context, 'voice-rack', { numberOfInputs: 0, outputChannelCount: [2], processorOptions: { Start: true, Throttle: 1, Car, Induction: Inducer, Gear, Mix } });
     let Last = null; Rack.port.onmessage = (Message) => { Last = Message.data; };
     Rack.connect(Context.destination);
@@ -275,7 +281,7 @@ function BuildPanels()
         Pad.className = 'Pad'; Pad.dataset.cue = Name;
         Pad.innerHTML = `<b>${Spec.Label}</b><small>${Spec.Loop ? 'Loop · tap to toggle' : `${Spec.Seconds.toFixed(1)} s`}</small>`;
         Pad.onclick = () => Cue(Name);
-        const Shelf = { Lights: 'PadsLights', Cabin: 'PadsCabin', Bullets: 'PadsBullets', Impacts: 'PadsBullets', Shells: 'PadsShells', Factory: 'PadsFactory', Creaks: 'PadsFactory', Sparks: 'PadsSparks' }[Spec.Group] ?? 'PadsImpacts';
+        const Shelf = { Lights: 'PadsLights', Cabin: 'PadsCabin', Bullets: 'PadsBullets', Impacts: 'PadsBullets', Shells: 'PadsShells', Factory: 'PadsFactory', Creaks: 'PadsFactory', Sparks: 'PadsSparks', War: 'PadsWar' }[Spec.Group] ?? 'PadsImpacts';
         Find(Shelf).append(Pad);
     }
     for (const [Name, Spec] of Object.entries(Weapons))

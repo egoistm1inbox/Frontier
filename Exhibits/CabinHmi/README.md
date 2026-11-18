@@ -20,13 +20,14 @@ Each step file clicks through every menu and its main interactions; every run re
 | `Acoustics-8-Power` | Forced induction and Electric panels: twin-screw supercharger picked, the Demon's blower pad, the Turbo lag slider and tip-in stopwatch, sport sound on, aircraft pads |
 | `Acoustics-9-Shells` | Shells panel with three casing cues ringing (brass rain, steel floor, 120 mm stub) under the Weapons and Bullets panels |
 | `Acoustics-10-Factory` | Factory and Sparks and electronics panels: conveyor looping, grinder, beam creak, spark shower and relay bank ringing |
+| `Acoustics-12-War` | War panel (Follow-up 19): 12 pads, eight playing at once (sand blast, incoming mortar, grenade, helicopter, siren, tank, shell shock, battlefield); the eight new guns on the Weapons shelf above |
 | `Acoustics-11-Mix` | Mix panel: road noise switch (M), Road roar at 40 %, separate Wind at 80 %, the note on what the roar is |
 | `Audio-*.png` | Spectrogram + waveform plates for every reel file in `Audio/` (cyan dots on engine plates = predicted firing frequency: rpm/10 for the V12, rpm/20 for the V6; on supercharger plates the predicted blower whine, rpm × drive ratio × lobes; on EV plates a predicted motor order) |
 | `Lucent-1…6` | Rejected first HMI C attempt (kept for reference) |
 
 ## Vehicle sound reel (`Audio/`)
 All synthesized in code — no recordings or samples anywhere. 192 kbps stereo MP3 at 44.1 kHz (lamejs), rendered by
-`Experimental/CabinHmi/Acoustics/Offline/RenderReel.mjs` (deterministic seeds; `--wav` also writes WAV). 80 files, 22 MB in total (the
+`Experimental/CabinHmi/Acoustics/Offline/RenderReel.mjs` (deterministic seeds; `--wav` also writes WAV). 100 files, 26 MB in total (the
 Follow-up 10 WAVs, 22 MB, were replaced). Peak is measured before encoding.
 
 | File | Length | Peak dBFS | RMS dBFS | Content |
@@ -62,6 +63,26 @@ Follow-up 10 WAVs, 22 MB, were replaced). Peak is measured before encoding.
 | `Weapon-Turret.mp3` | 6.0 s | −0.9 | −17.9 | Servo traverse, lock-on pips, 720/min burst with feed motor, spin-down |
 | `Weapon-Cannon.mp3` | 7.0 s | −0.5 | −22.5 | 120 mm: blast wave, chest thump, fireball roar, hull ring, echoes, breech clank, case clang |
 | `Weapon-AutoCannon.mp3` | 5.0 s | −0.7 | −18.0 | 30 mm, 210/min: two bursts, heavy action, big cases ringing |
+| `Weapon-Fifty.mp3` | 6.0 s | −0.7 | −19.5 | Follow-up 19: .50 cal heavy machine gun (M2-style), 550 rounds/min in bursts of 8–10: long blast, deep boom, wide bullet crack, recoiling bolt, belt links, .50 cases |
+| `Weapon-Ak47.mp3` | 6.0 s | −0.9 | −21.0 | AK-47 (an assault rifle): three single shots, a short burst, then the rest of the 30-round magazine at 600 rounds/min, heavy bolt clack, dry click |
+| `Weapon-M4.mp3` | 5.0 s | −0.9 | −22.8 | M4 carbine, 5.56 mm at 800 rounds/min: bursts, brighter and snappier than the AK, buffer-spring twang |
+| `Weapon-Minigun.mp3` | 5.5 s | −0.9 | −22.8 | M134-style minigun: electric drive spins up in 0.5 s to 3000 rounds/min, one tearing roar, motor whine, cases raining, spin-down |
+| `Weapon-Mg42.mp3` | 5.0 s | −0.9 | −22.2 | MG 42 at 1200 rounds/min: the ripping buzzsaw, two short bursts and a long one |
+| `Weapon-Shotgun.mp3` | 5.0 s | −0.7 | −27.1 | 12-gauge pump shotgun: wide deep boom, no bullet crack, pump back (hull ejected, landing), pump forward; three shots |
+| `Weapon-Pistol.mp3` | 4.5 s | −0.9 | −30.3 | 9 mm pistol: single shots and double taps, slide slam, pistol cases |
+| `Weapon-AntiMateriel.mp3` | 6.0 s | −0.5 | −28.3 | .50 anti-materiel rifle: muzzle brake throws the blast sideways, chest-deep boom, wide crack, barrel slamming home |
+| `War-SandBlast.mp3` | 7.5 s | −0.5 | −20.7 | Follow-up 19 (`WarFoley.js`): explosion in sand 30 m away: dull crack, big low whump, sand column tearing up, then sand raining back (hiss, grains, clods, stones on a vehicle) |
+| `War-SandBlastFar.mp3` | 7.0 s | −5.2 | −22.2 | Same charge 350 m away: grains lost, crack absorbed, whump, dull roar and dune echoes carry |
+| `War-MortarLaunch.mp3` | 7.5 s | −0.7 | −26.3 | Mortar: three rounds dropped down the tube (scrape, clink), hollow thoonk, whoosh away |
+| `War-MortarIncoming.mp3` | 7.0 s | −0.5 | −25.1 | Incoming mortar: 760 Hz fin whistle Doppler-shifted along a real path (about 2 kHz falling to 600 Hz as it passes over), impact 47 m away |
+| `War-Grenade.mp3` | 9.0 s | −0.5 | −29.9 | Frag grenade: pin, throw, lever flying off (4.5 s fuse), thud and roll on dirt, blast, fragments whizzing, earth falling |
+| `War-RpgRocket.mp3` | 7.0 s | −0.5 | −29.7 | RPG: booster pop and back-blast, rocket motor screaming away (Doppler, darkening), impact on a vehicle 300 m off |
+| `War-Barrage.mp3` | 15.0 s | −0.9 | −18.0 | Artillery barrage: 15 heavy shells 1.2–5 km away, rolling echoes, constant low rumble |
+| `War-Helicopter.mp3` | 16.0 s | −0.9 | −24.8 | Military helicopter fly-over: 4-blade main rotor (17.2 passes/s), 79 Hz tail rotor, turbines, blade slap on the approach, Doppler |
+| `War-AirRaidSiren.mp3` | 18.0 s | −0.9 | −17.4 | Air-raid siren: two-rotor mechanical siren (480 / 576 Hz), wind-up and fall from rotor inertia, turning head, echoing across a town |
+| `War-TankDriveBy.mp3` | 14.0 s | −0.9 | −28.5 | Tank passing at 29 km/h, 14 m away: track links (53 clanks/s), slack slaps, road-wheel squeal, V12 diesel, ground rumble |
+| `War-Deafened.mp3` | 14.0 s | −0.5 | −32.3 | Shell shock: fighting, a shell lands 10 m away, then muffled (low-pass from 180 Hz), ringing ears, heartbeat, hearing returns over ~10 s |
+| `War-Battlefield.mp3` | 20.0 s | −1.4 | −28.4 | Battlefield bed: AK, M4, MG 42, .50 cal and LMG bursts 120–750 m away, far explosions, rounds cracking overhead |
 | `Bullets-Supersonic.mp3` | 4.5 s | −0.9 | −30.1 | Downrange of a rifle 400 m away: crack first, muzzle report 0.67 s later |
 | `Bullets-Whizz.mp3` | 2.6 s | −1.4 | −24.4 | Three subsonic fly-bys: Doppler drop, vortex tone, panning across |
 | `Bullets-Ricochet.mp3` | 3.0 s | −1.4 | −22.9 | Glancing off rock, steel and concrete: strike then tumbling whine |
@@ -212,6 +233,21 @@ shift quickly, like a magazine test. Headless check: every new car switches in w
 −0.1 to −0.2 dBFS) and pulls live (GT 75 km/h at 6628 rpm, GT350 74 at 6943, GT3 92 at 7340, Ligier 89 at 6306 in 1st); Taycan and
 Next-Gen still drive; console errors 0. Build tag "build 18". Typical values stand in for the GT3 and Ligier gear ratios and torque
 curves and the race VK56 limiter.
+
+**More guns and war sounds (Follow-up 19).** Eight new hold-to-fire guns in `Ballistics.js`, voiced from published cyclic rates and
+calibres (Wikipedia, NavWeaps, Soviet Army field data, weaponsystems.net): `Fifty` (M2HB-style .50 BMG, 450–600 rounds/min; 550
+here), `Ak47` (7.62×39, 600 rounds/min, 30 rounds, 715 m/s; it is an assault rifle, not a submachine gun), `M4` (5.56 mm, about
+800 rounds/min), `Minigun` (M134-style, six barrels, 3000 rounds/min after a 0.5 s spin-up, the published M134D figure), `Mg42`
+(1200 rounds/min), `Shotgun` (12-gauge pump; new `PumpCycle`), `Pistol` (9 mm semi-auto) and `AntiMateriel` (.50 semi-auto rifle;
+new `Brake` layer for the muzzle brake's side blasts). New `WarFoley.js` (12 cues): explosions in sand at 30 and 350 m, mortar
+launch, incoming mortar, frag grenade, RPG, artillery barrage, helicopter fly-over, air-raid siren, tank passing, shell shock and a
+battlefield bed. Moving sources (mortar round, rocket, helicopter, tank) go through `Flight()`, which steps the listener's clock and
+advances the source's emission time by 1 / (1 + radial speed / c), so Doppler and 1 / range come from the geometry: the mortar's
+760 Hz fin whistle arrives near 2 kHz while the round closes at 210 m/s and falls through 760 to about 600 Hz as it passes over (see
+the plate). Distant sounds use `Afar()` (air absorption by range and a (30 / metres)^0.75 level law, a listening compromise). Headless
+check: the eight guns fire at their rates (`.50` 11 rounds in 1.2 s, AK 12, M4 16, minigun 58 in 1.34 s with spin-up, MG 42 22 in
+1.1 s, shotgun 3 in 2.1 s, pistol 5, .50 rifle 2); the War shelf shows 12 pads; eight War cues render and start together in 5.7 s;
+all 20 new reel renders are finite; console errors 0. Build tag "build 19".
 
 ## Reproduce
 ```
