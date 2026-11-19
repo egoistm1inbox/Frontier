@@ -143,6 +143,26 @@ frame. Threads (orbits, fibres, fern fans) are runs of capsules with flat-cut jo
 URL options for captures: `?look=Airflow&time=6&variant=1&palette=Ice&car=Ghost&count=80000&still=1&ui=0&capture=1`. `window.Filament` is the test
 hook: `SetLook(Key)`, `Seek(Seconds)`, `Settings`.
 
+## Particle editor (Filament editor)
+`FilamentEditor/FilamentEditor.html` is the same ten looks inside the Frontier Editor layout: outliner on the left, viewport with its bar and readout
+in the middle, inspector on the right, status bar along the bottom. The look of the page is reused, not copied: it links `FrontierEditor.css` and imports
+`EditorControls.js` and `EditorIcons.js` straight from `SlateReference/A/Exhibits/VehicleProvingGrounds/`. `FilamentEditor.css` adds only the
+caption chip and the palette chips.
+- **Layers** (outliner): one row per look. The eye shows or hides a layer, and any number can run together (each is one draw call). The **lead** layer
+  (green dot; amber = on but not lead) drives the car body in Auto, the backdrop and the caption.
+- **Layer inspector**: Visible / Lead / Bokeh tiles. Emission (count 5k–160k, speed). Shape (size, trail, turbulence, plus the look's own variant:
+  Airflow fill or smoke rakes, clone bars or dots). Colour (8 palettes, then each of the 4 tones). Lens & intensity (depth of field, gain). Timeline
+  (cycle, phase, restart, aim camera, solo, defaults).
+- **Scene**: Camera (auto orbit, yaw, pitch, distance, view presets). ControlVehicle (Auto / Paint / Ghost / Glass / Hidden, coat and restyle colours).
+  Backdrop (follow the lead, or a custom gradient). **Post**: Bloom & tone (strength, threshold, exposure). Time (pause, jump, restart).
+- **Recipe**: four built-in stacks (Launch reveal = Vehicle transition + Light speed; Aero study = Airflow + Digital twin; Charging bay = Charging + Clone
+  field; Orbit garden = Orbits + Flora), export and import as JSON. Every edit is kept in `localStorage` (`FilamentEditor.Recipe`).
+- Keys: 1–9, 0 select a layer · E show/hide · Space pause · R restart · O auto orbit · P columns · V clean view · H readout.
+- URL options: `?fresh=1`, `?recipe=Launch|Aero|Charging|Reference`, `?solo=Flora`, `?select=Camera`, `?time=6`, `?capture=1`. Test hook
+  `window.FilamentEditor`: `Select(Id)`, `LoadStock(Key)`, `Solo(Slot)`, `WriteRecipe()`, `ReadRecipe(Recipe)`, `Seek(Seconds)`.
+
+The renderer behind both pages is `Filament/FilamentRig.js` (`RaiseRig`). The showroom is a thin page over it that runs one layer at a time.
+
 ## Vehicle sound library (Acoustics)
 `Acoustics/Acoustics.html` is a sound bench: drive a Ferrari LaFerrari, a Nissan GT-R NISMO, a Porsche Taycan Turbo S or an original Next-Gen
 racer (Jackson Storm style) live (keyboard or on-screen pedals), bolt any of 10 turbos and superchargers onto the petrol cars, switch the
@@ -213,6 +233,7 @@ Each HMI has its own **Lights** menu on the shared `LampRig`. These are real lam
 - `/Experimental/CabinHmi/Visor/Visor.html` (full window, not a fixed panel)
 - `/Experimental/CabinHmi/Lobby/Lobby.html` (full window)
 - `/Experimental/CabinHmi/Filament/Filament.html` (full window)
+- `/Experimental/CabinHmi/FilamentEditor/FilamentEditor.html` (particle editor)
 - `/Experimental/CabinHmi/Acoustics/Acoustics.html` (sound bench; click once to wake the sound)
 
 Each display is a fixed 1600 × 900 panel, scaled to fit the window. Drag to orbit and scroll to zoom.
@@ -256,7 +277,10 @@ Each display is a fixed 1600 × 900 panel, scaled to fit the window. Drag to orb
 | `Acoustics/Acoustics.html` / `.css` / `.js` | The bench page: tachometer, pedals, paddles, surfaces, cue pads, mix, reel players. |
 | `Acoustics/Offline/RenderReel.mjs` | Scripts the 101 reel scenes, writes MP3s (and WAVs with `--wav`), spectrogram plates and levels. |
 | `Acoustics/Offline/SpectrumTools.mjs` | WAV and MP3 (`WriteMp3`, lamejs) writers, FFT, spectra, hand-rolled PNG plates (spectrogram + waveform). |
-| `Filament/Filament.js` | Particle showroom page: renderer, backdrop dome, glass sphere, car body modes, instanced particle buffer, orbit camera, panel, look timelines (twin cycle, charge level), `window.Filament`. |
+| `Filament/FilamentRig.js` | `RaiseRig`: renderer, backdrop dome, glass sphere, car body modes, shared instanced particle buffer, one layer (draw call, uniforms, timeline) per look, orbit camera, bloom. Shared by the showroom and the editor. |
+| `Filament/Filament.js` | Particle showroom page over the rig: panel, keys, one look at a time, `window.Filament`. |
+| `FilamentEditor/FilamentEditor.js` | Particle editor: outliner entries, inspector pages, viewport bar, status bar, recipes, keys, `window.FilamentEditor`. |
+| `FilamentEditor/FilamentEditor.html`, `.css` | Editor page (Frontier Editor skeleton) and its few additions to `FrontierEditor.css`. |
 | `Filament/FilamentLooks.js` | GLSL: shared `Prelude` (noise-free ABC turbulence `Flow`), capsule `Projection` and `Fragment`, the six looks' `Track` functions, `Looks`, `Palettes`. |
 | `Filament/FilamentFibres.js` | GLSL for the reference looks: `Orbits`, `Flora`, `SweepJag` (the jagged edge, shared with the car paint shader), `Transition` (vehicle transition), `FibreWave`. |
 | `Filament/SurfaceScatter.js` | `ScatterSurface` (area-weighted seeded points on the car, with normals and surface family), `SilhouetteProfile` (roof and half-width along X, plus the air-felt version as a texture). |

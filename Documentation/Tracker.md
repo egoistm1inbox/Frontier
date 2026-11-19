@@ -1276,5 +1276,8 @@ in `Exhibits/LightCompute/Results/FogFacetRegression.txt`; this was a fixture-se
   graphite → lime, paint → particles), car shader cut and recoloured at the edge; straight evenly spaced lanes. Flora and Fibre wave made
   cleaner (even vein, rib and fibre spacing). 16 captures, 0 console errors.
   Follow-up 26: Orbits rings evenly spaced in one shared plane (golden-angle heads, radius-graded glow, fewer sparkles).
+  Follow-up 27: Filament particle editor (`FilamentEditor`) in the Frontier Editor layout, reusing `FrontierEditor.css`, `EditorControls`, `EditorIcons`:
+  the ten looks as stackable layers, layer / camera / car / backdrop / bloom / time / recipe inspector pages, JSON recipes. Renderer split into
+  `FilamentRig` (showroom captures byte-identical). 7 editor captures + 16 showroom captures, 0 console errors.
   Follow-up 22: Agera RS (`AgeraRs`, cross-plane 90° crank), rubber tyre squeal per surface (`Singer`, `Concrete` surface, `Tyres-Drift` scene), ricochet warble, subsonic whizz flown past the ear.
   Live AudioWorklet bench with car switch + offline MP3 reel (101 files, 26 MB) with spectrogram plates (`Exhibits/CabinHmi/Audio/`). Names unapproved.
