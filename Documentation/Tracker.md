@@ -1279,5 +1279,9 @@ in `Exhibits/LightCompute/Results/FogFacetRegression.txt`; this was a fixture-se
   Follow-up 27: Filament particle editor (`FilamentEditor`) in the Frontier Editor layout, reusing `FrontierEditor.css`, `EditorControls`, `EditorIcons`:
   the ten looks as stackable layers, layer / camera / car / backdrop / bloom / time / recipe inspector pages, JSON recipes. Renderer split into
   `FilamentRig` (showroom captures byte-identical). 7 editor captures + 16 showroom captures, 0 console errors.
+  Follow-up 28: the editor became a standalone web app, `Experimental/ParticleEditor/`, with its own `index.html`, server
+  (`ServeParticleEditor.py`, "/" opens the editor), UI copies, fonts, particle engine (moved from CabinHmi/Filament), car facets
+  (`VehicleFacets`) and three.js. It loads nothing outside its folder; the CabinHmi showroom imports the engine from it. Launcher card
+  removed. Checks in `Exhibits/ParticleEditor/`: 7 captures (identical to before), 0 console errors, 0 out-of-folder requests.
   Follow-up 22: Agera RS (`AgeraRs`, cross-plane 90° crank), rubber tyre squeal per surface (`Singer`, `Concrete` surface, `Tyres-Drift` scene), ricochet warble, subsonic whizz flown past the ear.
   Live AudioWorklet bench with car switch + offline MP3 reel (101 files, 26 MB) with spectrogram plates (`Exhibits/CabinHmi/Audio/`). Names unapproved.

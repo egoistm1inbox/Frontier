@@ -7,7 +7,7 @@
 // 📝 The renderer lives in FilamentRig.js (shared with the particle editor); this page shows one layer at a time.
 //    URL options (for captures): ?look=Airflow&time=6&palette=Ice&variant=1&car=Ghost&count=80000&aperture=0.1&still=1&ui=0&capture=1
 
-import { RaiseRig, Looks, Palettes, CarModes, MaxCount } from './FilamentRig.js';
+import { RaiseRig, Looks, Palettes, CarModes, MaxCount } from '../../ParticleEditor/Source/Particles/FilamentRig.js';
 
 const Query = new URLSearchParams(location.search);
 const Capture = Query.get('capture') === '1';                       // headless captures: no animation loop, one frame per Seek

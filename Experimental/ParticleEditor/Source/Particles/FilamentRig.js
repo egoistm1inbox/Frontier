@@ -1,13 +1,13 @@
 // FILAMENTRIG.JS
 // 🧩 The Filament renderer without any page around it: the ControlVehicle on a dark set, a backdrop dome, the glass
 //    sphere, bloom, an orbit camera and one particle layer per look. The showroom (Filament.js) shows one layer at a
-//    time; the editor (FilamentEditor) stacks several, each with its own count, speed, trail, size, colours and lens.
+//    time; the particle editor (Experimental/ParticleEditor) stacks several, each with its own count, speed, trail, size, colours and lens.
 // 📝 Every layer owns its uniforms and its instanced geometry (the per-particle attributes are shared), so layers
 //    tune independently and cost one draw call each. Timelines (Digital twin, Vehicle transition, Charging) run per
 //    layer on the layer's own cycle; the clock driving the motion is shared. Pointer orbit and wheel zoom bind to the
 //    canvas. Raise once: RaiseRig(Canvas, { Capture }) → Rig.
 
-import { THREE, AssembleVehicle, DefaultFinish, PanelEnvironment, Family } from '../Shared/VehicleAssembly.js';
+import { THREE, AssembleVehicle, DefaultFinish, PanelEnvironment, Family } from '../Vehicle/VehicleFacets.js';
 import { ScatterSurface, SilhouetteProfile, Seeded } from './SurfaceScatter.js';
 import { Prelude, Projection, Fragment, Looks, Palettes } from './FilamentLooks.js';
 import { BloomChain } from './BloomChain.js';

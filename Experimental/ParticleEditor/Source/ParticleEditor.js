@@ -1,20 +1,21 @@
-// FILAMENTEDITOR.JS
-// 🧩 Particle editor: the ten Filament looks as stackable particle layers inside the Frontier Editor layout —
+// PARTICLEEDITOR.JS
+// 🧩 Particle editor (standalone web app): the ten Filament looks as stackable particle layers inside the Frontier Editor layout —
 //    outliner (layers, scene, post, recipe) · WebGL viewport with its bar and readout · inspector of cards · status bar.
-// 📝 The renderer is FilamentRig (shared with the Filament showroom). The UI reuses the Frontier Editor's stylesheet and
-//    inspector builders from the Proving Grounds exhibit without copying them. Every edit applies live and is kept in
+// 📝 The renderer is Particles/FilamentRig.js (the CabinHmi Filament showroom also runs on it). The UI is the Frontier
+//    Editor's stylesheet and inspector builders (Style/FrontierEditor.css, Interface/), copied unchanged from the Proving
+//    Grounds exhibit so this folder serves on its own. Every edit applies live and is kept in
 //    the browser (localStorage); recipes export and import as JSON.
 //    URL options: ?fresh=1 (ignore the saved recipe) · ?recipe=Launch (start from a built-in recipe) · ?solo=Flora · ?select=Camera
 //    · ?time=6 · ?capture=1 (headless captures: no animation loop, one frame per Seek).
 //    Keys: 1–9, 0 select a layer · E show/hide it · Space pause · R restart time · O auto orbit · P columns · V clean view · H readout.
 
-import { RaiseRig, Looks, Palettes, CarModes, MaxCount } from '../Filament/FilamentRig.js';
-import { EditorControls, ClearElement, AssignStyle } from '../../SlateReference/A/Exhibits/VehicleProvingGrounds/Source/EditorControls.js';
-import { ConstructGlyph } from '../../SlateReference/A/Exhibits/VehicleProvingGrounds/Source/EditorIcons.js';
+import { RaiseRig, Looks, Palettes, CarModes, MaxCount } from './Particles/FilamentRig.js';
+import { EditorControls, ClearElement, AssignStyle } from './Interface/EditorControls.js';
+import { ConstructGlyph } from './Interface/EditorIcons.js';
 
 const Query = new URLSearchParams(location.search);
 const Capture = Query.get('capture') === '1';
-const StorageKey = 'FilamentEditor.Recipe';
+const StorageKey = 'ParticleEditor.Recipe';
 const RefreshInterval = 200;                                          // [ms] readouts, outliner and status bar at 5 Hz
 const GroupOrder = ['Layers', 'Scene', 'Post', 'Recipe'];
 const LookGlyphs = { Streaks: 'TrendingUp', Assemble: 'Boxes', Airflow: 'Wind', Turbulence: 'Flame', Clones: 'LayoutGrid', Charge: 'Zap',
@@ -694,7 +695,7 @@ function Loop(Now)
 }
 
 // Capture hook for the headless checks.
-window.FilamentEditor = {
+window.ParticleEditor = {
     Rig, Select, LoadStock, Solo, WriteRecipe, ReadRecipe,
     Seek(Seconds) { Rig.Seek(Seconds); Present(performance.now()); },
 };

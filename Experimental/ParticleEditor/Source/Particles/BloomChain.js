@@ -4,7 +4,7 @@
 //    vignette and a little grain, and writes sRGB to the canvas.
 // 📝 Particles are additive and can sum far above 1; the glow only looks right when the target keeps those values.
 
-import { THREE } from '../Shared/VehicleAssembly.js';
+import { THREE } from '../Vehicle/VehicleFacets.js';
 
 const Corner = /* glsl */ `
 varying vec2 vUv;

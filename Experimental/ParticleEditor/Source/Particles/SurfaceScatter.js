@@ -3,7 +3,7 @@
 //    silhouette along its length (the Profile texture the airflow and streak looks steer around).
 // 📝 Car axes (VehicleAssembly): +X forward, +Y up, Z across. Positions are in the car Root's space.
 
-import { THREE, Family } from '../Shared/VehicleAssembly.js';
+import { THREE, Family } from '../Vehicle/VehicleFacets.js';
 
 /** Small seeded generator (mulberry32) so captures are repeatable. */
 export function Seeded(Seed = 1)

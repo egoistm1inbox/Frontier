@@ -1,4 +1,4 @@
-/* FILAMENT EDITOR — additions on top of the reused FrontierEditor.css: the timeline caption over the viewport, palette
+/* PARTICLE EDITOR — additions on top of the reused FrontierEditor.css: the timeline caption over the viewport, palette
    chips in the inspector and the recipe drop hint. Everything else is the Frontier Editor's own stylesheet. */
 
 #viewport.Dragging { cursor: grabbing; }
