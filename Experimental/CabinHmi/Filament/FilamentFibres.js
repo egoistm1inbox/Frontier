@@ -1,6 +1,6 @@
 // FILAMENTFIBRES.JS
 // 🧩 Four looks drawn from reference stills (Follow-up 24): light threads orbiting a glass sphere, flowers built from
-//    glittering particles with bokeh, a display reveal (prismatic lines behind an electric edge) and a fibre-optic wave.
+//    glittering particles with bokeh, a vehicle transition (an electric edge sweeping the car) and a fibre-optic wave.
 // 📝 A thread is a run of capsules: instance n draws segment n mod S of thread floor(n / S), from the curve at u to
 //    u + 1/S. The same per-instance trick turns some threads into sparkles riding the same curves.
 //    These Track functions run inside FilamentLooks.Prelude (Hash, Flow, Spin, Sphere, palette uniforms).
@@ -9,7 +9,7 @@
 export const Orbits = /* glsl */ `
 const vec3 OrbitCentre = vec3(0.0, 1.6, 0.0);
 const float OrbitSegments = 96.0;
-vec3 RingFrame(vec3 P, float Fibre)
+vec3 RingTilt(vec3 P, float Fibre)
 {
     float Tilt = 0.36 + (Hash(Fibre * 4.7) - 0.5) * 0.1;
     P = vec3(P.x, P.y * cos(Tilt) - P.z * sin(Tilt), P.y * sin(Tilt) + P.z * cos(Tilt));
@@ -24,7 +24,7 @@ vec3 OrbitPoint(float Fibre, float U, float Time)
     float Span = mix(0.6, 2.4, Hash(Fibre * 5.1)) * (1.0 + Spiral * 1.5);
     float Angle = Hash(Fibre * 2.9) * Tau + Time * uSpeed * 0.55 * pow(1.65 / Radius, 1.5) + (U - 1.0) * Span;
     float Lift = (Hash(Fibre * 8.3) - 0.5) * 0.05 * Radius;
-    return RingFrame(vec3(cos(Angle) * Reach, Lift, sin(Angle) * Reach), Fibre);
+    return RingTilt(vec3(cos(Angle) * Reach, Lift, sin(Angle) * Reach), Fibre);
 }
 void Track(out vec3 Head, out vec3 Tail, out vec3 Tint, out float Width, out float Glow)
 {
@@ -73,43 +73,45 @@ vec3 PetalShape(float Length, float Open, float S, float T, float Time, float Ri
 void Track(out vec3 Head, out vec3 Tail, out vec3 Tint, out float Width, out float Glow)
 {
     float Index = float(gl_InstanceID), Share = Index / uCount, Time = uClock * uSpeed;
-    float Twinkle = 0.65 + 0.35 * sin(uClock * 3.0 + Hash(Index * 0.77) * 40.0);
-    float S = Hash(Index * 0.513), T = Hash(Index * 0.871) - 0.5;
-    if (Hash(Index * 0.239) < 0.5) T = sign(T) * (0.5 - Hash(Index * 1.13) * 0.05);    // half the points trace the edge
+    float Twinkle = 0.8 + 0.2 * sin(uClock * 3.0 + Hash(Index * 0.77) * 40.0);
+    // Petals and leaves are a lattice, not a scatter: 17 evenly spaced veins (the outer two are the glowing edges),
+    // points beaded evenly along each by the golden ratio.
+    float Vein = mod(Index, 17.0), Bead = floor(Index / 17.0);
+    float S = fract(Bead * 0.6180339 + 0.05), T = Vein / 16.0 - 0.5;
     Tail = vec3(0.0);
     if (Share < 0.42)                                                                  // flowers
     {
-        float Roll = Hash(Index * 0.119);
+        float Roll = Hash(Bead * 0.119);
         float Which = Roll < 0.5 ? 0.0 : (Roll < 0.75 ? 1.0 : 2.0);
         vec3 Centre = Which < 0.5 ? vec3(0.0, 0.7, 0.0) : (Which < 1.5 ? vec3(-3.4, 1.5, -2.8) : vec3(3.6, 1.0, -1.9));
         float Size = Which < 0.5 ? 1.7 : (Which < 1.5 ? 1.25 : 1.1);
-        float Layer = step(Hash(Index * 0.331), 0.35);
-        float Petal = floor(Hash(Index * 0.457) * 7.0);
+        float Layer = step(Hash(Bead * 0.331), 0.35);
+        float Petal = floor(Hash(Bead * 0.457) * 7.0);
         float Open = 0.22 + 0.16 * sin(Time * 0.45 + Which * 2.0) + Layer * 0.55;
         vec3 Local = PetalShape(Size * (1.0 - Layer * 0.38), Open, S, T, Time, 0.05);
         vec3 P = Spin(Local, Petal / 7.0 * Tau + Which * 1.3 + Layer * 0.45);
-        if (Hash(Index * 0.613) < 0.06) P = Sphere(Hash(Index * 0.7), Hash(Index * 0.9)) * Size * 0.1 + vec3(0.0, Size * 0.08, 0.0);
+        if (Hash(Index * 0.613) < 0.04) P = Sphere(Hash(Index * 0.7), Hash(Index * 0.9)) * Size * 0.1 + vec3(0.0, Size * 0.08, 0.0);
         P = Centre + Tilted(P, 0.4);
-        float Away = step(Hash(Index * 0.947), 0.07) * fract(Time * 0.11 + Hash(Index * 1.71));
+        float Away = step(Hash(Index * 0.947), 0.03) * fract(Time * 0.11 + Hash(Index * 1.71));
         P += vec3(0.0, Away * 2.8, 0.0) + Flow(P * 0.8, Time) * Away * 0.9 * uTurbulence;
         Head = P; Tail = P - vec3(0.0, 2.8 * 0.11 * uSpeed, 0.0) * uTail * step(0.001, Away);
-        float Rim = smoothstep(0.38, 0.5, abs(T));
+        float Rim = step(0.49, abs(T));
         Tint = mix(uTone0, uTone1, Rim * 0.7 + S * 0.3);
         Tint = mix(Tint, uTone2, Rim * S * 0.5);
-        Width = mix(0.009, 0.02, Hash(Index * 2.9)) * uSize;
-        Glow = (0.25 + Rim * 0.55) * Twinkle * (1.0 - Away) + Away * 1.6 * (1.0 - Away);
+        Width = mix(0.011, 0.016, Rim) * uSize;
+        Glow = (0.22 + Rim * 0.6) * Twinkle * (1.0 - Away) + Away * 1.6 * (1.0 - Away);
     }
     else if (Share < 0.6)                                                              // foreground leaves
     {
-        float Leaf = floor(Hash(Index * 0.173) * 5.0);
-        vec3 Base = vec3(-4.4 + Leaf * 2.2 + (Hash(Leaf * 3.1) - 0.5), -0.7, 2.3 + Hash(Leaf * 5.7) * 1.6);
+        float Leaf = floor(Hash(Bead * 0.173) * 5.0);
+        vec3 Stalk = vec3(-4.4 + Leaf * 2.2 + (Hash(Leaf * 3.1) - 0.5), -0.7, 2.3 + Hash(Leaf * 5.7) * 1.6);
         vec3 Local = PetalShape(2.8, 0.45 + Hash(Leaf) * 0.4, S, T * 0.9, Time * 0.6, 0.03);
-        Head = Base + Tilted(Spin(Local, Leaf * 1.9 + 0.8 + sin(Time * 0.3 + Leaf) * 0.06), 0.25);
+        Head = Stalk + Tilted(Spin(Local, Leaf * 1.9 + 0.8 + sin(Time * 0.3 + Leaf) * 0.06), 0.25);
         Tail = Head;
-        float Rim = smoothstep(0.36, 0.48, abs(T));
+        float Rim = step(0.49, abs(T));
         Tint = mix(uTone3, uTone0, 0.4 + Rim * 0.6);
-        Width = mix(0.012, 0.022, Hash(Index * 3.1)) * uSize;
-        Glow = (0.22 + Rim * 0.5) * Twinkle;
+        Width = 0.016 * uSize;
+        Glow = (0.12 + Rim * 0.45) * Twinkle;
     }
     else if (Share < 0.965)                                                            // fern fans: filaments of 24 segments
     {
@@ -117,8 +119,9 @@ void Track(out vec3 Head, out vec3 Tail, out vec3 Tint, out float Width, out flo
         float Strand = floor(Local / 24.0), Segment = mod(Local, 24.0);
         float Fan = mod(Strand, 3.0);
         vec3 Root = Fan < 0.5 ? vec3(-3.8, 2.4, -6.0) : (Fan < 1.5 ? vec3(0.9, 3.3, -7.8) : vec3(4.8, 2.1, -5.6));
-        float Spread = (Hash(Strand * 0.71) - 0.5) * 2.3 + sin(Time * 0.4 + Fan) * 0.05;
-        float Length = mix(1.4, 2.3, Hash(Strand * 1.3));
+        float Rib = floor(Strand / 3.0), Ribs = 84.0;                                    // 84 ribs per fan at even angles; spare instances stay dark
+        float Spread = (Rib / (Ribs - 1.0) - 0.5) * 2.3 + sin(Time * 0.4 + Fan) * 0.05;
+        float Length = (2.3 - 0.7 * abs(Spread) / 1.15) * (mod(Rib, 2.0) < 0.5 ? 1.0 : 0.88);
         vec3 Along = vec3(sin(Spread), cos(Spread), 0.15 * sin(Spread * 2.0));
         float From = Segment / 24.0, To = (Segment + 1.0) / 24.0;
         float Droop = 0.45 * Length * abs(sin(Spread));
@@ -126,8 +129,8 @@ void Track(out vec3 Head, out vec3 Tail, out vec3 Tint, out float Width, out flo
         Tail = Root + Along * From * Length - vec3(0.0, Droop * From * From, 0.0);
         Ramp = 0.0;
         Tint = mix(uTone3, uTone1, To);
-        Width = 0.008 * uSize * (Segment > 22.5 ? 2.5 : 1.0);
-        Glow = (0.08 + 0.35 * To * To) * (Segment > 22.5 ? 3.0 : 1.0) * Twinkle;
+        Width = 0.007 * uSize;
+        Glow = (0.18 + 0.6 * To * To) * Twinkle * step(Rib, Ribs - 0.5);
     }
     else                                                                               // dust and bokeh motes
     {
@@ -140,62 +143,82 @@ void Track(out vec3 Head, out vec3 Tail, out vec3 Tint, out float Width, out flo
     }
 }`;
 
-// 9 · Display reveal: a jagged electric front sweeps a screen. Behind it the pixel grid lights with prismatic lines;
-//     at the edge pixels break off as sparks and thin wisps; ahead of it the panel is dark. uMorph = sweep 0 … 1.
-export const Prism = /* glsl */ `
-const vec3 PanelCentre = vec3(0.0, 2.3, 0.0);
-const vec3 PanelRight = vec3(0.9131, 0.0, -0.4078);
-const vec3 PanelUp = vec3(0.0, 1.0, 0.0);
-const vec3 PanelOut = vec3(0.4078, 0.0, 0.9131);
+// 9 · Vehicle transition: a jagged electric edge sweeps the car nose to tail, three times per loop: dust twin → painted
+//     car, paint A → paint B, painted car → dust blowing away. The real mesh is clipped and recoloured at the same edge
+//     (Filament.js patches the paint shaders with SweepJag), the edge glows on the body, thin wisps run ahead of it and
+//     prismatic lines run behind it, all on evenly spaced straight lanes. uSweepMode 0 dust · 1 reveal · 2 restyle ·
+//     3 dissolve; uFront is the edge's x.
+export const SweepJag = /* glsl */ `
+float SweepJag(vec3 P, float T)
+{
+    return 0.16 * sin(P.y * 7.0 + T * 2.0) + 0.08 * sin(P.z * 11.0 - T * 5.0) + 0.05 * sin((P.y + P.z) * 23.0 + T * 13.0) + 0.035 * sin(P.y * 41.0 - P.z * 37.0 + T * 21.0);
+}`;
+
+export const Transition = SweepJag + /* glsl */ `
+const float SweepLanes = 30.0;                                                       // horizontal lines per metre of height
 void Track(out vec3 Head, out vec3 Tail, out vec3 Tint, out float Width, out float Glow)
 {
     float Index = float(gl_InstanceID);
-    float Columns = floor(sqrt(uCount * 1.78)), Rows = floor(uCount / Columns);
-    float Column = mod(Index, Columns), Row = floor(Index / Columns);
-    vec2 Spot = vec2((Column + 0.5) / Columns, (Row + 0.5) / Rows);
-    vec3 Base = PanelCentre + PanelRight * (Spot.x - 0.5) * 8.0 + PanelUp * (Spot.y - 0.5) * 4.5;
-    vec3 Lines = normalize(PanelRight * 0.8 - PanelUp * 0.6);
-    float Sweep = Spot.x * 0.75 + (1.0 - Spot.y) * 0.5;
-    float Front = mix(-0.25, 1.5, uMorph);
-    float Jag = 0.07 * sin(Spot.y * 21.0 + uClock * 2.0) + 0.035 * sin(Spot.y * 53.0 - uClock * 5.0) + 0.018 * sin(Spot.x * 37.0 + Spot.y * 61.0 + uClock * 13.0);
-    float Gap = Sweep + Jag - Front;                                                 // < 0: revealed
-    float Speed = 1.75 * max(uMorphRate, 1e-3);
-    Head = Base; Tail = Base; Width = 0.008 * uSize; Glow = 0.0; Tint = uTone0;
-    if (Row >= Rows) return;
-    float Roll = Hash(Index * 0.377);
-    if (Gap > 0.0)                                                                   // ahead of the edge: dark, with a few wisps
+    vec3 Normal = aFacing;
+    float Gap = aAnchor.x + SweepJag(aAnchor, uClock) - uFront;                     // > 0: the edge has passed this point
+    float Age = Gap / max(uFrontSpeed, 1e-3);                                         // seconds since it passed
+    float Roll = Hash(Index * 0.377), Pick = Hash(Index * 0.613);
+    float Seam = exp(-abs(Gap) * 26.0);
+    // Everything sits on evenly spaced horizontal lanes, so the sweep reads as many particles running in straight lines.
+    float Across = mix(aAnchor.y, aAnchor.z, smoothstep(0.55, 0.85, abs(Normal.y)));   // height on the flanks, width on roof and bonnet
+    float Lane = floor(Across * SweepLanes);
+    float OnLane = 1.0 - smoothstep(0.1, 0.16, abs(fract(Across * SweepLanes) - 0.5));
+    vec3 Along = normalize(vec3(1.0, 0.0, 0.0) - Normal * Normal.x + vec3(0.0, 1e-4, 0.0));
+    vec3 Lifted = aAnchor + Normal * 0.012;
+    vec3 Hue = 0.5 + 0.5 * cos(Tau * (fract(Lane * 0.071 + 0.15) + vec3(0.0, 0.33, 0.67)));   // prismatic: one hue per lane
+    Head = Lifted; Tail = Lifted;
+    Width = 0.009 * uSize;
+    Tint = uTone1; Glow = 0.0;
+    bool Done = Gap > 0.0;
+    float Mode = uSweepMode;
+    if (Mode > 0.5 && Roll < 0.03 && Age > 0.0 && Age < 0.9)                          // particles shot straight out ahead of the edge
     {
-        if (Roll < 0.035 && Gap < 0.22)
-        {
-            vec3 Kink = normalize(PanelRight * (Hash(Index * 1.3) - 0.2) + PanelUp * (Hash(Index * 1.7) - 0.5) + PanelOut * 0.2);
-            Head = Base + Kink * 0.09; Tail = Base;
-            Tint = uTone1; Width = 0.004 * uSize;
-            Glow = 0.45 * exp(-Gap * 14.0) * step(0.5, Hash(Index + floor(uClock * 14.0)));
-        }
+        float Run = Age * mix(1.6, 2.6, Pick);
+        Head = Lifted - vec3(Run, 0.0, 0.0); Tail = Head + vec3(mix(0.12, 0.3, Pick), 0.0, 0.0);
+        Tint = mix(uTone2, Hue, 0.3);
+        Glow = 1.4 * exp(-Age * 3.5) * OnLane;
         return;
     }
-    if (Roll < 0.06 && Gap > -0.3)                                                   // sparks breaking off the edge
+    if (Mode > 0.5 && Roll > 0.985 && abs(Gap) < 0.25)                                // thin electric wisps ahead of the edge
     {
-        float Age = -Gap / Speed;
-        vec3 Velocity = PanelOut * 1.4 + Lines * 1.1 + (vec3(Hash(Index * 2.1), Hash(Index * 2.7), Hash(Index * 3.3)) - 0.5) * 0.8;
-        Head = Base + Velocity * Age + Flow(Base * 0.9, uClock) * Age * 0.5 * uTurbulence;
-        Tail = Head - Velocity * max(uTail, 0.03) * 1.5;
-        Tint = mix(uTone2, uTone1, smoothstep(0.0, 1.2, Age));
-        Width = mix(0.006, 0.014, Hash(Index * 4.1)) * uSize;
-        Glow = 1.1 * exp(-Age * 2.2);
+        float Flick = floor(uClock * 12.0);
+        vec3 Kink = normalize(vec3(-1.0, (Hash(Index * 1.7 + Flick) - 0.5) * 1.6, (Hash(Index * 2.3 + Flick) - 0.5) * 1.6) + Normal * 0.4);
+        Head = Lifted + Kink * mix(0.06, 0.22, Hash(Index * 3.1)); Ramp = 0.0;
+        Tint = mix(uTone1, uTone2, 0.5); Width = 0.0035 * uSize;
+        Glow = 1.2 * exp(-abs(Gap) * 8.0) * step(0.4, Hash(Index + floor(uClock * 15.0)));
         return;
     }
-    float Across = dot(Spot, vec2(0.6, 0.8));
-    float Lane = floor(Across * 240.0);
-    float Bright = pow(Hash(Lane * 0.913), 7.0);
-    vec3 Hue = 0.5 + 0.5 * cos(Tau * (fract(Across * 2.2 + Hash(Lane) * 0.3) + vec3(0.0, 0.33, 0.67)));
-    Head = Base + Lines * 0.2; Tail = Base; Ramp = 0.0;
-    float Edge = exp(Gap * 9.0), Seam = exp(Gap * 90.0);
-    float Lit = smoothstep(0.12, 0.3, Bright);                                       // about one lane in six carries a colour line
-    Tint = mix(uTone0 * 0.6, Hue, mix(0.08, 0.9, Lit));
-    Tint = mix(Tint, uTone1, Edge * 0.6);
-    Tint = mix(Tint, uTone2, Seam);
-    Glow = 0.016 + Lit * Bright * 0.3 + Edge * 0.05 + Seam * 0.35 * (0.7 + 0.3 * sin(uClock * 40.0 + Spot.y * 90.0));
+    if (Mode < 0.5 || (Mode < 1.5 && !Done))                                          // dust twin (before the reveal): dotted lines
+    {
+        Tint = mix(uTone0, uTone1, 0.3);
+        Glow = (0.3 * OnLane + Seam * 2.0);
+        return;
+    }
+    if (!Done)                                                                        // painted car still ahead of the edge
+    {
+        Tint = mix(uTone1, uTone2, Seam);
+        Glow = Seam * 1.8 * OnLane;
+        return;
+    }
+    if (Mode > 2.5)                                                                   // dissolve: the swept body streams away in straight lines
+    {
+        float Run = Age * Age * mix(0.7, 1.0, Hash(Lane * 0.37)) + Age * 0.9;
+        Head = Lifted + vec3(Run, 0.0, 0.0); Tail = Head - vec3(0.1 + Age * 0.2, 0.0, 0.0);
+        Tint = mix(uTone2, Hue, smoothstep(0.0, 0.6, Age));
+        Glow = (0.15 + 0.6 * exp(-Age * 3.0)) * smoothstep(1.1, 0.2, Age) * OnLane + Seam * 1.2;
+        return;
+    }
+    // Revealed or restyled: prismatic lines run straight along the body, bright just behind the edge, fading to a faint sheen.
+    float Slide = fract(uClock * 0.6 + Hash(Index * 5.9)) - 0.5;
+    Head = Lifted + Along * (Slide * 0.3 + 0.15); Tail = Lifted + Along * (Slide * 0.3 - 0.15);
+    Tint = mix(mix(uTone1, Hue, 0.8), uTone2, Seam);
+    float Fresh = exp(-Age * 3.0);
+    Glow = 0.75 * Fresh * OnLane + Seam * 2.2;
 }`;
 
 // 10 · Fibre wave: a twisting sheet of optical fibres, narrow at one end and fanned out at the other, with light
@@ -208,7 +231,7 @@ vec3 SheetPoint(float V, float U, float Time, float Fibre)
     float Width = mix(0.4, 5.2, smoothstep(0.05, 0.92, U));
     float Twist = U * 2.6 + Time * 0.17 + 0.6;
     vec3 Across = vec3(0.0, cos(Twist), sin(Twist)), Out = vec3(0.0, -sin(Twist), cos(Twist));
-    float Wander = (Hash(Fibre * 3.1) - 0.5) * 0.06 * Width + 0.04 * sin(U * 7.0 + Hash(Fibre * 5.3) * 6.0 + Time * 0.8);
+    float Wander = 0.035 * sin(U * 6.0 + V * 5.0 + Time * 0.8);                        // one smooth ripple shared by neighbours: the spacing stays even
     return Centre + Across * (V - 0.5) * Width + Out * Wander;
 }
 void Track(out vec3 Head, out vec3 Tail, out vec3 Tint, out float Width, out float Glow)
@@ -216,14 +239,14 @@ void Track(out vec3 Head, out vec3 Tail, out vec3 Tint, out float Width, out flo
     float Index = float(gl_InstanceID), Time = uClock * uSpeed;
     float Fibre = floor(Index / WaveSegments), Segment = mod(Index, WaveSegments);
     float Fibres = max(1.0, floor(uCount / WaveSegments));
-    float V = clamp((Fibre + Hash(Fibre * 1.7) * 0.8) / Fibres, 0.0, 1.0);
-    if (Hash(Fibre * 9.3) < 0.05)                                                     // sparkle slot: dots racing along the edge fibres
+    float V = (Fibre + 0.5) / Fibres;                                                 // evenly spaced across the sheet
+    if (Hash(Fibre * 9.3) < 0.02)                                                     // sparkle slot: dots racing along the edge fibres
     {
-        float Lane = pow(Hash(Index * 0.53), 2.5);
+        float Lane = (floor(pow(Hash(Index * 0.53), 4.0) * Fibres) + 0.5) / Fibres;   // riding exactly on a fibre
         float U = fract(Hash(Index * 0.29) + Time * mix(0.03, 0.09, Hash(Index * 0.71)));
         Head = SheetPoint(Lane, U, Time, Index);
         Tail = SheetPoint(Lane, U - 0.004 * uSpeed, Time, Index);
-        if (Hash(Index * 0.91) < 0.15) { Head += (vec3(Hash(Index * 1.1), Hash(Index * 1.3), Hash(Index * 1.9)) - 0.5) * vec3(4.0, 3.0, 3.0); Tail = Head; }
+        if (Hash(Index * 0.91) < 0.06) { Head += (vec3(Hash(Index * 1.1), Hash(Index * 1.3), Hash(Index * 1.9)) - 0.5) * vec3(4.0, 3.0, 3.0); Tail = Head; }
         Tint = mix(uTone1, uTone2, Hash(Index * 2.3));
         Width = mix(0.008, 0.026, pow(Hash(Index * 2.9), 2.0)) * uSize;
         Glow = mix(0.5, 3.0, pow(Hash(Index * 3.7), 3.0)) * (1.0 - Lane * 0.7) * smoothstep(0.0, 0.05, U) * smoothstep(1.0, 0.9, U);
@@ -234,11 +257,11 @@ void Track(out vec3 Head, out vec3 Tail, out vec3 Tint, out float Width, out flo
     Tail = SheetPoint(V, From, Time, Fibre);
     Ramp = 0.0;
     float EdgeLight = exp(-V * 9.0);
-    float Pulse = smoothstep(0.85, 1.0, sin(To * 18.0 - Time * 2.6 + Hash(Fibre) * 6.0));
-    Tint = mix(uTone3, uTone0, 0.5 + 0.5 * Hash(Fibre * 2.1));
+    float Pulse = smoothstep(0.9, 1.0, sin(To * 14.0 - Time * 2.6 + floor(Fibre / 8.0) * 1.7)) * step(mod(Fibre, 8.0), 0.5);   // light pulses ride every eighth fibre
+    Tint = mix(uTone3, uTone0, 0.65 + 0.35 * step(2.5, mod(Fibre, 4.0)));
     Tint = mix(Tint, uTone1, EdgeLight);
     Tint = mix(Tint, uTone2, Pulse * 0.6 + EdgeLight * 0.3);
-    Width = mix(0.004, 0.009, Hash(Fibre * 4.3)) * uSize;
-    float Strong = Hash(Fibre * 5.9) > 0.9 ? 2.2 : 1.0;
-    Glow = (0.11 * Strong + EdgeLight * 1.1 + Pulse * 0.3) * smoothstep(0.0, 0.07, From) * smoothstep(1.0, 0.9, To);
+    Width = 0.005 * uSize;
+    float Strong = mod(Fibre, 4.0) < 0.5 ? 1.6 : 1.0;                                  // every fourth fibre a touch brighter
+    Glow = (0.16 * Strong + EdgeLight * 1.1 + Pulse * 0.3) * smoothstep(0.0, 0.07, From) * smoothstep(1.0, 0.9, To);
 }`;

@@ -2,14 +2,15 @@
 // 🧩 Particle showroom: the ControlVehicle on a dark stage with ten GPU particle looks seen on new cars' screens and
 //    in motion-graphics tools: light-speed streaks, a dust "digital twin" that assembles the car, wind-tunnel airflow,
 //    Particular-style emitters, a MoGraph clone field, a charging flow, and (from reference stills) light threads
-//    orbiting a glass sphere, particle flowers with bokeh, a display reveal and a fibre-optic wave. Orbit the camera, tune count, speed,
+//    orbiting a glass sphere, particle flowers with bokeh, a vehicle transition and a fibre-optic wave. Orbit the camera, tune count, speed,
 //    trail, size, glow, turbulence and palette, and switch how the car body shows.
 // 📝 URL options (for captures): ?look=Airflow&time=6&palette=Ice&variant=1&car=Ghost&count=80000&aperture=0.1&still=1&ui=0&capture=1
 
-import { THREE, AssembleVehicle, DefaultFinish, PanelEnvironment } from '../Shared/VehicleAssembly.js';
+import { THREE, AssembleVehicle, DefaultFinish, PanelEnvironment, Family } from '../Shared/VehicleAssembly.js';
 import { ScatterSurface, SilhouetteProfile, Seeded } from './SurfaceScatter.js';
 import { Prelude, Projection, Fragment, Looks, Palettes } from './FilamentLooks.js';
 import { BloomChain } from './BloomChain.js';
+import { SweepJag } from './FilamentFibres.js';
 
 const Query = new URLSearchParams(location.search);
 const MaxCount = 160000;
@@ -57,9 +58,9 @@ Scene.add(Dome);
 // so the threads passing behind it disappear.
 const GlobeCentre = new THREE.Vector3(0, 1.6, 0);
 const Globe = new THREE.Mesh(new THREE.SphereGeometry(1.32, 96, 64), new THREE.ShaderMaterial({
-    uniforms: { uFade: { value: 0 }, uRim: { value: new THREE.Color() }, uCore: { value: new THREE.Color() } },
+    uniforms: { uFade: { value: 0 }, uRim: { value: new THREE.Color() }, uInner: { value: new THREE.Color() } },
     vertexShader: 'varying vec3 vNormal, vView, vSpot; void main() { vSpot = position; vec4 P = modelViewMatrix * vec4(position, 1.0); vView = -P.xyz; vNormal = normalMatrix * normal; gl_Position = projectionMatrix * P; }',
-    fragmentShader: `uniform float uFade; uniform vec3 uRim, uCore; varying vec3 vNormal, vView, vSpot;
+    fragmentShader: `uniform float uFade; uniform vec3 uRim, uInner; varying vec3 vNormal, vView, vSpot;
         void main()
         {
             vec3 N = normalize(vNormal), V = normalize(vView), D = normalize(vSpot);
@@ -67,7 +68,7 @@ const Globe = new THREE.Mesh(new THREE.SphereGeometry(1.32, 96, 64), new THREE.S
             float Spec = pow(max(dot(N, normalize(normalize(vec3(-0.4, 0.7, 0.6)) + V)), 0.0), 140.0);
             float Wisp = 0.5 + 0.5 * sin(D.y * 7.0 + D.z * 5.0) * sin(D.x * 6.0 - D.y * 4.0);
             float Feather = pow(0.5 + 0.5 * sin(atan(D.y - 0.15, D.x) * 46.0 + D.z * 9.0 + Wisp * 3.0), 18.0) * smoothstep(0.2, 0.95, Facing) * Wisp * 0.12;
-            vec3 Colour = uCore * (0.035 + 0.06 * Facing + Feather) + uRim * Fresnel * 1.5 + vec3(Spec * 3.0);
+            vec3 Colour = uInner * (0.035 + 0.06 * Facing + Feather) + uRim * Fresnel * 1.5 + vec3(Spec * 3.0);
             gl_FragColor = vec4(Colour * uFade, 1.0);
         }`,
 }));
@@ -119,6 +120,36 @@ Vehicle.Root.traverse((Mesh) =>
 });
 Scene.add(Edges);
 
+// Vehicle transition: every paint material is patched so the same jagged edge the particles use (SweepJag) clips the
+// mesh (reveal / dissolve), swaps the body coat from one colour to the other (restyle) and glows where it crosses.
+// uSweepMode 0 hidden · 1 visible behind the edge · 2 recolour behind the edge · 3 visible ahead of it · 4 untouched.
+const Sweep = {
+    uSweepFront: { value: 99 }, uSweepMode: { value: 4 }, uSweepClock: { value: 0 },
+    uSweepFrom: { value: new THREE.Color('#3a4049').convertSRGBToLinear() }, uSweepTo: { value: new THREE.Color('#b8d032').convertSRGBToLinear() },
+    uSweepSeam: { value: new THREE.Color() },
+};
+const SweepHeader = `uniform float uSweepFront, uSweepMode, uSweepClock, uSweepCoat; uniform vec3 uSweepFrom, uSweepTo, uSweepSeam; varying vec3 vSweepSpot;\n${SweepJag}\n`;
+for (const [Key, Material] of Object.entries(Vehicle.Finish))
+{
+    const Coat = +Key === Family.BodyCoat ? 1 : 0;
+    Material.onBeforeCompile = (Shader) =>
+    {
+        Object.assign(Shader.uniforms, Sweep, { uSweepCoat: { value: Coat } });
+        Shader.vertexShader = 'varying vec3 vSweepSpot;\n' + Shader.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n    vSweepSpot = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+        Shader.fragmentShader = SweepHeader + Shader.fragmentShader
+            .replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
+    float SweepGap = vSweepSpot.x + SweepJag(vSweepSpot, uSweepClock) - uSweepFront;
+    bool SweepDone = SweepGap > 0.0;
+    if (uSweepMode < 0.5 || (uSweepMode < 1.5 && !SweepDone) || (uSweepMode > 2.5 && uSweepMode < 3.5 && SweepDone)) discard;`)
+            .replace('#include <color_fragment>', `#include <color_fragment>
+    if (uSweepCoat > 0.5 && uSweepMode < 3.5) diffuseColor.rgb = (uSweepMode > 2.5 || (uSweepMode > 1.5 && SweepDone)) ? uSweepTo : uSweepFrom;`)
+            .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+    if (uSweepMode > 0.5 && uSweepMode < 3.5) totalEmissiveRadiance += uSweepSeam * exp(-abs(SweepGap) * 26.0) * 5.0;`);
+    };
+    Material.customProgramCacheKey = () => `Sweep${Coat}`;
+    Material.needsUpdate = true;
+}
+
 let ShownCar = '';
 function DressCar(Mode)
 {
@@ -156,6 +187,7 @@ Geometry.instanceCount = Settings.Count;
 const Shared = {
     uClock: { value: 0 }, uSpeed: { value: 1 }, uTail: { value: 0.07 }, uSize: { value: 1 }, uTurbulence: { value: 0.5 },
     uSide: { value: 200 }, uVariant: { value: 0 }, uCount: { value: 60000 }, uAperture: { value: 0 }, uFocus: { value: 10 },
+    uFront: { value: 99 }, uFrontSpeed: { value: 1 }, uSweepMode: { value: 0 },
     uMorph: { value: 0 }, uMorphRate: { value: 0 }, uRelease: { value: 0 }, uReleaseRate: { value: 0 }, uScan: { value: -1 }, uCharge: { value: 0 },
     uViewport: { value: new THREE.Vector2(1, 1) },
     uTone0: { value: new THREE.Color() }, uTone1: { value: new THREE.Color() }, uTone2: { value: new THREE.Color() }, uTone3: { value: new THREE.Color() },
@@ -266,7 +298,8 @@ function SetPalette(Name)
     Palettes[Name].forEach((Hex, Slot) => Shared[`uTone${Slot}`].value.set(Hex).convertSRGBToLinear());
     EdgeLine.color.set(Palettes[Name][1]);
     Globe.material.uniforms.uRim.value.set(Palettes[Name][1]).convertSRGBToLinear();
-    Globe.material.uniforms.uCore.value.set(Palettes[Name][2]).convertSRGBToLinear();
+    Globe.material.uniforms.uInner.value.set(Palettes[Name][2]).convertSRGBToLinear();
+    Sweep.uSweepSeam.value.set(Palettes[Name][1]).convertSRGBToLinear();
     PaletteRow.querySelectorAll('.Swatch').forEach((Each) => Each.classList.toggle('On', Each.dataset.palette === Name));
 }
 function SyncPanel()
@@ -345,12 +378,19 @@ function RunTimelines(Seconds)
         GhostOpacity = Math.min(1, Math.max(0, (Shared.uMorph.value - 0.8) / 0.2)) * (1 - Math.min(1, Shared.uRelease.value * 2.5));
         Text = Time < 4.5 ? 'Assembling' : Time > 6 && Time < 8.5 ? 'Scanning' : Time > 10 ? 'Releasing' : 'Ready';
     }
-    if (Look === 'Prism')
+    Sweep.uSweepMode.value = 4;
+    if (Look === 'Transition')
     {
-        const Time = Cycle % 9;
-        Shared.uMorph.value = Span(Time, 0, 5.5);
-        Shared.uMorphRate.value = Time < 5.5 ? Settings.Speed / 5.5 : 0;
-        CycleFade = Math.min(Span(Time, 0, 0.3), 1 - Span(Time, 8, 9));
+        // 17.5 s loop: dust · reveal sweep · hold · restyle sweep · hold · dissolve sweep · dark. Each sweep takes 4 s.
+        const Time = Cycle % 17.5, Start = Scatter.Max.x + 0.7, End = Scatter.Min.x - 0.7;
+        const Stages = [[0, 1.2, 0, 'Dust twin'], [1.2, 5.2, 1, 'Materialising'], [5.2, 7, 1, 'Graphite'], [7, 11, 2, 'Restyling'], [11, 12.8, 2, 'Lime'], [12.8, 16.8, 3, 'Dematerialising'], [16.8, 17.5, 3, '']];
+        const [From, To, Mode, Label] = Stages.find(([Begin, Finish]) => Time < Finish) ?? Stages[Stages.length - 1];
+        const Moving = Math.abs(To - From - 4) < 1e-6;
+        const Front = Mode === 0 ? Start : Moving ? Start + (End - Start) * Span(Time, From, From + 4) : End;
+        Shared.uFront.value = Front; Shared.uFrontSpeed.value = (Start - End) / 4 * Settings.Speed; Shared.uSweepMode.value = Mode;
+        Sweep.uSweepFront.value = Front; Sweep.uSweepMode.value = Mode; Sweep.uSweepClock.value = Clock;
+        CycleFade = Math.min(Span(Time, 0, 0.6), 1 - Span(Time, 16.8, 17.5));
+        Text = Label;
     }
     if (Look === 'Charge')
     {

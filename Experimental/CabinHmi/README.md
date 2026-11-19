@@ -131,7 +131,7 @@ The ControlVehicle stands on a dark stage with ten looks (keys 1–9 and 0). Loo
 | Charging | Energy spirals down the cable, into the port and along the floor, then fills a 40-cell battery cell by cell (readout: %, kW, km). |
 | Orbits | Light threads orbit a glass sphere (fresnel rim, highlight, faint feathers inside). Inner rings run faster (Kepler), a few threads spiral in from far out, and sparkles and dust are scattered around. |
 | Flora | Three flowers made of glittering particles: the petal edges glow, the petals slowly open and close, and motes drift off. Big leaves in front, fern fans behind and floating dust; depth of field turns the near and far parts into bokeh. |
-| Display reveal | A jagged electric edge sweeps a screen (9 s loop). Behind it, a blue pixel grid with prismatic colour lines; at the edge, sparks and thin wisps break off; ahead of it, dark. |
+| Vehicle transition | A jagged electric edge sweeps the car nose to tail, three times in a 17.5 s loop: the dotted dust twin becomes the painted car, the paint changes from graphite to lime, then the car streams away as particles. The real car body is cut and recoloured at the same edge, which glows on the paint. Everything runs on evenly spaced straight lanes: prismatic lines behind the edge, particles shot straight out ahead of it, thin electric wisps. Turbulence is unused here. |
 | Fibre wave | A twisting sheet of optical fibres, narrow at one end and fanned out at the other. Light pulses run along it, with a bright, sparkling leading edge on a teal backdrop. |
 
 **Controls.** Particles (5k–160k), speed, trail, size, glow, turbulence, depth of field (lens aperture, focused on the orbit target); 8 palettes (Ice, Ember, Aurora, Rosso, Mono, Lilac, Jade, Teal). Car body: Auto, Paint,
@@ -258,7 +258,7 @@ Each display is a fixed 1600 × 900 panel, scaled to fit the window. Drag to orb
 | `Acoustics/Offline/SpectrumTools.mjs` | WAV and MP3 (`WriteMp3`, lamejs) writers, FFT, spectra, hand-rolled PNG plates (spectrogram + waveform). |
 | `Filament/Filament.js` | Particle showroom page: renderer, backdrop dome, glass sphere, car body modes, instanced particle buffer, orbit camera, panel, look timelines (twin cycle, charge level), `window.Filament`. |
 | `Filament/FilamentLooks.js` | GLSL: shared `Prelude` (noise-free ABC turbulence `Flow`), capsule `Projection` and `Fragment`, the six looks' `Track` functions, `Looks`, `Palettes`. |
-| `Filament/FilamentFibres.js` | GLSL for the reference looks: `Orbits`, `Flora`, `Prism` (display reveal), `FibreWave`. |
+| `Filament/FilamentFibres.js` | GLSL for the reference looks: `Orbits`, `Flora`, `SweepJag` (the jagged edge, shared with the car paint shader), `Transition` (vehicle transition), `FibreWave`. |
 | `Filament/SurfaceScatter.js` | `ScatterSurface` (area-weighted seeded points on the car, with normals and surface family), `SilhouetteProfile` (roof and half-width along X, plus the air-felt version as a texture). |
 | `Filament/BloomChain.js` | Half-float scene target, 5-level dual-filter bloom, ACES composite with vignette and grain. |
 | `Lobby/LobbyKit.js` | `Seeded` random, canvas-painted textures (tile, concrete, asphalt, moss, bark, shutter, sky, sign, forest wall), beams, halos, fronds, leaves, `Scatter` (instanced), `Release`. |

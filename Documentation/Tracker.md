@@ -1272,5 +1272,8 @@ in `Exhibits/LightCompute/Results/FogFacetRegression.txt`; this was a fixture-se
   particles (`FilamentLooks`), `SurfaceScatter`, `BloomChain`. 10 captures, 0 console errors.
   Follow-up 24: Filament looks from reference stills: Orbits (glass sphere), Flora (particle flowers, bokeh), Display reveal, Fibre wave;
   depth of field, thread segments, PCG hash, backdrop dome (`FilamentFibres`). 15 captures, 0 console errors.
+  Follow-up 25: Display reveal replaced by Vehicle transition (`Transition`, `SweepJag`): an electric edge sweeps the real car (dust → paint,
+  graphite → lime, paint → particles), car shader cut and recoloured at the edge; straight evenly spaced lanes. Flora and Fibre wave made
+  cleaner (even vein, rib and fibre spacing). 16 captures, 0 console errors.
   Follow-up 22: Agera RS (`AgeraRs`, cross-plane 90° crank), rubber tyre squeal per surface (`Singer`, `Concrete` surface, `Tyres-Drift` scene), ricochet warble, subsonic whizz flown past the ear.
   Live AudioWorklet bench with car switch + offline MP3 reel (101 files, 26 MB) with spectrogram plates (`Exhibits/CabinHmi/Audio/`). Names unapproved.

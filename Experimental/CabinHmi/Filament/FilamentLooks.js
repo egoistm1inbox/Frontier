@@ -5,7 +5,7 @@
 // 📝 Car axes: +X forward, +Y up, Z across (left side is −Z). uProfile holds the car silhouette along X
 //    (R roof, G half-width, B and A the same felt by passing air; see SurfaceScatter.SilhouetteProfile).
 
-import { Orbits, Flora, Prism, FibreWave } from './FilamentFibres.js';
+import { Orbits, Flora, Transition, FibreWave } from './FilamentFibres.js';
 
 export const Prelude = /* glsl */ `
 attribute vec2 aCorner;                 // quad corner: x −1 tail … +1 head, y −1 … +1 across
@@ -16,7 +16,8 @@ attribute float aFamily;                // VehicleAssembly.Family of that surfac
 
 uniform float uClock, uSpeed, uTail, uSize, uTurbulence, uFade, uSide, uVariant;
 uniform float uMorph, uMorphRate, uRelease, uReleaseRate, uScan, uCharge;
-uniform float uCount, uAperture, uFocus;          // live instance count; lens aperture (m) and focus distance for bokeh
+uniform float uCount, uAperture, uFocus;
+uniform float uFront, uFrontSpeed, uSweepMode;   // vehicle transition: edge x, its speed (m/s), stage          // live instance count; lens aperture (m) and focus distance for bokeh
 uniform vec2 uViewport;
 uniform vec3 uTone0, uTone1, uTone2, uTone3;      // palette: base, accent, hot core, contrast
 uniform sampler2D uProfile;
@@ -96,11 +97,11 @@ void main()
     float Gap = length(vec2(vRamp < 0.5 && vBokeh < 0.5 ? 0.0 : Beyond, vLocal.y)) / vHalf;
     float Soft = exp(-Gap * Gap * 2.4) + 0.18 * exp(-Gap * 1.2) * step(Gap, 1.6);
     float Disc = (1.0 - smoothstep(0.84, 1.0, Gap)) * (0.7 + 0.55 * smoothstep(0.55, 0.96, Gap));   // flat bokeh disc, brighter rim
-    float Core = mix(Soft, Disc, vBokeh);
+    float Body = mix(Soft, Disc, vBokeh);
     float Ramp = vLength > 0.5 ? clamp(vLocal.x / vLength, 0.0, 1.0) : 1.0;
     float Comet = mix(1.0, mix(0.12, 1.0, Ramp * Ramp), vRamp);
-    vec3 Colour = vTint * Core * Comet * vFade;
-    if (Core < 0.003) discard;
+    vec3 Colour = vTint * Body * Comet * vFade;
+    if (Body < 0.003) discard;
     gl_FragColor = vec4(Colour, 1.0);
 }`;
 
@@ -273,25 +274,25 @@ void Track(out vec3 Head, out vec3 Tail, out vec3 Tint, out float Width, out flo
     float Index = float(gl_InstanceID);
     float Column = mod(Index, uSide), Row = floor(Index / uSide);
     float Spacing = 30.0 / uSide;
-    vec3 Base = vec3((Column - uSide * 0.5 + 0.5) * Spacing, 0.0, (Row - uSide * 0.5 + 0.5) * Spacing);
+    vec3 Cell = vec3((Column - uSide * 0.5 + 0.5) * Spacing, 0.0, (Row - uSide * 0.5 + 0.5) * Spacing);
     float Time = uClock * uSpeed;
     vec2 Ball = vec2(cos(Time * 0.45) * 7.5, sin(Time * 0.45) * 6.0);
-    float Sphere = smoothstep(4.2, 0.0, distance(Base.xz, Ball));
+    float Sphere = smoothstep(4.2, 0.0, distance(Cell.xz, Ball));
     Sphere = Sphere * Sphere * (3.0 - 2.0 * Sphere);
-    float Radius = length(Base.xz * vec2(0.8, 1.0));
+    float Radius = length(Cell.xz * vec2(0.8, 1.0));
     float Wave = mod(Time * 5.0, 24.0);
     float Ring = exp(-pow((Radius - Wave) / 0.9, 2.0)) * (1.0 - Wave / 24.0);
-    float Noise = 0.5 + 0.5 * sin(Base.x * 0.55 + Time * 0.9) * cos(Base.z * 0.62 - Time * 0.7);
+    float Noise = 0.5 + 0.5 * sin(Cell.x * 0.55 + Time * 0.9) * cos(Cell.z * 0.62 - Time * 0.7);
     float Strength = clamp(Sphere + Ring * 0.85 + Noise * 0.22 * uTurbulence, 0.0, 1.6);
-    vec4 Felt = Profile(Base.x);
-    float Under = step(abs(Base.z), Felt.g + 0.25) * step(0.05, Felt.g);
+    vec4 Felt = Profile(Cell.x);
+    float Under = step(abs(Cell.z), Felt.g + 0.25) * step(0.05, Felt.g);
     float Lift = 0.03 + 1.7 * Strength;
-    if (uVariant > 0.5) { Head = Base + vec3(0.0, 0.08 + Lift, 0.0); Tail = Head; Width = Spacing * 0.2 * uSize * (0.6 + Strength); }
-    else { Head = Base + vec3(0.0, Lift, 0.0); Tail = Base + vec3(0.0, 0.004, 0.0); Width = Spacing * 0.16 * uSize; }
+    if (uVariant > 0.5) { Head = Cell + vec3(0.0, 0.08 + Lift, 0.0); Tail = Head; Width = Spacing * 0.2 * uSize * (0.6 + Strength); }
+    else { Head = Cell + vec3(0.0, Lift, 0.0); Tail = Cell + vec3(0.0, 0.004, 0.0); Width = Spacing * 0.16 * uSize; }
     Tint = mix(uTone3 * 0.5, uTone0, smoothstep(0.05, 0.45, Strength));
     Tint = mix(Tint, uTone1, smoothstep(0.45, 0.9, Strength));
     Tint = mix(Tint, uTone2, smoothstep(0.9, 1.4, Strength));
-    float Edge = 1.0 - smoothstep(10.0, 15.0, max(abs(Base.x), abs(Base.z)));
+    float Edge = 1.0 - smoothstep(10.0, 15.0, max(abs(Cell.x), abs(Cell.z)));
     Glow = (0.18 + 1.5 * Strength) * Edge * (1.0 - Under);
 }`;
 
@@ -384,12 +385,12 @@ export const Looks = [
     { Key: 'Flora', Name: 'Flora', Tagline: 'Flowers, leaves and fern fans made of glittering particles, with bokeh', Track: Flora, Car: 'Hidden',
       Backdrop: ['#021209', '#000201'], View: { Yaw: 90, Pitch: 7, Distance: 8, Target: [0, 1.1, 0] },
       Defaults: { Speed: 1, Tail: 0.05, Size: 1, Turbulence: 0.6, Count: 140000, Palette: 'Jade', Aperture: 0.12 } },
-    { Key: 'Prism', Name: 'Display reveal', Tagline: 'An electric edge sweeps a screen, prismatic lines behind it, sparks breaking off', Track: Prism, Car: 'Hidden',
-      Backdrop: ['#050414', '#000001'], View: { Yaw: 58, Pitch: -2, Distance: 7.2, Target: [0.4, 2.2, 0] },
-      Defaults: { Speed: 1, Tail: 0.04, Size: 1, Turbulence: 0.6, Count: 150000, Palette: 'Ice', Aperture: 0.05 } },
+    { Key: 'Transition', Name: 'Vehicle transition', Tagline: 'An electric edge sweeps the car: dust to paint, graphite to lime, then back to dust', Track: Transition, Car: 'Paint', Sweep: true,
+      Backdrop: ['#050414', '#000001'], View: { Yaw: 34, Pitch: 11, Distance: 10.5, Target: [0, 0.75, 0] },
+      Defaults: { Speed: 1, Tail: 0.04, Size: 1, Turbulence: 0, Count: 140000, Palette: 'Ice', Aperture: 0.03 } },
     { Key: 'FibreWave', Name: 'Fibre wave', Tagline: 'A twisting sheet of optical fibres with pulses and a sparkling leading edge', Track: FibreWave, Car: 'Hidden',
       Backdrop: ['#0b4146', '#021316'], View: { Yaw: 96, Pitch: 6, Distance: 11, Target: [1.5, 1.6, 0] },
-      Defaults: { Speed: 1, Tail: 0.05, Size: 1, Turbulence: 0.5, Count: 90000, Palette: 'Teal', Aperture: 0.1 } },
+      Defaults: { Speed: 1, Tail: 0.05, Size: 1, Turbulence: 0.5, Count: 45000, Palette: 'Teal', Aperture: 0.1 } },
 ];
 
 export const Palettes = {
