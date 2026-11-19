@@ -419,23 +419,60 @@ function Bubble(Left, Right, Rate, Time, { Hz = 900, Rise = 0.8, Decay = 0.06, G
     }
 }
 
-/** Ricochet: the bullet tumbling away, a falling, warbling whine with turbulent hiss, fading and panning off. */
-function Ricochet(Left, Right, Rate, Time, { From = 3800, To = 1300, Seconds = 0.75, Gain = 0.25, Pan = 0, Away = 0.8, Seed = 71 } = {})
+/**
+ * Ricochet (Follow-up 21). A glancing round leaves the surface as a deformed, tumbling fragment. Its whine is not a
+ * clean falling sine: the fragment sheds a narrow band of turbulent noise (pitch roughly proportional to its speed)
+ * and every half-turn of its tumble swings an edge into the airflow, so the band is chopped and frequency-wobbled at the
+ * tumble rate (100–500 Hz): the buzzy, ragged "pt-wheeeoww". It decelerates hard (quadratic drag), so pitch and tumble
+ * both sag, and it really moves: the listener hears it through geometry. Emission time is stepped on the listener's
+ * clock (dt_emit / dt_heard = 1 / (1 + radial speed / c)), so the Doppler drop, the 1 / range fade and air absorption
+ * all come from the flight path. Toward > 0 aims the fragment that many metres past the listener (a zing by the ear);
+ * otherwise it flies off into the distance. A second, smaller fragment sometimes peels off higher and shorter.
+ */
+function Ricochet(Left, Right, Rate, Time, { Hz = 2600, Tumble = 260, Speed = 480, Seconds = 1.1, Gain = 0.25, Pan = 0, Away = 0.8, Toward = 0, Range = 18, Seed = 71, Spare = true } = {})
 {
+    const Noise = new SeededNoise(Seed), Sound = 343, Drag = 0.012;
     const Start = Math.round(Time * Rate), Count = Math.min(Left.length - Start, Math.round(Seconds * Rate));
-    const Noise = new SeededNoise(Seed), Band = new Biquad(Rate);
-    let Phase = 0;
+    if (Count <= 0) return;
+    // Listener at the origin, facing +y. The strike is Range metres off, at the side the pan says.
+    const Strike0 = [Pan * Range * 0.8, Range * Math.sqrt(1 - 0.64 * Pan * Pan), 0.5];
+    let Aim;
+    if (Toward > 0) Aim = [Toward * Math.sign(Away || 1) - Strike0[0], -Strike0[1] - 6, 1.5 - Strike0[2]];      // passes beside the head
+    else Aim = [Away * Range * 2 - Strike0[0] * 0.3, Range * 2.5, Range * 0.4];                            // off and away
+    const Length = Math.hypot(...Aim), Way = Aim.map((Part) => Part / Length);
+    const Where = (Emit) => { const Run = Math.log(1 + Drag * Speed * Emit) / Drag; return Strike0.map((Part, Axis) => Part + Way[Axis] * Run); };
+    const SpeedAt = (Emit) => Speed / (1 + Drag * Speed * Emit);
+    const Tone = new NarrowTone(Rate, { Breath: 0.55, Width: 0.03, Jitter: 0.01, Flutter: 0.3, Seed: Seed + 1 });
+    const Upper = new NarrowTone(Rate, { Breath: 0.7, Width: 0.04, Jitter: 0.012, Flutter: 0.35, Seed: Seed + 2 });
+    const Hiss = new Biquad(Rate), Air = [new OnePole(Rate, 12000), new OnePole(Rate, 12000)], Floor = new Biquad(Rate).Shape('High', 400, 0.7);
+    const First = Math.hypot(...Strike0);
+    let Emit = 0, Spin = Noise.Next(), Wobble = 1, Fade = 1;
     for (let Index = 0; Index < Count; Index++)
     {
-        const Progress = Index / Count, Age = Index / Rate;
-        const Hz = From * Math.pow(To / From, Progress) * (1 + 0.035 * Math.sin(Tau * 17 * Age));
-        if ((Index & 31) === 0) Band.Shape('Band', Hz, 4);
-        Phase += Hz / Rate;
-        const Envelope = Smoothstep(0, 0.03, Progress) * Math.pow(1 - Progress, 1.4);
-        const Out = (Math.sin(Tau * Phase) * 0.8 + Band.Run(Noise.White()) * 1.5) * Envelope * Gain;
-        const [GainL, GainR] = PanGains(Pan + (Away - Pan) * Progress);
-        Left[Start + Index] += Out * GainL; Right[Start + Index] += Out * GainR;
+        const Spot = Where(Emit), Range1 = Math.hypot(...Spot), Velocity = SpeedAt(Emit);
+        const Radial = Way.reduce((Sum, Part, Axis) => Sum + Part * Velocity * Spot[Axis], 0) / Range1;      // + receding
+        const Step = 1 / (1 + Radial / Sound) / Rate;
+        Emit += Step;
+        const Pitch = Hz * Math.pow(Velocity / Speed, 0.85), Turn = Tumble * Math.pow(Velocity / Speed, 0.7);
+        Spin += Turn * Step * (1 + 0.01 * Noise.Gauss());
+        if (Spin >= 1) { Spin -= 1; Wobble = Noise.Range(0.6, 1.25); }                          // each turn a little different
+        const Edge = Math.pow(Math.abs(Math.sin(Math.PI * Spin * 2)), 1.6);                       // edge into the flow twice a turn
+        const Heard = Pitch * Step * Rate * (1 + 0.05 * Math.sin(Tau * Spin * 2));
+        if ((Index & 31) === 0)
+        {
+            Hiss.Shape('Band', Clamp(Heard * 1.6, 500, 15000), 1.2);
+            const Cut = Clamp(15000 * Math.pow(20 / Range1, 0.8), 1800, 16000); Air[0].Set(Cut); Air[1].Set(Cut);
+        }
+        const Source = (Tone.Run(Heard) * 0.85 + Upper.Run(Heard * 2.04) * 0.25) * (0.25 + 0.75 * Edge * Wobble) + Hiss.Run(Noise.White()) * (0.35 + 0.4 * Edge);
+        Fade = Smoothstep(0, 0.012, Index / Rate) * (1 - Smoothstep(0.82, 1, Index / Count));
+        const Level = Clamp(First / Range1, 0, 4) * Fade * Gain;
+        const Side = Clamp(Spot[0] / Math.max(1, Math.hypot(Spot[0], Spot[1])), -1, 1);
+        const [GainL, GainR] = PanGains(Side * 0.9);
+        const Out = Floor.Run(Source) * Level;
+        Left[Start + Index] += Air[0].Run(Out * GainL); Right[Start + Index] += Air[1].Run(Out * GainR);
     }
+    if (Spare && Noise.Next() < 0.7)                                                             // a smaller chip, higher and quicker
+        Ricochet(Left, Right, Rate, Time + Noise.Range(0.002, 0.01), { Hz: Hz * Noise.Range(1.35, 1.7), Tumble: Tumble * Noise.Range(1.4, 2), Speed: Speed * 0.8, Seconds: Seconds * 0.45, Gain: Gain * 0.35, Pan, Away: -Away * 0.6, Range, Seed: Seed + 9, Spare: false });
 }
 
 /** Subsonic whizz: band noise and a vortex tone sweeping down as the projectile passes (Doppler), panning across. */
@@ -460,6 +497,69 @@ export function Whizz(Left, Right, Rate, Time, { From = 2800, To = 1000, Seconds
 //------------------------------------------------------------------------------------------------------------------------
 //                                                    IMPACTS
 //------------------------------------------------------------------------------------------------------------------------
+
+/**
+ * Plate modes (Follow-up 21): a rectangular plate rings at f(m, n) ∝ (m / a)² + (n / b)², which packs the modes ever
+ * closer as the pitch rises (the dense, clangy, inharmonic spectrum of a struck panel, not the few clean partials of a
+ * bell). Each mode is weighted by how hard the strike point drives it (sin(mπx)·sin(nπy)) and damped faster the higher
+ * it is; a little random detune stands in for an imperfect, bolted plate. Returns Strike modes up to Top Hz.
+ */
+function PlateModes(Root, Noise, { Aspect = 1.37, Decay = 0.6, Top = 12000, Tilt = 0.5, Lowest = 0, Fall = 0.45 } = {})
+{
+    const Modes = [], X = Noise.Range(0.15, 0.45), Y = Noise.Range(0.2, 0.48);
+    for (let M = 1; M < 14; M++)
+        for (let N = 1; N < 14; N++)
+        {
+            const Hz = Root * (M * M + N * N / (Aspect * Aspect)) / (1 + 1 / (Aspect * Aspect)) * (1 + Noise.Gauss() * 0.012);
+            if (Hz > Top || Hz < Lowest) continue;
+            const Drive = Math.abs(Math.sin(M * Math.PI * X) * Math.sin(N * Math.PI * Y));
+            Modes.push([Hz, Decay * Math.pow(Root / Hz, Fall) * Noise.Range(0.7, 1.2), Drive * Math.pow(Root / Hz, Tilt) * Noise.Range(0.7, 1.1)]);
+        }
+    return Modes;
+}
+
+/**
+ * A round into a steel panel (a vehicle door, a target plate). The jacket splatters (a very sharp tick with a short
+ * "tss" of fragmenting lead), the panel dents (a dull low "pank"), then the plate clangs with its dense ring and a
+ * spray of spall crackles; a glancing hit leaves as a ricochet.
+ */
+function MetalHit(Left, Right, Rate, Time, Noise, Seed, { Pan = 0, Gain = 1, Glance = false } = {})
+{
+    const R = (Low, High) => Noise.Range(Low, High), Root = R(120, 190);
+    Overpressure(Left, Right, Rate, Time, { Lasts: 0.00022, Gain: 0.35 * Gain, Low: 16000, Pan });
+    Strike(Left, Right, Rate, Time, { Modes: [], Burst: 0.0003, Gain: 0, Pan, Seed, Breath: { Low: 3500, High: 12000, Decay: 0.018, Gain: 0.5 * Gain } });
+    Strike(Left, Right, Rate, Time, { Modes: [[R(170, 230), 0.05, 1], [R(330, 420), 0.035, 0.6], [R(620, 760), 0.02, 0.35]], Burst: 0.0012, Gain: 0.9 * Gain, Pan, Seed: Seed + 1 });
+    Strike(Left, Right, Rate, Time + 0.0004, { Modes: PlateModes(Root, Noise, { Decay: R(1.1, 1.5), Lowest: 300, Fall: 0.3 }), Burst: 0.00025, Gain: 9 * Gain, Pan, Seed: Seed + 2 });
+    Scatter(Left, Right, Rate, Time + 0.002, 0.18, 22, (N) => ({ Modes: [[N.Range(5500, 12000), 0.0025, 1]], Burst: 0.00015, Gain: N.Range(0.15, 0.6) * Gain, Pan: Pan + N.Range(-0.35, 0.35) }), { Seed: Seed + 3, Bunch: 2.2 });
+    if (Glance) Ricochet(Left, Right, Rate, Time + 0.004, { Hz: R(3800, 4800), Tumble: R(280, 420), Speed: R(450, 560), Seconds: R(0.9, 1.2), Gain: 0.45 * Gain, Pan, Away: Pan > 0 ? -0.9 : 0.9, Toward: 3, Seed: Seed + 4 });
+}
+
+/**
+ * A round through a window pane. The bullet punches a cone out with a sharp crack, and cracks run out across the pane
+ * in a burst of tiny clicks (a few milliseconds); the cracked pane gives one short damped "chink" (its ring dies because
+ * the pieces now rub). Pieces break away in the air with a brittle crunch, then the shards land about 0.4 s later
+ * (a metre's fall): a dense bright crash first, thinning into scattered tinkles, small shards higher and shorter than
+ * big ones, some snapping again as they hit, the last pieces sliding and settling.
+ */
+function GlassHit(Left, Right, Rate, Time, Noise, Seed, { Pan = 0, Gain = 1 } = {})
+{
+    const R = (Low, High) => Noise.Range(Low, High);
+    const Shard = (N, Size) =>                                   // Size 0 (dust) … 1 (hand-sized): pitch falls with size
+    {
+        const Hz = Mix(9500, 1500, Size) * N.Range(0.8, 1.25), Decay = Mix(0.03, 0.22, Size) * N.Range(0.7, 1.3);
+        return [[Hz, Decay, 1], [Hz * N.Range(1.85, 2.4), Decay * 0.7, N.Range(0.4, 0.8)], [Hz * N.Range(3.3, 4.3), Decay * 0.45, N.Range(0.2, 0.5)]].filter(([F]) => F < 18000);
+    };
+    Overpressure(Left, Right, Rate, Time, { Lasts: 0.00025, Gain: 0.2 * Gain, Low: 16000, Pan });
+    Scatter(Left, Right, Rate, Time, 0.008, 45, (N) => ({ Modes: [[N.Range(3000, 14000), 0.0015, 1]], Burst: 0.0001, Gain: N.Range(0.15, 0.5) * Gain, Pan: Pan + N.Range(-0.15, 0.15) }), { Seed: Seed + 1, Bunch: 1.3 });
+    Strike(Left, Right, Rate, Time + 0.0005, { Modes: PlateModes(R(380, 520), Noise, { Aspect: 1.5, Decay: 0.09, Top: 9000, Tilt: 0.4 }), Burst: 0.0003, Gain: 0.45 * Gain, Pan, Seed: Seed + 2,
+        Breath: { Low: 2500, High: 11000, Decay: 0.06, Gain: 0.35 * Gain } });
+    Scatter(Left, Right, Rate, Time + 0.006, 0.12, 30, (N) => ({ Modes: Shard(N, N.Range(0, 0.6)), Burst: 0.0002, Gain: N.Range(0.4, 1.4) * Gain, Pan: Pan + N.Range(-0.3, 0.3) }), { Seed: Seed + 3, Bunch: 1.5 });
+    const Land = Time + R(0.36, 0.44);
+    Strike(Left, Right, Rate, Land, { Modes: [], Burst: 0.0003, Gain: 0, Pan, Seed: Seed + 4, Breath: { Low: 2200, High: 13000, Decay: 0.16, Gain: 0.6 * Gain } });   // the crash wash
+    Scatter(Left, Right, Rate, Land - 0.01, 0.7, 120, (N, P) => ({ Modes: Shard(N, Math.pow(N.Next(), 2.2) * (1 - P * 0.5)), Burst: 0.0002, Gain: N.Range(0.3, 2.6) * Gain * Math.pow(1 - P, 1.2), Pan: Pan + N.Range(-0.6, 0.6) }), { Seed: Seed + 5, Bunch: 2.6 });
+    Scatter(Left, Right, Rate, Land + 0.02, 0.15, 25, (N) => ({ Modes: [[N.Range(4000, 12000), 0.002, 1]], Burst: 0.0001, Gain: N.Range(0.5, 1.6) * Gain, Pan: Pan + N.Range(-0.5, 0.5) }), { Seed: Seed + 6, Bunch: 1.8 });   // pieces snapping again
+    Scatter(Left, Right, Rate, Land + 0.35, 0.9, 10, (N) => ({ Modes: Shard(N, N.Range(0.2, 0.7)), Burst: 0.0003, Gain: N.Range(0.15, 0.6) * Gain, Pan: Pan + N.Range(-0.7, 0.7) }), { Seed: Seed + 7, Bunch: 1.2 });       // settling
+}
 
 /** One bullet strike on a material at Time. Materials: Sand, Dirt, Rock, Concrete, Wood, Metal, Glass, Water. */
 export function DrawHit(Left, Right, Rate, Time, Material, Seed = 400, { Pan = 0, Gain = 1, Bounce: Glance = false } = {})
@@ -486,14 +586,14 @@ export function DrawHit(Left, Right, Rate, Time, Material, Seed = 400, { Pan = 0
             Overpressure(Left, Right, Rate, Time, { Lasts: 0.00035, Gain: 0.25 * Gain, Low: 14000, Pan });
             Scatter(Left, Right, Rate, Time + 0.01, 0.5, 26, (N) => ({ Modes: [[N.Range(1800, 4500), N.Range(0.004, 0.012), 1], [N.Range(5000, 9000), 0.004, 0.5]], Burst: 0.0002, Gain: N.Range(0.3, 1.2) * Gain, Pan: Pan + N.Range(-0.6, 0.6) }), { Seed: Seed + 1, Bunch: 1.8 });
             Roar(Left, Right, Rate, Time + 0.01, 0.35, { From: 8000, To: 3000, Floor: 1500, Gain: 0.06 * Gain, Attack: 0.01, Curve: 2, Grit: 0.8, Seed: Seed + 2 });
-            if (Glance) Ricochet(Left, Right, Rate, Time + 0.01, { From: R(3400, 4400), To: R(1100, 1600), Seconds: R(0.55, 0.85), Gain: 0.22 * Gain, Pan, Away: Pan > 0 ? -0.8 : 0.8, Seed: Seed + 3 });
+            if (Glance) Ricochet(Left, Right, Rate, Time + 0.006, { Hz: R(3400, 4200), Tumble: R(180, 300), Speed: R(380, 480), Seconds: R(1.0, 1.3), Gain: 0.6 * Gain, Pan, Away: Pan > 0 ? -0.8 : 0.8, Seed: Seed + 3 });
             break;
         case 'Concrete':
             Strike(Left, Right, Rate, Time, { Modes: [[R(1500, 1900), 0.014, 1], [R(3200, 3800), 0.009, 0.6], [R(650, 800), 0.02, 0.6]], Burst: 0.0006, Gain: 3.6 * Gain, Pan, Seed });
             Overpressure(Left, Right, Rate, Time, { Lasts: 0.0005, Gain: 0.3 * Gain, Low: 11000, Pan });
             Roar(Left, Right, Rate, Time + 0.005, 0.7, { From: 7000, To: 1800, Floor: 600, Gain: 0.16 * Gain, Attack: 0.008, Curve: 2.2, Grit: 0.85, Seed: Seed + 1 });   // dust and grit
             Scatter(Left, Right, Rate, Time + 0.02, 0.6, 30, (N) => ({ Modes: [[N.Range(1200, 3200), N.Range(0.005, 0.015), 1]], Burst: 0.0004, Gain: N.Range(0.3, 1) * Gain, Pan: Pan + N.Range(-0.6, 0.6) }), { Seed: Seed + 2, Bunch: 1.6 });
-            if (Glance) Ricochet(Left, Right, Rate, Time + 0.01, { From: R(3000, 3800), To: R(1000, 1400), Seconds: R(0.5, 0.7), Gain: 0.18 * Gain, Pan, Seed: Seed + 3 });
+            if (Glance) Ricochet(Left, Right, Rate, Time + 0.006, { Hz: R(2800, 3600), Tumble: R(140, 240), Speed: R(350, 430), Seconds: R(0.8, 1.0), Gain: 0.5 * Gain, Pan, Away: 0.5, Seed: Seed + 3 });
             break;
         case 'Wood':
             // Hollow thunk (plank modes), a low knock through the post, splinters crackling.
@@ -502,19 +602,10 @@ export function DrawHit(Left, Right, Rate, Time, Material, Seed = 400, { Pan = 0
             Scatter(Left, Right, Rate, Time + 0.15, 0.4, 6, (N) => ({ Modes: [[N.Range(600, 1400), 0.02, 1], [N.Range(1800, 3000), 0.01, 0.5]], Burst: 0.0006, Gain: N.Range(0.4, 1) * Gain, Pan: Pan + N.Range(-0.5, 0.5) }), { Seed: Seed + 2 });
             break;
         case 'Metal':
-        {
-            // Steel plate: a bright inharmonic clang that rings on, a spark crackle; sometimes the round glances off.
-            const Root = R(850, 1250);
-            Strike(Left, Right, Rate, Time, { Modes: [[Root, 0.95, 1], [Root * 2.32, 0.7, 0.8], [Root * 3.71, 0.5, 0.6], [Root * 5.13, 0.32, 0.45], [Root * 7.29, 0.2, 0.3], [Root * 0.47, 0.6, 0.5]], Burst: 0.0004, Gain: 7 * Gain, Pan, Seed });
-            Overpressure(Left, Right, Rate, Time, { Lasts: 0.0003, Gain: 0.15 * Gain, Low: 15000, Pan });
-            Scatter(Left, Right, Rate, Time + 0.003, 0.2, 14, (N) => ({ Modes: [[N.Range(6000, 11000), 0.002, 1]], Burst: 0.0002, Gain: N.Range(0.2, 0.7) * Gain, Pan: Pan + N.Range(-0.3, 0.3) }), { Seed: Seed + 1, Bunch: 2 });
-            if (Glance) Ricochet(Left, Right, Rate, Time + 0.005, { From: R(3800, 4800), To: R(1400, 1900), Seconds: R(0.6, 0.9), Gain: 0.25 * Gain, Pan, Away: Pan > 0 ? -0.9 : 0.9, Seed: Seed + 2 });
+            MetalHit(Left, Right, Rate, Time, Noise, Seed, { Pan, Gain, Glance });
             break;
-        }
         case 'Glass':
-            Strike(Left, Right, Rate, Time, { Modes: [[R(2400, 3000), 0.04, 1], [R(5200, 6400), 0.03, 0.7], [R(9000, 11000), 0.015, 0.4]], Burst: 0.0004, Gain: 3 * Gain, Pan, Seed });
-            Overpressure(Left, Right, Rate, Time, { Lasts: 0.0003, Gain: 0.2 * Gain, Low: 15000, Pan });
-            Scatter(Left, Right, Rate, Time + 0.005, 0.7, 70, (N, P) => ({ Modes: [[N.Range(2600, 4800), N.Range(0.03, 0.09), 1], [N.Range(5600, 9000), N.Range(0.02, 0.05), 0.6]], Burst: 0.0004, Gain: N.Range(0.3, 1.4) * Gain * (1 - P * 0.5), Pan: Pan + N.Range(-0.5, 0.5) }), { Seed: Seed + 1, Bunch: 1.7 });
+            GlassHit(Left, Right, Rate, Time, Noise, Seed, { Pan, Gain });
             break;
         case 'Water':
             // Splash: a slap and spray, the cavity's big bubble rising in pitch, then droplets plinking back.
@@ -742,13 +833,14 @@ export const Cues = {
         },
     },
     Ricochet: {
-        Group: 'Bullets', Label: 'Ricochets', Seconds: 3.0, Peak: 0.85,
+        Group: 'Bullets', Label: 'Ricochets', Seconds: 4.4, Peak: 0.85,
         Draw(Left, Right, Rate)
         {
+            // Off rock (flies away), off a steel plate (the fragment zings past the listener's head), off concrete.
             DrawHit(Left, Right, Rate, 0.1, 'Rock', 2701, { Pan: -0.3, Bounce: true });
-            DrawHit(Left, Right, Rate, 1.2, 'Metal', 2702, { Pan: 0.4, Bounce: true, Gain: 0.8 });
-            DrawHit(Left, Right, Rate, 2.0, 'Concrete', 2703, { Pan: 0, Bounce: true });
-            Echoes(Left, Right, Rate, { Taps: [[0.12, 0.18, 0.6], [0.31, 0.1, -0.6]], Dark: 4000, Wash: 0.15 });
+            DrawHit(Left, Right, Rate, 1.5, 'Metal', 2702, { Pan: 0.4, Bounce: true, Gain: 0.7 });
+            DrawHit(Left, Right, Rate, 3.0, 'Concrete', 2703, { Pan: 0, Bounce: true });
+            Place(Left, Right, Rate, 'Valley', { Wet: 0.8, Seed: 27 });
             Settle(Left, Right, Rate);
         },
     },
@@ -783,7 +875,7 @@ export const Cues = {
         },
     },
     ...Object.fromEntries(Materials.map((Material, Index) => [`Hit${Material}`, {
-        Group: 'Impacts', Label: `Bullet into ${Material.toLowerCase()}`, Seconds: Material === 'Metal' ? 1.6 : 1.2, Peak: 0.85,
+        Group: 'Impacts', Label: `Bullet into ${Material.toLowerCase()}`, Seconds: Material === 'Metal' ? 1.8 : Material === 'Glass' ? 2.2 : 1.2, Peak: 0.85,
         Draw(Left, Right, Rate) { DrawHit(Left, Right, Rate, 0.03, Material, 3000 + Index * 37); Settle(Left, Right, Rate); },
     }])),
 };

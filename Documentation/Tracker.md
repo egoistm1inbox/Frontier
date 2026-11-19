@@ -1267,4 +1267,5 @@ in `Exhibits/LightCompute/Results/FogFacetRegression.txt`; this was a fixture-se
   (12 cues: sand explosions, mortar, grenade, RPG, barrage, helicopter, siren, tank, shell shock, battlefield; Doppler `Flight`), 20 reel scenes.
   Follow-up 20: weapons, explosions, shells, turbos, superchargers, Taycan and racer redone (`NarrowTone`, `PolySaw`, `Detonation.js`
   with charge-scaled blasts and generated place reverbs, per-gun layer recipes, rewritten `Casings`, `Compressor`/`BlowOff`/`Surge`), 64 scenes re-rendered.
+  Follow-up 21: ricochets (tumbling fragment with drag and flight-path Doppler), bullets into metal (dense `PlateModes` ring) and glass (crack, chink, shards landing).
   Live AudioWorklet bench with car switch + offline MP3 reel (100 files, 26 MB) with spectrogram plates (`Exhibits/CabinHmi/Audio/`). Names unapproved.

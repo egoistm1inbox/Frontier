@@ -85,8 +85,8 @@ Follow-up 10 WAVs, 22 MB, were replaced). Peak is measured before encoding.
 | `War-Battlefield.mp3` | 20.0 s | −1.4 | −26.2 | Battlefield bed: AK, M4, MG 42, .50 cal and LMG bursts 120–750 m away, far explosions, rounds cracking overhead |
 | `Bullets-Supersonic.mp3` | 4.5 s | −0.9 | −35.3 | Downrange of a rifle 400 m away: crack first, muzzle report 0.67 s later |
 | `Bullets-Whizz.mp3` | 2.6 s | −1.4 | −24.4 | Three subsonic fly-bys: Doppler drop, vortex tone, panning across |
-| `Bullets-Ricochet.mp3` | 3.0 s | −1.4 | −22.9 | Glancing off rock, steel and concrete: strike then tumbling whine |
-| `Bullets-Impacts.mp3` | 11.0 s | −1.4 | −29.5 | Sand, dirt, rock, concrete, wood, metal, glass, water, 1.2 s apart |
+| `Bullets-Ricochet.mp3` | 4.4 s | −1.4 | −20.9 | Glancing off rock, steel and concrete: strike then tumbling whine |
+| `Bullets-Impacts.mp3` | 14.0 s | −1.4 | −30.3 | Sand, dirt, rock, concrete, wood, metal, glass, water, 1.2 s apart |
 | `Shells-Floors.mp3` | 16.6 s | −1.4 | −31.3 | Spent cases (`Casings.js`): 7.62 mm on concrete, 5.56 mm on a wooden deck, 7.62 mm on a steel floor, 7.62 mm on dirt — ring, bounce series, roll |
 | `Shells-Calibres.mp3` | 20.4 s | −1.4 | −29.0 | 9 mm pistol, 12-gauge shotgun, .50 BMG on steel, 30 mm cannon on steel, 120 mm case stub on the turret floor |
 | `Shells-BrassRain.mp3` | 5.5 s | −1.4 | −28.0 | 32 cases and belt links from a 3 s LMG burst raining onto concrete, clinking on the pile, last ones rolling |
@@ -277,6 +277,21 @@ shotgun at 63 Hz; closest pair Turret / AK-47 1.6 dB apart); 64 reel scenes re-r
 their rates, 12 War pads, eight War cues render and start in 22.5 s (slower than build 19's 5.7 s: the convolution reverbs), console
 errors 0. Build tag "build 20". Limits: nothing is matched against recordings; impulse responses are generated; inducer and case
 frequencies are typical published figures, not measurements.
+
+**Ricochets and bullets into glass and metal (Follow-up 21).** The old ricochet was a clean sine sweeping down (a cartoon
+"peeew"); metal was six bell-like partials; glass was tinkles starting the instant the round hit. Now:
+- `Ricochet`: a tumbling fragment flown through 3-D space. It sheds a narrow band of turbulent noise (pitch roughly proportional
+  to its speed), chopped and wobbled at the tumble rate (100–500 Hz) as an edge swings into the flow twice a turn, so it is buzzy
+  and ragged. Quadratic drag slows it hard, and emission time is stepped on the listener's clock, so the Doppler drop, the
+  1 / range fade and air absorption come from the flight path. Off a steel plate it zings past the listener's head; off rock and
+  concrete it flies away. A smaller, higher chip often peels off as well.
+- `MetalHit`: the jacket splatters (sharp tick and a short "tss"), the panel dents (a dull "pank"), then the plate rings with
+  dense plate modes (`PlateModes`: f ∝ m² + (n / aspect)², weighted by the strike point) for about a second, with spall crackles.
+- `GlassHit`: a sharp crack and a few milliseconds of fracture clicks, one short damped "chink" from the cracked pane, a brittle
+  crunch as pieces break away, then the shards land about 0.4 s later (a metre's fall): a bright crash thinning into tinkles,
+  small shards higher and shorter than big ones, some snapping again, the last ones settling.
+Impacts reel now spaces the materials 1.6 s apart so glass shards and the metal ring are not cut off. Build tag "build 21".
+
 
 ## Reproduce
 ```
