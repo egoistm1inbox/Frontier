@@ -10,6 +10,7 @@
 //    explosion, shockwave and crash away: later, darker, with more echo. Nothing is sampled.
 
 import { Tau, Clamp, Mix, Smoothstep, SeededNoise, OnePole, Biquad, Resonator, DcBlock, DelayLine, PanGains, SoftClip, Strike } from './SignalKit.js';
+import { Detonate, Place } from './Detonation.js';
 
 //------------------------------------------------------------------------------------------------------------------------
 //                                                    PIECES
@@ -223,19 +224,16 @@ export const Cues = {
         {
             // Sound arrives after Distance / 343 s; the crack thins out with range while the boom carries.
             const Arrive = 0.05 + Math.min(0.6, Distance / 343 * 0.15), Near = Clamp(1 - (Distance - 20) / 400, 0.15, 1);
-            Overpressure(Left, Right, Rate, Arrive, { Lasts: 0.008 + Distance * 0.00003, Gain: 2.4 * Near, Low: Mix(1500, 9000, Near) });
-            Thump(Left, Right, Rate, Arrive, { Hz: 70, EndHz: 24, Decay: 2.6, Gain: 1.1, Drive: 2.2 });
-            Thump(Left, Right, Rate, Arrive + 0.012, { Hz: 120, EndHz: 45, Decay: 0.9, Gain: 0.45, Drive: 1.5 });
-            // Fireball: a bright roar that darkens as it expands and burns out, rough with turbulence.
-            Roar(Left, Right, Rate, Arrive, 4.8, { From: Mix(2500, 9000, Near), To: 140, Floor: 25, Gain: 1.0, Attack: 0.006, Curve: 2.4, Grit: 0.55, Seed: 11 });
-            Roar(Left, Right, Rate, Arrive + 0.05, 5.5, { From: 900, To: 60, Floor: 20, Gain: 0.7, Attack: 0.08, Curve: 1.6, Width: 0.9, Seed: 12 });
+            // Follow-up 20: a 4 kg surface burst with a big fireball (a vehicle going up): Detonation.js scales the blast,
+            // the turbulent rumble and the fireball roar by the charge instead of a pitched sine thump.
+            Detonate(Left, Right, Rate, Arrive, { Charge: 4, Ground: 'Open', Fire: 0.9, Seed: 11, Metres: Distance });
             // Debris: stones and metal fragments falling back over the next three seconds.
             Scatter(Left, Right, Rate, Arrive + 0.5, 3.2, Math.round(70 * Near + 10), (Noise, Progress) => ({
                 Modes: Noise.Next() < 0.7 ? Rock(Noise) : Shard(Noise, 700, 3000), Burst: Noise.Range(0.0003, 0.002),
                 Gain: Noise.Range(0.2, 1) * 0.9 * (1 - Progress * 0.6), Pan: Noise.Range(-0.9, 0.9),
             }), { Seed: 13, Bunch: 1.4 });
             Bounce(Left, Right, Rate, Arrive + 1.4, { Modes: [[1650, 0.08, 1], [4100, 0.05, 0.6], [690, 0.06, 0.5]], Hits: 5, First: 0.25, Gain: 0.6, Pan: 0.55, Seed: 14 });
-            Echoes(Left, Right, Rate, { Taps: [[0.28, 0.42, -0.7], [0.61, 0.3, 0.6], [1.05, 0.2, -0.3], [1.7, 0.12, 0.5]], Dark: 1400, Wash: 0.45 });
+            Place(Left, Right, Rate, 'Urban', { Wet: 1.1, Seed: 2 });
             Distant(Left, Right, Rate, Distance);
             Settle(Left, Right, Rate);
         },

@@ -38,72 +38,72 @@ Follow-up 10 WAVs, 22 MB, were replaced). Peak is measured before encoding.
 | `LaFerrari-Limiter.mp3` | 7.5 s | −1.6 | −18.1 | Neutral on the 9250 rpm limiter, lift with pops, two sharp blips |
 | `LaFerrari-FlyBy.mp3` | 8.0 s | −1.0 | −18.4 | Trackside at 12 m, 262 km/h in 6th: Doppler, distance, air absorption, ground bounce, exhaust directivity |
 | `GtrNismo-ColdStart.mp3` | 10.0 s | −1.0 | −20.1 | VR38DETT: starter, catch, fast cold idle ~1150, three blips with turbo whistle and flutter |
-| `GtrNismo-Launch.mp3` | 13.5 s | −2.6 | −16.0 | Launch-control boost build, AWD launch (0–100 2.9 s), 6-speed DCT upshifts with clunks, lift with blow-off |
-| `GtrNismo-Onboard.mp3` | 14.0 s | −3.2 | −17.0 | Cabin mic, pull 3-4-5 on boost, ABS stop with blipped downshifts, corner, spool back up on exit |
+| `GtrNismo-Launch.mp3` | 13.5 s | −2.7 | −16.0 | Launch-control boost build, AWD launch (0–100 2.9 s), 6-speed DCT upshifts with clunks, lift with blow-off |
+| `GtrNismo-Onboard.mp3` | 14.0 s | −2.5 | −17.0 | Cabin mic, pull 3-4-5 on boost, ABS stop with blipped downshifts, corner, spool back up on exit |
 | `GtrNismo-FlyBy.mp3` | 8.0 s | −1.1 | −18.1 | Trackside at 12 m, 225 km/h in 5th on full boost |
 | `Tyres-Screech.mp3` | 12.0 s | −3.5 | −17.0 | Cornering squeal at the limit, panic stop with lock-up, standing burnout |
 | `Surfaces-Tour.mp3` | 28.0 s | −5.8 | −19.0 | 60 km/h over asphalt, wet, gravel, dirt, grass, cobbles, rumble strip (4 s each) |
 | `Chassis-Brakes.mp3` | 12.0 s | −1.4 | −20.0 | 130 km/h ABS stop (pump buzz, valve clicks, pad roar), light braking into squeal, creep groan to a halt |
-| `Chassis-Suspension.mp3` | 16.0 s | −5.6 | −20.0 | Cabin mic at 40 km/h: kerb strike, cobbles, pothole, rutted dirt, rumble strip (dampers, bump stops, bushings, rattles) |
+| `Chassis-Suspension.mp3` | 16.0 s | −7.2 | −20.0 | Cabin mic at 40 km/h: kerb strike, cobbles, pothole, rutted dirt, rumble strip (dampers, bump stops, bushings, rattles) |
 | `Lights-Cues.mp3` | 10.5 s | −1.0 | −26.6 | Headlamp switch, lamp relay, xenon ignition, LED welcome with levelling, indicator relay |
 | `Cabin-Cues.mp3` | 25.0 s | −1.0 | −26.6 | Unlock, butterfly door open and close, seatbelt, belt chime, start button, paddle, window, wipers, climate fan |
-| `Impact-Explosion.mp3` | 6.5 s | −0.5 | −22.4 | 60 m: blast overpressure, sub thump, fireball roar, debris falling back, echoes off distant surfaces |
-| `Impact-ExplosionFar.mp3` | 6.5 s | −0.5 | −19.6 | Same blast at 450 m: the crack is absorbed by the air, the boom and echoes carry |
+| `Impact-Explosion.mp3` | 6.5 s | −0.5 | −23.0 | 60 m: blast overpressure, sub thump, fireball roar, debris falling back, echoes off distant surfaces |
+| `Impact-ExplosionFar.mp3` | 6.5 s | −0.5 | −23.5 | Same blast at 450 m: the crack is absorbed by the air, the boom and echoes carry |
 | `Impact-Shockwave.mp3` | 4.0 s | −0.9 | −20.3 | N-wave double crack, air rush sweeping past, glass and panels rattling |
 | `Impact-EmpPulse.mp3` | 6.0 s | −0.9 | −20.9 | Capacitor charge whine, discharge slap and sub drop, arcing, electronics winding down, ears ringing |
 | `Impact-SonicBlast.mp3` | 4.5 s | −0.9 | −14.8 | Spin-up, beating pressure beam over an infrasonic body, cut-off into a rush |
 | `Impact-WindowShatter.mp3` | 2.4 s | −1.4 | −30.6 | Tempered side glass: tap, pop, crazing hiss, cubes pouring and tinkling |
 | `Impact-GlassBreak.mp3` | 2.6 s | −1.4 | −31.8 | Annealed pane: crack, ringing shards breaking away, landing, scattering, bouncing |
 | `Impact-MetalCrash.mp3` | 6.0 s | −0.5 | −28.9 | Impact, sheet buckling, lamps bursting, scrape, lurch, hubcap, settling creaks, coolant hiss |
-| `Weapon-EnergyLmg.mp3` | 5.6 s | −0.9 | −19.5 | Energy LMG voiced as a real full-power LMG (Follow-up 14), full 44-round magazine: 5 → 15 rounds/s over 1.75 s; heavy report with low-mid boom and supersonic crack, geared drive and barrel clatter, rolling outdoor tail, brass landing on concrete |
-| `Weapon-EnergyLmgTurbo.mp3` | 4.8 s | −0.9 | −19.3 | Same with the Turbocharger: 6.8 → 15 rounds/s over 0.85 s, turbine whistle and charge hiss on the pull |
-| `Weapon-Lmg.mp3` | 5.5 s | −0.9 | −15.4 | Belt-fed LMG, 640/min: long burst and two short, links and brass, outdoor slap-back |
-| `Weapon-Smg.mp3` | 4.5 s | −0.9 | −21.2 | SMG, 900/min: two short bursts, then the rest of a 30-round magazine |
-| `Weapon-Sniper.mp3` | 5.5 s | −0.5 | −25.5 | Heavy blast and thump, report rolling off the valley, bolt cycle, casing landing |
-| `Weapon-Turret.mp3` | 6.0 s | −0.9 | −17.9 | Servo traverse, lock-on pips, 720/min burst with feed motor, spin-down |
-| `Weapon-Cannon.mp3` | 7.0 s | −0.5 | −22.5 | 120 mm: blast wave, chest thump, fireball roar, hull ring, echoes, breech clank, case clang |
-| `Weapon-AutoCannon.mp3` | 5.0 s | −0.7 | −18.0 | 30 mm, 210/min: two bursts, heavy action, big cases ringing |
-| `Weapon-Fifty.mp3` | 6.0 s | −0.7 | −19.5 | Follow-up 19: .50 cal heavy machine gun (M2-style), 550 rounds/min in bursts of 8–10: long blast, deep boom, wide bullet crack, recoiling bolt, belt links, .50 cases |
-| `Weapon-Ak47.mp3` | 6.0 s | −0.9 | −21.0 | AK-47 (an assault rifle): three single shots, a short burst, then the rest of the 30-round magazine at 600 rounds/min, heavy bolt clack, dry click |
-| `Weapon-M4.mp3` | 5.0 s | −0.9 | −22.8 | M4 carbine, 5.56 mm at 800 rounds/min: bursts, brighter and snappier than the AK, buffer-spring twang |
-| `Weapon-Minigun.mp3` | 5.5 s | −0.9 | −22.8 | M134-style minigun: electric drive spins up in 0.5 s to 3000 rounds/min, one tearing roar, motor whine, cases raining, spin-down |
-| `Weapon-Mg42.mp3` | 5.0 s | −0.9 | −22.2 | MG 42 at 1200 rounds/min: the ripping buzzsaw, two short bursts and a long one |
-| `Weapon-Shotgun.mp3` | 5.0 s | −0.7 | −27.1 | 12-gauge pump shotgun: wide deep boom, no bullet crack, pump back (hull ejected, landing), pump forward; three shots |
-| `Weapon-Pistol.mp3` | 4.5 s | −0.9 | −30.3 | 9 mm pistol: single shots and double taps, slide slam, pistol cases |
-| `Weapon-AntiMateriel.mp3` | 6.0 s | −0.5 | −28.3 | .50 anti-materiel rifle: muzzle brake throws the blast sideways, chest-deep boom, wide crack, barrel slamming home |
-| `War-SandBlast.mp3` | 7.5 s | −0.5 | −20.7 | Follow-up 19 (`WarFoley.js`): explosion in sand 30 m away: dull crack, big low whump, sand column tearing up, then sand raining back (hiss, grains, clods, stones on a vehicle) |
-| `War-SandBlastFar.mp3` | 7.0 s | −5.2 | −22.2 | Same charge 350 m away: grains lost, crack absorbed, whump, dull roar and dune echoes carry |
-| `War-MortarLaunch.mp3` | 7.5 s | −0.7 | −26.3 | Mortar: three rounds dropped down the tube (scrape, clink), hollow thoonk, whoosh away |
-| `War-MortarIncoming.mp3` | 7.0 s | −0.5 | −25.1 | Incoming mortar: 760 Hz fin whistle Doppler-shifted along a real path (about 2 kHz falling to 600 Hz as it passes over), impact 47 m away |
-| `War-Grenade.mp3` | 9.0 s | −0.5 | −29.9 | Frag grenade: pin, throw, lever flying off (4.5 s fuse), thud and roll on dirt, blast, fragments whizzing, earth falling |
-| `War-RpgRocket.mp3` | 7.0 s | −0.5 | −29.7 | RPG: booster pop and back-blast, rocket motor screaming away (Doppler, darkening), impact on a vehicle 300 m off |
-| `War-Barrage.mp3` | 15.0 s | −0.9 | −18.0 | Artillery barrage: 15 heavy shells 1.2–5 km away, rolling echoes, constant low rumble |
+| `Weapon-EnergyLmg.mp3` | 5.6 s | −0.9 | −14.1 | Energy LMG voiced as a real full-power LMG (Follow-up 14), full 44-round magazine: 5 → 15 rounds/s over 1.75 s; heavy report with low-mid boom and supersonic crack, geared drive and barrel clatter, rolling outdoor tail, brass landing on concrete |
+| `Weapon-EnergyLmgTurbo.mp3` | 4.8 s | −0.9 | −13.5 | Same with the Turbocharger: 6.8 → 15 rounds/s over 0.85 s, turbine whistle and charge hiss on the pull |
+| `Weapon-Lmg.mp3` | 5.5 s | −0.9 | −14.0 | Belt-fed LMG, 640/min: long burst and two short, links and brass, outdoor slap-back |
+| `Weapon-Smg.mp3` | 4.5 s | −0.9 | −19.6 | SMG, 900/min: two short bursts, then the rest of a 30-round magazine |
+| `Weapon-Sniper.mp3` | 5.5 s | −0.5 | −16.9 | Heavy blast and thump, report rolling off the valley, bolt cycle, casing landing |
+| `Weapon-Turret.mp3` | 6.0 s | −0.9 | −14.5 | Servo traverse, lock-on pips, 720/min burst with feed motor, spin-down |
+| `Weapon-Cannon.mp3` | 7.0 s | −0.5 | −16.7 | 120 mm: blast wave, chest thump, fireball roar, hull ring, echoes, breech clank, case clang |
+| `Weapon-AutoCannon.mp3` | 5.0 s | −0.7 | −13.7 | 30 mm, 210/min: two bursts, heavy action, big cases ringing |
+| `Weapon-Fifty.mp3` | 6.0 s | −0.7 | −13.3 | Follow-up 19: .50 cal heavy machine gun (M2-style), 550 rounds/min in bursts of 8–10: long blast, deep boom, wide bullet crack, recoiling bolt, belt links, .50 cases |
+| `Weapon-Ak47.mp3` | 6.0 s | −0.9 | −15.8 | AK-47 (an assault rifle): three single shots, a short burst, then the rest of the 30-round magazine at 600 rounds/min, heavy bolt clack, dry click |
+| `Weapon-M4.mp3` | 5.0 s | −0.9 | −16.8 | M4 carbine, 5.56 mm at 800 rounds/min: bursts, brighter and snappier than the AK, buffer-spring twang |
+| `Weapon-Minigun.mp3` | 5.5 s | −0.9 | −14.2 | M134-style minigun: electric drive spins up in 0.5 s to 3000 rounds/min, one tearing roar, motor whine, cases raining, spin-down |
+| `Weapon-Mg42.mp3` | 5.0 s | −0.9 | −16.5 | MG 42 at 1200 rounds/min: the ripping buzzsaw, two short bursts and a long one |
+| `Weapon-Shotgun.mp3` | 5.0 s | −0.7 | −17.6 | 12-gauge pump shotgun: wide deep boom, no bullet crack, pump back (hull ejected, landing), pump forward; three shots |
+| `Weapon-Pistol.mp3` | 4.5 s | −0.9 | −23.5 | 9 mm pistol: single shots and double taps, slide slam, pistol cases |
+| `Weapon-AntiMateriel.mp3` | 6.0 s | −0.5 | −18.1 | .50 anti-materiel rifle: muzzle brake throws the blast sideways, chest-deep boom, wide crack, barrel slamming home |
+| `War-SandBlast.mp3` | 7.5 s | −0.5 | −20.5 | Follow-up 19 (`WarFoley.js`): explosion in sand 30 m away: dull crack, big low whump, sand column tearing up, then sand raining back (hiss, grains, clods, stones on a vehicle) |
+| `War-SandBlastFar.mp3` | 7.0 s | −5.2 | −28.2 | Same charge 350 m away: grains lost, crack absorbed, whump, dull roar and dune echoes carry |
+| `War-MortarLaunch.mp3` | 7.5 s | −0.7 | −22.3 | Mortar: three rounds dropped down the tube (scrape, clink), hollow thoonk, whoosh away |
+| `War-MortarIncoming.mp3` | 7.0 s | −0.5 | −25.9 | Incoming mortar: 760 Hz fin whistle Doppler-shifted along a real path (about 2 kHz falling to 600 Hz as it passes over), impact 47 m away |
+| `War-Grenade.mp3` | 9.0 s | −0.5 | −26.2 | Frag grenade: pin, throw, lever flying off (4.5 s fuse), thud and roll on dirt, blast, fragments whizzing, earth falling |
+| `War-RpgRocket.mp3` | 7.0 s | −0.5 | −32.6 | RPG: booster pop and back-blast, rocket motor screaming away (Doppler, darkening), impact on a vehicle 300 m off |
+| `War-Barrage.mp3` | 15.0 s | −0.9 | −21.8 | Artillery barrage: 15 heavy shells 1.2–5 km away, rolling echoes, constant low rumble |
 | `War-Helicopter.mp3` | 16.0 s | −0.9 | −24.8 | Military helicopter fly-over: 4-blade main rotor (17.2 passes/s), 79 Hz tail rotor, turbines, blade slap on the approach, Doppler |
 | `War-AirRaidSiren.mp3` | 18.0 s | −0.9 | −17.4 | Air-raid siren: two-rotor mechanical siren (480 / 576 Hz), wind-up and fall from rotor inertia, turning head, echoing across a town |
 | `War-TankDriveBy.mp3` | 14.0 s | −0.9 | −28.5 | Tank passing at 29 km/h, 14 m away: track links (53 clanks/s), slack slaps, road-wheel squeal, V12 diesel, ground rumble |
-| `War-Deafened.mp3` | 14.0 s | −0.5 | −32.3 | Shell shock: fighting, a shell lands 10 m away, then muffled (low-pass from 180 Hz), ringing ears, heartbeat, hearing returns over ~10 s |
-| `War-Battlefield.mp3` | 20.0 s | −1.4 | −28.4 | Battlefield bed: AK, M4, MG 42, .50 cal and LMG bursts 120–750 m away, far explosions, rounds cracking overhead |
-| `Bullets-Supersonic.mp3` | 4.5 s | −0.9 | −30.1 | Downrange of a rifle 400 m away: crack first, muzzle report 0.67 s later |
+| `War-Deafened.mp3` | 14.0 s | −0.5 | −25.8 | Shell shock: fighting, a shell lands 10 m away, then muffled (low-pass from 180 Hz), ringing ears, heartbeat, hearing returns over ~10 s |
+| `War-Battlefield.mp3` | 20.0 s | −1.4 | −26.2 | Battlefield bed: AK, M4, MG 42, .50 cal and LMG bursts 120–750 m away, far explosions, rounds cracking overhead |
+| `Bullets-Supersonic.mp3` | 4.5 s | −0.9 | −35.3 | Downrange of a rifle 400 m away: crack first, muzzle report 0.67 s later |
 | `Bullets-Whizz.mp3` | 2.6 s | −1.4 | −24.4 | Three subsonic fly-bys: Doppler drop, vortex tone, panning across |
 | `Bullets-Ricochet.mp3` | 3.0 s | −1.4 | −22.9 | Glancing off rock, steel and concrete: strike then tumbling whine |
 | `Bullets-Impacts.mp3` | 11.0 s | −1.4 | −29.5 | Sand, dirt, rock, concrete, wood, metal, glass, water, 1.2 s apart |
-| `Shells-Floors.mp3` | 16.6 s | −1.4 | −28.1 | Spent cases (`Casings.js`): 7.62 mm on concrete, 5.56 mm on a wooden deck, 7.62 mm on a steel floor, 7.62 mm on dirt — ring, bounce series, roll |
-| `Shells-Calibres.mp3` | 20.4 s | −1.4 | −26.9 | 9 mm pistol, 12-gauge shotgun, .50 BMG on steel, 30 mm cannon on steel, 120 mm case stub on the turret floor |
-| `Shells-BrassRain.mp3` | 5.5 s | −1.4 | −26.7 | 32 cases and belt links from a 3 s LMG burst raining onto concrete, clinking on the pile, last ones rolling |
+| `Shells-Floors.mp3` | 16.6 s | −1.4 | −31.3 | Spent cases (`Casings.js`): 7.62 mm on concrete, 5.56 mm on a wooden deck, 7.62 mm on a steel floor, 7.62 mm on dirt — ring, bounce series, roll |
+| `Shells-Calibres.mp3` | 20.4 s | −1.4 | −29.0 | 9 mm pistol, 12-gauge shotgun, .50 BMG on steel, 30 mm cannon on steel, 120 mm case stub on the turret floor |
+| `Shells-BrassRain.mp3` | 5.5 s | −1.4 | −28.0 | 32 cases and belt links from a 3 s LMG burst raining onto concrete, clinking on the pile, last ones rolling |
 | `Factory-Line.mp3` | 14.0 s | −4.9 | −18.0 | Follow-up 17 (`FactoryFoley.js`): factory hall bed (rumble, mains hum, far motor, clanks, air blasts, forklift beeps), conveyor (24 Hz motor, 552 Hz reducer mesh, rollers, chain, belt splice, boxes), stamping press, impact wrench |
 | `Factory-MetalWorks.mp3` | 22.2 s | −0.9 | −24.7 | Blacksmith on the anvil and quench, angle grinder cutting steel (spin-up, load sag, screech, sparks, wind-down), MIG welding two beads, steel pipes dropped |
 | `Factory-Creaks.mp3` | 18.6 s | −0.9 | −17.4 | Steel beam under load, heavy steel door on a dry hinge and slam, wooden floorboards, chain hoist ratchet |
 | `Sparks-Arcs.mp3` | 18.6 s | −0.9 | −23.6 | Spark shower, short circuit with breaker trip, high-voltage climbing arc, loose wire making and breaking |
 | `Electronics-Bench.mp3` | 25.2 s | −0.9 | −17.2 | Transformer hum, contactor and relay bank, robot arm servos and gripper, fluorescent tube starting, coil whine under a changing load |
 | `Demon-ColdStart.mp3` | 10.5 s | −1.0 | −19.1 | Dodge Challenger SRT Demon (Follow-up 15): starter, catch and flare, lumpy cross-plane idle (each bank fires unevenly, firing order 1-8-4-3-6-5-7-2), three blips with the stock 2.7 L blower's scream, overrun pops |
-| `Demon-Launch.mp3` | 15.5 s | −2.4 | −16.0 | Staged on the TransBrake at 2350 rpm, released: 1.8 g, 8-speed upshifts, quarter mile in about 9.8 s at 142 mph, lift. Cyan dots: predicted blower whine (rpm × 0.157) |
+| `Demon-Launch.mp3` | 15.5 s | −2.1 | −16.0 | Staged on the TransBrake at 2350 rpm, released: 1.8 g, 8-speed upshifts, quarter mile in about 9.8 s at 142 mph, lift. Cyan dots: predicted blower whine (rpm × 0.157) |
 | `Demon-RollOn.mp3` | 16.5 s | −2.0 | −17.0 | Third gear from 2600 rpm, floored three times: the belt-driven blower makes boost the instant the throttle opens (no lag) |
-| `TurboLag-Compare.mp3` | 16.5 s | −1.7 | −17.0 | GT-R with parallel twin turbos, the same 3rd-gear roll-on from 2600 rpm with lag off, real lag and 2.5× lag; cyan dots: whistle pitch predicted from the simulated shaft speed |
+| `TurboLag-Compare.mp3` | 16.5 s | −1.2 | −17.0 | GT-R with parallel twin turbos, the same 3rd-gear roll-on from 2600 rpm with lag off, real lag and 2.5× lag; cyan dots: whistle pitch predicted from the simulated shaft speed |
 | `Spyder918-Launch.mp3` | 16.0 s | −2.3 | −16.0 | Porsche 918 Spyder (Follow-up 16, the hybrid from Porsche's 2020 Super Bowl advert "The Heist"): launch control, both e-motors whining under the flat-plane V8, scream to 9150 rpm through the top pipes, PDK upshifts, front motor decoupling at 235 km/h, lift |
 | `Spyder918-FlyBy.mp3` | 8.0 s | −1.0 | −18.4 | 918 Spyder at 250 km/h in 5th past a trackside mic 12 m away: Doppler drop, exhaust pointing away after the pass |
-| `AgeraR-Launch.mp3` | 16.0 s | −2.0 | −16.0 | Koenigsegg Agera R (the Need for Speed film car): boost build at about 3800 rpm, launch, twin-turbo flat-plane V8 through 7 gears, dump-valve chirps, big blow-off on the lift |
+| `AgeraR-Launch.mp3` | 16.0 s | −1.6 | −16.0 | Koenigsegg Agera R (the Need for Speed film car): boost build at about 3800 rpm, launch, twin-turbo flat-plane V8 through 7 gears, dump-valve chirps, big blow-off on the lift |
 | `AgeraR-FlyBy.mp3` | 8.0 s | −1.0 | −18.5 | Agera R at 300 km/h in 5th on full boost: turbo whistle over the V8, Doppler drop |
-| `Road-NoiseSwitch.mp3` | 15.0 s | −4.0 | −18.0 | Follow-up 17: Agera R flat out in 6th from 220 km/h, chase mic, road roar at 100 %, then the bench default (road 40 %, wind 80 %), then road switched off (wind only) |
+| `Road-NoiseSwitch.mp3` | 15.0 s | −3.6 | −18.0 | Follow-up 17: Agera R flat out in 6th from 220 km/h, chase mic, road roar at 100 %, then the bench default (road 40 %, wind 80 %), then road switched off (wind only) |
 | `MustangGt-StartLaunch.mp3` | 16.5 s | −1.3 | −17.0 | Follow-up 18: 2024 Mustang GT, chase mic: start, idle burble, launch, cross-plane Coyote V8 through the 6-speed manual, lift |
 | `Gt350-Launch.mp3` | 16.0 s | −1.3 | −16.0 | Shelby GT350: revs held, launch, flat-plane Voodoo scream to 8250 rpm, no burble (each bank fires evenly) |
 | `MustangGt3-Onboard.mp3` | 14.0 s | −4.8 | −17.0 | Mustang GT3 (LMGT3), cockpit: sequential upshifts, straight-cut whine, downshift blips and overrun pops |
@@ -111,22 +111,22 @@ Follow-up 10 WAVs, 22 MB, were replaced). Peak is measured before encoding.
 | `Mustang-Compare.mp3` | 15.0 s | −2.3 | −17.0 | The three Mustangs back to back: 3rd-gear pulls from 60 km/h, GT, then GT350, then GT3 |
 | `LigierJsP320-Onboard.mp3` | 14.0 s | −4.2 | −17.0 | Ligier JS P320 LMP3, cockpit: Nissan VK56 V8, paddle upshifts, gear whine, braking downshifts |
 | `LigierJsP320-FlyBy.mp3` | 8.0 s | −1.0 | −18.5 | Ligier JS P320 at 260 km/h in 6th, Doppler drop |
-| `Induction-SmallSingle.mp3` | 11.0 s | −3.2 | −17.0 | Every `Induction-*` scene: GT-R NISMO with the inducer swapped in, chase mic: two blips, pull from rest, lift, back on, lift. Small single turbo: quick spool, bright whistle, soft blow-off |
-| `Induction-BigSingle.mp3` | 11.0 s | −2.4 | −17.0 | Big single turbo: late, violent boost, deep whoosh, loud blow-off |
-| `Induction-TwinTurbo.mp3` | 11.0 s | −2.9 | −17.0 | Parallel twins: two detuned whistles beating, blow-off with a little flutter |
-| `Induction-Flutter.mp3` | 11.0 s | −2.4 | −17.0 | Turbo with no blow-off valve: compressor surge chatter on every lift |
-| `Induction-Vgt.mp3` | 11.0 s | −3.1 | −17.0 | Variable-geometry turbo: early boost, whistle sweeping with the vanes, no valve |
-| `Induction-ElectricTurbo.mp3` | 11.0 s | −2.8 | −17.0 | Electric-assist turbo: no lag, motor whine on the shaft, harvest whine on lift |
-| `Induction-Roots.mp3` | 11.0 s | −3.9 | −17.0 | Roots blower: gear-driven whine with a chugging pocket pulse |
-| `Induction-TwistedLobe.mp3` | 11.0 s | −3.6 | −17.0 | Twisted 4-lobe supercharger: high smooth scream, bypass valve on the cruise |
-| `Induction-TwinScrew.mp3` | 11.0 s | −3.2 | −17.0 | Twin-screw supercharger: raspy harmonic-rich scream, timing-gear whine |
-| `Induction-Centrifugal.mp3` | 11.0 s | −3.2 | −17.0 | Centrifugal supercharger: whine and boost climbing with rpm squared, blow-off on lift |
-| `Taycan-Launch.mp3` | 14.0 s | −6.6 | −18.0 | Porsche Taycan Turbo S, chase mic: ready chime, launch 0–200 km/h, both motors whining, rear 2-speed shift near 100 km/h, coast |
-| `Taycan-Onboard.mp3` | 15.0 s | −5.3 | −20.0 | Cabin mic: gentle pull-away, cruise, floor it (stays in 2nd above 60 km/h), regenerative braking to a stop |
-| `Taycan-SportSound.mp3` | 11.5 s | −4.9 | −18.0 | Same car with the synthetic sport-sound layer on |
-| `Taycan-FlyBy.mp3` | 8.0 s | −1.1 | −20.1 | Trackside at 12 m, 200 km/h in 2nd: motor whine, tyres and wind |
-| `NextGen-Launch.mp3` | 14.0 s | −4.7 | −17.0 | Next-Gen racer (original, Jackson Storm style), chase mic: whir locked to the motor, V8 undertone, sequential upshifts dropping the pitch |
-| `NextGen-Onboard.mp3` | 14.0 s | −3.7 | −17.0 | Cabin mic: pull 3-4-5, brake with downshifts (8.06 s to 4th, 8.77 s to 3rd), corner with squeal, exit |
+| `Induction-SmallSingle.mp3` | 11.0 s | −3.1 | −17.0 | Every `Induction-*` scene: GT-R NISMO with the inducer swapped in, chase mic: two blips, pull from rest, lift, back on, lift. Small single turbo: quick spool, bright whistle, soft blow-off |
+| `Induction-BigSingle.mp3` | 11.0 s | −2.5 | −17.0 | Big single turbo: late, violent boost, deep whoosh, loud blow-off |
+| `Induction-TwinTurbo.mp3` | 11.0 s | −3.5 | −17.0 | Parallel twins: two detuned whistles beating, blow-off with a little flutter |
+| `Induction-Flutter.mp3` | 11.0 s | −2.2 | −17.0 | Turbo with no blow-off valve: compressor surge chatter on every lift |
+| `Induction-Vgt.mp3` | 11.0 s | −3.2 | −17.0 | Variable-geometry turbo: early boost, whistle sweeping with the vanes, no valve |
+| `Induction-ElectricTurbo.mp3` | 11.0 s | −2.5 | −17.0 | Electric-assist turbo: no lag, motor whine on the shaft, harvest whine on lift |
+| `Induction-Roots.mp3` | 11.0 s | −2.9 | −17.0 | Roots blower: gear-driven whine with a chugging pocket pulse |
+| `Induction-TwistedLobe.mp3` | 11.0 s | −3.3 | −17.0 | Twisted 4-lobe supercharger: high smooth scream, bypass valve on the cruise |
+| `Induction-TwinScrew.mp3` | 11.0 s | −3.9 | −17.0 | Twin-screw supercharger: raspy harmonic-rich scream, timing-gear whine |
+| `Induction-Centrifugal.mp3` | 11.0 s | −3.7 | −17.0 | Centrifugal supercharger: whine and boost climbing with rpm squared, blow-off on lift |
+| `Taycan-Launch.mp3` | 14.0 s | −6.1 | −18.0 | Porsche Taycan Turbo S, chase mic: ready chime, launch 0–200 km/h, both motors whining, rear 2-speed shift near 100 km/h, coast |
+| `Taycan-Onboard.mp3` | 15.0 s | −4.9 | −20.0 | Cabin mic: gentle pull-away, cruise, floor it (stays in 2nd above 60 km/h), regenerative braking to a stop |
+| `Taycan-SportSound.mp3` | 11.5 s | −5.0 | −18.0 | Same car with the synthetic sport-sound layer on |
+| `Taycan-FlyBy.mp3` | 8.0 s | −1.0 | −20.1 | Trackside at 12 m, 200 km/h in 2nd: motor whine, tyres and wind |
+| `NextGen-Launch.mp3` | 14.0 s | −3.7 | −17.0 | Next-Gen racer (original, Jackson Storm style), chase mic: whir locked to the motor, V8 undertone, sequential upshifts dropping the pitch |
+| `NextGen-Onboard.mp3` | 14.0 s | −3.1 | −17.0 | Cabin mic: pull 3-4-5, brake with downshifts (8.06 s to 4th, 8.77 s to 3rd), corner with squeal, exit |
 | `NextGen-FlyBy.mp3` | 8.0 s | −1.0 | −18.6 | Trackside at 12 m, 290 km/h in 6th: whir and undertone with Doppler |
 | `Aircraft-TrainerRunUp.mp3` | 10.0 s | −0.9 | −20.3 | Electric trainer on the apron: 2-blade prop spin-up, full-power run-up, idle, stop |
 | `Aircraft-TrainerTakeoff.mp3` | 18.0 s | −0.9 | −20.7 | 25 m beside the runway: roll, rotation, climb-out past and away |
@@ -248,6 +248,35 @@ the plate). Distant sounds use `Afar()` (air absorption by range and a (30 / met
 check: the eight guns fire at their rates (`.50` 11 rounds in 1.2 s, AK 12, M4 16, minigun 58 in 1.34 s with spin-up, MG 42 22 in
 1.1 s, shotgun 3 in 2.1 s, pistol 5, .50 rifle 2); the War shelf shows 12 pads; eight War cues render and start together in 5.7 s;
 all 20 new reel renders are finite; console errors 0. Build tag "build 19".
+
+**Weapons, explosions, shells, turbos, superchargers, Taycan and racer redone (Follow-up 20).** Diagnosis: every gun ran one shared
+chain (same blast, same thump, same echo taps), every explosion was the same overpressure plus a pitched sine thump, and the turbo
+whistle, supercharger whine and EV orders were pure sines, which is what read as "electric whine". Changes:
+- `SignalKit.js`: `NarrowTone` (a narrow band of noise with pitch drift and amplitude flutter: a tone that breathes like air or
+  steel instead of a test oscillator), `Blep` / `PolySaw` (band-limited saw, no aliasing).
+- New `Detonation.js`: `Fft`, `Convolve`, generated impulse responses per place (`Spaces`: Range, Urban, Forest, Field, Valley,
+  Desert, Indoor; `SpaceIr`, `Place`), a look-ahead `Limit`, the muzzle/blast `Pulse` (Friedlander-shaped overpressure with a ground
+  reflection), turbulent `Rumble`, and `Detonate`, which scales the blast by charge mass (positive-phase length grows with the cube
+  root of the charge, so a 180 g grenade cracks while a 10 kg shell booms) and by ground (Open, Sand, Rock, Air).
+- `Ballistics.js`: each gun is now a recipe of separate layers (Muzzle, Gas, Punch, Crack, Ring, Action, Rattle, Spring, Links, Zap,
+  Arc) placed in its own space; the brass lands on dirt outdoors and concrete in streets and on ranges. The Energy LMG keeps a
+  full-power 7.62-class report with a falling discharge zing and arc crackle on top, instead of a toy zap.
+- `Casings.js` rewritten: tube modes with split (detuned) pairs and a hoop mode per case, end-over-end double hits, floor thuds,
+  rolling with rim ticks and rocking to rest; plastic shotgun hulls.
+- `WarFoley.js` / `ImpactFoley.js`: every blast goes through `Detonate` with a charge and ground (grenade 0.18 kg, mortar 1 kg, RPG
+  1.5 kg on rock, sand blast 5 kg in sand, artillery 7–15 kg) and `Place` instead of the shared echo taps.
+- `ForcedInduction.js`: turbo = `Compressor` (blade-pass narrow band, half and double orders, shaft-rate wobble, inlet rush through
+  duct formants) + `BlowOff` ("ch" then a falling "pssshh" with piston flutter) + `Surge` (stu-tu-tu chuffs); displacement blowers are
+  pressure pulses per rotor pocket with rotor-rate modulation and a rasp. `PulseTrainEngine.js` built-in turbos (GT-R, Agera, Demon)
+  use the same parts.
+- `ElectricDrive.js`: motor orders, inverter sidebands and gear mesh are `NarrowTone`s with rotor-eccentricity and gear run-out
+  modulation, torque-ripple orders that grow with load, and a spread-spectrum hiss band at the inverter carrier; the racer's whir is
+  band-limited saws through pitch-tracking formants, roughened by its V8 undertone's firing pulses.
+Checks: every gun shot renders finite in 85–270 ms, peaks −13 to −20 dBFS, octave profiles distinct (Energy LMG peaks at 8 kHz,
+shotgun at 63 Hz; closest pair Turret / AK-47 1.6 dB apart); 64 reel scenes re-rendered, all finite; headless bench: guns fire at
+their rates, 12 War pads, eight War cues render and start in 22.5 s (slower than build 19's 5.7 s: the convolution reverbs), console
+errors 0. Build tag "build 20". Limits: nothing is matched against recordings; impulse responses are generated; inducer and case
+frequencies are typical published figures, not measurements.
 
 ## Reproduce
 ```

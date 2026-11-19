@@ -1,159 +1,199 @@
 // BALLISTICS
 // 🧩 Synthesized weapon sounds: an energy LMG that spins up as you hold the trigger (Devotion-style, with or without the
 //    Turbocharger hop-up), a belt-fed LMG, an SMG, a bolt-action sniper rifle, an automated turret, a tank cannon and an
-//    autocannon; Follow-up 19 adds a .50 cal heavy machine gun (M2HB-style), an AK-47, an M4 carbine, an M134-style
-//    minigun, an MG 42, a pump shotgun, a 9 mm pistol and a .50 anti-materiel rifle; spent casings falling on concrete, wood, steel and dirt (Casings.js); bullets passing by (supersonic crack with the distant report arriving later, subsonic whizz,
-//    ricochet whine); and bullets hitting sand, dirt, rock, concrete, wood, metal, glass and water.
-// 📝 Every shot is layered from physics-shaped pieces (ImpactFoley helpers): the muzzle blast (Friedlander
-//    overpressure), propellant gas (shaped noise), the weapon's body thump, the action's struck modes (bolt, belt
-//    links, breech), brass landing, and for the energy weapon an electric zap plus the spin motor. Fire rates follow
-//    FireRate(): Devotion-style 5 → 15 rounds/s over 1.75 s, 6.8 → 15 over 0.85 s with the Turbocharger, 44 rounds.
+//    autocannon; a .50 cal heavy machine gun (M2HB-style), an AK-47, an M4 carbine, an M134-style minigun, an MG 42, a
+//    pump shotgun, a 9 mm pistol and a .50 anti-materiel rifle; spent casings (Casings.js); bullets passing by
+//    (supersonic crack with the distant report arriving later, subsonic whizz, ricochet whine); and bullets hitting
+//    sand, dirt, rock, concrete, wood, metal, glass and water.
+// 📝 Follow-up 20 rebuild: every report is now built from the physics of that weapon instead of one shared chain with
+//    different numbers. The muzzle blast is a Friedlander pulse whose length follows the calibre and barrel (9 mm pistol
+//    0.28 ms, so a sharp high crack; 5.56 0.36 ms; 7.62×39 0.5 ms; 7.62 NATO 0.6 ms; .50 BMG 1.1 ms, a deep boom; 30 mm
+//    3.5 ms), with its ground reflection, the propellant jet and a noise punch (no more pitched sine "thump", which made
+//    every gun and explosion sound alike). Each gun has its own mechanism: the AK's loose, heavy carrier slam and rattle,
+//    the M4's buffer spring twang, the MG 42's roller-locked buzz, the M2's recoiling barrel, the pistol's slide, the
+//    minigun's motor and delinker, the energy LMG's geared motor, discharge zing and arc crackle. Every cue plays in its own
+//    space by convolution (Detonation.js: open field, forest, town, valley, desert, range), then a look-ahead limiter.
+//    Fire rates: FireRate(): Devotion-style 5 → 15 rounds/s over 1.75 s, 6.8 → 15 over 0.85 s with the Turbocharger.
 //    Same contract as CabinFoley: Cues + RenderCue; plus RenderShot / RenderMotor for the live bench's hold-to-fire.
 //    Original designs: nothing is copied or sampled from any game or recording.
 
-import { Tau, Clamp, Mix, Smoothstep, SeededNoise, OnePole, Biquad, Resonator, PanGains, Strike } from './SignalKit.js';
-import { Overpressure, Thump, Roar, Scatter, Bounce, Whine, Echoes, Distant, Settle } from './ImpactFoley.js';
+import { Tau, Clamp, Mix, Smoothstep, SeededNoise, OnePole, Biquad, Resonator, PanGains, Strike, NarrowTone, PolySaw } from './SignalKit.js';
+import { Overpressure, Roar, Scatter, Whine, Echoes, Settle } from './ImpactFoley.js';
 import { Shells, Floors, DropCasing, CasingRain } from './Casings.js';
+import { Pulse, Rumble, Place, Limit } from './Detonation.js';
 
 //------------------------------------------------------------------------------------------------------------------------
 //                                                    WEAPONS
 //------------------------------------------------------------------------------------------------------------------------
 
+// Where the brass lands follows where the gun is heard: on a range or in a street it rings on concrete; in a field,
+// a forest, a valley or the desert it drops into dirt with a dull tick (no steady case ring under the burst).
+const Ground = (W) => (W.Space === 'Urban' || W.Space === 'Range' ? 'Concrete' : 'Dirt');
+
 /**
  * Weapon recipes. Rate: [first, top] rounds per second; Spin: seconds to reach the top rate (0 = constant). Turbo
- * overrides for the hop-up. Shot layers: Blast (overpressure), Gas (noise roar), Body (thump), Action ([modes, gain,
- * delay]), Brass (a Casings.js case, landing on concrete), Boom (low-mid barrel and air body: modes plus band noise), Crack
- * (supersonic bullet N-wave at the muzzle), Arc (energy-cell crackle), Tail (rolling outdoor report per shot and after a burst),
- * Level (live bench shot gain, so every weapon sits at a similar loudness).
+ * overrides for the hop-up.
+ *   Muzzle  blast pulse: Width (positive phase s), Drive (how hard it clips), Ground ([delay s, level] reflection)
+ *   Gas     propellant jet: band noise { Seconds, Hz, Q, Gain };   Punch: low noise burst { Seconds, Hz, Gain }
+ *   Crack   supersonic bullet N-wave at the muzzle { Lasts, Gain } (absent for the shotgun)
+ *   Ring    receiver and barrel struck by the shot { Modes, Gain }
+ *   Action  mechanism events [delay s, modes, gain, burst s]: bolt or carrier back, slam home, slide, roller lock
+ *   Rattle  loose parts chattering after the slam { Delay, Count, Low, High, Gain };  Spring: buffer spring twang
+ *   Zap / Arc  the energy weapon's discharge zing and crackle;  Links: belt links;  Brake: muzzle brake side blasts
+ *   Space   where the cue is heard (Detonation.js Spaces);  Level: live bench gain, so every weapon sits alike
  */
 export const Weapons = {
     EnergyLmg: {
-        // Voiced as a real full-power LMG (Follow-up 14): a long, heavy muzzle blast with a low-mid boom, the bullet's
-        // supersonic crack, a steel bolt carrier slamming, a rolling outdoor report and brass falling; the spin-up
-        // drive is a geared motor (mesh grind and barrel clatter), and the energy ammo only adds a faint arc crackle.
-        Label: 'Energy LMG', Note: 'Devotion-style spin-up', Rate: [5, 15], Spin: 1.75, Magazine: 44, Motor: { Hz: 24, Barrels: 3, Gain: 0.03, Grind: 1 },
-        Turbo: { Rate: [6.8, 15], Spin: 0.85 },
-        Blast: { Lasts: 0.0024, Gain: 1.25, Low: 5000 }, Gas: { Seconds: 0.22, From: 9000, To: 600, Floor: 120, Gain: 0.8, Grit: 0.7 },
-        Body: { Hz: 74, EndHz: 38, Decay: 0.2, Gain: 0.85, Drive: 2.4 },
-        Boom: { Modes: [[190, 0.07, 0.5], [310, 0.06, 0.4], [470, 0.045, 0.3], [760, 0.03, 0.2]], Gain: 2.4, Low: 150, High: 1200, Decay: 0.14, Noise: 2.2 },
-        Crack: { Lasts: 0.00024, Gain: 0.5 }, Arc: { Gain: 0.03 }, Tail: { Gain: 0.13 },
-        Action: [[[1050, 0.045, 1], [2300, 0.03, 0.6], [460, 0.06, 0.5], [3900, 0.015, 0.3]], 4, 0.011],
-        Brass: 'Rifle762', Level: 0.6,
+        // A full-power LMG report (7.62-class blast, heavy steel receiver ring, crack) carrying the Devotion's signature:
+        // a geared motor whirring up as the rate climbs, a falling metallic discharge zing on every shot and a short
+        // arc crackle from the energy cell; the bolt is heard as two clacks.
+        Label: 'Energy LMG', Note: 'Devotion-style spin-up', Rate: [5, 15], Spin: 1.75, Magazine: 44,
+        Motor: { Hz: 26, Teeth: 3, Barrels: 3, Gain: 0.07, Gear: 1 }, Turbo: { Rate: [6.8, 15], Spin: 0.85 },
+        Muzzle: { Width: 0.00062, Drive: 2.9, Ground: [0.0031, 0.6] },
+        Gas: { Seconds: 0.028, Hz: 1600, Q: 0.6, Gain: 0.5 }, Punch: { Seconds: 0.04, Hz: 90, Gain: 0.3 },
+        Crack: { Lasts: 0.00028, Gain: 0.45 },
+        Ring: { Modes: [[640, 0.08, 1], [1530, 0.06, 0.7], [2740, 0.04, 0.5], [4310, 0.025, 0.3]], Gain: 0.9 },
+        Zap: { From: 3900, To: 760, Seconds: 0.06, Gain: 0.1 }, Arc: 0.035,
+        Action: [[0.011, [[1050, 0.035, 1], [2300, 0.025, 0.6], [460, 0.05, 0.5]], 1.6], [0.042, [[1380, 0.03, 1], [3150, 0.02, 0.5], [620, 0.04, 0.4]], 1.1]],
+        Space: 'Field', Brass: 'Rifle762', Level: 0.6,
     },
     Lmg: {
+        // 7.62 NATO belt-fed LMG (M240 / FN MAG class, 640 rounds/min): open-bolt, so the bolt runs forward and fires
+        // in one heavy stroke; a steady, even chug with belt links slapping the feed tray. Heard in woods.
         Label: 'LMG', Note: 'belt-fed, 640 rounds/min', Rate: [10.7, 10.7], Spin: 0, Magazine: 100,
-        Blast: { Lasts: 0.0022, Gain: 1.1, Low: 6000 }, Gas: { Seconds: 0.16, From: 7000, To: 700, Floor: 150, Gain: 0.45, Grit: 0.6 },
-        Body: { Hz: 85, EndHz: 45, Decay: 0.25, Gain: 0.75, Drive: 2 },
-        Action: [[[1250, 0.04, 1], [2600, 0.025, 0.6], [480, 0.05, 0.5]], 4, 0.012], Links: [[3100, 0.012, 1], [4700, 0.01, 0.6]],
-        Brass: 'Rifle762',
+        Muzzle: { Width: 0.0006, Drive: 2.7, Ground: [0.0028, 0.65] },
+        Gas: { Seconds: 0.034, Hz: 1700, Q: 0.6, Gain: 0.55 }, Punch: { Seconds: 0.0425, Hz: 85, Gain: 0.32 },
+        Crack: { Lasts: 0.00026, Gain: 0.45 },
+        Ring: { Modes: [[880, 0.05, 1], [2070, 0.035, 0.6], [3450, 0.02, 0.35]], Gain: 0.6 },
+        Action: [[0.003, [[720, 0.05, 1], [1640, 0.035, 0.6], [330, 0.06, 0.5]], 1.6], [0.03, [[1250, 0.03, 1], [2600, 0.02, 0.5]], 0.7]],
+        Links: [[3100, 0.012, 1], [4700, 0.01, 0.6]],
+        Space: 'Forest', Brass: 'Rifle762', Level: 0.65,
     },
     Smg: {
+        // 9 mm SMG (900 rounds/min): a light, fast patter, short pops more than cracks (pistol bullets are near or
+        // below the speed of sound), the blowback bolt chattering. Heard on a
+        // covered firing range.
         Label: 'SMG', Note: '900 rounds/min', Rate: [15, 15], Spin: 0, Magazine: 30,
-        Blast: { Lasts: 0.0011, Gain: 0.8, Low: 9000 }, Gas: { Seconds: 0.08, From: 10000, To: 1800, Floor: 500, Gain: 0.32, Grit: 0.4 },
-        Body: { Hz: 140, EndHz: 80, Decay: 0.08, Gain: 0.32, Drive: 1.4 },
-        Action: [[[2100, 0.025, 1], [3800, 0.015, 0.6], [900, 0.03, 0.5]], 3, 0.008],
-        Brass: 'Pistol',
+        Muzzle: { Width: 0.0003, Drive: 2.2, Ground: [0.0022, 0.55] },
+        Gas: { Seconds: 0.014, Hz: 2600, Q: 0.7, Gain: 0.45 }, Punch: { Seconds: 0.015, Hz: 150, Gain: 0.16 },
+        Ring: { Modes: [[1900, 0.03, 1], [4300, 0.02, 0.5]], Gain: 0.35 },
+        Action: [[0.006, [[2100, 0.02, 1], [3900, 0.012, 0.6], [950, 0.025, 0.5]], 1.4], [0.028, [[1750, 0.02, 1], [3400, 0.012, 0.5]], 1.0]],
+        Space: 'Range', Brass: 'Pistol', Level: 0.85,
     },
     Turret: {
-        Label: 'Turret', Note: 'automated, 720 rounds/min', Rate: [12, 12], Spin: 0, Magazine: 200, Motor: { Hz: 38, Barrels: 0, Gain: 0.05 },
-        Blast: { Lasts: 0.0018, Gain: 1.0, Low: 6500 }, Gas: { Seconds: 0.13, From: 8000, To: 900, Floor: 200, Gain: 0.4, Grit: 0.55 },
-        Body: { Hz: 95, EndHz: 50, Decay: 0.2, Gain: 0.6, Drive: 1.8 },
-        Action: [[[1500, 0.035, 1], [2900, 0.022, 0.6], [620, 0.045, 0.5]], 4, 0.01], Links: [[3600, 0.01, 1], [5400, 0.008, 0.5]],
-        Brass: 'Rifle762',
+        Label: 'Turret', Note: 'automated, 720 rounds/min', Rate: [12, 12], Spin: 0, Magazine: 200,
+        Motor: { Hz: 38, Teeth: 1, Barrels: 0, Gain: 0.05, Gear: 0 },
+        Muzzle: { Width: 0.00052, Drive: 2.6, Ground: [0.0035, 0.5] },
+        Gas: { Seconds: 0.026, Hz: 1900, Q: 0.6, Gain: 0.5 }, Punch: { Seconds: 0.035, Hz: 95, Gain: 0.26 },
+        Crack: { Lasts: 0.00025, Gain: 0.4 },
+        Ring: { Modes: [[1180, 0.06, 1], [2650, 0.04, 0.6], [4950, 0.02, 0.3]], Gain: 0.6 },
+        Action: [[0.008, [[1500, 0.03, 1], [2900, 0.02, 0.6], [620, 0.04, 0.5]], 1.3]],
+        Links: [[3600, 0.01, 1], [5400, 0.008, 0.5]],
+        Space: 'Urban', Brass: 'Rifle762', Level: 0.7,
     },
     AutoCannon: {
+        // 30 mm (210 rounds/min): each round a separate, chest-deep bang, the breech block slamming like a hammer.
         Label: 'Autocannon', Note: '30 mm, 210 rounds/min', Rate: [3.5, 3.5], Spin: 0, Magazine: 40,
-        Blast: { Lasts: 0.008, Gain: 1.4, Low: 3000 }, Gas: { Seconds: 0.6, From: 4000, To: 200, Floor: 40, Gain: 0.55, Grit: 0.6 },
-        Body: { Hz: 60, EndHz: 30, Decay: 0.6, Gain: 1.0, Drive: 2.4 },
-        Action: [[[420, 0.08, 1], [980, 0.05, 0.7], [2200, 0.03, 0.4]], 6, 0.05],
-        Brass: 'Cannon30',
+        Muzzle: { Width: 0.0035, Drive: 2.4, Ground: [0.006, 0.6] },
+        Gas: { Seconds: 0.1, Hz: 600, Q: 0.6, Gain: 0.6 }, Punch: { Seconds: 0.14, Hz: 48, Gain: 0.42 },
+        Crack: { Lasts: 0.0009, Gain: 0.4 },
+        Ring: { Modes: [[260, 0.25, 1], [610, 0.16, 0.6], [1350, 0.08, 0.35]], Gain: 0.6 },
+        Action: [[0.05, [[420, 0.08, 1], [980, 0.05, 0.7], [2200, 0.03, 0.4]], 2.4, 0.0015]],
+        Space: 'Valley', Brass: 'Cannon30', Level: 0.45,
     },
 
-    // ── Follow-up 19: real-world guns (published cyclic rates and calibres; voicing is original, not sampled) ────────
+    // ── Real-world guns (published cyclic rates and calibres; voicing is original, not sampled) ──────────────────────
     Fifty: {
-        // M2HB-style .50 BMG heavy machine gun: 450–600 rounds/min (550 here), so you hear each round as a slow, deep
-        // chug: a long blast, a heavy boom, the big bullet's wider crack, the recoiling bolt and barrel, belt links.
+        // M2HB-style .50 BMG (550 rounds/min): each round a slow, deep chug: a long 1.1 ms blast (energy down near
+        // 300 Hz), a wide crack, then the barrel and bolt recoiling together and slamming back: "chunk".
         Label: '.50 cal HMG', Note: 'M2-style, 550 rounds/min', Rate: [9.2, 9.2], Spin: 0, Magazine: 100,
-        Blast: { Lasts: 0.0034, Gain: 1.5, Low: 4500 }, Gas: { Seconds: 0.3, From: 7000, To: 400, Floor: 70, Gain: 0.8, Grit: 0.7 },
-        Body: { Hz: 60, EndHz: 30, Decay: 0.32, Gain: 1.1, Drive: 2.6 },
-        Boom: { Modes: [[120, 0.09, 0.6], [205, 0.08, 0.5], [330, 0.06, 0.4], [530, 0.04, 0.3]], Gain: 3.0, Low: 90, High: 950, Decay: 0.2, Noise: 2.6 },
-        Crack: { Lasts: 0.0004, Gain: 0.6 }, Tail: { Gain: 0.18 },
-        Action: [[[640, 0.06, 1], [1450, 0.04, 0.6], [300, 0.08, 0.6], [2600, 0.02, 0.3]], 5, 0.022], Links: [[2700, 0.014, 1], [4300, 0.011, 0.6]],
-        Brass: 'Fifty', Level: 0.5,
+        Muzzle: { Width: 0.0011, Drive: 2.6, Ground: [0.0042, 0.6] },
+        Gas: { Seconds: 0.055, Hz: 950, Q: 0.6, Gain: 0.6 }, Punch: { Seconds: 0.07, Hz: 62, Gain: 0.4 },
+        Crack: { Lasts: 0.00042, Gain: 0.5 },
+        Ring: { Modes: [[410, 0.12, 1], [980, 0.08, 0.6], [1870, 0.05, 0.4], [3100, 0.03, 0.2]], Gain: 0.7 },
+        Action: [[0.024, [[520, 0.07, 1], [1180, 0.05, 0.6], [260, 0.09, 0.6], [2300, 0.025, 0.3]], 2.6, 0.0012], [0.07, [[690, 0.05, 1], [1600, 0.035, 0.5]], 1.4]],
+        Links: [[2700, 0.014, 1], [4300, 0.011, 0.6]],
+        Space: 'Valley', Brass: 'Fifty', Level: 0.5,
     },
     Ak47: {
-        // 7.62×39 assault rifle (often called a submachine gun; it is a rifle): 600 rounds/min, 30-round magazine,
-        // 715 m/s so the bullet cracks; the loose, heavy bolt carrier gives the AK its hard clack.
+        // 7.62×39 assault rifle (600 rounds/min): a mid-heavy, harsh report (0.5 ms blast, energy near 700 Hz) and the
+        // AK's signature hardware: a stamped steel receiver that rings, a heavy, loosely fitted carrier slamming back and
+        // forward, and the parts rattling after it. The cue is heard between buildings.
         Label: 'AK-47', Note: 'assault rifle, 600 rounds/min', Rate: [10, 10], Spin: 0, Magazine: 30,
-        Blast: { Lasts: 0.0022, Gain: 1.15, Low: 6500 }, Gas: { Seconds: 0.15, From: 8000, To: 700, Floor: 160, Gain: 0.5, Grit: 0.6 },
-        Body: { Hz: 90, EndHz: 48, Decay: 0.16, Gain: 0.7, Drive: 2 },
-        Boom: { Modes: [[240, 0.05, 0.5], [390, 0.045, 0.4], [610, 0.035, 0.3], [980, 0.022, 0.2]], Gain: 1.8, Low: 200, High: 1600, Decay: 0.1, Noise: 1.8 },
-        Crack: { Lasts: 0.0002, Gain: 0.35 }, Tail: { Gain: 0.1 },
-        Action: [[[900, 0.04, 1], [2000, 0.028, 0.6], [420, 0.05, 0.5], [3300, 0.015, 0.3]], 4.5, 0.012],
-        Brass: 'Rifle762', Level: 0.8,
+        Muzzle: { Width: 0.0005, Drive: 3.0, Ground: [0.0026, 0.65] },
+        Gas: { Seconds: 0.026, Hz: 1900, Q: 0.55, Gain: 0.6 }, Punch: { Seconds: 0.03, Hz: 105, Gain: 0.26 },
+        Crack: { Lasts: 0.00022, Gain: 0.4 },
+        Ring: { Modes: [[1240, 0.05, 1], [2930, 0.035, 0.7], [5150, 0.018, 0.4], [760, 0.04, 0.4]], Gain: 0.9 },
+        Action: [[0.013, [[860, 0.04, 1], [1950, 0.03, 0.7], [400, 0.05, 0.5], [3300, 0.015, 0.3]], 2.4], [0.056, [[980, 0.04, 1], [2250, 0.03, 0.6], [470, 0.05, 0.5]], 2.0]],
+        Rattle: { Delay: 0.062, Count: 3, Low: 1800, High: 4200, Gain: 0.6 },
+        Space: 'Urban', Brass: 'Rifle762', Level: 0.8,
     },
     M4: {
-        // 5.56 mm carbine: about 800 rounds/min, brighter and snappier than the AK, with the buffer spring's twang.
+        // 5.56 carbine (about 800 rounds/min): a brighter, snappier crack (0.36 ms blast, energy near 1 kHz), an
+        // aluminium receiver's dry tick, and the M4's tell: the buffer spring's metallic "sproing" behind every shot.
         Label: 'M4 carbine', Note: '5.56 mm, 800 rounds/min', Rate: [13.3, 13.3], Spin: 0, Magazine: 30,
-        Blast: { Lasts: 0.0016, Gain: 1.0, Low: 8500 }, Gas: { Seconds: 0.11, From: 10000, To: 1100, Floor: 250, Gain: 0.42, Grit: 0.5 },
-        Body: { Hz: 110, EndHz: 58, Decay: 0.12, Gain: 0.55, Drive: 1.8 },
-        Boom: { Modes: [[300, 0.04, 0.5], [480, 0.035, 0.4], [760, 0.028, 0.3], [1250, 0.018, 0.2]], Gain: 1.5, Low: 260, High: 2200, Decay: 0.08, Noise: 1.6 },
-        Crack: { Lasts: 0.00018, Gain: 0.4 }, Tail: { Gain: 0.09 },
-        Action: [[[1350, 0.03, 1], [2900, 0.02, 0.6], [560, 0.11, 0.18], [4300, 0.012, 0.3]], 4, 0.009],
-        Brass: 'Rifle556', Level: 0.85,
+        Muzzle: { Width: 0.00036, Drive: 3.2, Ground: [0.0024, 0.6] },
+        Gas: { Seconds: 0.018, Hz: 3000, Q: 0.6, Gain: 0.5 }, Punch: { Seconds: 0.0225, Hz: 120, Gain: 0.21 },
+        Crack: { Lasts: 0.00018, Gain: 0.45 },
+        Ring: { Modes: [[2150, 0.02, 1], [4600, 0.014, 0.6]], Gain: 0.4 },
+        Action: [[0.008, [[1500, 0.025, 1], [3200, 0.018, 0.6], [700, 0.03, 0.4]], 1.3], [0.04, [[1800, 0.022, 1], [3800, 0.015, 0.5]], 1.0]],
+        Spring: { Delay: 0.012, Hz: 560, Decay: 0.16, Gain: 0.16 },
+        Space: 'Field', Brass: 'Rifle556', Level: 0.85,
     },
     Minigun: {
         // M134-style six-barrel rotary gun: an electric drive spins the barrels up in about 0.5 s to 3000 rounds/min
-        // (50 a second), so the shots merge into one tearing roar over the motor whine and the delinker clatter.
-        Label: 'Minigun', Note: 'M134-style, 3000 rounds/min', Rate: [16, 50], Spin: 0.5, Magazine: 1500, Motor: { Hz: 8, Barrels: 1, Gain: 0.05, Grind: 0.5 },
-        Blast: { Lasts: 0.0018, Gain: 0.9, Low: 6500 }, Gas: { Seconds: 0.07, From: 8000, To: 900, Floor: 200, Gain: 0.3, Grit: 0.5 },
-        Body: { Hz: 95, EndHz: 55, Decay: 0.08, Gain: 0.45, Drive: 1.6 },
-        Boom: { Modes: [[210, 0.04, 0.5], [350, 0.035, 0.4], [560, 0.028, 0.3]], Gain: 1.2, Low: 180, High: 1400, Decay: 0.06, Noise: 1.4 },
-        Crack: { Lasts: 0.00024, Gain: 0.35 }, Tail: { Gain: 0.04 },
-        Action: [[[1600, 0.02, 1], [3400, 0.012, 0.5]], 2, 0.005], Links: [[3100, 0.008, 1], [4700, 0.006, 0.6]],
-        Brass: 'Rifle762', Level: 0.45,
+        // (50 a second), so the shots merge into one tearing "brrrt" over the motor and the delinker. Out in the desert.
+        Label: 'Minigun', Note: 'M134-style, 3000 rounds/min', Rate: [16, 50], Spin: 0.5, Magazine: 1500,
+        Motor: { Hz: 8, Teeth: 6, Barrels: 1, Gain: 0.07, Gear: 0.6 },
+        Muzzle: { Width: 0.00058, Drive: 2.4, Ground: [0.0034, 0.5] },
+        Gas: { Seconds: 0.02, Hz: 1700, Q: 0.6, Gain: 0.4 }, Punch: { Seconds: 0.02, Hz: 95, Gain: 0.19 },
+        Crack: { Lasts: 0.00026, Gain: 0.35 },
+        Ring: { Modes: [[1450, 0.03, 1], [3300, 0.02, 0.5]], Gain: 0.3 },
+        Action: [[0.004, [[1600, 0.015, 1], [3400, 0.01, 0.5]], 0.6]], Links: [[3100, 0.008, 1], [4700, 0.006, 0.6]],
+        Space: 'Desert', Brass: 'Rifle762', Level: 0.45,
     },
     Mg42: {
-        // MG 42: 1200 rounds/min, 20 rounds a second, too fast to hear single shots: the ripping 'buzzsaw'.
+        // MG 42: 1200 rounds/min, a report every 50 ms, faster than the ear can count: the ripping "buzzsaw". The
+        // roller-locked bolt adds a sharp tick to every shot, the light receiver rings high. Heard in woods.
         Label: 'MG 42', Note: '1200 rounds/min buzzsaw', Rate: [20, 20], Spin: 0, Magazine: 50,
-        Blast: { Lasts: 0.0021, Gain: 1.1, Low: 6500 }, Gas: { Seconds: 0.12, From: 8000, To: 800, Floor: 180, Gain: 0.42, Grit: 0.6 },
-        Body: { Hz: 88, EndHz: 46, Decay: 0.15, Gain: 0.65, Drive: 2 },
-        Boom: { Modes: [[210, 0.05, 0.5], [350, 0.045, 0.4], [560, 0.035, 0.3], [900, 0.022, 0.2]], Gain: 1.6, Low: 180, High: 1400, Decay: 0.09, Noise: 1.8 },
-        Crack: { Lasts: 0.00024, Gain: 0.4 }, Tail: { Gain: 0.07 },
-        Action: [[[1150, 0.03, 1], [2500, 0.02, 0.6], [500, 0.04, 0.5]], 3.5, 0.008], Links: [[3300, 0.01, 1], [5000, 0.008, 0.6]],
-        Brass: 'Rifle762', Level: 0.7,
+        Muzzle: { Width: 0.00056, Drive: 3.3, Ground: [0.003, 0.65] },
+        Gas: { Seconds: 0.022, Hz: 1800, Q: 0.6, Gain: 0.5 }, Punch: { Seconds: 0.025, Hz: 92, Gain: 0.24 },
+        Crack: { Lasts: 0.00025, Gain: 0.45 },
+        Ring: { Modes: [[1720, 0.035, 1], [3860, 0.025, 0.6], [6100, 0.012, 0.3]], Gain: 0.7 },
+        Action: [[0.004, [[2300, 0.015, 1], [4700, 0.01, 0.5], [1100, 0.02, 0.4]], 1.2], [0.022, [[1500, 0.018, 1], [3200, 0.012, 0.5]], 0.8]],
+        Links: [[3300, 0.01, 1], [5000, 0.008, 0.6]],
+        Space: 'Forest', Brass: 'Rifle762', Level: 0.7,
     },
     Shotgun: {
-        // 12-gauge pump: a wide, deep boom with no bullet crack, then the pump: fore-end back (the hull flies out),
-        // fore-end forward. Hold to keep pumping and firing.
+        // 12-gauge pump: the widest bore here, so a big, round 0.9 ms boom and no bullet crack; then the pump: fore-end
+        // back (the hull flies out), fore-end forward.
         Label: 'Pump shotgun', Note: '12 gauge, pump action', Rate: [1.4, 1.4], Spin: 0, Magazine: 6,
-        Blast: { Lasts: 0.0032, Gain: 1.5, Low: 4500 }, Gas: { Seconds: 0.28, From: 6000, To: 300, Floor: 80, Gain: 0.75, Grit: 0.6 },
-        Body: { Hz: 70, EndHz: 34, Decay: 0.3, Gain: 1.0, Drive: 2.4 },
-        Boom: { Modes: [[150, 0.08, 0.6], [260, 0.07, 0.5], [420, 0.05, 0.4], [700, 0.03, 0.25]], Gain: 2.6, Low: 120, High: 1100, Decay: 0.16, Noise: 2.4 },
-        Tail: { Gain: 0.16 }, Pump: 0.36,
-        Action: [[[1800, 0.01, 1]], 0.5, 0.002],
-        Brass: 'Shotgun', Level: 0.6,
+        Muzzle: { Width: 0.0009, Drive: 2.2, Ground: [0.003, 0.6] },
+        Gas: { Seconds: 0.045, Hz: 1100, Q: 0.5, Gain: 0.65 }, Punch: { Seconds: 0.06, Hz: 95, Gain: 0.39 },
+        Ring: { Modes: [[520, 0.07, 1], [1310, 0.05, 0.5]], Gain: 0.4 },
+        Pump: 0.36, Action: [[0.002, [[1800, 0.01, 1]], 0.4]],
+        Space: 'Field', Brass: 'Shotgun', Level: 0.6,
     },
     Pistol: {
-        // 9 mm semi-automatic: one shot per pull (held: about 4 a second), a short sharp report and the slide slam.
+        // 9 mm semi-automatic: the shortest pulse (0.28 ms, energy above 1 kHz) so a sharp, high "pak", the slide
+        // slamming back and forward. Heard in an alley (Urban), where the walls slap it back fast.
         Label: '9 mm pistol', Note: 'semi-auto, 17 rounds', Rate: [4, 4], Spin: 0, Magazine: 17,
-        Blast: { Lasts: 0.0011, Gain: 0.85, Low: 9500 }, Gas: { Seconds: 0.07, From: 11000, To: 1600, Floor: 400, Gain: 0.32, Grit: 0.4 },
-        Body: { Hz: 150, EndHz: 85, Decay: 0.06, Gain: 0.3, Drive: 1.4 },
-        Boom: { Modes: [[420, 0.03, 0.5], [700, 0.025, 0.4], [1150, 0.02, 0.3]], Gain: 1.2, Low: 350, High: 2600, Decay: 0.05, Noise: 1.4 },
-        Tail: { Gain: 0.06 },
-        Action: [[[1900, 0.025, 1], [3600, 0.015, 0.6], [850, 0.03, 0.5]], 3, 0.006],
-        Brass: 'Pistol',
+        Muzzle: { Width: 0.00028, Drive: 2.6, Ground: [0.002, 0.55] },
+        Gas: { Seconds: 0.012, Hz: 2800, Q: 0.7, Gain: 0.45 }, Punch: { Seconds: 0.014, Hz: 160, Gain: 0.16 },
+        Ring: { Modes: [[2400, 0.02, 1], [5200, 0.012, 0.5]], Gain: 0.3 },
+        Action: [[0.005, [[1900, 0.02, 1], [3600, 0.012, 0.6], [850, 0.025, 0.5]], 1.4], [0.03, [[2300, 0.018, 1], [4500, 0.012, 0.5], [1100, 0.02, 0.4]], 1.6]],
+        Space: 'Urban', Brass: 'Pistol', Level: 1,
     },
     AntiMateriel: {
-        // .50 BMG semi-auto anti-materiel rifle: the muzzle brake throws the blast sideways, so it is the loudest
-        // shot here, with a chest-deep boom, a wide crack and the recoiling barrel slamming home.
+        // .50 BMG anti-materiel rifle: the muzzle brake throws most of the gas sideways in two extra blasts, so it is the
+        // loudest, widest shot here; a 1.3 ms blast, a wide crack, the recoiling barrel slamming home; a valley answers.
         Label: '.50 rifle', Note: 'anti-materiel, muzzle brake', Rate: [1.2, 1.2], Spin: 0, Magazine: 10,
-        Blast: { Lasts: 0.0045, Gain: 1.8, Low: 4000 }, Gas: { Seconds: 0.4, From: 6000, To: 250, Floor: 60, Gain: 0.9, Grit: 0.6 },
-        Body: { Hz: 58, EndHz: 26, Decay: 0.5, Gain: 1.2, Drive: 2.6 },
-        Boom: { Modes: [[110, 0.1, 0.6], [190, 0.09, 0.5], [310, 0.07, 0.4], [500, 0.05, 0.3]], Gain: 3.2, Low: 80, High: 900, Decay: 0.25, Noise: 2.8 },
-        Brake: { Gain: 0.9 }, Crack: { Lasts: 0.00045, Gain: 0.6 }, Tail: { Gain: 0.25 },
-        Action: [[[700, 0.06, 1], [1500, 0.04, 0.6], [320, 0.08, 0.5]], 5, 0.03],
-        Brass: 'Fifty', Level: 0.45,
+        Muzzle: { Width: 0.0013, Drive: 2.8, Ground: [0.0045, 0.6] },
+        Gas: { Seconds: 0.07, Hz: 850, Q: 0.6, Gain: 0.7 }, Punch: { Seconds: 0.09, Hz: 58, Gain: 0.42 },
+        Crack: { Lasts: 0.00045, Gain: 0.55 }, Brake: { Gain: 0.85 },
+        Ring: { Modes: [[380, 0.12, 1], [910, 0.08, 0.6], [1750, 0.05, 0.3]], Gain: 0.6 },
+        Action: [[0.03, [[700, 0.06, 1], [1500, 0.04, 0.6], [320, 0.08, 0.5]], 2.2, 0.001]],
+        Space: 'Valley', Brass: 'Fifty', Level: 0.45,
     },
 };
 
@@ -165,32 +205,77 @@ export function FireRate(Name, Held, Turbo = false)
     return Spec.Spin ? First + (Top - First) * Clamp(Held / Spec.Spin, 0, 1) : First;
 }
 
-/** Draws one shot of a weapon at Time (no room echo; callers add Echoes once over the whole scene). */
+/**
+ * Buffer spring twang (AR-15 family): the long coil spring is hit by the buffer and rings with a slightly falling,
+ * dispersive pitch (coil springs are inharmonic), a metallic "sproing" behind the report.
+ */
+function Twang(Left, Right, Rate, Time, { Hz = 560, Decay = 0.16, Gain = 0.15, Pan = 0, Seed = 1 } = {})
+{
+    const Start = Math.round(Time * Rate), Count = Math.min(Left.length - Start, Math.round(Decay * Rate));
+    if (Count <= 0) return;
+    const Noise = new SeededNoise(Seed), Partials = [1, 2.42, 4.13, 6.3], [GainL, GainR] = PanGains(Pan);
+    const Rings = Partials.map((Ratio) => new Resonator(Rate, Hz * Ratio, Decay / Math.sqrt(Ratio)));
+    for (let Index = 0; Index < Count; Index++)
+    {
+        const Progress = Index / Count;
+        if ((Index & 31) === 0) Rings.forEach((Ring, Part) => Ring.Tune(Hz * Partials[Part] * (1 - 0.06 * Progress) * (1 + 0.01 * Part * Progress), Decay / Math.sqrt(Partials[Part])));
+        const Excite = Index < Rate * 0.0012 ? Noise.White() : 0;
+        let Out = 0;
+        for (let Part = 0; Part < Rings.length; Part++) Out += Rings[Part].Run(Excite) / Rings[Part].Norm * [1, 0.6, 0.35, 0.2][Part];
+        Out *= Gain * 0.02;
+        Left[Start + Index] += Out * GainL; Right[Start + Index] += Out * GainR;
+    }
+}
+
+/**
+ * The energy weapon's discharge: a metallic zing falling fast from From to To Hz (two inharmonic partials of a struck
+ * bar, plus a band of noise riding them) and a short arc crackle (sparse sharp pops). Short and low in the mix: it
+ * colours the report rather than replacing it.
+ */
+function Discharge(Left, Right, Rate, Time, { From = 3900, To = 760, Seconds = 0.06, Gain = 0.2, Arc = 0.1, Pan = 0, Seed = 1 } = {})
+{
+    const Start = Math.round(Time * Rate), Count = Math.min(Left.length - Start, Math.round(Seconds * 1.6 * Rate));
+    if (Count <= 0) return;
+    const Noise = new SeededNoise(Seed), Tones = [new NarrowTone(Rate, { Breath: 0.35, Width: 0.04, Jitter: 0.01, Flutter: 0.3, Seed }), new NarrowTone(Rate, { Breath: 0.5, Width: 0.05, Jitter: 0.01, Flutter: 0.3, Seed: Seed + 3 })];
+    const Spark = new Biquad(Rate).Shape('High', 3500, 0.7), Pop = new Resonator(Rate, 6200, 0.002), [GainL, GainR] = PanGains(Pan);
+    for (let Index = 0; Index < Count; Index++)
+    {
+        const T = Index / Rate, Hz = To + (From - To) * Math.exp(-T / (Seconds * 0.35));
+        const Envelope = Math.min(1, T / 0.0015) * Math.exp(-T / (Seconds * 0.4));
+        let Out = (Tones[0].Run(Hz) + Tones[1].Run(Hz * 2.76) * 0.45) * Envelope * Gain;
+        const Kick = Noise.Next() < 0.004 * Math.exp(-T / 0.02) ? Noise.Range(0.5, 1) * (Noise.Next() < 0.5 ? -1 : 1) : 0;
+        Out += (Spark.Run(Pop.Run(Kick) / Pop.Norm * 0.08) + Spark.Run(Noise.White()) * 0.02 * Math.exp(-T / 0.008)) * Arc * 6;
+        Left[Start + Index] += Out * GainL; Right[Start + Index] += Out * GainR;
+    }
+}
+
+/** Draws one shot of a weapon at Time, dry (callers put the whole cue in its space once). */
 function DrawShot(Left, Right, Rate, Time, Name, Seed, { Pan = 0, Gain = 1, Brass = true } = {})
 {
-    const W = Weapons[Name], Noise = new SeededNoise(Seed), Vary = () => 1 + Noise.Gauss() * 0.06;
-    Overpressure(Left, Right, Rate, Time, { Lasts: W.Blast.Lasts * Vary(), Gain: W.Blast.Gain * Gain * Vary(), Low: W.Blast.Low, Pan });
-    Roar(Left, Right, Rate, Time, W.Gas.Seconds, { From: W.Gas.From * Vary(), To: W.Gas.To, Floor: W.Gas.Floor, Gain: W.Gas.Gain * Gain, Attack: 0.0015, Curve: 2.6, Grit: W.Gas.Grit, Seed: Seed + 1 });
-    Thump(Left, Right, Rate, Time, { Hz: W.Body.Hz * Vary(), EndHz: W.Body.EndHz, Decay: W.Body.Decay, Gain: W.Body.Gain * Gain, Drive: W.Body.Drive, Attack: 0.0015, Pan });
-    const [Modes, Level, Delay] = W.Action;
-    Strike(Left, Right, Rate, Time + Delay, { Modes: Modes.map(([Hz, Decay, Part]) => [Hz * Vary(), Decay, Part]), Burst: 0.0008, Gain: Level * Gain * Vary(), Pan, Seed: Seed + 2 });
-    if (W.Links) Strike(Left, Right, Rate, Time + Delay * 2.6, { Modes: W.Links, Burst: 0.0004, Gain: 2.2 * Gain * Vary(), Pan: Pan + 0.2, Seed: Seed + 3 });
-    if (W.Boom)
+    const W = Weapons[Name], Noise = new SeededNoise(Seed), Vary = (Spread = 0.05) => 1 + Noise.Gauss() * Spread;
+    Pulse(Left, Right, Rate, Time, { ...W.Muzzle, Gain: Gain, Gas: W.Gas, Low: W.Punch, Pan, Seed, Vary: 0.06 });
+    if (W.Crack) Snap(Left, Right, Rate, Time + 0.00015, { Lasts: W.Crack.Lasts * Vary(), Gain: W.Crack.Gain * Gain, Pan });
+    if (W.Ring) Strike(Left, Right, Rate, Time, { Modes: W.Ring.Modes.map(([Hz, Decay, Part]) => [Hz * Vary(0.004), Decay * Vary(), Part]), Burst: 0.0005, Gain: W.Ring.Gain * Gain * Vary(0.1), Pan, Seed: Seed + 2 });
+    (W.Action ?? []).forEach(([Delay, Modes, Level, Burst = 0.0007], Step) =>
+        Strike(Left, Right, Rate, Time + Delay * Vary(0.08), { Modes: Modes.map(([Hz, Decay, Part]) => [Hz * Vary(0.02), Decay, Part]), Burst, Gain: Level * Gain * Vary(0.12), Pan: Pan + 0.12, Seed: Seed + 10 + Step }));
+    if (W.Rattle)
     {
-        // The weight of a real report: the gas slug rings the barrel and the air around it in the low mids.
-        const B = W.Boom;
-        Strike(Left, Right, Rate, Time, { Modes: B.Modes.map(([Hz, Decay, Part]) => [Hz * Vary(), Decay, Part]), Burst: 0.0015, Gain: B.Gain * Gain * Vary(), Pan, Seed: Seed + 6, Breath: { Low: B.Low, High: B.High, Decay: B.Decay, Gain: B.Noise } });
+        const R = W.Rattle;
+        let At = Time + R.Delay;
+        for (let Hit = 0; Hit < R.Count; Hit++)
+        {
+            At += Noise.Range(0.003, 0.011);
+            Strike(Left, Right, Rate, At, { Modes: [[Noise.Range(R.Low, R.High), 0.012, 1], [Noise.Range(R.High, R.High * 1.8), 0.006, 0.5]], Burst: 0.0003, Gain: R.Gain * Gain * Noise.Range(0.4, 1) * Math.pow(0.7, Hit), Pan: Pan + 0.15, Seed: Seed + 30 + Hit });
+        }
     }
-    if (W.Crack) Snap(Left, Right, Rate, Time + 0.0003, { Lasts: W.Crack.Lasts * Vary(), Gain: W.Crack.Gain * Gain, Pan });
-    if (W.Arc) Strike(Left, Right, Rate, Time + 0.001, { Modes: [], Burst: 0.0002, Gain: W.Arc.Gain * Gain, Pan, Seed: Seed + 4, Breath: { Low: 5000, High: 14000, Decay: 0.012, Gain: 1 } });
-    if (W.Tail) Roar(Left, Right, Rate, Time + 0.012, 0.55, { From: 1500, To: 160, Floor: 45, Gain: W.Tail.Gain * 0.5 * Gain, Attack: 0.012, Curve: 1.5, Width: 1, Grit: 0.3, Seed: Seed + 7 });
+    if (W.Spring) Twang(Left, Right, Rate, Time + W.Spring.Delay, { Hz: W.Spring.Hz * Vary(0.01), Decay: W.Spring.Decay, Gain: W.Spring.Gain * Gain, Pan: Pan + 0.1, Seed: Seed + 4 });
+    if (W.Links) Strike(Left, Right, Rate, Time + 0.03 * Vary(0.1), { Modes: W.Links, Burst: 0.0004, Gain: 1.4 * Gain * Vary(0.15), Pan: Pan + 0.25, Seed: Seed + 3 });
+    if (W.Zap) Discharge(Left, Right, Rate, Time + 0.0008, { ...W.Zap, From: W.Zap.From * Vary(0.03), Arc: W.Arc ?? 0, Gain: W.Zap.Gain * Gain, Pan, Seed: Seed + 5 });
     if (W.Brake)
-    {
-        // Muzzle brake: the gas turns sideways through the ports, two extra blasts thrown left and right.
-        for (const Side of [-0.85, 0.85]) Overpressure(Left, Right, Rate, Time + 0.0004, { Lasts: W.Blast.Lasts * 0.8, Gain: W.Brake.Gain * Gain * Vary(), Low: 3500, Pan: Side });
-    }
-    if (W.Pump) { PumpCycle(Left, Right, Rate, Time + W.Pump, { Pan: Pan + 0.25, Gain, Seed: Seed + 8 }); if (Brass && W.Brass) DropCasing(Left, Right, Rate, Time + W.Pump + Noise.Range(0.38, 0.46), W.Brass, 'Concrete', { Seed: Seed + 5, Gain: 0.4 * Gain, Pan: Pan + 0.6, Height: 1.1 }); return; }
-    if (Brass && W.Brass) DropCasing(Left, Right, Rate, Time + Noise.Range(0.32, 0.5), W.Brass, 'Concrete', { Seed: Seed + 5, Gain: 0.4 * Gain, Pan: Pan + Noise.Range(0.3, 0.7), Height: Noise.Range(1.0, 1.3) });
+        for (const Side of [-0.85, 0.85])
+            Pulse(Left, Right, Rate, Time + 0.0004, { Width: W.Muzzle.Width * 0.8, Gain: W.Brake.Gain * Gain, Drive: 2.4, Ground: [0.0035, 0.5], Gas: { Seconds: 0.03, Hz: 1300, Q: 0.6, Gain: 0.35 }, Pan: Side, Seed: Seed + (Side > 0 ? 7 : 8) });
+    if (W.Pump) { PumpCycle(Left, Right, Rate, Time + W.Pump, { Pan: Pan + 0.25, Gain, Seed: Seed + 8 }); if (Brass && W.Brass) DropCasing(Left, Right, Rate, Time + W.Pump + Noise.Range(0.38, 0.46), W.Brass, Ground(W), { Seed: Seed + 5, Gain: 0.4 * Gain, Pan: Pan + 0.6, Height: 1.1 }); return; }
+    if (Brass && W.Brass) DropCasing(Left, Right, Rate, Time + Noise.Range(0.32, 0.5), W.Brass, Ground(W), { Seed: Seed + 5, Gain: 0.4 * Gain, Pan: Pan + Noise.Range(0.3, 0.7), Height: Noise.Range(1.0, 1.3) });
 }
 
 /**
@@ -207,58 +292,73 @@ function PumpCycle(Left, Right, Rate, Time, { Pan = 0, Gain = 1, Seed = 600 } = 
 }
 
 /**
- * One sample of a spin motor at shaft Phase (cycles). Without Grind: a harmonic whine (the turret's servo). With Grind
- * (the energy LMG's geared drive): gear-mesh grind (band noise gated at the tooth rate) over a low drive hum, so it
- * reads as machinery rather than a tone. State holds the filters (MotorState).
+ * A spin drive (energy LMG, minigun, turret servo) as machinery, not a tone: the armature's commutator buzz (a
+ * band-limited saw through the housing's two resonances), the gear mesh as narrow noise bands (NarrowTone) at Teeth ×
+ * shaft rate and twice that, the rotating barrels' air swish, and barrel clatter Barrels × per round. Gear 0 = a servo
+ * (buzz only), 1 = a fully geared drive. Loop: no pitch drift (the bench loop must not wander from its playback rate).
  */
-function MotorState(Rate, Seed)
+class SpinDrive
 {
-    return { Noise: new SeededNoise(Seed), Mesh: new Biquad(Rate).Shape('Band', 1300, 1.1), Mesh2: new Biquad(Rate).Shape('Band', 2900, 1.8), Clatter: new Resonator(Rate, 2600, 0.01), Clatter2: new Resonator(Rate, 4100, 0.008) };
-}
+    constructor(Rate, Motor, Seed, { Loop = false, Turbo = false } = {})
+    {
+        this.Rate = Rate; this.Motor = Motor; this.Noise = new SeededNoise(Seed); this.Turbo = Turbo;
+        const Jitter = Loop ? 0 : 0.004;
+        this.Saw = new PolySaw();
+        this.Body = [new Biquad(Rate).Shape('Band', 820, 2.2), new Biquad(Rate).Shape('Band', 2350, 2.8), new Biquad(Rate).Shape('Low', 5000, 0.7)];
+        this.Mesh = new NarrowTone(Rate, { Breath: 0.5, Width: 0.03, Jitter, Flutter: 0.25, Seed });
+        this.Mesh2 = new NarrowTone(Rate, { Breath: 0.7, Width: 0.05, Jitter, Flutter: 0.3, Seed: Seed + 5 });
+        this.Swish = new Biquad(Rate).Shape('Band', 1400, 0.8);
+        this.Clatter = [new Resonator(Rate, 2600, 0.012), new Resonator(Rate, 4100, 0.009), new Resonator(Rate, 1250, 0.02)];
+        this.Blades = new NarrowTone(Rate, { Breath: 0.6, Width: 0.035, Jitter, Flutter: 0.35, Seed: Seed + 9 });
+        this.Blades2 = new NarrowTone(Rate, { Breath: 0.8, Width: 0.05, Jitter, Flutter: 0.35, Seed: Seed + 11 });
+        this.Rush = new Biquad(Rate).Shape('Band', 5200, 0.9);
+        this.Turn = 0;
+    }
 
-function MotorSample(State, Motor, Phase)
-{
-    if (!Motor.Grind) return Math.sin(Tau * Phase) * 0.6 + Math.sin(Tau * Phase * 2) * 0.35 + Math.sin(Tau * Phase * 3) * 0.2 + Math.sin(Tau * Phase * 5) * 0.1;
-    const Tooth = Math.pow(0.5 + 0.5 * Math.sin(Tau * Phase), 3);
-    const Grind = (State.Mesh.Run(State.Noise.White()) * 2.2 + State.Mesh2.Run(State.Noise.White()) * 1.2) * (0.3 + Tooth) * Motor.Grind;
-    return Grind + Math.sin(Tau * Phase * 0.5) * 0.22 + Math.sin(Tau * Phase) * 0.12;
+    /** One sample at Spin rounds per second (Share = Spin / top rate, for the air and the turbine). */
+    Run(Spin, Share)
+    {
+        const M = this.Motor, Shaft = Spin * M.Hz, Noise = this.Noise;
+        const Buzz = this.Saw.Run(Shaft * 2, this.Rate);
+        let Out = (this.Body[0].Run(Buzz) * 0.9 + this.Body[1].Run(Buzz) * 0.6 + this.Body[2].Run(Buzz) * 0.15) * (1 - M.Gear * 0.4);
+        if (M.Gear) Out += (this.Mesh.Run(Shaft * M.Teeth) * 0.45 + this.Mesh2.Run(Shaft * M.Teeth * 2) * 0.22) * M.Gear;
+        Out += this.Swish.Run(Noise.White()) * 0.5 * Share * Share;
+        if (M.Barrels)
+        {
+            this.Turn += Spin * M.Barrels / this.Rate;
+            const Kick = this.Turn >= 1 ? (this.Turn -= 1, Noise.Range(0.6, 1)) : 0;
+            Out += (this.Clatter[0].Run(Kick) + this.Clatter[1].Run(Kick) * 0.6 + this.Clatter[2].Run(Kick) * 0.5) / this.Clatter[0].Norm * 0.12;
+        }
+        if (this.Turbo)
+        {
+            // Turbocharger hop-up: a small turbine on the drive, its blade-pass pitch riding up with the spin (a
+            // breathy narrow band, not a sine) over the air it moves.
+            const Pitch = 3000 + Spin * 380;
+            Out += (this.Blades.Run(Pitch) * 0.2 + this.Blades2.Run(Pitch * 2) * 0.07 + this.Rush.Run(Noise.White()) * 0.25) * Smoothstep(0.1, 0.7, Share);
+        }
+        return Out;
+    }
 }
 
 /**
- * The spin motor of the energy LMG and the turret: a whine whose pitch tracks the fire rate (Motor.Hz per round per
- * second), barrel clatter at Barrels × rate, a spin-down after the trigger is released, and for the Turbocharger a
- * turbine whistle riding up with it plus a charge hiss on the trigger pull.
+ * The spin drive of the energy LMG, minigun and turret during a burst: its pitch tracks the fire rate, a short pre-spin
+ * on the trigger pull, a spin-down after release; with the Turbocharger a pressurising hiss on the pull.
  */
 function DrawMotor(Left, Right, Rate, Start, Stop, Name, Turbo)
 {
-    const W = Weapons[Name], Motor = W.Motor, Noise = new SeededNoise(97);
-    const From = Math.max(0, Start - 0.06), Count = Math.min(Left.length, Math.round((Stop + 1.0) * Rate)) - Math.round(From * Rate);
-    const State = MotorState(Rate, 96), { Clatter, Clatter2 } = State, Rattle = Motor.Grind ? 0.009 : 0.0045, Sing = Motor.Grind ? 0.01 : 0.022;
-    let Phase = 0, Turn = 0, Whistle = 0;
+    const W = Weapons[Name], Motor = W.Motor, Top = FireRate(Name, 99, Turbo);
+    const From = Math.max(0, Start - 0.08), First = Math.round(From * Rate), Count = Math.min(Left.length, Math.round((Stop + 1.2) * Rate)) - First;
+    const Drive = new SpinDrive(Rate, Motor, 96, { Turbo: Turbo && !!W.Turbo });
     for (let Index = 0; Index < Count; Index++)
     {
-        const Time = From + Index / Rate, Sample = Math.round(From * Rate) + Index;
-        const Firing = Time < Stop;
-        const Held = Math.max(0, Time - Start);
-        let Spin = Time < Start ? (Time - From) / 0.06 * FireRate(Name, 0, Turbo) : FireRate(Name, Held, Turbo);
-        if (!Firing) Spin = FireRate(Name, Stop - Start, Turbo) * Math.exp(-(Time - Stop) / 0.32);
-        const Level = Motor.Gain * Smoothstep(0, 0.05, Time - From) * (Firing ? 1 : Math.exp(-(Time - Stop) / 0.45));
-        Phase += Spin * Motor.Hz / Rate;
-        let Out = MotorSample(State, Motor, Phase) * Level;
-        if (Motor.Barrels)
-        {
-            Turn += Spin * Motor.Barrels / Rate;
-            const Kick = Turn >= 1 ? (Turn -= 1, Noise.Range(0.6, 1)) : 0;
-            Out += (Clatter.Run(Kick) + Clatter2.Run(Kick) * 0.6) / Clatter.Norm * Rattle * Level / Motor.Gain;
-        }
-        if (Turbo && W.Turbo)
-        {
-            Whistle += (2800 + Spin * 360) / Rate;
-            Out += Math.sin(Tau * Whistle) * Sing * Level / Motor.Gain * Smoothstep(0, 0.2, Held + (Firing ? 0 : 1));
-        }
-        Left[Sample] += Out; Right[Sample] += Out * 0.92;
+        const Time = From + Index / Rate, Firing = Time < Stop;
+        let Spin = Time < Start ? (Time - From) / (Start - From || 1) * FireRate(Name, 0, Turbo) : FireRate(Name, Time - Start, Turbo);
+        if (!Firing) Spin = FireRate(Name, Stop - Start, Turbo) * Math.exp(-(Time - Stop) / 0.34);
+        const Level = Motor.Gain * Smoothstep(0, 0.06, Time - From) * (Firing ? 1 : Math.exp(-(Time - Stop) / 0.5));
+        const Out = Drive.Run(Spin, Spin / Top) * Level;
+        Left[First + Index] += Out; Right[First + Index] += Out * 0.92;
     }
-    if (Turbo && W.Turbo) Roar(Left, Right, Rate, From, 0.3, { From: 3000, To: 9000, Floor: 1500, Gain: 0.12, Attack: 0.01, Curve: 1, Seed: 98, Shape: (P) => Math.sin(Math.PI * P) });
+    if (Turbo && W.Turbo) Roar(Left, Right, Rate, From, 0.3, { From: 3000, To: 9000, Floor: 1500, Gain: 0.1, Attack: 0.01, Curve: 1, Seed: 98, Shape: (P) => Math.sin(Math.PI * P) });
 }
 
 /**
@@ -273,9 +373,19 @@ export function Burst(Left, Right, Rate, Start, Name, { Seconds = 3, Turbo = fal
     Times.forEach((At, Index) => DrawShot(Left, Right, Rate, Start + At, Name, Seed + Index * 11, { Pan, Brass }));
     const Stop = Start + (Times.at(-1) ?? 0) + 0.04;
     if (W.Motor) DrawMotor(Left, Right, Rate, Start, Stop, Name, Turbo);
-    if (W.Tail) Roar(Left, Right, Rate, Stop - 0.02, 2.2, { From: 1100, To: 110, Floor: 40, Gain: W.Tail.Gain, Attack: 0.04, Curve: 1.3, Width: 1, Grit: 0.35, Seed: Seed + 777 });   // the report rolling away
     if (Times.length >= W.Magazine) Strike(Left, Right, Rate, Stop + 0.06, { Modes: [[2400, 0.02, 1], [4100, 0.012, 0.5]], Burst: 0.0004, Gain: 1.5, Pan, Seed: Seed + 999 });   // empty: dry click
     return { Times, Stop };
+}
+
+/** Puts a finished weapon cue in its space, then limits it the way a recorded, mastered gun sound is (Detonation.js). */
+export function Finale(Left, Right, Rate, Space = 'Field', { Wet = 1, Drive = 2.6, Seed = 1 } = {})
+{
+    Place(Left, Right, Rate, Space, { Wet, Seed });
+    // A gentle 40 Hz high-pass first: sub-bass would only make the limiter pump without adding weight you can hear.
+    const Floors = [new Biquad(Rate).Shape('High', 40, 0.6), new Biquad(Rate).Shape('High', 40, 0.6)];
+    for (let Index = 0; Index < Left.length; Index++) { Left[Index] = Floors[0].Run(Left[Index]); Right[Index] = Floors[1].Run(Right[Index]); }
+    Settle(Left, Right, Rate);
+    Limit(Left, Right, Rate, { Drive });
 }
 
 //------------------------------------------------------------------------------------------------------------------------
@@ -430,8 +540,6 @@ export const Materials = ['Sand', 'Dirt', 'Rock', 'Concrete', 'Wood', 'Metal', '
 //                                                    CUES
 //------------------------------------------------------------------------------------------------------------------------
 
-const Outdoor = { Taps: [[0.11, 0.24, -0.6], [0.29, 0.17, 0.6], [0.62, 0.1, -0.2], [1.1, 0.06, 0.4]], Dark: 3500, Wash: 0.25 };
-
 /** The sniper's bolt: lift, draw back (scrape), casing flies out, push forward, lock down, casing lands. */
 function BoltCycle(Left, Right, Rate, Time)
 {
@@ -448,11 +556,11 @@ export const Cues = {
     // ── Weapons ─────────────────────────────────────────────────────────────────────────────────────────────────────
     EnergyLmg: {
         Group: 'Weapons', Label: 'Energy LMG · full mag', Seconds: 5.6, Peak: 0.9,
-        Draw(Left, Right, Rate) { Burst(Left, Right, Rate, 0.15, 'EnergyLmg', { Seconds: 10, Seed: 300 }); Echoes(Left, Right, Rate, Outdoor); Settle(Left, Right, Rate); },
+        Draw(Left, Right, Rate) { Burst(Left, Right, Rate, 0.15, 'EnergyLmg', { Seconds: 10, Seed: 300 }); Finale(Left, Right, Rate, 'Field'); },
     },
     EnergyLmgTurbo: {
         Group: 'Weapons', Label: 'Energy LMG + Turbocharger', Seconds: 4.8, Peak: 0.9,
-        Draw(Left, Right, Rate) { Burst(Left, Right, Rate, 0.15, 'EnergyLmg', { Seconds: 10, Turbo: true, Seed: 700 }); Echoes(Left, Right, Rate, Outdoor); Settle(Left, Right, Rate); },
+        Draw(Left, Right, Rate) { Burst(Left, Right, Rate, 0.15, 'EnergyLmg', { Seconds: 10, Turbo: true, Seed: 700 }); Finale(Left, Right, Rate, 'Field'); },
     },
     Lmg: {
         Group: 'Weapons', Label: 'LMG bursts', Seconds: 5.5, Peak: 0.9,
@@ -461,7 +569,7 @@ export const Cues = {
             Burst(Left, Right, Rate, 0.1, 'Lmg', { Seconds: 1.9, Seed: 900 });
             Burst(Left, Right, Rate, 2.6, 'Lmg', { Seconds: 0.5, Seed: 1300 });
             Burst(Left, Right, Rate, 3.5, 'Lmg', { Seconds: 0.7, Seed: 1500 });
-            Echoes(Left, Right, Rate, Outdoor); Settle(Left, Right, Rate);
+            Finale(Left, Right, Rate, Weapons.Lmg.Space);
         },
     },
     Smg: {
@@ -471,21 +579,20 @@ export const Cues = {
             Burst(Left, Right, Rate, 0.1, 'Smg', { Seconds: 0.25, Seed: 1700 });
             Burst(Left, Right, Rate, 0.75, 'Smg', { Seconds: 0.25, Seed: 1800 });
             Burst(Left, Right, Rate, 1.5, 'Smg', { Seconds: 2.0, Seed: 1900 });     // the rest of the 30-round magazine
-            Echoes(Left, Right, Rate, Outdoor); Settle(Left, Right, Rate);
+            Finale(Left, Right, Rate, Weapons.Smg.Space);
         },
     },
     Sniper: {
         Group: 'Weapons', Label: 'Sniper rifle + bolt', Seconds: 5.5, Peak: 0.94,
         Draw(Left, Right, Rate)
         {
-            // .338-class rifle: a long, heavy blast, a deep thump, then the report rolling back off the valley for seconds.
-            Overpressure(Left, Right, Rate, 0.1, { Lasts: 0.0045, Gain: 1.6, Low: 5000 });
-            Roar(Left, Right, Rate, 0.1, 0.5, { From: 6500, To: 250, Floor: 60, Gain: 0.8, Attack: 0.0015, Curve: 2.4, Grit: 0.5, Seed: 2001 });
-            Thump(Left, Right, Rate, 0.1, { Hz: 62, EndHz: 28, Decay: 0.9, Gain: 1.0, Drive: 2.4, Attack: 0.0015 });
-            Roar(Left, Right, Rate, 0.25, 3.2, { From: 1100, To: 120, Floor: 40, Gain: 0.32, Attack: 0.08, Curve: 1.3, Width: 1, Grit: 0.35, Seed: 2002 });
-            Echoes(Left, Right, Rate, { Taps: [[0.34, 0.32, -0.7], [0.78, 0.22, 0.6], [1.3, 0.14, -0.2], [2.1, 0.08, 0.5]], Dark: 2200, Wash: 0.4 });
+            // .338-class rifle: a 1 ms blast (energy near 400 Hz) clipped hard, the bullet's crack, a long low punch,
+            // then the report rolling back off the valley walls for seconds; the bolt is worked afterwards, close and dry.
+            Pulse(Left, Right, Rate, 0.1, { Width: 0.001, Drive: 3, Ground: [0.004, 0.6], Gas: { Seconds: 0.06, Hz: 1000, Q: 0.6, Gain: 0.65 }, Low: { Seconds: 0.16, Hz: 62, Gain: 1.1 }, Seed: 2001 });
+            Snap(Left, Right, Rate, 0.1002, { Lasts: 0.00036, Gain: 0.55 });
+            Strike(Left, Right, Rate, 0.1, { Modes: [[520, 0.09, 1], [1260, 0.06, 0.5], [2380, 0.04, 0.3]], Burst: 0.0005, Gain: 0.6, Seed: 2002 });
+            Finale(Left, Right, Rate, 'Valley', { Drive: 2.4 });
             BoltCycle(Left, Right, Rate, 2.6);
-            Settle(Left, Right, Rate);
         },
     },
     Turret: {
@@ -498,22 +605,23 @@ export const Cues = {
             for (let Pip = 0; Pip < 3; Pip++) Whine(Left, Right, Rate, 1.15 + Pip * 0.16, 0.07, { From: 2400, To: 2400, Gain: 0.08, Curve: 1, Harmonics: [1, 0.2], Wobble: 0 });
             Whine(Left, Right, Rate, 1.63, 0.2, { From: 3200, To: 3200, Gain: 0.08, Curve: 1, Harmonics: [1, 0.2], Wobble: 0 });
             Burst(Left, Right, Rate, 1.95, 'Turret', { Seconds: 2.4, Seed: 2200 });
-            Echoes(Left, Right, Rate, Outdoor); Settle(Left, Right, Rate);
+            Finale(Left, Right, Rate, Weapons.Turret.Space);
         },
     },
     Cannon: {
         Group: 'Weapons', Label: 'Tank cannon', Seconds: 7.0, Peak: 0.94,
         Draw(Left, Right, Rate)
         {
-            // 120 mm: a long blast wave, a chest-deep thump, the fireball roar, echoes for seconds; then the breech
-            // opens with a heavy clank and the spent case stub clangs onto the turret floor.
-            Overpressure(Left, Right, Rate, 0.1, { Lasts: 0.022, Gain: 2.0, Low: 2200 });
-            Thump(Left, Right, Rate, 0.1, { Hz: 48, EndHz: 18, Decay: 3.0, Gain: 1.3, Drive: 2.8, Attack: 0.003 });
-            Roar(Left, Right, Rate, 0.1, 3.6, { From: 3200, To: 80, Floor: 20, Gain: 0.9, Attack: 0.004, Curve: 2.2, Grit: 0.6, Seed: 2301 });
-            Strike(Left, Right, Rate, 0.12, { Modes: [[85, 0.4, 1], [190, 0.3, 0.7], [410, 0.2, 0.4]], Burst: 0.01, Gain: 2.5, Seed: 2302 });   // the hull rings
-            Echoes(Left, Right, Rate, { Taps: [[0.42, 0.4, -0.7], [0.95, 0.28, 0.6], [1.6, 0.18, -0.3], [2.5, 0.1, 0.5]], Dark: 1300, Wash: 0.5 });
-            Strike(Left, Right, Rate, 4.2, { Modes: [[260, 0.15, 1], [640, 0.09, 0.7], [1500, 0.05, 0.4]], Burst: 0.002, Gain: 4, Pan: 0.2, Seed: 2303 });
-            DropCasing(Left, Right, Rate, 4.55, 'TankStub', 'Metal', { Seed: 2304, Gain: 0.36, Pan: 0.4, Height: 0.8 });
+            // 120 mm: a 6 ms blast wave (energy below 70 Hz), the gun's own fireball roaring for a second, the hull
+            // ringing; the valley throws it back for seconds. Then, close and dry, the breech opens with a heavy clank
+            // and the spent case stub clangs onto the turret floor.
+            Pulse(Left, Right, Rate, 0.1, { Width: 0.006, Drive: 2.6, Ground: [0.004, 0.7], Gas: { Seconds: 0.18, Hz: 380, Q: 0.6, Gain: 0.7 }, Low: { Seconds: 0.45, Hz: 42, Gain: 1.3 }, Seed: 2301 });
+            Rumble(Left, Right, Rate, 0.1, 2.6, { Hz: 260, EndHz: 45, Gain: 0.4, Attack: 0.01, Seed: 2305 });
+            Rumble(Left, Right, Rate, 0.11, 1.2, { Hz: 1800, EndHz: 300, Gain: 0.08, Attack: 0.02, Seed: 2306, Swirl: 0.9 });
+            Strike(Left, Right, Rate, 0.12, { Modes: [[85, 0.4, 1], [190, 0.3, 0.7], [410, 0.2, 0.4]], Burst: 0.01, Gain: 1.5, Seed: 2302 });   // the hull rings
+            Finale(Left, Right, Rate, 'Valley', { Drive: 2.2 });
+            Strike(Left, Right, Rate, 4.2, { Modes: [[260, 0.15, 1], [640, 0.09, 0.7], [1500, 0.05, 0.4]], Burst: 0.002, Gain: 0.35, Pan: 0.2, Seed: 2303 });
+            DropCasing(Left, Right, Rate, 4.55, 'TankStub', 'Metal', { Seed: 2304, Gain: 0.04, Pan: 0.4, Height: 0.8 });
             Settle(Left, Right, Rate);
         },
     },
@@ -523,7 +631,7 @@ export const Cues = {
         {
             Burst(Left, Right, Rate, 0.1, 'AutoCannon', { Seconds: 1.4, Seed: 2400 });
             Burst(Left, Right, Rate, 2.2, 'AutoCannon', { Seconds: 0.6, Seed: 2500 });
-            Echoes(Left, Right, Rate, { Taps: [[0.3, 0.32, -0.6], [0.7, 0.2, 0.6], [1.3, 0.12, 0]], Dark: 1800, Wash: 0.4 }); Settle(Left, Right, Rate);
+            Finale(Left, Right, Rate, Weapons.AutoCannon.Space);
         },
     },
 
@@ -536,7 +644,7 @@ export const Cues = {
             Burst(Left, Right, Rate, 0.1, 'Fifty', { Seconds: 0.95, Seed: 4000 });
             Burst(Left, Right, Rate, 1.9, 'Fifty', { Seconds: 0.85, Seed: 4100 });
             Burst(Left, Right, Rate, 3.5, 'Fifty', { Seconds: 1.0, Seed: 4200 });
-            Echoes(Left, Right, Rate, { Taps: [[0.3, 0.3, -0.6], [0.72, 0.2, 0.6], [1.3, 0.12, 0]], Dark: 1800, Wash: 0.4 }); Settle(Left, Right, Rate);
+            Finale(Left, Right, Rate, Weapons.Fifty.Space);
         },
     },
     Ak47: {
@@ -546,7 +654,7 @@ export const Cues = {
             for (const [Index, Time] of [0.1, 0.65, 1.1].entries()) Burst(Left, Right, Rate, Time, 'Ak47', { Seconds: 0.01, Seed: 4300 + Index * 7 });
             Burst(Left, Right, Rate, 1.9, 'Ak47', { Seconds: 0.5, Seed: 4400 });
             Burst(Left, Right, Rate, 2.9, 'Ak47', { Seconds: 3, Seed: 4500 });       // the rest of the 30-round magazine
-            Echoes(Left, Right, Rate, Outdoor); Settle(Left, Right, Rate);
+            Finale(Left, Right, Rate, Weapons.Ak47.Space);
         },
     },
     M4: {
@@ -557,7 +665,7 @@ export const Cues = {
             Burst(Left, Right, Rate, 0.8, 'M4', { Seconds: 0.2, Seed: 4700 });
             Burst(Left, Right, Rate, 1.5, 'M4', { Seconds: 0.45, Seed: 4800 });
             Burst(Left, Right, Rate, 2.5, 'M4', { Seconds: 1.0, Seed: 4900 });
-            Echoes(Left, Right, Rate, Outdoor); Settle(Left, Right, Rate);
+            Finale(Left, Right, Rate, Weapons.M4.Space);
         },
     },
     Minigun: {
@@ -565,7 +673,7 @@ export const Cues = {
         Draw(Left, Right, Rate)
         {
             Burst(Left, Right, Rate, 0.2, 'Minigun', { Seconds: 2.0, Seed: 5000 });
-            Echoes(Left, Right, Rate, Outdoor); Settle(Left, Right, Rate);
+            Finale(Left, Right, Rate, Weapons.Minigun.Space);
         },
     },
     Mg42: {
@@ -575,7 +683,7 @@ export const Cues = {
             Burst(Left, Right, Rate, 0.1, 'Mg42', { Seconds: 0.3, Seed: 5100 });
             Burst(Left, Right, Rate, 0.9, 'Mg42', { Seconds: 0.35, Seed: 5200 });
             Burst(Left, Right, Rate, 1.8, 'Mg42', { Seconds: 1.2, Seed: 5300 });
-            Echoes(Left, Right, Rate, Outdoor); Settle(Left, Right, Rate);
+            Finale(Left, Right, Rate, Weapons.Mg42.Space);
         },
     },
     Shotgun: {
@@ -583,7 +691,7 @@ export const Cues = {
         Draw(Left, Right, Rate)
         {
             for (const [Index, Time] of [0.1, 1.4, 2.6].entries()) Burst(Left, Right, Rate, Time, 'Shotgun', { Seconds: 0.01, Seed: 5400 + Index * 13 });
-            Echoes(Left, Right, Rate, Outdoor); Settle(Left, Right, Rate);
+            Finale(Left, Right, Rate, Weapons.Shotgun.Space);
         },
     },
     Pistol: {
@@ -591,7 +699,7 @@ export const Cues = {
         Draw(Left, Right, Rate)
         {
             for (const [Index, Time] of [0.1, 0.8, 1.05, 1.8, 2.05, 2.3, 3.0].entries()) Burst(Left, Right, Rate, Time, 'Pistol', { Seconds: 0.01, Seed: 5500 + Index * 7 });
-            Echoes(Left, Right, Rate, Outdoor); Settle(Left, Right, Rate);
+            Finale(Left, Right, Rate, Weapons.Pistol.Space);
         },
     },
     AntiMateriel: {
@@ -599,7 +707,7 @@ export const Cues = {
         Draw(Left, Right, Rate)
         {
             for (const [Index, Time] of [0.1, 2.0, 3.4].entries()) Burst(Left, Right, Rate, Time, 'AntiMateriel', { Seconds: 0.01, Seed: 5600 + Index * 13 });
-            Echoes(Left, Right, Rate, { Taps: [[0.34, 0.32, -0.7], [0.78, 0.22, 0.6], [1.3, 0.14, -0.2], [2.1, 0.08, 0.5]], Dark: 2200, Wash: 0.4 }); Settle(Left, Right, Rate);
+            Finale(Left, Right, Rate, Weapons.AntiMateriel.Space);
         },
     },
 
@@ -616,11 +724,10 @@ export const Cues = {
             {
                 Snap(Left, Right, Rate, Time, { Lasts, Gain, Pan });
                 Roar(Left, Right, Rate, Time + 0.0005, 0.05, { From: 9000, To: 3500, Floor: 2000, Gain: 0.15 * Gain, Attack: 0.0005, Curve: 2, Grit: 0.8, Seed: Math.round(Time * 100) });
-                Overpressure(Left, Right, Rate, Time + Lag, { Lasts: 0.004, Gain: 0.35, Low: 1500, Pan: Pan * 0.3 });
-                Thump(Left, Right, Rate, Time + Lag, { Hz: 70, EndHz: 35, Decay: 0.5, Gain: 0.25, Drive: 1.5 });
-                Roar(Left, Right, Rate, Time + Lag, 1.4, { From: 1200, To: 150, Floor: 50, Gain: 0.15, Attack: 0.01, Curve: 1.6, Seed: Math.round(Time * 100) + 7 });
+                // The far report: a blast stretched and dulled by 400 m of air (wider pulse, no highs), then the valley.
+                Pulse(Left, Right, Rate, Time + Lag, { Width: 0.0018, Gain: 0.3, Drive: 1.6, Ground: [0.006, 0.7], Dull: 1400, Low: { Seconds: 0.12, Hz: 75, Gain: 0.25 }, Pan: Pan * 0.3, Seed: Math.round(Time * 100) + 7 });
             }
-            Echoes(Left, Right, Rate, { Taps: [[0.4, 0.15, 0.6], [0.9, 0.09, -0.6]], Dark: 1500, Wash: 0.2 });
+            Place(Left, Right, Rate, 'Valley', { Wet: 0.6 });
             Settle(Left, Right, Rate);
         },
     },
@@ -653,7 +760,7 @@ export const Cues = {
         ['ShellsWood', 'Rifle cases on a wooden deck', 'Rifle556', 'Wood', 6, 0.5, 3.8],
         ['ShellsSteel', 'Rifle cases on a steel floor', 'Rifle762', 'Metal', 5, 0.7, 4.6],
         ['ShellsDirt', 'Rifle cases on dirt', 'Rifle762', 'Dirt', 6, 0.45, 3.2],
-        ['ShellsShotgun', 'Shotgun shells on concrete', 'Shotgun', 'Concrete', 3, 0.95, 3.6],
+        ['ShellsShotgun', 'Shotgun shells on concrete', 'Shotgun', 'Concrete', 5, 0.6, 3.6],
         ['ShellsFifty', '.50 cal cases on a steel deck', 'Fifty', 'Metal', 4, 0.85, 4.8],
         ['ShellsCannon', '30 mm cannon cases on steel', 'Cannon30', 'Metal', 4, 0.7, 4.8],
         ['ShellsTank', '120 mm case stub on the turret floor', 'TankStub', 'Metal', 1, 0, 3.0],
@@ -706,44 +813,40 @@ function Finish(Left, Right, Rate, Peak, Seconds)
 }
 
 /**
- * One shot with its own short outdoor tail, for the live bench's hold-to-fire scheduler. All shots of a weapon share
- * one gain (Level) so variants match; returns { Left, Right }.
+ * One shot in its weapon's space, for the live bench's hold-to-fire scheduler (each shot carries its own tail, so a
+ * held trigger builds the same rolling wash a burst does). Limited like the cues, then set to the weapon's bench Level
+ * so every weapon sits at a similar loudness; returns { Left, Right }.
  */
 export function RenderShot(Name, Rate, Seed = 1)
 {
-    const Seconds = Weapons[Name].Pump ? 1.6 : Weapons[Name].Brass ? 1.1 : 0.8;
+    const W = Weapons[Name], Seconds = W.Pump ? 2.0 : 1.6;
     const Left = new Float32Array(Math.ceil(Seconds * Rate)), Right = new Float32Array(Left.length);
     DrawShot(Left, Right, Rate, 0.005, Name, 5000 + Seed * 13);
-    Echoes(Left, Right, Rate, { ...Outdoor, Taps: Outdoor.Taps.slice(0, 3), Wash: 0.18 });
+    Place(Left, Right, Rate, W.Space ?? 'Field', { Wet: 0.8, Seed });
     Settle(Left, Right, Rate);
-    const Level = 0.32 * (Weapons[Name].Level ?? 1);
-    for (let Index = 0; Index < Left.length; Index++) { Left[Index] *= Level; Right[Index] *= Level; }
+    Limit(Left, Right, Rate, { Drive: 2.2 });
+    const Level = 0.3 * (W.Level ?? 1), Fade = Math.round(0.25 * Rate);
+    for (let Index = 0; Index < Left.length; Index++) { const Tail = Math.min(1, (Left.length - 1 - Index) / Fade); Left[Index] *= Level * Tail; Right[Index] *= Level * Tail; }
     return { Left, Right };
 }
 
 /**
- * A one-second seamless loop of the weapon's spin motor at its top fire rate (every partial completes whole cycles),
- * so the bench can loop it and set playbackRate = rate / top rate as the spin builds and decays.
+ * A one-second seamless loop of the weapon's spin drive at its top fire rate, so the bench can loop it and set
+ * playbackRate = rate / top rate as the spin builds and decays. The drive is noisy machinery (no whole-cycle trick
+ * possible), so 1.25 s is rendered and the last quarter second folded linearly over the first: the seam is inaudible.
  */
 export function RenderMotor(Name, Rate, Turbo = false)
 {
-    const W = Weapons[Name], Motor = W.Motor, Top = (Turbo && W.Turbo ? W.Turbo.Rate : W.Rate)[1];
+    const W = Weapons[Name], Top = (Turbo && W.Turbo ? W.Turbo.Rate : W.Rate)[1];
+    const Fold = Math.round(0.25 * Rate), Count = Rate + Fold, Raw = new Float32Array(Count);
+    const Drive = new SpinDrive(Rate, W.Motor, 95, { Loop: true, Turbo: Turbo && !!W.Turbo });
+    for (let Index = 0; Index < Rate; Index++) Drive.Run(Top, 1);                  // settle the filters first
+    for (let Index = 0; Index < Count; Index++) Raw[Index] = Drive.Run(Top, 1) * W.Motor.Gain;
     const Left = new Float32Array(Rate), Right = new Float32Array(Rate);
-    const Fundamental = Math.round(Top * Motor.Hz), Barrels = Math.round(Top * Motor.Barrels), Whistle = Math.round(2800 + Top * 360);
-    const State = MotorState(Rate, 95), { Clatter, Clatter2 } = State, Rattle = Motor.Grind ? 0.009 : 0.0045, Sing = Motor.Grind ? 0.01 : 0.022;
-    // Run the clatter resonators one lap first so the loop seam carries their ringing.
-    for (let Lap = 0; Lap < 2; Lap++)
-        for (let Index = 0; Index < Rate; Index++)
-        {
-            const Time = Index / Rate;
-            let Out = MotorSample(State, Motor, Fundamental * Time) * Motor.Gain;
-            if (Barrels)
-            {
-                const Kick = Math.floor(Time * Barrels) !== Math.floor((Index - 1) / Rate * Barrels) ? 0.8 : 0;
-                Out += (Clatter.Run(Kick) + Clatter2.Run(Kick) * 0.6) / Clatter.Norm * Rattle;
-            }
-            if (Turbo && W.Turbo) Out += Math.sin(Tau * Whistle * Time) * Sing;
-            if (Lap === 1) { Left[Index] = Out * 0.32; Right[Index] = Out * 0.3; }
-        }
+    for (let Index = 0; Index < Rate; Index++)
+    {
+        const Out = Index < Fold ? Raw[Index] * (Index / Fold) + Raw[Rate + Index] * (1 - Index / Fold) : Raw[Index];
+        Left[Index] = Out * 0.32; Right[Index] = Out * 0.3;
+    }
     return { Left, Right, Top };
 }

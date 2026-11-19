@@ -90,7 +90,7 @@ async function Wake()
     Audio.Waking = (async () =>
     {
         const Context = new AudioContext({ latencyHint: 'interactive' });
-        await Context.audioWorklet.addModule(new URL('./VoiceRackWorklet.js?v=19', import.meta.url));
+        await Context.audioWorklet.addModule(new URL('./VoiceRackWorklet.js?v=20', import.meta.url));
         const Limiter = Context.createDynamicsCompressor();
         Limiter.threshold.value = -6; Limiter.knee.value = 4; Limiter.ratio.value = 12; Limiter.attack.value = 0.002; Limiter.release.value = 0.12;
         const Master = Context.createGain(); Master.gain.value = 0.8;
@@ -247,7 +247,7 @@ async function Fire(Name, Seconds = 1)
 async function RenderOffline(Seconds = 5, Car = CarName, Inducer = null, Gear = 0, Mix = null)
 {
     const Rate = 48000, Context = new OfflineAudioContext(2, Math.round(Seconds * Rate), Rate);
-    await Context.audioWorklet.addModule(new URL('./VoiceRackWorklet.js?v=19', import.meta.url));
+    await Context.audioWorklet.addModule(new URL('./VoiceRackWorklet.js?v=20', import.meta.url));
     const Rack = new AudioWorkletNode(Context, 'voice-rack', { numberOfInputs: 0, outputChannelCount: [2], processorOptions: { Start: true, Throttle: 1, Car, Induction: Inducer, Gear, Mix } });
     let Last = null; Rack.port.onmessage = (Message) => { Last = Message.data; };
     Rack.connect(Context.destination);

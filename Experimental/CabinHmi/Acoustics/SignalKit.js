@@ -227,6 +227,62 @@ export class Wander
     Run() { return Clamp(this.Second.Run(this.Low.Run(this.Noise.White())) * this.Gain, -1, 1); }
 }
 
+/**
+ * A real-world tone rather than a test tone: a sine plus a narrow band of noise around it (Width: bandwidth as a share
+ * of the pitch), a slow pitch drift (Jitter, ±share) and level flutter. Turbo whistles, blower and gear whines and
+ * motor orders are aero- or mechano-acoustic, so their energy is smeared around the nominal pitch; a pure sine at a
+ * locked pitch is what makes a synthesized whine sound electronic. Breath 0 = pure sine, 1 = pure noise band. The noise
+ * band is level-normalized with a slow AGC so it sits at the sine's RMS whatever its pitch and width.
+ */
+export class NarrowTone
+{
+    constructor(Rate, { Breath = 0.35, Width = 0.02, Jitter = 0.003, Flutter = 0.12, Seed = 1, Phase = 0 } = {})
+    {
+        this.Rate = Rate; this.Breath = Breath; this.Width = Width; this.Jitter = Jitter; this.Flutter = Flutter;
+        this.Noise = new SeededNoise(Seed); this.Phase = Phase; this.Count = 0; this.Power = 0.05; this.Shown = 0;
+        this.Ring = new Resonator(Rate, 1000, 0.05);
+        this.Drift = new Wander(Rate, 3.5, Seed + 1); this.Wave = new Wander(Rate, 9, Seed + 2);
+        this.Track = 1 - Math.exp(-1 / (0.05 * Rate));
+    }
+
+    Run(Hz)
+    {
+        if (Hz <= 1 || Hz >= this.Rate * 0.45) { this.Shown = 0; return 0; }
+        if ((this.Count++ & 15) === 0) this.Ring.Tune(Hz, 6.9078 / (Math.PI * Math.max(4, this.Width * Hz)));
+        this.Phase += Hz * (1 + this.Jitter * this.Drift.Run()) / this.Rate;
+        this.Phase -= Math.floor(this.Phase);
+        let Band = 0;
+        if (this.Breath > 0)
+        {
+            const Raw = this.Ring.Run(this.Noise.White());
+            this.Power += (Raw * Raw - this.Power) * this.Track;
+            Band = Raw * 0.707 / Math.sqrt(this.Power + 1e-12);
+        }
+        this.Shown = (Math.sin(Tau * this.Phase) * (1 - this.Breath) + Band * this.Breath) * (1 + this.Flutter * this.Wave.Run());
+        return this.Shown;
+    }
+}
+
+/** PolyBLEP correction for a unit step at phase T (0..1) with phase increment Dt. */
+export function Blep(T, Dt)
+{
+    if (T < Dt) { T /= Dt; return T + T - T * T - 1; }
+    if (T > 1 - Dt) { T = (T - 1) / Dt; return T * T + T + T + 1; }
+    return 0;
+}
+
+/** Band-limited sawtooth (PolyBLEP), −1..1: harmonic-rich without the aliasing hash of a naive ramp. */
+export class PolySaw
+{
+    constructor(Phase = 0) { this.Phase = Phase; }
+    Run(Hz, Rate)
+    {
+        const Dt = Math.min(0.45, Math.max(0, Hz / Rate));
+        this.Phase += Dt; if (this.Phase >= 1) this.Phase -= 1;
+        return 2 * this.Phase - 1 - Blep(this.Phase, Dt);
+    }
+}
+
 /** Soft clipper with unity slope at zero. */
 export const SoftClip = (Input, Drive = 1) => Math.tanh(Input * Drive) / Drive;
 

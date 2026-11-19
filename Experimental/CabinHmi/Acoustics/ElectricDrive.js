@@ -8,7 +8,7 @@
 //    The motor tones are not drawn as a sweep: each one is an engine order of the motor shaft (pole pairs × 6 and 12
 //    for torque ripple, the slot order, gear tooth counts), so every pitch follows the real shaft speed.
 
-import { Tau, Clamp, Mix, Smoothstep, SeededNoise, OnePole, Biquad, ModeBank, DcBlock, DelayLine, Slew, PanGains, SoftClip } from './SignalKit.js';
+import { Tau, Clamp, Mix, Smoothstep, SeededNoise, OnePole, Biquad, ModeBank, DcBlock, DelayLine, Slew, PanGains, SoftClip, NarrowTone, PolySaw, Wander } from './SignalKit.js';
 import { TractionIntegrator } from './TractionIntegrator.js';
 
 const RpmPerRadian = 60 / (2 * Math.PI);
@@ -206,16 +206,20 @@ export class DriveUnit
         this.Sport = Sport ?? Profile.Voice.Sport;
         this.Units = Profile.Motors.map((Motor, Index) => ({
             Motor, Rpm: new Slew(Rate, 0.01, 0), Load: new Slew(Rate, 0.04, 0),
-            Orders: Motor.Orders.map((_, Order) => new Tone(0.13 * Order + Index * 0.31)),
-            Sides: [0, 1, 2, 3, 4].map((Side) => new Tone(0.17 * Side + Index * 0.07)),
-            Meshes: Motor.Meshes.map((Gear) => Gear.map((_, Mesh) => new Tone(0.29 * Mesh + Index * 0.11))),
+            // Follow-up 20: every tone is a narrow noise band with drift (NarrowTone), not a locked sine.
+            Orders: Motor.Orders.map((_, Order) => new NarrowTone(Rate, { Breath: 0.16 + Order * 0.05, Width: 0.004, Jitter: 0.0015, Flutter: 0.1, Seed: Seed + Index * 31 + Order })),
+            Sides: [0, 1, 2, 3, 4].map((Side) => new NarrowTone(Rate, { Breath: 0.35, Width: 0.006, Jitter: 0.002, Flutter: 0.25, Seed: Seed + Index * 31 + 10 + Side })),
+            Meshes: Motor.Meshes.map((Gear, Ratio) => Gear.map((_, Mesh) => new NarrowTone(Rate, { Breath: 0.3 + Mesh * 0.1, Width: 0.005, Jitter: 0.0015, Flutter: 0.15, Seed: Seed + Index * 31 + 20 + Ratio * 4 + Mesh }))),
+            Spread: new Biquad(Rate), Shaft: 0,
             Drift: Motor.Orders.map(() => 1), Windage: [new Biquad(Rate), new Biquad(Rate)], Tune: Index * 17,
         }));
         this.Throttle = new Slew(Rate, 0.05, 0); this.Speed = new Slew(Rate, 0.05, 0);
         this.Gear = 0; this.Clunk = 0;
         this.ClunkRing = new ModeBank(Rate, Profile.Clunk.Modes); this.ClunkHit = 0;
         this.SportTones = [0, 1, 2, 3].map((Index) => new Tone(Index * 0.21)); this.SportTone = new Biquad(Rate).Shape('Low', 600, 0.9);
-        this.WhirTones = [0, 1, 2].map((Index) => new Tone(Index * 0.37)); this.WhirBand = new Biquad(Rate).Shape('Band', 1800, 0.8); this.WhirPhase = 0;
+        this.WhirSaws = [new PolySaw(0), new PolySaw(0.37), new PolySaw(0.71)]; this.WhirBand = new Biquad(Rate).Shape('Band', 1800, 0.8); this.WhirPhase = 0;
+        this.WhirFormants = [new Biquad(Rate), new Biquad(Rate)]; this.WhirBreath = new NarrowTone(Rate, { Breath: 0.45, Width: 0.01, Jitter: 0.003, Flutter: 0.2, Seed: Seed + 90 });
+        this.WhirDrift = new Wander(Rate, 2.5, Seed + 91); this.Growl = 0;
         this.TurbineBand = new Biquad(Rate).Shape('Band', 3000, 2);
         this.Undertone = { Crank: 0, Slot: -1, Amp: 0, Level: 0, Body: new Biquad(Rate).Shape('Low', 700, 0.8), Chest: new Biquad(Rate).Shape('Peak', 115, 1.2, 6) };
         this.Chime = 0; this.ChimeTones = [new Tone(0), new Tone(0.5)];
@@ -259,14 +263,18 @@ export class DriveUnit
                 }
 
                 // Electromagnetic orders: torque ripple and slot harmonics; regeneration is a little softer and darker.
+                // Rotor eccentricity modulates everything at the shaft rate (sidebands ± 1 × shaft: the slight roughness of
+                // a real motor); torque ripple grows with current, so the high orders come up under load.
+                Unit.Shaft += Shaft / Rate; Unit.Shaft -= Math.floor(Unit.Shaft);
+                const Eccentric = 1 + 0.12 * Math.sin(Tau * Unit.Shaft) + 0.05 * Math.sin(Tau * 2 * Unit.Shaft + 0.9);
                 const Push = (0.12 + 0.88 * Math.pow(Drive, 0.8)) * (Load < 0 ? 0.75 : 1) * Present;
                 let Whine = 0;
                 Motor.Orders.forEach(([Order, Level], Slot) =>
                 {
-                    const Hz = Shaft * Order;
-                    Whine += Unit.Orders[Slot].Run(Hz, Rate) * Level * Unit.Drift[Slot] * Fade(Hz) * (Load < 0 && Order > 30 ? 0.6 : 1);
+                    const Hz = Shaft * Order, Strain = Order > 24 ? 0.45 + 0.75 * Drive : 1;
+                    Whine += Unit.Orders[Slot].Run(Hz) * Level * Strain * Unit.Drift[Slot] * Fade(Hz) * (Load < 0 && Order > 30 ? 0.6 : 1);
                 });
-                Whine *= Push * V.Whine * Motor.Level;
+                Whine *= Push * V.Whine * 1.15 * Motor.Level * Eccentric;
 
                 // Inverter: carrier and sidebands, louder with current, fading as the motor speeds up (masking + modulation).
                 const Current = Math.pow(Drive, 0.7) * (1 - 0.65 * Smoothstep(1500, 9000, Rpm)) * (this.Gear > 0 || Drive > 0.02 ? 1 : 0);
@@ -275,15 +283,19 @@ export class DriveUnit
                 {
                     const Carrier = Motor.Carrier;
                     const Pairs = [[Carrier, 0.35], [Carrier - 2 * Electrical, 1], [Carrier + 2 * Electrical, 1], [Carrier - 4 * Electrical, 0.4], [Carrier + 4 * Electrical, 0.4]];
-                    for (let Slot = 0; Slot < 5; Slot++) { const Hz = Math.abs(Pairs[Slot][0]); Inverter += Unit.Sides[Slot].Run(Hz, Rate) * Pairs[Slot][1] * Fade(Hz); }
-                    Inverter *= Current * V.Inverter * Motor.Level;
+                    for (let Slot = 0; Slot < 5; Slot++) { const Hz = Math.abs(Pairs[Slot][0]); Inverter += Unit.Sides[Slot].Run(Hz) * Pairs[Slot][1] * Fade(Hz); }
+                    // Spread-spectrum switching: the carrier is dithered, so a hiss band sits around it under the tones.
+                    if ((this.Count + Unit.Tune) % 64 === 0) Unit.Spread.Shape('Band', Carrier, 5);
+                    Inverter += Unit.Spread.Run(Noise.White()) * 2.2 * Fade(Carrier);
+                    Inverter *= Current * V.Inverter * 1.3 * Motor.Level;
                 }
 
                 // Gear mesh whine for the engaged gear (the racer's straight-cut gears whine on the overrun too).
                 const Gear = Clamp(Motor.Meshes.length > 1 ? this.Gear || 1 : 1, 1, Motor.Meshes.length) - 1;
                 let Mesh = 0;
-                Motor.Meshes[Gear].forEach(([Order, Level], Slot) => { const Hz = Shaft * Order; Mesh += Unit.Meshes[Gear][Slot].Run(Hz, Rate) * Level * Fade(Hz); });
-                Mesh *= (0.3 + 0.7 * Math.pow(Drive, 0.8)) * Present * Smoothstep(200, 3500, Rpm) * V.Gears * Motor.Level;
+                Motor.Meshes[Gear].forEach(([Order, Level], Slot) => { const Hz = Shaft * Order; Mesh += Unit.Meshes[Gear][Slot].Run(Hz) * Level * Fade(Hz); });
+                // Gear run-out: the mesh is modulated once per pinion turn (sidebands), harder under load.
+                Mesh *= (0.3 + 0.7 * Math.pow(Drive, 0.8)) * Present * Smoothstep(200, 3500, Rpm) * V.Gears * 1.3 * Motor.Level * (1 + 0.2 * Drive * Math.sin(Tau * Unit.Shaft + 2.1));
 
                 const Spin = Rpm / P.MaxRpm, Air = Noise.White();
                 const Windage = (Unit.Windage[0].Run(Air) + Unit.Windage[1].Run(Air) * 0.5) * Spin * Spin * V.Windage * 2;
@@ -307,24 +319,6 @@ export class DriveUnit
                 });
                 Mid += this.SportTone.Run(Pad) * this.Sport * (0.35 + 0.65 * Throttle) * Smoothstep(0, 1.5, Speed + Throttle * 2);
             }
-            if (V.Whir > 0)
-            {
-                // The racer's whir: a twin tone (root and fifth) locked to the motor, with a slight vibrato and a sawtooth
-                // edge, plus turbine hiss; it rises through each gear and drops on every upshift.
-                const W = P.Whir, Root = LeadRpm / 60 * W.Order;
-                this.WhirPhase += W.Vibrato / Rate;
-                const Wobble = 1 + 0.004 * Math.sin(Tau * this.WhirPhase);
-                let Whir = 0;
-                [[1, 1], [W.Fifth, 0.55], [2, 0.3]].forEach(([Ratio, Level], Slot) =>
-                {
-                    const Hz = Root * Ratio * Wobble, Sine = this.WhirTones[Slot].Run(Hz, Rate), Phase = this.WhirTones[Slot].Phase;
-                    Whir += (Sine + 0.4 * Math.sin(Tau * 2 * Phase) * Fade(Hz * 2) + 0.2 * Math.sin(Tau * 3 * Phase) * Fade(Hz * 3)) * Level * Fade(Hz);
-                });
-                if ((this.Count & 63) === 0) { this.WhirBand.Shape('Band', Clamp(Root * 1.4, 300, 9000), 0.7); this.TurbineBand.Shape('Band', Clamp(2500 + LeadRpm * 0.35, 2500, 9500), 2.5); }
-                const Drive = 0.25 + 0.75 * Math.pow(Math.max(0, LeadLoad), 0.7) + 0.15 * Math.max(0, -LeadLoad);
-                Mid += (this.WhirBand.Run(Whir) * 1.6 + Whir * 0.35) * V.Whir * Drive * Smoothstep(100, 1500, LeadRpm);
-                Mid += this.TurbineBand.Run(Noise.White()) * V.Whir * 0.6 * Math.pow(LeadRpm / P.MaxRpm, 1.5);
-            }
             if (V.Undertone > 0)
             {
                 // V8 undertone: cross-plane firing (each bank uneven), low-passed into a chest-deep thrum under the whir.
@@ -336,8 +330,32 @@ export class DriveUnit
                 const Pulse = U.Amp * (Age < 0.12 ? Math.sin(Math.PI * Age / 0.24) : Math.exp(-(Age - 0.12) * 5)) - 0.3;
                 U.Level += ((0.3 + 0.7 * Math.max(Throttle, Math.max(0, LeadLoad))) - U.Level) * 0.0005;
                 Mid += U.Chest.Run(U.Body.Run(Pulse)) * V.Undertone * U.Level * 0.25 * (this.Gear > 0 || Throttle > 0 ? 1 : 0.4);
+                this.Growl = Clamp(Pulse, -0.3, 1);                           // the whir is roughened by the same firing pulses
             }
 
+            if (V.Whir > 0)
+            {
+                // The racer's whir (Follow-up 20): band-limited saws (root, fifth and octave) locked to the motor through
+                // two formants that track the pitch, so it screams like a turbine-electric hybrid rather than an
+                // organ; a breathy narrow band an octave up, a slow pitch drift with a little vibrato, and the V8
+                // undertone's firing pulses roughening it (one machine, not two layers). Rises through each gear and
+                // drops on every upshift.
+                const W = P.Whir, Root = LeadRpm / 60 * W.Order;
+                this.WhirPhase += W.Vibrato / Rate;
+                const Wobble = 1 + 0.003 * Math.sin(Tau * this.WhirPhase) + 0.004 * this.WhirDrift.Run();
+                let Whir = 0;
+                [[1, 1], [W.Fifth * 1.002, 0.55], [2, 0.3]].forEach(([Ratio, Level], Slot) => { const Hz = Root * Ratio * Wobble; Whir += this.WhirSaws[Slot].Run(Hz, Rate) * Level * Fade(Hz * 3); });
+                if ((this.Count & 63) === 0)
+                {
+                    this.WhirBand.Shape('Band', Clamp(Root * 1.4, 300, 9000), 0.7); this.TurbineBand.Shape('Band', Clamp(2500 + LeadRpm * 0.35, 2500, 9500), 2.5);
+                    this.WhirFormants[0].Shape('Band', Clamp(Root * 2.2, 400, 12000), 2.2); this.WhirFormants[1].Shape('Band', Clamp(Root * 4.6, 800, 15000), 3);
+                }
+                const Drive = 0.25 + 0.75 * Math.pow(Math.max(0, LeadLoad), 0.7) + 0.15 * Math.max(0, -LeadLoad);
+                const Rough = 1 + 0.35 * this.Growl * Math.max(Throttle, 0.3);
+                const Voiced = this.WhirBand.Run(Whir) * 1.1 + this.WhirFormants[0].Run(Whir) * 1.3 + this.WhirFormants[1].Run(Whir) * 0.8 + Whir * 0.12 + this.WhirBreath.Run(Root * 2 * Wobble) * 0.35 * Fade(Root * 2);
+                Mid += Voiced * V.Whir * 1.45 * Drive * Rough * Smoothstep(100, 1500, LeadRpm);
+                Mid += this.TurbineBand.Run(Noise.White()) * V.Whir * 0.6 * Math.pow(LeadRpm / P.MaxRpm, 1.5);
+            }
             // Shift thunk and the ready chime.
             let Extra = 0;
             if (this.ClunkHit > 0) { Extra += this.ClunkRing.Run(this.ClunkHit * (Noise.White() * 0.5 + 0.5)) * P.Clunk.Gain; this.ClunkHit = this.ClunkHit > 0.02 ? this.ClunkHit * 0.6 : 0; }

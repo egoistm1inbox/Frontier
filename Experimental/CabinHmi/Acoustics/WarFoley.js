@@ -16,6 +16,7 @@
 import { Tau, Clamp, Mix, Smoothstep, SeededNoise, OnePole, Biquad, Resonator, PanGains, Strike } from './SignalKit.js';
 import { Overpressure, Thump, Roar, Scatter, Bounce, Echoes, Distant, Settle } from './ImpactFoley.js';
 import { Burst, Snap, Whizz, DrawHit } from './Ballistics.js';
+import { Pulse, Rumble, Detonate, Place, Limit } from './Detonation.js';
 
 const Sound = 343;
 
@@ -64,15 +65,14 @@ function Afar(Left, Right, Rate, Time, Metres, Seconds, Draw, { Pan = 0 } = {})
     }
 }
 
-/** An explosion's body: blast wave, sub whump, fireball roar and low rumble. Size scales the charge (1 ≈ 60 m Explosion). */
-function Blast(Left, Right, Rate, Time, { Size = 1, Pan = 0, Seed = 900, Fire = 1, Crack = 1 } = {})
+/**
+ * An explosion (Follow-up 20): Detonation.js scales the blast by the charge (positive phase ∝ cube root of the charge,
+ * so a 180 g grenade cracks near 300 Hz while a 10 kg shell booms below 60 Hz) and by the ground it goes off on
+ * (Open, Sand, Rock, Air), with a turbulent rumble instead of a pitched sine. Charge: kg TNT-equivalent.
+ */
+function Blast(Left, Right, Rate, Time, { Charge = 4, Ground = 'Open', Pan = 0, Seed = 900, Fire = 0.3, Gain = 1, Metres = 30 } = {})
 {
-    const Root = Math.sqrt(Size);
-    Overpressure(Left, Right, Rate, Time, { Lasts: 0.006 * Root, Gain: 2.2 * Crack, Low: 7000 / Root, Pan });
-    Thump(Left, Right, Rate, Time, { Hz: 75 / Math.pow(Size, 0.3), EndHz: 24, Decay: 1.6 * Root, Gain: 1.1, Drive: 2.2, Pan });
-    Thump(Left, Right, Rate, Time + 0.01, { Hz: 130, EndHz: 50, Decay: 0.6, Gain: 0.4, Drive: 1.5, Pan });
-    Roar(Left, Right, Rate, Time, 3.2 * Root, { From: 8000, To: 140, Floor: 25, Gain: 0.9 * Fire, Attack: 0.004, Curve: 2.4, Grit: 0.55, Seed });
-    Roar(Left, Right, Rate, Time + 0.04, 3.8 * Root, { From: 900, To: 60, Floor: 20, Gain: 0.6, Attack: 0.06, Curve: 1.6, Width: 0.9, Seed: Seed + 1 });
+    return Detonate(Left, Right, Rate, Time, { Charge, Ground, Fire, Pan, Seed, Gain, Metres });
 }
 
 /** Earth thrown up by a blast falling back: clods thudding, small stones, a dry hiss of dust. */
@@ -92,11 +92,7 @@ function Clods(Left, Right, Rate, Time, Seconds, Count, { Pan = 0, Seed = 960, G
 function DrawSand(Left, Right, Rate, { Distance = 30 } = {})
 {
     const Arrive = 0.08 + Math.min(1.2, Math.max(0, Distance - 30) / Sound) * 0.15, Near = Clamp(1 - (Distance - 30) / 500, 0.08, 1);
-    Overpressure(Left, Right, Rate, Arrive, { Lasts: 0.01 + Distance * 0.00003, Gain: 2.0 * Near, Low: Mix(1200, 4500, Near) });
-    Thump(Left, Right, Rate, Arrive, { Hz: 55, EndHz: 19, Decay: 2.8, Gain: 1.3, Drive: 2.4 });
-    Thump(Left, Right, Rate, Arrive + 0.015, { Hz: 110, EndHz: 40, Decay: 0.8, Gain: 0.5, Drive: 1.6 });
-    Roar(Left, Right, Rate, Arrive, 2.5, { From: Mix(1800, 5000, Near), To: 120, Floor: 25, Gain: 0.55, Attack: 0.005, Curve: 2.2, Grit: 0.5, Seed: 31 });
-    Roar(Left, Right, Rate, Arrive + 0.05, 5, { From: 600, To: 50, Floor: 18, Gain: 0.6, Attack: 0.1, Curve: 1.4, Width: 0.9, Seed: 32 });
+    Blast(Left, Right, Rate, Arrive, { Charge: 5, Ground: 'Sand', Fire: 0.15, Seed: 31, Metres: Distance });
     // The sand column: a tearing rush on the way up.
     Roar(Left, Right, Rate, Arrive + 0.01, 1.4, { From: 5500, To: 900, Floor: 300, Gain: 0.6 * Near, Width: 1, Grit: 0.8, Seed: 33, Shape: (P) => Smoothstep(0, 0.08, P) * Math.pow(1 - P, 1.6) });
     // Falling back: a long hiss and thousands of grains, clods first (heavier, shorter flight), stones on a vehicle.
@@ -104,8 +100,8 @@ function DrawSand(Left, Right, Rate, { Distance = 30 } = {})
     Scatter(Left, Right, Rate, Arrive + 0.7, 4.8, Math.round(1600 * Near), (Noise, P) => ({ Modes: [[Noise.Range(4500, 11000), 0.002, 1]], Burst: 0.0002, Gain: Noise.Range(0.1, 0.7) * (1 - P * 0.7), Pan: Noise.Range(-1, 1) }), { Seed: 35, Bunch: 1.3 });
     Clods(Left, Right, Rate, Arrive + 0.9, 2.6, Math.round(40 * Near) + 4, { Seed: 36, Gain: Near });
     Scatter(Left, Right, Rate, Arrive + 1.1, 2, Math.round(8 * Near), (Noise) => ({ Modes: [[Noise.Range(1400, 2400), 0.25, 1], [Noise.Range(3500, 5200), 0.12, 0.5]], Burst: 0.0003, Gain: Noise.Range(0.15, 0.4), Pan: 0.6 + Noise.Range(-0.2, 0.2) }), { Seed: 37 });
-    // Open desert: few surfaces, so sparse late echoes off dunes and a long low wash.
-    Echoes(Left, Right, Rate, { Taps: [[0.5, 0.25, -0.6], [1.2, 0.15, 0.6], [2.1, 0.08, 0]], Dark: 1200, Wash: 0.3 });
+    // Open desert: few surfaces, so sparse late echoes off dunes (the Desert space).
+    Place(Left, Right, Rate, 'Desert', { Wet: 1.2 });
     Distant(Left, Right, Rate, Distance);
     Settle(Left, Right, Rate);
 }
@@ -121,13 +117,13 @@ function DrawBattle(Left, Right, Rate, Seconds, Seed = 7000)
         Afar(Left, Right, Rate, Time, Metres, Length + 2.5, (L, R, SampleRate) =>
         {
             Burst(L, R, SampleRate, 0.02, Name, { Seconds: Length, Seed: Shot, Brass: false });
-            Echoes(L, R, SampleRate, { Taps: [[0.3, 0.3, -0.6], [0.75, 0.2, 0.6], [1.4, 0.12, 0]], Dark: 1500, Wash: 0.35 });
+            Place(L, R, SampleRate, 'Valley', { Wet: 1.3, Seed: Shot });
         }, { Pan: Noise.Range(-0.9, 0.9) });
     }
     for (let Time = Noise.Range(1, 3); Time < Seconds - 1.5; Time += Noise.Range(2.5, 5))
     {
         const Metres = Noise.Range(600, 2500), Size = Noise.Range(1, 2.5), Bang = Math.round(Noise.Range(1, 9999));
-        Afar(Left, Right, Rate, Time, Metres, 5, (L, R, SampleRate) => { Blast(L, R, SampleRate, 0.02, { Size, Seed: Bang }); Echoes(L, R, SampleRate, { Taps: [[0.5, 0.35, -0.7], [1.2, 0.25, 0.6], [2.2, 0.15, 0]], Dark: 1000, Wash: 0.5 }); }, { Pan: Noise.Range(-0.9, 0.9) });
+        Afar(Left, Right, Rate, Time, Metres, 5, (L, R, SampleRate) => { Blast(L, R, SampleRate, 0.02, { Charge: Size * 2.5, Seed: Bang, Metres }); Place(L, R, SampleRate, 'Valley', { Wet: 1.4, Seed: Bang }); }, { Pan: Noise.Range(-0.9, 0.9) });
     }
     for (let Time = Noise.Range(1.5, 3); Time < Seconds - 0.5; Time += Noise.Range(1.2, 3.5))
     {
@@ -163,13 +159,13 @@ export const Cues = {
                 Roar(Left, Right, Rate, Time, 0.25, { From: 4000, To: 2000, Floor: 800, Gain: 0.06, Attack: 0.02, Curve: 0.8, Grit: 0.6, Seed: 1100 + Index });
                 Strike(Left, Right, Rate, Time + 0.02, { Modes: [[2600, 0.05, 1], [5100, 0.03, 0.4]], Burst: 0.0004, Gain: 1.2, Pan: -0.2, Seed: 1110 + Index });
                 const Fire = Time + 0.32;
-                Overpressure(Left, Right, Rate, Fire, { Lasts: 0.003, Gain: 1.6, Low: 3000, Pan: -0.2 });
+                Pulse(Left, Right, Rate, Fire, { Width: 0.0028, Gain: 1.1, Drive: 2, Ground: [0.004, 0.6], Gas: { Seconds: 0.05, Hz: 700, Q: 0.6, Gain: 0.5 }, Pan: -0.2, Seed: 1125 + Index });
                 Strike(Left, Right, Rate, Fire, { Modes: [[72, 0.25, 0.8], [215, 0.14, 1], [645, 0.07, 0.45], [1075, 0.035, 0.2]], Burst: 0.002, Gain: 5, Pan: -0.2, Seed: 1120 + Index });
-                Thump(Left, Right, Rate, Fire, { Hz: 85, EndHz: 40, Decay: 0.5, Gain: 0.9, Drive: 2, Pan: -0.2 });
                 Roar(Left, Right, Rate, Fire + 0.01, 0.7, { From: 3000, To: 600, Floor: 200, Gain: 0.25, Width: 1, Seed: 1130 + Index, Shape: (P) => Smoothstep(0, 0.1, P) * Math.pow(1 - P, 2) });
             }
-            Echoes(Left, Right, Rate, { Taps: [[0.3, 0.3, -0.6], [0.8, 0.2, 0.6], [1.5, 0.12, 0]], Dark: 1600, Wash: 0.4 });
+            Place(Left, Right, Rate, 'Field');
             Settle(Left, Right, Rate);
+            Limit(Left, Right, Rate, { Drive: 1.8 });
         },
     },
     MortarIncoming: {
@@ -199,9 +195,9 @@ export const Cues = {
             const Hit = Start + Heard / Rate, Pan = 0.6;
             Afar(Left, Right, Rate, Hit, 1, 7 - Hit, (L, R, SampleRate) =>
             {
-                Blast(L, R, SampleRate, 0, { Size: 0.8, Pan, Seed: 1210 });
+                Blast(L, R, SampleRate, 0, { Charge: 1, Pan, Seed: 1210, Fire: 0.15, Metres: 47 });   // 81 mm mortar: about 1 kg HE
                 Clods(L, R, SampleRate, 0.5, 2.2, 36, { Pan, Seed: 1220 });
-                Echoes(L, R, SampleRate, { Taps: [[0.3, 0.35, -0.6], [0.7, 0.24, 0.6], [1.3, 0.14, 0], [2.0, 0.08, 0.4]], Dark: 1400, Wash: 0.45 });
+                Place(L, R, SampleRate, 'Field', { Seed: 3 });
                 Distant(L, R, SampleRate, 47);
             });
             Settle(Left, Right, Rate);
@@ -228,7 +224,7 @@ export const Cues = {
             const Bang = 1.0 + 4.5 + 12 / Sound;
             Afar(Left, Right, Rate, Bang, 1, 9 - Bang, (L, R, SampleRate) =>
             {
-                Blast(L, R, SampleRate, 0, { Size: 0.5, Pan: 0.4, Seed: 1310, Fire: 0.6, Crack: 1.2 });
+                Blast(L, R, SampleRate, 0, { Charge: 0.18, Pan: 0.4, Seed: 1310, Fire: 0.05, Metres: 12 });   // M67-class: 180 g filler, a sharp crack
                 const Noise = new SeededNoise(1311);
                 for (let Piece = 0; Piece < 6; Piece++)
                 {
@@ -236,7 +232,7 @@ export const Cues = {
                     Whizz(L, R, SampleRate, 0.01 + Noise.Range(0, 0.15), { From: Noise.Range(4000, 5500), To: Noise.Range(1500, 2500), Seconds: Noise.Range(0.12, 0.2), Gain: 0.25, Pan: -Side, EndPan: Side, Seed: 1312 + Piece });
                 }
                 Clods(L, R, SampleRate, 0.35, 1.6, 24, { Pan: 0.4, Seed: 1320, Gain: 0.7 });
-                Echoes(L, R, SampleRate, { Taps: [[0.25, 0.3, -0.6], [0.6, 0.2, 0.6], [1.1, 0.12, 0]], Dark: 1800, Wash: 0.4 });
+                Place(L, R, SampleRate, 'Forest', { Seed: 4 });
             });
             Settle(Left, Right, Rate);
         },
@@ -250,10 +246,9 @@ export const Cues = {
             // darkens and fades with range; it strikes about 300 m away and the blast arrives 0.9 s after that.
             Afar(Left, Right, Rate, 0.2, 1, 3, (L, R, SampleRate) =>
             {
-                Overpressure(L, R, SampleRate, 0, { Lasts: 0.004, Gain: 1.8, Low: 5000 });
+                Pulse(L, R, SampleRate, 0, { Width: 0.0016, Gain: 1.2, Drive: 2.6, Ground: [0.003, 0.6], Low: { Seconds: 0.05, Hz: 90, Gain: 0.4 }, Seed: 1400 });
                 Roar(L, R, SampleRate, 0, 0.45, { From: 9000, To: 600, Floor: 120, Gain: 0.9, Attack: 0.002, Curve: 2.2, Grit: 0.6, Seed: 1401 });
-                Thump(L, R, SampleRate, 0, { Hz: 70, EndHz: 30, Decay: 0.5, Gain: 0.8, Drive: 2 });
-                Echoes(L, R, SampleRate, { Taps: [[0.25, 0.3, -0.6], [0.6, 0.2, 0.6]], Dark: 2000, Wash: 0.3 });
+                Place(L, R, SampleRate, 'Urban', { Wet: 0.7, Seed: 5 });
             });
             const Ignite = 0.24, Burn = 1.0, Count = Math.round(2.6 * Rate), Offset = Math.round(Ignite * Rate);
             const { Emit, Range, Across } = Flight(Count, Rate, (Time) => [11 + 295 * Math.min(Time, Burn), 4, 1.5]);
@@ -272,9 +267,9 @@ export const Cues = {
             const Hit = Ignite + Heard / Rate;
             Afar(Left, Right, Rate, Hit, 306, 7 - Hit, (L, R, SampleRate) =>
             {
-                Blast(L, R, SampleRate, 0.02, { Size: 0.9, Seed: 1410, Crack: 1.3 });
+                Blast(L, R, SampleRate, 0.02, { Charge: 1.5, Ground: 'Rock', Seed: 1410, Fire: 0.6, Metres: 306 });   // warhead plus the vehicle's fuel
                 Strike(L, R, SampleRate, 0.02, { Modes: [[46, 0.5, 1.4], [118, 0.32, 0.9], [290, 0.18, 0.5], [720, 0.08, 0.25]], Burst: 0.004, Gain: 1.2, Seed: 1411 });   // a vehicle hull struck
-                Echoes(L, R, SampleRate, { Taps: [[0.4, 0.35, -0.7], [0.9, 0.25, 0.6], [1.6, 0.15, 0]], Dark: 1200, Wash: 0.5 });
+                Place(L, R, SampleRate, 'Urban', { Wet: 1.2, Seed: 6 });
             }, { Pan: 0.35 });
             Settle(Left, Right, Rate);
         },
@@ -292,8 +287,8 @@ export const Cues = {
                 const Time = Noise.Range(0.2, 12.5), Metres = Noise.Range(1200, 5000), Size = Noise.Range(1.5, 3), Seed = 1510 + Round * 7;
                 Afar(Left, Right, Rate, Time, Metres, 15 - Time, (L, R, SampleRate) =>
                 {
-                    Blast(L, R, SampleRate, 0.02, { Size, Seed });
-                    Echoes(L, R, SampleRate, { Taps: [[0.6, 0.4, -0.7], [1.4, 0.3, 0.6], [2.5, 0.2, -0.2], [3.6, 0.12, 0.5]], Dark: 900, Wash: 0.55 });
+                    Blast(L, R, SampleRate, 0.02, { Charge: Size * 5, Seed, Metres });                  // 155 mm class: 7–15 kg
+                    Place(L, R, SampleRate, 'Valley', { Wet: 1.6, Seed });
                 }, { Pan: Noise.Range(-0.9, 0.9) });
             }
             Settle(Left, Right, Rate);
@@ -399,7 +394,7 @@ export const Cues = {
             // 4.15 kHz tone) and a heartbeat thuds; hearing comes back over about ten seconds.
             const Hit = 1.5;
             DrawBattle(Left, Right, Rate, 14, 7300);
-            Blast(Left, Right, Rate, Hit, { Size: 1.2, Pan: -0.2, Seed: 1901, Crack: 1.3 });
+            Blast(Left, Right, Rate, Hit, { Charge: 7, Pan: -0.2, Seed: 1901, Fire: 0.3, Metres: 10 });
             Clods(Left, Right, Rate, Hit + 0.5, 2.5, 40, { Pan: -0.2, Seed: 1902 });
             const Shades = [[new OnePole(Rate, 16000), new OnePole(Rate, 16000)], [new OnePole(Rate, 16000), new OnePole(Rate, 16000)]];
             for (let Index = 0; Index < Left.length; Index++)

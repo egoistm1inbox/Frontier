@@ -9,7 +9,7 @@
 //    exactly; turbo whistles follow the shaft speed, which follows boost. Pulley ratios, lobe counts and whistle
 //    ranges are typical values, not measurements of a particular product.
 
-import { Tau, Clamp, Mix, Smoothstep, SeededNoise, OnePole, Biquad, DcBlock, Slew, SoftClip } from './SignalKit.js';
+import { Tau, Clamp, Mix, Smoothstep, SeededNoise, OnePole, Biquad, Resonator, DcBlock, Slew, SoftClip, NarrowTone, PolySaw } from './SignalKit.js';
 
 //------------------------------------------------------------------------------------------------------------------------
 //                                                    MODELS
@@ -109,33 +109,156 @@ export function InductedProfile(Base, Name)
 //                                                    VOICE
 //------------------------------------------------------------------------------------------------------------------------
 
-class Tone
+/** Pink-ish noise (white through a three-pole mix) for air: a whoosh made from white noise sounds like hiss. */
+class Air
 {
-    constructor(Phase = 0) { this.Phase = Phase; }
-    Run(Hz, Rate) { this.Phase += Hz / Rate; this.Phase -= Math.floor(this.Phase); return Math.sin(Tau * this.Phase); }
+    constructor(Rate, Seed) { this.Noise = new SeededNoise(Seed); this.Poles = [new OnePole(Rate, 80), new OnePole(Rate, 900), new OnePole(Rate, 6000)]; }
+    Run() { const White = this.Noise.White(); return this.Poles[0].Run(White) * 3.2 + this.Poles[1].Run(White) * 1.1 + this.Poles[2].Run(White) * 0.5 + White * 0.08; }
+}
+
+/**
+ * A turbo compressor as an aero-acoustic source (Follow-up 20). The whistle is the blade-pass tone of the compressor
+ * wheel (6 full + 6 splitter blades: Pitch = 12 × shaft rev/s) as a narrow band of turbulent noise around the pitch
+ * (NarrowTone), not a sine; the full blades alone add a weaker tone at half the pitch; shaft imbalance modulates it at
+ * the shaft rate (sidebands, the slightly rough "sizzle" of a real turbo); near full load the blade tips go supersonic
+ * and add a buzz of shaft orders; and the inlet air rush is pink noise through the intake duct's broad resonances,
+ * decorrelated left and right. Run(Pitch, Shaft, Throttle, Whoosh) → [Mid, Side].
+ */
+export class Compressor
+{
+    constructor(Rate, { Twins = 1, Detune = 1.013, Seed = 41, Spool = [900, 3400] } = {})
+    {
+        this.Rate = Rate; this.Twins = Twins; this.Detune = Detune; this.Spool = Spool;
+        this.Blade = [0, 1].map((Twin) => new NarrowTone(Rate, { Breath: 0.42, Width: 0.009, Jitter: 0.003, Flutter: 0.22, Seed: Seed + Twin * 17 }));
+        this.Half = new NarrowTone(Rate, { Breath: 0.6, Width: 0.014, Jitter: 0.003, Flutter: 0.3, Seed: Seed + 3 });
+        this.Double = new NarrowTone(Rate, { Breath: 0.65, Width: 0.012, Jitter: 0.003, Flutter: 0.3, Seed: Seed + 5 });
+        this.Buzz = new PolySaw(); this.BuzzBand = new Biquad(Rate);
+        this.Airs = [new Air(Rate, Seed + 7), new Air(Rate, Seed + 9)];
+        this.Duct = [0, 1].map(() => [new Biquad(Rate), new Biquad(Rate), new Biquad(Rate).Shape('High', 160, 0.7)]);
+        this.ShaftPhase = 0; this.Count = 0;
+    }
+
+    Run(Pitch, Shaft, Throttle, Whoosh = 0.1)
+    {
+        const Rate = this.Rate, Fade = (Hz) => 1 - Smoothstep(Rate * 0.34, Rate * 0.45, Hz), ShaftHz = Pitch / 12;
+        if ((this.Count++ & 63) === 0)
+        {
+            const Hz = Mix(this.Spool[0], this.Spool[1], Shaft);
+            for (const Duct of this.Duct) { Duct[0].Shape('Band', Hz, 0.75); Duct[1].Shape('Band', Hz * 2.3, 1.1); }
+            this.BuzzBand.Shape('Band', Clamp(Pitch * 0.55, 400, 9000), 1.4);
+        }
+        this.ShaftPhase += ShaftHz / Rate; this.ShaftPhase -= Math.floor(this.ShaftPhase);
+        const Wobble = 1 + 0.2 * Math.sin(Tau * this.ShaftPhase) + 0.08 * Math.sin(Tau * 2 * this.ShaftPhase + 1.3);
+        let Mid = 0, Side = 0;
+        const A = this.Blade[0].Run(Pitch) * Fade(Pitch) * Wobble;
+        if (this.Twins === 2) { const B = this.Blade[1].Run(Pitch * this.Detune) * Fade(Pitch) * (2 - Wobble); Mid += (A + B) * 0.5; Side += (A - B) * 0.35; }
+        else Mid += A;
+        Mid += this.Half.Run(Pitch * 0.5) * 0.3 + this.Double.Run(Pitch * 2) * 0.12 * Fade(Pitch * 2);
+        Mid += this.BuzzBand.Run(this.Buzz.Run(ShaftHz, Rate)) * 0.9 * Math.pow(Shaft, 4) * Throttle;
+        // Inlet rush: scaled by the caller (Whoosh); returned separately so callers can level it against the whistle.
+        const Flow = Whoosh * Shaft * (0.2 + 0.8 * Throttle) * 2.9;
+        const RushL = this.Duct[0][2].Run(this.Duct[0][0].Run(this.Airs[0].Run()) + this.Duct[0][1].Run(this.Airs[0].Run()) * 0.4);
+        const RushR = this.Duct[1][2].Run(this.Duct[1][0].Run(this.Airs[1].Run()) + this.Duct[1][1].Run(this.Airs[1].Run()) * 0.4);
+        return [Mid, Side, (RushL + RushR) * 0.5 * Flow, (RushL - RushR) * 0.5 * Flow];
+    }
+}
+
+/**
+ * Blow-off valve. Fire(Pressure) when the throttle snaps shut on boost. Atmospheric: a sharp "ch" as the piston
+ * cracks open, then a jet of air whose hiss falls in pitch as the pressure bleeds away ("pssshh"), the piston
+ * fluttering on its spring as it closes; recirculating: the same through the intake, so a duller, shorter "tshh".
+ * Run() → [Mid, Side].
+ */
+export class BlowOff
+{
+    constructor(Rate, Vents = 'Atmos', Seed = 51)
+    {
+        this.Rate = Rate; this.Open = Vents === 'Atmos'; this.Noise = new SeededNoise(Seed); this.Side = new SeededNoise(Seed + 1);
+        this.Jet = [new Biquad(Rate), new Biquad(Rate)]; this.Hiss = [new Biquad(Rate).Shape('High', this.Open ? 3000 : 1200, 0.7), new Biquad(Rate).Shape('High', this.Open ? 3000 : 1200, 0.7)];
+        this.Dull = [new Biquad(Rate).Shape('Low', this.Open ? 11000 : 3400, 0.7), new Biquad(Rate).Shape('Low', this.Open ? 11000 : 3400, 0.7)];
+        this.Pressure = 0; this.Start = 0; this.Age = 0; this.Count = 0;
+    }
+
+    Fire(Pressure) { this.Pressure = this.Start = Pressure; this.Age = 0; }
+    get Busy() { return this.Pressure > 0.15 * this.Start && this.Pressure > 0.02; }
+
+    Run()
+    {
+        if (this.Pressure < 0.0005) return [0, 0];
+        const Rate = this.Rate, T = this.Age++ / Rate, Share = this.Pressure / Math.max(0.05, this.Start);
+        if ((this.Count++ & 31) === 0)
+        {
+            const Hz = this.Open ? Mix(1900, 5200, Share) : Mix(800, 2200, Share);
+            this.Jet[0].Shape('Band', Hz, 0.8); this.Jet[1].Shape('Band', Hz * 1.06, 0.8);
+        }
+        const Crack = T < 0.004 ? (1 - T / 0.004) * 1.8 : 0;
+        const Attack = Math.min(1, T / 0.006);
+        const Flutter = this.Open && Share < 0.55 ? 1 - 0.45 * Math.pow(Math.max(0, Math.sin(Tau * 34 * T)), 2) : 1;
+        const Level = this.Pressure * Attack * Flutter;
+        const L = this.Dull[0].Run(this.Jet[0].Run(this.Noise.White()) * 1.6 + this.Hiss[0].Run(this.Noise.White()) * 0.5) * Level + this.Noise.White() * Crack * this.Start * 0.4;
+        const R = this.Dull[1].Run(this.Jet[1].Run(this.Side.White()) * 1.6 + this.Hiss[1].Run(this.Side.White()) * 0.5) * Level;
+        this.Pressure *= 1 - 1 / ((this.Open ? 0.34 : 0.15) * Rate);
+        return [(L + R) * 0.5, (L - R) * 0.4];
+    }
+}
+
+/**
+ * Compressor surge (no blow-off valve): trapped air reverses through the wheel in bursts, each a chuff of turbulent air
+ * ringing the intake pipe, the bursts slowing from about 20 to 7 a second as the pressure falls: "stu-tu-tu-tu".
+ */
+export class Surge
+{
+    constructor(Rate, Seed = 61)
+    {
+        this.Rate = Rate; this.Noise = new SeededNoise(Seed);
+        this.Bands = [new Biquad(Rate).Shape('Band', 750, 1.3), new Biquad(Rate).Shape('Band', 1650, 2), new Biquad(Rate).Shape('Band', 3900, 1.2)];
+        this.Pipe = new Resonator(Rate, 1080, 0.035);
+        this.Level = 0; this.Phase = 0; this.Chuff = 0; this.Decay = Math.exp(-1 / (0.016 * Rate));
+    }
+
+    Fire(Level) { this.Level = Level; this.Phase = 0.95; }
+    get Busy() { return this.Level > 0.15; }
+
+    Run()
+    {
+        if (this.Level < 0.0005) return 0;
+        this.Phase += Mix(7, 20, this.Level) / this.Rate;
+        if (this.Phase >= 1) { this.Phase -= 1; this.Chuff = this.Noise.Range(0.65, 1); }
+        this.Chuff *= this.Decay;
+        const Air = this.Noise.White() * this.Chuff;
+        const Out = this.Bands[0].Run(Air) * 1.2 + this.Bands[1].Run(Air) * 0.7 + this.Bands[2].Run(Air) * 0.25 + this.Pipe.Run(Air) / this.Pipe.Norm * 0.01;
+        this.Level *= 1 - 1 / (0.55 * this.Rate);
+        return Out * this.Level;
+    }
 }
 
 /**
  * The inducer's own sound. Feed({ Rpm, Throttle, Boost, Spool }) each block (Boost and shaft Spool from TractionIntegrator for turbos; the
  * superchargers work out theirs from rpm), then Render() adds stereo samples. Lifting off sharply (throttle falling
  * well below its slow average) with boost up fires the blow-off valve or the surge chatter.
+ * Follow-up 20: every tone is a narrow band of noise (NarrowTone) with drift and flutter; the displacement blowers
+ * are pressure pulses (every rotor pocket opening to the outlet), with a rotor-rate modulation and a turbulent rasp
+ * gated by each pocket, so they growl and scream instead of humming like an oscillator.
  */
 export class InductionVoice
 {
     constructor(Rate, Name, { Pickup = 'Chase', Seed = 31, Redline = 7000 } = {})
     {
         this.Rate = Rate; this.Name = Name; this.Model = Inducers[Name]; this.Pickup = Pickup; this.Redline = Redline;
+        const M = this.Model;
         this.Noise = new SeededNoise(Seed);
         this.Rpm = new Slew(Rate, 0.012, 0); this.Throttle = new Slew(Rate, 0.03, 0); this.Held = new Slew(Rate, 0.18, 0);
         this.Boost = new Slew(Rate, 0.05, 0); this.FedBoost = 0; this.FedSpool = null;
-        this.Shaft = new Slew(Rate, this.Model.Lag ? Mix(0.18, 0.6, Clamp(this.Model.Lag, 0, 1)) : 0.2, 0);
-        this.Tones = Array.from({ length: 8 }, (_, Index) => new Tone(Index * 0.173));
+        this.Shaft = new Slew(Rate, M.Lag ? Mix(0.18, 0.6, Clamp(M.Lag, 0, 1)) : 0.2, 0);
+        if (M.Family === 'Turbo') this.Wheel = new Compressor(Rate, { Twins: M.Twins, Detune: M.Detune ?? 1.013, Seed: Seed + 1, Spool: M.Spool });
+        // Narrow tones: displacement harmonics get breathier as they go up; slot 6 = timing gear, 7 = e-motor.
+        this.Tones = Array.from({ length: 8 }, (_, Slot) => new NarrowTone(Rate, { Breath: Math.min(0.75, 0.28 + Slot * 0.08), Width: 0.006 + Slot * 0.002, Jitter: 0.002, Flutter: 0.15, Seed: Seed + 20 + Slot }));
+        this.Motor = [new NarrowTone(Rate, { Breath: 0.12, Width: 0.004, Jitter: 0.001, Flutter: 0.08, Seed: Seed + 40 }), new NarrowTone(Rate, { Breath: 0.25, Width: 0.006, Jitter: 0.001, Flutter: 0.1, Seed: Seed + 41 })];
         this.Bands = Array.from({ length: 6 }, () => new Biquad(Rate));
-        this.VentHigh = new Biquad(Rate).Shape('High', this.Model.Valve === 'Recirc' ? 700 : 1600, 0.7);
-        this.VentLow = new Biquad(Rate).Shape('Low', this.Model.Valve === 'Recirc' ? 2600 : 7500, 0.7);
-        this.SurgeBand = new Biquad(Rate).Shape('Band', 900, 1.1);
-        this.IntakeBand = new Biquad(Rate).Shape('Band', 700, 0.9);
-        this.Vent = 0; this.Surge = 0; this.SurgePhase = 0; this.Rattle = 0; this.RattlePhase = 0;
+        this.Valve = new BlowOff(Rate, M.Valve === 'Recirc' ? 'Recirc' : 'Atmos', Seed + 50);
+        this.Stall = new Surge(Rate, Seed + 60);
+        this.Intake = new Air(Rate, Seed + 70); this.IntakeBand = new Biquad(Rate).Shape('Band', 700, 0.9);
+        this.Rasp = new Biquad(Rate); this.Pocket = 0; this.RotorPhase = 0; this.Rattle = 0; this.RattlePhase = 0;
         this.Cabin = new Biquad(Rate).Shape('Low', 5000, 0.7);
         this.Blocks = [new DcBlock(Rate, 20), new DcBlock(Rate, 20)];
         this.Count = 0;
@@ -166,17 +289,12 @@ export class InductionVoice
                 this.Shaft.Target = Spin;
                 const Shaft = this.FedSpool !== null ? (this.Shaft.Current += (Math.max(this.FedSpool, M.Assist ? Spin : 0) - this.Shaft.Current) * 0.002) : this.Shaft.Run();
 
-                // Whistle (one or two compressors), and for the VGT the vanes sweep it with boost.
+                // Compressor: blade-pass whistle (the VGT's vanes sweep it with boost) and the inlet rush.
                 const Pitch = Mix(M.Whistle[0], M.Whistle[1], M.Vanes ? Math.pow(Shaft, 0.7) * Mix(0.8, 1.1, Boost) : Shaft);
-                const Level = M.Tone * Shaft * Shaft * (0.35 + 0.65 * Throttle);
-                const A = this.Tones[0].Run(Pitch, Rate) * Fade(Pitch);
-                if (M.Twins === 2) { const B = this.Tones[1].Run(Pitch * M.Detune, Rate) * Fade(Pitch); Mid += (A + B) * 0.5 * Level; Side += (A - B) * 0.35 * Level; }
-                else Mid += (A + this.Tones[1].Run(Pitch * 2, Rate) * 0.18 * Fade(Pitch * 2)) * Level;
-
-                // Spool whoosh (air through the compressor), VGT vane hiss.
-                if (Tune) { const Hz = Mix(M.Spool[0], M.Spool[1], Shaft); this.Bands[0].Shape('Band', Hz, 1.2); this.Bands[1].Shape('Band', Hz * 1.9, 1.6); this.Bands[2].Shape('Band', Mix(3000, 9000, Shaft), 3); }
-                const Air = Noise.White();
-                Mid += (this.Bands[0].Run(Air) + this.Bands[1].Run(Air) * 0.5) * M.Whoosh * Shaft * (0.2 + 0.8 * Throttle) * 3;
+                const Level = M.Tone * 2.3 * Shaft * Shaft * (0.35 + 0.65 * Throttle);
+                const [WhistleMid, WhistleSide, RushMid, RushSide] = this.Wheel.Run(Pitch, Shaft, Throttle, M.Whoosh);
+                Mid += WhistleMid * Level + RushMid; Side += WhistleSide * Level + RushSide;
+                if (Tune && M.Vanes) this.Bands[2].Shape('Band', Mix(3000, 9000, Shaft), 3);
                 if (M.Vanes) Mid += this.Bands[2].Run(Noise.White()) * M.Vanes * Throttle * Shaft;
 
                 // Electric assist: motor whine at the shaft's electrical frequency; on a lift it keeps singing as it harvests.
@@ -184,7 +302,7 @@ export class InductionVoice
                 {
                     const Electrical = Mix(15000, M.Assist.MaxRpm, Shaft) / 60 * M.Assist.PolePairs;
                     const Drive = Math.max(Throttle * (1 - Boost * 0.6), (Held - Throttle) * 1.5, 0.12 * Shaft);
-                    Mid += (this.Tones[2].Run(Electrical, Rate) * Fade(Electrical) + this.Tones[3].Run(Electrical * 3, Rate) * 0.35 * Fade(Electrical * 3)) * M.Assist.Level * Drive;
+                    Mid += (this.Motor[0].Run(Electrical) * Fade(Electrical) + this.Motor[1].Run(Electrical * 3) * 0.35 * Fade(Electrical * 3)) * M.Assist.Level * Drive;
                 }
             }
             else
@@ -196,17 +314,24 @@ export class InductionVoice
                 const Rotor = Rpm * M.Ratio;                                       // rotor or pulley rpm
                 const Load = M.Bypass ? Mix(0.22, 1, Smoothstep(0.15, 0.7, Throttle)) : Mix(0.55, 1, Throttle);
                 const Speed = Smoothstep(300, 1200, Rpm) * (0.35 + 0.65 * Clamp(Rpm / Top, 0, 1.2));
+                this.RotorPhase += Rotor / 60 / Rate; this.RotorPhase -= Math.floor(this.RotorPhase);
 
                 if (M.Curve !== 'Square')
                 {
-                    // Displacement blowers: each rotor pocket delivers a pressure pulse → whine at Rotor/60 × Pockets.
+                    // Displacement blowers: each rotor pocket opening to the outlet is a pressure pulse (backflow), so
+                    // the whine is a pulse train at Rotor/60 × Pockets: narrow-band harmonics, a turbulent rasp gated by
+                    // every pocket, and a rotor-rate modulation (no two pockets are quite alike).
                     const Base = Rotor / 60 * M.Pockets;
+                    this.Pocket += Base / Rate; this.Pocket -= Math.floor(this.Pocket);
                     let Whine = 0;
-                    M.Harmonics.forEach(([Multiple, Level], Slot) => { const Hz = Base * Multiple; Whine += this.Tones[Slot].Run(Hz, Rate) * Level * Fade(Hz); });
-                    const Pocket = this.Tones[0].Phase;
-                    const Chug = 1 - M.Pulsing + M.Pulsing * 2 * Math.pow(Math.max(0, Math.sin(Tau * Pocket)), 4);
-                    Mid += Whine * Chug * M.Whine * Load * Speed;
-                    if (M.TimingGear) { const Hz = Rotor / 60 * M.TimingGear; Mid += this.Tones[6].Run(Hz, Rate) * Fade(Hz) * M.Whine * 0.35 * Speed * (0.4 + 0.6 * Throttle); }
+                    M.Harmonics.forEach(([Multiple, Level], Slot) => { const Hz = Base * Multiple; Whine += this.Tones[Slot].Run(Hz) * Level * Fade(Hz); });
+                    const Rotation = 1 + 0.14 * Math.sin(Tau * this.RotorPhase) + 0.06 * Math.sin(Tau * 2 * this.RotorPhase + 0.7);
+                    const Gate = Math.pow(1 - this.Pocket, 6);                    // the backflow burst at each pocket opening
+                    const Chug = 1 - M.Pulsing + M.Pulsing * 2 * Math.pow(Math.max(0, Math.sin(Tau * this.Pocket)), 4);
+                    if (Tune) this.Rasp.Shape('Band', Clamp(Base * 3.2, 600, 12000), 1.2);
+                    const Rasp = this.Rasp.Run(Noise.White()) * Gate * 2.4;
+                    Mid += (Whine * Chug + Rasp) * Rotation * M.Whine * 1.25 * Load * Speed;
+                    if (M.TimingGear) { const Hz = Rotor / 60 * M.TimingGear; Mid += this.Tones[6].Run(Hz) * Fade(Hz) * M.Whine * 0.35 * Speed * (0.4 + 0.6 * Throttle); }
                     // Roots gear backlash rattle at idle (light load lets the timing gears chatter).
                     if (M.Rattle && Rpm < 1800)
                     {
@@ -219,39 +344,29 @@ export class InductionVoice
                 }
                 else
                 {
-                    // Centrifugal: impeller blade-pass tone plus the step-up gears' zing, both climbing with rpm².
+                    // Centrifugal: impeller blade-pass (a breathy band, modulated by the impeller shaft) and the step-up
+                    // gears' zing, both climbing with rpm², over the air the impeller moves.
                     const Impeller = Rotor * M.StepUp, Blade = Impeller / 60 * M.Blades, Mesh = Rotor / 60 * M.GearTeeth;
-                    const Level = M.Whine * Math.pow(Clamp(Rpm / Top, 0, 1.1), 1.5) * (0.3 + 0.7 * Throttle);
-                    Mid += (this.Tones[0].Run(Mesh, Rate) * Fade(Mesh) + this.Tones[1].Run(Mesh * 2, Rate) * 0.3 * Fade(Mesh * 2)) * Level;
-                    Mid += this.Tones[2].Run(Blade, Rate) * Fade(Blade) * Level * 0.55;
-                    if (Tune) this.Bands[4].Shape('Band', Clamp(Blade * 0.4, 800, 9000), 1.4);
-                    Mid += this.Bands[4].Run(Noise.White()) * Boost * M.Whine * 1.8;
+                    const Level = M.Whine * 1.25 * Math.pow(Clamp(Rpm / Top, 0, 1.1), 1.5) * (0.3 + 0.7 * Throttle);
+                    const Spin = 1 + 0.15 * Math.sin(Tau * this.RotorPhase * M.StepUp);
+                    Mid += (this.Tones[0].Run(Mesh) * Fade(Mesh) + this.Tones[2].Run(Mesh * 2) * 0.3 * Fade(Mesh * 2)) * Level;
+                    Mid += this.Tones[4].Run(Blade) * Fade(Blade) * Level * 0.6 * Spin;
+                    if (Tune) this.Bands[4].Shape('Band', Clamp(Blade * 0.4, 800, 9000), 0.9);
+                    Mid += this.Bands[4].Run(this.Intake.Run()) * Boost * M.Whine * 1.2;
                 }
                 // Intake roar: the blower inhales hard at full throttle.
                 if (Tune) this.IntakeBand.Shape('Band', Mix(380, 1300, Clamp(Rpm / Top, 0, 1)), 0.9);
-                Mid += this.IntakeBand.Run(Noise.White()) * M.Intake * Throttle * Speed;
+                Mid += this.IntakeBand.Run(this.Intake.Run()) * M.Intake * Throttle * Speed * 0.6;
             }
 
             // Lift detection: blow-off vent or compressor surge.
-            if (Held - Throttle > 0.35 && Boost > 0.3 && this.Vent < 0.15 && this.Surge < 0.15)
+            if (Held - Throttle > 0.35 && Boost > 0.3 && !this.Valve.Busy && !this.Stall.Busy)
             {
-                if (M.Valve === 'Atmos' || M.Valve === 'Recirc') this.Vent = Boost;
-                if (M.Flutter) { this.Surge = Boost; this.SurgePhase = 0; }
+                if (M.Valve === 'Atmos' || M.Valve === 'Recirc') this.Valve.Fire(Boost);
+                if (M.Flutter) this.Stall.Fire(Boost);
             }
-            if (this.Vent > 0.0005)
-            {
-                const Decay = M.Valve === 'Recirc' ? 0.14 : 0.32;
-                const Attack = this.Vent > 0.9 * Boost ? 1.4 : 1;                 // the valve cracks open with a sharper "ch"
-                Mid += this.VentLow.Run(this.VentHigh.Run(Noise.White())) * this.Vent * M.Vent * 0.32 * Attack;
-                this.Vent *= 1 - 1 / (Decay * Rate);
-            }
-            if (this.Surge > 0.0005)
-            {
-                this.SurgePhase += Mix(8, 22, this.Surge) / Rate;
-                const Chop = Math.pow(Math.max(0, Math.sin(Tau * this.SurgePhase)), 3);
-                Mid += this.SurgeBand.Run(Noise.White()) * Chop * this.Surge * M.Flutter * 1.8;
-                this.Surge *= 1 - 1 / (0.55 * Rate);
-            }
+            if (M.Vent) { const [VentMid, VentSide] = this.Valve.Run(); Mid += VentMid * M.Vent * 0.45; Side += VentSide * M.Vent * 0.45; }
+            if (M.Flutter) Mid += this.Stall.Run() * M.Flutter * 0.95;
 
             let Left0 = Mid + Side, Right0 = Mid - Side;
             if (this.Pickup === 'Cabin') { const Muffled = this.Cabin.Run(Mid) * 1.2; Left0 = Muffled + Side * 0.5; Right0 = Muffled - Side * 0.5; }

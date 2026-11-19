@@ -10,6 +10,7 @@
 //    each combustion varies cycle to cycle, so the half orders that make an engine sound alive are present.
 
 import { Tau, Clamp, Mix, Smoothstep, SeededNoise, OnePole, Biquad, ModeBank, DcBlock, DelayLine, PipeSection, Slew, PanGains, SoftClip } from './SignalKit.js';
+import { Compressor, BlowOff, Surge } from './ForcedInduction.js';
 
 //------------------------------------------------------------------------------------------------------------------------
 //                                                    PROFILES
@@ -336,12 +337,11 @@ export class PulseTrainEngine
         {
             this.Boost = new Slew(Rate, Profile.Turbo.Lag, 0);
             this.Shaft = new Slew(Rate, 0.25, 0);
-            this.WhistlePhase = [0, 0.3];
-            this.SpoolBand = [new Biquad(Rate), new Biquad(Rate)];
-            this.VentBand = [new Biquad(Rate).Shape('High', 1800, 0.7), new Biquad(Rate).Shape('Low', 6500, 0.7)];
-            this.SurgeBand = new Biquad(Rate).Shape('Band', 950, 1.1);
+            // Follow-up 20: the same aero-acoustic compressor, blow-off valve and surge as the add-on inducers
+            // (ForcedInduction.js), twin wheels slightly detuned, instead of two sines and plain filtered noise.
+            this.Wheel = new Compressor(Rate, { Twins: 2, Detune: 1.013, Seed: 141, Spool: [900, 3400] });
+            this.Dump = new BlowOff(Rate, 'Atmos', 151); this.Stall = new Surge(Rate, 161);
             this.GateBand = new Biquad(Rate).Shape('Band', 3200, 0.9);
-            this.Vent = 0; this.Surge = 0; this.SurgePhase = 0; this.SpoolTune = 0;
         }
 
         // Pickup colouring and space.
@@ -433,7 +433,7 @@ export class PulseTrainEngine
                 if (this.ExternalSpool !== null) Shaft = this.Shaft.Current += (Clamp(this.ExternalSpool, 0, 1.1) - this.Shaft.Current) * 0.002;   // the integrator's shaft (real lag)
                 else { this.Shaft.Target = Math.sqrt(Clamp(Boost, 0, 1)) * 0.85 + 0.15 * Smoothstep(800, 6000, Rpm); Shaft = this.Shaft.Run(); }
                 Gate = Smoothstep(0.85, 1, Boost) * Smoothstep(4500, 6500, Rpm);
-                if (Held - Throttle > 0.35 && Boost > 0.3 && this.Vent < 0.15) { this.Vent = Boost; this.Surge = Boost; this.SurgePhase = 0; }
+                if (Held - Throttle > 0.35 && Boost > 0.3 && !this.Dump.Busy) { this.Dump.Fire(Boost); if (Turbo.Flutter) this.Stall.Fire(Boost); }
                 const Cutoff = Mix(Mix(5500, Turbo.Muffle, Shaft), 7500, Gate * 0.5);
                 Bank0.Turbine.Set(Cutoff); Bank1.Turbine.Set(Cutoff);
             }
@@ -537,20 +537,12 @@ export class PulseTrainEngine
             if (Turbo)
             {
                 const Pitch = Mix(Turbo.Whistle[0], Turbo.Whistle[1], Shaft);
-                this.WhistlePhase[0] = (this.WhistlePhase[0] + Pitch / Rate) % 1;
-                this.WhistlePhase[1] = (this.WhistlePhase[1] + Pitch * 1.013 / Rate) % 1;
-                const Whistle = (Math.sin(Tau * this.WhistlePhase[0]) + Math.sin(Tau * this.WhistlePhase[1])) * 0.5 * Turbo.Tone * Shaft * Shaft * (0.35 + 0.65 * Throttle);
-                if ((this.SpoolTune = (this.SpoolTune + 1) % 64) === 0) { const Hz = Mix(900, 3400, Shaft); this.SpoolBand[0].Shape('Band', Hz, 1.3); this.SpoolBand[1].Shape('Band', Hz * 1.9, 1.6); }
-                const Air = Noise.White();
-                const Spool = (this.SpoolBand[0].Run(Air) + this.SpoolBand[1].Run(Air) * 0.5) * Turbo.Spool * Shaft * (0.25 + 0.75 * Throttle) * 3;
-                this.Vent *= 1 - 1 / (0.3 * Rate);
-                const Vent = this.VentBand[1].Run(this.VentBand[0].Run(Noise.White())) * this.Vent * Turbo.Vent;
-                this.Surge *= 1 - 1 / (0.5 * Rate);
-                this.SurgePhase += Mix(9, 21, this.Surge) / Rate;
-                const Chop = Math.pow(Math.max(0, Math.sin(Tau * this.SurgePhase)), 3);
-                const Surge = this.SurgeBand.Run(Noise.White()) * Chop * this.Surge * Turbo.Flutter * 3;
+                const [WhistleMid, , RushMid] = this.Wheel.Run(Pitch, Shaft, Throttle, Turbo.Spool);
+                const Whistle = WhistleMid * Turbo.Tone * 1.6 * Shaft * Shaft * (0.35 + 0.65 * Throttle);
+                const Vent = this.Dump.Run()[0] * Turbo.Vent * 1.4;
+                const Surge = Turbo.Flutter ? this.Stall.Run() * Turbo.Flutter * 1.6 : 0;
                 const Wastegate = this.GateBand.Run(Noise.White()) * Gate * 0.05;
-                Forced = Whistle + Spool + Vent + Surge + Wastegate;
+                Forced = Whistle + RushMid + Vent + Surge + Wastegate;
             }
 
             // Starter: pinion whine with brush noise; each compression stroke loads it (speed and level dip).
