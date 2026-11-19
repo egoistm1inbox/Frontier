@@ -16,6 +16,11 @@ const Shots = [
     { File: 'Filament-5a-CloneBars',   Query: 'look=Clones&time=2.2' },
     { File: 'Filament-5b-CloneDots',   Query: 'look=Clones&time=5&variant=1&palette=Rosso' },
     { File: 'Filament-6-Charging',     Query: 'look=Charge&time=12.5' },
+    { File: 'Filament-7-Orbits',       Query: 'look=Orbits&time=5' },
+    { File: 'Filament-8-Flora',        Query: 'look=Flora&time=4' },
+    { File: 'Filament-9a-RevealEdge',  Query: 'look=Prism&time=2.6' },
+    { File: 'Filament-9b-RevealLate',  Query: 'look=Prism&time=4.4' },
+    { File: 'Filament-10-FibreWave',   Query: 'look=FibreWave&time=6' },
 ];
 (async () =>
 {

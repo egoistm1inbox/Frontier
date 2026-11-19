@@ -119,7 +119,7 @@ the twin as the floor gets less glossy, and a contact shadow sits under the car.
 
 ## Particle showroom (Filament)
 `Filament/Filament.html` is a separate full-window demo of the particle effects seen on new cars' screens and in motion-graphics tools.
-The ControlVehicle stands on a black stage with six looks (keys 1–6):
+The ControlVehicle stands on a dark stage with ten looks (keys 1–9 and 0). Looks 7–10 follow reference stills (Follow-up 24) and hide the car by default:
 
 | Look | What it shows |
 |---|---|
@@ -129,13 +129,17 @@ The ControlVehicle stands on a black stage with six looks (keys 1–6):
 | Particular | Trapcode Particular-style: two emitters orbit the car. Particles age through a colour ramp, shrink over life and drift in a turbulence field. |
 | Clone field | MoGraph cloner: a grid of clones around the car, driven by a sphere effector, a shockwave ring and a noise effector. Bars (scale) or dots (move). |
 | Charging | Energy spirals down the cable, into the port and along the floor, then fills a 40-cell battery cell by cell (readout: %, kW, km). |
+| Orbits | Light threads orbit a glass sphere (fresnel rim, highlight, faint feathers inside). Inner rings run faster (Kepler), a few threads spiral in from far out, and sparkles and dust are scattered around. |
+| Flora | Three flowers made of glittering particles: the petal edges glow, the petals slowly open and close, and motes drift off. Big leaves in front, fern fans behind and floating dust; depth of field turns the near and far parts into bokeh. |
+| Display reveal | A jagged electric edge sweeps a screen (9 s loop). Behind it, a blue pixel grid with prismatic colour lines; at the edge, sparks and thin wisps break off; ahead of it, dark. |
+| Fibre wave | A twisting sheet of optical fibres, narrow at one end and fanned out at the other. Light pulses run along it, with a bright, sparkling leading edge on a teal backdrop. |
 
-**Controls.** Particles (5k–160k), speed, trail, size, glow, turbulence; 5 palettes (Ice, Ember, Aurora, Rosso, Mono). Car body: Auto, Paint,
-Ghost (black mirror), Glass (see-through with edge lines) or Hidden. Drag orbits, the wheel zooms. Keys: 1–6 looks · Space pause · O auto orbit · H hide panels.
+**Controls.** Particles (5k–160k), speed, trail, size, glow, turbulence, depth of field (lens aperture, focused on the orbit target); 8 palettes (Ice, Ember, Aurora, Rosso, Mono, Lilac, Jade, Teal). Car body: Auto, Paint,
+Ghost (black mirror), Glass (see-through with edge lines) or Hidden. Drag orbits, the wheel zooms. Keys: 1–9, 0 looks · Space pause · O auto orbit · H hide panels.
 
 📝 Every particle is a camera-facing capsule drawn between a Head and a Tail point, so one instanced quad gives a dot, a comet, a speed line or a
 clone bar. Motion is a function of the clock alone, with no simulation state: the Particular look re-integrates its 6-step turbulence path each
-frame. All 160k particles are one draw call per look. Additive HDR (half-float) feeds a dual-filter bloom, then ACES, a vignette and grain (`BloomChain`).
+frame. Threads (orbits, fibres, fern fans) are runs of capsules with flat-cut joints: instance n draws segment n mod S of thread floor(n / S). Depth of field widens out-of-focus particles into flat bokeh discs with a brighter rim. The random numbers come from a PCG integer hash, because sin-based hashes clump at large instance counts. All 160k particles are one draw call per look. Additive HDR (half-float) feeds a dual-filter bloom, then ACES, a vignette and grain (`BloomChain`).
 URL options for captures: `?look=Airflow&time=6&variant=1&palette=Ice&car=Ghost&count=80000&still=1&ui=0&capture=1`. `window.Filament` is the test
 hook: `SetLook(Key)`, `Seek(Seconds)`, `Settings`.
 
@@ -252,8 +256,9 @@ Each display is a fixed 1600 × 900 panel, scaled to fit the window. Drag to orb
 | `Acoustics/Acoustics.html` / `.css` / `.js` | The bench page: tachometer, pedals, paddles, surfaces, cue pads, mix, reel players. |
 | `Acoustics/Offline/RenderReel.mjs` | Scripts the 101 reel scenes, writes MP3s (and WAVs with `--wav`), spectrogram plates and levels. |
 | `Acoustics/Offline/SpectrumTools.mjs` | WAV and MP3 (`WriteMp3`, lamejs) writers, FFT, spectra, hand-rolled PNG plates (spectrogram + waveform). |
-| `Filament/Filament.js` | Particle showroom page: renderer, car body modes, instanced particle buffer, orbit camera, panel, look timelines (twin cycle, charge level), `window.Filament`. |
+| `Filament/Filament.js` | Particle showroom page: renderer, backdrop dome, glass sphere, car body modes, instanced particle buffer, orbit camera, panel, look timelines (twin cycle, charge level), `window.Filament`. |
 | `Filament/FilamentLooks.js` | GLSL: shared `Prelude` (noise-free ABC turbulence `Flow`), capsule `Projection` and `Fragment`, the six looks' `Track` functions, `Looks`, `Palettes`. |
+| `Filament/FilamentFibres.js` | GLSL for the reference looks: `Orbits`, `Flora`, `Prism` (display reveal), `FibreWave`. |
 | `Filament/SurfaceScatter.js` | `ScatterSurface` (area-weighted seeded points on the car, with normals and surface family), `SilhouetteProfile` (roof and half-width along X, plus the air-felt version as a texture). |
 | `Filament/BloomChain.js` | Half-float scene target, 5-level dual-filter bloom, ACES composite with vignette and grain. |
 | `Lobby/LobbyKit.js` | `Seeded` random, canvas-painted textures (tile, concrete, asphalt, moss, bark, shutter, sky, sign, forest wall), beams, halos, fronds, leaves, `Scatter` (instanced), `Release`. |

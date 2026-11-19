@@ -32,8 +32,8 @@ input[type=range] { width: 100%; height: 18px; margin: 0; background: transparen
 .Buttons button:hover { color: #fff; }
 .Buttons button.On { color: #001014; background: var(--Accent); }
 
-.Strip { position: fixed; left: 50%; bottom: 26px; transform: translateX(-50%); display: flex; gap: 6px; padding: 6px; border-radius: 16px; background: var(--Glass); border: 1px solid var(--Edge); backdrop-filter: blur(14px); transition: opacity 300ms; }
-.Strip .Pick { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 11px; font-size: 13px; color: var(--Soft); transition: background 160ms, color 160ms; }
+.Strip { position: fixed; left: calc((100vw - 290px) / 2); bottom: 22px; transform: translateX(-50%); display: flex; gap: 2px; padding: 5px; border-radius: 16px; background: var(--Glass); border: 1px solid var(--Edge); backdrop-filter: blur(14px); transition: opacity 300ms; }
+.Strip .Pick { display: flex; align-items: center; gap: 6px; padding: 9px 10px; border-radius: 11px; font-size: 12px; white-space: nowrap; color: var(--Soft); transition: background 160ms, color 160ms; }
 .Strip .Pick i { font-style: normal; font-size: 10px; width: 18px; height: 18px; display: grid; place-items: center; border-radius: 6px; background: rgba(255, 255, 255, 0.07); }
 .Strip .Pick b { font-weight: 500; }
 .Strip .Pick:hover { color: #fff; }
@@ -41,4 +41,5 @@ input[type=range] { width: 100%; height: 18px; margin: 0; background: transparen
 .Strip .Pick.On i { background: var(--Accent); color: #001014; }
 
 body.Bare .Panel, body.Bare .Strip, body.Bare .ProtoTag { opacity: 0; pointer-events: none; }
+@media (max-width: 1400px) { .Strip .Pick b { font-size: 11px; } .Strip .Pick { padding: 8px 7px; } }
 @media (max-width: 900px) { .Panel { width: 220px; } .Strip .Pick b { display: none; } }

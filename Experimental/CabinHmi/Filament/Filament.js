@@ -1,9 +1,10 @@
 // FILAMENT.JS
-// 🧩 Particle showroom: the ControlVehicle on a black stage with six GPU particle looks seen on new cars' screens and
+// 🧩 Particle showroom: the ControlVehicle on a dark stage with ten GPU particle looks seen on new cars' screens and
 //    in motion-graphics tools: light-speed streaks, a dust "digital twin" that assembles the car, wind-tunnel airflow,
-//    Particular-style emitters, a MoGraph clone field and a charging flow. Orbit the camera, tune count, speed,
+//    Particular-style emitters, a MoGraph clone field, a charging flow, and (from reference stills) light threads
+//    orbiting a glass sphere, particle flowers with bokeh, a display reveal and a fibre-optic wave. Orbit the camera, tune count, speed,
 //    trail, size, glow, turbulence and palette, and switch how the car body shows.
-// 📝 URL options (for captures): ?look=Airflow&time=6&palette=Ice&variant=1&car=Ghost&count=80000&still=1&ui=0&capture=1
+// 📝 URL options (for captures): ?look=Airflow&time=6&palette=Ice&variant=1&car=Ghost&count=80000&aperture=0.1&still=1&ui=0&capture=1
 
 import { THREE, AssembleVehicle, DefaultFinish, PanelEnvironment } from '../Shared/VehicleAssembly.js';
 import { ScatterSurface, SilhouetteProfile, Seeded } from './SurfaceScatter.js';
@@ -41,13 +42,46 @@ const RimLight = new THREE.DirectionalLight('#8fd8ff', 1.4);
 RimLight.position.set(-6, 3, -7);
 Scene.add(KeyLight, RimLight);
 
+// Backdrop: a gradient dome per look (black for the car looks, indigo, deep green or teal for the reference looks).
+const DomeTop = new THREE.Color('#010203'), DomeBottom = new THREE.Color('#010203');
+const Dome = new THREE.Mesh(new THREE.SphereGeometry(200, 32, 16), new THREE.ShaderMaterial({
+    side: THREE.BackSide, depthWrite: false,
+    uniforms: { uTop: { value: DomeTop }, uBottom: { value: DomeBottom } },
+    vertexShader: 'varying vec3 vDirection; void main() { vDirection = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+    fragmentShader: 'uniform vec3 uTop, uBottom; varying vec3 vDirection; void main() { gl_FragColor = vec4(mix(uBottom, uTop, smoothstep(-0.35, 0.55, vDirection.y)), 1.0); }',
+}));
+Dome.renderOrder = -10;
+Scene.add(Dome);
+
+// Glass sphere for the Orbits look: fresnel rim, one sharp highlight and faint feathered fibres inside. It writes depth,
+// so the threads passing behind it disappear.
+const GlobeCentre = new THREE.Vector3(0, 1.6, 0);
+const Globe = new THREE.Mesh(new THREE.SphereGeometry(1.32, 96, 64), new THREE.ShaderMaterial({
+    uniforms: { uFade: { value: 0 }, uRim: { value: new THREE.Color() }, uCore: { value: new THREE.Color() } },
+    vertexShader: 'varying vec3 vNormal, vView, vSpot; void main() { vSpot = position; vec4 P = modelViewMatrix * vec4(position, 1.0); vView = -P.xyz; vNormal = normalMatrix * normal; gl_Position = projectionMatrix * P; }',
+    fragmentShader: `uniform float uFade; uniform vec3 uRim, uCore; varying vec3 vNormal, vView, vSpot;
+        void main()
+        {
+            vec3 N = normalize(vNormal), V = normalize(vView), D = normalize(vSpot);
+            float Facing = clamp(dot(N, V), 0.0, 1.0), Fresnel = pow(1.0 - Facing, 3.0);
+            float Spec = pow(max(dot(N, normalize(normalize(vec3(-0.4, 0.7, 0.6)) + V)), 0.0), 140.0);
+            float Wisp = 0.5 + 0.5 * sin(D.y * 7.0 + D.z * 5.0) * sin(D.x * 6.0 - D.y * 4.0);
+            float Feather = pow(0.5 + 0.5 * sin(atan(D.y - 0.15, D.x) * 46.0 + D.z * 9.0 + Wisp * 3.0), 18.0) * smoothstep(0.2, 0.95, Facing) * Wisp * 0.12;
+            vec3 Colour = uCore * (0.035 + 0.06 * Facing + Feather) + uRim * Fresnel * 1.5 + vec3(Spec * 3.0);
+            gl_FragColor = vec4(Colour * uFade, 1.0);
+        }`,
+}));
+Globe.position.copy(GlobeCentre);
+Globe.visible = false;
+Scene.add(Globe);
+
 //------------------------------------------------------------------------------------------------------------------------
 //                                                    SETTINGS
 //------------------------------------------------------------------------------------------------------------------------
 
 const Settings = {
     Look: Math.max(0, Looks.findIndex((Each) => Each.Key === Query.get('look'))),
-    Count: 60000, Speed: 1, Tail: 0.07, Size: 1, Glow: 1, Turbulence: 0.5, Palette: 'Ice', Car: 'Auto', Variant: 0,
+    Count: 60000, Speed: 1, Tail: 0.07, Size: 1, Glow: 1, Turbulence: 0.5, Aperture: 0, Palette: 'Ice', Car: 'Auto', Variant: 0,
     Orbit: Query.get('orbit') === '1', Paused: Query.get('still') === '1',
 };
 
@@ -58,6 +92,7 @@ const Sliders = [
     { Key: 'Size',       Label: 'Size',       Min: 0.3,  Max: 3,   Step: 0.05, Show: (V) => `${V.toFixed(2)}×` },
     { Key: 'Glow',       Label: 'Glow',       Min: 0,    Max: 3,   Step: 0.05, Show: (V) => `${V.toFixed(2)}` },
     { Key: 'Turbulence', Label: 'Turbulence', Min: 0,    Max: 2.5, Step: 0.05, Show: (V) => `${V.toFixed(2)}` },
+    { Key: 'Aperture',   Label: 'Depth of field', Min: 0, Max: 0.3, Step: 0.01, Show: (V) => (V > 0 ? `${Math.round(V * 100)} cm lens` : 'Off') },
 ];
 const CarModes = ['Auto', 'Paint', 'Ghost', 'Glass', 'Hidden'];
 
@@ -120,7 +155,7 @@ Geometry.instanceCount = Settings.Count;
 
 const Shared = {
     uClock: { value: 0 }, uSpeed: { value: 1 }, uTail: { value: 0.07 }, uSize: { value: 1 }, uTurbulence: { value: 0.5 },
-    uSide: { value: 200 }, uVariant: { value: 0 },
+    uSide: { value: 200 }, uVariant: { value: 0 }, uCount: { value: 60000 }, uAperture: { value: 0 }, uFocus: { value: 10 },
     uMorph: { value: 0 }, uMorphRate: { value: 0 }, uRelease: { value: 0 }, uReleaseRate: { value: 0 }, uScan: { value: -1 }, uCharge: { value: 0 },
     uViewport: { value: new THREE.Vector2(1, 1) },
     uTone0: { value: new THREE.Color() }, uTone1: { value: new THREE.Color() }, uTone2: { value: new THREE.Color() }, uTone3: { value: new THREE.Color() },
@@ -230,6 +265,8 @@ function SetPalette(Name)
     Settings.Palette = Name;
     Palettes[Name].forEach((Hex, Slot) => Shared[`uTone${Slot}`].value.set(Hex).convertSRGBToLinear());
     EdgeLine.color.set(Palettes[Name][1]);
+    Globe.material.uniforms.uRim.value.set(Palettes[Name][1]).convertSRGBToLinear();
+    Globe.material.uniforms.uCore.value.set(Palettes[Name][2]).convertSRGBToLinear();
     PaletteRow.querySelectorAll('.Swatch').forEach((Each) => Each.classList.toggle('On', Each.dataset.palette === Name));
 }
 function SyncPanel()
@@ -246,7 +283,7 @@ document.getElementById('Reset').addEventListener('click', () => SetLook(Setting
 const Strip = document.getElementById('Strip');
 Looks.forEach((Look, Slot) =>
 {
-    const Button = Build('button', 'Pick', `<i>${Slot + 1}</i><b>${Look.Name}</b>`);
+    const Button = Build('button', 'Pick', `<i>${(Slot + 1) % 10}</i><b>${Look.Name}</b>`);
     Button.addEventListener('click', () => SetLook(Slot));
     Strip.append(Button);
 });
@@ -257,7 +294,7 @@ function SetLook(Slot, Reapply = Slot !== Settings.Look || !SetLook.Done)
     Settings.Look = Slot;
     if (Reapply)
     {
-        Object.assign(Settings, { Count: Look.Defaults.Count, Speed: Look.Defaults.Speed, Tail: Look.Defaults.Tail, Size: Look.Defaults.Size, Turbulence: Look.Defaults.Turbulence, Variant: 0 });
+        Object.assign(Settings, { Count: Look.Defaults.Count, Speed: Look.Defaults.Speed, Tail: Look.Defaults.Tail, Size: Look.Defaults.Size, Turbulence: Look.Defaults.Turbulence, Aperture: Look.Defaults.Aperture ?? 0, Variant: 0 });
         SetPalette(Look.Defaults.Palette);
         AimAt(Look.View, !SetLook.Done);
         Cycle = 0;
@@ -275,7 +312,8 @@ window.addEventListener('keydown', (Event) =>
 {
     if (Event.target.tagName === 'INPUT' && Event.target.type !== 'range') return;
     const Digit = Number.parseInt(Event.key, 10);
-    if (Digit >= 1 && Digit <= Looks.length) SetLook(Digit - 1);
+    if (Digit === 0 && Looks.length >= 10) SetLook(9);
+    else if (Digit >= 1 && Digit <= Looks.length) SetLook(Digit - 1);
     else if (Event.code === 'Space') { Event.preventDefault(); Settings.Paused = !Settings.Paused; SyncToggles(); }
     else if (Event.key === 'h' || Event.key === 'H') document.body.classList.toggle('Bare');
     else if (Event.key === 'o' || Event.key === 'O') { Settings.Orbit = !Settings.Orbit; SyncToggles(); }
@@ -307,6 +345,13 @@ function RunTimelines(Seconds)
         GhostOpacity = Math.min(1, Math.max(0, (Shared.uMorph.value - 0.8) / 0.2)) * (1 - Math.min(1, Shared.uRelease.value * 2.5));
         Text = Time < 4.5 ? 'Assembling' : Time > 6 && Time < 8.5 ? 'Scanning' : Time > 10 ? 'Releasing' : 'Ready';
     }
+    if (Look === 'Prism')
+    {
+        const Time = Cycle % 9;
+        Shared.uMorph.value = Span(Time, 0, 5.5);
+        Shared.uMorphRate.value = Time < 5.5 ? Settings.Speed / 5.5 : 0;
+        CycleFade = Math.min(Span(Time, 0, 0.3), 1 - Span(Time, 8, 9));
+    }
     if (Look === 'Charge')
     {
         const Level = (Cycle % 20) / 20;
@@ -334,6 +379,7 @@ function Resize()
 }
 window.addEventListener('resize', Resize);
 
+const Scratch = new THREE.Color();
 function Advance(Seconds)
 {
     if (!Settings.Paused) Clock += Seconds;
@@ -345,9 +391,18 @@ function Advance(Seconds)
     Shared.uSize.value = Settings.Size;
     Shared.uTurbulence.value = Settings.Turbulence;
     Shared.uVariant.value = Settings.Variant;
+    Shared.uAperture.value = Settings.Aperture;
+    Shared.uFocus.value = Orbit.Distance;
     const Side = Math.floor(Math.sqrt(Settings.Count));
     Shared.uSide.value = Side;
     Geometry.instanceCount = Look.Key === 'Clones' ? Side * Side : Settings.Count;
+    Shared.uCount.value = Geometry.instanceCount;
+    const Backdrop = Look.Backdrop ?? ['#010203', '#010203'], Blend = Math.min(1, Seconds * 4);
+    DomeTop.lerp(Scratch.set(Backdrop[0]), Blend);                     // hex used as linear on purpose: a visible tint after ACES
+    DomeBottom.lerp(Scratch.set(Backdrop[1]), Blend);
+    const Orbiting = Layers.find((Layer) => Layer.Look.Sphere);
+    Globe.material.uniforms.uFade.value = Orbiting.Fade;
+    Globe.visible = Orbiting.Fade > 0.01;
     for (const Layer of Layers)
     {
         const Target = Layer.Look === Look ? 1 : 0;
@@ -382,6 +437,8 @@ window.Filament = {
     {
         Clock = 0; Cycle = 0;
         for (const Layer of Layers) Layer.Fade = Layer.Look === Looks[Settings.Look] ? 1 : 0;
+        const Backdrop = Looks[Settings.Look].Backdrop ?? ['#010203', '#010203'];
+        DomeTop.set(Backdrop[0]); DomeBottom.set(Backdrop[1]);
         const Paused = Settings.Paused; Settings.Paused = false;
         for (let Time = 0; Time < Seconds; Time += 1 / 30) { Clock += 1 / 30; RunTimelines(1 / 30); }
         Settings.Paused = Paused;
@@ -393,7 +450,7 @@ window.Filament = {
 
 Resize();
 SetLook(Settings.Look);
-for (const Key of ['Count', 'Speed', 'Tail', 'Size', 'Glow', 'Turbulence']) if (Query.has(Key.toLowerCase())) Settings[Key] = +Query.get(Key.toLowerCase());
+for (const Key of ['Count', 'Speed', 'Tail', 'Size', 'Glow', 'Turbulence', 'Aperture']) if (Query.has(Key.toLowerCase())) Settings[Key] = +Query.get(Key.toLowerCase());
 if (Query.has('palette') && Palettes[Query.get('palette')]) SetPalette(Query.get('palette'));
 if (Query.has('car') && CarModes.includes(Query.get('car'))) Settings.Car = Query.get('car');
 if (Query.has('variant')) Settings.Variant = +Query.get('variant');

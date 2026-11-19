@@ -1270,5 +1270,7 @@ in `Exhibits/LightCompute/Results/FogFacetRegression.txt`; this was a fixture-se
   Follow-up 21: ricochets (tumbling fragment with drag and flight-path Doppler), bullets into metal (dense `PlateModes` ring) and glass (crack, chink, shards landing).
   Follow-up 23: `Filament` particle showroom (separate demo): Light speed, Digital twin, Airflow, Particular, Clone field, Charging; capsule
   particles (`FilamentLooks`), `SurfaceScatter`, `BloomChain`. 10 captures, 0 console errors.
+  Follow-up 24: Filament looks from reference stills: Orbits (glass sphere), Flora (particle flowers, bokeh), Display reveal, Fibre wave;
+  depth of field, thread segments, PCG hash, backdrop dome (`FilamentFibres`). 15 captures, 0 console errors.
   Follow-up 22: Agera RS (`AgeraRs`, cross-plane 90° crank), rubber tyre squeal per surface (`Singer`, `Concrete` surface, `Tyres-Drift` scene), ricochet warble, subsonic whizz flown past the ear.
   Live AudioWorklet bench with car switch + offline MP3 reel (101 files, 26 MB) with spectrogram plates (`Exhibits/CabinHmi/Audio/`). Names unapproved.

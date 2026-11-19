@@ -5,6 +5,8 @@
 // 📝 Car axes: +X forward, +Y up, Z across (left side is −Z). uProfile holds the car silhouette along X
 //    (R roof, G half-width, B and A the same felt by passing air; see SurfaceScatter.SilhouetteProfile).
 
+import { Orbits, Flora, Prism, FibreWave } from './FilamentFibres.js';
+
 export const Prelude = /* glsl */ `
 attribute vec2 aCorner;                 // quad corner: x −1 tail … +1 head, y −1 … +1 across
 attribute vec4 aSeed;                   // four uniform randoms per particle
@@ -14,6 +16,7 @@ attribute float aFamily;                // VehicleAssembly.Family of that surfac
 
 uniform float uClock, uSpeed, uTail, uSize, uTurbulence, uFade, uSide, uVariant;
 uniform float uMorph, uMorphRate, uRelease, uReleaseRate, uScan, uCharge;
+uniform float uCount, uAperture, uFocus;          // live instance count; lens aperture (m) and focus distance for bokeh
 uniform vec2 uViewport;
 uniform vec3 uTone0, uTone1, uTone2, uTone3;      // palette: base, accent, hot core, contrast
 uniform sampler2D uProfile;
@@ -21,11 +24,18 @@ uniform float uProfileFrom, uProfileSpan;
 uniform vec3 uCarMin, uCarMax;
 
 varying vec2 vLocal;
-varying float vLength, vHalf, vFade;
+varying float vLength, vHalf, vFade, vBokeh, vRamp;
 varying vec3 vTint;
 
 const float Tau = 6.2831853;
-float Hash(float N) { return fract(sin(N * 12.9898 + 4.1414) * 43758.5453); }
+// PCG integer hash of the float's bits: stays random for large inputs (sin-based hashes clump past ~10⁵).
+float Hash(float N)
+{
+    uint X = floatBitsToUint(N) * 747796405u + 2891336453u;
+    X = ((X >> ((X >> 28u) + 4u)) ^ X) * 277803737u;
+    return float((X >> 22u) ^ X) / 4294967295.0;
+}
+float Ramp = 1.0;                       // a look sets 0 for thread segments: solid, no comet fade from tail to head
 vec4 Profile(float X) { return texture2D(uProfile, vec2(clamp((X - uProfileFrom) / uProfileSpan, 0.0, 1.0), 0.5)); }
 vec3 Sphere(float U, float V) { float Z = U * 2.0 - 1.0, R = sqrt(max(0.0, 1.0 - Z * Z)), A = V * Tau; return vec3(R * cos(A), Z, R * sin(A)); }
 
@@ -42,16 +52,18 @@ vec3 Spin(vec3 P, float A) { float C = cos(A), S = sin(A); return vec3(C * P.x -
 `;
 
 // Turns Head/Tail/Width (metres) into a screen-space capsule. Width under ~0.75 px is clamped and dimmed instead,
-// which keeps far particles from shimmering.
+// which keeps far particles from shimmering. Depth of field: a thin-lens circle of confusion, A·|1/focus − 1/depth|,
+// widens out-of-focus particles into bokeh discs and spreads their light (dimmer per pixel).
 export const Projection = /* glsl */ `
 void main()
 {
     vec3 Head, Tail, Tint; float Width, Glow;
     Track(Head, Tail, Tint, Width, Glow);
     vTint = Tint * Glow * uFade;
+    vRamp = Ramp;
     mat4 Into = projectionMatrix * modelViewMatrix;
     vec4 H = Into * vec4(Head, 1.0), T = Into * vec4(Tail, 1.0);
-    if (H.w < 0.08 || T.w < 0.08 || Glow <= 0.0) { gl_Position = vec4(0.0, 0.0, 2.0, 1.0); vHalf = 1.0; vLength = 0.0; vFade = 0.0; vLocal = vec2(9.0); return; }
+    if (H.w < 0.08 || T.w < 0.08 || Glow <= 0.0) { gl_Position = vec4(0.0, 0.0, 2.0, 1.0); vHalf = 1.0; vLength = 0.0; vFade = 0.0; vBokeh = 0.0; vLocal = vec2(9.0); return; }
     vec2 Half = uViewport * 0.5;
     vec2 ScreenHead = H.xy / H.w * Half, ScreenTail = T.xy / T.w * Half;
     vec2 Along = ScreenHead - ScreenTail;
@@ -59,8 +71,11 @@ void main()
     vec2 Direction = Length > 1e-4 ? Along / Length : vec2(1.0, 0.0);
     vec2 Across = vec2(-Direction.y, Direction.x);
     float Pixels = Width * projectionMatrix[1][1] * Half.y / H.w;
-    float Radius = clamp(Pixels, 0.75, 5.0);                                       // near-camera particles stay crisp
-    vFade = clamp(Pixels / 0.75, 0.0, 1.0);
+    float Sharp = clamp(Pixels, 0.75, 5.0);                                        // near-camera particles stay crisp
+    float Blur = min(uAperture * abs(1.0 / uFocus - 1.0 / H.w) * projectionMatrix[1][1] * Half.y, 44.0);
+    float Radius = max(Sharp, Blur);
+    vFade = clamp(Pixels / 0.75, 0.0, 1.0) * clamp(pow(Sharp / Radius, 1.25), 0.05, 1.0);
+    vBokeh = smoothstep(Sharp + 1.0, Sharp + 6.0, Blur);
     float Pick = aCorner.x * 0.5 + 0.5;
     vec2 Screen = mix(ScreenTail, ScreenHead, Pick) + (Direction * aCorner.x + Across * aCorner.y) * Radius * 1.6;
     float Depth = mix(T.z / T.w, H.z / H.w, Pick);
@@ -71,14 +86,19 @@ void main()
 
 export const Fragment = /* glsl */ `
 varying vec2 vLocal;
-varying float vLength, vHalf, vFade;
+varying float vLength, vHalf, vFade, vBokeh, vRamp;
 varying vec3 vTint;
 void main()
 {
-    float Gap = length(vec2(vLocal.x - clamp(vLocal.x, 0.0, vLength), vLocal.y)) / vHalf;
-    float Core = exp(-Gap * Gap * 2.4) + 0.18 * exp(-Gap * 1.2) * step(Gap, 1.6);
+    // Thread segments (vRamp 0) are cut flat at both ends so neighbouring segments meet without doubling at the joint.
+    float Beyond = vLocal.x - clamp(vLocal.x, 0.0, vLength);
+    if (vRamp < 0.5 && vBokeh < 0.5 && vLength > 0.5 && abs(Beyond) > 0.0) discard;
+    float Gap = length(vec2(vRamp < 0.5 && vBokeh < 0.5 ? 0.0 : Beyond, vLocal.y)) / vHalf;
+    float Soft = exp(-Gap * Gap * 2.4) + 0.18 * exp(-Gap * 1.2) * step(Gap, 1.6);
+    float Disc = (1.0 - smoothstep(0.84, 1.0, Gap)) * (0.7 + 0.55 * smoothstep(0.55, 0.96, Gap));   // flat bokeh disc, brighter rim
+    float Core = mix(Soft, Disc, vBokeh);
     float Ramp = vLength > 0.5 ? clamp(vLocal.x / vLength, 0.0, 1.0) : 1.0;
-    float Comet = mix(0.12, 1.0, Ramp * Ramp);
+    float Comet = mix(1.0, mix(0.12, 1.0, Ramp * Ramp), vRamp);
     vec3 Colour = vTint * Core * Comet * vFade;
     if (Core < 0.003) discard;
     gl_FragColor = vec4(Colour, 1.0);
@@ -358,6 +378,18 @@ export const Looks = [
       Variant: { Label: 'Clones', Options: ['Bars', 'Dots'] } },
     { Key: 'Charge', Name: 'Charging', Tagline: 'Energy runs down the cable, into the port and fills the battery cell by cell', Track: Charge, Car: 'Glass',
       View: { Yaw: 236, Pitch: 22, Distance: 9.5, Target: [-0.8, 0.5, -0.4] }, Defaults: { Speed: 1, Tail: 0.08, Size: 1, Turbulence: 0.5, Count: 30000, Palette: 'Aurora' } },
+    { Key: 'Orbits', Name: 'Orbits', Tagline: 'Light threads orbit a glass sphere, fast inside, a few spiralling in from far out', Track: Orbits, Car: 'Hidden', Sphere: true,
+      Backdrop: ['#0b0920', '#010104'], View: { Yaw: 104, Pitch: 13, Distance: 10.5, Target: [0.6, 1.5, 0] },
+      Defaults: { Speed: 1, Tail: 0.05, Size: 1, Turbulence: 0.5, Count: 80000, Palette: 'Lilac', Aperture: 0.05 } },
+    { Key: 'Flora', Name: 'Flora', Tagline: 'Flowers, leaves and fern fans made of glittering particles, with bokeh', Track: Flora, Car: 'Hidden',
+      Backdrop: ['#021209', '#000201'], View: { Yaw: 90, Pitch: 7, Distance: 8, Target: [0, 1.1, 0] },
+      Defaults: { Speed: 1, Tail: 0.05, Size: 1, Turbulence: 0.6, Count: 140000, Palette: 'Jade', Aperture: 0.12 } },
+    { Key: 'Prism', Name: 'Display reveal', Tagline: 'An electric edge sweeps a screen, prismatic lines behind it, sparks breaking off', Track: Prism, Car: 'Hidden',
+      Backdrop: ['#050414', '#000001'], View: { Yaw: 58, Pitch: -2, Distance: 7.2, Target: [0.4, 2.2, 0] },
+      Defaults: { Speed: 1, Tail: 0.04, Size: 1, Turbulence: 0.6, Count: 150000, Palette: 'Ice', Aperture: 0.05 } },
+    { Key: 'FibreWave', Name: 'Fibre wave', Tagline: 'A twisting sheet of optical fibres with pulses and a sparkling leading edge', Track: FibreWave, Car: 'Hidden',
+      Backdrop: ['#0b4146', '#021316'], View: { Yaw: 96, Pitch: 6, Distance: 11, Target: [1.5, 1.6, 0] },
+      Defaults: { Speed: 1, Tail: 0.05, Size: 1, Turbulence: 0.5, Count: 90000, Palette: 'Teal', Aperture: 0.1 } },
 ];
 
 export const Palettes = {
@@ -366,4 +398,7 @@ export const Palettes = {
     Aurora: ['#21e08a', '#3cc8ff', '#eafff6', '#8a4dff'],
     Rosso:  ['#ff1f2e', '#ff8a55', '#fff4ec', '#5d6dff'],
     Mono:   ['#9aa3ad', '#dfe6ee', '#ffffff', '#5c6672'],
+    Lilac:  ['#8f7dff', '#d6cfff', '#ffffff', '#5b4bd6'],
+    Jade:   ['#19c98a', '#7affc9', '#eafff4', '#0a7d6b'],
+    Teal:   ['#18b9b0', '#62f6e7', '#eafffb', '#0b6c78'],
 };
