@@ -5,58 +5,60 @@
 //    u + 1/S. The same per-instance trick turns some threads into sparkles riding the same curves.
 //    These Track functions run inside FilamentLooks.Prelude (Hash, Flow, Spin, Sphere, palette uniforms).
 
-// 7 · Orbits: rings of light threads around a glass sphere, Kepler-fast inside, a few spiralling in from far out.
+// 7 · Orbits: concentric rings of light threads in one plane around a glass sphere, evenly spaced and slowly widening
+//     outward, Kepler-fast inside. Every 40th thread spirals in from far out in the same plane; dots ride the rings.
 export const Orbits = /* glsl */ `
 const vec3 OrbitCentre = vec3(0.0, 1.6, 0.0);
 const float OrbitSegments = 96.0;
-vec3 RingTilt(vec3 P, float Fibre)
+vec3 RingTilt(vec3 P)
 {
-    float Tilt = 0.36 + (Hash(Fibre * 4.7) - 0.5) * 0.1;
+    const float Tilt = 0.36, Roll = -0.32;                                       // one shared plane: the rings never cross
     P = vec3(P.x, P.y * cos(Tilt) - P.z * sin(Tilt), P.y * sin(Tilt) + P.z * cos(Tilt));
-    float Roll = -0.32 + (Hash(Fibre * 6.1) - 0.5) * 0.12;
     return OrbitCentre + vec3(P.x * cos(Roll) - P.y * sin(Roll), P.x * sin(Roll) + P.y * cos(Roll), P.z);
 }
-vec3 OrbitPoint(float Fibre, float U, float Time)
+float RingRadius(float Ring, float Rings) { return 1.55 + 5.6 * pow((Ring + 0.5) / Rings, 1.25); }
+vec3 OrbitPoint(float Ring, float Rings, float U, float Time)
 {
-    float Radius = 1.65 + pow(Hash(Fibre * 7.91), 1.8) * 5.2;
-    float Spiral = step(Hash(Fibre * 3.3), 0.16);
-    float Reach = Radius * (1.0 + Spiral * pow(1.0 - U, 1.5) * 2.2);
-    float Span = mix(0.6, 2.4, Hash(Fibre * 5.1)) * (1.0 + Spiral * 1.5);
-    float Angle = Hash(Fibre * 2.9) * Tau + Time * uSpeed * 0.55 * pow(1.65 / Radius, 1.5) + (U - 1.0) * Span;
-    float Lift = (Hash(Fibre * 8.3) - 0.5) * 0.05 * Radius;
-    return RingTilt(vec3(cos(Angle) * Reach, Lift, sin(Angle) * Reach), Fibre);
+    float Radius = RingRadius(Ring, Rings);
+    float Spiral = step(mod(Ring, 40.0), 0.5);
+    float Reach = Radius * (1.0 + Spiral * pow(1.0 - U, 1.5) * 1.6);
+    float Span = (1.5 + 0.5 * sin(Ring * 0.37)) * (1.0 + Spiral * 1.2);                // arc length drifts smoothly ring to ring
+    float Angle = Ring * 2.39996 + Time * uSpeed * 0.55 * pow(1.65 / Radius, 1.5) + (U - 1.0) * Span;   // heads spread by the golden angle
+    return RingTilt(vec3(cos(Angle) * Reach, 0.0, sin(Angle) * Reach));
 }
 void Track(out vec3 Head, out vec3 Tail, out vec3 Tint, out float Width, out float Glow)
 {
     float Index = float(gl_InstanceID);
     float Fibre = floor(Index / OrbitSegments), Segment = mod(Index, OrbitSegments);
-    if (Hash(Fibre * 9.7) < 0.08)                                                 // sparkle slot: dots on their own orbits, or loose dust
+    float Rings = max(1.0, floor(uCount / OrbitSegments));
+    if (Hash(Fibre * 9.7) < 0.012)                                                // sparkle slot: dots riding the rings, a little loose dust
     {
-        if (Hash(Index * 0.311) < 0.2)
+        if (Hash(Index * 0.311) < 0.15)
         {
             vec3 Box = vec3(Hash(Index * 0.71), Hash(Index * 0.93), Hash(Index * 1.37)) - 0.5;
             Head = OrbitCentre + Box * vec3(22.0, 9.0, 18.0) + vec3(0.0, sin(uClock * 0.2 + Index) * 0.2, 0.0);
             Tail = Head;
-            Tint = mix(uTone1, uTone2, Hash(Index * 2.1)); Width = mix(0.01, 0.03, Hash(Index * 3.7)) * uSize;
-            Glow = mix(0.3, 2.0, pow(Hash(Index * 4.3), 4.0)) * (0.6 + 0.4 * sin(uClock * 2.0 + Index * 0.37));
+            Tint = mix(uTone1, uTone2, 0.5); Width = 0.014 * uSize;
+            Glow = mix(0.3, 1.4, pow(Hash(Index * 4.3), 4.0)) * (0.6 + 0.4 * sin(uClock * 2.0 + Index * 0.37));
             return;
         }
-        Head = OrbitPoint(Index + 0.5, 1.0, uClock);
-        Tail = OrbitPoint(Index + 0.5, 1.0, uClock - max(uTail, 0.02));
-        Tint = uTone2; Width = mix(0.008, 0.024, Hash(Index * 1.9)) * uSize;
-        Glow = mix(0.8, 3.5, pow(Hash(Index * 5.3), 4.0));
+        float Ring = floor(Hash(Index * 0.53) * Rings), Phase = Hash(Index * 0.77) * Tau;
+        Head = OrbitPoint(Ring, Rings, 1.0, uClock + Phase / (0.55 * uSpeed * pow(1.65 / RingRadius(Ring, Rings), 1.5)));
+        Tail = OrbitPoint(Ring, Rings, 1.0 - 0.006, uClock + Phase / (0.55 * uSpeed * pow(1.65 / RingRadius(Ring, Rings), 1.5)));
+        Tint = uTone2; Width = 0.01 * uSize;
+        Glow = mix(0.6, 2.2, pow(Hash(Index * 5.3), 4.0));
         return;
     }
     float From = Segment / OrbitSegments, To = (Segment + 1.0) / OrbitSegments;
-    Head = OrbitPoint(Fibre, To, uClock);
-    Tail = OrbitPoint(Fibre, From, uClock);
+    Head = OrbitPoint(Fibre, Rings, To, uClock);
+    Tail = OrbitPoint(Fibre, Rings, From, uClock);
     Ramp = 0.0;
-    float Pick = Hash(Fibre * 1.37);
-    Tint = mix(uTone0, uTone1, Pick);
+    float Inner = 1.0 - (Fibre + 0.5) / Rings;                                    // brighter near the sphere, fading outward
+    Tint = mix(uTone0, uTone1, Inner);
     Tint = mix(Tint, uTone2, To * To * 0.7);
-    Width = mix(0.004, 0.011, Hash(Fibre * 2.3)) * uSize;
-    Glow = mix(0.15, 1.1, pow(Pick, 2.0)) * pow(To, 1.2) * smoothstep(0.0, 0.08, From);
-    if (Segment == OrbitSegments - 1.0) { Width *= 1.8; Glow = Glow * 2.0 + 0.4; Tint = uTone2; }
+    Width = 0.0055 * uSize;
+    Glow = (0.3 + 0.9 * Inner * Inner) * pow(To, 1.2) * smoothstep(0.0, 0.08, From);
+    if (Segment == OrbitSegments - 1.0) { Width *= 1.3; Glow = Glow * 1.4 + 0.08; Tint = uTone2; }
 }`;
 
 // 8 · Flora: three particle flowers (glowing petal edges, breathing open, a few motes drifting off), big leaves in the
