@@ -138,9 +138,9 @@ const Loaded = require('@sparticuz/chromium'), sp = Loaded.default ?? Loaded;   
         console.log('lag', Lag, JSON.stringify(await Page.evaluate(() => ({ Rpm: Math.round(Bench.Readout().Rpm), Boost: +Bench.Readout().Boost.toFixed(2), Spool: document.querySelector('#SpoolTime').textContent, Shown: document.querySelector('#LagShown').textContent }))));
     }
     await Page.evaluate(() => { Bench.Hold('Throttle', null); Bench.Lag(1); });
-    // 918 Spyder (hybrid: both motors under the V8), Agera R (twin turbo), and Follow-up 18's three Mustangs and the
+    // 918 Spyder (hybrid: both motors under the V8), Agera RS (twin turbo), and Follow-up 18's three Mustangs and the
     // Ligier JS P320: offline renders and a live pull in 2nd.
-    for (const Car of ['Spyder918', 'AgeraR', 'MustangGt', 'Gt350', 'MustangGt3', 'LigierJsP320'])
+    for (const Car of ['Spyder918', 'AgeraRs', 'MustangGt', 'Gt350', 'MustangGt3', 'LigierJsP320'])
     {
         console.log('offline', Car, JSON.stringify(await Page.evaluate((C) => Bench.RenderOffline(4, C, null, 0).then((R) => ({ Peak: R.Peak, Rms: R.Rms, NonFinite: R.NonFinite, Rpm: Math.round(R.Telemetry?.Rpm ?? 0) })), Car)));
         await Page.evaluate((C) => { Bench.Induction(null); return Bench.Car(C); }, Car);
@@ -155,7 +155,7 @@ const Loaded = require('@sparticuz/chromium'), sp = Loaded.default ?? Loaded;   
     // then the live switch through the hook and the M key; then the factory and sparks/electronics pads.
     const Solo = { Engine: 0, Tyres: 0, Chassis: 0 };
     for (const [Label, Mix] of [['road 100 wind 100', { ...Solo, Road: 1, Wind: 1 }], ['road 40 wind 80 (default)', { ...Solo, Road: 0.4, Wind: 0.8 }], ['road off wind 80', { ...Solo, Road: 0, Wind: 0.8 }]])
-        console.log('road layer', Label, JSON.stringify(await Page.evaluate((M) => Bench.RenderOffline(6, 'AgeraR', null, 2, M).then((R) => ({ Rms: R.Rms, Peak: R.Peak, NonFinite: R.NonFinite, Kmh: Math.round(R.Telemetry?.Kmh ?? 0) })), Mix)));
+        console.log('road layer', Label, JSON.stringify(await Page.evaluate((M) => Bench.RenderOffline(6, 'AgeraRs', null, 2, M).then((R) => ({ Rms: R.Rms, Peak: R.Peak, NonFinite: R.NonFinite, Kmh: Math.round(R.Telemetry?.Kmh ?? 0) })), Mix)));
     console.log('mix default', JSON.stringify(await Page.evaluate(() => Bench.Levels())));
     await Page.evaluate(() => Bench.RoadNoise(false));
     console.log('road switched off', JSON.stringify(await Page.evaluate(() => ({ ...Bench.Levels(), Switch: document.querySelector('#RoadNoise b').textContent, Muted: document.querySelector('[data-mix="Road"]').classList.contains('Muted') }))));

@@ -125,7 +125,7 @@ class VoiceRack extends AudioWorkletProcessor
         this.Engine.Feed(Feed);
         this.Inducer?.Feed(Feed);
         this.Roll.Feed({ Speed: Car.Speed, Surface: this.Surface });
-        this.Squeal.Feed({ Speed: Car.Speed, Corner: Car.Corner, LockUp: Car.LockUp, Wheelspin: Car.Wheelspin, Grip: Surfaces[this.Surface].Grip });
+        this.Squeal.Feed({ Speed: Car.Speed, Corner: Car.Corner, LockUp: Car.LockUp, Wheelspin: Car.Wheelspin, Grip: Surfaces[this.Surface].Grip, Surface: this.Surface });
         this.Brakes.Feed({ Speed: Car.Speed, Brake: Car.Brake, Abs: Car.AbsActive, Handbrake: Car.Handbrake });
         this.Springs.Feed({ Speed: Car.Speed, Surface: this.Surface, Accel: Car.Accel, Lateral: Car.Lateral, Kick: this.Kick });
         this.Kick = 0;

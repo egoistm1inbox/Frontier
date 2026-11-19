@@ -423,13 +423,13 @@ function Bubble(Left, Right, Rate, Time, { Hz = 900, Rise = 0.8, Decay = 0.06, G
  * Ricochet (Follow-up 21). A glancing round leaves the surface as a deformed, tumbling fragment. Its whine is not a
  * clean falling sine: the fragment sheds a narrow band of turbulent noise (pitch roughly proportional to its speed)
  * and every half-turn of its tumble swings an edge into the airflow, so the band is chopped and frequency-wobbled at the
- * tumble rate (100–500 Hz): the buzzy, ragged "pt-wheeeoww". It decelerates hard (quadratic drag), so pitch and tumble
+ * tumble rate (25–70 Hz): the wavering, ragged "pt-wheeeoww". It decelerates hard (quadratic drag), so pitch and tumble
  * both sag, and it really moves: the listener hears it through geometry. Emission time is stepped on the listener's
  * clock (dt_emit / dt_heard = 1 / (1 + radial speed / c)), so the Doppler drop, the 1 / range fade and air absorption
  * all come from the flight path. Toward > 0 aims the fragment that many metres past the listener (a zing by the ear);
  * otherwise it flies off into the distance. A second, smaller fragment sometimes peels off higher and shorter.
  */
-function Ricochet(Left, Right, Rate, Time, { Hz = 2600, Tumble = 260, Speed = 480, Seconds = 1.1, Gain = 0.25, Pan = 0, Away = 0.8, Toward = 0, Range = 18, Seed = 71, Spare = true } = {})
+function Ricochet(Left, Right, Rate, Time, { Hz = 6000, Tumble = 45, Speed = 480, Seconds = 1.1, Gain = 0.25, Pan = 0, Away = 0.8, Toward = 0, Range = 18, Seed = 71, Spare = true } = {})
 {
     const Noise = new SeededNoise(Seed), Sound = 343, Drag = 0.012;
     const Start = Math.round(Time * Rate), Count = Math.min(Left.length - Start, Math.round(Seconds * Rate));
@@ -442,7 +442,7 @@ function Ricochet(Left, Right, Rate, Time, { Hz = 2600, Tumble = 260, Speed = 48
     const Length = Math.hypot(...Aim), Way = Aim.map((Part) => Part / Length);
     const Where = (Emit) => { const Run = Math.log(1 + Drag * Speed * Emit) / Drag; return Strike0.map((Part, Axis) => Part + Way[Axis] * Run); };
     const SpeedAt = (Emit) => Speed / (1 + Drag * Speed * Emit);
-    const Tone = new NarrowTone(Rate, { Breath: 0.55, Width: 0.03, Jitter: 0.01, Flutter: 0.3, Seed: Seed + 1 });
+    const Tone = new NarrowTone(Rate, { Breath: 0.3, Width: 0.015, Jitter: 0.006, Flutter: 0.2, Seed: Seed + 1 });
     const Upper = new NarrowTone(Rate, { Breath: 0.7, Width: 0.04, Jitter: 0.012, Flutter: 0.35, Seed: Seed + 2 });
     const Hiss = new Biquad(Rate), Air = [new OnePole(Rate, 12000), new OnePole(Rate, 12000)], Floor = new Biquad(Rate).Shape('High', 400, 0.7);
     const First = Math.hypot(...Strike0);
@@ -456,14 +456,14 @@ function Ricochet(Left, Right, Rate, Time, { Hz = 2600, Tumble = 260, Speed = 48
         const Pitch = Hz * Math.pow(Velocity / Speed, 0.85), Turn = Tumble * Math.pow(Velocity / Speed, 0.7);
         Spin += Turn * Step * (1 + 0.01 * Noise.Gauss());
         if (Spin >= 1) { Spin -= 1; Wobble = Noise.Range(0.6, 1.25); }                          // each turn a little different
-        const Edge = Math.pow(Math.abs(Math.sin(Math.PI * Spin * 2)), 1.6);                       // edge into the flow twice a turn
-        const Heard = Pitch * Step * Rate * (1 + 0.05 * Math.sin(Tau * Spin * 2));
+        const Edge = Math.pow(Math.abs(Math.sin(Math.PI * Spin)), 1.2);                           // edge into the flow once a turn
+        const Heard = Pitch * Step * Rate * (1 + 0.035 * Math.sin(Tau * Spin));
         if ((Index & 31) === 0)
         {
             Hiss.Shape('Band', Clamp(Heard * 1.6, 500, 15000), 1.2);
             const Cut = Clamp(15000 * Math.pow(20 / Range1, 0.8), 1800, 16000); Air[0].Set(Cut); Air[1].Set(Cut);
         }
-        const Source = (Tone.Run(Heard) * 0.85 + Upper.Run(Heard * 2.04) * 0.25) * (0.25 + 0.75 * Edge * Wobble) + Hiss.Run(Noise.White()) * (0.35 + 0.4 * Edge);
+        const Source = (Tone.Run(Heard) * 0.9 + Upper.Run(Heard * 2.04) * 0.2) * (0.45 + 0.55 * Edge * Wobble) + Hiss.Run(Noise.White()) * (0.25 + 0.25 * Edge);
         Fade = Smoothstep(0, 0.012, Index / Rate) * (1 - Smoothstep(0.82, 1, Index / Count));
         const Level = Clamp(First / Range1, 0, 4) * Fade * Gain;
         const Side = Clamp(Spot[0] / Math.max(1, Math.hypot(Spot[0], Spot[1])), -1, 1);
@@ -472,24 +472,50 @@ function Ricochet(Left, Right, Rate, Time, { Hz = 2600, Tumble = 260, Speed = 48
         Left[Start + Index] += Air[0].Run(Out * GainL); Right[Start + Index] += Air[1].Run(Out * GainR);
     }
     if (Spare && Noise.Next() < 0.7)                                                             // a smaller chip, higher and quicker
-        Ricochet(Left, Right, Rate, Time + Noise.Range(0.002, 0.01), { Hz: Hz * Noise.Range(1.35, 1.7), Tumble: Tumble * Noise.Range(1.4, 2), Speed: Speed * 0.8, Seconds: Seconds * 0.45, Gain: Gain * 0.35, Pan, Away: -Away * 0.6, Range, Seed: Seed + 9, Spare: false });
+        Ricochet(Left, Right, Rate, Time + Noise.Range(0.002, 0.01), { Hz: Hz * Noise.Range(1.35, 1.7), Tumble: Tumble * Noise.Range(1.3, 1.8), Speed: Speed * 0.8, Seconds: Seconds * 0.45, Gain: Gain * 0.35, Pan, Away: -Away * 0.6, Range, Seed: Seed + 9, Spare: false });
 }
 
-/** Subsonic whizz: band noise and a vortex tone sweeping down as the projectile passes (Doppler), panning across. */
-export function Whizz(Left, Right, Rate, Time, { From = 2800, To = 1000, Seconds = 0.22, Gain = 0.4, Pan = -1, EndPan = 1, Seed = 81 } = {})
+/**
+ * Subsonic whizz (Follow-up 22): a round slower than sound (about 300 m/s: 9 mm, .45, suppressed .300) passing
+ * Miss metres from the ear on a straight line. It sheds a turbulent wake: a breathy band near the vortex-shedding
+ * pitch (Hz, set by speed over calibre, about 5–8 kHz) over broadband rush. Emission time is solved per sample
+ * (heard = emitted + range / c), so the geometry does the rest: everything the round makes on the way in arrives
+ * squeezed into a few milliseconds (a sudden, very high "zz"), then the departing wake is stretched and dropped
+ * nearly an octave (the falling "-iuu"), and the wake is louder behind the round than ahead. Pan → EndPan sets the
+ * direction (left to right or back); From (legacy) sets the shedding pitch at about twice the old start pitch.
+ */
+export function Whizz(Left, Right, Rate, Time, { From = 3200, Hz = From * 2, Speed = 300, Miss = 1.6, Seconds = 0.4, Gain = 0.4, Pan = -1, EndPan = 1, Seed = 81 } = {})
 {
     const Start = Math.round(Time * Rate), Count = Math.min(Left.length - Start, Math.round(Seconds * Rate));
-    const Noise = new SeededNoise(Seed), Band = new Biquad(Rate);
-    let Phase = 0;
+    if (Count <= 0) return;
+    const Sound = 343, Way = Math.sign(EndPan - Pan) || 1, Rise = 0.4;
+    const Noise = new SeededNoise(Seed), Band = new Biquad(Rate), Edge = new Biquad(Rate), Rush = new Biquad(Rate).Shape('High', 1200, 0.6), Air = new OnePole(Rate, 14000), Floor = new Biquad(Rate).Shape('High', 350, 0.7);
+    const Heard = Seconds / 2;                                              // closest approach is heard mid-window
+    let Emit = Heard - Miss / Sound;
     for (let Index = 0; Index < Count; Index++)
     {
-        const Progress = Index / Count;
-        const Hz = Mix(From, To, Smoothstep(0.3, 0.7, Progress));                 // pitch drops as it goes past
-        if ((Index & 31) === 0) Band.Shape('Band', Hz, 2.5);
-        Phase += Hz / Rate;
-        const Envelope = Math.exp(-Math.pow((Progress - 0.5) / 0.17, 2));
-        const Out = (Band.Run(Noise.White()) * 1.4 + Math.sin(Tau * Phase) * 0.35) * Envelope * Gain;
-        const [GainL, GainR] = PanGains(Mix(Pan, EndPan, Progress));
+        const Clock = Index / Rate;
+        let Range = 1, Along = 0;
+        for (let Step = 0; Step < 3; Step++)                                // Newton: Emit + range(Emit) / c = Clock
+        {
+            Along = Way * Speed * (Emit - (Heard - Miss / Sound));
+            Range = Math.hypot(Along, Miss, Rise);
+            const Error = Emit + Range / Sound - Clock, Slope = 1 + Along * Way * Speed / (Range * Sound);
+            Emit -= Error / Slope;
+        }
+        Along = Way * Speed * (Emit - (Heard - Miss / Sound)); Range = Math.hypot(Along, Miss, Rise);
+        const Closing = -Along * Way / Range;                              // +1 coming straight in, −1 going away
+        const Squeeze = 1 / (1 - Closing * Speed / Sound);                // heard / emitted frequency
+        if ((Index & 15) === 0)
+        {
+            Band.Shape('Band', Clamp(Hz * Squeeze, 300, 19000), 4.5); Edge.Shape('Band', Clamp(Hz * 0.45 * Squeeze, 200, 16000), 1.2);
+            Air.Set(Clamp(16000 * Math.pow(3 / Range, 0.3), 6000, 18000));
+        }
+        const Behind = 0.45 + 0.55 * (1 - Closing) / 2;                    // the wake trails the round
+        const Source = Band.Run(Noise.White()) * 1.6 + Edge.Run(Noise.White()) * 0.4 + Rush.Run(Noise.White()) * 0.35;
+        const Level = Clamp(Miss / Range, 0, 1) * Math.sqrt(Squeeze) * Behind * Gain * Smoothstep(0, 0.02, Clock) * (1 - Smoothstep(Seconds - 0.03, Seconds, Clock));
+        const [GainL, GainR] = PanGains(Clamp(Along / Math.hypot(Along, Miss) * 0.95, -1, 1));
+        const Out = Floor.Run(Air.Run(Source * Level));
         Left[Start + Index] += Out * GainL; Right[Start + Index] += Out * GainR;
     }
 }
@@ -531,7 +557,7 @@ function MetalHit(Left, Right, Rate, Time, Noise, Seed, { Pan = 0, Gain = 1, Gla
     Strike(Left, Right, Rate, Time, { Modes: [[R(170, 230), 0.05, 1], [R(330, 420), 0.035, 0.6], [R(620, 760), 0.02, 0.35]], Burst: 0.0012, Gain: 0.9 * Gain, Pan, Seed: Seed + 1 });
     Strike(Left, Right, Rate, Time + 0.0004, { Modes: PlateModes(Root, Noise, { Decay: R(1.1, 1.5), Lowest: 300, Fall: 0.3 }), Burst: 0.00025, Gain: 9 * Gain, Pan, Seed: Seed + 2 });
     Scatter(Left, Right, Rate, Time + 0.002, 0.18, 22, (N) => ({ Modes: [[N.Range(5500, 12000), 0.0025, 1]], Burst: 0.00015, Gain: N.Range(0.15, 0.6) * Gain, Pan: Pan + N.Range(-0.35, 0.35) }), { Seed: Seed + 3, Bunch: 2.2 });
-    if (Glance) Ricochet(Left, Right, Rate, Time + 0.004, { Hz: R(3800, 4800), Tumble: R(280, 420), Speed: R(450, 560), Seconds: R(0.9, 1.2), Gain: 0.45 * Gain, Pan, Away: Pan > 0 ? -0.9 : 0.9, Toward: 3, Seed: Seed + 4 });
+    if (Glance) Ricochet(Left, Right, Rate, Time + 0.004, { Hz: R(6500, 8000), Tumble: R(40, 70), Speed: R(450, 560), Seconds: R(0.9, 1.2), Gain: 0.45 * Gain, Pan, Away: Pan > 0 ? -0.9 : 0.9, Toward: 3, Seed: Seed + 4 });
 }
 
 /**
@@ -586,14 +612,14 @@ export function DrawHit(Left, Right, Rate, Time, Material, Seed = 400, { Pan = 0
             Overpressure(Left, Right, Rate, Time, { Lasts: 0.00035, Gain: 0.25 * Gain, Low: 14000, Pan });
             Scatter(Left, Right, Rate, Time + 0.01, 0.5, 26, (N) => ({ Modes: [[N.Range(1800, 4500), N.Range(0.004, 0.012), 1], [N.Range(5000, 9000), 0.004, 0.5]], Burst: 0.0002, Gain: N.Range(0.3, 1.2) * Gain, Pan: Pan + N.Range(-0.6, 0.6) }), { Seed: Seed + 1, Bunch: 1.8 });
             Roar(Left, Right, Rate, Time + 0.01, 0.35, { From: 8000, To: 3000, Floor: 1500, Gain: 0.06 * Gain, Attack: 0.01, Curve: 2, Grit: 0.8, Seed: Seed + 2 });
-            if (Glance) Ricochet(Left, Right, Rate, Time + 0.006, { Hz: R(3400, 4200), Tumble: R(180, 300), Speed: R(380, 480), Seconds: R(1.0, 1.3), Gain: 0.6 * Gain, Pan, Away: Pan > 0 ? -0.8 : 0.8, Seed: Seed + 3 });
+            if (Glance) Ricochet(Left, Right, Rate, Time + 0.006, { Hz: R(6000, 7200), Tumble: R(30, 55), Speed: R(380, 480), Seconds: R(1.0, 1.3), Gain: 0.6 * Gain, Pan, Away: Pan > 0 ? -0.8 : 0.8, Seed: Seed + 3 });
             break;
         case 'Concrete':
             Strike(Left, Right, Rate, Time, { Modes: [[R(1500, 1900), 0.014, 1], [R(3200, 3800), 0.009, 0.6], [R(650, 800), 0.02, 0.6]], Burst: 0.0006, Gain: 3.6 * Gain, Pan, Seed });
             Overpressure(Left, Right, Rate, Time, { Lasts: 0.0005, Gain: 0.3 * Gain, Low: 11000, Pan });
             Roar(Left, Right, Rate, Time + 0.005, 0.7, { From: 7000, To: 1800, Floor: 600, Gain: 0.16 * Gain, Attack: 0.008, Curve: 2.2, Grit: 0.85, Seed: Seed + 1 });   // dust and grit
             Scatter(Left, Right, Rate, Time + 0.02, 0.6, 30, (N) => ({ Modes: [[N.Range(1200, 3200), N.Range(0.005, 0.015), 1]], Burst: 0.0004, Gain: N.Range(0.3, 1) * Gain, Pan: Pan + N.Range(-0.6, 0.6) }), { Seed: Seed + 2, Bunch: 1.6 });
-            if (Glance) Ricochet(Left, Right, Rate, Time + 0.006, { Hz: R(2800, 3600), Tumble: R(140, 240), Speed: R(350, 430), Seconds: R(0.8, 1.0), Gain: 0.5 * Gain, Pan, Away: 0.5, Seed: Seed + 3 });
+            if (Glance) Ricochet(Left, Right, Rate, Time + 0.006, { Hz: R(5200, 6400), Tumble: R(25, 45), Speed: R(350, 430), Seconds: R(0.8, 1.0), Gain: 0.5 * Gain, Pan, Away: 0.5, Seed: Seed + 3 });
             break;
         case 'Wood':
             // Hollow thunk (plank modes), a low knock through the post, splinters crackling.
@@ -826,9 +852,10 @@ export const Cues = {
         Group: 'Bullets', Label: 'Subsonic whizz-by', Seconds: 2.6, Peak: 0.85,
         Draw(Left, Right, Rate)
         {
-            Whizz(Left, Right, Rate, 0.1, { From: 3000, To: 1100, Seconds: 0.24, Gain: 0.5, Pan: -1, EndPan: 1, Seed: 2601 });
-            Whizz(Left, Right, Rate, 0.85, { From: 2500, To: 950, Seconds: 0.3, Gain: 0.35, Pan: 1, EndPan: -0.6, Seed: 2602 });
-            Whizz(Left, Right, Rate, 1.4, { From: 3400, To: 1300, Seconds: 0.18, Gain: 0.6, Pan: -0.7, EndPan: 1, Seed: 2603 });
+            // Three subsonic rounds: close past the right ear, farther right to left, very close left to right.
+            Whizz(Left, Right, Rate, 0.05, { Hz: 6800, Speed: 310, Miss: 1.2, Seconds: 0.45, Gain: 0.5, Pan: -1, EndPan: 1, Seed: 2601 });
+            Whizz(Left, Right, Rate, 0.8, { Hz: 5600, Speed: 290, Miss: 3, Seconds: 0.5, Gain: 0.45, Pan: 1, EndPan: -1, Seed: 2602 });
+            Whizz(Left, Right, Rate, 1.6, { Hz: 7400, Speed: 320, Miss: 0.6, Seconds: 0.4, Gain: 0.55, Pan: -1, EndPan: 1, Seed: 2603 });
             Settle(Left, Right, Rate);
         },
     },

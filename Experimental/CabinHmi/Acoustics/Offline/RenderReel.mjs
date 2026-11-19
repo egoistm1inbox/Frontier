@@ -10,7 +10,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { PulseTrainEngine, LaFerrari, GtrNismo, Demon, Spyder918, AgeraR, MustangGt, Gt350, MustangGt3, LigierJsP320 } from '../PulseTrainEngine.js';
+import { PulseTrainEngine, LaFerrari, GtrNismo, Demon, Spyder918, AgeraRs, MustangGt, Gt350, MustangGt3, LigierJsP320 } from '../PulseTrainEngine.js';
 import { TractionIntegrator } from '../TractionIntegrator.js';
 import { SurfaceRoll, TyreSqueal, Surfaces } from '../ContactPatch.js';
 import { RenderCue as RenderCabinCue, Cues as CabinCues } from '../CabinFoley.js';
@@ -69,7 +69,7 @@ function DriveScene(Seconds, Pickup, Plan, { Surface = 'Asphalt', Roll = true, S
         if (Roll) { Bus.Roll.Feed({ Speed: Car.Speed, Surface: Bus.Surface }); Bus.Roll.Render(Left, Right, Index, Size); }
         if (Squeal)
         {
-            Bus.Squeal.Feed(Bus.SquealOverride ?? { Speed: Car.Speed, Corner: Car.Corner, LockUp: Car.LockUp, Wheelspin: Car.Wheelspin, Grip: Surfaces[Bus.Surface].Grip });
+            Bus.Squeal.Feed(Bus.SquealOverride ?? { Speed: Car.Speed, Corner: Car.Corner, LockUp: Car.LockUp, Wheelspin: Car.Wheelspin, Grip: Surfaces[Bus.Surface].Grip, Surface: Bus.Surface });
             Bus.Squeal.Render(Left, Right, Index, Size);
         }
         if (Bus.Brakes)
@@ -265,33 +265,33 @@ const Scenes = {
         Build: () => FlyBy(8, 4, Spyder918, 250, 5, { Motor: 0.6 }),
         Rms: -18,
     },
-    'AgeraR-Launch': {
-        Title: 'KOENIGSEGG AGERA R LAUNCH', Note: 'CHASE MIC. BOOST BUILD AT ABOUT 3800 RPM, LAUNCH, TWIN-TURBO FLAT-PLANE V8 THROUGH 7 GEARS, DUMP-VALVE CHIRPS, LIFT WITH THE BIG BLOW-OFF',
+    'AgeraRs-Launch': {
+        Title: 'KOENIGSEGG AGERA RS LAUNCH', Note: 'CHASE MIC. BOOST BUILD AT ABOUT 3800 RPM, LAUNCH, TWIN-TURBO CROSS-PLANE V8 (90 DEGREE CRANK) THROUGH 7 GEARS, DUMP-VALVE CHIRPS, LIFT WITH THE BIG BLOW-OFF',
         Marks: [[0.8, 'BUILD'], [2, 'LAUNCH'], [13, 'LIFT']],
         Build: () => DriveScene(16, 'Chase', (Time, Car) =>
         {
-            if (Time < 0.01) { Car.Running = true; Car.Rpm = AgeraR.Idle; Car.Automatic = true; }
+            if (Time < 0.01) { Car.Running = true; Car.Rpm = AgeraRs.Idle; Car.Automatic = true; }
             if (Time > 0.8 && Time < 2) { Car.Gear = 0; Car.Throttle = 0.3; }
             else Car.Throttle = Time >= 2 && Time < 13 ? 1 : 0;
             if (Time >= 2 && Car.Gear === 0) Car.Gear = 1;
-        }, { Profile: AgeraR }),
+        }, { Profile: AgeraRs }),
         Rms: -16,
     },
-    'AgeraR-FlyBy': {
-        Title: 'KOENIGSEGG AGERA R FLY-BY', Note: 'TRACKSIDE MIC, 12 M FROM THE LINE: 300 KM/H IN 5TH ON FULL BOOST, TURBO WHISTLE OVER THE V8, DOPPLER DROP',
+    'AgeraRs-FlyBy': {
+        Title: 'KOENIGSEGG AGERA RS FLY-BY', Note: 'TRACKSIDE MIC, 12 M FROM THE LINE: 300 KM/H IN 5TH ON FULL BOOST, TURBO WHISTLE OVER THE V8, DOPPLER DROP',
         Marks: [[4, 'PASS']],
-        Build: () => FlyBy(8, 4, AgeraR, 300, 5, { Boost: 1 }),
+        Build: () => FlyBy(8, 4, AgeraRs, 300, 5, { Boost: 1 }),
         Rms: -18,
     },
     'Road-NoiseSwitch': {
-        Title: 'ROAD NOISE: FULL, BENCH DEFAULT, OFF', Note: 'AGERA R, CHASE MIC, 6TH GEAR FLAT OUT FROM 220 KM/H. ROAD ROAR AT 100 %, THEN THE BENCH DEFAULT (ROAD 40 %, WIND 80 %), THEN ROAD SWITCHED OFF (WIND ONLY)',
+        Title: 'ROAD NOISE: FULL, BENCH DEFAULT, OFF', Note: 'AGERA RS, CHASE MIC, 6TH GEAR FLAT OUT FROM 220 KM/H. ROAD ROAR AT 100 %, THEN THE BENCH DEFAULT (ROAD 40 %, WIND 80 %), THEN ROAD SWITCHED OFF (WIND ONLY)',
         Marks: [[0.1, 'ROAD 100 %'], [5, 'ROAD 40 % WIND 80 %'], [10, 'ROAD OFF']],
         Build: () => DriveScene(15, 'Chase', (Time, Car, Bus) =>
         {
             if (Time < 0.01) { Car.Running = true; Car.Gear = 6; Car.Speed = 220 / 3.6; Car.Rpm = Car.WheelRpm(); Car.Automatic = false; Car.Boost = 1; }
             Car.Throttle = 1;
             [Bus.Roll.RoadLevel, Bus.Roll.WindLevel] = Time < 5 ? [1, 1] : Time < 10 ? [0.4, 0.8] : [0, 0.8];
-        }, { Profile: AgeraR }),
+        }, { Profile: AgeraRs }),
         Rms: -18,
     },
     'MustangGt-StartLaunch': {
@@ -405,18 +405,35 @@ const Scenes = {
                 const On = Time > 7.6 && Time < 11.2;
                 Car.Throttle = On ? 0.85 : 0;
                 Bus.Override = { Rpm: On ? Mix(3200, 6400, Smoothstep(7.6, 8.4, Time)) + 300 * Math.sin(Time * 9) : LaFerrari.Idle + 300, Throttle: On ? 0.85 : 0.04, Load: On ? 0.7 : 0.05, Ignition: 1 };
-                Bus.SquealOverride = { Speed: 0, Corner: 0, LockUp: 0, Wheelspin: On ? Smoothstep(7.6, 8.1, Time) * (0.9 + 0.1 * Math.sin(Time * 13)) : 0, Grip: 1 };
+                Bus.SquealOverride = { Speed: 0, Corner: 0, LockUp: 0, Wheelspin: On ? Smoothstep(7.6, 8.1, Time) * (0.9 + 0.1 * Math.sin(Time * 13)) : 0, Grip: 1, Surface: 'Asphalt' };
             }
         }, { EngineGain: 0.55 }),
         Rms: -17,
     },
+    'Tyres-Drift': {
+        Title: 'DRIFT SQUEAL ON FIVE SURFACES', Note: 'CHASE MIC, 70 KM/H SIDEWAYS: TURN-IN CHIRPS, SUSTAINED DRIFT WAIL BENDING WITH THE ANGLE, ON ASPHALT, SMOOTH CONCRETE, WET ASPHALT, COBBLES, GRAVEL (4 S EACH)',
+        Marks: [[0, 'ASPHALT'], [4, 'CONCRETE'], [8, 'WET'], [12, 'COBBLES'], [16, 'GRAVEL']],
+        Build: () => DriveScene(20, 'Chase', (Time, Car, Bus) =>
+        {
+            if (Time < 0.01) { Car.Running = true; Car.Gear = 3; Car.Speed = 70 / 3.6; Car.Rpm = Car.WheelRpm(); Car.Automatic = false; }
+            const Ground = ['Asphalt', 'Concrete', 'Wet', 'Cobbles', 'Gravel'][Math.min(4, Math.floor(Time / 4))], Local = Time % 4;
+            Bus.Surface = Ground; Car.Speed = 70 / 3.6; Car.Throttle = 0.7;
+            // Each 4 s: two short chirps at the grip limit, then the car is thrown sideways and held in a drift whose
+            // angle swings, then it straightens.
+            const Chirps = Local < 0.9 ? 0.55 * (Math.sin(Local * 11) > 0.2 ? 1 : 0.1) : 0;
+            const Held = Smoothstep(0.9, 1.2, Local) * (1 - Smoothstep(3.4, 3.8, Local)) * (0.7 + 0.25 * Math.sin(Local * 2.6) + 0.05 * Math.sin(Local * 9));
+            Bus.Override = { Rpm: 5200 + 900 * Held + 200 * Math.sin(Time * 5), Throttle: 0.75, Load: 0.6, Ignition: 1 };
+            Bus.SquealOverride = { Speed: 70 / 3.6, Corner: Math.max(Chirps, Held), LockUp: 0, Wheelspin: 0.25 * Held, Grip: Surfaces[Ground].Grip, Surface: Ground };
+        }, { EngineGain: 0.4 }),
+        Rms: -18,
+    },
     'Surfaces-Tour': {
-        Title: 'DRIVING SURFACES', Note: 'CHASE MIC, 60 KM/H LIGHT THROTTLE. ASPHALT, WET, GRAVEL, DIRT, GRASS, COBBLES, RUMBLE STRIP (4 S EACH)',
+        Title: 'DRIVING SURFACES', Note: 'CHASE MIC, 60 KM/H LIGHT THROTTLE. ASPHALT, WET, GRAVEL, DIRT, GRASS, COBBLES, RUMBLE STRIP, SMOOTH CONCRETE (4 S EACH)',
         Marks: Object.values(Surfaces).map((S, Index) => [Index * 4, S.Label.toUpperCase()]),
-        Build: () => DriveScene(28, 'Chase', (Time, Car, Bus) =>
+        Build: () => DriveScene(32, 'Chase', (Time, Car, Bus) =>
         {
             if (Time < 0.01) { Car.Running = true; Car.Gear = 3; Car.Speed = 60 / 3.6; Car.Rpm = Car.WheelRpm(); Car.Automatic = false; }
-            Bus.Surface = Object.keys(Surfaces)[Math.min(6, Math.floor(Time / 4))];
+            Bus.Surface = Object.keys(Surfaces)[Math.min(7, Math.floor(Time / 4))];
             Car.Throttle = 0.05 + 0.25 * Math.max(0, (60 / 3.6 - Car.Speed));          // cruise control holding 60
         }, { EngineGain: 0.3 }),
         Rms: -19,

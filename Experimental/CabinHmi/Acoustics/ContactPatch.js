@@ -1,22 +1,24 @@
 // CONTACT PATCH
 // 🧩 Everything the tyres make: the rolling sound over seven surfaces (asphalt, wet, gravel, dirt, grass, cobbles,
-//    rumble strip), wind over the body, and tyre squeal (cornering), lock-up skid and wheelspin howl.
+//    rumble strip, smooth concrete), wind over the body, and tyre squeal (cornering, drifting), lock-up skid and wheelspin howl.
 // 📝 Like PulseTrainEngine these are live voices: Feed() the speed and slip each block, Render() adds stereo samples.
 //    Surfaces are built from their physics: tread-block impacts and air pumping (asphalt), water film and spray (wet),
 //    discrete stone hits and underbody pings (gravel), periodic stone or strip impacts through the suspension (cobbles,
-//    rumble strip). Squeal is a stick-slip relaxation oscillator plus tread resonances with wandering pitch.
+//    rumble strip). Squeal (Follow-up 22) is the rubber singing: three sliding tyres, each a warbling tone with overtones
+//    through the belt resonances, set per surface.
 
-import { Tau, Clamp, Mix, Smoothstep, SeededNoise, OnePole, Biquad, Resonator, Slew, Wander, PanGains, SoftClip } from './SignalKit.js';
+import { Tau, Clamp, Mix, Smoothstep, SeededNoise, OnePole, Biquad, Resonator, Slew, Wander, PanGains, SoftClip, NarrowTone } from './SignalKit.js';
 
 /** Surface recipes. Gain trims overall loudness; Roll is the tread/texture band; the rest drive each layer. */
 export const Surfaces = {
-    Asphalt:     { Label: 'Asphalt', Roll: [700, 1.1], Rumble: 0.55, Hiss: 0.18, Stones: 0, Water: 0, Spacing: 0, Thump: 0, Grip: 1, Gain: 1 },
-    Wet:         { Label: 'Wet asphalt', Roll: [620, 0.9], Rumble: 0.45, Hiss: 0.45, Stones: 0, Water: 1, Spacing: 0, Thump: 0, Grip: 0.7, Gain: 1 },
-    Gravel:      { Label: 'Gravel', Roll: [900, 0.6], Rumble: 0.9, Hiss: 0.25, Stones: 1, Water: 0, Spacing: 0, Thump: 0.2, Grip: 0.55, Gain: 1.35 },
-    Dirt:        { Label: 'Dirt track', Roll: [320, 0.7], Rumble: 1.1, Hiss: 0.08, Stones: 0.18, Water: 0, Spacing: 0, Thump: 0.55, Grip: 0.65, Gain: 1.1 },
-    Grass:       { Label: 'Grass', Roll: [1800, 0.5], Rumble: 0.7, Hiss: 0.35, Stones: 0, Water: 0.15, Spacing: 0, Thump: 0.35, Grip: 0.45, Gain: 0.5 },
-    Cobbles:     { Label: 'Cobblestones', Roll: [550, 0.9], Rumble: 0.8, Hiss: 0.15, Stones: 0, Water: 0, Spacing: 0.115, Thump: 1, Grip: 0.85, Gain: 0.8 },
-    RumbleStrip: { Label: 'Rumble strip', Roll: [700, 1.1], Rumble: 0.6, Hiss: 0.18, Stones: 0, Water: 0, Spacing: 0.32, Thump: 1.4, Grip: 1, Gain: 0.9 },
+    Asphalt:     { Label: 'Asphalt', Roll: [700, 1.1], Rumble: 0.55, Hiss: 0.18, Stones: 0, Water: 0, Spacing: 0, Thump: 0, Grip: 1, Gain: 1, Squeal: { Tone: 1, Pitch: 1 } },
+    Wet:         { Label: 'Wet asphalt', Roll: [620, 0.9], Rumble: 0.45, Hiss: 0.45, Stones: 0, Water: 1, Spacing: 0, Thump: 0, Grip: 0.7, Gain: 1, Squeal: { Tone: 0.18, Pitch: 0.9 } },
+    Gravel:      { Label: 'Gravel', Roll: [900, 0.6], Rumble: 0.9, Hiss: 0.25, Stones: 1, Water: 0, Spacing: 0, Thump: 0.2, Grip: 0.55, Gain: 1.35, Squeal: { Tone: 0, Pitch: 1 } },
+    Dirt:        { Label: 'Dirt track', Roll: [320, 0.7], Rumble: 1.1, Hiss: 0.08, Stones: 0.18, Water: 0, Spacing: 0, Thump: 0.55, Grip: 0.65, Gain: 1.1, Squeal: { Tone: 0, Pitch: 1 } },
+    Grass:       { Label: 'Grass', Roll: [1800, 0.5], Rumble: 0.7, Hiss: 0.35, Stones: 0, Water: 0.15, Spacing: 0, Thump: 0.35, Grip: 0.45, Gain: 0.5, Squeal: { Tone: 0, Pitch: 1 } },
+    Cobbles:     { Label: 'Cobblestones', Roll: [550, 0.9], Rumble: 0.8, Hiss: 0.15, Stones: 0, Water: 0, Spacing: 0.115, Thump: 1, Grip: 0.85, Gain: 0.8, Squeal: { Tone: 0.6, Pitch: 1.04 } },
+    RumbleStrip: { Label: 'Rumble strip', Roll: [700, 1.1], Rumble: 0.6, Hiss: 0.18, Stones: 0, Water: 0, Spacing: 0.32, Thump: 1.4, Grip: 1, Gain: 0.9, Squeal: { Tone: 0.9, Pitch: 1 } },
+    Concrete:    { Label: 'Smooth concrete', Roll: [820, 1.2], Rumble: 0.4, Hiss: 0.14, Stones: 0, Water: 0, Spacing: 0, Thump: 0, Grip: 1, Gain: 0.85, Squeal: { Tone: 1.35, Pitch: 1.22 } },   // a garage or warehouse floor: the shrillest squeal
 };
 
 //------------------------------------------------------------------------------------------------------------------------
@@ -201,12 +203,36 @@ export class SurfaceRoll
 //------------------------------------------------------------------------------------------------------------------------
 
 /**
- * Tyre squeal, skid and wheelspin. Feed: { Speed m/s, Corner 0–1 (lateral slip), LockUp 0–1 (braked slide),
- * Wheelspin 0–1 (driven slip), Grip 0–1 (surface; loose surfaces scrub instead of squealing) }.
- * Squeal: a stick-slip relaxation oscillator (tread blocks catching and letting go) whose pitch wanders around
- * 700–1300 Hz, mixed with noise ringing a set of tread resonances. Lock-up adds a lower, rougher scrub; wheelspin adds a
- * howl whose pitch follows the slip speed and a smoke-hiss bed.
+ * Tyre squeal, skid and wheelspin (Follow-up 22). Feed: { Speed m/s, Corner 0–1 (lateral slip), LockUp 0–1 (braked
+ * slide), Wheelspin 0–1 (driven slip), Grip 0–1, Surface (a Surfaces name) }.
+ * The squeal is the rubber's voice, not a scrub: tread blocks stick and slip hundreds of times a second in step,
+ * so each sliding tyre sings a strong, nearly pure tone (about 700–1400 Hz, rising with slip) with a few overtones,
+ * coloured by the tyre's belt and sidewall resonances (fixed peaks near 1.1 and 2.6 kHz). The stick-slip runs in
+ * clusters, so the tone warbles ("eee-ee-eee", 5–12 Hz) and drifts; each tyre slides at its own slip, so three voices
+ * (front pair and the rears) sit a little apart in pitch and beat against each other, taking turns to lead. Through a
+ * drift it is a sustained wail that bends with the angle; at the grip limit it chirps on and off. The surface sets how
+ * much it sings (Surface.Squeal: Tone, Pitch): smooth garage concrete shrieks high, asphalt wails, wet asphalt only
+ * chirps over hiss, cobbles and rumble strips chop it, loose surfaces don't squeal at all (spray instead). Lock-up adds
+ * a lower, rougher scrub and pulls the pitch down; wheelspin adds a smoke-hiss bed and a howl that climbs with slip.
  */
+class Singer
+{
+    constructor(Rate, Seed)
+    {
+        this.Tones = [[1, 1, 0.1], [2.008, 0.42, 0.16], [3.015, 0.2, 0.22], [4.03, 0.09, 0.3]].map(([Ratio, Level, Breath], Index) =>
+            [new NarrowTone(Rate, { Breath, Width: 0.004 + Index * 0.002, Jitter: 0.003, Flutter: 0.08, Seed: Seed + Index }), Ratio, Level]);
+        this.Warble = new Wander(Rate, 8, Seed + 7); this.Drift = new Wander(Rate, 0.9, Seed + 8); this.Share = new Wander(Rate, 0.5, Seed + 9);
+    }
+
+    Run(Pitch, Rate)
+    {
+        const Warble = this.Warble.Run(), Hz = Pitch * (1 + 0.012 * Warble + 0.035 * this.Drift.Run());
+        let Out = 0;
+        for (const [Tone, Ratio, Level] of this.Tones) { const Partial = Hz * Ratio; if (Partial < Rate * 0.42) Out += Tone.Run(Partial) * Level; }
+        return Out * (0.72 + 0.28 * Warble) * Clamp(0.65 + 0.6 * this.Share.Run(), 0.15, 1.2);
+    }
+}
+
 export class TyreSqueal
 {
     constructor(Rate, { Seed = 31, Pickup = 'Chase' } = {})
@@ -215,10 +241,11 @@ export class TyreSqueal
         this.Noise = new SeededNoise(Seed);
         this.Speed = new Slew(Rate, 0.05, 0);
         this.Corner = new Slew(Rate, 0.06, 0); this.LockUp = new Slew(Rate, 0.03, 0); this.Wheelspin = new Slew(Rate, 0.05, 0);
-        this.Grip = new Slew(Rate, 0.2, 1);
-        this.Wanders = [new Wander(Rate, 1.8, Seed + 1), new Wander(Rate, 5.5, Seed + 2), new Wander(Rate, 0.6, Seed + 3), new Wander(Rate, 11, Seed + 4)];
-        this.Phases = [0, 0.37];                                       // left and right tyre oscillators
-        this.Modes = [[1, 0.11], [2.02, 0.07], [2.97, 0.05], [4.1, 0.03]].map(([Ratio, Decay]) => [new Resonator(Rate, 900 * Ratio, Decay), new Resonator(Rate, 905 * Ratio, Decay), Ratio]);
+        this.Grip = new Slew(Rate, 0.2, 1); this.Tone = new Slew(Rate, 0.25, 1); this.Pitch = new Slew(Rate, 0.25, 1);
+        this.Singers = [0, 1, 2].map((Index) => new Singer(Rate, Seed + 20 + Index * 13));
+        this.Spread = [[1, -0.55], [1.055, 0.55], [0.94, 0.1]];        // pitch offset and pan: front left, front right, rears
+        this.Body = [0, 1].map(() => [new Biquad(Rate).Shape('Peak', 1100, 1.4, 5), new Biquad(Rate).Shape('Peak', 2600, 2, 4), new Biquad(Rate).Shape('High', 450, 0.7)]);
+        this.Catch = new Wander(Rate, 6, Seed + 5); this.Chop = 0; this.Spacing = 0;
         this.Scrub = [new Biquad(Rate).Shape('Band', 520, 1.2), new Biquad(Rate).Shape('Band', 560, 1.2)];
         this.Smoke = [new Biquad(Rate).Shape('High', 1500, 0.6), new Biquad(Rate).Shape('High', 1500, 0.6)];
         this.Loose = [new Biquad(Rate).Shape('Band', 1100, 0.5), new Biquad(Rate).Shape('Band', 1200, 0.5)];
@@ -226,55 +253,60 @@ export class TyreSqueal
         this.Cabin = [new Biquad(Rate).Shape('HighShelf', 1200, 0.7, -9), new Biquad(Rate).Shape('HighShelf', 1200, 0.7, -9)];
     }
 
-    Feed({ Speed = 0, Corner = 0, LockUp = 0, Wheelspin = 0, Grip = 1 })
+    Feed({ Speed = 0, Corner = 0, LockUp = 0, Wheelspin = 0, Grip = 1, Surface = null })
     {
         this.Speed.Target = Speed; this.Corner.Target = Clamp(Corner, 0, 1); this.LockUp.Target = Clamp(LockUp, 0, 1);
         this.Wheelspin.Target = Clamp(Wheelspin, 0, 1); this.Grip.Target = Clamp(Grip, 0, 1);
+        const Recipe = Surface && Surfaces[Surface] ? Surfaces[Surface] : null;
+        const Sings = Recipe ? Recipe.Squeal : { Tone: Smoothstep(0.55, 0.9, Grip), Pitch: 1 };
+        this.Tone.Target = Sings.Tone; this.Pitch.Target = Sings.Pitch; this.Spacing = Recipe ? Recipe.Spacing : 0;
     }
 
     Render(Left, Right, Offset = 0, Count = Left.length - Offset)
     {
         const Rate = this.Rate, Noise = this.Noise;
-        let Retune = 0;
         for (let Index = Offset; Index < Offset + Count; Index++)
         {
             const Speed = this.Speed.Run(), Corner = this.Corner.Run(), LockUp = this.LockUp.Run(), Spin = this.Wheelspin.Run(), Grip = this.Grip.Run();
+            const Tone = this.Tone.Run(), Scale = this.Pitch.Run();
             const Slide = Math.max(Corner, LockUp);
             const Drive = Math.max(Slide * Smoothstep(1, 6, Speed), Spin);
             if (Drive < 1e-4 && this.Chatter < 1e-4) { this.Chatter = 0; continue; }
-            const Sticky = Smoothstep(0.55, 0.9, Grip);                // squeal needs grip; loose surfaces scrub
-            const [Slow, Fast, Drift, Jitter] = this.Wanders.map((Walk) => Walk.Run());
+            const Sticky = Smoothstep(0.55, 0.9, Grip);
 
-            // Pitch: higher with more slip and on high-grip surfaces; lock-up is lower.
-            const SlidePitch = Mix(780, 1150, Smoothstep(0.2, 1, Drive)) * (1 - 0.18 * LockUp) * (1 + 0.06 * Slow + 0.025 * Fast + 0.04 * Drift);
-            const SpinPitch = Mix(520, 1450, Smoothstep(0, 1, Spin)) * (1 + 0.05 * Fast);
-            const Pitch = Spin > Slide ? Mix(SlidePitch, SpinPitch, Smoothstep(0.1, 0.6, Spin)) : SlidePitch;
-            if (++Retune % 32 === 0) for (const [L, R, Ratio] of this.Modes) { L.Tune(Pitch * Ratio, 0.09 / Ratio); R.Tune(Pitch * Ratio * 1.012, 0.09 / Ratio); }
+            // Pitch: up with slip; lock-up lower; wheelspin climbs with the slip speed.
+            const SlidePitch = Mix(720, 1250, Smoothstep(0.15, 1, Drive)) * (1 - 0.2 * LockUp);
+            const SpinPitch = Mix(620, 1500, Smoothstep(0, 1, Spin));
+            const Pitch = (Spin > Slide ? Mix(SlidePitch, SpinPitch, Smoothstep(0.1, 0.6, Spin)) : SlidePitch) * Scale;
 
-            // Stick-slip: a relaxation pulse per cycle with timing jitter; amplitude chatters as blocks grab.
-            this.Chatter += ((0.55 + 0.45 * Math.abs(Jitter)) * Drive - this.Chatter) * 0.004;
-            const Pulses = [0, 0];
-            for (let Side = 0; Side < 2; Side++)
-            {
-                this.Phases[Side] += Pitch * (Side ? 1.007 : 1) * (1 + Noise.Gauss() * 0.012) / Rate;
-                if (this.Phases[Side] >= 1) { this.Phases[Side] -= 1; Pulses[Side] = 1; }
-            }
-            const Saw = [this.Phases[0] * 2 - 1, this.Phases[1] * 2 - 1];
-            let SquealL = 0, SquealR = 0;
-            const Excite = Noise.White() * 0.25;
-            for (const [L, R] of this.Modes) { SquealL += L.Run(Pulses[0] + Excite); SquealR += R.Run(Pulses[1] + Excite); }
-            SquealL = SquealL * 3.2 + Saw[0] * 0.08; SquealR = SquealR * 3.2 + Saw[1] * 0.08;
-            const Squeal = this.Chatter * Sticky;
+            // Onset: it starts singing once the slip passes the grip peak; near the limit it catches and lets go (chirps).
+            const Catch = this.Catch.Run();
+            const Sing = Smoothstep(0.12, 0.45, Drive) * Clamp(1.4 * Smoothstep(0.2, 0.7, Drive) + 0.5 * Catch, 0, 1);
+            this.Chatter += (Sing - this.Chatter) * 0.003;
+            // Cobbles and rumble strips: the contact breaks at every stone or strip, chopping the tone.
+            let Chop = 1;
+            if (this.Spacing > 0 && Speed > 0.5) { this.Chop += Speed / this.Spacing / Rate; this.Chop -= Math.floor(this.Chop); Chop = 0.35 + 0.65 * Smoothstep(0.15, 0.4, this.Chop); }
+            const Level = this.Chatter * Tone * Chop;
+            let SingL = 0, SingR = 0;
+            if (Level > 1e-4)
+                this.Singers.forEach((Singer, Slot) =>
+                {
+                    const [Ratio, Pan] = this.Spread[Slot], Out = Singer.Run(Pitch * Ratio, Rate);
+                    SingL += Out * (1 - Pan) * 0.5; SingR += Out * (1 + Pan) * 0.5;
+                });
+            const [BodyL, BodyR] = this.Body;
+            SingL = BodyL[2].Run(BodyL[1].Run(BodyL[0].Run(SingL))) * Level; SingR = BodyR[2].Run(BodyR[1].Run(BodyR[0].Run(SingR))) * Level;
 
             // Scrub (lock-up), smoke hiss (wheelspin), loose-surface spray.
+            const Fast = Catch;
             const Scrub = LockUp * Smoothstep(1, 8, Speed);
             const ScrubL = this.Scrub[0].Run(Noise.White()) * Scrub * (0.7 + 0.3 * Fast), ScrubR = this.Scrub[1].Run(Noise.White()) * Scrub * (0.7 + 0.3 * Fast);
             const Smoke = Spin * (0.4 + 0.6 * Sticky);
             const SmokeL = this.Smoke[0].Run(Noise.White()) * Smoke, SmokeR = this.Smoke[1].Run(Noise.White()) * Smoke;
             const LooseL = this.Loose[0].Run(Noise.White()) * Drive * (1 - Sticky), LooseR = this.Loose[1].Run(Noise.White()) * Drive * (1 - Sticky);
 
-            let OutL = SquealL * Squeal * 1.8 + ScrubL * 2.6 + SmokeL * 0.3 + LooseL * 2.6;
-            let OutR = SquealR * Squeal * 1.8 + ScrubR * 2.6 + SmokeR * 0.3 + LooseR * 2.6;
+            let OutL = SingL * 0.75 + ScrubL * 1.6 + SmokeL * 0.3 + LooseL * 2.6;
+            let OutR = SingR * 0.75 + ScrubR * 1.6 + SmokeR * 0.3 + LooseR * 2.6;
             if (this.Pickup === 'Cabin') { OutL = this.Cabin[0].Run(OutL); OutR = this.Cabin[1].Run(OutR); }
             Left[Index] += SoftClip(OutL * 0.6, 1.3);
             Right[Index] += SoftClip(OutR * 0.6, 1.3);

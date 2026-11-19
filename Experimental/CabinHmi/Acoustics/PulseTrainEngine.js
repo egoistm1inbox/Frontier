@@ -105,25 +105,30 @@ export const Spyder918 = {
 };
 
 /**
- * Koenigsegg Agera R (2011–2014), the car of the 2014 Need for Speed film (the hero's silver car and the De Leon racers;
- * the crash cars were replicas): 5.0 L twin-turbo flat-plane V8, 1140 hp at 7100 rpm on E85, 1200 Nm at 4100 rpm,
- * 7-speed paddle-shift dual-clutch, rear drive, 1435 kg, final drive 3.364 (spec sheets). Big dump valves chirp on every
- * lift. Gear ratios are chosen to reach its ~440 km/h (Koenigsegg does not publish them); pipe lengths typical.
+ * Koenigsegg Agera RS (2015–2018, 25 built; 457 km/h peak on the 2017 Nevada record run): Koenigsegg's own 5.0 L
+ * twin-turbo V8, 1160 hp at 7800 rpm on petrol, 1280 Nm at 4100 rpm (1000 Nm from 2700 to 6170), redline 8250 rpm,
+ * 1.3–1.4 bar from two ball-bearing turbos, Inconel manifolds into a merge collector and one central exit, engine
+ * solid-mounted in the carbon tub, 7-speed paddle shift, rear drive, 1395 kg kerb (Koenigsegg spec sheet).
+ * Follow-up 22: the crank is a 90° (cross-plane) design (Koenigsegg's own engine notes; the later Jesko was the first
+ * to switch to a flat plane, which "changes the exhaust note quite a bit"), so each bank fires unevenly (90/180/270°
+ * gaps) and the Agera has the deep, thunderous, burbling bellow of a big V8 under its turbo whoosh, not a Ferrari-like
+ * shriek. Firing order (the common cross-plane 1-8-4-3-6-5-7-2), gear ratios and pipe lengths are typical values;
+ * Koenigsegg does not publish them.
  */
-export const AgeraR = {
-    Name: 'Koenigsegg Agera R', Code: '5.0 L twin-turbo flat-plane V8',
-    Cylinders: 8, BankOffset: 90, Idle: 900, ColdIdle: 1300, Limiter: 7500, Redline: 7250,
-    Header: [0.5, 0.53], Tail: [1.5, 1.56], GasSpeed: 540, CrossFeed: 0.4,
-    Formants: [[120, 1.0, 3.5], [380, 1.4, 3], [900, 1.9, 3], [1900, 2.5, 3], [3800, 3, 1.5]],
-    ValveRpm: 3000, Intake: { Box: 100, Runner: 600, Howl: 1400 },
-    Spread: 0.18, Lean: 3, Shape: 0.24, Jitter: [0.28, 0.1], Burble: 0.7,
-    Valvetrain: 0.05, Injector: 0.02, Space: 0.24,
-    Torque: [[850, 380], [1500, 560], [2500, 1000], [3400, 1150], [4100, 1200], [5800, 1200], [7100, 1143], [7600, 980]],
+export const AgeraRs = {
+    Name: 'Koenigsegg Agera RS', Code: '5.0 L twin-turbo cross-plane V8',
+    Cylinders: 8, BankOffset: 0, BankAngles: [[0, 270, 450, 540], [90, 180, 360, 630]], Idle: 900, ColdIdle: 1300, Limiter: 8250, Redline: 8000,
+    Header: [0.62, 0.66], Tail: [1.32, 1.38], GasSpeed: 530, CrossFeed: 0.35,
+    Formants: [[95, 1.0, 4], [280, 1.3, 3.2], [700, 1.7, 2.8], [1550, 2.3, 2.4], [3200, 2.9, 1.2]],
+    ValveRpm: 3000, Intake: { Box: 96, Runner: 560, Howl: 1300 },
+    Spread: 0.22, Lean: 3.4, Shape: 0.26, Jitter: [0.32, 0.12], Burble: 0.9,
+    Valvetrain: 0.045, Injector: 0.02, Space: 0.24,
+    Torque: [[850, 380], [1500, 560], [2000, 800], [2700, 1000], [3400, 1180], [4100, 1280], [5000, 1240], [6170, 1180], [7000, 1110], [7800, 1060], [8300, 900]],
     Motor: null,
-    Turbo: { Onset: 2000, Full: 3500, Lag: 0.55, Unboosted: 0.42, Whistle: [3800, 9200], Tone: 0.024, Spool: 0.08, Vent: 1.0, Flutter: 0.2, Muffle: 2600 },
-    Gearbox: { Teeth: [31, 28, 26, 24, 23, 22, 21], Whine: 0.008, Clunk: 0.6, Cut: 0.05, Swap: 0.09 },
-    Ratios: [2.92, 1.98, 1.50, 1.18, 0.95, 0.79, 0.65], Final: 3.364, TyreRadius: 0.35, Mass: 1435 + 75, DragArea: 0.72,
-    Drive: { Share: 0.6, Launch: 3800, Grip: 1.6 }, Pops: 0.6, Level: 0.5,
+    Turbo: { Onset: 2200, Full: 3800, Lag: 0.55, Unboosted: 0.42, Whistle: [3500, 8800], Tone: 0.032, Spool: 0.1, Vent: 1.3, Flutter: 0.5, Muffle: 2300 },
+    Gearbox: { Teeth: [31, 28, 26, 24, 23, 22, 21], Whine: 0.008, Clunk: 0.7, Cut: 0.05, Swap: 0.09 },
+    Ratios: [2.92, 1.98, 1.50, 1.18, 0.95, 0.79, 0.65], Final: 3.364, TyreRadius: 0.35, Mass: 1395 + 75, DragArea: 0.7,
+    Drive: { Share: 0.6, Launch: 3800, Grip: 1.6 }, Pops: 0.9, Level: 0.5,
 };
 
 /**
@@ -213,7 +218,7 @@ export const LigierJsP320 = {
     Drive: { Share: 0.62, Launch: 5000, Grip: 1.7, Rotating: true }, Pops: 1.1, Level: 0.6,
 };
 
-export const Profiles = { LaFerrari, GtrNismo, Demon, Spyder918, AgeraR, MustangGt, Gt350, MustangGt3, LigierJsP320 };
+export const Profiles = { LaFerrari, GtrNismo, Demon, Spyder918, AgeraRs, MustangGt, Gt350, MustangGt3, LigierJsP320 };
 
 /** Engine torque (Nm) at full throttle (and full boost) for an engine speed, from the profile's table. */
 export function FullTorque(Profile, Rpm)

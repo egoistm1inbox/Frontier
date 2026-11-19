@@ -41,8 +41,9 @@ Follow-up 10 WAVs, 22 MB, were replaced). Peak is measured before encoding.
 | `GtrNismo-Launch.mp3` | 13.5 s | −2.7 | −16.0 | Launch-control boost build, AWD launch (0–100 2.9 s), 6-speed DCT upshifts with clunks, lift with blow-off |
 | `GtrNismo-Onboard.mp3` | 14.0 s | −2.5 | −17.0 | Cabin mic, pull 3-4-5 on boost, ABS stop with blipped downshifts, corner, spool back up on exit |
 | `GtrNismo-FlyBy.mp3` | 8.0 s | −1.1 | −18.1 | Trackside at 12 m, 225 km/h in 5th on full boost |
-| `Tyres-Screech.mp3` | 12.0 s | −3.5 | −17.0 | Cornering squeal at the limit, panic stop with lock-up, standing burnout |
-| `Surfaces-Tour.mp3` | 28.0 s | −5.8 | −19.0 | 60 km/h over asphalt, wet, gravel, dirt, grass, cobbles, rumble strip (4 s each) |
+| `Tyres-Screech.mp3` | 12.0 s | −3.5 | −17.0 | Cornering squeal at the limit, panic stop with lock-up, standing burnout (Follow-up 22: rubber squeal, not scrub) |
+| `Tyres-Drift.mp3` | 20.0 s | −4.6 | −18.0 | Follow-up 22: drift at 70 km/h on asphalt, smooth concrete, wet asphalt, cobbles and gravel: turn-in chirps, sustained warbling wail bending with the angle; concrete shrillest, wet only chirps, cobbles chop it, gravel sprays instead |
+| `Surfaces-Tour.mp3` | 32.0 s | −5.4 | −19.0 | 60 km/h over asphalt, wet, gravel, dirt, grass, cobbles, rumble strip, smooth concrete (4 s each) |
 | `Chassis-Brakes.mp3` | 12.0 s | −1.4 | −20.0 | 130 km/h ABS stop (pump buzz, valve clicks, pad roar), light braking into squeal, creep groan to a halt |
 | `Chassis-Suspension.mp3` | 16.0 s | −7.2 | −20.0 | Cabin mic at 40 km/h: kerb strike, cobbles, pothole, rutted dirt, rumble strip (dampers, bump stops, bushings, rattles) |
 | `Lights-Cues.mp3` | 10.5 s | −1.0 | −26.6 | Headlamp switch, lamp relay, xenon ignition, LED welcome with levelling, indicator relay |
@@ -84,8 +85,8 @@ Follow-up 10 WAVs, 22 MB, were replaced). Peak is measured before encoding.
 | `War-Deafened.mp3` | 14.0 s | −0.5 | −25.8 | Shell shock: fighting, a shell lands 10 m away, then muffled (low-pass from 180 Hz), ringing ears, heartbeat, hearing returns over ~10 s |
 | `War-Battlefield.mp3` | 20.0 s | −1.4 | −26.2 | Battlefield bed: AK, M4, MG 42, .50 cal and LMG bursts 120–750 m away, far explosions, rounds cracking overhead |
 | `Bullets-Supersonic.mp3` | 4.5 s | −0.9 | −35.3 | Downrange of a rifle 400 m away: crack first, muzzle report 0.67 s later |
-| `Bullets-Whizz.mp3` | 2.6 s | −1.4 | −24.4 | Three subsonic fly-bys: Doppler drop, vortex tone, panning across |
-| `Bullets-Ricochet.mp3` | 4.4 s | −1.4 | −20.9 | Glancing off rock, steel and concrete: strike then tumbling whine |
+| `Bullets-Whizz.mp3` | 2.6 s | −1.4 | −31.4 | Three subsonic fly-bys: Doppler drop, vortex tone, panning across |
+| `Bullets-Ricochet.mp3` | 4.4 s | −1.4 | −20.5 | Glancing off rock, steel and concrete: strike then tumbling whine |
 | `Bullets-Impacts.mp3` | 14.0 s | −1.4 | −30.3 | Sand, dirt, rock, concrete, wood, metal, glass, water, 1.2 s apart |
 | `Shells-Floors.mp3` | 16.6 s | −1.4 | −31.3 | Spent cases (`Casings.js`): 7.62 mm on concrete, 5.56 mm on a wooden deck, 7.62 mm on a steel floor, 7.62 mm on dirt — ring, bounce series, roll |
 | `Shells-Calibres.mp3` | 20.4 s | −1.4 | −29.0 | 9 mm pistol, 12-gauge shotgun, .50 BMG on steel, 30 mm cannon on steel, 120 mm case stub on the turret floor |
@@ -101,9 +102,9 @@ Follow-up 10 WAVs, 22 MB, were replaced). Peak is measured before encoding.
 | `TurboLag-Compare.mp3` | 16.5 s | −1.2 | −17.0 | GT-R with parallel twin turbos, the same 3rd-gear roll-on from 2600 rpm with lag off, real lag and 2.5× lag; cyan dots: whistle pitch predicted from the simulated shaft speed |
 | `Spyder918-Launch.mp3` | 16.0 s | −2.3 | −16.0 | Porsche 918 Spyder (Follow-up 16, the hybrid from Porsche's 2020 Super Bowl advert "The Heist"): launch control, both e-motors whining under the flat-plane V8, scream to 9150 rpm through the top pipes, PDK upshifts, front motor decoupling at 235 km/h, lift |
 | `Spyder918-FlyBy.mp3` | 8.0 s | −1.0 | −18.4 | 918 Spyder at 250 km/h in 5th past a trackside mic 12 m away: Doppler drop, exhaust pointing away after the pass |
-| `AgeraR-Launch.mp3` | 16.0 s | −1.6 | −16.0 | Koenigsegg Agera R (the Need for Speed film car): boost build at about 3800 rpm, launch, twin-turbo flat-plane V8 through 7 gears, dump-valve chirps, big blow-off on the lift |
-| `AgeraR-FlyBy.mp3` | 8.0 s | −1.0 | −18.5 | Agera R at 300 km/h in 5th on full boost: turbo whistle over the V8, Doppler drop |
-| `Road-NoiseSwitch.mp3` | 15.0 s | −3.6 | −18.0 | Follow-up 17: Agera R flat out in 6th from 220 km/h, chase mic, road roar at 100 %, then the bench default (road 40 %, wind 80 %), then road switched off (wind only) |
+| `AgeraRs-Launch.mp3` | 16.0 s | −1.7 | −16.0 | Follow-up 22: Koenigsegg Agera RS: boost build at about 3800 rpm, launch, twin-turbo cross-plane V8 (90° crank) through 7 gears, dump-valve chirps, lift with the big blow-off |
+| `AgeraRs-FlyBy.mp3` | 8.0 s | −1.0 | −18.5 | Agera RS at 300 km/h in 5th on full boost: deep cross-plane bellow and turbo whistle, Doppler drop |
+| `Road-NoiseSwitch.mp3` | 15.0 s | −4.6 | −18.0 | Follow-up 17: Agera R flat out in 6th from 220 km/h, chase mic, road roar at 100 %, then the bench default (road 40 %, wind 80 %), then road switched off (wind only) |
 | `MustangGt-StartLaunch.mp3` | 16.5 s | −1.3 | −17.0 | Follow-up 18: 2024 Mustang GT, chase mic: start, idle burble, launch, cross-plane Coyote V8 through the 6-speed manual, lift |
 | `Gt350-Launch.mp3` | 16.0 s | −1.3 | −16.0 | Shelby GT350: revs held, launch, flat-plane Voodoo scream to 8250 rpm, no burble (each bank fires evenly) |
 | `MustangGt3-Onboard.mp3` | 14.0 s | −4.8 | −17.0 | Mustang GT3 (LMGT3), cockpit: sequential upshifts, straight-cut whine, downshift blips and overrun pops |
@@ -291,6 +292,23 @@ frequencies are typical published figures, not measurements.
   crunch as pieces break away, then the shards land about 0.4 s later (a metre's fall): a bright crash thinning into tinkles,
   small shards higher and shorter than big ones, some snapping again, the last ones settling.
 Impacts reel now spaces the materials 1.6 s apart so glass shards and the metal ring are not cut off. Build tag "build 21".
+
+**Agera RS, tyre squeal, ricochet and whizz (Follow-up 22).**
+- The Koenigsegg was modelled with a flat-plane crank, which made it shriek like a Ferrari or the 918. Koenigsegg's own engine
+  notes say the Agera's V8 has a 90° (cross-plane) crank; the Jesko was the first to go flat-plane (Top Gear, Carscoops). It is now
+  `AgeraRs` (the RS, as asked: 1160 hp at 7800 rpm, 1280 Nm at 4100, redline 8250, 1395 kg kerb, Koenigsegg spec sheet) with uneven
+  per-bank firing (the deep, burbling bellow), longer turbo manifolds into a merge collector and single exit, deeper formants, a
+  louder spool whistle, bigger whoosh, dump-valve flutter and more overrun crackle. The film car was the Agera R; the engine family
+  and crank are the same. Firing order and gear ratios are typical values (not published).
+- `TyreSqueal` is now the rubber singing rather than a scrub: three sliding tyres (`Singer`), each a near-pure tone 700–1400 Hz
+  with overtones through belt resonances near 1.1 and 2.6 kHz, warbling at 5–12 Hz, drifting and beating against each other, with
+  chirps at the grip limit. Each surface has a `Squeal` recipe (Tone, Pitch): new `Concrete` (smooth garage floor, shrillest),
+  asphalt wails, wet only chirps over the hiss, cobbles and rumble strips chop it, gravel, dirt and grass spray instead.
+- `Ricochet` warbles at the fragment's tumble rate (25–70 Hz) instead of buzzing, and starts brighter (heard about 3.5 kHz falling
+  to under 2 kHz).
+- `Whizz` is now a subsonic round flown past the ear on a straight line, with emission time solved per sample: the approach
+  arrives squeezed into a sudden high "zz" and the departing wake drops in pitch and trails off ("zzziu"), not a symmetric sweep.
+Build tag "build 22".
 
 
 ## Reproduce
