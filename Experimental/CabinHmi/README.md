@@ -117,6 +117,28 @@ paint picks up that garage's lamps, sky and walls. Glossy floors are semi-transp
 the twin as the floor gets less glossy, and a contact shadow sits under the car.
 `window.Lobby` is the test hook: `Ready`, `Use(Key, Options, Seed)`, `Look`, `Rig`, `View`, `Orbit`, `Tab`, `Spot(Id)`, `Overview`, `Spots`, `Bare`, `State`.
 
+## Particle showroom (Filament)
+`Filament/Filament.html` is a separate full-window demo of the particle effects seen on new cars' screens and in motion-graphics tools.
+The ControlVehicle stands on a black stage with six looks (keys 1–6):
+
+| Look | What it shows |
+|---|---|
+| Light speed | Welcome / Sport-mode speed lines. Streaks rush past the parked car in a tunnel, and the lowest ones ride floor lanes. |
+| Digital twin | Dust swirls in and builds the car nose-first from 160k points scattered on its real surface. A scan line sweeps it, then the wind blows it off (14 s loop). |
+| Airflow | Wind-tunnel streamlines bend around the car's measured silhouette, bunch over the roof, turn red where the air piles up and tumble in the wake. Fill or smoke rakes. |
+| Particular | Trapcode Particular-style: two emitters orbit the car. Particles age through a colour ramp, shrink over life and drift in a turbulence field. |
+| Clone field | MoGraph cloner: a grid of clones around the car, driven by a sphere effector, a shockwave ring and a noise effector. Bars (scale) or dots (move). |
+| Charging | Energy spirals down the cable, into the port and along the floor, then fills a 40-cell battery cell by cell (readout: %, kW, km). |
+
+**Controls.** Particles (5k–160k), speed, trail, size, glow, turbulence; 5 palettes (Ice, Ember, Aurora, Rosso, Mono). Car body: Auto, Paint,
+Ghost (black mirror), Glass (see-through with edge lines) or Hidden. Drag orbits, the wheel zooms. Keys: 1–6 looks · Space pause · O auto orbit · H hide panels.
+
+📝 Every particle is a camera-facing capsule drawn between a Head and a Tail point, so one instanced quad gives a dot, a comet, a speed line or a
+clone bar. Motion is a function of the clock alone, with no simulation state: the Particular look re-integrates its 6-step turbulence path each
+frame. All 160k particles are one draw call per look. Additive HDR (half-float) feeds a dual-filter bloom, then ACES, a vignette and grain (`BloomChain`).
+URL options for captures: `?look=Airflow&time=6&variant=1&palette=Ice&car=Ghost&count=80000&still=1&ui=0&capture=1`. `window.Filament` is the test
+hook: `SetLook(Key)`, `Seek(Seconds)`, `Settings`.
+
 ## Vehicle sound library (Acoustics)
 `Acoustics/Acoustics.html` is a sound bench: drive a Ferrari LaFerrari, a Nissan GT-R NISMO, a Porsche Taycan Turbo S or an original Next-Gen
 racer (Jackson Storm style) live (keyboard or on-screen pedals), bolt any of 10 turbos and superchargers onto the petrol cars, switch the
@@ -179,13 +201,14 @@ Each HMI has its own **Lights** menu on the shared `LampRig`. These are real lam
 
 ## Run
 `python3 Experimental/CabinHmi/ServeCabinHmi.py 8097` serves the repository root and redirects `/` to the launcher
-(`Experimental/CabinHmi/index.html`: HMI, cluster, Visor, Lobby and Acoustics cards). Any static server rooted at the repository also works; open:
+(`Experimental/CabinHmi/index.html`: HMI, cluster, Visor, Lobby, Filament and Acoustics cards). Any static server rooted at the repository also works; open:
 - `/Experimental/CabinHmi/Contour/Contour.html`
 - `/Experimental/CabinHmi/Afterglow/Afterglow.html`
 - `/Experimental/CabinHmi/Nocturne/Nocturne.html`
 - `/Experimental/CabinHmi/Clusters/{Ridge/Ridge.html, Halo/Halo.html, Tide/Tide.html}`
 - `/Experimental/CabinHmi/Visor/Visor.html` (full window, not a fixed panel)
 - `/Experimental/CabinHmi/Lobby/Lobby.html` (full window)
+- `/Experimental/CabinHmi/Filament/Filament.html` (full window)
 - `/Experimental/CabinHmi/Acoustics/Acoustics.html` (sound bench; click once to wake the sound)
 
 Each display is a fixed 1600 × 900 panel, scaled to fit the window. Drag to orbit and scroll to zoom.
@@ -229,6 +252,10 @@ Each display is a fixed 1600 × 900 panel, scaled to fit the window. Drag to orb
 | `Acoustics/Acoustics.html` / `.css` / `.js` | The bench page: tachometer, pedals, paddles, surfaces, cue pads, mix, reel players. |
 | `Acoustics/Offline/RenderReel.mjs` | Scripts the 101 reel scenes, writes MP3s (and WAVs with `--wav`), spectrogram plates and levels. |
 | `Acoustics/Offline/SpectrumTools.mjs` | WAV and MP3 (`WriteMp3`, lamejs) writers, FFT, spectra, hand-rolled PNG plates (spectrogram + waveform). |
+| `Filament/Filament.js` | Particle showroom page: renderer, car body modes, instanced particle buffer, orbit camera, panel, look timelines (twin cycle, charge level), `window.Filament`. |
+| `Filament/FilamentLooks.js` | GLSL: shared `Prelude` (noise-free ABC turbulence `Flow`), capsule `Projection` and `Fragment`, the six looks' `Track` functions, `Looks`, `Palettes`. |
+| `Filament/SurfaceScatter.js` | `ScatterSurface` (area-weighted seeded points on the car, with normals and surface family), `SilhouetteProfile` (roof and half-width along X, plus the air-felt version as a texture). |
+| `Filament/BloomChain.js` | Half-float scene target, 5-level dual-filter bloom, ACES composite with vignette and grain. |
 | `Lobby/LobbyKit.js` | `Seeded` random, canvas-painted textures (tile, concrete, asphalt, moss, bark, shutter, sky, sign, forest wall), beams, halos, fronds, leaves, `Scatter` (instanced), `Release`. |
 
 ## Known limits
@@ -240,6 +267,7 @@ Locks are shown as callouts and axle bars (Contour).
 ⚠️ Visor: speeds, coolant, fuel burn and cabin O₂ are game-scale. The road is straight by design, and the porcupine and signal are scripted per lap.
 ⚠️ Visor traffic is two-lane only (no junctions). Other cars do not overtake, and they swerve for nothing but stop points. A software renderer (headless) draws about 1 fps with traffic; captures use `Pace(2)`.
 ⚠️ Lobby: the camera is clamped to a box, not collided with props, so it can pass through a pillar or plant. Rebuilding a set takes a short moment (hidden by a fade on set switches).
+⚠️ Filament: the airflow is a look, not CFD. Streamlines are pushed around a boxy outline of the measured silhouette, so the colours only suggest pressure and speed. The charge figures are display-scale. The headless software renderer draws the 160k-particle looks slowly, so captures render single frames (`capture=1`).
 ⚠️ Acoustics: synthesized, not sampled. Without reference recordings neither car is A/B-matched to the real thing: the LaFerrari and GT-R voices are tuned to published figures (power, torque, ratios, redlines) and by measurement (firing order lands on rpm/10 and rpm/20; spectrogram checks), so they read as "a high-revving V12 with hybrid whine" and "a twin-turbo V6 with whistle and blow-off" rather than forensic copies. Pipe lengths, formants, turbo whistle pitches and the impact recipes are informed guesses. The chase mic now has a few early reflections, but there is still no full reverb or room model; the impacts' outdoor echoes are simple taps plus a comb wash. Explosions, EMP and sonic blast are cinematic designs (real EMPs are silent; a real sonic weapon is mostly inaudible). Live audio needs a click first (browser rule). The weapons are stylised originals: the energy LMG borrows only the Devotion's published fire-rate behaviour (5 → 15 rounds/s, 1.75 s, 0.85 s with Turbocharger, 44 rounds), not its audio. Gunshots have no real muzzle blast level (they are normalized), and impacts are short procedural recipes. The reel is 192 kbps MP3 (7.1 MB).
 ⚠️ Acoustics power sounds: the inducer and aircraft figures are typical values, not manufacturer data; Taycan pole pairs, gear teeth and inverter carrier are informed guesses. The Next-Gen racer is an original sound in the spirit of Jackson Storm, not film audio. An inducer replaces the car's stock induction. Aircraft are pre-rendered clips on the bench (too heavy to synthesize on demand).
 ⚠️ The Afterglow HMI still shows its old EV battery pill, while its Halo cluster runs a 3.0 petrol car.
