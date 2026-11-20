@@ -33,6 +33,22 @@ for (const Type of ["ledlight", "ledstrip"])
     groups: [],
   };
 
+// Restyle only the embedded Sun summary; the pinned reference modules remain intact.
+const SunDashboardStyle = document.createElement("style");
+SunDashboardStyle.textContent = `
+  #ReferenceMount[data-reference-kind="sun"] .mpanel { gap: 8px; }
+  #ReferenceMount[data-reference-kind="sun"] .mp-hero { border-radius: 18px; border-color: #292929; }
+  #ReferenceMount[data-reference-kind="sun"] .mp-cap { padding: 14px; }
+  #ReferenceMount[data-reference-kind="sun"] .mp-cap b { font-size: 16px; font-weight: 400; }
+  #ReferenceMount[data-reference-kind="sun"] .mp-rail { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; }
+  #ReferenceMount[data-reference-kind="sun"] .mp-pill { min-height: 66px; padding: 12px; border-radius: 15px; background: #171717; border-color: #292929; }
+  #ReferenceMount[data-reference-kind="sun"] .mp-pill .v { font-size: 21px; font-weight: 300; }
+  #ReferenceMount[data-reference-kind="sun"] .mp-pill .k { margin-top: 5px; color: #888; }
+  #ReferenceMount[data-reference-kind="sun"] .mp-stat { border-radius: 16px; background: #171717; border-color: #292929; }
+  #ReferenceMount[data-reference-kind="sun"] .mp-stat .i { border-radius: 50%; }
+`;
+document.head.appendChild(SunDashboardStyle);
+
 const Mount = document.getElementById("ReferenceMount");
 const Nodes = new Map();
 const Baseline = new Map();

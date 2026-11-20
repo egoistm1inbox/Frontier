@@ -21,6 +21,7 @@ import MaterialPanel from "./MaterialPanel.jsx";
 import { ColourSlotDropProps } from "./ColourCodex.js";
 import ActionIcon, { QuickSymbol } from "./ActionIcon.jsx";
 import React, { useState, useEffect, useRef } from "react";
+import { Sun, Compass, Sparkles, CircleDot, Clock3, CalendarDays, Database, ChevronLeft, ChevronRight } from "lucide-react";
 import { SunGizmo } from "../FrontierEditor/environment-graphics.jsx";
 import { DepthOfField } from "../FrontierEditor/camera-graphics.jsx";
 import { Iris, CloudCoverage } from "../FrontierEditor/property-graphics.jsx";
@@ -339,6 +340,8 @@ export function Card({
   Class = "",
   GraphHandled = false,
 }) {
+  const SunMarks = { "Sun direction": Compass, "Sunlight intensity": Sun, Temperature: Sparkles, "Daylight cycle": Clock3, "Sun disc": CircleDot, "Dynamic settings": CalendarDays, "Sun lighting bake": Database, "Sun disk bake": Database };
+  const SunMark = SunMarks[Title];
   const Mark = {
     "Sun direction": "celestial-orbit",
     "Sunlight intensity": "sun",
@@ -356,7 +359,7 @@ export function Card({
       data-card={Title}
     >
       <h3>
-        {Mark && <Glyph Name={Mark} Size={16} />}
+        {SunMark ? <SunMark size={17} strokeWidth={1.5} aria-hidden="true" /> : Mark && <Glyph Name={Mark} Size={16} />}
         <span>{Title}</span>
       </h3>
       {children || Children}
@@ -497,6 +500,7 @@ export function Inspector({
 }) {
   const Sheet = Panels[Subject.Panel] || Panels.geometry;
   const [MoonSlot, SelectMoon] = useState(0);
+  const [SunPage, SetSunPage] = useState(0);
   const Prefix = Subject.Panel === "moon" ? "moon" + MoonSlot + ":" : "";
   const V = (Name) =>
     (["clouds", "local-cloud"].includes(Subject.Panel)
@@ -762,9 +766,44 @@ export function Inspector({
       Longitude: V("Longitude"),
     });
     const { Elevation, Azimuth } = Solved;
+    const Pages = [
+      ["Overview", Sun], ["Position", Compass], ["Light", Sparkles],
+      ["Cycle", Clock3], ["Bake", Database],
+    ];
+    const Page = (Index, Children) => (
+      <section className="sun-page" id={`sun-page-${Index}`} role="tabpanel"
+        aria-labelledby={`sun-tab-${Index}`} hidden={SunPage !== Index}>
+        {Children}
+      </section>
+    );
     Content = (
       <>
         {Header("Environment")}
+        <div className="sun-carousel" aria-label="Sun settings categories">
+          <div className="sun-carousel-heading">
+            <div><span>CONFIGURE</span><strong>Sun settings</strong></div>
+            <div className="sun-carousel-arrows">
+              <button type="button" aria-label="Previous Sun category" disabled={SunPage === 0} onClick={() => SetSunPage(SunPage - 1)}><ChevronLeft size={16} /></button>
+              <button type="button" aria-label="Next Sun category" disabled={SunPage === Pages.length - 1} onClick={() => SetSunPage(SunPage + 1)}><ChevronRight size={16} /></button>
+            </div>
+          </div>
+          <div className="sun-category-list" role="tablist" aria-label="Sun settings" onKeyDown={(Event) => {
+            if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(Event.key)) return;
+            Event.preventDefault();
+            const Next = Event.key === "Home" ? 0 : Event.key === "End" ? Pages.length - 1 : (SunPage + (Event.key === "ArrowRight" ? 1 : -1) + Pages.length) % Pages.length;
+            SetSunPage(Next);
+            document.getElementById(`sun-tab-${Next}`)?.focus();
+          }}>
+            {Pages.map(([Label, CategoryIcon], Index) => (
+              <button type="button" role="tab" id={`sun-tab-${Index}`} key={Label}
+                aria-selected={SunPage === Index} aria-controls={`sun-page-${Index}`}
+                tabIndex={SunPage === Index ? 0 : -1} onClick={() => SetSunPage(Index)}>
+                <CategoryIcon size={15} strokeWidth={1.6} aria-hidden="true" /><span>{Label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+        {Page(0, <>
         {ReferenceCards}
         <div className="section-caption">
           PROPERTIES <small>Light, direction & atmosphere</small>
@@ -802,6 +841,9 @@ export function Inspector({
           </div>
           <Glyph Name="arrow" />
         </div>
+        </>)}
+        {Page(1, <>
+        <div className="sun-page-intro"><span>01 / POSITION</span><h2>Where the sun sits</h2><p>Direction is calculated from your time and location.</p></div>
         <div className="card-grid sun-properties">
           <Card Title="Sun direction" Height={711} Class="direction-card">
             <Metric
@@ -847,6 +889,12 @@ export function Inspector({
             </div>
             <p>Shared time above · angles solved by date / location</p>
           </Card>
+        </div>
+        <p className="native-note">Solar position uses the native NOAA calculation, translated to JavaScript. No GPU lighting is running.</p>
+        </>)}
+        {Page(2, <>
+        <div className="sun-page-intro"><span>02 / LIGHT</span><h2>Shape the sunlight</h2><p>Adjust the intensity, colour and apparent size of the sun.</p></div>
+        <div className="card-grid sun-properties">
           <Card Title="Sunlight intensity" Height={347} GraphHandled>
             <Metric
               Value={Number(V("Intensity")).toFixed(1)}
@@ -876,13 +924,6 @@ export function Inspector({
             <p>Blackbody tint approximation · linear RGB</p>
             {F("Sun Tint", !!V("Colour source"))}
           </Card>
-          <Card Title="Daylight cycle" Height={329} GraphHandled>
-            <Metric
-              Value={`${String(Math.floor(Time)).padStart(2, "0")}:${String(Math.floor((Time % 1) * 60)).padStart(2, "0")}`}
-            />
-            <SunGraph V={V} Change={AssignProperty} Mode="day" />
-            {F("Local Hours")}
-          </Card>
           <Card Title="Sun disc" Height={329}>
             <Metric Value={Number(V("Angular Diameter")).toFixed(2) + "°"} />
             <div
@@ -893,6 +934,18 @@ export function Inspector({
               }}
             />
             {F("Angular Diameter")}
+          </Card>
+        </div>
+        </>)}
+        {Page(3, <>
+        <div className="sun-page-intro"><span>03 / CYCLE</span><h2>Time & location</h2><p>Set the clock, calendar and geographic coordinates.</p></div>
+        <div className="card-grid sun-properties">
+          <Card Title="Daylight cycle" Height={329} GraphHandled>
+            <Metric
+              Value={`${String(Math.floor(Time)).padStart(2, "0")}:${String(Math.floor((Time % 1) * 60)).padStart(2, "0")}`}
+            />
+            <SunGraph V={V} Change={AssignProperty} Mode="day" />
+            {F("Local Hours")}
           </Card>
         </div>
         <Card Title="Dynamic settings" Wide GraphHandled>
@@ -916,10 +969,9 @@ export function Inspector({
             <output>{Solved.EquationOfTime.toFixed(2)} min</output>
           </div>
         </Card>
-        <p className="native-note">
-          Solar position uses the native NOAA calculation, translated to
-          JavaScript. No GPU lighting is running.
-        </p>
+        </>)}
+        {Page(4, <>
+        <div className="sun-page-intro"><span>04 / BAKE</span><h2>Baked lighting</h2><p>Native target bindings are not connected in this preview.</p></div>
         <div className="section-caption">
           BAKING <small>Native target bindings pending</small>
         </div>
@@ -927,6 +979,7 @@ export function Inspector({
           <Bake Title="Sun lighting bake" Sun />
           <Bake Title="Sun disk bake" Sun />
         </div>
+        </>)}
       </>
     );
   } else if (Subject.Panel === "camera") {
