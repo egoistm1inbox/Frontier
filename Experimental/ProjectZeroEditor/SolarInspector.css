@@ -1,0 +1,1043 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   SOLAR BENTO & CAROUSEL DESIGN SYSTEM — Project-Zero Editor
+   Responsive across narrow docked inspector (@container) and wide workspace.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.pz-sun-redesign {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+/* ── 1. Preset Moment Pill Strip (Images 3 & 4) ── */
+.pz-sun-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.pz-preset-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 29px;
+  padding: 5px 11px;
+  border-radius: 999px;
+  background: #14171b;
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  color: #cfd5df;
+  font-size: 11px;
+  font-weight: 450;
+  cursor: pointer;
+  transition: background 0.16s ease, border-color 0.16s ease;
+}
+
+.pz-preset-pill:hover {
+  background: #1b2026;
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+.pz-preset-pill.is-active {
+  background: linear-gradient(135deg, rgba(242, 195, 107, 0.17), rgba(242, 195, 107, 0.05));
+  border-color: rgba(242, 195, 107, 0.52);
+  color: #fff8eb;
+}
+
+.pz-preset-pill i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.pz-preset-pill small {
+  font-size: 9.5px;
+  color: #7d8492;
+  font-variant-numeric: tabular-nums;
+}
+
+.pz-preset-pill.is-active small {
+  color: #e3c894;
+}
+
+/* ── 2. Dual Status & Comparison KPI Row (Images 2 & 4) ── */
+.pz-kpi-duo {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.pz-kpi-card {
+  padding: 14px 15px;
+  border-radius: 18px;
+  background:
+    radial-gradient(120% 95% at 0% 0%, rgba(255, 255, 255, 0.04) 0%, transparent 65%),
+    #111317;
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 8px;
+  cursor: pointer;
+  min-width: 0;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.pz-kpi-card:hover {
+  border-color: rgba(255, 255, 255, 0.16);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.28);
+}
+
+.pz-kpi-card.tone-golden {
+  background:
+    radial-gradient(120% 100% at 0% 0%, rgba(235, 146, 72, 0.14) 0%, transparent 68%),
+    #141214;
+  border-color: rgba(238, 152, 82, 0.45);
+}
+
+.pz-kpi-card.tone-night,
+.pz-kpi-card.tone-twilight {
+  background:
+    radial-gradient(120% 100% at 0% 0%, rgba(226, 94, 112, 0.14) 0%, transparent 68%),
+    #131115;
+  border-color: rgba(226, 94, 112, 0.45);
+}
+
+.pz-kpi-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.pz-kpi-bar {
+  width: 3.5px;
+  height: 15px;
+  border-radius: 99px;
+  background: #5ad68d;
+  flex-shrink: 0;
+}
+
+.pz-kpi-card.tone-golden .pz-kpi-bar,
+.pz-kpi-bar.is-amber {
+  background: #f2b857;
+}
+
+.pz-kpi-card.tone-night .pz-kpi-bar,
+.pz-kpi-card.tone-twilight .pz-kpi-bar {
+  background: #ec5d71;
+}
+
+.pz-kpi-title {
+  font-size: 11.5px;
+  font-weight: 500;
+  color: #d6dce5;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pz-kpi-corner {
+  margin-left: auto;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.055);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  display: grid;
+  place-items: center;
+  color: #aeb5c1;
+  flex-shrink: 0;
+}
+
+.pz-kpi-delta {
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.pz-kpi-delta .is-up {
+  color: #63dc96;
+}
+
+.pz-kpi-delta .is-down {
+  color: #f06e7e;
+}
+
+.pz-kpi-foot {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.pz-kpi-num {
+  font-size: 27px;
+  line-height: 1;
+  font-weight: 300;
+  letter-spacing: -1.1px;
+  color: #f6f8fb;
+  font-variant-numeric: tabular-nums;
+}
+
+.pz-kpi-num small {
+  font-size: 11.5px;
+  font-weight: 400;
+  letter-spacing: 0;
+  margin-left: 3px;
+  color: #8b929f;
+}
+
+.pz-kpi-meta {
+  font-size: 10.5px;
+  color: #888f9c;
+  font-variant-numeric: tabular-nums;
+}
+
+.pz-compare-pair {
+  display: grid;
+  grid-template-columns: 1fr 1.1fr;
+  gap: 6px;
+}
+
+.pz-compare-hatch,
+.pz-compare-solid {
+  border-radius: 9px;
+  padding: 5px 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.pz-compare-hatch {
+  background: repeating-linear-gradient(
+    -45deg,
+    rgba(255, 255, 255, 0.065),
+    rgba(255, 255, 255, 0.065) 4px,
+    rgba(255, 255, 255, 0.015) 4px,
+    rgba(255, 255, 255, 0.015) 8px
+  );
+  border-top: 1.5px solid rgba(255, 255, 255, 0.34);
+  color: #9ba2ae;
+}
+
+.pz-compare-hatch small {
+  color: #777e8b;
+  font-size: 9px;
+}
+
+.pz-compare-solid {
+  background: var(--pz-flux, #70e19b);
+  color: #101315;
+  font-weight: 600;
+}
+
+.pz-compare-solid small {
+  font-size: 9px;
+  font-weight: 500;
+  opacity: 0.72;
+}
+
+/* ── 3. Smart-Home Tactile Bento Quick Tiles (Image 5) ── */
+.tiles.sun-tiles.pz-smart-tiles {
+  display: grid !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 9px !important;
+  margin: 2px 0 4px !important;
+}
+
+.pz-smart-tile {
+  padding: 13px;
+  border-radius: 20px;
+  background: #121418;
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 120px;
+  min-width: 0;
+  text-align: left;
+  transition: background 0.18s ease, border-color 0.18s ease;
+}
+
+.pz-smart-tile:hover {
+  border-color: rgba(255, 255, 255, 0.17);
+}
+
+.pz-smart-tile.is-spotlight {
+  background: linear-gradient(155deg, #fbfaf6 0%, #e9e4da 100%);
+  border-color: rgba(255, 255, 255, 0.65);
+  color: #111316;
+}
+
+.pz-smart-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.pz-sun-icon-badge {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.055);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  display: grid;
+  place-items: center;
+  color: #f0c46f;
+  flex-shrink: 0;
+}
+
+.pz-sun-icon-badge.is-muted {
+  color: #7d8491;
+}
+
+.pz-smart-tile.is-off .pz-sun-icon-badge {
+  color: #7b818e;
+}
+
+.pz-smart-tile.is-spotlight .pz-sun-icon-badge {
+  background: rgba(17, 19, 22, 0.08);
+  border-color: rgba(17, 19, 22, 0.12);
+  color: #15171b;
+}
+
+.pz-corner-btn {
+  width: 28px;
+  height: 28px;
+  min-height: 28px;
+  padding: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  display: grid;
+  place-items: center;
+  color: #b7beca;
+  cursor: pointer;
+}
+
+.pz-corner-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+}
+
+.pz-smart-tile.is-spotlight .pz-corner-btn {
+  background: rgba(17, 19, 22, 0.07);
+  border-color: rgba(17, 19, 22, 0.11);
+  color: #181b1f;
+}
+
+.pz-smart-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.pz-smart-copy strong {
+  font-size: 13px;
+  font-weight: 500;
+  color: #f2f4f8;
+  letter-spacing: -0.15px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pz-smart-copy span {
+  font-size: 10.5px;
+  color: #808795;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pz-smart-tile.is-spotlight .pz-smart-copy strong {
+  color: #101215;
+}
+
+.pz-smart-tile.is-spotlight .pz-smart-copy span {
+  color: #4d5159;
+}
+
+.pz-smart-bottom {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+}
+
+.pz-capsule-toggle {
+  width: 44px;
+  height: 24px;
+  min-height: 24px;
+  padding: 3px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.075);
+  border: 1px solid rgba(255, 255, 255, 0.095);
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+.pz-capsule-toggle.is-on {
+  background: rgba(169, 224, 206, 0.22);
+  border-color: rgba(169, 224, 206, 0.44);
+}
+
+.pz-smart-tile.is-spotlight .pz-capsule-toggle.is-on {
+  background: #171a1e;
+  border-color: #171a1e;
+}
+
+.pz-capsule-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #6d7380;
+  transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1), background 0.18s ease;
+}
+
+.pz-capsule-toggle.is-on .pz-capsule-thumb {
+  transform: translateX(20px);
+  background: #bce6d8;
+}
+
+.pz-smart-tile.is-spotlight .pz-capsule-toggle.is-on .pz-capsule-thumb {
+  background: #f5f2e9;
+}
+
+.pz-smart-tile.is-sublink {
+  cursor: pointer;
+}
+
+.pz-sub-badge {
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 10px;
+  background: rgba(235, 181, 132, 0.13);
+  border: 1px solid rgba(235, 181, 132, 0.28);
+  color: #ebb584;
+}
+
+/* ── 4. Categorized Sun Carousel (.sun-properties) ── */
+.card-grid.sun-properties.pz-sun-carousel-shell {
+  display: flex !important;
+  flex-direction: column;
+  gap: 11px;
+  background: #0e1013;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 22px;
+  padding: 14px;
+  margin-bottom: 16px;
+}
+
+.pz-cat-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.065);
+  padding-bottom: 9px;
+}
+
+.pz-cat-tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.pz-cat-tab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  padding: 5px 10px;
+  border-radius: 9px;
+  background: transparent;
+  border: none;
+  color: #7d8492;
+  font-size: 11.5px;
+  font-weight: 450;
+  cursor: pointer;
+}
+
+.pz-cat-tab:hover {
+  color: #d8dde6;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.pz-cat-tab.is-active {
+  color: #f8f9fb;
+  background: rgba(255, 255, 255, 0.065);
+}
+
+.pz-cat-tab.is-active::after {
+  content: "";
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: -10px;
+  height: 2px;
+  border-radius: 2px;
+  background: #f5f6f8;
+}
+
+.pz-cat-tab sup {
+  font-size: 9px;
+  color: #707786;
+  font-weight: 600;
+  margin-left: -2px;
+}
+
+.pz-cat-tab.is-active sup {
+  color: #f0c46f;
+}
+
+.pz-view-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 28px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #c5cbd6;
+  font-size: 10.5px;
+  cursor: pointer;
+}
+
+.pz-progress-rail {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.pz-progress-seg {
+  height: 4px;
+  min-height: 4px;
+  padding: 0;
+  border-radius: 999px;
+  border: none;
+  background: rgba(255, 255, 255, 0.09);
+  cursor: pointer;
+}
+
+.pz-progress-seg.is-cat {
+  background: rgba(240, 196, 111, 0.35);
+}
+
+.pz-progress-seg.is-current {
+  background: #f3f5f8;
+}
+
+.pz-carousel-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.pz-slide-chips {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.pz-slide-chip {
+  min-height: 26px;
+  padding: 4px 11px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  color: #969daa;
+  cursor: pointer;
+}
+
+.pz-slide-chip.is-active {
+  background: #f2f4f8;
+  border-color: #f2f4f8;
+  color: #101215;
+  font-weight: 500;
+}
+
+.pz-nav-arrows {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.pz-slide-counter {
+  font-size: 10.5px;
+  color: #7c8390;
+  font-variant-numeric: tabular-nums;
+}
+
+.pz-arrow-btn {
+  width: 29px;
+  height: 29px;
+  min-height: 29px;
+  padding: 0;
+  border-radius: 50%;
+  background: #171a1f;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  color: #d6dce6;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.pz-arrow-btn:hover {
+  background: #22262d;
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.pz-carousel-viewport {
+  overflow: hidden;
+  border-radius: 18px;
+}
+
+.pz-carousel-track {
+  display: flex;
+  width: 100%;
+  transition: transform 0.36s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
+}
+
+.pz-carousel-slide {
+  flex: 0 0 100%;
+  min-width: 0;
+}
+
+.pz-carousel-viewport.is-grid .pz-carousel-track {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  transform: none !important;
+}
+
+/* ── Redesigned Sun Bento Cards ── */
+.property-card.pz-sun-card {
+  background:
+    radial-gradient(90% 80% at 0% 0%, rgba(108, 194, 178, 0.06) 0%, transparent 58%),
+    radial-gradient(85% 75% at 100% 0%, rgba(240, 195, 108, 0.07) 0%, transparent 60%),
+    linear-gradient(165deg, #14171c 0%, #101216 100%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 18px;
+  padding: 18px 19px;
+  margin-bottom: 0;
+  min-height: 0 !important;
+}
+
+.pz-sun-bake-card {
+  margin-bottom: 12px !important;
+}
+
+.pz-sun-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.pz-sun-card-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.pz-sun-card-title h3 {
+  margin: 0 !important;
+  font-size: 14px !important;
+  font-weight: 500;
+  color: #f3f5f8 !important;
+}
+
+.pz-sun-eyebrow {
+  display: block;
+  font-size: 9px;
+  letter-spacing: 0.85px;
+  color: #777e8c;
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+.pz-sun-tag,
+.pz-sun-phase-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 10px;
+  background: rgba(255, 255, 255, 0.055);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #cbd1dc;
+  white-space: nowrap;
+}
+
+.pz-sun-phase-pill i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #5ad68c;
+}
+
+.pz-sun-phase-pill.tone-golden i {
+  background: #f2b857;
+}
+
+.pz-sun-phase-pill.tone-night i,
+.pz-sun-phase-pill.tone-twilight i {
+  background: #ec5d71;
+}
+
+.pz-sun-callout-pill {
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  background: #e06342;
+  color: #fff8f4;
+  white-space: nowrap;
+}
+
+.pz-sun-hero-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.pz-sun-big-num {
+  font-size: 36px;
+  line-height: 1;
+  font-weight: 300;
+  letter-spacing: -1.5px;
+  color: #f7f8fb;
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  font-variant-numeric: tabular-nums;
+}
+
+.pz-sun-big-num small {
+  font-size: 13px;
+  letter-spacing: 0;
+  color: #8b92a0;
+  font-weight: 400;
+}
+
+.pz-muted-colon {
+  color: #7d8492;
+}
+
+.pz-sun-caption {
+  margin: 5px 0 0;
+  font-size: 11px;
+  color: #848b98;
+}
+
+.pz-sun-gizmo-frame {
+  background: rgba(0, 0, 0, 0.24);
+  border: 1px solid rgba(255, 255, 255, 0.055);
+  border-radius: 15px;
+  padding: 6px 8px;
+  margin-bottom: 10px;
+}
+
+.pz-sun-gizmo-frame svg {
+  max-height: 196px;
+  margin: 0 auto;
+  display: block;
+}
+
+.pz-solved-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+  margin-top: 10px;
+}
+
+.pz-solved-cell {
+  background: rgba(255, 255, 255, 0.032);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+  padding: 9px 11px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pz-solved-cell small {
+  font-size: 10px;
+  color: #7e8592;
+}
+
+.pz-solved-cell strong {
+  font-size: 13px;
+  font-weight: 500;
+  color: #eff2f7;
+  font-variant-numeric: tabular-nums;
+}
+
+.pz-mini-bar {
+  height: 3px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+  margin-top: 2px;
+}
+
+.pz-mini-bar i {
+  display: block;
+  height: 100%;
+  border-radius: 99px;
+  background: #f0c46f;
+}
+
+/* Image-3 Diurnal Tick Ruler */
+.pz-sun-ruler {
+  margin-top: 10px;
+  padding: 9px 11px;
+  border-radius: 13px;
+  background: rgba(255, 255, 255, 0.028);
+  border: 1px solid rgba(255, 255, 255, 0.055);
+}
+
+.pz-sun-ruler-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 9px;
+  color: #787f8c;
+  margin-bottom: 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+.pz-sun-ruler-bars {
+  display: grid;
+  grid-template-columns: repeat(33, minmax(0, 1fr));
+  gap: 2.5px;
+  align-items: center;
+  height: 16px;
+}
+
+.pz-sun-ruler-tick {
+  height: 9px;
+  min-height: 9px;
+  padding: 0;
+  border-radius: 2px;
+  border: none;
+  background: rgba(255, 255, 255, 0.12);
+  cursor: pointer;
+}
+
+.pz-sun-ruler-tick.is-day {
+  height: 12px;
+  background: rgba(242, 198, 114, 0.34);
+}
+
+.pz-sun-ruler-tick.is-current {
+  height: 16px;
+  background: #f7d992;
+  box-shadow: 0 0 7px rgba(247, 217, 146, 0.65);
+}
+
+.pz-range-ends {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: #767d8a;
+  margin-top: 6px;
+}
+
+.pz-kelvin-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 10px 0 4px;
+}
+
+.pz-kelvin-chips button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 26px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  color: #b7beca;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.pz-kelvin-chips button.is-active {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.3);
+  color: #ffffff;
+}
+
+.pz-kelvin-chips button i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+/* Sun Disc Chamber & Steppers */
+.pz-disc-bento {
+  display: grid;
+  grid-template-columns: 1.1fr 1fr;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.pz-stepper-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 12px;
+}
+
+.pz-circle-stepper {
+  width: 34px;
+  height: 34px;
+  min-height: 34px;
+  padding: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  color: #f2f4f8;
+  font-size: 16px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.pz-stepper-pill {
+  min-height: 30px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  color: #aeb5c2;
+  font-size: 10.5px;
+  cursor: pointer;
+}
+
+.pz-disc-chamber {
+  position: relative;
+  height: 128px;
+  border-radius: 16px;
+  background: radial-gradient(circle at 50% 50%, rgba(242, 198, 114, 0.14), #0c0e12 74%);
+  border: 1px solid rgba(255, 255, 255, 0.065);
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+
+.pz-disc-halo {
+  position: absolute;
+  border-radius: 50%;
+  border: 1px dashed rgba(242, 198, 114, 0.55);
+}
+
+.pz-disc-core {
+  border-radius: 50%;
+  box-shadow: 0 0 24px rgba(245, 200, 115, 0.45);
+}
+
+.pz-disc-chamber span {
+  position: absolute;
+  bottom: 7px;
+  right: 10px;
+  font-size: 9.5px;
+  color: #88909d;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Ephemeris Sub-Boxes */
+.pz-ephemeris-groups {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.pz-ephemeris-box {
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid rgba(255, 255, 255, 0.055);
+  border-radius: 14px;
+  padding: 10px 12px;
+}
+
+.pz-ephemeris-label {
+  display: block;
+  font-size: 9px;
+  letter-spacing: 0.85px;
+  font-weight: 600;
+  color: #7d8492;
+  margin-bottom: 4px;
+}
+
+/* Baking Bento Row */
+.pz-sun-bake-row {
+  display: flex;
+  gap: 12px;
+  align-items: stretch;
+}
+
+.pz-bake-tile {
+  width: 44%;
+  min-width: 108px;
+}
+
+.pz-sun-bake-actions {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pz-sun-bake-actions button {
+  width: 100%;
+  min-height: 31px;
+  border-radius: 9px;
+  font-size: 10.5px;
+}
+
+.pz-sun-bake-actions p {
+  margin: 2px 0 0;
+  font-size: 9.5px;
+  color: #7d8491;
+}
+
+/* Responsive Narrow Docked Inspector (@container) */
+@container (max-width: 560px) {
+  .tiles.sun-tiles.pz-smart-tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .pz-kpi-duo,
+  .pz-disc-bento,
+  .pz-ephemeris-groups,
+  .pz-carousel-viewport.is-grid .pz-carousel-track {
+    grid-template-columns: 1fr;
+  }
+}

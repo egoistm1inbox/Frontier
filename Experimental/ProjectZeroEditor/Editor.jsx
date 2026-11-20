@@ -1848,6 +1848,25 @@ function App() {
               WindFields={WindFields}
               AllValues={Values}
               AllHidden={Hidden}
+              SelectEntity={(Id) => {
+                const Seen = new Set();
+                let Row = SceneInventory.ById.get(Id);
+                const Parents = [];
+                while (Row?.Parent && !Seen.has(Row.Parent)) {
+                  Seen.add(Row.Parent);
+                  Parents.push(Row.Parent);
+                  Row = SceneInventory.ById.get(Row.Parent);
+                }
+                Collapse((Previous) => ({
+                  ...Previous,
+                  ...Object.fromEntries(
+                    Parents.map((Parent) => [Parent, false]),
+                  ),
+                }));
+                Search("");
+                Filter([]);
+                SelectRow(Id);
+              }}
               ReferenceDetailCards={
                 Subject.Panel === "light" && !Subject.ReferenceOnly
                   ? ReferenceCards("details")

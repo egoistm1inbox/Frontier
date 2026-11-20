@@ -12,10 +12,11 @@ const frame = (name, draw) => {
 };
 
 export const Sun = frame('sun', <>
-  <circle cx="12" cy="12" r="4.35" fill="currentColor" fillOpacity=".13"/>
-  <path d="M12 2v2.2m0 15.6V22M2 12h2.2m15.6 0H22"/>
-  <path d="m4.93 4.93 1.5 1.5m11.14 11.14 1.5 1.5m0-14.14-1.5 1.5M6.43 17.57l-1.5 1.5" strokeOpacity=".8"/>
-  <path d="M9.6 11.5a2.45 2.45 0 0 1 2.05-1.94" strokeWidth="1" strokeOpacity=".55"/>
+  <circle cx="12" cy="12" r="4.5" fill="currentColor" fillOpacity=".2"/>
+  <circle cx="12" cy="12" r="7.4" strokeDasharray="1.8 3" strokeWidth="1" strokeOpacity=".45"/>
+  <path d="M12 1.9v2.4m0 15.4v2.4M1.9 12h2.4m15.4 0h2.4"/>
+  <path d="m4.86 4.86 1.65 1.65m10.98 10.98 1.65 1.65m0-14.28-1.65 1.65M6.51 17.49l-1.65 1.65" strokeOpacity=".78"/>
+  <path d="M9.7 11.35a2.35 2.35 0 0 1 2.05-1.88" strokeWidth="1.05" strokeOpacity=".65"/>
 </>);
 
 export const Moon = frame('moon', <>

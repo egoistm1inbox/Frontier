@@ -7,6 +7,7 @@ import {
 import { CloudReference } from "./CloudSpecification.js";
 import { HeightFogReference } from "./HeightFogSpecification.js";
 import { LightPanel } from "./LightPanel.js";
+import { Solar } from "./Solar.mjs";
 import { CUSTOM_PANELS } from "./InspectorDepot/panels/index.js";
 
 for (const Type of [
@@ -262,6 +263,30 @@ function Synchronize(Data) {
         Node.props,
         HeightFogReference(Data.Values[Row.Id] || {}),
       );
+    if (Row.Panel === "sun") {
+      const SunValues = Data.Values[Row.Id] || {};
+      if (
+        SunValues["Local Hours"] !== undefined ||
+        SunValues.Month !== undefined ||
+        SunValues["Day of Month"] !== undefined ||
+        SunValues.Latitude !== undefined ||
+        SunValues.Longitude !== undefined
+      ) {
+        const Solved = Solar({
+          LocalHours: SunValues["Local Hours"] ?? 15.5,
+          Month: SunValues.Month ?? 10,
+          Day: SunValues["Day of Month"] ?? 4,
+          Latitude: SunValues.Latitude ?? -26.19,
+          Longitude: SunValues.Longitude ?? 28.32,
+        });
+        Node.props.elevation = Solved.Elevation;
+        Node.props.azimuth = Solved.Azimuth;
+      }
+      if (SunValues.Temperature !== undefined)
+        Node.props.temperature = SunValues.Temperature;
+      if (SunValues["Angular Diameter"] !== undefined)
+        Node.props.angular = SunValues["Angular Diameter"];
+    }
     Node.kids = [];
   }
   const Present = new Set(Data.Rows.map((Row) => Row.Id));

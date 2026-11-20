@@ -1,0 +1,1075 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   SOLAR BENTO & CAROUSEL DESIGN SYSTEM — Frontier Editor
+   Synthesizing obsidian telemetry cards, vertical-bar KPI tiles, diagonal
+   hatch comparison blocks, smart-bento circular icon badges, and category
+   progress-rail carousel.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.cards.sun {
+  display: block;
+}
+
+.sun-redesign-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* ── 1. Preset Pill Strip (Images 3 & 4) ── */
+.sun-preset-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.sun-preset-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 13px;
+  border-radius: 999px;
+  background: #14171b;
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  color: #cfd4dc;
+  font-size: 11.5px;
+  font-weight: 450;
+  cursor: pointer;
+  transition: background 0.18s ease, border-color 0.18s ease, transform 0.15s ease;
+}
+
+.sun-preset-pill:hover {
+  background: #1b1f25;
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+.sun-preset-pill.is-active {
+  background: linear-gradient(135deg, rgba(242, 195, 107, 0.16), rgba(242, 195, 107, 0.05));
+  border-color: rgba(242, 195, 107, 0.52);
+  color: #fff8eb;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.28);
+}
+
+.sun-preset-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  box-shadow: 0 0 8px currentColor;
+}
+
+.sun-preset-pill small {
+  font-size: 10px;
+  color: #7c828e;
+  font-variant-numeric: tabular-nums;
+}
+
+.sun-preset-pill.is-active small {
+  color: #e2c792;
+}
+
+/* ── 2. Dual Status & Comparison KPI Row (Images 2 & 4) ── */
+.sun-kpi-duo {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.sun-kpi-card {
+  position: relative;
+  padding: 16px 18px;
+  border-radius: 20px;
+  background:
+    radial-gradient(120% 95% at 0% 0%, rgba(255, 255, 255, 0.045) 0%, transparent 65%),
+    #111317;
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 10px;
+  cursor: pointer;
+  transition: border-color 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.sun-kpi-card:hover {
+  border-color: rgba(255, 255, 255, 0.16);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.28);
+}
+
+.sun-kpi-card.tone-golden {
+  background:
+    radial-gradient(120% 100% at 0% 0%, rgba(235, 146, 72, 0.14) 0%, rgba(235, 146, 72, 0.03) 62%, transparent 100%),
+    #141214;
+  border-color: rgba(238, 152, 82, 0.45);
+}
+
+.sun-kpi-card.tone-night,
+.sun-kpi-card.tone-twilight {
+  background:
+    radial-gradient(120% 100% at 0% 0%, rgba(226, 94, 112, 0.13) 0%, rgba(44, 24, 32, 0.24) 68%, transparent 100%),
+    #131115;
+  border-color: rgba(226, 94, 112, 0.46);
+}
+
+.sun-kpi-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.sun-kpi-bar {
+  width: 4px;
+  height: 16px;
+  border-radius: 99px;
+  background: #58d68d;
+  flex-shrink: 0;
+}
+
+.sun-kpi-card.tone-golden .sun-kpi-bar,
+.sun-kpi-bar.is-amber {
+  background: #f2b857;
+}
+
+.sun-kpi-card.tone-night .sun-kpi-bar,
+.sun-kpi-card.tone-twilight .sun-kpi-bar {
+  background: #ec5d71;
+}
+
+.sun-kpi-title {
+  font-size: 12.5px;
+  font-weight: 450;
+  color: #d6dbe3;
+  letter-spacing: -0.1px;
+}
+
+.sun-kpi-corner {
+  margin-left: auto;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.055);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  display: grid;
+  place-items: center;
+  color: #aeb5c0;
+}
+
+.sun-kpi-delta {
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.sun-kpi-delta .is-up {
+  color: #63dc96;
+}
+
+.sun-kpi-delta .is-down {
+  color: #f06e7e;
+}
+
+.sun-kpi-bottom {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.sun-kpi-bottom.is-compact {
+  margin-top: -2px;
+}
+
+.sun-kpi-big {
+  font-size: 34px;
+  line-height: 1;
+  font-weight: 300;
+  letter-spacing: -1.4px;
+  color: #f6f7fa;
+  font-variant-numeric: tabular-nums;
+}
+
+.sun-kpi-big small {
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: 0;
+  margin-left: 4px;
+  color: #8b929e;
+}
+
+.sun-kpi-meta {
+  font-size: 11.5px;
+  color: #8b929e;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Image-4 Paired Hatched vs Solid Comparison Blocks */
+.sun-compare-blocks {
+  display: grid;
+  grid-template-columns: 1fr 1.15fr;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.sun-compare-hatched,
+.sun-compare-solid {
+  border-radius: 11px;
+  padding: 6px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.sun-compare-hatched {
+  background: repeating-linear-gradient(
+    -45deg,
+    rgba(255, 255, 255, 0.065),
+    rgba(255, 255, 255, 0.065) 4px,
+    rgba(255, 255, 255, 0.015) 4px,
+    rgba(255, 255, 255, 0.015) 8px
+  );
+  border-top: 1.5px solid rgba(255, 255, 255, 0.36);
+  color: #9ba1ad;
+}
+
+.sun-compare-hatched small {
+  color: #777e8b;
+  font-size: 9.5px;
+}
+
+.sun-compare-solid {
+  background: var(--flux-fill, #70e19b);
+  color: #101412;
+  font-weight: 600;
+}
+
+.sun-compare-solid small {
+  font-size: 9.5px;
+  font-weight: 500;
+  opacity: 0.72;
+}
+
+/* ── 3. Smart-Home Tactile Bento Quick Tiles (Image 5) ── */
+.sun-smart-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.sun-smart-tile {
+  padding: 14px;
+  border-radius: 22px;
+  background: #121418;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 132px;
+  text-align: left;
+  transition: background 0.2s ease, border-color 0.2s ease, transform 0.16s ease;
+}
+
+.sun-smart-tile:hover {
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+/* Image-5 High-contrast warm ivory active spotlight card */
+.sun-smart-tile.is-spotlight {
+  background: linear-gradient(155deg, #fbfaf6 0%, #eae6dc 100%);
+  border-color: rgba(255, 255, 255, 0.65);
+  color: #111316;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.26);
+}
+
+.sun-smart-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.sun-icon-circle {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.055);
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  display: grid;
+  place-items: center;
+  color: #f0c46f;
+}
+
+.sun-smart-tile.is-off .sun-icon-circle {
+  color: #7d838f;
+}
+
+.sun-smart-tile.is-spotlight .sun-icon-circle {
+  background: rgba(17, 19, 22, 0.08);
+  border-color: rgba(17, 19, 22, 0.1);
+  color: #16181c;
+}
+
+.sun-icon-circle.is-flare {
+  color: #ebb584;
+}
+
+.sun-corner-jump {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.065);
+  display: grid;
+  place-items: center;
+  color: #b8bec9;
+  cursor: pointer;
+  transition: background 0.16s ease, color 0.16s ease;
+}
+
+.sun-corner-jump:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+}
+
+.sun-smart-tile.is-spotlight .sun-corner-jump {
+  background: rgba(17, 19, 22, 0.07);
+  border-color: rgba(17, 19, 22, 0.1);
+  color: #191c20;
+}
+
+.sun-smart-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.sun-smart-copy strong {
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: -0.2px;
+  color: #f2f4f8;
+}
+
+.sun-smart-copy span {
+  font-size: 11px;
+  color: #808693;
+  font-variant-numeric: tabular-nums;
+}
+
+.sun-smart-tile.is-spotlight .sun-smart-copy strong {
+  color: #101215;
+}
+
+.sun-smart-tile.is-spotlight .sun-smart-copy span {
+  color: #4d5159;
+}
+
+.sun-smart-foot {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+}
+
+/* Image-5 Capsule Toggle Switch */
+.sun-capsule-switch {
+  width: 46px;
+  height: 25px;
+  border-radius: 999px;
+  padding: 3px;
+  background: rgba(255, 255, 255, 0.075);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  transition: background 0.18s ease, border-color 0.18s ease;
+}
+
+.sun-capsule-switch.is-on {
+  background: rgba(169, 224, 206, 0.22);
+  border-color: rgba(169, 224, 206, 0.42);
+}
+
+.sun-smart-tile.is-spotlight .sun-capsule-switch.is-on {
+  background: #171a1e;
+  border-color: #171a1e;
+}
+
+.sun-capsule-thumb {
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  background: #6c727e;
+  transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1), background 0.18s ease;
+}
+
+.sun-capsule-switch.is-on .sun-capsule-thumb {
+  transform: translateX(21px);
+  background: #bce6d8;
+}
+
+.sun-smart-tile.is-spotlight .sun-capsule-switch.is-on .sun-capsule-thumb {
+  background: #f5f2e9;
+}
+
+.sun-smart-tile.is-subcomponent {
+  cursor: pointer;
+}
+
+.sun-sub-pill {
+  padding: 4px 9px;
+  border-radius: 999px;
+  font-size: 10px;
+  background: rgba(235, 181, 132, 0.12);
+  color: #ebb584;
+  border: 1px solid rgba(235, 181, 132, 0.26);
+}
+
+/* ── 4. Categorized Carousel Bar & Segmented Progress Rail (Images 2, 5, 6) ── */
+.sun-carousel-shell {
+  background: #0e1013;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 24px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sun-category-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.065);
+  padding-bottom: 10px;
+}
+
+.sun-category-tabs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.sun-cat-tab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 12px;
+  border-radius: 10px;
+  background: transparent;
+  border: none;
+  color: #7d8491;
+  font-size: 12.5px;
+  font-weight: 450;
+  cursor: pointer;
+  transition: color 0.16s ease, background 0.16s ease;
+}
+
+.sun-cat-tab:hover {
+  color: #d7dce5;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.sun-cat-tab.is-active {
+  color: #f8f9fb;
+  background: rgba(255, 255, 255, 0.065);
+}
+
+.sun-cat-tab.is-active::after {
+  content: '';
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: -11px;
+  height: 2px;
+  border-radius: 2px;
+  background: #f5f6f8;
+}
+
+.sun-cat-tab sup {
+  font-size: 9.5px;
+  color: #6f7684;
+  font-weight: 600;
+  margin-left: -2px;
+}
+
+.sun-cat-tab.is-active sup {
+  color: #f0c46f;
+}
+
+.sun-view-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 11px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #c5cbd6;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.sun-view-toggle:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+}
+
+/* Image-6 Segmented Progress Bars */
+.sun-progress-rail {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.sun-progress-seg {
+  height: 4px;
+  border-radius: 999px;
+  border: none;
+  padding: 0;
+  background: rgba(255, 255, 255, 0.09);
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.16s ease;
+}
+
+.sun-progress-seg.is-cat {
+  background: rgba(240, 196, 111, 0.34);
+}
+
+.sun-progress-seg.is-current {
+  background: #f3f5f8;
+}
+
+.sun-carousel-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.sun-slide-pills {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.sun-slide-pill {
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-size: 11px;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  color: #949ba8;
+  cursor: pointer;
+  transition: all 0.16s ease;
+}
+
+.sun-slide-pill.is-active {
+  background: #f2f4f8;
+  border-color: #f2f4f8;
+  color: #101215;
+  font-weight: 500;
+}
+
+.sun-arrow-pair {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-left: auto;
+}
+
+.sun-slide-count {
+  font-size: 11px;
+  color: #7c8390;
+  font-variant-numeric: tabular-nums;
+  margin-right: 3px;
+}
+
+.sun-nav-circle {
+  width: 31px;
+  height: 31px;
+  border-radius: 50%;
+  background: #171a1f;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  color: #d6dce6;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: background 0.16s ease, border-color 0.16s ease;
+}
+
+.sun-nav-circle:hover {
+  background: #22262d;
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+/* Carousel Viewport */
+.sun-carousel-viewport {
+  overflow: hidden;
+  border-radius: 20px;
+}
+
+.sun-carousel-track {
+  display: flex;
+  width: 100%;
+  transition: transform 0.36s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
+}
+
+.sun-carousel-slide {
+  flex: 0 0 100%;
+  min-width: 0;
+}
+
+.sun-carousel-viewport.is-grid .sun-carousel-track {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  transform: none !important;
+}
+
+.sun-carousel-viewport.is-grid .sun-carousel-slide:first-child {
+  grid-column: 1 / -1;
+}
+
+/* ── Inside Redesigned Sun Bento Cards ── */
+.sun-bento-card.card {
+  background:
+    radial-gradient(90% 80% at 0% 0%, rgba(108, 194, 178, 0.065) 0%, transparent 58%),
+    radial-gradient(85% 75% at 100% 0%, rgba(240, 195, 108, 0.07) 0%, transparent 60%),
+    linear-gradient(165deg, #14171c 0%, #101216 100%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
+  padding: 20px 22px;
+  margin: 0;
+}
+
+.sun-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.sun-card-title-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.sun-card-icon-badge {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.055);
+  border: 1px solid rgba(255, 255, 255, 0.085);
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.sun-card-eyebrow {
+  display: block;
+  font-size: 9.5px;
+  letter-spacing: 0.9px;
+  color: #777e8c;
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+.sun-card-title-group h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 500;
+  color: #f3f5f8;
+  letter-spacing: -0.2px;
+}
+
+.sun-card-cat-tag {
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  color: #9ca3b0;
+}
+
+.sun-card-enable-chip {
+  padding: 5px 11px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  background: rgba(238, 108, 118, 0.16);
+  border: 1px solid rgba(238, 108, 118, 0.4);
+  color: #ff9ea6;
+  cursor: pointer;
+}
+
+.sun-slide-hero-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.sun-bento-figure {
+  font-size: 42px;
+  line-height: 1;
+  font-weight: 300;
+  letter-spacing: -1.8px;
+  color: #f7f8fb;
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.sun-bento-figure small {
+  font-size: 14px;
+  letter-spacing: 0;
+  color: #8b92a0;
+  font-weight: 400;
+}
+
+.sun-clock-muted {
+  color: #7d8492;
+}
+
+.sun-bento-sub {
+  margin: 6px 0 0;
+  font-size: 11.5px;
+  color: #848b98;
+}
+
+.sun-phase-chip,
+.sun-pill-tag,
+.sun-kelvin-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 11px;
+  border-radius: 999px;
+  font-size: 11px;
+  background: rgba(255, 255, 255, 0.055);
+  border: 1px solid rgba(255, 255, 255, 0.085);
+  color: #dfe4ec;
+  white-space: nowrap;
+}
+
+.sun-phase-chip i,
+.sun-kelvin-badge i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #5ad68c;
+}
+
+.sun-phase-chip.tone-golden i {
+  background: #f2b857;
+}
+
+.sun-phase-chip.tone-night i,
+.sun-phase-chip.tone-twilight i {
+  background: #ec5d71;
+}
+
+.sun-orbit-stage {
+  background: rgba(0, 0, 0, 0.24);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 16px;
+  padding: 6px 10px;
+  margin-bottom: 14px;
+}
+
+.sun-orbit-stage .solar-orbit-gizmo svg {
+  max-height: 215px;
+  margin: 0 auto;
+  display: block;
+}
+
+.sun-dual-sliders {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.sun-slider-box {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 14px;
+  padding: 11px 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.sun-slider-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11.5px;
+  color: #959ca9;
+}
+
+.sun-slider-head strong {
+  color: #eef1f6;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Image-1 Split Telemetry Layout for Illuminance */
+.sun-activity-split {
+  display: grid;
+  grid-template-columns: 175px minmax(0, 1fr);
+  gap: 16px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.sun-mini-kpis {
+  margin-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sun-mini-kpis > div {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: baseline;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.065);
+  font-size: 11px;
+}
+
+.sun-mini-kpis span {
+  color: #7d8492;
+}
+
+.sun-mini-kpis strong {
+  color: #eef1f6;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.sun-mini-kpis em {
+  font-style: normal;
+  font-size: 10px;
+}
+
+.sun-mini-kpis em.up {
+  color: #63dc96;
+}
+
+.sun-mini-kpis em.warm {
+  color: #f0b865;
+}
+
+.sun-mini-kpis em.muted {
+  color: #7f8694;
+}
+
+.sun-bento-svg {
+  width: 100%;
+  height: auto;
+  display: block;
+  margin-bottom: 10px;
+}
+
+.sun-range-ends {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10.5px;
+  color: #757c89;
+  margin-top: 7px;
+}
+
+/* Image-3 Bottom Solar Tick Ruler */
+.sun-tick-ruler {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.028);
+  border: 1px solid rgba(255, 255, 255, 0.055);
+}
+
+.sun-tick-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 9.5px;
+  color: #787f8c;
+  margin-bottom: 7px;
+  font-variant-numeric: tabular-nums;
+}
+
+.sun-tick-track {
+  display: grid;
+  grid-template-columns: repeat(33, minmax(0, 1fr));
+  gap: 3px;
+  align-items: center;
+  height: 18px;
+}
+
+.sun-tick-bar {
+  height: 10px;
+  border-radius: 2px;
+  border: none;
+  padding: 0;
+  background: rgba(255, 255, 255, 0.12);
+  cursor: pointer;
+  transition: height 0.14s ease, background 0.14s ease;
+}
+
+.sun-tick-bar.is-day {
+  height: 13px;
+  background: rgba(242, 198, 114, 0.34);
+}
+
+.sun-tick-bar.is-current {
+  height: 18px;
+  background: #f7d992;
+  box-shadow: 0 0 8px rgba(247, 217, 146, 0.65);
+}
+
+/* Kelvin Quick Presets */
+.sun-kelvin-presets {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 7px;
+  margin-top: 12px;
+}
+
+.sun-kelvin-presets button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 7px 8px;
+  border-radius: 11px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  color: #b7beca;
+  font-size: 10.5px;
+  cursor: pointer;
+}
+
+.sun-kelvin-presets button.is-active {
+  background: rgba(255, 255, 255, 0.11);
+  border-color: rgba(255, 255, 255, 0.28);
+  color: #ffffff;
+}
+
+.sun-kelvin-presets button i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* Sun Disc Chamber + Image-5 Thermostat Steppers */
+.sun-disc-bento {
+  display: grid;
+  grid-template-columns: 1.15fr 1fr;
+  gap: 16px;
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.sun-stepper-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.sun-circle-stepper {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  color: #f2f4f8;
+  font-size: 18px;
+  line-height: 1;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.sun-circle-stepper:hover {
+  background: rgba(255, 255, 255, 0.13);
+}
+
+.sun-stepper-reset {
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  color: #aeb5c2;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.sun-disc-chamber {
+  position: relative;
+  height: 144px;
+  border-radius: 18px;
+  background: radial-gradient(circle at 50% 50%, rgba(242, 198, 114, 0.14), #0c0e12 72%);
+  border: 1px solid rgba(255, 255, 255, 0.065);
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+
+.sun-disc-halo {
+  position: absolute;
+  border-radius: 50%;
+  border: 1px dashed rgba(242, 198, 114, 0.55);
+  transition: width 0.15s ease, height 0.15s ease;
+}
+
+.sun-disc-core {
+  border-radius: 50%;
+  box-shadow: 0 0 28px rgba(245, 200, 115, 0.45);
+  transition: width 0.15s ease, height 0.15s ease;
+}
+
+.sun-disc-caliper {
+  position: absolute;
+  bottom: 9px;
+  right: 12px;
+  font-size: 10px;
+  color: #89909d;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Harmonize Sun BakeQuickTiles below .cards.sun */
+.cards.sun + .bake-quick-area .bake-quick-tile {
+  background: linear-gradient(165deg, #14171c 0%, #101216 100%);
+  border-color: rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
+}
+
+@media (max-width: 960px) {
+  .sun-smart-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .sun-activity-split,
+  .sun-disc-bento,
+  .sun-kpi-duo,
+  .sun-dual-sliders,
+  .sun-carousel-viewport.is-grid .sun-carousel-track {
+    grid-template-columns: 1fr;
+  }
+  .sun-kelvin-presets {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
