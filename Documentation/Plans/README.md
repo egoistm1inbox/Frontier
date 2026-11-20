@@ -19,6 +19,7 @@
 | [MaterialVisibilityRenderingBringupPlan.md](MaterialVisibilityRenderingBringupPlan.md) | 10-lobe `MaterialSpace`, 64-bit VisBuffer & rendering bringup |
 | [DynamicMaterialSystemPlan.md](DynamicMaterialSystemPlan.md) | Time-varying procedural/transition OpenPBR material compiler |
 | [DeterministicPathTracerVulkanOptimizationPlan.md](DeterministicPathTracerVulkanOptimizationPlan.md) | Vulkan compute optimization for deterministic path tracing |
+| [WorldLightingTracePlan.md](WorldLightingTracePlan.md) | Real-triangle GI, shadows and deterministic path tracer review |
 | [CelestialSkyCloudsSystemPlan.md](CelestialSkyCloudsSystemPlan.md) | Physical sky, atmosphere & cloud scattering plan |
 | [NetworkingPolicyBringupPlan.md](NetworkingPolicyBringupPlan.md) | UDP/TCP socket transport & snapshot replication policy |
 | [RemediationInputCameraPlan.md](RemediationInputCameraPlan.md) | Input exchange & orbit/fly camera remediation |
