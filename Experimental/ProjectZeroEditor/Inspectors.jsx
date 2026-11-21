@@ -1417,21 +1417,7 @@ export function Inspector({
     Content = (
       <>
         {Header("Environment", "Atmosphere")}
-        <AtmosphereLab
-          V={V}
-          Change={AssignProperty}
-          Slider={(Name, After) => (
-            <Control
-              key={Name}
-              Field={Sheet.find((Item) => Item.Label === Name)}
-              Value={V(Name)}
-              Change={(Next) => {
-                AssignProperty(Name, Next);
-                After?.();
-              }}
-            />
-          )}
-        />
+        <AtmosphereLab V={V} Change={AssignProperty} />
         <Card Title="Atmosphere settings">{Tiles(["Line at civil only"])}</Card>
         <Card Title="Atmospheric scattering" Height={485} GraphHandled>
           <Metric

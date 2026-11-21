@@ -1314,6 +1314,12 @@ in `Exhibits/LightCompute/Results/FogFacetRegression.txt`; this was a fixture-se
   joint at its pose (drag to set it) → Socket type → range card → **Attached to** (the asset's name as a link that selects it, plus an
   Attach to picker, offset and axis). `CheckVehicleSockets.mjs` rewritten (8 checks) and passes; InspectorOrder (109), EntityContext,
   SharedCards and InspectorLayout pass. Names unapproved.
+  Follow-up 39: Atmosphere sky presets removed (tiles, preset names, `AtmospherePresets`); a plain **Sky colour** card keeps the
+  noon / sunset preview from the current settings. **Bumper Trigger** removed from the Vehicle folder (saved scenes drop it on load).
+  Vehicle Movement and Chassis Collision no longer draw the car: Vehicle Movement is figures, fields and readouts (plus its data
+  plots). Checks updated: EnvironmentGraphs, InspectorOrder (107), EntityContext (53 rows), Construction counts (48 / Vehicle 8);
+  VehicleSockets, SharedCards, InspectorLayout, InstrumentStyle and WorkspaceCards pass; Construction still fails at its
+  pre-existing step (:190). Names unapproved.
   Follow-up 35: in-place UV and Fracture edit workspaces for showcase primitives (`Workspaces.jsx`, `WorkspaceGeometry.js`; the viewport
   isolates the object, the inspector switches workspaces, Esc/Leave/Done exit), replacing the pop-out fracture window; Vehicle outliner
   folder (`VehicleComponents.jsx`: Vehicle Movement, Body, three sockets, two collisions, two lights, built from ComponentViewer

@@ -20,7 +20,6 @@ const Components = [
   ["vehicle-steering", "Steering", "Socket", "editor-pivot", "Hinge socket · steering knuckle", { Joint: "hinge", Mount: 1.7 }],
   ["vehicle-tow", "Tow Hitch", "Socket", "editor-pivot", "Dock socket · trailer coupling", { Joint: "dock", Mount: -2.6 }],
   ["vehicle-collision", "Chassis Collision", "BoxCollision", "editor-box-collider", "Box collision · blocks all"],
-  ["vehicle-bumper", "Bumper Trigger", "SphereCollision", "editor-trigger", "Sphere collision · overlap events", { Trigger: true }],
   ["vehicle-headlights", "Headlights", "SpotLight", "editor-spotlight", "Spot light pair"],
   ["vehicle-brake", "Brake Lights", "PointLight", "editor-brake-light", "Point light pair · rear"],
 ];
@@ -36,10 +35,15 @@ export const VehicleRows = Components.map(([Id, Name, Component, Icon, Descripti
   ...Extra,
 }));
 
-// Runs once per saved scene (VehicleRevision), so a later deletion is respected.
+// Rows retired from the Vehicle folder; removed from saved scenes on load.
+const RetiredRows = new Set(["vehicle-bumper"]);
+
+// The folder is added once per saved scene (VehicleRevision), so a later deletion is respected.
 export function EnsureVehicleFolder(Rows = [], Revision) {
-  if (Revision === 1 || !Array.isArray(Rows) || Rows.some((Row) => Row?.Id === "vehicle")) return Rows;
-  return [...Rows, { ...VehicleFolder }, ...VehicleRows.map((Row) => ({ ...Row }))];
+  if (!Array.isArray(Rows)) return Rows;
+  const Kept = Rows.filter((Row) => !RetiredRows.has(Row?.Id));
+  if (Revision >= 1 || Kept.some((Row) => Row?.Id === "vehicle")) return Kept;
+  return [...Kept, { ...VehicleFolder }, ...VehicleRows.map((Row) => ({ ...Row }))];
 }
 
 // Socket mounts for rows saved before rows carried one (metres ahead of the wheelbase centre).
@@ -114,29 +118,6 @@ function Readouts({ Kit, Rows }) {
   );
 }
 
-// Side view of the car on its axles, shared by the chassis and body cards.
-function SideView({ children, Height = 150, Label = "Vehicle side view", Handlers = {} }) {
-  return (
-    <svg className="vc-visual" viewBox={`0 0 320 ${Height}`} role="img" aria-label={Label} {...Handlers}>
-      <line x1="10" x2="310" y1={Height - 22} y2={Height - 22} stroke="#ffffff1c" />
-      <path
-        d={`M38 ${Height - 44} L44 ${Height - 66} Q60 ${Height - 72} 96 ${Height - 76} L124 ${Height - 104} Q140 ${Height - 112} 196 ${Height - 110} L232 ${Height - 80} Q272 ${Height - 76} 284 ${Height - 68} L286 ${Height - 44} Z`}
-        fill="#2a2a2a"
-        stroke="#9a9a9a"
-        strokeWidth="1.3"
-        strokeLinejoin="round"
-      />
-      {[86, 238].map((X) => (
-        <g key={X}>
-          <circle cx={X} cy={Height - 40} r="18" fill="#111" stroke="#bdbdbd" strokeWidth="1.4" />
-          <circle cx={X} cy={Height - 40} r="6" fill="none" stroke="#777" />
-        </g>
-      ))}
-      {children}
-    </svg>
-  );
-}
-
 //------------------------------------------------------------------------------------------------------------------------
 //                                                   VEHICLE MOVEMENT
 //------------------------------------------------------------------------------------------------------------------------
@@ -155,8 +136,6 @@ function MovementInspector({ Kit, V, Write }) {
   const { Card, Metric } = Kit;
   const Mass = +V("mass"), Front = +V("frontWeight") / 100, Com = +V("comHeight");
   const FrontLoad = Mass * Front, RearLoad = Mass - FrontLoad;
-  // Chassis: CoM sits between the axles at the front-weight split; its height scales from the ground line.
-  const AxleFront = 238, AxleRear = 86, ComX = Lerp(AxleRear, AxleFront, Front), ComY = 128 - Com * 110;
   const Steer = +V("maxSteer"), Radius = +V("tyreRadius");
   const TurnRadius = Wheelbase / Math.tan(Steer) + Track / 2;
   const Hz = +V("springHz"), Zeta = +V("dampingRatio");
@@ -193,37 +172,17 @@ function MovementInspector({ Kit, V, Write }) {
   return (
     <>
       <Card Title="Chassis & mass" Class="vc-card">
-        <SideView>
-          <line x1={AxleRear} x2={AxleRear} y1="128" y2={128 - (RearLoad / Mass) * 70} stroke="#7cb7ff" strokeWidth="6" strokeLinecap="round" opacity="0.7" />
-          <line x1={AxleFront} x2={AxleFront} y1="128" y2={128 - (FrontLoad / Mass) * 70} stroke="#ff9f5a" strokeWidth="6" strokeLinecap="round" opacity="0.7" />
-          <line x1={ComX} x2={ComX} y1={ComY} y2="128" stroke="#ffffff40" strokeDasharray="3 3" />
-          <circle cx={ComX} cy={ComY} r="7" fill="none" stroke="#f2f2f2" strokeWidth="1.5" />
-          <path d={`M${ComX - 7} ${ComY}h14M${ComX} ${ComY - 7}v14`} stroke="#f2f2f2" strokeWidth="1.2" />
-          <text x={ComX + 10} y={ComY - 8}>CoM {Com.toFixed(2)} m</text>
-          <text x={AxleRear} y="146" textAnchor="middle">{Fixed(RearLoad)} kg</text>
-          <text x={AxleFront} y="146" textAnchor="middle">{Fixed(FrontLoad)} kg</text>
-        </SideView>
         <Metric Value={Fixed(Mass)} Unit="kg" Caption={`${Fixed(Front * 100, 1)} % on the front axle · wheelbase ${Wheelbase.toFixed(2)} m`} />
         <ClassSlider Kit={Kit} V={V} Write={Write} Type="VehicleMovement" Key="mass" />
         <ClassSlider Kit={Kit} V={V} Write={Write} Type="VehicleMovement" Key="frontWeight" />
         <ClassSlider Kit={Kit} V={V} Write={Write} Type="VehicleMovement" Key="comHeight" />
-        <Readouts Kit={Kit} Rows={[["Static load per front wheel", Fixed((FrontLoad / 2) * Gravity) + " N"], ["Static load per rear wheel", Fixed((RearLoad / 2) * Gravity) + " N"], ["Rollover threshold", Fixed(Track / (2 * Com), 2) + " g"]]} />
+        <Readouts Kit={Kit} Rows={[["Front axle", Fixed(FrontLoad) + " kg"], ["Rear axle", Fixed(RearLoad) + " kg"], ["Wheelbase", Wheelbase.toFixed(2) + " m"], ["Static load per front wheel", Fixed((FrontLoad / 2) * Gravity) + " N"], ["Static load per rear wheel", Fixed((RearLoad / 2) * Gravity) + " N"], ["Rollover threshold", Fixed(Track / (2 * Com), 2) + " g"]]} />
       </Card>
       <Card Title="Wheels & steering" Class="vc-card">
-        <svg className="vc-visual" viewBox="0 0 320 170" role="img" aria-label="Wheel plan and steering lock">
-          <rect x="110" y="20" width="100" height="130" rx="22" fill="#232323" stroke="#8a8a8a" />
-          {[[96, 46, true], [224, 46, true], [96, 124, false], [224, 124, false]].map(([X, Y, Steers], Index) => (
-            <g key={Index} transform={`translate(${X} ${Y}) rotate(${Steers ? (-Steer * 180) / Math.PI : 0})`}>
-              <rect x="-7" y={-Radius * 34} width="14" height={Radius * 68} rx="4" fill="#111" stroke="#cfcfcf" strokeWidth="1.3" />
-            </g>
-          ))}
-          <path d={`M96 46 L${96 - Math.sin(Steer) * 46} ${46 - Math.cos(Steer) * 46}`} stroke="#ff9f5a" strokeDasharray="3 3" />
-          <text x="40" y="18">{((Steer * 180) / Math.PI).toFixed(0)}° lock</text>
-          <text x="160" y="164" textAnchor="middle">track {Track.toFixed(2)} m</text>
-        </svg>
         <Metric Value={Fixed(TurnRadius, 1)} Unit="m turning radius" Caption={`${(V("wheels")?.length || 4)} wheels · tyre Ø ${(Radius * 2).toFixed(2)} m`} />
         <ClassSlider Kit={Kit} V={V} Write={Write} Type="VehicleMovement" Key="maxSteer" />
         <ClassSlider Kit={Kit} V={V} Write={Write} Type="VehicleMovement" Key="tyreRadius" />
+        <Readouts Kit={Kit} Rows={[["Steering lock", ((Steer * 180) / Math.PI).toFixed(1) + "°"], ["Track", Track.toFixed(2) + " m"], ["Tyre circumference", (2 * Math.PI * Radius).toFixed(2) + " m"]]} />
       </Card>
       <Card Title="Suspension" Class="vc-card">
         <svg className="vc-visual" viewBox="0 0 320 130" role="img" aria-label="Suspension step response">
@@ -830,7 +789,7 @@ function CollisionInspector({ Kit, V, Write, Row }) {
   const Scale = Box ? 1 / Math.max(1, ...Extent.map((Each) => Each / 1.4)) : 1 / Math.max(1, Radius / 1.2);
   return (
     <Card Title={Box ? "Box collision" : "Sphere collision"} Class="vc-card">
-      <SideView Height={170}>
+      <svg className="vc-visual" viewBox="0 0 320 170" role="img" aria-label={Box ? "Box extents" : "Sphere radius"}>
         {Box ? (
           (() => {
             const [Ex, Ey, Ez] = Extent.map((Each) => Each * Scale);
@@ -844,7 +803,7 @@ function CollisionInspector({ Kit, V, Write, Row }) {
             <ellipse cx="160" cy="92" rx={Radius * Scale * 40} ry={Radius * Scale * 12} fill="none" stroke={Colour} strokeOpacity="0.6" />
           </>
         )}
-      </SideView>
+      </svg>
       <Metric Value={Fixed(Volume, 2)} Unit="m³" Caption={Trigger ? "Overlap events · nothing is blocked (OverlapAll)" : "Blocks everything (BlockAll)"} />
       {Box ? (
         ["X", "Y", "Z"].map((Axis, Index) => (

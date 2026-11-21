@@ -113,12 +113,7 @@
   outline: 1px solid #dac6a1;
   outline-offset: 3px;
 }
-/* Sky presets: the current sky at noon / sunset, then one tile per preset. */
-.atmosphere-presets .graph-metric {
-  font-size: 26px;
-  letter-spacing: -0.7px;
-  margin-top: 20px;
-}
+/* Sky colour: the current sky at noon / sunset. */
 .atmosphere-presets > h3 {
   display: flex;
   justify-content: space-between;
@@ -144,50 +139,6 @@
 .atmosphere-presets svg text.sky-label {
   fill: #ffffffd0;
   letter-spacing: 0.8px;
-}
-.sky-preset-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
-  margin-top: 14px;
-}
-.sky-preset-grid button {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 5px 5px 8px;
-  min-width: 0;
-  border-radius: 14px;
-  border: 1px solid #ffffff0d;
-  background: #1c1c1c;
-  color: #bdbdbd;
-  font: inherit;
-  font-size: 10px;
-  text-align: left;
-  cursor: pointer;
-}
-.sky-preset-grid button svg {
-  width: 100%;
-  height: auto;
-  display: block;
-  border-radius: 10px;
-}
-.sky-preset-grid button span {
-  padding: 0 2px;
-  line-height: 1.25;
-  text-align: center;
-  overflow-wrap: anywhere;
-}
-.sky-preset-grid button:hover {
-  border-color: #ffffff26;
-}
-.sky-preset-grid button[aria-pressed="true"] {
-  border-color: #ffffffa0;
-  background: #262626;
-  color: #f2f2f2;
-}
-.sky-sliders {
-  margin-top: 8px;
 }
 .atmosphere-space > header {
   display: flex;
@@ -295,9 +246,6 @@
   border: 1px solid #ffffff08;
   border-radius: 20px;
 }
-.atmosphere-lab-body .sky-preset-grid {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-}
 .atmosphere-lab-window p {
   font-size: 12px;
   line-height: 1.6;
@@ -313,9 +261,6 @@
   }
   .atmosphere-lab-backdrop {
     padding: 10px;
-  }
-  .atmosphere-lab-body .sky-preset-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 

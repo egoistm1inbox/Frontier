@@ -165,8 +165,8 @@ const Sections = {
     Card("Bake / image"),
   ],
 };
-// Vehicle folder rows: every inspector opens with its own visual-led card.
-Sections["vehicle-component"] = [".vc-card .vc-visual", ".vc-card .field"];
+// Vehicle folder rows: every inspector opens with its headline figure, then its fields (Vehicle Movement is data only).
+Sections["vehicle-component"] = [".vc-card .metric", ".vc-card .field"];
 const BakeCards = {
   sun: ["Sun lighting bake", "Sun disk bake"],
   atmosphere: ["Atmosphere bake", "Baked atmosphere"],

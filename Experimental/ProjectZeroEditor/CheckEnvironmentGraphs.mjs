@@ -115,7 +115,9 @@ try {
     "Solar daylight and seasonal plots update real time/date controls using the existing solver; relative intensity graph edits gain",
   );
   await Select("Atmosphere");
-  assert.equal(await Card("Sky presets").count(), 1);
+  assert.equal(await Card("Sky colour").count(), 1);
+  assert.equal(await Card("Sky presets").count(), 0);
+  assert.equal(await Page.locator('[aria-label^="Atmosphere preset"]').count(), 0);
   assert.equal(await Card("Baked atmosphere").count(), 1);
   await Page.getByRole("button", {
     name: "Expand AtmosphereLab",
@@ -128,27 +130,8 @@ try {
     () =>
       !!document.querySelector(".atmosphere-lab-window canvas")?.dataset.render,
   );
-  let Image = await Canvas.evaluate((Node) => Node.toDataURL());
-  await Lab.getByRole("button", {
-    name: "Atmosphere preset Mars-like dust",
-    exact: true,
-  }).click();
-  await Page.waitForFunction(
-    (Previous) =>
-      document.querySelector(".atmosphere-lab-window canvas").toDataURL() !==
-      Previous,
-    Image,
-  );
-  assert.equal((await Saved()).Values.atmosphere["Planet radius"], 3390);
-  assert.equal((await Saved()).Values.atmosphere.Ozone, 0);
-  await Page.screenshot({ path: Proof + "/AtmosphereMars.png" });
-  await Lab.getByRole("button", {
-    name: "Atmosphere preset Arctic clear",
-    exact: true,
-  }).click();
-  assert.equal((await Saved()).Values.atmosphere["Planet radius"], 6371);
-  await Page.waitForTimeout(350);
-  await Page.screenshot({ path: Proof + "/AtmospherePresets.png" });
+  assert.equal(await Lab.locator('[aria-label^="Atmosphere preset"]').count(), 0);
+  await Page.screenshot({ path: Proof + "/AtmosphereLab.png" });
   await Page.setViewportSize({ width: 1366, height: 768 });
   await Page.screenshot({ path: Proof + "/AtmosphereDesktop.png" });
   await Page.setViewportSize({ width: 1440, height: 1000 });
@@ -162,7 +145,7 @@ try {
     true,
   );
 
-  Image = await Canvas.evaluate((Node) => Node.toDataURL());
+  let Image = await Canvas.evaluate((Node) => Node.toDataURL());
   const Box = await Canvas.boundingBox();
   await Page.mouse.move(Box.x + Box.width * 0.5, Box.y + Box.height * 0.5);
   await Page.mouse.down();
@@ -185,12 +168,6 @@ try {
   await Page.waitForTimeout(650);
   assert.notEqual((await Saved()).Values.atmosphere["Space yaw"], Tick);
   await Lab.getByRole("button", { name: "Pause orbit", exact: true }).click();
-  await Lab.getByRole("slider", { name: "Rayleigh", exact: true }).fill("3.5");
-  assert.ok((await Saved()).Values.atmosphere.Rayleigh > 3);
-  assert.equal(
-    (await Saved()).Values.atmosphere["Atmosphere preset"],
-    "Custom",
-  );
   for (const Width of [1024, 1280, 1366, 1920]) {
     await Page.setViewportSize({ width: Width, height: 900 });
     assert.ok(
@@ -231,12 +208,9 @@ try {
   assert.equal((await Saved()).Values.atmosphere["Space yaw"], PausedYaw);
   await Page.reload({ waitUntil: "networkidle" });
   await Select("Atmosphere");
-  assert.equal(
-    (await Saved()).Values.atmosphere["Atmosphere preset"],
-    "Custom",
-  );
+  assert.equal(await Card("Sky colour").count(), 1);
   Checks.push(
-    "Sky preset tiles and Rayleigh slider editing; responsive orbital single-scatter preview; changed pixels for Mars/Arctic and orbit; animation, modal focus/inert and reload",
+    "Sky colour card without presets; responsive orbital single-scatter preview; changed pixels on orbit; animation, modal focus/inert and reload",
   );
   // Stars, Moons, Lens Flare, Precipitation, Rainbow and Editor Camera only had the removed bar maps.
   for (const Name of [

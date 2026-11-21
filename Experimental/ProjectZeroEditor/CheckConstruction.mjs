@@ -151,14 +151,14 @@ try {
   );
   // Cameras include Motion Blur, Lens Flare, Post Process and its 7 effects; Lighting includes the Environment Light;
   // Vehicle holds the nine Vehicle folder components.
-  assert.equal(Names.length, 49);
+  assert.equal(Names.length, 48);
   for (const [Group, Expected] of [
     ["Environment", 5],
     ["Weather", 7],
     ["Cameras", 12],
     ["Geometry", 5],
     ["Lighting", 11],
-    ["Vehicle", 9],
+    ["Vehicle", 8],
   ]) {
     await Page.getByRole("navigation", { name: "Construct categories" })
       .getByRole("button", { name: Group, exact: true })

@@ -49,6 +49,14 @@ starting point for the UI redesign.
 
 ---
 
+## Follow-up 39: no presets, no car drawings
+
+- **Atmosphere**: the sky preset tiles are gone. A plain **Sky colour** card shows the current sky at noon and sunset from the
+  scattering settings; the cards below it edit those settings.
+- **Vehicle folder**: **Bumper Trigger** removed (saved scenes drop it on load). **Vehicle Movement** no longer draws the car:
+  each card is its headline figure, its fields and plain readouts (axle loads, wheelbase, steering lock, track, tyre circumference),
+  with the suspension response, torque curve and drag curves kept as data plots. **Chassis Collision** draws only its box.
+
 ## Follow-up 37: render settings per camera, preview cards, SDF Bake and LOD Clusters
 
 - **Render settings** (`RenderSettings.js`, `RenderSettingsCards.jsx`, `RenderSettings.css`, icon `EngineContent/Icons/render-settings.svg`):

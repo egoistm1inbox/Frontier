@@ -1,117 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { Plot, Clamp } from "./LiveGraph.jsx";
-export const AtmospherePresets = [
-  {
-    Name: "Arctic clear",
-    X: 0.7,
-    Y: 0.08,
-    Colour: "#a5cadb",
-    Settings: {
-      Ozone: 1.3,
-      "Rayleigh Scale H": 6500,
-      "Mie Scale H": 500,
-      "Sky Tint": "#cae6ff",
-      "Ground Albedo": "#bbc9ce",
-    },
-  },
-  {
-    Name: "Alpine",
-    X: 0.45,
-    Y: 0.25,
-    Colour: "#719fc5",
-    Settings: {
-      Ozone: 1.1,
-      "Rayleigh Scale H": 7000,
-      "Mie Scale H": 700,
-      "Sky Tint": "#d5e6ff",
-    },
-  },
-  {
-    Name: "Temperate Earth",
-    X: 1,
-    Y: 1,
-    Colour: "#769ec1",
-    Settings: {
-      Ozone: 1.2,
-      "Rayleigh Scale H": 8000,
-      "Mie Scale H": 1200,
-      "Sky Tint": "#ffffff",
-    },
-  },
-  {
-    Name: "Tropical humid",
-    X: 1.4,
-    Y: 2,
-    Colour: "#8cbdc0",
-    Settings: {
-      Ozone: 1,
-      "Rayleigh Scale H": 9000,
-      "Mie Scale H": 2400,
-      "Sky Tint": "#e1f4ee",
-    },
-  },
-  {
-    Name: "Desert dust",
-    X: 0.9,
-    Y: 3.4,
-    Colour: "#c7a784",
-    Settings: {
-      Ozone: 0.5,
-      "Mie Anisotropy": 0.86,
-      "Mie Scale H": 3000,
-      "Sky Tint": "#edc4a3",
-      "Ground Albedo": "#9a7451",
-    },
-  },
-  {
-    Name: "Urban haze",
-    X: 1.8,
-    Y: 3,
-    Colour: "#a7aa99",
-    Settings: { Ozone: 0.7, "Mie Scale H": 1500, "Sky Tint": "#ddd4b6" },
-  },
-  {
-    Name: "Thick smog",
-    X: 2.5,
-    Y: 5.6,
-    Colour: "#9f9270",
-    Settings: {
-      Ozone: 0.3,
-      "Mie Scale H": 800,
-      "Sky Tint": "#c9ad80",
-      "Sky Brightness": 0.65,
-    },
-  },
-  {
-    Name: "Mars-like dust",
-    X: 0.18,
-    Y: 0.65,
-    Colour: "#c68770",
-    Settings: {
-      Ozone: 0,
-      "Planet radius": 3390,
-      Atmosphere: 45000,
-      "Rayleigh Scale H": 10000,
-      "Mie Scale H": 3500,
-      "Sky Tint": "#df9d80",
-      "Ground Albedo": "#80513e",
-    },
-  },
-  {
-    Name: "Dense golden haze",
-    X: 3.7,
-    Y: 4.5,
-    Colour: "#c4b177",
-    Settings: {
-      Ozone: 0,
-      Atmosphere: 100000,
-      "Rayleigh Scale H": 14000,
-      "Mie Scale H": 4000,
-      "Sky Tint": "#e7c895",
-    },
-  },
-];
 const Defaults = {
   Ozone: 1.2,
   "Mie Anisotropy": 0.78,
@@ -268,24 +157,12 @@ function SkyPanel({ X, Y, W, H, Top, Bottom, Ground, Sun, SunX, SunY, Glow, Labe
   );
 }
 
-function SkyPresets({ V, Change, Slider }) {
-  const Apply = (P) => {
-    for (const [Key, Value] of Object.entries({ ...Defaults, ...P.Settings, Rayleigh: P.X, Mie: P.Y })) Change(Key, Value);
-    Change("Atmosphere preset", P.Name);
-  };
-  const Active = AtmospherePresets.find(
-    (P) =>
-      P.Name === V("Atmosphere preset") &&
-      Object.entries({ ...Defaults, ...P.Settings, Rayleigh: P.X, Mie: P.Y }).every(([Key, Value]) => (V(Key) ?? Defaults[Key]) === Value),
-  );
+// The current sky at noon and at sunset, coloured from the scattering settings. No presets: the cards below edit it.
+function SkyPreview({ V }) {
   const Current = SkyColours(Object.fromEntries([...Object.keys(Defaults), "Rayleigh", "Mie"].map((Key) => [Key, V(Key) ?? Defaults[Key]])));
-  const Custom = () => Change("Atmosphere preset", "Custom");
   return (
-    <section className="property-card atmosphere-presets" data-card="Sky presets">
-      <h3>
-        Sky presets <small>AUTHORING PALETTE</small>
-      </h3>
-      <div className="graph-metric">{Active?.Name || "Custom atmosphere"}</div>
+    <section className="property-card atmosphere-presets" data-card="Sky colour">
+      <h3>Sky colour</h3>
       <p>
         Rayleigh {V("Rayleigh").toFixed(2)} × · Mie {V("Mie").toFixed(2)} × · Ozone {(V("Ozone") ?? Defaults.Ozone).toFixed(2)} ×
       </p>
@@ -295,30 +172,7 @@ function SkyPresets({ V, Change, Slider }) {
         <text x="0" y="113">sun high · 60°</text>
         <text x="300" y="113" textAnchor="end">sun on the horizon · long light path</text>
       </svg>
-      <div className="sky-preset-grid">
-        {AtmospherePresets.map((P) => {
-          const Sky = SkyColours({ ...P.Settings, Rayleigh: P.X, Mie: P.Y });
-          return (
-            <button key={P.Name} aria-label={"Atmosphere preset " + P.Name} aria-pressed={Active?.Name === P.Name} onClick={() => Apply(P)}>
-              <svg viewBox="0 0 96 56" aria-hidden="true">
-                <SkyPanel X={0} Y={0} W={60} H={56} Top={Sky.Overhead} Bottom={Sky.Skyline} Ground={Sky.Ground} Sun="#fff8e0" SunX={44} SunY={12} Glow={12} Round={0} />
-                <SkyPanel X={60} Y={0} W={36} H={56} Top={Sky.DuskOverhead} Bottom={Sky.DuskSkyline} Ground={Sky.DuskGround} Sun={Sky.Sun} SunX={78} SunY={42} Glow={14} Round={0} />
-              </svg>
-              <span>{P.Name}</span>
-            </button>
-          );
-        })}
-      </div>
-      {Slider && (
-        <div className="sky-sliders">
-          {Slider("Rayleigh", Custom)}
-          {Slider("Mie", Custom)}
-        </div>
-      )}
-      <p className="graph-note">
-        Each tile shows the preset at noon (left) and at sunset (right). Tiles apply complete presets; the sliders edit Rayleigh / Mie
-        only. Illustrative single-scatter colours, not the native sky; Mars-like is a stylised setting.
-      </p>
+      <p className="graph-note">Illustrative single-scatter colours from the settings below, not the native sky.</p>
     </section>
   );
 }
@@ -569,7 +423,7 @@ function Space({ V, Change, Expand, Turn, Orbit }) {
     </section>
   );
 }
-export default function AtmosphereLab({ V, Change, Slider }) {
+export default function AtmosphereLab({ V, Change }) {
   const [Open, Expand] = useState(false),
     Root = useRef(null),
     Opener = useRef(null),
@@ -629,7 +483,7 @@ export default function AtmosphereLab({ V, Change, Slider }) {
   return (
     <>
       <div className="card-grid atmosphere-lab-cards">
-        <SkyPresets V={V} Change={Change} Slider={Slider} />
+        <SkyPreview V={V} />
         <Space
           Turn={Turn}
           Orbit={Orbit}
@@ -665,7 +519,7 @@ export default function AtmosphereLab({ V, Change, Slider }) {
                 </button>
               </header>
               <div className="atmosphere-lab-body">
-                <SkyPresets V={V} Change={Change} Slider={Slider} />
+                <SkyPreview V={V} />
                 <Space V={V} Change={Change} Turn={Turn} Orbit={Orbit} />
               </div>
             </section>
