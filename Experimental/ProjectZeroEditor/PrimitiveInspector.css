@@ -849,3 +849,22 @@
   line-height: 1.5;
   color: var(--pi-faint);
 }
+
+/* Mass balance (standard property card). */
+.pi-mass-card .pi-balance-wrap {
+  margin: 4px 0 14px;
+}
+.pi-mass-card .pi-balance {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+.pi-mass-card .pi-balance text {
+  font:
+    9px "DM Sans",
+    sans-serif;
+  fill: #8a8a8a;
+}
+.pi-mass-card .pi-balance text.pi-balance-strong {
+  fill: #dfe8f3;
+}

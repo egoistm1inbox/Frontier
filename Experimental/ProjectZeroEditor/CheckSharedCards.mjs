@@ -224,7 +224,7 @@ try {
       Id === "light"
         ? Page.frameLocator('[data-reference-slice="details"] iframe')
         : Light();
-    await Controls.locator(".lp-response").waitFor();
+    await Controls.locator(".lp-shape").waitFor();
     const Image = Light().locator(".lp-source-icon img");
     await Image.evaluate((Image) => Image.decode());
     const Record = (await Saved()).Rows.find((Row) => Row.Id === Id);
@@ -241,25 +241,17 @@ try {
       assert.equal(Record.Icon, "editor-area-light");
     await Wide();
     const Source = await Light().locator(".lp-preview").boundingBox();
-    const Rail = await Light().locator(".lp-readings").boundingBox();
-    const Output = await Controls.locator(".lp-output").boundingBox();
-    const Response = await Controls.locator(".lp-response").boundingBox();
+    const Rail = await Light().locator(".lp-preview .lp-readings").boundingBox();
+    const Output = await Light().locator(".lp-preview > .lp-output").boundingBox();
     const Shape = await Controls.locator(".lp-shape").boundingBox();
+    const Visual = await Controls.locator(".lp-shape > .lp-shape-visual").boundingBox();
     assert(Source.width > 650);
-    assert(
-      Rail.y - Source.y - Source.height >= 0 &&
-        Rail.y - Source.y - Source.height < 30,
-    );
-    assert(Output.y > Rail.y + Rail.height);
-    assert(Math.abs(Output.y - Shape.y) < 2);
-    assert(
-      Response.y > Output.y &&
-        Response.y + Response.height <= Output.y + Output.height,
-    );
-    assert.equal(
-      await Controls.locator(".lp-output > .lp-response").count(),
-      1,
-    );
+    // One Preview card: readings rail, then the source sliders, both inside its bounds.
+    assert(Rail.y > Source.y && Output.y >= Rail.y + Rail.height - 2);
+    assert(Output.y + Output.height <= Source.y + Source.height + 1);
+    // The optics card opens with its visual (the analytical study merged into it).
+    assert(Visual.y > Shape.y && Visual.y - Shape.y < 90);
+    assert.equal(await Controls.locator(".lp-response > header").count(), 0);
     assert(
       await Light()
         .locator("body")

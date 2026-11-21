@@ -1,6 +1,19 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useBrowserTiming } from "./BrowserTiming.js";
 import "./WorkspaceCards.css";
+// Header / footer glyphs drawn as SVG with round caps and joins (text glyphs rendered as boxes in some fonts).
+function RoundGlyph({ Name }) {
+  const Paths = {
+    reset: "M5 11V5h6M5 5l6.5 6.5M19 13v6h-6M19 19l-6.5-6.5",
+    close: "M7 7l10 10M17 7 7 17",
+    resize: "M19 9v4a6 6 0 0 1-6 6H9M19 15a4 4 0 0 1-4 4",
+  };
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+      <path d={Paths[Name]} />
+    </svg>
+  );
+}
 const Storage = "Frontier.DiagnosticsCard.v1",
   Defaults = {
     Metric: "FPS",
@@ -261,10 +274,10 @@ export default function DiagnosticsCard({
             SetPrefs((P) => ({ ...P, X: 16, Y: 16, Width: 370, Height: 520 }))
           }
         >
-          ↗
+          <RoundGlyph Name="reset" />
         </button>
         <button aria-label="Close diagnostics" onClick={Close}>
-          ×
+          <RoundGlyph Name="close" />
         </button>
       </header>
       <div className="debug-card-body">
@@ -503,7 +516,7 @@ export default function DiagnosticsCard({
       </div>
       <footer className="debug-card-footer">
         <span>
-          {Math.round(Box.Width)} × {Math.round(Box.Height)} · resize ↘
+          {Math.round(Box.Width)} × {Math.round(Box.Height)} · drag the corner to resize
         </span>
         <button
           className="debug-resize"
@@ -512,7 +525,7 @@ export default function DiagnosticsCard({
           onPointerDown={(E) => Start(E, "resize")}
           onKeyDown={(E) => Keyboard(E, "resize")}
         >
-          ⌟
+          <RoundGlyph Name="resize" />
         </button>
       </footer>
     </section>

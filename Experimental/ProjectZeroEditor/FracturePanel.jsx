@@ -31,12 +31,14 @@ export default function FracturePanel({ Subject, Values, Change, Expand }) {
         </div>
         <button
           className="fracture-expand"
-          aria-label="Expand fracture editor"
-          title="Open fracture editor for this object"
-          disabled={!Settings.Enabled || !Expand}
+          aria-label="Open fracture workspace"
+          title="Edit this object's fracture in place: the viewport isolates it"
+          disabled={!Expand}
           onClick={Expand}
         >
-          ↗
+          <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M9 5H6.5A1.5 1.5 0 0 0 5 6.5v11A1.5 1.5 0 0 0 6.5 19h11a1.5 1.5 0 0 0 1.5-1.5V15M13 5h6v6M19 5l-8 8" />
+          </svg>
         </button>
       </header>
       <label className="switch-row">
@@ -82,7 +84,7 @@ export default function FracturePanel({ Subject, Values, Change, Expand }) {
                 ? Settings.PieceSdf
                   ? "Browser geometry ready. SDF pending."
                   : "Browser bake ready."
-                : "Open the editor to bake or refresh geometry."
+                : "Open the workspace to bake or refresh geometry."
               : ""}
           </p>
           {Settings.Mode === "baked" && (
@@ -123,7 +125,7 @@ export default function FracturePanel({ Subject, Values, Change, Expand }) {
             </div>
           )}
           <button className="fracture-open" disabled={!Expand} onClick={Expand}>
-            Edit {Subject.Name} fracture <span>↗</span>
+            Open fracture workspace
           </button>
           {!Supported && (
             <p>

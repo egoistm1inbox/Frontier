@@ -3,7 +3,6 @@ import {
   Publish as PublishFracture,
   Describe as DescribeFracture,
   Normalize as NormalizeFracture,
-  OpenFracture,
   ReadRecord as ReadFracture,
 } from "../FractureEditor/FractureSpecification.js";
 import { CloudProperties, CloudEdit } from "./CloudSpecification.js";
@@ -22,6 +21,8 @@ import ReferencePanel, {
 import FolderInspector from "./FolderInspector.jsx";
 import { FolderInventory } from "./FolderInventory.mjs";
 import DiagnosticsCard from "./DiagnosticsCard.jsx";
+import { WorkspaceView } from "./Workspaces.jsx";
+import { VehicleFolder, VehicleRows, VehiclePanel, VehicleSummary, EnsureVehicleFolder } from "./VehicleComponents.jsx";
 import { BrowserFPS } from "./BrowserTiming.js";
 import {
   EnsureEditorCamera,
@@ -204,6 +205,7 @@ InitialRows.splice(
   0,
   ...EffectRows.filter((Row) => Row.Parent === "post"),
 );
+InitialRows.push({ ...VehicleFolder }, ...VehicleRows.map((Row) => ({ ...Row })));
 const DefaultSettings = {
   GI: 2,
   Reflection: 2,
@@ -279,6 +281,7 @@ function OutlinerMetadata(Row, Record = {}, Rows = []) {
     );
   if (IsEffectPanel(Row.Panel)) return EffectSummary(Row.Panel, V);
   if (Row.Panel === EnvironmentPanel) return EnvironmentSummary(V);
+  if (Row.Panel === VehiclePanel) return VehicleSummary(Row, Record);
   if (Row.Panel === "post")
     return (
       "EV " +
@@ -432,12 +435,19 @@ if (SkyAlias && new URLSearchParams(location.search).get("inspect") === "sky") {
   history.replaceState(null, "", Address);
 }
 function App() {
+  // The open edit workspace ({ Id, Tool, …view }) or null. It belongs to one selection and closes when the selection changes.
+  const [WorkspaceState, StoreWorkspace] = useState(null);
+  const SetWorkspace = (Next) =>
+    StoreWorkspace((Previous) => {
+      const Value = typeof Next === "function" ? Next(Previous) : Next;
+      return Value ? { ...Value } : null;
+    });
   const [Debug, SetDebug] = useState(0),
     [HiZ, ToggleHiZ] = useState(true),
     [Alias, ToggleAlias] = useState(true),
     [PatchError, SetPatchError] = useState(1);
   const [Rows, StoreRows] = useState(() =>
-      EnsureEnvironmentLight(
+      EnsureVehicleFolder(EnsureEnvironmentLight(
         ArrangeCameraEffects(
           EnsureEditorCamera(
             PrepareLightRows(
@@ -450,7 +460,7 @@ function App() {
           Saved.Rows ? Saved.CameraEffectsRevision : 1,
         ),
         Saved.Rows ? Saved.EnvironmentLightRevision : 0,
-      ),
+      ), Saved.Rows ? Saved.VehicleRevision : 0),
     ),
     [Selected, Select] = useState(
       new URLSearchParams(location.search).get("inspect") ||
@@ -881,6 +891,7 @@ function App() {
           LightDesignRevision: 1,
           CameraEffectsRevision: 1,
           EnvironmentLightRevision: 1,
+          VehicleRevision: 1,
           Assets: AssetRecords,
           Selected,
           Values,
@@ -922,6 +933,7 @@ function App() {
         SetPatchError((Previous) => (Previous >= 4 ? 0.5 : Previous * 2));
       }
       if (Event.key === "Escape") {
+        SetWorkspace(null);
         SetDebug(0);
         ShowViewportSettings(false);
         ShowMenu(null);
@@ -978,6 +990,11 @@ function App() {
   const SelectRow = (Id) => {
     Select(Id);
     ShowMenu(null);
+  };
+  const Workspace = WorkspaceState && WorkspaceState.Id === Selected ? WorkspaceState : null;
+  const OpenWorkspace = (Tool) => {
+    SetRunMode("EDIT");
+    SetWorkspace((Previous) => ({ ...(Previous?.Id === Selected ? Previous : {}), Id: Selected, Tool, Selection: [] }));
   };
   const SceneInventory = useMemo(
     () => FolderInventory(Rows, null, Hidden),
@@ -1042,6 +1059,7 @@ function App() {
             LightDesignRevision: 1,
             CameraEffectsRevision: 1,
             EnvironmentLightRevision: 1,
+            VehicleRevision: 1,
             Collapsed,
             Assets: AssetRecords,
             Values,
@@ -1082,7 +1100,7 @@ function App() {
       )
         throw Error();
       AssignRows(
-        EnsureEnvironmentLight(
+        EnsureVehicleFolder(EnsureEnvironmentLight(
           ArrangeCameraEffects(
             PrepareLightRows(
               Loaded.ReferenceDesignRevision === 1
@@ -1093,7 +1111,7 @@ function App() {
             Loaded.CameraEffectsRevision,
           ),
           Loaded.EnvironmentLightRevision,
-        ),
+        ), Loaded.VehicleRevision),
       );
       Collapse(ConsolidateAtmosphereFlags(Loaded.Collapsed, Loaded.Rows));
       const ImportedValues = NormalizeHeightFogValues(
@@ -1749,13 +1767,23 @@ function App() {
         className={"scene-image " + (SplitView ? "split-view" : "")}
         title="Checkerboard authoring preview. Symbols represent constructed entities, not engine rendering."
       >
-        <CheckerViewport
-          Rows={Rows}
-          Hidden={Hidden}
-          Selected={Selected}
-          Select={SelectRow}
-        />
-        {SplitView && (
+        {Workspace ? (
+          <WorkspaceView
+            Subject={Subject}
+            Values={Values[Selected] || {}}
+            Change={Change}
+            Workspace={Workspace}
+            SetWorkspace={SetWorkspace}
+          />
+        ) : (
+          <CheckerViewport
+            Rows={Rows}
+            Hidden={Hidden}
+            Selected={Selected}
+            Select={SelectRow}
+          />
+        )}
+        {SplitView && !Workspace && (
           <CheckerViewport
             Rows={Rows}
             Hidden={Hidden}
@@ -1879,15 +1907,10 @@ function App() {
               Hidden={Hidden[Selected]}
               ToggleHidden={() => ToggleHidden(Selected)}
               OpenShader={() => OpenShader(Selected)}
-              OpenFracture={() => {
-                try {
-                  OpenFracture(Subject, Values[Selected] || {});
-                } catch {
-                  Toast(
-                    "Browser storage is unavailable; cannot open the object fracture editor.",
-                  );
-                }
-              }}
+              OpenFracture={() => OpenWorkspace("fracture")}
+              Workspace={Workspace}
+              OpenWorkspace={OpenWorkspace}
+              SetWorkspace={SetWorkspace}
               OpenWind={() => {
                 WindOpener.current = document.activeElement;
                 EditWind(Selected);
@@ -2193,23 +2216,14 @@ function App() {
                 <button
                   onClick={() => {
                     ShowMenu(null);
-                    if (
-                      Subject.Panel !== "geometry" ||
-                      !Values[Selected]?.Fracture?.Enabled
-                    ) {
-                      Toast(
-                        "Select geometry and enable Fracture in its inspector first.",
-                      );
+                    if (Subject.Panel !== "geometry") {
+                      Toast("Select geometry to open its fracture workspace.");
                       return;
                     }
-                    try {
-                      OpenFracture(Subject, Values[Selected] || {});
-                    } catch {
-                      Toast("Browser storage is unavailable.");
-                    }
+                    OpenWorkspace("fracture");
                   }}
                 >
-                  Selected object fracture…
+                  Fracture workspace
                 </button>
                 {["Outliner", "Viewport", "Inspector", "ShaderEditor"].map(
                   (Tab) => (

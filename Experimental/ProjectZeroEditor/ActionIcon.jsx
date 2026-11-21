@@ -288,9 +288,9 @@ export default function ActionIcon({ Name, Size = 24 }) {
     case "diagnostics":
       Drawing = (
         <>
-          <rect x="2" y="13" width="4" height="9" rx="1" />
-          <rect x="10" y="7" width="4" height="15" rx="1" />
-          <rect x="18" y="2" width="4" height="20" rx="1" />
+          <rect x="2.5" y="12" width="4.5" height="10" rx="2.25" />
+          <rect x="9.75" y="6" width="4.5" height="16" rx="2.25" />
+          <rect x="17" y="2" width="4.5" height="20" rx="2.25" />
         </>
       );
       break;

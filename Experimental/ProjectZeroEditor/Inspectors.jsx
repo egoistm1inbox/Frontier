@@ -43,11 +43,15 @@ import Native from "./NativePanels.json";
 import { Solar } from "./Solar.mjs";
 import SunNow from "./SunNow.jsx";
 import { SensorField } from "./OpticalGraphic.jsx";
+import SensorFormats, { Formats } from "./SensorFormats.jsx";
+import { WorkspacePanel, WorkspaceLauncher } from "./Workspaces.jsx";
+import { VehicleInspector, VehiclePanel, VehicleSheet } from "./VehicleComponents.jsx";
 
 export const Panels = {
   ...Native.Panels,
   ...EffectSheets,
   [EnvironmentPanel]: EnvironmentSheet,
+  [VehiclePanel]: VehicleSheet,
 };
 export function Glyph({ Name, Size = 18 }) {
   if (Name === "celestial-orbit")
@@ -303,6 +307,10 @@ export function Control({
     Maximum = Field.Maximum ?? 100,
     Decimals = Field.Decimals ?? 2;
   const Safe = Number.isFinite(+Value) ? +Value : Field.Default;
+  // Curve (optional power, e.g. 3) gives the low end of a wide range most of the slider travel.
+  const Curve = Field.Curve > 0 && Field.Curve !== 1 ? Field.Curve : 0;
+  const Linear = Math.min(1, Math.max(0, (Safe - Minimum) / (Maximum - Minimum)));
+  const Travel = Curve ? Linear ** (1 / Curve) : Linear;
   const Write = (Input) => {
     const Numeric = +Input;
     if (Number.isFinite(Numeric))
@@ -331,15 +339,21 @@ export function Control({
         <input
           aria-label={Label}
           type="range"
-          min={Minimum}
-          max={Maximum}
-          step={10 ** -Decimals}
-          value={Safe}
+          min={Curve ? 0 : Minimum}
+          max={Curve ? 1 : Maximum}
+          step={Curve ? 0.001 : 10 ** -Decimals}
+          value={Curve ? Travel : Safe}
           disabled={ReadOnly}
           style={{
-            "--fill": `${(100 * (Safe - Minimum)) / (Maximum - Minimum)}%`,
+            "--fill": `${100 * Travel}%`,
           }}
-          onChange={(Event) => Write(Event.target.value)}
+          onChange={(Event) =>
+            Write(
+              Curve
+                ? +(Minimum + (Maximum - Minimum) * (+Event.target.value) ** Curve).toFixed(Decimals)
+                : Event.target.value,
+            )
+          }
         />
       </div>
     </label>
@@ -503,6 +517,9 @@ export function Inspector({
   ReferenceCards = null,
   CloudCoverageCards = null,
   ReferenceDetailCards = null,
+  Workspace = null,
+  OpenWorkspace = null,
+  SetWorkspace = null,
 }) {
   const Sheet = Panels[Subject.Panel] || Panels.geometry;
   const [MoonSlot, SelectMoon] = useState(0);
@@ -652,7 +669,18 @@ export function Inspector({
   const Showcase = () => (
     <>
       {Header("Geometry")}
+      {Workspace && SetWorkspace ? (
+        <WorkspacePanel
+          Subject={Subject}
+          Values={Values}
+          Change={Change}
+          Workspace={Workspace}
+          SetWorkspace={SetWorkspace}
+          Kit={{ Card, Control, Metric }}
+        />
+      ) : (
       <PrimitiveInspector
+        Launcher={OpenWorkspace && <WorkspaceLauncher Open={OpenWorkspace} />}
         Kit={{ Card, Control, Metric }}
         Subject={Subject}
         Values={Values}
@@ -677,6 +705,7 @@ export function Inspector({
           />
         }
       />
+      )}
     </>
   );
   const Generic = () =>
@@ -743,6 +772,13 @@ export function Inspector({
         />
       )}
     </>
+    );
+  if (Subject.Panel === VehiclePanel)
+    return (
+      <div className="generic-inspector vehicle-component-inspector" data-panel={Subject.Panel}>
+        {Header("Vehicle")}
+        <VehicleInspector Subject={Subject} Values={Values} Change={Change} Kit={{ Card, Control, Metric }} />
+      </div>
     );
   const Environment = Subject.Panel === EnvironmentPanel;
   if (IsEffectPanel(Subject.Panel) || Environment) {
@@ -1119,12 +1155,20 @@ export function Inspector({
             </p>
           </Card>
         </div>
-        <Card Title="Sensor / support" Height={196}>
+        <Card Title="Sensor / support" Height={196} Class="sensor-card">
+          <Metric
+            Value={(36 / Sensor).toFixed(2)}
+            Unit="× crop"
+            Caption={`${Formats.reduce((Best, Format) => (Math.abs(Format[1] - Sensor) < Math.abs(Best[1] - Sensor) ? Format : Best), Formats[0])[0]} · ${Optics.horizontalFov.toFixed(1)}° horizontal field`}
+          />
+          <div className="graphic sensor-graphic">
+            <SensorFormats Width={Sensor} Aspect={Aspect} Focal={Focal} Change={(Next) => AssignProperty("Sensor Width", Next)} />
+          </div>
           {F("Sensor Width")}
-          <p>
-            Aspect {Aspect.toFixed(3)} · hyperfocal{" "}
-            {Optics.hyperfocal.toFixed(1)} m · pinhole renderer
-          </p>
+          <Control Field={{ Label: "Sensor height", Control: "Readout" }} Value={(Sensor / Aspect).toFixed(2) + " mm"} />
+          <Control Field={{ Label: "Aspect", Control: "Readout" }} Value={Aspect.toFixed(3) + " : 1"} />
+          <Control Field={{ Label: "Hyperfocal distance", Control: "Readout" }} Value={Optics.hyperfocal.toFixed(1) + " m"} />
+          <p>Pinhole renderer: the sensor sets the field of view and depth of field, not exposure.</p>
         </Card>
       </>
     );

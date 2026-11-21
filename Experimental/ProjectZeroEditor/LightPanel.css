@@ -599,3 +599,150 @@
   letter-spacing: 1px;
   color: #8d8d8d;
 }
+
+/* Follow-up 35: one card per visual. The study leads, readings follow, then the controls grouped under small headings. */
+.lighting-panel .lp-group {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid #ffffff10;
+}
+#ReferenceMount .lighting-panel .lp-group-title {
+  margin: 18px 0 4px;
+  font-size: 10px;
+  font-weight: 500;
+  color: #a8a8a8;
+  letter-spacing: 0.2px;
+}
+#ReferenceMount .lighting-panel .lp-group > .lp-group-title:first-child {
+  margin-top: 0;
+}
+.lighting-panel .lp-preview .lp-readings {
+  margin: 14px 0 0;
+}
+#ReferenceMount .lighting-panel .lp-preview .lp-readings .mp-pill {
+  background: #ffffff07;
+  border: 1px solid #ffffff0a;
+}
+.lighting-panel .lp-shape-visual {
+  margin: 4px 0 6px;
+}
+#ReferenceMount .lighting-panel .lp-shape-visual .lp-response {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+.lighting-panel .lp-saved-profiles {
+  margin-top: 8px;
+}
+.lighting-panel .lp-saved-profiles button {
+  border-style: dashed;
+}
+
+/* IES curve editor */
+.ies-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.ies-plot {
+  width: 100%;
+  height: auto;
+  display: block;
+  background: #151515;
+  border: 1px solid #ffffff0d;
+  border-radius: 14px;
+  touch-action: none;
+  cursor: crosshair;
+  outline: none;
+}
+.ies-plot:focus-visible {
+  border-color: #ffffff40;
+}
+.ies-plot text {
+  font: 7.5px sans-serif;
+  fill: #7d7d7d;
+  letter-spacing: 0.3px;
+}
+.ies-plot .ies-point {
+  cursor: grab;
+}
+.ies-tools,
+.ies-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.ies-tools button,
+.ies-actions button {
+  flex: 1 1 auto;
+  min-height: 28px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid #ffffff0d;
+  background: #262626;
+  color: #a9a9a9;
+  font-size: 10px;
+  cursor: pointer;
+}
+.ies-tools button[aria-pressed="true"] {
+  background: #3d3d3d;
+  color: #ececec;
+  border-color: #ffffff2a;
+}
+.ies-tools button:disabled,
+.ies-actions button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.ies-readings {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+.ies-readings .ies-reading {
+  padding: 9px 8px;
+  border-radius: 12px;
+  background: #ffffff07;
+  border: 1px solid #ffffff0a;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.ies-readings b {
+  font-size: 14px;
+  display: block;
+  font-weight: 300;
+  color: #e2e2e2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ies-readings span {
+  font-size: 8.5px;
+  color: #969696;
+}
+.ies-name {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 10px;
+  color: #a8a8a8;
+}
+.ies-name input {
+  flex: 1;
+  min-width: 0;
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid #ffffff10;
+  background: #0d0d0d;
+  color: #e6e6e6;
+  font-size: 11px;
+}
+.ies-editor .lp-note {
+  margin: 0;
+}
+#ReferenceMount .lighting-panel .field[hidden] {
+  display: none;
+}

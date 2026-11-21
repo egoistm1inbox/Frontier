@@ -419,57 +419,19 @@ try {
   await Open("sphere");
   await Page.locator(".fracture-card").scrollIntoViewIfNeeded();
   await Page.screenshot({ path: path.join(Proof, "FractureSdf.png") });
-  const Wait = Context.waitForEvent("page");
   await Page.getByRole("button", {
-    name: "Expand fracture editor",
+    name: "Open fracture workspace",
     exact: true,
   }).click();
-  const Fracture = await Wait;
-  await Fracture.waitForFunction(
-    () => window.FrontierFracture?.snapshot().Settings.SdfResolution === 128,
-  );
-  assert(await Fracture.locator("#piece-sdf").isChecked());
-  await Fracture.locator("#bake").click();
-  await Fracture.waitForFunction(
-    () =>
-      window.FrontierFracture.snapshot().Baked &&
-      !window.FrontierFracture.snapshot().Busy,
-  );
-  assert(
-    (await Fracture.locator("#bake-status").innerText()).includes(
-      "SDF pending",
-    ),
-  );
-  const BeforeSignature = await Fracture.evaluate(
-    () => window.FrontierFracture.snapshot().Receipt.Signature,
-  );
-  await Fracture.locator("#sdf-resolution").selectOption("32");
-  assert.equal(
-    await Fracture.evaluate(
-      () => window.FrontierFracture.snapshot().Receipt.Signature,
-    ),
-    BeforeSignature,
-  );
-  assert(
-    await Fracture.evaluate(() => window.FrontierFracture.snapshot().Baked),
-  );
-  const Export = await Fracture.evaluate(() =>
-    window.FrontierFracture.export(),
-  );
-  assert.equal(Export.Sdf.Requested, true);
-  assert.equal(Export.Sdf.PerFragment, true);
-  assert.equal(Export.Sdf.Generated, false);
-  assert(Export.Geometry.length > 1);
-  assert.equal(Export.Sdf.Resolution, 32);
-  await Page.waitForFunction(
-    () =>
-      JSON.parse(localStorage.getItem("Frontier.ProjectZeroHtml.v1")).Values
-        .sphere.Fracture.SdfResolution === 32,
-  );
-  await Fracture.locator(".bake-card").scrollIntoViewIfNeeded();
-  await Fracture.screenshot({ path: path.join(Proof, "SdfAuthoring.png") });
+  const Workspace = Page.locator(".ws-viewport");
+  await Workspace.waitFor();
+  assert((await Workspace.innerText()).includes("Fracture workspace"));
+  assert(await Page.locator(".ws-switcher").isVisible());
+  await Page.screenshot({ path: path.join(Proof, "FractureWorkspace.png") });
+  await Page.keyboard.press("Escape");
+  await Workspace.waitFor({ state: "detached" });
   Checks.push(
-    "Per-piece SDF settings sync, survive geometry baking and export as ungenerated requests; geometry signature stays valid",
+    "Fracture opens as an in-place edit workspace (isolated object, switcher in the inspector) and Esc leaves it",
   );
   assert.deepEqual(Errors, []);
   console.log("Lighting and authoring checks passed:", Checks.length);

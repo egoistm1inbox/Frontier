@@ -114,6 +114,15 @@ export function HasReferencePanel(Row) {
   );
 }
 
+const IesLibraryKey = "Frontier.IesProfiles.v1";
+const ReadIesLibrary = () => {
+  try {
+    const Entries = JSON.parse(localStorage.getItem(IesLibraryKey));
+    return Array.isArray(Entries) ? Entries : [];
+  } catch {
+    return [];
+  }
+};
 export default function ReferencePanel({
   Subject,
   Rows,
@@ -134,6 +143,7 @@ export default function ReferencePanel({
       {
         ReferenceHost: true,
         Slice: State.Slice,
+        IesLibrary: ReadIesLibrary(),
         Selected: State.Subject.Id,
         Rows: State.Rows.map((Row) => ({
           Id: Row.Id,
@@ -165,6 +175,13 @@ export default function ReferencePanel({
         Size(Math.max(1, Math.min(500000, Event.data.Height)));
       if (Event.data.Type === "state")
         Current.current.Apply(Event.data.Records);
+      // Saved IES curves live in the editor's storage; every open inspector frame receives the new list.
+      if (Event.data.Type === "ies-library" && Array.isArray(Event.data.Entries)) {
+        try {
+          localStorage.setItem(IesLibraryKey, JSON.stringify(Event.data.Entries.slice(0, 64)));
+        } catch {}
+        window.dispatchEvent(new window.Event("frontier-ies-library"));
+      }
     };
     addEventListener("message", Receive);
     return () => removeEventListener("message", Receive);
@@ -172,6 +189,11 @@ export default function ReferencePanel({
   useEffect(() => {
     if (Ready.current) Transmit();
   }, [Rows, Values, Hidden, Collapsed, Slice]);
+  useEffect(() => {
+    const Resend = () => Ready.current && Transmit();
+    addEventListener("frontier-ies-library", Resend);
+    return () => removeEventListener("frontier-ies-library", Resend);
+  }, []);
   if (!HasReferencePanel(Subject)) return null;
   return (
     <section
@@ -186,7 +208,7 @@ export default function ReferencePanel({
           Subject.Name +
           (Slice === "all" ? "" : " · " + Slice)
         }
-        sandbox="allow-scripts"
+        sandbox="allow-scripts allow-downloads"
         srcDoc={window.NativeAssets.ReferenceInspector}
         onLoad={() => {
           Ready.current = true;

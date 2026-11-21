@@ -1,4 +1,5 @@
 import { EnvironmentPanel } from "./EnvironmentLight.jsx";
+import { VehiclePanel } from "./VehicleComponents.jsx";
 import React, { useEffect, useRef, useState } from "react";
 import ReferencePanel from "./ReferencePanel.jsx";
 import { IsEffectPanel } from "./PostEffects.jsx";
@@ -11,6 +12,7 @@ export const ConstructGroups = [
   "Cameras",
   "Geometry",
   "Lighting",
+  "Vehicle",
 ];
 export function ConstructGroup(Subject) {
   if (
@@ -33,6 +35,7 @@ export function ConstructGroup(Subject) {
   )
     return "Cameras";
   if (Subject.Panel === "geometry") return "Geometry";
+  if (Subject.Panel === VehiclePanel) return "Vehicle";
   if (Subject.Panel === "light" || Subject.Panel === EnvironmentPanel)
     return "Lighting";
   return "Environment";

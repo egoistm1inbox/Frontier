@@ -1298,6 +1298,15 @@ in `Exhibits/LightCompute/Results/FogFacetRegression.txt`; this was a fixture-se
   The Wind inspector's Composite flow card was removed; the WindEditor opens from Wind controls. Checks updated; InspectorOrder,
   EnvironmentGraphs, Wind, EntityContext, WorkspaceCards, LightDesign and SharedCards pass. CheckConstruction (Cube roughness) and
   CheckReference (hash) fail exactly as at HEAD. Names unapproved.
+  Follow-up 35: in-place UV and Fracture edit workspaces for showcase primitives (`Workspaces.jsx`, `WorkspaceGeometry.js`; the viewport
+  isolates the object, the inspector switches workspaces, Esc/Leave/Done exit), replacing the pop-out fracture window; Vehicle outliner
+  folder (`VehicleComponents.jsx`: Vehicle Movement, Body, three sockets, two collisions, two lights, built from ComponentViewer
+  Blueprint/Sockets, one-time `VehicleRevision` migration, Vehicle construct category); IES curve editor with library and LM-63 import /
+  export (`IesProfile.js`); light Preview card merges readings and source sliders; rounded diagnostics icons, camera Sensor formats
+  (`SensorFormats.jsx`), Mass card. Checks updated: InspectorOrder (109), SharedCards (14), LightDesign (22), EntityContext (54 rows),
+  Construction (49 entities; still fails at :188 as before), Lighting (in-place workspace; still needs the missing FractureEditor file).
+  InstrumentStyle, InspectorLayout, WorkspaceCards, FogCards, EnvironmentGraphs, Wind, Browser pass. Reference:21, QuickTools and Assets
+  (stale "Content origin" control) fail as before. Names unapproved.
   Follow-up 34: Sun hero replaced by a "Sun now" card (`SunNow.jsx`: horizon panorama with the day's path, six lighting figures);
   Atmosphere atlas replaced by Sky preset tiles (noon / sunset gradients) plus the Rayleigh / Mie pill sliders; Height Fog (Fog layer,
   Density by altitude, Light in the fog) and Atmospheric Fog (Aerial perspective, Spectral transmission) get their own cards

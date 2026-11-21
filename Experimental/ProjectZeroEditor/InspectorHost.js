@@ -78,13 +78,6 @@ function Trim() {
             ".lp-status-column",
             ".lp-source-column",
             ".lp-control-column",
-            ".lp-preview",
-            ".mp-rail",
-            ".lp-output",
-            ".lp-shape",
-            ".lp-transform",
-            ".lp-participation",
-            ".lp-response",
           ];
   const Allowed = {
     ledlight: LightCards,
@@ -222,6 +215,8 @@ Mount.addEventListener("input", (Event) => {
 });
 
 function Synchronize(Data) {
+  // The sandboxed frame has no storage of its own; the editor sends the saved IES curves with every update.
+  if (Array.isArray(Data.IesLibrary)) globalThis.__IES_LIBRARY__ = Data.IesLibrary;
   Applying = true;
   Slice = Data.Slice || "all";
   for (const [Index, Row] of Data.Rows.entries()) {

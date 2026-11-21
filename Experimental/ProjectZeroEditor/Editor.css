@@ -3127,3 +3127,30 @@ img {
   stroke: #ffffff;
   stroke-width: 2;
 }
+
+/* Camera sensor formats. */
+.sensor-card .sensor-graphic {
+  margin: 4px 0 14px;
+}
+.sensor-card .sensor-formats {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+.sensor-card .sensor-formats text {
+  font:
+    8px "DM Sans",
+    sans-serif;
+  fill: #7d7d7d;
+}
+.sensor-card .sensor-formats text.sensor-strong {
+  fill: #e6cf72;
+}
+.sensor-card .sensor-format {
+  cursor: pointer;
+  outline: none;
+}
+.sensor-card .sensor-format:hover rect,
+.sensor-card .sensor-format:focus-visible rect {
+  stroke-opacity: 0.7;
+}

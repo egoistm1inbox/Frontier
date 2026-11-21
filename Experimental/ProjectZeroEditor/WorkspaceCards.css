@@ -405,9 +405,12 @@
   flex: none;
 }
 .debug-card-header > button {
+  display: grid;
+  place-items: center;
   width: 29px;
   height: 29px;
   padding: 0;
+  border-radius: 50%;
 }
 .debug-card-header .debug-drag {
   display: flex;
@@ -534,6 +537,10 @@
   flex: none;
 }
 .debug-card-footer .debug-resize {
+  display: grid;
+  place-items: center;
+  color: #9a9a9a;
+  border-radius: 50% !important;
   width: 30px;
   height: 27px;
   cursor: nwse-resize;

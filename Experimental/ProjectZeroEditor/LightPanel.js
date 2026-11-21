@@ -8,6 +8,7 @@ import { LightGlyphSource, PresetGlyphs } from "./LightGlyphs.js";
 import { ProjectLight, ProjectResponse } from "./LightProjection.js";
 import { MountLightTransform } from "./EmitterPanel.jsx";
 import { el } from "./InspectorDepot/kit.js";
+import { Curves, Figures, MountIesEditor, Presets, ReadLibrary } from "./IesProfile.js";
 const Clamp = (NumberValue, Minimum, Maximum) =>
   Math.max(Minimum, Math.min(Maximum, NumberValue));
 function Temperature(Kelvin) {
@@ -45,6 +46,13 @@ export function LightPanel(Subject, Context) {
     if (Subject.locked) return;
     Context.setProp(Subject, Key, Next);
     Refresh();
+  };
+  // A sub-heading inside a card: keeps one card per visual while grouping its controls.
+  const Group = (Section, Name, ClassName) => {
+    const Block = el("div", "lp-group " + ClassName);
+    Block.append(el("h4", "lp-group-title", Name));
+    Section.append(Block);
+    return Block;
   };
   const Card = (Name, Caption, ClassName) => {
     const Section = el("section", "pcard lp-card " + ClassName);
@@ -198,7 +206,7 @@ export function LightPanel(Subject, Context) {
   Preview.append(Descriptor);
   Bindings.push(() => {
     Descriptor.textContent = Photometric
-      ? (Properties.profile || "Downlight") + " / synthetic polar study"
+      ? (Properties.profile === "Custom" ? Properties.iesName || "Custom profile" : Properties.profile || "Downlight") + " / polar study"
       : Area
         ? (Properties.aperture || "Rectangle") +
           " / " +
@@ -244,15 +252,15 @@ export function LightPanel(Subject, Context) {
       }),
     260,
   );
-  Preview.append(
-    el(
-      "p",
-      "lp-study-note",
-      Photometric
-        ? "Illustrative preset · no measured IES data"
-        : "Source study · HTML authoring",
-    ),
-  );
+  const StudyNote = el("p", "lp-study-note");
+  Preview.append(StudyNote);
+  Bindings.push(() => {
+    StudyNote.textContent = !Photometric
+      ? "Source study · HTML authoring"
+      : Properties.profile === "Custom"
+        ? "Custom candela curve · C0 solid, C90 dashed"
+        : "Illustrative preset · no measured IES data";
+  });
   const Rail = el("div", "mp-rail lp-readings");
   Host.append(Rail);
   const Metric = (Name, Readout) => {
@@ -292,7 +300,11 @@ export function LightPanel(Subject, Context) {
       "Scaled output",
       () => Format(Flux() * Read("multiplier", 1)) + " lm",
     );
-    Metric("Field angle", () => Format(Read("cone"), 1) + "°");
+    Metric("Field angle", () =>
+      Properties.profile === "Custom"
+        ? Format(Math.min(360, Figures(Curves(Properties, Read), Flux()).Field), 0) + "°"
+        : Format(Read("cone"), 1) + "°",
+    );
   } else if (Area) {
     Metric(
       "Aperture",
@@ -312,9 +324,10 @@ export function LightPanel(Subject, Context) {
     );
     Metric("Tube radius", () => Format(Read("radius", 0.04) * 1000) + " mm");
   }
-  const Output = Card(
+  // The source controls tint and scale the study above, so they live in the same card, after the visual and readings.
+  const Output = Group(
+    Preview,
     Diode ? "Driver & colour" : Strip ? "Output per metre" : "Source & colour",
-    "OUTPUT",
     "lp-output",
   );
   if (Diode) {
@@ -365,6 +378,9 @@ export function LightPanel(Subject, Context) {
     "OPTICS",
     "lp-shape",
   );
+  // The visual this card's controls change comes first; the sliders follow.
+  const ShapeVisual = el("div", "lp-shape-visual");
+  Shape.append(ShapeVisual);
   const Choice = (Section, Key, Names) => {
     const Options = el("div", "lp-profiles");
     Names.forEach((Name) => {
@@ -390,29 +406,62 @@ export function LightPanel(Subject, Context) {
     Field(Shape, "voltage", "Supply voltage", 5, 48, 1, "V");
     Toggle(Shape, "diffuser", "Opal diffuser");
   } else if (Photometric) {
+    MountIesEditor(ShapeVisual, {
+      Properties,
+      Read,
+      Write: (Key, Next) => {
+        if (Key === "profile" && Next === "Custom" && Presets.includes(Properties.profile)) Write("iesBase", Properties.profile);
+        Write(Key, Next);
+      },
+      Locked: () => !!Subject.locked,
+      Flux: () => Flux() * Read("multiplier", 1),
+      Tint,
+      Bindings,
+    });
     const Profiles = el("div", "lp-profiles");
-    for (const Profile of [
-      "Downlight",
-      "Wall wash",
-      "Batwing",
-      "ECE Low Beam",
-      "SAE Low Beam",
-      "High Beam",
-      "Fog Lamp",
-      "Parking Lamp",
-    ]) {
+    for (const Profile of Presets) {
       const Button = el("button", "", Profile);
       Button.onclick = () => Write("profile", Profile);
       Profiles.append(Button);
       Bindings.push(() => {
-        Button.setAttribute("aria-pressed", Properties.profile === Profile);
+        Button.setAttribute("aria-pressed", (Properties.profile || "Downlight") === Profile);
         Button.disabled = Subject.locked;
       });
     }
-    Shape.append(Profiles);
+    Shape.append(el("h4", "lp-group-title", "Start from a preset"), Profiles);
+    // Saved custom curves from the local library.
+    const Saved = el("div", "lp-profiles lp-saved-profiles");
+    Shape.append(Saved);
+    Bindings.push(() => {
+      const Entries = ReadLibrary();
+      Saved.hidden = !Entries.length;
+      Saved.replaceChildren(
+        ...Entries.map((Entry) => {
+          const Button = el("button", "", Entry.Name);
+          Button.title = "Saved profile";
+          Button.disabled = Subject.locked;
+          Button.setAttribute("aria-pressed", Properties.profile === "Custom" && Properties.iesName === Entry.Name);
+          Button.onclick = () => {
+            if (Subject.locked) return;
+            Write("iesC0", Entry.C0);
+            Write("iesC90", Entry.C90 || null);
+            Write("iesSmooth", Entry.Smooth !== false);
+            Write("iesName", Entry.Name);
+            Write("profile", "Custom");
+          };
+          return Button;
+        }),
+      );
+    });
     Shape.append(
-      el("p", "lp-note", "Preset illustration · IES file import pending."),
+      el("p", "lp-note", "Browser-authored candela curve · exported files follow LM-63-2002."),
     );
+    Shape.append(el("h4", "lp-group-title", "Output shaping"));
+    // A custom curve already defines its spread, so the preset field angle only applies to presets.
+    Bindings.push(() => {
+      const Cone = Shape.querySelector('input[data-light-property="cone"]')?.closest(".field");
+      if (Cone) Cone.hidden = Properties.profile === "Custom";
+    });
     Field(Shape, "multiplier", "Profile multiplier", 0, 4, 0.05, "×");
     Field(Shape, "cone", "Field angle", 5, 100, 0.5, "°");
     Field(Shape, "cutoff", "Cut-off pitch", -5, 5, 0.1, "°");
@@ -434,7 +483,7 @@ export function LightPanel(Subject, Context) {
     Field(Shape, "radius", "Tube radius", 0.01, 1, 0.01, "m");
     Field(Shape, "distance", "Reach", 1, 120, 1, "m");
   }
-  const Response = Card(
+  const Response = Photometric ? null : Card(
     Photometric
       ? "Angular response"
       : Area
@@ -453,8 +502,8 @@ export function LightPanel(Subject, Context) {
   );
   const ResponseReading = el("div", "lp-response-reading"),
     ResponseCaption = el("p", "lp-note");
-  Response.append(ResponseReading, ResponseCaption);
-  Bindings.push(() => {
+  if (Response) Response.append(ResponseReading, ResponseCaption);
+  if (Response) Bindings.push(() => {
     ResponseReading.textContent = Photometric
       ? Read("cone", 60) + "°"
       : Area
@@ -498,7 +547,7 @@ export function LightPanel(Subject, Context) {
                 ? "Authored decay at 5 m · free-space estimate"
                 : "Authored source flux per metre";
   });
-  Canvas(
+  if (Response) Canvas(
     Response,
     (Brush, Width, Height) =>
       ProjectResponse(Brush, Width, Height, {
@@ -525,9 +574,13 @@ export function LightPanel(Subject, Context) {
     });
     Response.append(Samples);
   }
-  // Keep the response with the source that drives it, rather than in a separate card.
-  Response.classList.remove("pcard", "lp-card");
-  Output.append(Response);
+  // The response is the visual of the optics card: it leads the card whose sliders drive it.
+  if (Response) {
+    Response.classList.remove("pcard", "lp-card");
+    // The optics card already names this study; its own header would repeat it.
+    Response.querySelector("header")?.remove();
+    ShapeVisual.append(Response);
+  }
   const Placement = el("div", "lp-card lp-transform");
   Host.append(Placement);
   const Transform = MountLightTransform(Placement, Subject, Context);
@@ -555,10 +608,12 @@ export function LightPanel(Subject, Context) {
     ControlColumn = el("div", "lp-control-column");
   const SummaryColumn = el("div", "lp-summary-column"),
     StatusColumn = el("div", "lp-status-column");
+  // Readings sit between the visual and the source sliders of the same card.
+  Preview.insertBefore(Rail, Output);
   SummaryColumn.append(Preview);
-  StatusColumn.append(Rail, Visibility);
-  SourceColumn.append(Output);
-  ControlColumn.append(Shape, Placement);
+  StatusColumn.append(Visibility);
+  SourceColumn.append(Shape);
+  ControlColumn.append(Placement);
   Host.replaceChildren(
     SummaryColumn,
     StatusColumn,

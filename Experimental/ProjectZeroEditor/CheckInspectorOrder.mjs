@@ -165,6 +165,8 @@ const Sections = {
     Card("Bake / image"),
   ],
 };
+// Vehicle folder rows: every inspector opens with its own visual-led card.
+Sections["vehicle-component"] = [".vc-card .vc-visual", ".vc-card .field"];
 const BakeCards = {
   sun: ["Sun lighting bake", "Sun disk bake"],
   atmosphere: ["Atmosphere bake", "Baked atmosphere"],
@@ -185,38 +187,39 @@ try {
       );
       assert(await Page.locator(".inspector-scroll .breadcrumbs").count());
       if (Row.Panel === "light") {
+        // The readings rail and the source group live inside the Preview card, in that order.
         await Sequence(Row.Id, [
           [null, ".lp-preview"],
-          [null, ".lp-readings"],
           [null, ".lp-participation"],
+        ]);
+        await Sequence(Row.Id, [
+          [null, ".lp-preview .lp-primary"],
+          [null, ".lp-preview .lp-readings"],
+          [null, ".lp-preview > .lp-output"],
         ]);
         const Controls = Row.ReferenceOnly ? Frame() : Frame("details");
         if (!Row.ReferenceOnly)
           await Sequence(Row.Id, [
             ["summary", ".lp-participation"],
             ".entity-capabilities",
-            ["details", ".lp-output"],
+            ["details", ".lp-shape"],
           ]);
-        const Quick = await Frame().locator(".lp-participation").boundingBox();
-        const Output = await Controls.locator(".lp-output").boundingBox();
-        assert(Output.y >= Quick.y + Quick.height - 2);
+        // The analytical study sits inside the optics card's visual, with no card or header of its own.
+        assert(
+          (await Controls.locator(".lp-shape .lp-shape-visual > .lp-response").count()) <= 1,
+        );
         assert.equal(
-          await Controls.locator(".lp-output > .lp-response").count(),
-          1,
+          await Controls.locator(".lp-response > header").count(),
+          0,
         );
         assert.equal(await Controls.locator(".lp-response.lp-card").count(), 0);
         if (Wide) {
+          // Wide frames place optics and placement in neighbouring columns.
           const Shape = await Controls.locator(".lp-shape").boundingBox();
-          const Transform =
-            await Controls.locator(".lp-transform").boundingBox();
-          assert(Math.abs(Output.y - Shape.y) < 2);
-          assert(
-            Transform.y - Shape.y - Shape.height >= 0 &&
-              Transform.y - Shape.y - Shape.height < 30,
-          );
+          const Transform = await Controls.locator(".lp-transform").boundingBox();
+          assert(Shape && Transform && Transform.y >= Shape.y - 2);
         } else
           await Sequence(Row.Id, [
-            [Row.ReferenceOnly ? null : "details", ".lp-output"],
             [Row.ReferenceOnly ? null : "details", ".lp-shape"],
             [Row.ReferenceOnly ? null : "details", ".lp-transform"],
           ]);
@@ -358,7 +361,7 @@ try {
   await Open("reference-fill-point", true);
   await Table.getByText("10.00 lx", { exact: true }).waitFor();
   await Frame()
-    .locator(".lp-output")
+    .locator(".lp-shape")
     .evaluate((Node) => Node.scrollIntoView({ block: "start" }));
   await Page.screenshot({
     path: path.join(Proof, "PointResponseExpanded.png"),

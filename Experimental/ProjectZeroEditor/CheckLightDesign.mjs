@@ -206,12 +206,13 @@ try {
   }
   assert.equal(new Set(Lobes).size, 5);
   assert(
-    (await Frame().locator(".lp-shape .lp-note").innerText()).includes(
-      "IES file import pending",
-    ),
+    await Frame()
+      .locator(".lp-shape .lp-note", { hasText: "LM-63-2002" })
+      .isVisible(),
   );
+  assert(await Frame().getByRole("button", { name: /Import/ }).count());
   Checks.push(
-    "Architectural and automotive IES presets have distinct synthetic lobes and clearly disclose pending file import",
+    "Architectural and automotive IES presets have distinct synthetic lobes; the curve editor discloses LM-63-2002 export and offers import",
   );
   await Ready("reference-softbox");
   const Rectangle = await Plot();

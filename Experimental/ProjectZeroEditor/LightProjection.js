@@ -1,24 +1,7 @@
 // Source studies are analytical authoring diagrams, not native rendering or measured photometry.
+import { ProfileLobe } from "./IesProfile.js";
 const Clamp = (Number, Minimum, Maximum) =>
   Math.max(Minimum, Math.min(Maximum, Number));
-function Polar(Profile, Angle, Cone, Section = 0) {
-  Angle *= 60 / Math.max(5, Cone);
-  if (Math.abs(Angle) > Math.PI / 2) return 0;
-  const Axis = Math.max(0, Math.cos(Angle));
-  if (Profile === "Batwing") return Math.abs(Math.sin(Angle * 2)) ** 1.4 * Axis;
-  if (Profile === "Wall wash")
-    return Math.max(0, Math.cos(Angle - 0.55)) ** (Section ? 3 : 5);
-  let Power =
-    Profile === "Fog Lamp"
-      ? 0.65
-      : Profile === "Parking Lamp"
-        ? 0.4
-        : (Profile === "High Beam" ? 240 : 130) / 60;
-  let Lobe = Axis ** Math.max(0.4, Power * (Section ? 0.65 : 1));
-  if (Profile.includes("Low Beam"))
-    Lobe *= Math.sin(Angle) > 0 ? (Profile.startsWith("SAE") ? 0.5 : 0.65) : 1;
-  return Lobe;
-}
 export function ProjectLight(
   Brush,
   Width,
@@ -222,7 +205,7 @@ export function ProjectLight(
         for (let Index = 0; Index <= 240; Index++) {
           const Angle = (Index / 240) * Math.PI * 2,
             Pitch = (Read("cutoff", 0) * Math.PI) / 180,
-            Lobe = Polar(Profile, Angle, Read("cone", 60), Section);
+            Lobe = ProfileLobe(Properties, Read, Angle, Section);
           Points.push([
             190 + Math.sin(Angle + Pitch) * Radius * Lobe,
             CenterY + Math.cos(Angle + Pitch) * Radius * Lobe,
@@ -242,7 +225,7 @@ export function ProjectLight(
       Text("90°", 69, 122);
       Text("90°", 312, 122, "right");
       Text("0°", 190, 235, "center");
-      Text("NORMALIZED PRESET", 190, 254, "center");
+      Text(Profile === "Custom" ? (Properties.iesName || "CUSTOM PROFILE").toUpperCase() : "NORMALIZED PRESET", 190, 254, "center");
     }
   } else if (Style === "ledlight") {
     const Size = Clamp(100 + Read("diameter", 40) * 0.5, 102, 158),
@@ -576,11 +559,7 @@ export function ProjectResponse(
     Style === "pointlight"
       ? 1 / (1 + Fraction * 9) ** Read("decay", 2)
       : Style === "ieslight"
-        ? Polar(
-            Properties.profile || "Downlight",
-            (Fraction - 0.5) * Math.PI,
-            Read("cone", 60),
-          )
+        ? ProfileLobe(Properties, Read, (Fraction - 0.5) * Math.PI)
         : Style === "spotlight"
           ? BeamSection(Fraction)
           : Style === "ledlight"

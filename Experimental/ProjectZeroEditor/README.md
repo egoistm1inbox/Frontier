@@ -49,6 +49,36 @@ starting point for the UI redesign.
 
 ---
 
+## Follow-up 35: edit workspaces, Vehicle folder, IES authoring
+
+- **Edit workspaces** (`Workspaces.jsx`, `WorkspaceGeometry.js`, `Workspaces.css`): showcase primitives now have **UV** and **Fracture**
+  buttons at the top of the inspector. Each opens a workspace **in place**: the viewport shows only the selected object, an "Edit"
+  bar names it, and Leave / Esc / Done return to the scene. The inspector shows a switcher between the two workspaces and that
+  workspace's cards. This replaces the old pop-out fracture editor window (`window.open`).
+  - **UV**: on the left, the object with a checker drawn through its current UVs; on the right, UV space with its islands. Drag
+    islands to move them; there are also Rotate 90°, Mirror U, Pack, Reset and an unwrap angle. Edits are saved to `Values["UV Layout"]`.
+  - **Fracture**: the shattered object with an explode slider. Click the object to place the impact. Recipe cards cover material,
+    impact energy (joules, on a cubic slider; presets Tap, Strike, Impact, Blast), piece ceiling, minimum size and seed, plus a
+    piece-size histogram. Uses `FractureEditor/FractureModel.js`.
+- **Vehicle folder** (`VehicleComponents.jsx`): a new outliner folder with nine components from the Component Viewer's
+  `Blueprint.js` / `Sockets.js`, plus a **Vehicle** construct category. A one-time migration (`VehicleRevision`) adds it to saved scenes.
+  - **Vehicle Movement**: chassis and centre of mass (axle loads, rollover threshold), wheels and steering (turning radius),
+    suspension (overshoot and settle time from a bump), powertrain (torque / power curve, top gear speed), and aerodynamics
+    (drag-limited top speed, downforce).
+  - Other inspectors: the **Front Suspension / Steering / Tow Hitch** sockets (diagram plus kind picker), **Chassis Collision** and
+    **Bumper Trigger** (shape over the car), **Headlights** and **Brake Lights** (beam plus an illuminance estimate), and **Body** (LOD chain).
+  - These are browser drafts: nothing drives a physics simulation.
+- **IES authoring** (`IesProfile.js`): you can edit the candela curve directly. It is symmetric by default, with an optional separate
+  C90 plane. Profiles can be saved to a library in the editor (`Frontier.IesProfiles.v1`), exported as LM-63-2002 Type C and imported.
+- **Light inspector layout**: one Preview card holds the visual, the readings rail and the source sliders. The analytical study now
+  sits inside the optics card's visual.
+- **Other cards**:
+  - Rounded diagnostics icons.
+  - A camera **Sensor** card with format outlines (`SensorFormats.jsx`).
+  - A **Mass** card: density × volume, weight and spin resistance per shape.
+- The shared slider `Control` accepts an optional `Curve` power (for example 3) so a wide range gives most of its travel to the
+  low end.
+
 ## Follow-up 34 inspector cards
 
 - **Sun**: the imported sky picture and stat tiles are replaced by a **Sun now** card (`SunNow.jsx`). It has the local time and

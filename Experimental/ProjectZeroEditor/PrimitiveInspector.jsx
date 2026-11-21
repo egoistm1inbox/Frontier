@@ -645,7 +645,7 @@ function DropStudy({ Shape, Body, Simulate, Gravity, Damping, Restitution }) {
   );
 }
 
-// Mass on a logarithmic ruler from 10 g to 10 t, next to everyday objects, so the number has a feel.
+// Everyday objects the balance compares against.
 const Everyday = [
   ["Phone", 0.2],
   ["Brick", 2.5],
@@ -654,55 +654,122 @@ const Everyday = [
   ["Piano", 300],
   ["Car", 1500],
 ];
-function MassRuler({ Mass, Name }) {
-  const Left = 18, Right = 282, Axis = 66;
-  const Lowest = -2, Highest = 4;
-  const Px = (Kg) => Left + ((Math.log10(Math.max(1e-6, Kg)) - Lowest) / (Highest - Lowest)) * (Right - Left);
-  const X = Math.max(Left, Math.min(Right, Px(Mass)));
-  const Nearest = NearestEveryday(Mass);
-  const Bubble = `${Name} ${Mass >= 100 ? Mass.toFixed(0) : Mass.toFixed(Mass < 1 ? 3 : 1)} kg`;
-  const BubbleWidth = Bubble.length * 5.2 + 14;
-  const BubbleX = Math.max(4, Math.min(296 - BubbleWidth, X - BubbleWidth / 2));
+
+
+// Balance study: the primitive on one pan, the nearest everyday object (as many as it takes) on the other. The beam
+// tips by the remaining difference, so the mass reads as "about four bricks" rather than a bare number.
+const Silhouette = {
+  cube: (X, Y, S) => <rect x={X - S / 2} y={Y - S} width={S} height={S} rx="2" />,
+  sphere: (X, Y, S) => <circle cx={X} cy={Y - S / 2} r={S / 2} />,
+  cylinder: (X, Y, S) => <rect x={X - S * 0.4} y={Y - S} width={S * 0.8} height={S} rx={S * 0.12} />,
+  torus: (X, Y, S) => <ellipse cx={X} cy={Y - S * 0.28} rx={S * 0.55} ry={S * 0.28} fillRule="evenodd" />,
+  cone: (X, Y, S) => <path d={`M${X - S / 2} ${Y}L${X} ${Y - S}L${X + S / 2} ${Y}Z`} />,
+};
+function BalanceStudy({ Mass, Shape }) {
+  // The reference and count (1–6) that come closest to balancing.
+  const [Label, Kg, Count] = Everyday.flatMap(([Name, Each]) => [1, 2, 3, 4, 5, 6].map((Many) => [Name, Each, Many])).reduce((Best, Option) =>
+    Math.abs(Math.log(Mass / (Option[1] * Option[2]))) < Math.abs(Math.log(Mass / (Best[1] * Best[2]))) ? Option : Best,
+  );
+  const Offset = Math.log10(Mass / (Count * Kg));
+  const Tilt = Math.max(-14, Math.min(14, Offset * 60));
+  const Pivot = [150, 46], Arm = 92;
+  const Turn = (Tilt * Math.PI) / 180;
+  const LeftEnd = [Pivot[0] - Arm * Math.cos(Turn), Pivot[1] + Arm * Math.sin(Turn)];
+  const RightEnd = [Pivot[0] + Arm * Math.cos(Turn), Pivot[1] - Arm * Math.sin(Turn)];
+  const Pan = ([X, Y], Content) => (
+    <g>
+      <line x1={X} x2={X - 22} y1={Y} y2={Y + 40} stroke="#6a6a6a" strokeWidth=".8" />
+      <line x1={X} x2={X + 22} y1={Y} y2={Y + 40} stroke="#6a6a6a" strokeWidth=".8" />
+      <path d={`M${X - 28} ${Y + 40}h56a28 6 0 0 1-56 0Z`} fill="#3a3a3a" />
+      {Content(X, Y + 39)}
+    </g>
+  );
+  const Shown = Count;
   return (
-    <svg className="pi-study-svg" viewBox="0 0 300 112" role="img" aria-label="Mass ruler" data-study="mass">
-      {["10 g", "100 g", "1 kg", "10 kg", "100 kg", "1 t", "10 t"].map((Label, Index) => {
-        const Tx = Left + (Index / 6) * (Right - Left);
-        return (
-          <g key={Label}>
-            <line x1={Tx} x2={Tx} y1={Axis - 10} y2={Axis - 5} stroke="#4a4a4a" />
-            <text x={Tx} y={Axis - 14} textAnchor="middle">{Label}</text>
-          </g>
-        );
-      })}
-      <rect x={Left} y={Axis - 3} width={Right - Left} height="6" rx="3" fill="#0e0e0e" />
-      <rect x={Left} y={Axis - 3} width={Math.max(0, X - Left)} height="6" rx="3" fill="#a9bfdc" opacity=".85" />
-      {Everyday.map(([Label, Kg], Index) => {
-        const Tx = Px(Kg), Row = Index % 2 ? 100 : 86, Close = Label === Nearest[0];
-        return (
-          <g key={Label} opacity={Close ? 1 : 0.6}>
-            <circle cx={Tx} cy={Axis} r="2.2" fill={Close ? "#f2f2f2" : "#5a5a5a"} />
-            <line x1={Tx} x2={Tx} y1={Axis + 5} y2={Row - 8} stroke="#3a3a3a" />
-            <text x={Tx} y={Row} textAnchor="middle" className={Close ? "pi-study-accent" : ""}>{Label}</text>
-          </g>
-        );
-      })}
-      <rect x={BubbleX} y="4" width={BubbleWidth} height="18" rx="9" fill="#f2f2f2" />
-      <text x={BubbleX + BubbleWidth / 2} y="16" textAnchor="middle" className="pi-study-dark">{Bubble}</text>
-      <path d={`M${X - 4} 24L${X + 4} 24L${X} 29Z`} fill="#f2f2f2" />
-      <line x1={X} x2={X} y1="29" y2={Axis - 4} stroke="#f2f2f2" strokeDasharray="1.5 2" />
+    <svg className="pi-balance" viewBox="0 0 300 140" role="img" aria-label="Mass balance" data-study="mass">
+      <path d={`M${Pivot[0]} ${Pivot[1]}L${Pivot[0] - 12} 124H${Pivot[0] + 12}Z`} fill="#2a2a2a" />
+      <rect x={Pivot[0] - 34} y="124" width="68" height="5" rx="2.5" fill="#2a2a2a" />
+      <line x1={LeftEnd[0]} y1={LeftEnd[1]} x2={RightEnd[0]} y2={RightEnd[1]} stroke="#cfcfcf" strokeWidth="2.4" strokeLinecap="round" />
+      <circle cx={Pivot[0]} cy={Pivot[1]} r="4" fill="#cfcfcf" />
+      {Pan(LeftEnd, (X, Y) => (
+        <g fill="#a9bfdc">{(Silhouette[Shape] || Silhouette.cube)(X, Y, 26)}</g>
+      ))}
+      {Pan(RightEnd, (X, Y) => (
+        <g fill="#8a8a8a">
+          {Array.from({ length: Shown }, (_, Index) => {
+            const Column = Index % 3, Row = Math.floor(Index / 3);
+            return <rect key={Index} x={X - 23 + Column * 16} y={Y - 13 - Row * 14} width="14" height="12" rx="3.5" />;
+          })}
+        </g>
+      ))}
+      <text x={LeftEnd[0]} y={LeftEnd[1] - 6} textAnchor="middle" className="pi-balance-strong">
+        {Mass >= 100 ? Mass.toFixed(0) : Mass.toFixed(Mass < 1 ? 3 : 1)} kg
+      </text>
+      <text x={RightEnd[0]} y={RightEnd[1] - 6} textAnchor="middle">
+        {Count} × {Label.toLowerCase()}
+      </text>
+      <text x="150" y="139" textAnchor="middle">
+        {Math.abs(Offset) < 0.03 ? "balanced" : Offset > 0 ? "a little heavier than the reference" : "a little lighter than the reference"}
+      </text>
     </svg>
   );
 }
 
-function NearestEveryday(Mass) {
-  return Everyday.reduce((Best, Each) => (Math.abs(Math.log(Each[1] / Mass)) < Math.abs(Math.log(Best[1] / Mass)) ? Each : Best));
+// Spin resistance about the vertical axis for the solid shape (kg·m²).
+function Inertia(Shape, Mass, Bounds, Read, Scale) {
+  const R = Bounds[0] / 2;
+  if (Shape === "cube") return (Mass * (Bounds[0] ** 2 + Bounds[2] ** 2)) / 12;
+  if (Shape === "sphere") return 0.4 * Mass * R * R;
+  if (Shape === "cylinder") return 0.5 * Mass * R * R;
+  if (Shape === "cone") return 0.3 * Mass * R * R;
+  const Major = +Read("Geometry Major Radius", 0.5) * Scale, Minor = +Read("Geometry Minor Radius", 0.15) * Scale;
+  return Mass * (Major * Major + 0.75 * Minor * Minor);
 }
-const Comparison = (Mass) => {
-  const [Label, Kg] = NearestEveryday(Mass), Ratio = Mass / Kg;
-  return `≈ ${Ratio >= 10 ? Ratio.toFixed(0) : Ratio.toFixed(Ratio < 1 ? 2 : 1)} × ${Label.toLowerCase()}`;
-};
 
-function PhysicsPage({ Shape, Read, Change, Values, Size }) {
+function MassCard({ Shape, Read, Change, Values, Size, Kit, Mass, Manual, Density, DensityKg, Gravity }) {
+  const { Card: PropertyCard, Control, Metric } = Kit;
+  const Scale = Array.isArray(Values.Scale) ? Values.Scale[0] : 1;
+  const Spin = Inertia(Shape, Mass, Size.Bounds, Read, Scale);
+  const Readout = (Label, Text) => <Control key={Label} Field={{ Label, Control: "Readout" }} Value={Text} />;
+  return (
+    <PropertyCard Title="Mass" Class="pi-mass-card">
+      <Metric
+        Value={Mass >= 100 ? Fixed(Mass, 0) : Fixed(Mass, Mass < 1 ? 3 : 1)}
+        Unit="kg"
+        Caption={Manual ? "Set by hand" : `${Fixed(Size.Volume, 3)} m³ of ${Density.toLowerCase()} at ${DensityKg} kg/m³`}
+      />
+      <div className="graphic pi-balance-wrap">
+        <BalanceStudy Mass={Mass} Shape={Shape} />
+      </div>
+      <Control
+        Field={{ Label: "Material", Control: "Select", Options: Densities.map(([Name, Kg]) => `${Name} · ${Kg} kg/m³`) }}
+        Value={Math.max(0, Densities.findIndex(([Name]) => Name === Density))}
+        Disabled={Manual}
+        Change={(Next) => Change("Physics Density", Densities[Next][0])}
+      />
+      <Control
+        Field={{ Label: "Set mass by hand", Control: "Switch" }}
+        Value={Manual}
+        Change={(Next) => {
+          if (Next) Change("Physics Mass Manual", +Mass.toFixed(3));
+          Change("Physics Mass Mode", Next ? "manual" : "auto");
+        }}
+      />
+      {Manual && (
+        <Control
+          Field={{ Label: "Mass", Control: "Slider", Minimum: 0.01, Maximum: 5000, Default: 1, Unit: "kg", Decimals: 2 }}
+          Value={Mass}
+          Change={(Next) => Change("Physics Mass Manual", Next)}
+        />
+      )}
+      {Readout("Volume", Fixed(Size.Volume, 3) + " m³")}
+      {Readout("Weight", Fixed(Mass * 9.81 * Gravity, 1) + " N")}
+      {Readout("Spin resistance", (Spin < 0.01 ? Spin.toExponential(2) : Fixed(Spin, 3)) + " kg·m²")}
+    </PropertyCard>
+  );
+}
+
+function PhysicsPage({ Shape, Read, Change, Values, Size, Kit }) {
   const Simulate = !!Values.PHYSICS;
   const Body = !Values.DYNAMIC ? "static" : Read("Physics Body", "dynamic");
   const Density = Read("Physics Density", "Plastic");
@@ -762,36 +829,7 @@ function PhysicsPage({ Shape, Read, Change, Values, Size }) {
         <Switch Label="Start asleep" Detail="Wakes on first contact" On={Read("Physics Asleep", false)} Disabled={Off} Assign={(Next) => Change("Physics Asleep", Next)} />
       </Card>
 
-      <Card Title="Mass" Glyph="weight" Tone="#a9bfdc" Aside={Manual ? "Manual" : "From density"} className="pi-study-card">
-        <BigFigure
-          Whole={Mass >= 100 ? Fixed(Mass, 0) : Fixed(Mass, Mass < 1 ? 3 : 1)}
-          Unit="kg"
-          Caption={`${Comparison(Mass)} · ${Manual ? "set by hand" : `${Fixed(Size.Volume, 3)} m³ × ${DensityKg} kg/m³`}`}
-        />
-        <div className="pi-study">
-          <MassRuler Mass={Mass} Name={Shapes[Shape].Name} />
-        </div>
-        <Segmented
-          Current={Manual ? "manual" : "auto"}
-          Choices={[["From density", "auto"], ["Manual", "manual"]]}
-          Assign={(Next) => {
-            if (Next === "manual") Change("Physics Mass Manual", +Mass.toFixed(3));
-            Change("Physics Mass Mode", Next);
-          }}
-        />
-        {Manual ? (
-          <Slider Label="Mass" Reading={Mass} Minimum={0.01} Maximum={5000} Step={0.01} Unit="kg" Tone="#a9bfdc" Assign={(Next) => Change("Physics Mass Manual", Next)} />
-        ) : (
-          <div className="pi-density">
-            {Densities.map(([Name, Kg]) => (
-              <button key={Name} type="button" className={Name === Density ? "active" : ""} onClick={() => Change("Physics Density", Name)}>
-                {Name}
-                <small>{Kg}</small>
-              </button>
-            ))}
-          </div>
-        )}
-      </Card>
+      <MassCard {...{ Shape, Read, Change, Values, Size, Kit, Mass, Manual, Density, DensityKg, Gravity }} />
 
       <Card Title="Surface response" Glyph="physics" Tone="#ffc93d" Aside={Off ? "Simulation off" : "Drag a dial"} className={"pi-dial-card" + (Off ? " is-muted" : "")}>
         <div className="pi-dial-grid">
@@ -1204,13 +1242,14 @@ function Carousel({ Pages }) {
 //                                                    INSPECTOR
 //------------------------------------------------------------------------------------------------------------------------
 
-export default function PrimitiveInspector({ Subject, Values, Change, Hidden, ToggleHidden, MaterialCards, FractureCards, Kit }) {
+export default function PrimitiveInspector({ Subject, Values, Change, Hidden, ToggleHidden, MaterialCards, FractureCards, Kit, Launcher = null }) {
   const Shape = ShapeOf(Subject);
   const Read = (Key, Initial) => (Values[Key] === undefined ? Initial : Values[Key]);
   const Size = Measure(Shape, Read, Array.isArray(Values.Scale) ? Values.Scale : [1, 1, 1]);
   const Shared = { Shape, Read, Change, Values, Hidden, ToggleHidden, Size, Kit };
   return (
     <div className="primitive-inspector">
+      {Launcher}
       <Carousel
         key={Subject.Id}
         Pages={{
