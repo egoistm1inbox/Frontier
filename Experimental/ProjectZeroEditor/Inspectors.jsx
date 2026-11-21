@@ -1250,7 +1250,7 @@ export function Inspector({
           <Control Field={{ Label: "Hyperfocal distance", Control: "Readout" }} Value={Optics.hyperfocal.toFixed(1) + " m"} />
           <p>Pinhole renderer: the sensor sets the field of view and depth of field, not exposure.</p>
         </Card>
-        <ComponentsCard Owner={Subject} Values={Values} Scene={Scene} Kit={{ Icon }} Title="Render components" />
+        <ComponentsCard Owner={Subject} Values={Values} Scene={Scene} Kit={{ Icon }} Title="Render" />
       </>
     );
   } else if (Subject.Panel === "stars") {

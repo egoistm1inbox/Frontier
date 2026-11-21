@@ -4,7 +4,11 @@
 // 🎛️ Small drawings for the render components: each is drawn from the camera's render settings and nothing animates.
 
 import React, { useEffect, useRef } from "react";
-import { RENDER_ENGINES, UsesShadowMap } from "./RenderSettings.js";
+import { RENDER_ENGINES } from "./RenderSettings.js";
+
+// The studies read a small common shape ({ ShadowAlgorithm, ShadowSoftness, ShadowMapRes, … }); each renderer's cards map their own
+// keys onto it.
+const UsesShadowMap = (Settings) => ["contact_pcss", "pcss", "smrt", "pcf"].includes(Settings.ShadowAlgorithm);
 
 //------------------------------------------------------------------------------------------------------------------------
 //                                                   STUDIES
@@ -367,6 +371,44 @@ export function BudgetBar({ Budget, Tones }) {
           <text x="12" y="0">{Label} {Amount}</text>
         </g>
       ))}
+    </svg>
+  );
+}
+
+// MatCap studio shadow: the sphere over an implied floor with the chosen shadow (drop ellipse, contact rays, cavity grooves).
+export function StudioShadowStudy({ Mode, Strength, Softness, Light }) {
+  const Cx = 150, R = 32, Floor = 104, Cy = Floor - R;
+  const Angle = (Light * Math.PI) / 180;
+  const Shift = -Math.cos(Angle) * 26;
+  const Blur = 1.5 + Softness * 2.5;
+  return (
+    <svg className="rs-study" viewBox="0 0 300 140" role="img" aria-label="Studio shadow study" data-study="studio-shadow">
+      <defs>
+        <radialGradient id="rs-studio-ball" cx="0.38" cy="0.32" r="0.8">
+          <stop offset="0" stopColor="#efe6d9" />
+          <stop offset="0.5" stopColor="#a99d8e" />
+          <stop offset="1" stopColor="#3a3530" />
+        </radialGradient>
+        <filter id="rs-studio-blur" x="-50%" y="-200%" width="200%" height="500%">
+          <feGaussianBlur stdDeviation={Blur} />
+        </filter>
+      </defs>
+      <path d={`M60 ${Floor - 12}H240L282 ${Floor + 14}H18Z`} fill="#3c3a37" />
+      {Mode === "drop" && <ellipse cx={Cx + Shift} cy={Floor} rx={R * (0.85 + Softness * 0.25)} ry={5 + Softness * 1.5} fill="#000" opacity={0.2 + Strength * 0.8} filter="url(#rs-studio-blur)" />}
+      <circle cx={Cx} cy={Cy} r={R} fill="url(#rs-studio-ball)" />
+      {Mode === "cavity" && (
+        <g stroke="#151515" strokeOpacity={0.3 + Strength * 0.6} strokeWidth={1.2 + Strength * 1.6} fill="none">
+          <path d={`M${Cx - R + 3} ${Cy + 9}Q${Cx} ${Cy + 20} ${Cx + R - 3} ${Cy + 9}`} />
+          <path d={`M${Cx - 10} ${Cy - R + 2}Q${Cx - 18} ${Cy} ${Cx - 10} ${Cy + R - 2}`} />
+        </g>
+      )}
+      {Mode === "contact" &&
+        Array.from({ length: 6 }, (_, Index) => {
+          const X = Cx - R * 0.8 + Index * ((R * 1.6) / 5);
+          return <path key={Index} d={`M${X} ${Floor}l${Math.cos(Angle) * 18} ${-Math.abs(Math.sin(Angle)) * 18 - 4}`} stroke="#f2e2b8" strokeOpacity={0.35 + Strength * 0.5} strokeWidth="0.8" />;
+        })}
+      <circle cx={Cx + Math.cos(Angle) * (R + 18)} cy={Cy - Math.sin(Angle) * (R + 18)} r="4" fill="#edc181" />
+      <text x="14" y="16">{Mode === "none" ? "no shadow" : `strength ${Math.round(Strength * 100)} % · softness ${Softness.toFixed(2)}`}</text>
     </svg>
   );
 }

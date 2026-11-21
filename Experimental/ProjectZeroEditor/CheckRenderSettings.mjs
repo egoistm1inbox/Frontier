@@ -3,10 +3,11 @@ import path from "node:path";
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
-import { ResolveRenderSettings, CanonicalRenderSettings, MasterQualityPatch, EnginePatch } from "./RenderSettings.js";
+import { ResolveRenderSettings, CanonicalRenderSettings, MasterQualityPatch, RendererPatch, MasterTier, PbrShadowPatch } from "./RenderSettings.js";
 
-// Per-camera render settings as components: every camera (Editor, Cine, Construct-placed) has Render Engine, MatCap, Shadow Maps,
-// SDF Tracing and Ray Tracing rows that edit that camera's own copy, with the source presets.
+// Per-camera render settings as one Render Engine component: every camera (Editor, Cine, Construct-placed) has a single row whose
+// inspector has an Engine tab (renderer, Quality, Output) and one tab per renderer (PBR, SDF, Ray traced, MatCap), each with its own
+// shadow algorithm and settings.
 const Folder = path.dirname(fileURLToPath(import.meta.url));
 const Require = createRequire(process.env.FRONTIER_BROWSER_PACKAGE || path.resolve(Folder, "../../../_AgentScratch/Browser/package.json"));
 const { chromium } = Require("playwright");
@@ -16,24 +17,26 @@ const Checks = [],
   Errors = [],
   FontFailures = [];
 
-// Pure data first: clamping, fallbacks and the preset fan-out match the source.
+// Pure data first: clamping, fallbacks, the per-renderer preset fan-out, and the upgrade of the shared Follow-up 37–41 keys.
 assert.deepEqual(ResolveRenderSettings({}), CanonicalRenderSettings);
-const Wild = ResolveRenderSettings({ RenderEngine: "sdf_shadows", ShadowRays: 99, PcssTaps: 1, ShadowMapRes: 4096, GiIntensity: -3, RenderScale: 60, ExposureGain: "x" });
+const Wild = ResolveRenderSettings({ RenderEngine: "sdf_shadows", PbrContactRays: 99, PbrPcssTaps: 1, PbrMapRes: 4096, SdfGiIntensity: -3, RenderScale: 60, ExposureGain: "x", RayShadow: "bvh", MatcapShadow: "x" });
 assert.equal(Wild.RenderEngine, "gtx_sdf_gi");
-assert.equal(Wild.ShadowRays, 16);
-assert.equal(Wild.PcssTaps, 8);
-assert.equal(Wild.ShadowMapRes, 2048);
-assert.equal(Wild.GiIntensity, 0);
+assert.equal(Wild.PbrContactRays, 16);
+assert.equal(Wild.PbrPcssTaps, 8);
+assert.equal(Wild.PbrMapRes, 2048);
+assert.equal(Wild.SdfGiIntensity, 0);
 assert.equal(Wild.RenderScale, 100);
 assert.equal(Wild.ExposureGain, 1.35);
-assert.deepEqual(MasterQualityPatch(3), { ShadowQuality: 3, ShadowRays: 8, PcssTaps: 32, SmrtRays: 8, ShadowMapRes: 2048, GiQuality: 3, GiSamples: 14, GiCones: 10, ReflectionQuality: 3, ReflectionRays: 6, ReflectionBounces: 3 });
-assert.equal(MasterQualityPatch(0).ShadowMapRes, 1024);
-assert.equal(EnginePatch("openpbr_direct").GiAlgorithm, "off");
-assert.equal(ResolveRenderSettings({ MatcapLight: 900, MatcapChannel: "x", MatcapTint: "red" }).MatcapLight, 360);
-assert.equal(ResolveRenderSettings({ MatcapChannel: "x" }).MatcapChannel, "shaded");
-assert.equal(ResolveRenderSettings({ MatcapTint: "red" }).MatcapTint, CanonicalRenderSettings.MatcapTint);
-assert.equal(EnginePatch("pt_final").GiAlgorithm, "bvh");
-Checks.push("Defaults, clamps, unknown-id fallback, tier fan-out and engine → GI coupling match the source");
+assert.equal(Wild.RayShadow, "bvh_disk");
+assert.equal(Wild.MatcapShadow, "drop");
+const Ultra = MasterQualityPatch(3);
+assert.deepEqual([Ultra.PbrContactRays, Ultra.PbrPcssTaps, Ultra.SdfSteps, Ultra.SdfCones, Ultra.RayShadowRays, Ultra.RayGiSamples, Ultra.RayReflectionBounces], [8, 32, 48, 10, 8, 14, 3]);
+assert.equal(PbrShadowPatch(0).PbrMapRes, 1024);
+assert.equal(MasterTier({ ...CanonicalRenderSettings, ...PbrShadowPatch(0) }), -1);
+assert.equal(RendererPatch("ray", { RayTracer: "pt_final" }).RenderEngine, "pt_final");
+const Upgraded = ResolveRenderSettings({ RenderEngine: "pt_realtime", ShadowAlgorithm: "pcf", ShadowMapRes: 1024, SdfPenumbraMode: "analytic_cone", GiAlgorithm: "bvh", GiSamples: 12, ReflectionAlgorithm: "env" });
+assert.deepEqual([Upgraded.PbrShadow, Upgraded.PbrMapRes, Upgraded.SdfShadow, Upgraded.RayGi, Upgraded.SdfGi, Upgraded.RayGiSamples, Upgraded.RayReflections, Upgraded.RayTracer], ["pcf", 1024, "analytic_cone", true, false, 12, false, "pt_realtime"]);
+Checks.push("Defaults, clamps, unknown-id fallback, per-renderer tier fan-out and the upgrade of the shared Follow-up 41 keys");
 
 const Browser = await chromium.launch({ executablePath: process.env.FRONTIER_BROWSER_EXECUTABLE || "/tmp/chromium", args: ["--no-sandbox", "--disable-gpu"] });
 const Page = await Browser.newPage({ viewport: { width: 1365, height: 900 } });
@@ -52,99 +55,106 @@ const Saved = () => Page.evaluate(() => JSON.parse(localStorage.getItem("Frontie
 const Stored = async (Id) => ((await Saved())?.Values?.[Id] || {})["Render Settings"] || {};
 const Cards = () => Page.locator(".rc-cards [data-card]").evaluateAll((Each) => Each.map((Card) => Card.dataset.card));
 const InUse = () => Page.locator(".rc-use").getAttribute("data-in-use");
-const Names = ["Render Engine", "MatCap", "Shadow Maps", "SDF Tracing", "Ray Tracing"];
+const Tab = async (Id) => {
+  await Page.locator(`.rc-tabs [data-tab="${Id}"]`).click();
+  await Page.locator(`.rc-cards[data-render-tab="${Id}"]`).waitFor();
+};
 
 try {
   await Page.goto(Address);
   await Page.evaluate(() => localStorage.clear());
 
-  // Every camera lists the five render components, with their own icons; the camera inspector links to them.
+  // Every camera lists one render component with its baked icon; the four retired render-path icons no longer ship.
   await Open("camera");
   const Rows = (await Saved()).Rows;
   for (const Owner of ["camera", "cine"])
-    assert.deepEqual(Rows.filter((Row) => Row.Parent === Owner && Row.Panel === "object-component").map((Row) => Row.Name), Names, Owner);
-  assert.equal(await Page.locator(".rs-section").count(), 0);
-  assert.deepEqual(await Page.locator(".pi-components-card .oc-link b").allInnerTexts(), Names);
-  for (const Icon of ["render-settings", "render-matcap", "render-shadow-maps", "render-sdf", "render-ray-tracing"]) {
-    const Image = Page.locator(`.pi-components-card img[data-native-icon="${Icon}"]`);
-    assert.equal(await Image.count(), 1, Icon);
-    assert((await Image.evaluate((Each) => Each.naturalWidth)) > 0, Icon);
-  }
-  Checks.push("Editor and Cine cameras each carry Render Engine, MatCap, Shadow Maps, SDF Tracing and Ray Tracing, with baked icons");
+    assert.deepEqual(Rows.filter((Row) => Row.Parent === Owner && Row.Panel === "object-component").map((Row) => Row.Name), ["Render Engine"], Owner);
+  assert.deepEqual(await Page.locator(".pi-components-card .oc-link b").allInnerTexts(), ["Render Engine"]);
+  const Image = Page.locator('.pi-components-card img[data-native-icon="render-settings"]');
+  assert.equal(await Image.count(), 1);
+  assert((await Image.evaluate((Each) => Each.naturalWidth)) > 0);
+  assert.deepEqual(await Page.evaluate(() => ["render-matcap", "render-shadow-maps", "render-sdf", "render-ray-tracing"].filter((Name) => window.NativeAssets?.Icons?.[Name])), []);
+  Checks.push("Editor and Cine cameras each carry one Render Engine component with its baked icon; the retired icons are gone");
 
-  // Render Engine: engine families; picking OpenPBR couples GI off and moves the "in use" marks.
+  // Engine tab: renderer pick, summary lines and the Quality and Output cards; the dot follows the renderer.
   await Open("camera-render-engine");
+  assert.deepEqual(await Page.locator(".rc-tabs button").allInnerTexts(), ["Engine", "PBR", "SDF", "Ray traced", "MatCap"]);
   assert.deepEqual(await Cards(), ["Engine", "Quality", "Output"]);
-  assert.deepEqual(await Page.locator(".rc-family > span").allInnerTexts(), ["MATCAP", "RASTER", "SDF", "RAY TRACED"].map((Each) => Each), "families");
-  await Page.locator(".rc-family button", { hasText: "OpenPBR direct" }).click();
+  assert.equal(await Page.locator('.rc-tabs [data-tab="sdf"] i.on').count(), 1);
+  await Page.getByRole("radiogroup", { name: "Renderer" }).getByRole("radio", { name: "PBR", exact: true }).click();
   let Settings = await Stored("camera");
   assert.equal(Settings.RenderEngine, "openpbr_direct");
-  assert.equal(Settings.GiAlgorithm, "off");
-  assert.deepEqual(await Page.locator(".rc-uses button.on").allInnerTexts(), ["Shadow Maps", "Ray Tracing"]);
-  Checks.push("Render Engine: OpenPBR direct turns GI off (source coupling); Shadow Maps and Ray Tracing stay in use");
+  assert.equal(await Page.locator('.rc-tabs [data-tab="pbr"] i.on').count(), 1);
+  assert.match(await Page.locator(".rc-lines").innerText(), /Contact \+ PCSS · 2048²/);
+  await Page.locator(".rc-cards").screenshot({ path: path.join(Proof, "Engine.png") });
+  Checks.push("Engine tab: picking PBR sets OpenPBR direct, moves the rendering dot and summarises its shadows in one line");
 
-  // Global tier fans out; a component's own tier then makes it Custom.
-  await Page.getByRole("radio", { name: "Ultra", exact: true }).click();
-  Settings = await Stored("camera");
-  assert.equal(Settings.ShadowRays, 8);
-  assert.equal(Settings.GiCones, 10);
-  assert.equal(Settings.ReflectionBounces, 3);
-  await Page.locator(".rc-uses button", { hasText: "Shadow Maps" }).click();
-  await Page.locator('[data-render-component="Shadow Maps"]').waitFor();
-  assert.deepEqual(await Cards(), ["Shadow map", "Penumbra"]);
+  // Each renderer keeps its own shadow algorithm: PBR PCF at Low, SDF Sobol cap; neither touches the other.
+  await Tab("pbr");
   assert.equal(await InUse(), "true");
+  assert.deepEqual(await Cards(), ["Shadow algorithm", "Penumbra", "Direct lighting"]);
   await Page.getByLabel("Shadow quality", { exact: true }).selectOption({ label: "Low" });
-  Settings = await Stored("camera");
-  assert.equal(Settings.ShadowMapRes, 1024);
-  assert.equal(Settings.PcssTaps, 8);
   await Page.getByRole("radio", { name: /3 × 3 PCF/ }).click();
-  assert.equal((await Stored("camera")).ShadowAlgorithm, "pcf");
+  Settings = await Stored("camera");
+  assert.deepEqual([Settings.PbrShadow, Settings.PbrMapRes, Settings.PbrPcssTaps], ["pcf", 1024, 8]);
   assert.match(await Page.locator('[data-study="kernel"]').textContent(), /1024² map · 9 taps/);
-  await Page.locator(".rc-cards").screenshot({ path: path.join(Proof, "ShadowMaps.png") });
-  await Open("camera-render-engine");
+  await Page.locator(".rc-cards").screenshot({ path: path.join(Proof, "Pbr.png") });
+  await Tab("sdf");
+  assert.equal(await InUse(), "false");
+  assert.deepEqual(await Cards(), ["Distance-field shadows", "Cone GI"]);
+  await Page.locator(".rc-rail button", { hasText: "Sobol spherical cap" }).click();
+  Settings = await Stored("camera");
+  assert.deepEqual([Settings.SdfShadow, Settings.PbrShadow, Settings.RenderEngine], ["hybrid_sobol_cap", "pcf", "openpbr_direct"]);
+  await Page.locator(".rc-cards").screenshot({ path: path.join(Proof, "Sdf.png") });
+  Checks.push("PBR stores PCF at Low (1024², 8 taps) and SDF stores the Sobol cap separately; editing SDF leaves PBR rendering");
+
+  // Global tier: Custom after a renderer tier, then Ultra fans out to every renderer.
+  await Tab("engine");
   assert.equal(await Page.locator('.rc-segments[aria-label="Global quality tier"] [aria-checked="true"]').count(), 0);
   assert.match(await Page.locator('[data-card="Quality"]').innerText(), /Custom/);
-  Checks.push("Ultra fans out to every pass; Shadow Maps Low gives a 1024² map, PCF draws 9 taps, and the global tier reads Custom");
-
-  // SDF Tracing: penumbra rail and cone GI switch; idle under OpenPBR until the GI switch puts it in use.
-  await Open("camera-sdf-tracing");
-  assert.equal(await InUse(), "false");
-  await Page.locator(".rc-rail button", { hasText: "Sobol spherical cap" }).click();
-  assert.equal((await Stored("camera")).SdfPenumbraMode, "hybrid_sobol_cap");
-  await Page.getByRole("switch", { name: "SDF cone GI", exact: true }).click();
-  assert.equal((await Stored("camera")).GiAlgorithm, "sdf");
-  assert.equal(await InUse(), "true");
-  await Page.locator(".rc-cards").screenshot({ path: path.join(Proof, "SdfTracing.png") });
-  Checks.push("SDF Tracing: Sobol spherical cap stored; turning on cone GI puts SDF Tracing in use under OpenPBR");
-
-  // Ray Tracing lanes: tracing GI swaps it from SDF to BVH; reflections off falls back to the sky.
-  await Open("camera-ray-tracing");
-  await Page.getByRole("switch", { name: "Trace GI", exact: true }).click();
-  await Page.getByRole("switch", { name: "Trace Reflections", exact: true }).click();
+  await Page.getByRole("radio", { name: "Ultra", exact: true }).click();
   Settings = await Stored("camera");
-  assert.equal(Settings.GiAlgorithm, "bvh");
-  assert.equal(Settings.ReflectionAlgorithm, "env");
-  assert.deepEqual(await Cards(), ["Ray budget", "Traced GI"]);
-  Checks.push("Ray Tracing: GI lane switches GI to BVH; reflections lane off falls back to sky/env");
+  assert.deepEqual([Settings.PbrContactRays, Settings.SdfCones, Settings.RayGiSamples, Settings.RayReflectionBounces], [8, 10, 14, 3]);
+  Checks.push("A renderer's own tier makes the global tier Custom; Ultra then fans out to PBR, SDF and ray tracing");
 
-  // MatCap on the Cine Camera: idle until "Use MatCap"; channel and light edits stay on the Cine Camera.
-  await Open("cine-matcap");
+  // Ray traced: Use, tracer choice remembered across renderer switches, area-light shadows, reflections off.
+  await Tab("ray");
+  await Page.locator(".rc-use button").click();
+  assert.equal((await Stored("camera")).RenderEngine, "highend_bvh4_gi");
+  await Page.getByRole("radiogroup", { name: "Tracer" }).getByRole("radio", { name: "PT final", exact: true }).click();
+  await Page.getByRole("radio", { name: /Rectangular area/ }).click();
+  await Page.getByRole("switch", { name: "Trace reflections", exact: true }).click();
+  Settings = await Stored("camera");
+  assert.deepEqual([Settings.RenderEngine, Settings.RayTracer, Settings.RayShadow, Settings.RayReflections], ["pt_final", "pt_final", "bvh_area", false]);
+  await Tab("engine");
+  const Renderer = Page.getByRole("radiogroup", { name: "Renderer" });
+  await Renderer.getByRole("radio", { name: "SDF", exact: true }).click();
+  await Renderer.getByRole("radio", { name: "Ray traced", exact: true }).click();
+  assert.equal((await Stored("camera")).RenderEngine, "pt_final");
+  Checks.push("Ray traced: PT final, rectangular-area shadows and reflections off are stored; the tracer is remembered across renderers");
+
+  // MatCap on the Cine Camera: its own studio shadow; channel and light edits stay on the Cine Camera.
+  await Open("cine-render-engine");
+  await Tab("matcap");
   assert.equal(await InUse(), "false");
   await Page.locator(".rc-use button").click();
   assert.equal(await InUse(), "true");
+  assert.deepEqual(await Cards(), ["Studio sphere", "Studio shadow", "Studio light"]);
   await Page.getByRole("radio", { name: "Normals", exact: true }).click();
+  await Page.getByRole("radio", { name: /Screen contact/ }).click();
+  await Page.locator(".rc-matcap").scrollIntoViewIfNeeded();
   const Ball = await Page.locator(".rc-matcap").boundingBox();
   await Page.mouse.click(Ball.x + 4, Ball.y + Ball.height / 2);
   const Cine = await Stored("cine");
-  assert.equal(Cine.RenderEngine, "matcap");
-  assert.equal(Cine.MatcapChannel, "normal");
+  assert.deepEqual([Cine.RenderEngine, Cine.MatcapChannel, Cine.MatcapShadow], ["matcap", "normal", "contact"]);
   assert(Math.abs(Cine.MatcapLight - 180) <= 3, String(Cine.MatcapLight));
-  assert.equal((await Stored("camera")).RenderEngine, "openpbr_direct");
-  assert.equal(await Page.locator(".outliner-row", { hasText: "Normals · light 180°" }).count(), 1);
+  assert.equal((await Stored("camera")).RenderEngine, "pt_final");
+  assert.equal(await Page.locator(".outliner-row", { hasText: "MatCap · Ultra · 100 %" }).count(), 0);
+  assert.equal(await Page.locator(".outliner-row", { hasText: "MatCap · Medium · 100 %" }).count(), 1);
   await Page.locator(".rc-cards").screenshot({ path: path.join(Proof, "MatCap.png") });
-  Checks.push(`MatCap: Use MatCap switches only the Cine Camera; Normals stored and dragging the sphere edge sets the light to ${Cine.MatcapLight}°`);
+  Checks.push(`MatCap: Use MatCap switches only the Cine Camera; Normals and screen-contact shadow stored, light ${Cine.MatcapLight}°`);
 
-  // A camera placed from Construct gets its own five components; Reset restores the defaults.
+  // A camera placed from Construct gets its own single component; Reset restores the defaults.
   await Page.getByRole("button", { name: "Construct", exact: true }).click();
   await Page.getByRole("dialog", { name: "Construct", exact: true }).waitFor();
   await Page.getByRole("textbox", { name: "Search construct", exact: true }).fill("Main Camera");
@@ -153,27 +163,32 @@ try {
   await Page.waitForTimeout(400);
   const Placed = (await Saved()).Rows.find((Row) => /^camera-/.test(Row.Id) && Row.Panel === "camera");
   assert(Placed, "placed camera");
-  assert.deepEqual((await Saved()).Rows.filter((Row) => Row.Parent === Placed.Id).map((Row) => Row.Name), Names);
+  assert.deepEqual((await Saved()).Rows.filter((Row) => Row.Parent === Placed.Id).map((Row) => Row.Name), ["Render Engine"]);
   await Open(Placed.Id + "-render-engine");
-  await Page.locator(".rc-family button", { hasText: "Path tracer · final" }).click();
-  assert.equal((await Stored(Placed.Id)).RenderEngine, "pt_final");
-  assert.equal((await Stored("cine")).RenderEngine, "matcap");
+  await Page.getByRole("radiogroup", { name: "Renderer" }).getByRole("radio", { name: "MatCap", exact: true }).click();
+  assert.equal((await Stored(Placed.Id)).RenderEngine, "matcap");
   await Page.locator(".rc-reset button").click();
   assert.equal((await Stored(Placed.Id)).RenderEngine, "gtx_sdf_gi");
-  Checks.push("A Construct-placed camera gets its own five render components; Reset restores the source defaults");
+  Checks.push("A Construct-placed camera gets its own Render Engine component; Reset restores the source defaults");
 
-  // Scenes saved before (ComponentRevision 1) gain the camera components once.
+  // Scenes saved with the Follow-up 41 rows (ComponentRevision 2) lose the four render-path rows once; old shared keys still read.
   await Page.evaluate(() => {
     const Scene = JSON.parse(localStorage.getItem("Frontier.ProjectZeroHtml.v1"));
-    Scene.Rows = Scene.Rows.filter((Row) => !(Row.Panel === "object-component" && /^(camera|cine)-/.test(Row.Id)));
-    Scene.ComponentRevision = 1;
+    const Old = [["MatCap", "matcap"], ["Shadow Maps", "shadow-maps"], ["SDF Tracing", "sdf-tracing"], ["Ray Tracing", "ray-tracing"]];
+    const At = Scene.Rows.findIndex((Row) => Row.Id === "cine-render-engine");
+    Scene.Rows.splice(At + 1, 0, ...Old.map(([Name, Slug]) => ({ Id: "cine-" + Slug, Name, Panel: "object-component", Icon: "render-" + Slug, Parent: "cine", Component: Name })));
+    Scene.Values.cine = { ...(Scene.Values.cine || {}), "Render Settings": { RenderEngine: "openpbr_direct", ShadowAlgorithm: "pcf", ShadowMapRes: 1024, SdfPenumbraMode: "analytic_cone" } };
+    Scene.ComponentRevision = 2;
     localStorage.setItem("Frontier.ProjectZeroHtml.v1", JSON.stringify(Scene));
   });
-  await Open("cine");
+  await Open("cine-render-engine");
   const Restored = (await Saved()).Rows;
-  assert.equal(Restored.filter((Row) => Row.Parent === "cine" && Row.Panel === "object-component").length, 5);
+  assert.deepEqual(Restored.filter((Row) => Row.Parent === "cine" && Row.Panel === "object-component").map((Row) => Row.Name), ["Render Engine"]);
   assert.equal(Restored.filter((Row) => Row.Parent === "cube" && Row.Panel === "object-component").length, 3);
-  Checks.push("Scenes saved at ComponentRevision 1 gain the camera render components on load; object components are untouched");
+  await Tab("pbr");
+  assert.equal(await InUse(), "true");
+  assert.equal(await Page.getByRole("radio", { name: /3 × 3 PCF/ }).getAttribute("aria-checked"), "true");
+  Checks.push("Scenes saved at ComponentRevision 2 drop MatCap, Shadow Maps, SDF Tracing and Ray Tracing rows; their PCF setup reads in the PBR tab");
 } catch (Error) {
   Errors.push(Error.stack);
 } finally {

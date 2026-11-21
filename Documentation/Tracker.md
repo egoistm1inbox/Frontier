@@ -1319,6 +1319,13 @@ in `Exhibits/LightCompute/Results/FogFacetRegression.txt`; this was a fixture-se
   design, plus an in-use strip for the current engine. MatCap gains six editor-only fields. `ComponentRevision` 2 migrates saved scenes.
   RenderSettings (9), InspectorOrder (157), EntityContext (78), ObjectComponents, SharedCards, InspectorLayout, VolumeWorkspaces, FogCamera
   and InstrumentStyle (passes on rerun) pass; Construction:190 and QuickTools:296 also fail on the base commit. Names unapproved.
+  Follow-up 42: each camera has one Render Engine component with Engine / PBR / SDF / Ray traced / MatCap tabs. Every renderer has its own
+  shadow algorithm and settings (`Pbr*`, `Sdf*`, `Ray*`, `Matcap*` keys; old shared keys are upgraded on read; MatCap gains a studio
+  shadow). The engine card is decluttered; Quality and Output are kept. `ComponentRevision` 3 drops the four retired rows, and their icons
+  are deleted. Rigid Body is redesigned (body tiles, slope/bounce contact studies, damping half-lives). Mass has a new icon and can be set
+  directly in g / kg / t / lb / oz. RenderSettings (9), EntityContext (70), InspectorOrder (141), ObjectComponents, SharedCards,
+  InspectorLayout, VolumeWorkspaces, FogCamera, Browser, WorkspaceCards and Wind pass. InstrumentStyle:118 is flaky (it also fails on
+  the base commit and passes on rerun). Construction:190 and QuickTools:296 are pre-existing failures. Names unapproved.
   Follow-up 40: Vehicle Movement charts are editable (suspension peak → damping/frequency, 18 torque points plus idle/redline,
   CdA/ClA handles, clamped to Blueprint ranges). Primitive carousel is Overview/Geometry/Material/UV/Fracture/SDF/LOD with UV, SDF and
   LOD preview cards on their own pages. Showcase objects carry Mass, Rigid Body and Collision component rows (`ObjectComponents.jsx`;

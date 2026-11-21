@@ -83,7 +83,7 @@ const Sections = {
   // Showcase primitives: the category carousel opens on Overview; quick controls, then Notes holding the Purpose.
   geometry: [".pi-carousel-bar", ".pi-quick", ".pi-purpose"],
   post: [".entity-capabilities"],
-  // Components (object: Mass, Rigid Body, Collision; camera: the five render components): the owner link, then the cards.
+  // Components (object: Mass, Rigid Body, Collision; camera: Render Engine): the owner link, then the cards.
   "object-component": [".oc-owner", ".pi-component [data-card], .rc-cards [data-card]"],
   ...Object.fromEntries(
     [

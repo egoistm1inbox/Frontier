@@ -2,14 +2,13 @@
 //                                                          OBJECTCOMPONENTS.JSX
 //============================================================================================================================================
 // 🧩 Components: outliner rows that hang under an owner the way the post effects hang under Post Process. Showcase objects carry
-// Mass, Rigid Body and Collision; cameras carry their render settings split by path (Render Engine, MatCap, Shadow Maps, SDF Tracing,
-// Ray Tracing; RenderComponents.jsx). Each row has its own inspector, but the values live on the owner (Values[Owner]), so the
+// Mass, Rigid Body and Collision; cameras carry one Render Engine component (RenderComponents.jsx). Each row has its own inspector, but the values live on the owner (Values[Owner]), so the
 // owner's viewport, checks and quick controls keep reading the same keys. Browser authoring only.
 
 import React from "react";
 import "./ObjectComponents.css";
-import { ShapeOf, Measure, MassOf, CollisionProxy } from "./PrimitiveInspector.jsx";
-import { RenderComponentTypes, RenderSummary } from "./RenderComponents.jsx";
+import { ShapeOf, Measure, MassOf, MassText, CollisionProxy } from "./PrimitiveInspector.jsx";
+import { RenderComponentTypes, RetiredRenderComponents, RenderSummary } from "./RenderComponents.jsx";
 
 export const ComponentPanel = "object-component";
 export const ComponentSheet = [];
@@ -17,15 +16,18 @@ export const ComponentSheet = [];
 // Component, baked icon, description, per owner kind.
 export const ComponentTypes = {
   object: [
-    ["Mass", "editor-mass", "Density, mass and spin resistance"],
-    ["Rigid Body", "editor-physics", "Simulation and surface response"],
+    ["Mass", "editor-mass", "Mass from a material or set directly, in any unit"],
+    ["Rigid Body", "editor-physics", "Body type, contact and damping"],
     ["Collision", "editor-box-collider", "Collision shape and filtering"],
   ],
   camera: RenderComponentTypes.map(([Name, Icon, Description]) => [Name, Icon, Description]),
 };
 // The revision each kind's components arrived in (saved scenes below it gain them once).
 const Arrival = { object: 1, camera: 2 };
-export const ComponentRevision = 2;
+// Components retired at a revision (saved scenes below it lose them once): Follow-up 41 split camera render settings over five rows;
+// Follow-up 42 folds them back into Render Engine.
+const Retired = { 3: RetiredRenderComponents };
+export const ComponentRevision = 3;
 
 const Slug = (Component) => Component.toLowerCase().replace(/\s+/g, "-");
 export const OwnerKind = (Row) => (Row?.Panel === "geometry" && Row.Parent === "showcase" ? "object" : Row?.Panel === "camera" ? "camera" : null);
@@ -55,7 +57,10 @@ export function WithObjectComponents(Rows, Revision = 0) {
 export function EnsureObjectComponents(Rows = [], Revision) {
   const Seen = +Revision || 0;
   if (!Array.isArray(Rows) || Seen >= ComponentRevision) return Rows;
-  return WithObjectComponents(Rows, Seen);
+  const Gone = new Set(Object.entries(Retired).filter(([At]) => +At > Seen).flatMap(([, Names]) => Names));
+  const Owners = new Map(Rows.map((Row) => [Row.Id, Row]));
+  const Kept = Rows.filter((Row) => !(Row.Panel === ComponentPanel && Gone.has(Row.Component) && OwnerKind(Owners.get(Row.Parent)) === "camera"));
+  return WithObjectComponents(Kept, Seen);
 }
 
 const Read = (Values) => (Key, Initial) => (Values?.[Key] === undefined ? Initial : Values[Key]);
@@ -68,8 +73,8 @@ export function ComponentSummary(Row, Owner, Values = {}) {
   if (OwnerKind(Owner) === "camera") return RenderSummary(Row.Component, Values);
   const R = Read(Values);
   if (Row.Component === "Mass") {
-    const { Mass, Manual, Density } = MassOf(R, SizeOf(Owner, Values));
-    return `${Mass >= 100 ? Mass.toFixed(0) : Mass.toFixed(Mass < 1 ? 3 : 1)} kg · ${Manual ? "set by hand" : Density}`;
+    const { Mass, Manual, Density, Unit: Shown } = MassOf(R, SizeOf(Owner, Values));
+    return `${MassText(Mass, Shown)} · ${Manual ? "set directly" : Density}`;
   }
   if (Row.Component === "Rigid Body") {
     const Body = !Values.DYNAMIC ? "Static" : R("Physics Body", "dynamic").replace(/^./, (Letter) => Letter.toUpperCase());

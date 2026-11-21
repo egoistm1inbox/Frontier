@@ -49,6 +49,35 @@ starting point for the UI redesign.
 
 ---
 
+## Follow-up 42: one Render Engine component, per-renderer shadows; Rigid Body and Mass redesigned
+
+- **One render component per camera.** The MatCap, Shadow Maps, SDF Tracing and Ray Tracing rows are gone; each camera keeps a single
+  **Render Engine** row. Its inspector has five tabs: **Engine · PBR · SDF · Ray traced · MatCap**. A green dot marks the renderer drawing.
+  - **Engine**: a decluttered summary card (renderer, engine line, a Renderer segment, a Tracer segment when ray traced, three summary
+    lines for shadows / GI / reflections, and a link to that renderer's tab). The **Quality** card (samples/pixel bar, tier pills) and the
+    **Output** card (exposure, render scale, edge AA) are unchanged, then Reset.
+  - Each renderer tab has **its own shadow algorithm and settings**, stored under its own keys (`Pbr*`, `Sdf*`, `Ray*`, `Matcap*` in
+    `RenderSettings.js`), so switching renderer keeps every other renderer's setup:
+    - **PBR** (OpenPBR direct): raster shadow maps (Contact + PCSS, PCSS + filter, SMRT depth trace, 3 × 3 PCF), map resolution, tier,
+      half-res, plane filter; a penumbra card; direct lighting (LTC area lights, ambient fill).
+    - **SDF** (GTX GI): the six distance-field penumbra modes, march steps, softness, tier; the cone GI card.
+    - **Ray traced** (BVH4 / PT game / PT final): the tracer, traced shadows (Vogel disk or rectangular area), traced GI, traced reflections.
+    - **MatCap**: the studio sphere, a new studio shadow (None, Cavity occlusion, Studio drop, Screen contact; strength and softness) and
+      the studio light.
+  - Each tab opens with a Rendering / Not rendering strip and a "Use …" button. The global tier sets every renderer's counts.
+  - Saved settings from Follow-ups 37–41 (one shared set of shadow / GI / reflection keys) are read into the renderer that used them.
+    `ComponentRevision` 3 removes the four retired rows from saved scenes once. The four retired icons are deleted, and `Build.mjs` now
+    lets repository icons replace the embedded copies and drops retired ones.
+- **Rigid Body** redesigned: a **Body** card with Static / Dynamic / Kinematic tiles (each with a drawing), and for dynamic bodies three
+  facts (gravity, time to fall 1 m, top speed from damping), the gravity scale and Start asleep. A **Contact** card shows friction as the
+  steepest slope the body rests on (atan μ) and bounciness as a ladder of rebound heights. A **Damping** card shows speed and spin decay
+  curves with half-lives. The drop study and the four dials are gone.
+- **Mass**: new kettlebell icon (`editor-mass`). Mass comes from a material or is **set directly** as a number in a chosen unit
+  (g, kg, t, lb, oz). It is stored in kilograms (`Physics Mass Manual`); the unit (`Physics Mass Unit`) also sets how the figure, balance
+  and outliner line read.
+- Checks: `CheckRenderSettings.mjs` rewritten (9); EntityContext (70 rows), ObjectComponents (2 camera rows) and InspectorOrder (141)
+  updated and passing.
+
 ## Follow-up 41: render settings as camera components
 
 - Render settings are no longer a section inside the camera inspector. Every camera (Editor, Cine and any placed from Construct) has

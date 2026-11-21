@@ -103,8 +103,8 @@ try {
   await Open("cone");
   const Gained = ((await Saved()).Rows || []).filter((Row) => Row.Panel === "object-component");
   assert.equal(Gained.filter((Row) => ["cube", "sphere", "cylinder", "torus", "cone"].includes(Row.Parent)).length, 15);
-  assert.equal(Gained.filter((Row) => ["camera", "cine"].includes(Row.Parent)).length, 10);
-  Checks.push("Older saved scenes gain the 15 object and 10 camera component rows on load");
+  assert.equal(Gained.filter((Row) => ["camera", "cine"].includes(Row.Parent)).length, 2);
+  Checks.push("Older saved scenes gain the 15 object and 2 camera component rows on load");
 
   // Each workspace preview has its own page.
   await Open("cube");

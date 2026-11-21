@@ -250,83 +250,6 @@ function Segmented({ Label, Choices, Current, Assign, Disabled }) {
   );
 }
 
-// Dial gauge from the order-status reference: hatched disc, a wedge filling clockwise from twelve o'clock, a dotted
-// needle up to the percentage, ticks on a dashed ring. Drag up or down, scroll, or use the arrow keys.
-function Dial({ Label, Reading, Assign, Tone, Disabled }) {
-  const Drag = useRef(null);
-  const Ratio = Math.max(0, Math.min(1, +Reading || 0));
-  const Angle = Ratio * Math.PI * 2;
-  const Cx = 60, Cy = 66, R = 25;
-  const End = [Cx + R * Math.sin(Angle), Cy - R * Math.cos(Angle)];
-  const Wedge =
-    Ratio >= 0.999
-      ? `M${Cx} ${Cy - R}A${R} ${R} 0 1 1 ${Cx - 0.01} ${Cy - R}Z`
-      : `M${Cx} ${Cy}L${Cx} ${Cy - R}A${R} ${R} 0 ${Ratio > 0.5 ? 1 : 0} 1 ${End[0].toFixed(2)} ${End[1].toFixed(2)}Z`;
-  const Pattern = "pi-hatch-" + Label.replace(/\W/g, "");
-  const Nudge = (Delta) => Assign(+Math.max(0, Math.min(1, Ratio + Delta)).toFixed(2));
-  return (
-    <div
-      className={"pi-dial" + (Disabled ? " is-disabled" : "")}
-      role="slider"
-      tabIndex={Disabled ? -1 : 0}
-      aria-label={Label}
-      aria-valuemin={0}
-      aria-valuemax={100}
-      aria-valuenow={Math.round(Ratio * 100)}
-      style={{ "--pi-tone": Tone }}
-      onKeyDown={(Event) => {
-        if (Disabled) return;
-        if (["ArrowUp", "ArrowRight"].includes(Event.key)) { Event.preventDefault(); Nudge(0.01); }
-        if (["ArrowDown", "ArrowLeft"].includes(Event.key)) { Event.preventDefault(); Nudge(-0.01); }
-      }}
-      onWheel={(Event) => !Disabled && Nudge(Event.deltaY < 0 ? 0.01 : -0.01)}
-      onPointerDown={(Event) => {
-        if (Disabled || Event.button !== 0) return;
-        Drag.current = { Y: Event.clientY, Start: Ratio };
-        Event.currentTarget.setPointerCapture(Event.pointerId);
-      }}
-      onPointerMove={(Event) => {
-        if (!Drag.current) return;
-        const Next = Drag.current.Start + (Drag.current.Y - Event.clientY) / 160;
-        Assign(+Math.max(0, Math.min(1, Next)).toFixed(2));
-      }}
-      onPointerUp={() => (Drag.current = null)}
-      onPointerCancel={() => (Drag.current = null)}
-    >
-      <svg viewBox="0 0 120 112" aria-hidden="true">
-        <defs>
-          <pattern id={Pattern} width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-            <rect width="4" height="4" fill="#2a2a2a" />
-            <rect width="1.4" height="4" fill="#333" />
-          </pattern>
-        </defs>
-        {Array.from({ length: 8 }, (_, Index) => {
-          const A = (Index / 8) * Math.PI * 2 + Math.PI / 8;
-          return (
-            <line
-              key={Index}
-              x1={Cx + 37 * Math.sin(A)} y1={Cy - 37 * Math.cos(A)}
-              x2={Cx + 41 * Math.sin(A)} y2={Cy - 41 * Math.cos(A)}
-              stroke="#8a8a8a" strokeWidth="1.2" strokeLinecap="round"
-            />
-          );
-        })}
-        <circle cx={Cx} cy={Cy} r="32" fill="none" stroke="#5a5a5a" strokeWidth=".8" strokeDasharray="1.5 2.5" />
-        <circle cx={Cx} cy={Cy} r="29" fill="#141414" />
-        <circle cx={Cx} cy={Cy} r={R} fill={`url(#${Pattern})`} />
-        {Ratio > 0.002 && <path d={Wedge} fill="var(--pi-tone)" />}
-        <line x1={Cx} y1={Cy} x2={Cx} y2="14" stroke="#e8e8e8" strokeWidth="1.2" strokeDasharray="1.6 2" />
-        <circle cx={Cx} cy={Cy} r="2.6" fill="#f2f2f2" />
-      </svg>
-      <span className="pi-dial-reading">
-        {Math.round(Ratio * 100)}
-        <small>%</small>
-      </span>
-      <span className="pi-dial-label">{Label}</span>
-    </div>
-  );
-}
-
 function Card({ Title, Glyph, Tone, Aside, children, className = "" }) {
   return (
     <section className={"pi-card " + className} data-card={Title}>
@@ -561,33 +484,6 @@ function OverviewPage({ Shape, Read, Change, Values, Hidden, ToggleHidden, Size,
   );
 }
 
-// Drop study: the body is released from 3 m and integrated for two seconds with the authored gravity scale, linear
-// damping and bounciness (restitution), so every one of those controls reshapes the drawn path.
-const DropHeight = 3, DropSeconds = 2;
-function SimulateDrop({ Gravity, Damping, Restitution }) {
-  const G = 9.81 * Gravity, Step = 1 / 240, Path = [[0, DropHeight]];
-  let Height = DropHeight, Velocity = 0, Impact = null, ImpactSpeed = 0, Rebound = 0, Settle = null, Peak = 0, Rising = false;
-  for (let Time = Step; Time <= DropSeconds + 1e-9; Time += Step) {
-    Velocity += (-G - Damping * Velocity) * Step;
-    Height += Velocity * Step;
-    if (Height <= 0 && Velocity < 0) {
-      Height = 0;
-      if (Impact === null) { Impact = Time; ImpactSpeed = -Velocity; }
-      Velocity = -Velocity * Restitution;
-      if (Velocity < 0.05) { Velocity = 0; if (Settle === null) Settle = Time; }
-      Rising = true;
-      Peak = 0;
-    }
-    if (Rising) {
-      Peak = Math.max(Peak, Height);
-      if (Velocity <= 0 && Height > 0) { if (!Rebound) Rebound = Peak; Rising = false; }
-    }
-    if (Settle !== null && Height <= 0) Height = 0;
-    Path.push([Time, Math.min(Height, DropHeight * 1.6)]);
-  }
-  return { Path, Impact, ImpactSpeed, Rebound, Settle };
-}
-
 function ShapeMark({ Shape, X, Y, Size, ...Rest }) {
   const H = Size / 2;
   if (Shape === "cube") return <rect x={X - H} y={Y - Size} width={Size} height={Size} rx="1.5" {...Rest} />;
@@ -596,58 +492,6 @@ function ShapeMark({ Shape, X, Y, Size, ...Rest }) {
   if (Shape === "torus")
     return <ellipse cx={X} cy={Y - H * 0.6} rx={H} ry={H * 0.6} fill="none" strokeWidth={H * 0.45} {...Rest} stroke={Rest.fill} />;
   return <circle cx={X} cy={Y - H} r={H} {...Rest} />;
-}
-
-function DropStudy({ Shape, Body, Simulate, Gravity, Damping, Restitution }) {
-  const Left = 36, Right = 290, Top = 16, Ground = 128;
-  const Px = (Time) => Left + (Time / DropSeconds) * (Right - Left);
-  const Py = (Height) => Ground - (Height / (DropHeight * 1.15)) * (Ground - Top);
-  const Moving = Simulate && Body === "dynamic";
-  const Run = SimulateDrop({ Gravity, Damping, Restitution });
-  const Line = Run.Path.filter((_, Index) => Index % 4 === 0).map(([T, H]) => `${Px(T).toFixed(1)},${Py(H).toFixed(1)}`).join(" ");
-  const Ghosts = Moving ? Run.Path.filter((_, Index) => Index % 48 === 0 && Index > 0) : [];
-  return (
-    <svg className="pi-study-svg" viewBox="0 0 300 150" role="img" aria-label="Drop study" data-study="drop">
-      {[0, 1, 2, 3].map((Metre) => (
-        <g key={Metre}>
-          <line x1={Left} x2={Right} y1={Py(Metre)} y2={Py(Metre)} stroke="#ffffff10" strokeDasharray={Metre ? "2 4" : ""} />
-          <text x={Left - 8} y={Py(Metre) + 3} textAnchor="end">{Metre} m</text>
-        </g>
-      ))}
-      {[0, 0.5, 1, 1.5, 2].map((Second) => (
-        <text key={Second} x={Px(Second)} y={Ground + 14} textAnchor="middle">{Second} s</text>
-      ))}
-      <line x1={Left} x2={Right} y1={Ground} y2={Ground} stroke="#6a6a6a" />
-      {Array.from({ length: 26 }, (_, Index) => (
-        <line key={Index} x1={Left + Index * 10} x2={Left + Index * 10 - 5} y1={Ground + 1} y2={Ground + 5} stroke="#3a3a3a" />
-      ))}
-      {Moving ? (
-        <>
-          <polyline points={Line} fill="none" stroke="#ff9f5a" strokeWidth="1.6" strokeLinejoin="round" />
-          {Ghosts.map(([T, H], Index) => (
-            <ShapeMark key={Index} Shape={Shape} X={Px(T)} Y={Py(H)} Size={9} fill="#ff9f5a" opacity={0.18 + 0.5 * (1 - Index / Ghosts.length)} />
-          ))}
-          {Run.Impact !== null && (
-            <g>
-              <line x1={Px(Run.Impact)} x2={Px(Run.Impact)} y1={Top} y2={Ground} stroke="#ffffff30" strokeDasharray="2 3" />
-              <text x={Px(Run.Impact) + 4} y={Top + 8} className="pi-study-accent">impact {Run.Impact.toFixed(2)} s</text>
-            </g>
-          )}
-          <ShapeMark Shape={Shape} X={Px(0)} Y={Py(DropHeight)} Size={14} fill="#f2f2f2" />
-        </>
-      ) : (
-        <>
-          <polyline points={Line} fill="none" stroke="#8a8a8a" strokeWidth="1.2" strokeDasharray="3 3" opacity=".35" />
-          <text x={Px(1.55)} y={Py(1.6)} textAnchor="middle" opacity=".7">if simulated as dynamic</text>
-          <line x1={Left} x2={Right} y1={Body === "kinematic" && Simulate ? Py(DropHeight) : Ground - 0.5} y2={Body === "kinematic" && Simulate ? Py(DropHeight) : Ground - 0.5} stroke="#8a8a8a" strokeDasharray="4 4" />
-          <ShapeMark Shape={Shape} X={Px(0.9)} Y={Body === "kinematic" && Simulate ? Py(DropHeight) : Ground} Size={18} fill="#9a9a9a" />
-          <text x={Px(1)} y={Top + 10} textAnchor="middle" className="pi-study-accent">
-            {!Simulate ? "Simulation off · stays where it is placed" : Body === "kinematic" ? "Kinematic · moved by animation, ignores gravity" : "Static · never moves"}
-          </text>
-        </>
-      )}
-    </svg>
-  );
 }
 
 // Everyday objects the balance compares against.
@@ -670,7 +514,7 @@ const Silhouette = {
   torus: (X, Y, S) => <ellipse cx={X} cy={Y - S * 0.28} rx={S * 0.55} ry={S * 0.28} fillRule="evenodd" />,
   cone: (X, Y, S) => <path d={`M${X - S / 2} ${Y}L${X} ${Y - S}L${X + S / 2} ${Y}Z`} />,
 };
-function BalanceStudy({ Mass, Shape }) {
+function BalanceStudy({ Mass, Shape, Unit = "kg" }) {
   // The reference and count (1–6) that come closest to balancing.
   const [Label, Kg, Count] = Everyday.flatMap(([Name, Each]) => [1, 2, 3, 4, 5, 6].map((Many) => [Name, Each, Many])).reduce((Best, Option) =>
     Math.abs(Math.log(Mass / (Option[1] * Option[2]))) < Math.abs(Math.log(Mass / (Best[1] * Best[2]))) ? Option : Best,
@@ -708,7 +552,7 @@ function BalanceStudy({ Mass, Shape }) {
         </g>
       ))}
       <text x={LeftEnd[0]} y={LeftEnd[1] - 6} textAnchor="middle" className="pi-balance-strong">
-        {Mass >= 100 ? Mass.toFixed(0) : Mass.toFixed(Mass < 1 ? 3 : 1)} kg
+        {MassText(Mass, Unit)}
       </text>
       <text x={RightEnd[0]} y={RightEnd[1] - 6} textAnchor="middle">
         {Count} × {Label.toLowerCase()}
@@ -731,42 +575,83 @@ function Inertia(Shape, Mass, Bounds, Read, Scale) {
   return Mass * (Major * Major + 0.75 * Minor * Minor);
 }
 
-function MassCard({ Shape, Read, Change, Values, Size, Kit, Mass, Manual, Density, DensityKg, Gravity }) {
+// Mass units: id, kilograms per unit, decimals shown.
+export const MassUnits = [
+  ["g", 0.001],
+  ["kg", 1],
+  ["t", 1000],
+  ["lb", 0.45359237],
+  ["oz", 0.028349523125],
+];
+const UnitScale = (Unit) => (MassUnits.find(([Id]) => Id === Unit) || MassUnits[1])[1];
+const MassDigits = (Amount) => (Amount >= 100 ? 0 : Amount >= 1 ? 2 : 3);
+export const MassIn = (Kilograms, Unit) => Kilograms / UnitScale(Unit);
+export const MassText = (Kilograms, Unit = "kg") => {
+  const Amount = MassIn(Kilograms, Unit);
+  return `${Fixed(Amount, MassDigits(Amount))} ${Unit}`;
+};
+
+// Mass entry: a number in the chosen unit, stored in kilograms.
+function MassEntry({ Mass, Unit, Assign, Disabled }) {
+  const Amount = MassIn(Mass, Unit);
+  return (
+    <label className={"pi-mass-entry" + (Disabled ? " is-disabled" : "")}>
+      <span>Mass</span>
+      <input
+        type="number"
+        min="0"
+        step={10 ** -MassDigits(Amount)}
+        aria-label="Mass amount"
+        disabled={Disabled}
+        value={+Amount.toFixed(MassDigits(Amount) + 1)}
+        onChange={(Event) => Event.target.value !== "" && +Event.target.value > 0 && Assign(+Event.target.value * UnitScale(Unit))}
+      />
+      <b>{Unit}</b>
+    </label>
+  );
+}
+
+function MassCard({ Shape, Read, Change, Values, Size, Kit, Mass, Manual, Density, DensityKg, Gravity, Unit }) {
   const { Card: PropertyCard, Control, Metric } = Kit;
   const Scale = Array.isArray(Values.Scale) ? Values.Scale[0] : 1;
   const Spin = Inertia(Shape, Mass, Size.Bounds, Read, Scale);
   const Readout = (Label, Text) => <Control key={Label} Field={{ Label, Control: "Readout" }} Value={Text} />;
+  const Amount = MassIn(Mass, Unit);
   return (
     <PropertyCard Title="Mass" Class="pi-mass-card">
       <Metric
-        Value={Mass >= 100 ? Fixed(Mass, 0) : Fixed(Mass, Mass < 1 ? 3 : 1)}
-        Unit="kg"
-        Caption={Manual ? "Set by hand" : `${Fixed(Size.Volume, 3)} m³ of ${Density.toLowerCase()} at ${DensityKg} kg/m³`}
+        Value={Fixed(Amount, MassDigits(Amount))}
+        Unit={Unit}
+        Caption={Manual ? `Set directly · ${Fixed(Mass / Math.max(1e-9, Size.Volume), 0)} kg/m³ over ${Fixed(Size.Volume, 3)} m³` : `${Fixed(Size.Volume, 3)} m³ of ${Density.toLowerCase()} at ${DensityKg} kg/m³`}
       />
       <div className="graphic pi-balance-wrap">
-        <BalanceStudy Mass={Mass} Shape={Shape} />
+        <BalanceStudy Mass={Mass} Shape={Shape} Unit={Unit} />
       </div>
-      <Control
-        Field={{ Label: "Material", Control: "Select", Options: Densities.map(([Name, Kg]) => `${Name} · ${Kg} kg/m³`) }}
-        Value={Math.max(0, Densities.findIndex(([Name]) => Name === Density))}
-        Disabled={Manual}
-        Change={(Next) => Change("Physics Density", Densities[Next][0])}
-      />
-      <Control
-        Field={{ Label: "Set mass by hand", Control: "Switch" }}
-        Value={Manual}
-        Change={(Next) => {
-          if (Next) Change("Physics Mass Manual", +Mass.toFixed(3));
-          Change("Physics Mass Mode", Next ? "manual" : "auto");
+      <Segmented
+        Label="Mass from"
+        Current={Manual ? "manual" : "auto"}
+        Choices={[["Material", "auto"], ["Set directly", "manual"]]}
+        Assign={(Next) => {
+          if (Next === "manual") Change("Physics Mass Manual", +Mass.toFixed(4));
+          Change("Physics Mass Mode", Next);
         }}
       />
-      {Manual && (
+      {Manual ? (
+        <MassEntry Mass={Mass} Unit={Unit} Assign={(Next) => Change("Physics Mass Manual", Next)} />
+      ) : (
         <Control
-          Field={{ Label: "Mass", Control: "Slider", Minimum: 0.01, Maximum: 5000, Default: 1, Unit: "kg", Decimals: 2 }}
-          Value={Mass}
-          Change={(Next) => Change("Physics Mass Manual", Next)}
+          Field={{ Label: "Material", Control: "Select", Options: Densities.map(([Name, Kg]) => `${Name} · ${Kg} kg/m³`) }}
+          Value={Math.max(0, Densities.findIndex(([Name]) => Name === Density))}
+          Change={(Next) => Change("Physics Density", Densities[Next][0])}
         />
       )}
+      <div className="pi-unit-pills" role="radiogroup" aria-label="Mass unit">
+        {MassUnits.map(([Id]) => (
+          <button key={Id} type="button" role="radio" aria-checked={Id === Unit} onClick={() => Change("Physics Mass Unit", Id)}>
+            {Id}
+          </button>
+        ))}
+      </div>
       {Readout("Volume", Fixed(Size.Volume, 3) + " m³")}
       {Readout("Weight", Fixed(Mass * 9.81 * Gravity, 1) + " N")}
       {Readout("Spin resistance", (Spin < 0.01 ? Spin.toExponential(2) : Fixed(Spin, 3)) + " kg·m²")}
@@ -774,76 +659,182 @@ function MassCard({ Shape, Read, Change, Values, Size, Kit, Mass, Manual, Densit
   );
 }
 
-// Mass from the density table and the measured volume, unless it is set by hand.
+// Mass from the density table and the measured volume, unless it is set directly. Stored in kilograms; Unit is how it is shown.
 export function MassOf(Read, Size) {
   const Density = Read("Physics Density", "Plastic");
   const DensityKg = (Densities.find(([Name]) => Name === Density) || Densities[0])[1];
   const Manual = Read("Physics Mass Mode", "auto") === "manual";
   const Mass = Manual ? +Read("Physics Mass Manual", 1) : DensityKg * Size.Volume;
-  return { Density, DensityKg, Manual, Mass };
+  const Unit = MassUnits.some(([Id]) => Id === Read("Physics Mass Unit", "kg")) ? Read("Physics Mass Unit", "kg") : "kg";
+  return { Density, DensityKg, Manual, Mass, Unit };
 }
+
+// Body types as tiles: what the physics world does with the object. Static is also what an unsimulated object is.
+const BodyTypes = [
+  ["static", "Static", "Never moves. Others collide with it."],
+  ["dynamic", "Dynamic", "Gravity, contacts and forces move it."],
+  ["kinematic", "Kinematic", "Animation moves it. It pushes others."],
+];
+function BodyGlyph({ Type }) {
+  return (
+    <svg viewBox="0 0 48 36" aria-hidden="true" className="pi-body-glyph">
+      <path d="M4 31H44" stroke="currentColor" strokeOpacity=".45" strokeWidth="1.4" strokeLinecap="round" />
+      {Type === "static" && (
+        <>
+          <rect x="15" y="15" width="18" height="16" rx="2.5" fill="currentColor" fillOpacity=".85" />
+          <path d="M8 35l4-4M15 35l4-4M22 35l4-4M29 35l4-4M36 35l4-4" stroke="currentColor" strokeOpacity=".4" strokeWidth="1.2" strokeLinecap="round" />
+        </>
+      )}
+      {Type === "dynamic" && (
+        <>
+          <rect x="15" y="4" width="18" height="16" rx="2.5" fill="currentColor" fillOpacity=".85" transform="rotate(12 24 12)" />
+          <path d="M24 23v6M21 26.5l3 3 3-3" stroke="currentColor" strokeWidth="1.6" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M11 6v8M37 8v8" stroke="currentColor" strokeOpacity=".4" strokeWidth="1.2" strokeLinecap="round" />
+        </>
+      )}
+      {Type === "kinematic" && (
+        <>
+          <path d="M6 24C14 8 30 8 42 18" stroke="currentColor" strokeOpacity=".5" strokeWidth="1.3" strokeDasharray="2.5 3" fill="none" />
+          <rect x="28" y="6" width="14" height="12" rx="2" fill="currentColor" fillOpacity=".85" />
+          <circle cx="6" cy="24" r="2" fill="currentColor" fillOpacity=".6" />
+        </>
+      )}
+    </svg>
+  );
+}
+
+// Friction as the steepest slope the body rests on: it starts sliding above atan(friction).
+function SlopeStudy({ Friction, Shape }) {
+  const Angle = Math.atan(Math.max(0, Friction)), Degrees = (Angle * 180) / Math.PI;
+  const Foot = [16, 84], Run = 118, Rise = Math.min(70, Math.tan(Angle) * Run);
+  const Top = [Foot[0] + Run, Foot[1] - Rise], Slope = Math.atan2(Rise, Run);
+  const Mid = [Foot[0] + Run * 0.55, Foot[1] - Rise * 0.55];
+  const Arc = 26;
+  return (
+    <svg className="pi-mini-study" viewBox="0 0 150 106" role="img" aria-label="Friction slope study" data-study="slope">
+      <path d={`M${Foot[0]} ${Foot[1]}L${Top[0]} ${Top[1]}L${Top[0]} ${Foot[1]}Z`} fill="#232323" stroke="#4a4a4a" />
+      <path d={`M${Foot[0] + Arc} ${Foot[1]}A${Arc} ${Arc} 0 0 0 ${Foot[0] + Arc * Math.cos(Slope)} ${Foot[1] - Arc * Math.sin(Slope)}`} stroke="#e6cf72" fill="none" strokeWidth="1.4" />
+      <g transform={`translate(${Mid[0]} ${Mid[1]}) rotate(${(-Slope * 180) / Math.PI})`}>
+        <g fill="#cfcfcf">{(Silhouette[Shape] || Silhouette.cube)(0, -1, 16)}</g>
+      </g>
+      <text x={Foot[0] + Arc + 4} y={Foot[1] - 4} className="pi-mini-strong">{Degrees.toFixed(0)}°</text>
+      <text x="8" y="102">slides above {Degrees.toFixed(0)}°</text>
+    </svg>
+  );
+}
+
+// Bounciness as a ladder of rebound heights from a 1 m drop: each rebound is restitution² of the one before.
+function BounceLadder({ Restitution }) {
+  const E2 = Math.max(0, Math.min(1, Restitution)) ** 2;
+  const Heights = Array.from({ length: 6 }, (_, Index) => E2 ** (Index + 1));
+  const Rests = Heights.findIndex((Height) => Height < 0.01);
+  return (
+    <svg className="pi-mini-study" viewBox="0 0 150 106" role="img" aria-label="Bounce ladder" data-study="bounce">
+      <path d="M8 84H142" stroke="#4a4a4a" />
+      <rect x="10" y="14" width="14" height="70" rx="3" fill="none" stroke="#a9bfdc" strokeOpacity=".5" strokeDasharray="3 3" />
+      {Heights.map((Height, Index) => (
+        <rect key={Index} x={30 + Index * 19} y={84 - Math.max(1.5, Height * 70)} width="14" height={Math.max(1.5, Height * 70)} rx="3" fill="#a9bfdc" fillOpacity={0.9 - Index * 0.1} />
+      ))}
+      <text x="10" y="10">drop 1 m</text>
+      <text x="8" y="102">{E2 < 0.0001 ? "no rebound" : `rebounds ${Fixed(Heights[0] * 100, 0)} cm`}</text>
+    </svg>
+  );
+}
+
+// Damping as speed decay with no contacts: linear speed and spin each fall by e^(-damping · t).
+function DecayStudy({ Linear, Angular }) {
+  const Seconds = 10, Left = 30, Right = 290, Top = 12, Bottom = 92;
+  const Px = (Time) => Left + (Time / Seconds) * (Right - Left), Py = (Ratio) => Bottom - Ratio * (Bottom - Top);
+  const Curve = (Rate) => Array.from({ length: 61 }, (_, Index) => { const T = (Index / 60) * Seconds; return `${Px(T).toFixed(1)},${Py(Math.exp(-Rate * T)).toFixed(1)}`; }).join(" ");
+  const Half = (Rate) => (Rate > 0 ? Math.LN2 / Rate : Infinity);
+  return (
+    <svg className="pi-study-svg" viewBox="0 0 300 112" role="img" aria-label="Damping decay" data-study="decay">
+      <path d={`M${Left} ${Py(0.5)}H${Right}`} stroke="#ffffff22" strokeDasharray="3 4" />
+      <path d={`M${Left} ${Top}V${Bottom}H${Right}`} stroke="#4a4a4a" fill="none" />
+      <text x={Left - 4} y={Top + 4} textAnchor="end">100</text>
+      <text x={Left - 4} y={Py(0.5) + 4} textAnchor="end">50</text>
+      <text x={Left - 4} y={Bottom + 4} textAnchor="end">0 %</text>
+      <text x={Right} y={Bottom + 14} textAnchor="end">{Seconds} s</text>
+      {[[Linear, "#f2f2f2", "speed"], [Angular, "#ea6b45", "spin"]].map(([Rate, Tone, Label]) => (
+        <g key={Label}>
+          <polyline points={Curve(Rate)} fill="none" stroke={Tone} strokeWidth="1.6" />
+          {Half(Rate) <= Seconds && <circle cx={Px(Half(Rate))} cy={Py(0.5)} r="3" fill={Tone} />}
+        </g>
+      ))}
+      <g transform={`translate(${Left + 8} ${Bottom + 14})`}>
+        <circle cx="0" cy="-3.5" r="3" fill="#f2f2f2" />
+        <text x="7" y="0">speed</text>
+        <circle cx="52" cy="-3.5" r="3" fill="#ea6b45" />
+        <text x="59" y="0">spin</text>
+      </g>
+    </svg>
+  );
+}
+const HalfLife = (Rate) => (Rate > 0 ? Fixed(Math.LN2 / Rate, Math.LN2 / Rate < 10 ? 1 : 0) + " s" : "never");
 
 function RigidBodyCards({ Shape, Read, Change, Values }) {
   const Simulate = !!Values.PHYSICS;
-  const Body = !Values.DYNAMIC ? "static" : Read("Physics Body", "dynamic");
-  const Off = !Simulate;
+  const Body = !Simulate || !Values.DYNAMIC ? "static" : Read("Physics Body", "dynamic");
+  const Moving = Body === "dynamic";
   const Gravity = +Read("Physics Gravity Scale", 1);
-  const Damping = +Read("Physics Linear Damping", 0.05);
+  const Linear = +Read("Physics Linear Damping", 0.05);
+  const Angular = +Read("Physics Angular Damping", 0.1);
+  const Friction = +Read("Physics Friction", 0.6);
   const Restitution = +Read("Physics Bounciness", 0.2);
-  const Run = SimulateDrop({ Gravity, Damping, Restitution });
-  const Moving = Simulate && Body === "dynamic";
-  const Speed = Moving && Run.Impact !== null ? Fixed(Run.ImpactSpeed, 1) : "0.0";
+  const G = 9.81 * Gravity;
+  const Choose = (Next) => {
+    if (Next === "static") { Change("PHYSICS", false); Change("DYNAMIC", false); return; }
+    Change("PHYSICS", true);
+    Change("DYNAMIC", true);
+    Change("Physics Body", Next);
+  };
   return (
     <>
-      <Card Title="Simulation" Glyph="physics-tab" Tone="#ff9f5a" Aside={Moving ? "Drop from 3 m" : Off ? "Off" : Body} className="pi-study-card">
-        <BigFigure
-          Whole={Speed}
-          Unit="m/s"
-          Caption={
-            Moving
-              ? Run.Impact !== null
-                ? `Impact speed · lands after ${Run.Impact.toFixed(2)} s`
-                : "Never lands within 2 s · gravity too weak or negative"
-              : "Impact speed · body is not simulated"
-          }
-        />
-        <div className="pi-study">
-          <DropStudy Shape={Shape} Body={Body} Simulate={Simulate} Gravity={Gravity} Damping={Damping} Restitution={Restitution} />
+      <Card Title="Body" Glyph="physics-tab" Tone="#ff9f5a" Aside={Simulate ? "Simulated" : "Not simulated"} className="pi-body-card">
+        <div className="pi-body-tiles" role="radiogroup" aria-label="Body type">
+          {BodyTypes.map(([Id, Label, Line]) => (
+            <button key={Id} type="button" role="radio" aria-checked={Body === Id} data-body={Id} onClick={() => Choose(Id)}>
+              <BodyGlyph Type={Id} />
+              <b>{Label}</b>
+              <small>{Line}</small>
+            </button>
+          ))}
         </div>
-        <p className="pi-study-note">Illustrative drop in a vacuum column · uses gravity scale, linear damping and bounciness.</p>
-        <div className="pi-stat-grid">
-          <div><span>Rebound</span><b>{Moving && Run.Rebound ? Fixed(Run.Rebound, 2) : "–"}<small> m</small></b></div>
-          <div><span>Comes to rest</span><b>{Moving && Run.Settle !== null ? Fixed(Run.Settle, 2) : "–"}<small> s</small></b></div>
-          <div><span>Gravity</span><b>{Fixed(9.81 * Gravity, 1)}<small> m/s²</small></b></div>
-        </div>
-        <Switch
-          Label="Simulate physics"
-          Detail={Simulate ? "Rigid body in the physics world" : "Off: the object never moves on its own"}
-          On={Simulate}
-          Tone="#ff9f5a"
-          Assign={(Next) => { Change("PHYSICS", Next); if (Next) Change("DYNAMIC", true); }}
-        />
-        <Segmented
-          Label="Body type"
-          Current={Body}
-          Choices={[["Static", "static"], ["Dynamic", "dynamic"], ["Kinematic", "kinematic"]]}
-          Assign={(Next) => {
-            if (Next === "static") { Change("DYNAMIC", false); Change("PHYSICS", false); return; }
-            Change("DYNAMIC", true);
-            Change("Physics Body", Next);
-          }}
-        />
-        <Slider Label="Gravity scale" Reading={Gravity} Minimum={-2} Maximum={4} Step={0.05} Unit="×" Disabled={Off} Tone="#ff9f5a" Assign={(Next) => Change("Physics Gravity Scale", Next)} />
-        <Switch Label="Start asleep" Detail="Wakes on first contact" On={Read("Physics Asleep", false)} Disabled={Off} Assign={(Next) => Change("Physics Asleep", Next)} />
+        {Moving ? (
+          <>
+            <div className="pi-body-facts">
+              <div><span>Gravity</span><b>{Fixed(G, 1)}<small> m/s²</small></b></div>
+              <div><span>Falls 1 m in</span><b>{G > 0 ? Fixed(Math.sqrt(2 / G), 2) : "–"}<small> s</small></b></div>
+              <div><span>Top speed</span><b>{G > 0 && Linear > 0 ? Fixed(G / Linear, 0) : "–"}<small> m/s</small></b></div>
+            </div>
+            <Slider Label="Gravity scale" Reading={Gravity} Minimum={-2} Maximum={4} Step={0.05} Unit="×" Tone="#ff9f5a" Assign={(Next) => Change("Physics Gravity Scale", Next)} />
+            <Switch Label="Start asleep" Detail="Wakes on first contact" On={Read("Physics Asleep", false)} Assign={(Next) => Change("Physics Asleep", Next)} />
+          </>
+        ) : (
+          <p className="pi-study-note">{Body === "static" ? "Static bodies cost nothing to simulate; contact and collision still apply." : "Kinematic bodies follow animation or script exactly; gravity and contacts never move them."}</p>
+        )}
       </Card>
 
-      <Card Title="Surface response" Glyph="physics" Tone="#ffc93d" Aside={Off ? "Simulation off" : "Drag a dial"} className={"pi-dial-card" + (Off ? " is-muted" : "")}>
-        <div className="pi-dial-grid">
-          <Dial Label="Friction" Tone="#e6cf72" Reading={Read("Physics Friction", 0.6)} Assign={(Next) => Change("Physics Friction", Next)} />
-          <Dial Label="Bounciness" Tone="#a9bfdc" Reading={Restitution} Assign={(Next) => Change("Physics Bounciness", Next)} />
-          <Dial Label="Linear damping" Tone="#f2f2f2" Reading={Damping} Assign={(Next) => Change("Physics Linear Damping", Next)} />
-          <Dial Label="Angular damping" Tone="#ea6b45" Reading={Read("Physics Angular Damping", 0.1)} Assign={(Next) => Change("Physics Angular Damping", Next)} />
+      <Card Title="Contact" Glyph="physics" Tone="#ffc93d" Aside="When it touches" className="pi-contact-card">
+        <div className="pi-contact-grid">
+          <div className="pi-contact-panel" data-contact="friction">
+            <SlopeStudy Friction={Friction} Shape={Shape} />
+            <Slider Label="Friction" Reading={Friction} Minimum={0} Maximum={1.5} Step={0.01} Tone="#e6cf72" Assign={(Next) => Change("Physics Friction", Next)} />
+          </div>
+          <div className="pi-contact-panel" data-contact="bounce">
+            <BounceLadder Restitution={Restitution} />
+            <Slider Label="Bounce" Reading={Restitution} Minimum={0} Maximum={1} Step={0.01} Tone="#a9bfdc" Assign={(Next) => Change("Physics Bounciness", Next)} />
+          </div>
         </div>
+      </Card>
+
+      <Card Title="Damping" Glyph="dynamic" Tone="#ea6b45" Aside={Moving ? "No contacts" : "Dynamic only"} className={"pi-damping-card" + (Moving ? "" : " is-muted")}>
+        <BigFigure Whole={HalfLife(Linear).replace(" s", "")} Unit={Linear > 0 ? "s" : ""} Caption={`Speed halves after ${HalfLife(Linear)} · spin halves after ${HalfLife(Angular)}`} />
+        <div className="pi-study">
+          <DecayStudy Linear={Linear} Angular={Angular} />
+        </div>
+        <Slider Label="Linear damping" Reading={Linear} Minimum={0} Maximum={1} Step={0.01} Disabled={!Moving} Tone="#f2f2f2" Assign={(Next) => Change("Physics Linear Damping", Next)} />
+        <Slider Label="Angular damping" Reading={Angular} Minimum={0} Maximum={1} Step={0.01} Disabled={!Moving} Tone="#ea6b45" Assign={(Next) => Change("Physics Angular Damping", Next)} />
       </Card>
     </>
   );

@@ -1,4 +1,4 @@
-/* Render components under each camera (RenderComponents.jsx). Neutral cards; colour only on dots, studies and the active marks. */
+/* The camera's Render Engine component (RenderComponents.jsx). Neutral cards; colour only on dots, studies and the active marks. */
 .rc-cards {
   display: flex;
   flex-direction: column;
@@ -99,8 +99,7 @@
   margin: 4px 0 12px;
 }
 .rc-tiles button,
-.rc-rail button,
-.rc-family button {
+.rc-rail button {
   font: inherit;
   text-align: left;
   cursor: pointer;
@@ -125,8 +124,7 @@
   color: #7a7a7a;
 }
 .rc-tiles button[aria-checked="true"],
-.rc-rail button[aria-pressed="true"],
-.rc-family button[aria-pressed="true"] {
+.rc-rail button[aria-pressed="true"] {
   background: #2c2c2c;
   border-color: #ffffff30;
   color: #f2f2f2;
@@ -156,87 +154,82 @@
   color: #141414;
 }
 
-/* Render Engine: families and the "uses" chips. */
-.rc-families {
+/* Tabs: Engine, then one per renderer; the dot marks the renderer drawing. */
+.rc-tabs {
   display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin: 14px 0 12px;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 14px;
+  background: #121212;
+  border: 1px solid #ffffff0b;
 }
-.rc-family {
-  display: grid;
-  grid-template-columns: 74px 1fr;
-  align-items: start;
-  gap: 8px;
-}
-.rc-family > span {
-  padding-top: 8px;
-  font-size: 9.5px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: #7a7a7a;
-}
-.rc-family > div {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.rc-family button {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  min-height: 32px;
-  padding: 0 10px;
-  border-radius: 10px;
-  font-size: 11px;
-}
-.rc-family button i,
-.rc-rail button i {
-  display: inline-grid;
-  place-items: center;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: #262626;
-  color: #9a9a9a;
-  font-style: normal;
-  font-size: 9.5px;
-  flex: none;
-}
-.rc-family button[aria-pressed="true"] i,
-.rc-rail button[aria-pressed="true"] i {
-  background: #e6e6e6;
-  color: #141414;
-}
-.rc-uses {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-.rc-uses button {
+.rc-tabs button {
+  flex: 1 1 auto;
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  padding: 6px 11px 6px 9px;
-  border-radius: 999px;
-  border: 1px solid #ffffff0d;
-  background: #1f1f1f;
-  color: #8a8a8a;
+  justify-content: center;
+  gap: 6px;
+  min-width: 0;
+  min-height: 30px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 11px;
+  background: transparent;
+  color: #8f8f8f;
   font: inherit;
-  font-size: 10px;
+  font-size: 11px;
+  white-space: nowrap;
   cursor: pointer;
 }
-.rc-uses button i {
-  width: 7px;
-  height: 7px;
+.rc-tabs button[aria-selected="true"] {
+  background: #2c2c2c;
+  color: #f2f2f2;
+  box-shadow: 0 1px 6px #0007;
+}
+.rc-tabs button i {
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
-  background: #4a4a4a;
+  background: #444;
+  flex: none;
 }
-.rc-uses button.on {
-  color: #e6e6e6;
-}
-.rc-uses button.on i {
+.rc-tabs button i.on {
   background: #2fd27a;
+}
+
+/* Engine summary: three quiet lines and a link to the renderer's tab. */
+.rc-lines {
+  margin: 2px 0 10px;
+  padding: 0;
+}
+.rc-lines > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 2px;
+  border-top: 1px solid #ffffff0b;
+  font-size: 11px;
+}
+.rc-lines dt {
+  color: #8a8a8a;
+}
+.rc-lines dd {
+  margin: 0;
+  color: #e6e6e6;
+  text-align: right;
+}
+.property-card .rc-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid #ffffff18;
+  background: #222;
+  color: #e6e6e6;
+  font: inherit;
+  font-size: 10.5px;
+  cursor: pointer;
 }
 
 /* MatCap: the shaded sphere. */
@@ -294,54 +287,12 @@
   line-height: 1.35;
 }
 
-/* Ray Tracing: one switch per traced pass. */
-.rc-lanes {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 6px;
-}
-.rc-lanes button {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 4px;
-  padding: 10px 11px;
-  border-radius: 12px;
-  border: 1px solid #ffffff0d;
-  background: #161616;
-  color: #9a9a9a;
-  font: inherit;
-  font-size: 11px;
-  cursor: pointer;
-}
-.rc-lanes button i {
-  width: 22px;
-  height: 4px;
-  border-radius: 2px;
-  background: #3a3a3a;
-}
-.rc-lanes button[aria-checked="true"] {
-  background: #262626;
-  border-color: #ffffff26;
-  color: #f2f2f2;
-}
-.rc-lanes button[aria-checked="true"] i {
-  background: var(--rc-tone);
-}
-.rc-lanes small {
-  font-size: 9.5px;
-  color: #7a7a7a;
-}
 /* Global button rules centre content; these choices read left to right. */
 .property-card .rc-tiles button,
-.property-card .rc-rail button,
-.property-card .rc-family button {
+.property-card .rc-rail button {
   justify-content: flex-start;
   align-items: flex-start;
   text-align: left;
-}
-.property-card .rc-family button {
-  align-items: center;
 }
 .rc-segments button {
   min-width: 0;

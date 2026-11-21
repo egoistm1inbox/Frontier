@@ -1,44 +1,42 @@
 //============================================================================================================================================
 //                                                             RENDERSETTINGS.JS
 //============================================================================================================================================
-// 🎛️ Per-camera render settings. The option lists, quality presets, defaults and clamping are translated from the FrontierWorldMirror
-// gallery (unassignedinbox/Frontier, branch arena/28ada475-frontier, ShowcaseGalleryScene.js). That source keeps one permanent
-// "Render Settings" row under the Editor Camera; here every camera row carries its own copy in Values["Render Settings"].
-// Browser authoring only: nothing is sent to a renderer.
+// 🎛️ Per-camera render settings. Engines, shadow-map algorithms, SDF penumbra modes, quality presets and clamping are translated from
+// the FrontierWorldMirror gallery (unassignedinbox/Frontier, branch arena/28ada475-frontier, ShowcaseGalleryScene.js). Each renderer
+// (PBR raster, SDF, ray traced, MatCap) keeps its own shadow algorithm and its own settings, so switching engines never loses another
+// renderer's setup. Every camera row stores its own copy in Values["Render Settings"]. Browser authoring only: nothing is sent to a
+// renderer.
 
 export const RenderSettingsKey = "Render Settings";
-
-// Algorithms mirrored from ShadowAlgorithmLab (no SDF shadows, no SDF reflections). `label` is the source wording; `pick` is the
-// shorter name that fits the inspector's select.
-export const SHADOW_ALGORITHMS = [
-  { id: "contact_pcss", label: "Contact + PCSS (No SDF)", pick: "Contact + PCSS", desc: "Screen/tight contact rays plus Vogel-disk PCSS. No SDF." },
-  { id: "pcss", label: "Shadow Map · PCSS + Filter", pick: "PCSS + filter", desc: "Vogel blocker search, geometric penumbra and the plane filter." },
-  { id: "smrt", label: "SMRT · Depth Ray Trace", pick: "SMRT depth trace", desc: "EEVEE-Next style quadratic ray marching through the depth map." },
-  { id: "pcf", label: "Shadow Map · 3×3 PCF", pick: "3 × 3 PCF", desc: "Bilinear-weighted 3 × 3 percentage-closer filtering." },
-  { id: "bvh", label: "BVH Raytraced", pick: "BVH ray traced", desc: "Stochastic Vogel-disk and rectangular-area visibility through the BVH." },
-];
-
-export const GI_ALGORITHMS = [
-  { id: "sdf", label: "SDF Cone GI", pick: "SDF cone GI", desc: "Multi-bounce radiosity with solid-angle diffuse cones through the distance field." },
-  { id: "bvh", label: "BVH Raytraced GI", pick: "BVH ray traced", desc: "Two-bounce cosine-hemisphere path tracing over every light." },
-  { id: "off", label: "Off (Ambient Fill)", pick: "Off · ambient fill", desc: "Direct light plus the calibrated sky, moon and star ambient fill only." },
-];
-
-export const REFLECTION_ALGORITHMS = [
-  { id: "bvh", label: "BVH Raytraced Refl", pick: "BVH ray traced", desc: "Multi-bounce Fresnel reflections traced through the BVH." },
-  { id: "env", label: "Sky / Env Only", pick: "Sky / env only", desc: "Reflects the physical sky, clouds, moon and stars only." },
-];
 
 export const RENDER_ENGINES = [
   { id: "matcap", ordinal: 0, label: "0. MatCap (Studio Normal)", short: "MatCap", pick: "MatCap studio", desc: "Studio MatCap normal/roughness shading. No GI, no SDF." },
   { id: "openpbr_direct", ordinal: 1, label: "1. OpenPBR Direct", short: "OpenPBR", pick: "OpenPBR direct", desc: "Direct OpenPBR with LTC area lights and the shadow lab. No GI, no SDF." },
   { id: "gtx_sdf_gi", ordinal: 2, label: "2. RealTime GI · GTX Low-End", short: "GTX GI", pick: "GTX real-time GI", desc: "Hybrid cone penumbra with multi-bounce cone GI." },
-  { id: "highend_bvh4_gi", ordinal: 3, label: "3. RealTime GI · High-End BVH4", short: "BVH4 GI", desc: "BVH4 two-bounce GI with Heitz projected-disk VNDF reflections. No SDF." },
+  { id: "highend_bvh4_gi", ordinal: 3, label: "3. RealTime GI · High-End BVH4", short: "BVH4 GI", pick: "BVH4 real-time GI", desc: "BVH4 two-bounce GI with Heitz projected-disk VNDF reflections. No SDF." },
   { id: "pt_realtime", ordinal: 4, label: "4. Path Tracer · GameRealtime", short: "PT game", pick: "Path tracer · game", desc: "Deterministic path tracer with blue-noise R2 sampling and reconstruction." },
   { id: "pt_final", ordinal: 5, label: "5. Path Tracer · SceneFinalRender", short: "PT final", pick: "Path tracer · final", desc: "Deterministic path tracer with shared Sobol sampling to exact convergence." },
 ];
 
-export const SDF_PENUMBRA_MODES = [
+// The four renderers. Ray traced covers the BVH4 engine and both path tracers (RayTracer picks which).
+export const RENDERERS = [
+  { id: "pbr", label: "PBR", title: "PBR raster", engines: ["openpbr_direct"] },
+  { id: "sdf", label: "SDF", title: "SDF tracing", engines: ["gtx_sdf_gi"] },
+  { id: "ray", label: "Ray traced", title: "Ray tracing", engines: ["highend_bvh4_gi", "pt_realtime", "pt_final"] },
+  { id: "matcap", label: "MatCap", title: "MatCap", engines: ["matcap"] },
+];
+export const RendererOf = (Engine) => RENDERERS.find((Each) => Each.engines.includes(Engine)) || RENDERERS[0];
+
+// PBR raster shadows: the source's shadow-map algorithms (ShadowAlgorithmLab, without the BVH entry, which belongs to ray tracing).
+export const PBR_SHADOWS = [
+  { id: "contact_pcss", label: "Contact + PCSS (No SDF)", pick: "Contact + PCSS", desc: "Screen/tight contact rays plus Vogel-disk PCSS. No SDF." },
+  { id: "pcss", label: "Shadow Map · PCSS + Filter", pick: "PCSS + filter", desc: "Vogel blocker search, geometric penumbra and the plane filter." },
+  { id: "smrt", label: "SMRT · Depth Ray Trace", pick: "SMRT depth trace", desc: "EEVEE-Next style quadratic ray marching through the depth map." },
+  { id: "pcf", label: "Shadow Map · 3×3 PCF", pick: "3 × 3 PCF", desc: "Bilinear-weighted 3 × 3 percentage-closer filtering." },
+];
+
+// SDF shadows: the source's distance-field penumbra modes.
+export const SDF_SHADOWS = [
   { id: "point_sdf", ordinal: 0, label: "0. Point-Sample (No Penumbra)", pick: "Point sample", desc: "Crisp point-centroid occlusion with no penumbra spread." },
   { id: "analytic_cone", ordinal: 1, label: "1. Analytic Cone Penumbra", pick: "Analytic cone", desc: "Closed-form solid-angle cone penumbra across area emitters." },
   { id: "voxel_clipmap", ordinal: 2, label: "2. 3D Voxel Clipmap Penumbra", pick: "Voxel clipmap", desc: "Stratified 3D clipmap, cone-traced area penumbra." },
@@ -47,18 +45,20 @@ export const SDF_PENUMBRA_MODES = [
   { id: "sdf_mc_ref", ordinal: 5, label: "5. Monte Carlo PT Ref (96 SPP)", pick: "Monte Carlo 96 SPP", desc: "High-sample Monte Carlo reference penumbra." },
 ];
 
-export const QUALITY_PRESETS = [
-  { id: 0, label: "Low", bvhRays: 1, smrtRays: 2, pcssTaps: 8, giSamples: 4, giCones: 4, reflRays: 1 },
-  { id: 1, label: "Medium (GTX)", bvhRays: 2, smrtRays: 4, pcssTaps: 16, giSamples: 6, giCones: 6, reflRays: 2 },
-  { id: 2, label: "High", bvhRays: 4, smrtRays: 6, pcssTaps: 24, giSamples: 10, giCones: 8, reflRays: 4 },
-  { id: 3, label: "Ultra", bvhRays: 8, smrtRays: 8, pcssTaps: 32, giSamples: 14, giCones: 10, reflRays: 6 },
-  { id: 4, label: "Reference", bvhRays: 16, smrtRays: 12, pcssTaps: 48, giSamples: 20, giCones: 14, reflRays: 8 },
+// Ray-traced shadows: the source's BVH entry ("stochastic Vogel-disk and rectangular-area visibility") split into its two light
+// shapes, so each can be chosen.
+export const RAY_SHADOWS = [
+  { id: "bvh_disk", pick: "Vogel disk", desc: "Stochastic Vogel-disk visibility through the BVH; suits round and point lights." },
+  { id: "bvh_area", pick: "Rectangular area", desc: "Rectangular-area visibility through the BVH; suits panel and strip lights." },
 ];
 
-export const RENDER_SCALES = [50, 75, 100, 125];
-
-// MatCap engine (engine 0): which channel the studio sphere shades, and the studio light. Editor additions; the source engine has
-// no settings of its own beyond the pick.
+// MatCap shadows: editor additions (the source MatCap engine draws no shadows).
+export const MATCAP_SHADOWS = [
+  { id: "none", pick: "None", desc: "Shape only, no shadow." },
+  { id: "cavity", pick: "Cavity occlusion", desc: "Darkens creases and grooves." },
+  { id: "drop", pick: "Studio drop", desc: "A soft shadow under the object on an implied floor." },
+  { id: "contact", pick: "Screen contact", desc: "Short screen-space rays towards the studio light." },
+];
 export const MATCAP_CHANNELS = [
   { id: "shaded", label: "Shaded", desc: "Clay shading lit by the studio light, with rim and cavity." },
   { id: "normal", label: "Normals", desc: "View-space normals as colour." },
@@ -66,37 +66,64 @@ export const MATCAP_CHANNELS = [
   { id: "cavity", label: "Cavity", desc: "Creases and grooves only." },
 ];
 
-// CanonicalEditorCamera.ExposureGain in the source scene is 1.35.
+export const QUALITY_PRESETS = [
+  { id: 0, label: "Low", bvhRays: 1, smrtRays: 2, pcssTaps: 8, giSamples: 4, giCones: 4, reflRays: 1, sdfSteps: 16 },
+  { id: 1, label: "Medium (GTX)", bvhRays: 2, smrtRays: 4, pcssTaps: 16, giSamples: 6, giCones: 6, reflRays: 2, sdfSteps: 24 },
+  { id: 2, label: "High", bvhRays: 4, smrtRays: 6, pcssTaps: 24, giSamples: 10, giCones: 8, reflRays: 4, sdfSteps: 32 },
+  { id: 3, label: "Ultra", bvhRays: 8, smrtRays: 8, pcssTaps: 32, giSamples: 14, giCones: 10, reflRays: 6, sdfSteps: 48 },
+  { id: 4, label: "Reference", bvhRays: 16, smrtRays: 12, pcssTaps: 48, giSamples: 20, giCones: 14, reflRays: 8, sdfSteps: 64 },
+];
+
+export const RENDER_SCALES = [50, 75, 100, 125];
+
+// CanonicalEditorCamera.ExposureGain in the source scene is 1.35; the counts are the source's Medium (GTX) tier.
 export const CanonicalRenderSettings = {
   RenderEngine: "gtx_sdf_gi",
-  SdfPenumbraMode: "voxel_cone_gi",
-  ShadowAlgorithm: "contact_pcss",
-  ShadowQuality: 1,
-  ShadowRays: 2,
-  PcssTaps: 16,
-  SmrtRays: 4,
-  ShadowMapRes: 2048,
-  PlaneFilter: true,
-  HalfResShadows: false,
-  ShadowSoftness: 1.0,
-  EmissiveShadowMode: "shadowed",
-
-  GiAlgorithm: "sdf",
-  GiQuality: 1,
-  GiSamples: 6,
-  GiCones: 6,
-  GiIntensity: 1.25,
-  FillBoost: 1.15,
-
-  ReflectionAlgorithm: "bvh",
-  ReflectionQuality: 1,
-  ReflectionRays: 2,
-  ReflectionBounces: 2,
-
+  RayTracer: "highend_bvh4_gi",
   ExposureGain: 1.35,
   RenderScale: 100,
   AntiAliasing: true,
 
+  PbrShadow: "contact_pcss",
+  PbrShadowQuality: 1,
+  PbrContactRays: 2,
+  PbrPcssTaps: 16,
+  PbrSmrtRays: 4,
+  PbrMapRes: 2048,
+  PbrPlaneFilter: true,
+  PbrHalfRes: false,
+  PbrSoftness: 1.0,
+  PbrEmitters: "shadowed",
+  PbrAreaLights: true,
+  PbrFill: 1.15,
+
+  SdfShadow: "voxel_cone_gi",
+  SdfShadowQuality: 1,
+  SdfSteps: 24,
+  SdfSoftness: 1.0,
+  SdfGi: true,
+  SdfGiQuality: 1,
+  SdfCones: 6,
+  SdfGiIntensity: 1.25,
+  SdfFill: 1.15,
+
+  RayShadow: "bvh_disk",
+  RayShadowQuality: 1,
+  RayShadowRays: 2,
+  RaySoftness: 1.0,
+  RayGi: true,
+  RayGiQuality: 1,
+  RayGiSamples: 6,
+  RayGiIntensity: 1.25,
+  RayReflections: true,
+  RayReflectionQuality: 1,
+  RayReflectionRays: 2,
+  RayReflectionBounces: 2,
+  RayFill: 1.15,
+
+  MatcapShadow: "drop",
+  MatcapShadowStrength: 0.6,
+  MatcapShadowSoftness: 1.0,
   MatcapChannel: "shaded",
   MatcapLight: 40,
   MatcapRim: 0.35,
@@ -113,91 +140,135 @@ const Bounded = (Amount, Minimum, Maximum, Fallback, Whole = false) => {
 };
 const Known = (List, Id, Fallback) => (List.some((Option) => Option.id === Id) ? Id : Fallback);
 
+// Follow-up 37–41 drafts stored one shared set of shadow / GI / reflection keys. They map onto the renderer that used them.
+function Upgrade(Stored) {
+  if (!Stored || Stored.PbrShadow !== undefined || Stored.ShadowAlgorithm === undefined) return Stored || {};
+  const Old = Stored, Next = { ...Old };
+  if (Old.ShadowAlgorithm === "bvh") Next.RayShadowRays = Old.ShadowRays;
+  else Object.assign(Next, { PbrShadow: Old.ShadowAlgorithm, PbrContactRays: Old.ShadowRays });
+  Object.assign(Next, {
+    PbrShadowQuality: Old.ShadowQuality, PbrPcssTaps: Old.PcssTaps, PbrSmrtRays: Old.SmrtRays, PbrMapRes: Old.ShadowMapRes,
+    PbrPlaneFilter: Old.PlaneFilter, PbrHalfRes: Old.HalfResShadows, PbrSoftness: Old.ShadowSoftness, PbrEmitters: Old.EmissiveShadowMode,
+    PbrFill: Old.FillBoost, SdfFill: Old.FillBoost, RayFill: Old.FillBoost, SdfShadow: Old.SdfPenumbraMode,
+    SdfCones: Old.GiCones, SdfGiIntensity: Old.GiIntensity, SdfGi: Old.GiAlgorithm === undefined ? undefined : Old.GiAlgorithm === "sdf",
+    RayGiSamples: Old.GiSamples, RayGiIntensity: Old.GiIntensity, RayGi: Old.GiAlgorithm === undefined ? undefined : Old.GiAlgorithm === "bvh",
+    RayReflections: Old.ReflectionAlgorithm === undefined ? undefined : Old.ReflectionAlgorithm === "bvh",
+    RayReflectionQuality: Old.ReflectionQuality, RayReflectionRays: Old.ReflectionRays, RayReflectionBounces: Old.ReflectionBounces,
+  });
+  if (RENDERERS[2].engines.includes(Old.RenderEngine)) Next.RayTracer = Old.RenderEngine;
+  return Next;
+}
+
 // Source behaviour: unknown ids fall back to the defaults, every count and gain is clamped to the lab's range.
 export function ResolveRenderSettings(Stored) {
-  const Merged = { ...CanonicalRenderSettings, ...(Stored && typeof Stored === "object" ? Stored : {}) };
   const C = CanonicalRenderSettings;
+  const M = { ...C };
+  for (const [Key, Value] of Object.entries(Upgrade(Stored && typeof Stored === "object" ? Stored : {}))) if (Value !== undefined && Key in C) M[Key] = Value;
+  const Flag = (Key) => (typeof M[Key] === "boolean" ? M[Key] : C[Key]);
+  const Tier = (Key) => Bounded(M[Key], 0, 4, C[Key], true);
   return {
-    RenderEngine: Known(RENDER_ENGINES, Merged.RenderEngine, C.RenderEngine),
-    SdfPenumbraMode: Known(SDF_PENUMBRA_MODES, Merged.SdfPenumbraMode, C.SdfPenumbraMode),
-    ShadowAlgorithm: Known(SHADOW_ALGORITHMS, Merged.ShadowAlgorithm, C.ShadowAlgorithm),
-    ShadowQuality: Bounded(Merged.ShadowQuality, 0, 4, C.ShadowQuality, true),
-    ShadowRays: Bounded(Merged.ShadowRays, 1, 16, C.ShadowRays, true),
-    PcssTaps: Bounded(Merged.PcssTaps, 8, 48, C.PcssTaps, true),
-    SmrtRays: Bounded(Merged.SmrtRays, 2, 12, C.SmrtRays, true),
-    ShadowMapRes: Number(Merged.ShadowMapRes) === 1024 ? 1024 : 2048,
-    PlaneFilter: Merged.PlaneFilter !== false,
-    HalfResShadows: Boolean(Merged.HalfResShadows),
-    ShadowSoftness: Bounded(Merged.ShadowSoftness, 0.25, 2.5, C.ShadowSoftness),
-    EmissiveShadowMode: Merged.EmissiveShadowMode === "unshadowed" ? "unshadowed" : "shadowed",
-    GiAlgorithm: Known(GI_ALGORITHMS, Merged.GiAlgorithm, C.GiAlgorithm),
-    GiQuality: Bounded(Merged.GiQuality, 0, 4, C.GiQuality, true),
-    GiSamples: Bounded(Merged.GiSamples, 2, 20, C.GiSamples, true),
-    GiCones: Bounded(Merged.GiCones, 4, 14, C.GiCones, true),
-    GiIntensity: Bounded(Merged.GiIntensity, 0, 2.5, C.GiIntensity),
-    FillBoost: Bounded(Merged.FillBoost, 0.2, 2.5, C.FillBoost),
-    ReflectionAlgorithm: Known(REFLECTION_ALGORITHMS, Merged.ReflectionAlgorithm, C.ReflectionAlgorithm),
-    ReflectionQuality: Bounded(Merged.ReflectionQuality, 0, 4, C.ReflectionQuality, true),
-    ReflectionRays: Bounded(Merged.ReflectionRays, 1, 8, C.ReflectionRays, true),
-    ReflectionBounces: Bounded(Merged.ReflectionBounces, 1, 3, C.ReflectionBounces, true),
-    ExposureGain: Bounded(Merged.ExposureGain, 0.2, 3.5, C.ExposureGain),
-    RenderScale: RENDER_SCALES.includes(Number(Merged.RenderScale)) ? Number(Merged.RenderScale) : 100,
-    AntiAliasing: Merged.AntiAliasing !== false,
-    MatcapChannel: Known(MATCAP_CHANNELS, Merged.MatcapChannel, C.MatcapChannel),
-    MatcapLight: Bounded(Merged.MatcapLight, 0, 360, C.MatcapLight, true),
-    MatcapRim: Bounded(Merged.MatcapRim, 0, 1, C.MatcapRim),
-    MatcapCavity: Bounded(Merged.MatcapCavity, 0, 1, C.MatcapCavity),
-    MatcapWire: Boolean(Merged.MatcapWire),
-    MatcapTint: /^#[0-9a-f]{6}$/i.test(Merged.MatcapTint) ? Merged.MatcapTint : C.MatcapTint,
+    RenderEngine: Known(RENDER_ENGINES, M.RenderEngine, C.RenderEngine),
+    RayTracer: RENDERERS[2].engines.includes(M.RayTracer) ? M.RayTracer : C.RayTracer,
+    ExposureGain: Bounded(M.ExposureGain, 0.2, 3.5, C.ExposureGain),
+    RenderScale: RENDER_SCALES.includes(Number(M.RenderScale)) ? Number(M.RenderScale) : 100,
+    AntiAliasing: Flag("AntiAliasing"),
+
+    PbrShadow: Known(PBR_SHADOWS, M.PbrShadow, C.PbrShadow),
+    PbrShadowQuality: Tier("PbrShadowQuality"),
+    PbrContactRays: Bounded(M.PbrContactRays, 1, 16, C.PbrContactRays, true),
+    PbrPcssTaps: Bounded(M.PbrPcssTaps, 8, 48, C.PbrPcssTaps, true),
+    PbrSmrtRays: Bounded(M.PbrSmrtRays, 2, 12, C.PbrSmrtRays, true),
+    PbrMapRes: Number(M.PbrMapRes) === 1024 ? 1024 : 2048,
+    PbrPlaneFilter: Flag("PbrPlaneFilter"),
+    PbrHalfRes: Flag("PbrHalfRes"),
+    PbrSoftness: Bounded(M.PbrSoftness, 0.25, 2.5, C.PbrSoftness),
+    PbrEmitters: M.PbrEmitters === "unshadowed" ? "unshadowed" : "shadowed",
+    PbrAreaLights: Flag("PbrAreaLights"),
+    PbrFill: Bounded(M.PbrFill, 0.2, 2.5, C.PbrFill),
+
+    SdfShadow: Known(SDF_SHADOWS, M.SdfShadow, C.SdfShadow),
+    SdfShadowQuality: Tier("SdfShadowQuality"),
+    SdfSteps: Bounded(M.SdfSteps, 8, 96, C.SdfSteps, true),
+    SdfSoftness: Bounded(M.SdfSoftness, 0.25, 2.5, C.SdfSoftness),
+    SdfGi: Flag("SdfGi"),
+    SdfGiQuality: Tier("SdfGiQuality"),
+    SdfCones: Bounded(M.SdfCones, 4, 14, C.SdfCones, true),
+    SdfGiIntensity: Bounded(M.SdfGiIntensity, 0, 2.5, C.SdfGiIntensity),
+    SdfFill: Bounded(M.SdfFill, 0.2, 2.5, C.SdfFill),
+
+    RayShadow: Known(RAY_SHADOWS, M.RayShadow, C.RayShadow),
+    RayShadowQuality: Tier("RayShadowQuality"),
+    RayShadowRays: Bounded(M.RayShadowRays, 1, 16, C.RayShadowRays, true),
+    RaySoftness: Bounded(M.RaySoftness, 0.25, 2.5, C.RaySoftness),
+    RayGi: Flag("RayGi"),
+    RayGiQuality: Tier("RayGiQuality"),
+    RayGiSamples: Bounded(M.RayGiSamples, 2, 20, C.RayGiSamples, true),
+    RayGiIntensity: Bounded(M.RayGiIntensity, 0, 2.5, C.RayGiIntensity),
+    RayReflections: Flag("RayReflections"),
+    RayReflectionQuality: Tier("RayReflectionQuality"),
+    RayReflectionRays: Bounded(M.RayReflectionRays, 1, 8, C.RayReflectionRays, true),
+    RayReflectionBounces: Bounded(M.RayReflectionBounces, 1, 3, C.RayReflectionBounces, true),
+    RayFill: Bounded(M.RayFill, 0.2, 2.5, C.RayFill),
+
+    MatcapShadow: Known(MATCAP_SHADOWS, M.MatcapShadow, C.MatcapShadow),
+    MatcapShadowStrength: Bounded(M.MatcapShadowStrength, 0, 1, C.MatcapShadowStrength),
+    MatcapShadowSoftness: Bounded(M.MatcapShadowSoftness, 0.25, 2.5, C.MatcapShadowSoftness),
+    MatcapChannel: Known(MATCAP_CHANNELS, M.MatcapChannel, C.MatcapChannel),
+    MatcapLight: Bounded(M.MatcapLight, 0, 360, C.MatcapLight, true),
+    MatcapRim: Bounded(M.MatcapRim, 0, 1, C.MatcapRim),
+    MatcapCavity: Bounded(M.MatcapCavity, 0, 1, C.MatcapCavity),
+    MatcapWire: Flag("MatcapWire"),
+    MatcapTint: /^#[0-9a-f]{6}$/i.test(M.MatcapTint) ? M.MatcapTint : C.MatcapTint,
   };
 }
 
-// Preset fan-out, as in the source inspector: one tier choice rewrites the counts that tier controls.
-export const ShadowQualityPatch = (Tier) => {
-  const Preset = QUALITY_PRESETS[Tier] || QUALITY_PRESETS[1];
-  return { ShadowQuality: Preset.id, ShadowRays: Preset.bvhRays, PcssTaps: Preset.pcssTaps, SmrtRays: Preset.smrtRays, ShadowMapRes: Preset.id === 0 ? 1024 : 2048 };
-};
-export const GiQualityPatch = (Tier) => {
-  const Preset = QUALITY_PRESETS[Tier] || QUALITY_PRESETS[1];
-  return { GiQuality: Preset.id, GiSamples: Preset.giSamples, GiCones: Preset.giCones };
-};
-export const ReflectionQualityPatch = (Tier) => {
-  const Preset = QUALITY_PRESETS[Tier] || QUALITY_PRESETS[1];
-  return { ReflectionQuality: Preset.id, ReflectionRays: Preset.reflRays, ReflectionBounces: Preset.id >= 2 ? 3 : Preset.id >= 1 ? 2 : 1 };
-};
-export const MasterQualityPatch = (Tier) => ({ ...ShadowQualityPatch(Tier), ...GiQualityPatch(Tier), ...ReflectionQualityPatch(Tier) });
+// Preset fan-out, as in the source inspector: one tier choice rewrites the counts that tier controls, per renderer.
+const Preset = (Tier) => QUALITY_PRESETS[Tier] || QUALITY_PRESETS[1];
+export const PbrShadowPatch = (Tier) => ({ PbrShadowQuality: Preset(Tier).id, PbrContactRays: Preset(Tier).bvhRays, PbrPcssTaps: Preset(Tier).pcssTaps, PbrSmrtRays: Preset(Tier).smrtRays, PbrMapRes: Preset(Tier).id === 0 ? 1024 : 2048 });
+export const SdfShadowPatch = (Tier) => ({ SdfShadowQuality: Preset(Tier).id, SdfSteps: Preset(Tier).sdfSteps });
+export const SdfGiPatch = (Tier) => ({ SdfGiQuality: Preset(Tier).id, SdfCones: Preset(Tier).giCones });
+export const RayShadowPatch = (Tier) => ({ RayShadowQuality: Preset(Tier).id, RayShadowRays: Preset(Tier).bvhRays });
+export const RayGiPatch = (Tier) => ({ RayGiQuality: Preset(Tier).id, RayGiSamples: Preset(Tier).giSamples });
+export const RayReflectionPatch = (Tier) => ({ RayReflectionQuality: Preset(Tier).id, RayReflectionRays: Preset(Tier).reflRays, RayReflectionBounces: Preset(Tier).id >= 2 ? 3 : Preset(Tier).id >= 1 ? 2 : 1 });
+export const MasterQualityPatch = (Tier) => ({ ...PbrShadowPatch(Tier), ...SdfShadowPatch(Tier), ...SdfGiPatch(Tier), ...RayShadowPatch(Tier), ...RayGiPatch(Tier), ...RayReflectionPatch(Tier) });
 
-// Picking an engine also picks the GI family that engine runs (source: openpbr → off, gtx → sdf, BVH4/path tracers → bvh).
+// Each renderer's tier keys; the global tier is the one they all share, or -1 ("custom").
+const TierKeys = ["PbrShadowQuality", "SdfShadowQuality", "SdfGiQuality", "RayShadowQuality", "RayGiQuality", "RayReflectionQuality"];
+export const MasterTier = (Settings) => (TierKeys.every((Key) => Settings[Key] === Settings[TierKeys[0]]) ? Settings[TierKeys[0]] : -1);
+
+// Picking a renderer picks its engine; ray tracing remembers which tracer it last used.
 export function EnginePatch(Id) {
-  const Patch = { RenderEngine: Id };
-  if (Id === "openpbr_direct") Patch.GiAlgorithm = "off";
-  else if (Id === "gtx_sdf_gi") Patch.GiAlgorithm = "sdf";
-  else if (Id === "highend_bvh4_gi" || Id === "pt_realtime" || Id === "pt_final") Patch.GiAlgorithm = "bvh";
-  return Patch;
+  return RENDERERS[2].engines.includes(Id) ? { RenderEngine: Id, RayTracer: Id } : { RenderEngine: Id };
 }
+export const RendererPatch = (Renderer, Settings) => EnginePatch(Renderer === "ray" ? Settings.RayTracer : RENDERERS.find((Each) => Each.id === Renderer).engines[0]);
 
-// The tier shared by all three, or -1 when they differ ("custom").
-export const MasterTier = (Settings) =>
-  Settings.ShadowQuality === Settings.GiQuality && Settings.GiQuality === Settings.ReflectionQuality ? Settings.ShadowQuality : -1;
-
-export const UsesShadowMap = (Settings) => ["contact_pcss", "pcss", "smrt", "pcf"].includes(Settings.ShadowAlgorithm);
-export const UsesPcss = (Settings) => Settings.ShadowAlgorithm === "contact_pcss" || Settings.ShadowAlgorithm === "pcss";
-
-// Per-pixel work, per light for shadows: what each algorithm spends with the current counts.
+// Per-pixel work for the active renderer (shadows per light).
 export function SampleBudget(Settings) {
-  const Shadow = {
-    contact_pcss: Settings.ShadowRays + Settings.PcssTaps,
-    pcss: Settings.PcssTaps,
-    smrt: Settings.SmrtRays,
-    pcf: 9,
-    bvh: Settings.ShadowRays,
-  }[Settings.ShadowAlgorithm];
-  const Gi = Settings.GiAlgorithm === "sdf" ? Settings.GiCones : Settings.GiAlgorithm === "bvh" ? Settings.GiSamples * 2 : 0;
-  const Reflection = Settings.ReflectionAlgorithm === "bvh" ? Settings.ReflectionRays * Settings.ReflectionBounces : 0;
+  const Renderer = RendererOf(Settings.RenderEngine).id;
+  let Shadow = 0, Gi = 0, Reflection = 0;
+  if (Renderer === "pbr") {
+    Shadow = { contact_pcss: Settings.PbrContactRays + Settings.PbrPcssTaps, pcss: Settings.PbrPcssTaps, smrt: Settings.PbrSmrtRays, pcf: 9 }[Settings.PbrShadow];
+    if (Settings.PbrHalfRes) Shadow = Shadow / 4;
+  } else if (Renderer === "sdf") {
+    Shadow = Settings.SdfSteps;
+    Gi = Settings.SdfGi ? Settings.SdfCones : 0;
+  } else if (Renderer === "ray") {
+    Shadow = Settings.RayShadowRays;
+    Gi = Settings.RayGi ? Settings.RayGiSamples * 2 : 0;
+    Reflection = Settings.RayReflections ? Settings.RayReflectionRays * Settings.RayReflectionBounces : 0;
+  } else Shadow = Settings.MatcapShadow === "contact" ? 8 : Settings.MatcapShadow === "none" ? 0 : 1;
   const Scale = (Settings.RenderScale / 100) ** 2;
-  // Half-resolution shadows trace a quarter of the pixels.
-  const ShadowShare = Settings.HalfResShadows && UsesShadowMap(Settings) ? 0.25 : 1;
-  return { Shadow, Gi, Reflection, Scale, Total: (Shadow * ShadowShare + Gi + Reflection) * Scale };
+  return { Shadow: +Shadow.toFixed(2), Gi, Reflection, Scale, Total: (Shadow + Gi + Reflection) * Scale };
 }
 
 export const Find = (List, Id) => List.find((Option) => Option.id === Id) || List[0];
+
+// Short "shadows · GI · reflections" lines for the active renderer.
+export function RendererLines(Settings) {
+  const Renderer = RendererOf(Settings.RenderEngine).id;
+  if (Renderer === "pbr") return [["Shadows", `${Find(PBR_SHADOWS, Settings.PbrShadow).pick} · ${Settings.PbrMapRes}²`], ["GI", "Ambient fill"], ["Reflections", "Sky / env"]];
+  if (Renderer === "sdf") return [["Shadows", Find(SDF_SHADOWS, Settings.SdfShadow).pick], ["GI", Settings.SdfGi ? `${Settings.SdfCones} SDF cones` : "Ambient fill"], ["Reflections", "Sky / env"]];
+  if (Renderer === "ray")
+    return [["Shadows", `${Find(RAY_SHADOWS, Settings.RayShadow).pick} · ${Settings.RayShadowRays} rays`], ["GI", Settings.RayGi ? `${Settings.RayGiSamples} samples` : "Ambient fill"], ["Reflections", Settings.RayReflections ? `${Settings.RayReflectionRays} × ${Settings.RayReflectionBounces} bounces` : "Sky / env"]];
+  return [["Shadows", Find(MATCAP_SHADOWS, Settings.MatcapShadow).pick], ["Shading", Find(MATCAP_CHANNELS, Settings.MatcapChannel).label], ["Light", `${Settings.MatcapLight}°`]];
+}

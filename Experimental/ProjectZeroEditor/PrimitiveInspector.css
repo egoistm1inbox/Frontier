@@ -753,60 +753,186 @@
   color: var(--pi-faint);
 }
 
-/* ── Dial gauges ───────────────────────────────────────────────────────────────────────────────────────────────── */
-.primitive-inspector .pi-dial-card.is-muted .pi-dial-grid {
-  opacity: 0.5;
+/* ── Rigid Body: body tiles, facts, contact panels, damping ──────────────────────────────────────────────────────── */
+.primitive-inspector .pi-body-tiles {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
 }
-.primitive-inspector .pi-dial-grid {
+.primitive-inspector .pi-body-tiles button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 4px;
+  padding: 10px 10px 11px;
+  border-radius: 16px;
+  background: var(--pi-raised);
+  border: 1px solid var(--pi-line);
+  color: #8a8a8a;
+  text-align: left;
+  cursor: pointer;
+}
+.primitive-inspector .pi-body-tiles button b {
+  font-size: 12px;
+  font-weight: 500;
+  color: #cfcfcf;
+}
+.primitive-inspector .pi-body-tiles button small {
+  font-size: 9.5px;
+  line-height: 1.35;
+  color: var(--pi-faint);
+}
+.primitive-inspector .pi-body-tiles button[aria-checked="true"] {
+  background: #2a2420;
+  border-color: #ff9f5a66;
+  color: #ff9f5a;
+}
+.primitive-inspector .pi-body-tiles button[aria-checked="true"] b {
+  color: var(--pi-ink);
+}
+.primitive-inspector .pi-body-glyph {
+  width: 40px;
+  height: 30px;
+  margin-bottom: 2px;
+}
+.primitive-inspector .pi-body-facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border-top: 1px solid var(--pi-line);
+  border-bottom: 1px solid var(--pi-line);
+}
+.primitive-inspector .pi-body-facts > div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px 2px 9px 0;
+  min-width: 0;
+}
+.primitive-inspector .pi-body-facts > div + div {
+  padding-left: 10px;
+  border-left: 1px solid var(--pi-line);
+}
+.primitive-inspector .pi-body-facts span {
+  font-size: 9.5px;
+  color: var(--pi-faint);
+}
+.primitive-inspector .pi-body-facts b {
+  font-size: 17px;
+  font-weight: 300;
+  white-space: nowrap;
+}
+.primitive-inspector .pi-body-facts small {
+  font-size: 10px;
+  color: var(--pi-soft);
+}
+.primitive-inspector .pi-contact-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
 }
-@container (min-width: 560px) {
-  .primitive-inspector .pi-dial-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-}
-.primitive-inspector .pi-dial {
-  position: relative;
+.primitive-inspector .pi-contact-panel {
   display: flex;
   flex-direction: column;
-  padding: 10px 10px 12px;
-  border-radius: 20px;
-  background: var(--pi-raised);
-  border: 1px solid var(--pi-line);
-  cursor: ns-resize;
-  touch-action: none;
-  outline: none;
-  user-select: none;
+  gap: 8px;
+  padding: 8px 10px 10px;
+  border-radius: 16px;
+  background: #161616;
+  border: 1px solid #ffffff0a;
+  min-width: 0;
 }
-.primitive-inspector .pi-dial:focus-visible {
-  border-color: var(--pi-tone);
-}
-.primitive-inspector .pi-dial svg {
+.primitive-inspector .pi-mini-study {
   width: 100%;
   height: auto;
   display: block;
+  user-select: none;
 }
-.primitive-inspector .pi-dial-reading {
-  position: absolute;
-  top: 10px;
-  left: 12px;
-  font-size: 22px;
-  font-weight: 200;
-  letter-spacing: -0.6px;
-  line-height: 1;
+.primitive-inspector .pi-mini-study text {
+  font: 9.5px "DM Sans", sans-serif;
+  fill: #8a8a8a;
 }
-.primitive-inspector .pi-dial-reading small {
+.primitive-inspector .pi-contact-panel .pi-number input {
+  width: 48px;
+  padding: 0 8px;
+}
+.primitive-inspector .pi-contact-panel .pi-slider-line > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.primitive-inspector .pi-mini-study text.pi-mini-strong {
+  font-size: 12px;
+  fill: #e6cf72;
+}
+.primitive-inspector .pi-damping-card.is-muted .pi-study,
+.primitive-inspector .pi-damping-card.is-muted .pi-figure {
+  opacity: 0.5;
+}
+.primitive-inspector .pi-study-svg[data-study="decay"] text {
+  font-size: 8.5px;
+}
+
+/* ── Mass: direct entry and units ──────────────────────────────────────────────────────────────────────────────── */
+.primitive-inspector .pi-mass-entry {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 0 0;
+  padding: 6px 8px 6px 14px;
+  border-radius: 14px;
+  background: #121212;
+  border: 1px solid var(--pi-line);
+}
+.primitive-inspector .pi-mass-entry span {
   font-size: 11px;
   color: var(--pi-soft);
-  margin-left: 1px;
 }
-.primitive-inspector .pi-dial-label {
+.primitive-inspector .pi-mass-entry input {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 0;
+  border: 0;
+  background: transparent;
+  color: var(--pi-ink);
+  font: inherit;
+  font-size: 20px;
+  font-weight: 300;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.primitive-inspector .pi-mass-entry input:focus {
+  outline: none;
+}
+.primitive-inspector .pi-mass-entry b {
+  min-width: 26px;
+  padding: 5px 8px;
+  border-radius: 9px;
+  background: #2a2a2a;
   font-size: 11px;
-  color: #cfcfcf;
+  font-weight: 500;
   text-align: center;
-  margin-top: -2px;
+}
+.primitive-inspector .pi-unit-pills {
+  display: flex;
+  gap: 4px;
+  margin: 10px 0 12px;
+}
+.primitive-inspector .pi-unit-pills button {
+  flex: 1;
+  min-width: 0;
+  min-height: 26px;
+  padding: 0;
+  border-radius: 9px;
+  border: 1px solid var(--pi-line);
+  background: transparent;
+  color: var(--pi-soft);
+  font-size: 11px;
+  cursor: pointer;
+}
+.primitive-inspector .pi-unit-pills button[aria-checked="true"] {
+  background: #e6e6e6;
+  border-color: #e6e6e6;
+  color: #141414;
 }
 
 /* ── Origin picker ─────────────────────────────────────────────────────────────────────────────────────────────── */
@@ -814,7 +940,7 @@
   cursor: default;
 }
 
-/* Study cards (Simulation, Mass, Shading): big reading, a diagram on a dark inset, a caption, then controls —
+/* Study cards (Damping, Collision, Shading): big reading, a diagram on a dark inset, a caption, then controls —
    the same composition as the camera lens cards. */
 .primitive-inspector .pi-study {
   border-radius: 18px;

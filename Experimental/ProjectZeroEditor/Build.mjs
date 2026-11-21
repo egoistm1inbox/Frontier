@@ -12,6 +12,8 @@ const { build } = Require("esbuild");
 
 let Assets;
 let Fonts;
+// Icons removed from EngineContent/Icons (Follow-up 42 folded the four render-path components into Render Engine).
+const RetiredIcons = ["render-matcap", "render-shadow-maps", "render-sdf", "render-ray-tracing"];
 
 // Rebuild the embedded assets only when every source is present; otherwise reuse the ones inside the current index.html.
 const SourceAssets = [
@@ -116,11 +118,13 @@ if (SourceAssets.every((Entry) => fs.existsSync(path.join(Frontier, Entry)))) {
     ShaderBall: Embedded.ShaderBall,
     Notices: Embedded.Notices,
   };
-  // Icons added to the repository since the embedded copy was made still ship, even without the other sources.
+  // Icons added or redrawn in the repository since the embedded copy was made ship from the repository, even without the other
+  // sources; icons the repository retired leave the embedded copy.
   const IconFolder = path.join(Frontier, "EngineContent/Icons");
   if (fs.existsSync(IconFolder))
     for (const File of fs.readdirSync(IconFolder).filter((Name) => Name.endsWith(".svg")))
-      Assets.Icons[File.slice(0, -4)] ??= "data:image/svg+xml;base64," + fs.readFileSync(path.join(IconFolder, File)).toString("base64");
+      Assets.Icons[File.slice(0, -4)] = "data:image/svg+xml;base64," + fs.readFileSync(path.join(IconFolder, File)).toString("base64");
+  for (const Name of RetiredIcons) delete Assets.Icons[Name];
 }
 
 // Preserve the reference's document-wide CSS and control behaviour without restyling the current editor.
