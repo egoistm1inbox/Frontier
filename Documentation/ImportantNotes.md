@@ -12,6 +12,28 @@ Durable engineering rules, non-negotiable architectural invariants, and referenc
 
 ---
 
+## 🔴 0.1 ONE VIEWPORT CAMERA MODEL — LMB IS AUTHORING-ONLY (2026-11-21)
+
+- **Exactly One Navigation Model per Viewport (`UnrealNavigation`)**: The World viewport owns a single
+  camera model — **RMB** (`RMB` mouse-look + `WASD` + `Q`/`E` vertical + `Shift` sprint + `RMB`+wheel
+  fly-speed), **MMB** or `LMB`+`RMB` pan, **`Alt`+`LMB` orbit**, **`Alt`+`RMB` dolly**, **`Alt`+`MMB` pan**,
+  wheel fly-speed, and arrow/`PageUp`/`PageDown` keyboard flight.
+- 🔴 **`LMB` Never Navigates**: the left mouse button is reserved for authoring only — `TransformGizmo`
+  handle drag, entity picking, and force-probe placement. Do **not** add a second `LMB` orbit / walk /
+  look model "alongside" `RMB`, and never let plain `LMB` feed pointer deltas into yaw/pitch/position.
+- **Root Cause to Never Repeat (`2026-11-21`, commit `4cb1481` regression)**: a plain-`LMB` "yaw turn +
+  horizontal walk" model shipped next to the `RMB` fly model. Because the viewport sets
+  `CameraInteractiveDrag` from held buttons, plain `LMB` also disabled the GPU Gizmo pick patch
+  (`WorldGizmoOverlayRasterization` `RequestPickPatch`), so `TransformGizmo` hover picking starved and
+  handles became ungrabbable. `LMB` must leave `CameraInteractiveDrag` untouched unless a Gizmo drag or
+  selection is genuinely active.
+- **Modifier-Gated Exception**: `Alt`+`LMB` orbit is permitted precisely because it is modifier-gated;
+  a Gizmo press can never be stolen by it. Regression gate:
+  `Exhibits/ProjectBrowserValidation.cpp` §(f.2) asserts zero camera origin/target drift across plain
+  `LMB` and `LMB`+`WASD` drags.
+
+---
+
 ## 🔴 1. GPU-ONLY VIEWPORT OVERLAYS, VULKAN 1.3, RIGHT-HAND RULE & `1–5%` PIXEL-DELTA QUALITY GATE (2026-11-10)
 
 - **Vulkan 1.3 & Right-Hand Coordinate Rule (`Engine/Constants/EngineConstants.h`)**:

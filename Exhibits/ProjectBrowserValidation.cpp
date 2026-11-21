@@ -540,6 +540,63 @@ int main()
         // Release RMB cleanly
         StepRmbFly(ImVec2(960.0f, 420.0f), false, ImGuiKey_None, false, 1.0 / 60.0);
 
+        // (f.2) Single-camera-model gate: LMB is authoring-only, so a LMB drag (with or without WASD)
+        // must never move the camera. A second LMB camera model used to fight the Gizmo and starve its
+        // GPU pick patch. Coordinates stay inside the viewport canvas but away from the Gizmo pivot.
+        auto* LmbPanes = EditorSession.AccessWorkspaces().AccessActivePanes();
+        const Components::Rectangle2D CanvasBounds =
+            (LmbPanes != nullptr) ? LmbPanes->Viewport.QueryLastCanvasPaneBounds()
+                                  : Components::Rectangle2D{ 0.0f, 0.0f, 0.0f, 0.0f };
+        const bool CanvasUsable = CanvasBounds.Width > 120.0f && CanvasBounds.Height > 120.0f;
+        const ImVec2 LmbFrom =
+            CanvasUsable ? ImVec2(CanvasBounds.X + CanvasBounds.Width * 0.18f, CanvasBounds.Y + CanvasBounds.Height * 0.82f)
+                         : ImVec2(420.0f, 640.0f);
+        const ImVec2 LmbTo =
+            CanvasUsable ? ImVec2(CanvasBounds.X + CanvasBounds.Width * 0.34f, CanvasBounds.Y + CanvasBounds.Height * 0.64f)
+                         : ImVec2(700.0f, 520.0f);
+
+        auto StepLmbDrag = [&](ImVec2 From, ImVec2 To, ImGuiKey HeldKey)
+        {
+            Io.AddMousePosEvent(From.x, From.y);
+            Io.AddMouseButtonEvent(ImGuiMouseButton_Left, true);
+            if (HeldKey != ImGuiKey_None)
+            {
+                Io.AddKeyEvent(HeldKey, true);
+            }
+            ImGui::NewFrame();
+            EditorSession.PresentPrimaryEditorImGui(0.050);
+            ImGui::Render();
+            for (int Step = 1; Step <= 8; ++Step)
+            {
+                const float T = static_cast<float>(Step) / 8.0f;
+                Io.AddMousePosEvent(From.x + (To.x - From.x) * T, From.y + (To.y - From.y) * T);
+                ImGui::NewFrame();
+                EditorSession.PresentPrimaryEditorImGui(0.050);
+                ImGui::Render();
+            }
+            Io.AddMouseButtonEvent(ImGuiMouseButton_Left, false);
+            if (HeldKey != ImGuiKey_None)
+            {
+                Io.AddKeyEvent(HeldKey, false);
+            }
+            ImGui::NewFrame();
+            EditorSession.PresentPrimaryEditorImGui(1.0 / 60.0);
+            ImGui::Render();
+        };
+
+        const Mathematics::Axis3D BeforeLmbOrigin = LiveBundle->EditorCamera.CameraOrigin;
+        const Mathematics::Axis3D BeforeLmbTarget = LiveBundle->EditorCamera.TargetPoint;
+        StepLmbDrag(LmbFrom, LmbTo, ImGuiKey_None);
+        StepLmbDrag(LmbFrom, LmbTo, ImGuiKey_W);
+        const Mathematics::Axis3D AfterLmbOrigin = LiveBundle->EditorCamera.CameraOrigin;
+        const Mathematics::Axis3D AfterLmbTarget = LiveBundle->EditorCamera.TargetPoint;
+        const float LmbOriginDriftSq = Mathematics::EvaluateDot(
+            AfterLmbOrigin - BeforeLmbOrigin,
+            AfterLmbOrigin - BeforeLmbOrigin);
+        const float LmbTargetDriftSq = Mathematics::EvaluateDot(
+            AfterLmbTarget - BeforeLmbTarget,
+            AfterLmbTarget - BeforeLmbTarget);
+
         // Wheel must adjust Fly Speed (never Dolly-Zoom), with and without RMB held
         auto StepWheel = [&](bool RmbDown, float WheelNotches)
         {
@@ -577,11 +634,13 @@ int main()
             SpeedAfterRmbWheel > SpeedAfterWheelUp * 0.90f ||
             SpeedAfterRmbWheel < SpeedBeforeWheel * 1.05f ||
             WheelOriginDriftSq > 1.0e-6f ||
-            WheelTargetDriftSq > 1.0e-6f)
+            WheelTargetDriftSq > 1.0e-6f ||
+            LmbOriginDriftSq > 1.0e-6f ||
+            LmbTargetDriftSq > 1.0e-6f)
         {
             std::fprintf(
                 stderr,
-                "[FAIL] Unreal Engine camera controls validation failed (NormalW=%.3f, SprintW=%.3f, dZE=%.3f, dZShiftQ=%.3f, OutBoundsStrafeSq=%.4f, SpeedBefore=%.3f, SpeedWheelUp=%.3f, SpeedRmbWheel=%.3f, WheelDriftSq=%.6f/%.6f).\n",
+                "[FAIL] Unreal Engine camera controls validation failed (NormalW=%.3f, SprintW=%.3f, dZE=%.3f, dZShiftQ=%.3f, OutBoundsStrafeSq=%.4f, SpeedBefore=%.3f, SpeedWheelUp=%.3f, SpeedRmbWheel=%.3f, WheelDriftSq=%.6f/%.6f, LmbDriftSq=%.6f/%.6f).\n",
                 NormalStepDist,
                 SprintStepDist,
                 ZAfterE - ZBeforeE,
@@ -591,7 +650,9 @@ int main()
                 SpeedAfterWheelUp,
                 SpeedAfterRmbWheel,
                 WheelOriginDriftSq,
-                WheelTargetDriftSq);
+                WheelTargetDriftSq,
+                LmbOriginDriftSq,
+                LmbTargetDriftSq);
             EditorSession.Finalize();
             ImGui::DestroyContext(Ctx);
             return 1;
