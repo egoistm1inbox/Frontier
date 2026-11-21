@@ -49,6 +49,31 @@ starting point for the UI redesign.
 
 ---
 
+## Follow-up 40: editable vehicle curves, one page per workspace, object components
+
+- **Editable curves** (`VehicleComponents.jsx`): the three Vehicle Movement charts take drags and write the fields behind them.
+  - **Suspension**: the handle on the first peak sets the damping ratio (height = overshoot) and the natural frequency (when the peak
+    arrives).
+  - **Powertrain**: each of the 18 torque points drags (rpm between its neighbours, 0–600 N·m); the idle and redline bars drag sideways.
+  - **Aerodynamics**: one handle per line at 250 km/h sets the drag area (CdA) and the downforce area (ClA).
+  - Every edit is clamped to the Blueprint.js field range and step, so the sliders and the chart always agree.
+- **Workspace pages**: the primitive carousel is now Overview · Geometry · Material · **UV** · Fracture · **SDF** · **LOD**. The UV preview moved
+  off Geometry onto its own page; new **SDF preview** (centre slice, bricks, memory, bake status) and **LOD preview** (triangles per level,
+  cluster settings, bake status) cards (`WorkspacePreviews.jsx`) read the same data as the SDF Bake and LOD Clusters workspaces. Each card
+  opens its workspace.
+- **Object components** (`ObjectComponents.jsx`, `ObjectComponents.css`, icon `EngineContent/Icons/editor-mass.svg`): every showcase object has
+  **Mass**, **Rigid Body** and **Collision** as outliner children, the way post effects sit under Post Process. Each has its own inspector.
+  - The values stay on the owning object (`Values[owner]`), so the viewport, checks and quick controls are unchanged. Notes are kept per
+    component.
+  - The old Physics page is split up: Mass gets the mass card; Rigid Body gets the simulation and surface-response cards; Collision gets a
+    new collision-shape card. Collision offers Automatic, Box, Sphere, Capsule, Convex hull and Distance field (SDF); the torus defaults to
+    SDF. It shows the proxy's fit and margin, plus filtering (collides, CCD, overlap events, layer).
+  - The Overview lists the components as links and can add back any that were removed. New objects from Construct get all three.
+    Component rows can't be duplicated.
+  - Saved scenes gain the components once (`ComponentRevision`), so a removed component stays removed.
+- Checks: new `CheckObjectComponents.mjs` (7); InspectorOrder (137), EntityContext (68 rows) and VolumeWorkspaces (4, now including the SDF and
+  LOD page cards) updated and passing.
+
 ## Follow-up 39: no presets, no car drawings
 
 - **Atmosphere**: the sky preset tiles are gone. A plain **Sky colour** card shows the current sky at noon and sunset from the

@@ -39,9 +39,9 @@ try {
   await Page.goto(Address);
   await Page.evaluate(() => localStorage.clear());
 
-  // UV preview on the geometry page: tile 1001 holds the six cube islands; the button opens the UV workspace.
+  // UV preview on its own UV page: tile 1001 holds the six cube islands; the button opens the UV workspace.
   await Open("cube");
-  await Category("Geometry");
+  await Category("UV");
   await Card("UV preview").scrollIntoViewIfNeeded();
   assert.match(await Card("UV preview").innerText(), /64\.1\s*% of 1001 used/);
   assert.deepEqual(await Page.locator(".ws-udims span.on b").allInnerTexts(), ["1001"]);
@@ -88,6 +88,13 @@ try {
   await Card("Distance field").getByLabel("Resolution", { exact: true }).selectOption({ index: 0 });
   await Page.waitForFunction(() => /of 64 bricks/.test(document.querySelector('[data-card="Distance field"] .metric')?.textContent || ""));
   assert.match(await Page.locator(".ws-bake-status").innerText(), /changed since the last bake/);
+  // The SDF page preview reads the same volume and bake stamp.
+  await Page.keyboard.press("Escape");
+  await Category("SDF");
+  await Page.waitForFunction(() => /of 64 bricks/.test(document.querySelector('[data-card="SDF preview"] .metric')?.textContent || ""));
+  assert.match(await Card("SDF preview").innerText(), /32³/);
+  assert.match(await Card("SDF preview").innerText(), /Changed since the last bake/);
+  await Card("SDF preview").screenshot({ path: path.join(Proof, "SdfPreviewCard.png") });
   Checks.push("SDF Bake: 64³ sparse bricks with Mip 1 ≤ Mip 0 verified, centre probe inside, bake stamp, 32³ marks it stale");
 
   // LOD Clusters on the sphere: DAG levels, forced L0 draws every source triangle, distance coarsens the cut.
@@ -113,6 +120,15 @@ try {
   await Card("Error cut").getByLabel("View distance value", { exact: true }).fill("4");
   await Page.waitForTimeout(200);
   await Page.screenshot({ path: path.join(Proof, "LodClusters.png") });
+  // The LOD page preview shows the same level count and the bake.
+  await Page.evaluate(() => document.activeElement?.blur());
+  await Page.keyboard.press("Escape");
+  await Category("LOD");
+  await Card("LOD preview").waitFor();
+  assert.equal(Number_(await Metric("LOD preview")), Levels);
+  assert.equal(await Card("LOD preview").locator(".ws-preview-lod svg rect").count(), Levels);
+  assert.match(await Card("LOD preview").innerText(), /up to date/);
+  await Card("LOD preview").screenshot({ path: path.join(Proof, "LodPreviewCard.png") });
   Checks.push(`LOD Clusters: ${Levels} levels; forced L0 = ${Source} triangles, 4 m cut ${Near}, 200 m cut ${Far}; bake stamp stored`);
 } catch (Error) {
   Errors.push(Error.stack);

@@ -147,6 +147,28 @@ const Drawings = {
     </>
   ),
   chevron: <path d="m9 5 7 7-7 7" {...Strokes} strokeWidth="2" />,
+  uv: (
+    <>
+      <rect x="4" y="4" width="16" height="16" rx="3.5" {...Strokes} />
+      <path d="M7.5 8.5h4v4h-4Z" fill="currentColor" opacity=".45" />
+      <path d="M13.5 12.5l3 3.5M13 16.5h4" {...Strokes} />
+    </>
+  ),
+  sdf: (
+    <>
+      <circle cx="12" cy="12" r="3.2" fill="currentColor" opacity=".45" />
+      <circle cx="12" cy="12" r="6.2" {...Strokes} />
+      <circle cx="12" cy="12" r="9.2" {...Strokes} strokeOpacity=".4" />
+    </>
+  ),
+  lod: (
+    <>
+      <rect x="9" y="3.5" width="6" height="4.5" rx="1.2" fill="currentColor" opacity=".45" />
+      <rect x="4" y="11" width="6" height="4" rx="1.1" {...Strokes} />
+      <rect x="14" y="11" width="6" height="4" rx="1.1" {...Strokes} />
+      <path d="M12 8v1.6M7 11V9.6h10V11M4 19h16" {...Strokes} strokeOpacity=".6" />
+    </>
+  ),
   plus: <path d="M12 5v14M5 12h14" {...Strokes} strokeWidth="2" />,
   close: <path d="M7 7l10 10M17 7 7 17" {...Strokes} strokeWidth="2" />,
 };

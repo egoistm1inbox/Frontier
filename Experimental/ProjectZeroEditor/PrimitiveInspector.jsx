@@ -77,7 +77,7 @@ const Shapes = {
   },
 };
 
-const Densities = [
+export const Densities = [
   ["Plastic", 950],
   ["Wood", 700],
   ["Rubber", 1100],
@@ -87,12 +87,15 @@ const Densities = [
   ["Steel", 7850],
 ];
 
+// Mass, rigid body and collision are the object's own components (outliner children); each edit workspace has its own page.
 const Categories = [
   ["overview", "Overview", "overview", "#7cb7ff"],
-  ["physics", "Physics", "physics-tab", "#ff9f5a"],
   ["geometry", "Geometry", "geometry", "#5fe0a0"],
   ["material", "Material", "material", "#ff7eb6"],
+  ["uv", "UV", "uv", "#7ab8ff"],
   ["fracture", "Fracture", "fracture", "#ff6b6b"],
+  ["sdf", "SDF", "sdf", "#95c3ad"],
+  ["lod", "LOD", "lod", "#edc181"],
 ];
 
 //------------------------------------------------------------------------------------------------------------------------
@@ -437,7 +440,7 @@ function Checks({ Values, Hidden, Size }) {
   return Rows;
 }
 
-function OverviewPage({ Shape, Read, Change, Values, Hidden, ToggleHidden, Size }) {
+function OverviewPage({ Shape, Read, Change, Values, Hidden, ToggleHidden, Size, Components = null }) {
   const Profile = Shapes[Shape];
   const Tags = Array.isArray(Values.Tags) ? Values.Tags : Profile.Tags;
   const [Draft, EditDraft] = useState("");
@@ -474,6 +477,8 @@ function OverviewPage({ Shape, Read, Change, Values, Hidden, ToggleHidden, Size 
         </div>
         <p className="pi-footnote">Surface ≈ {Fixed(Size.Area)} m² · bounds include scale.</p>
       </Card>
+
+      {Components}
 
       <Card Title="Checks" Glyph="check" Tone="#2fd27a" Aside={`${Passed} / ${Rows.length}`}>
         <ul className="pi-checks">
@@ -769,13 +774,18 @@ function MassCard({ Shape, Read, Change, Values, Size, Kit, Mass, Manual, Densit
   );
 }
 
-function PhysicsPage({ Shape, Read, Change, Values, Size, Kit }) {
-  const Simulate = !!Values.PHYSICS;
-  const Body = !Values.DYNAMIC ? "static" : Read("Physics Body", "dynamic");
+// Mass from the density table and the measured volume, unless it is set by hand.
+export function MassOf(Read, Size) {
   const Density = Read("Physics Density", "Plastic");
   const DensityKg = (Densities.find(([Name]) => Name === Density) || Densities[0])[1];
   const Manual = Read("Physics Mass Mode", "auto") === "manual";
   const Mass = Manual ? +Read("Physics Mass Manual", 1) : DensityKg * Size.Volume;
+  return { Density, DensityKg, Manual, Mass };
+}
+
+function RigidBodyCards({ Shape, Read, Change, Values }) {
+  const Simulate = !!Values.PHYSICS;
+  const Body = !Values.DYNAMIC ? "static" : Read("Physics Body", "dynamic");
   const Off = !Simulate;
   const Gravity = +Read("Physics Gravity Scale", 1);
   const Damping = +Read("Physics Linear Damping", 0.05);
@@ -824,12 +834,8 @@ function PhysicsPage({ Shape, Read, Change, Values, Size, Kit }) {
           }}
         />
         <Slider Label="Gravity scale" Reading={Gravity} Minimum={-2} Maximum={4} Step={0.05} Unit="×" Disabled={Off} Tone="#ff9f5a" Assign={(Next) => Change("Physics Gravity Scale", Next)} />
-        <Switch Label="Collides" Detail="Other bodies bump into it" On={Read("Physics Collides", true)} Assign={(Next) => Change("Physics Collides", Next)} />
-        <Switch Label="Continuous collision" Detail="Stops fast bodies tunnelling through thin walls" On={Read("Physics CCD", false)} Disabled={Off} Assign={(Next) => Change("Physics CCD", Next)} />
         <Switch Label="Start asleep" Detail="Wakes on first contact" On={Read("Physics Asleep", false)} Disabled={Off} Assign={(Next) => Change("Physics Asleep", Next)} />
       </Card>
-
-      <MassCard {...{ Shape, Read, Change, Values, Size, Kit, Mass, Manual, Density, DensityKg, Gravity }} />
 
       <Card Title="Surface response" Glyph="physics" Tone="#ffc93d" Aside={Off ? "Simulation off" : "Drag a dial"} className={"pi-dial-card" + (Off ? " is-muted" : "")}>
         <div className="pi-dial-grid">
@@ -840,6 +846,93 @@ function PhysicsPage({ Shape, Read, Change, Values, Size, Kit }) {
         </div>
       </Card>
     </>
+  );
+}
+
+// Collision proxy: what the physics world tests against. Automatic picks the cheapest proxy that hugs the shape;
+// SDF uses the object's distance-field bake.
+const CollisionShapes = [["auto", "Automatic"], ["box", "Box"], ["sphere", "Sphere"], ["capsule", "Capsule"], ["convex", "Convex hull"], ["sdf", "Distance field (SDF)"]];
+const AutomaticProxy = { cube: "box", sphere: "sphere", cylinder: "convex", cone: "convex", torus: "sdf" };
+export function CollisionProxy(Shape, Read) {
+  const Chosen = Read("Collision Shape", "auto");
+  return Chosen === "auto" ? AutomaticProxy[Shape] || "convex" : Chosen;
+}
+function ProxyVolume(Proxy, Shape, Size, Read) {
+  const [X, Y, Z] = Size.Bounds, Margin = +Read("Collision Margin", 0.01);
+  const [Gx, Gy, Gz] = [X + 2 * Margin, Y + 2 * Margin, Z + 2 * Margin];
+  if (Proxy === "box") return Gx * Gy * Gz;
+  if (Proxy === "sphere") return (4 / 3) * Math.PI * (Math.max(Gx, Gy, Gz) / 2) ** 3;
+  if (Proxy === "capsule") {
+    const R = Math.max(Gx, Gz) / 2, Straight = Math.max(0, Gy - 2 * R);
+    return Math.PI * R * R * Straight + (4 / 3) * Math.PI * R ** 3;
+  }
+  if (Proxy === "convex") return Shape === "torus" ? Math.PI * (Gx / 2) ** 2 * Gy : Size.Volume * (Gx * Gy * Gz) / Math.max(1e-9, X * Y * Z);
+  return Size.Volume * (Gx * Gy * Gz) / Math.max(1e-9, X * Y * Z);
+}
+function ProxyStudy({ Shape, Proxy, Size }) {
+  const [X, Y, Z] = Size.Bounds, Span = Math.max(X, Y, Z, 1e-6), Scale = 96 / Span;
+  const W = Math.max(X, Z) * Scale, H = Y * Scale, Cx = 150, Base = 128;
+  const Outline = { fill: "none", stroke: "#7cb7ff", strokeWidth: 1.6, strokeDasharray: "5 4" };
+  const R = Math.max(W, H) / 2;
+  return (
+    <svg className="pi-study-svg" viewBox="0 0 300 150" role="img" aria-label={`${Proxy} collision proxy`} data-study="collision">
+      <line x1="30" x2="270" y1={Base} y2={Base} stroke="#3a3a3a" />
+      <ShapeMark Shape={Shape} X={Cx} Y={Base} Size={Math.max(W, H)} fill="#3a3a3a" stroke="#8a8a8a" />
+      {Proxy === "box" && <rect x={Cx - W / 2 - 4} y={Base - H - 4} width={W + 8} height={H + 8} rx="3" {...Outline} />}
+      {Proxy === "sphere" && <circle cx={Cx} cy={Base - H / 2} r={R + 4} {...Outline} />}
+      {Proxy === "capsule" && <rect x={Cx - W / 2 - 4} y={Base - H - 4} width={W + 8} height={H + 8} rx={W / 2 + 4} {...Outline} />}
+      {Proxy === "convex" && (Shape === "cone" ? <path d={`M${Cx - W / 2 - 5} ${Base + 2}L${Cx} ${Base - H - 6}L${Cx + W / 2 + 5} ${Base + 2}Z`} {...Outline} /> : <rect x={Cx - W / 2 - 4} y={Base - H - 4} width={W + 8} height={H + 8} rx={Math.min(W, H) * 0.3} {...Outline} />)}
+      {Proxy === "sdf" && [6, 12, 18].map((Grow, Index) => <ShapeMark key={Grow} Shape={Shape} X={Cx} Y={Base + Grow / 2} Size={Math.max(W, H) + Grow} fill="none" stroke="#7cb7ff" strokeOpacity={0.7 - Index * 0.22} strokeDasharray="3 3" />)}
+      <text x="30" y="20">{CollisionShapes.find(([Id]) => Id === Proxy)?.[1]}</text>
+    </svg>
+  );
+}
+
+function CollisionCards({ Shape, Read, Change, Values, Size, Kit }) {
+  const { Control, Metric } = Kit;
+  const Proxy = CollisionProxy(Shape, Read);
+  const Volume = ProxyVolume(Proxy, Shape, Size, Read);
+  const Fit = Size.Volume / Math.max(1e-9, Volume);
+  const Sdf = Values["SDF Bake"]?.Baked;
+  const Simulated = !!Values.PHYSICS;
+  const Layers = ["Default", "Static world", "Dynamic props", "Characters", "Triggers only"];
+  return (
+    <>
+      <Card Title="Collision shape" Glyph="physics" Tone="#7cb7ff" Aside={Read("Physics Collides", true) ? "Collides" : "Ignored"} className="pi-study-card pi-collision-card">
+        <BigFigure Whole={Fixed(Fit * 100, 0)} Unit="% fit" Caption={`Object volume over proxy volume · ${Fixed(Volume, 3)} m³ proxy`} />
+        <div className="pi-study">
+          <ProxyStudy Shape={Shape} Proxy={Proxy} Size={Size} />
+        </div>
+        <Control
+          Field={{ Label: "Shape", Control: "Select", Options: CollisionShapes.map(([, Label]) => Label) }}
+          Value={Math.max(0, CollisionShapes.findIndex(([Id]) => Id === Read("Collision Shape", "auto")))}
+          Change={(Index) => Change("Collision Shape", CollisionShapes[Index][0])}
+        />
+        <Control Field={{ Label: "Margin", Minimum: 0, Maximum: 0.1, Decimals: 3, Unit: "m", Default: 0.01 }} Value={+Read("Collision Margin", 0.01)} Change={(Next) => Change("Collision Margin", Next)} />
+        {Proxy === "sdf" && <p className="pi-footnote">{Sdf ? `Uses the SDF bake (${Sdf.Resolution}³, ${Sdf.Bricks} bricks).` : "Needs an SDF bake: open the object's SDF page and bake it."}</p>}
+        {Shape === "torus" && Proxy === "convex" && <p className="pi-footnote">A convex hull fills the torus hole; use the distance field to keep it open.</p>}
+      </Card>
+      <Card Title="Filtering" Glyph="lock" Tone="#c9c9c9" className="pi-filter-card">
+        <Switch Label="Collides" Detail="Other bodies bump into it" On={Read("Physics Collides", true)} Assign={(Next) => Change("Physics Collides", Next)} />
+        <Switch Label="Continuous collision" Detail="Stops fast bodies tunnelling through thin walls" On={Read("Physics CCD", false)} Disabled={!Simulated} Assign={(Next) => Change("Physics CCD", Next)} />
+        <Switch Label="Overlap events" Detail="Reports when something enters it" On={Read("Collision Overlaps", false)} Assign={(Next) => Change("Collision Overlaps", Next)} />
+        <Control Field={{ Label: "Layer", Control: "Select", Options: Layers }} Value={Math.max(0, Layers.indexOf(Read("Collision Layer", "Default")))} Change={(Index) => Change("Collision Layer", Layers[Index])} />
+      </Card>
+    </>
+  );
+}
+
+// Cards for one of the object's components (Mass, Rigid Body, Collision). Owner is the object row; values are the owner's.
+export function ObjectComponentCards({ Component, Owner, Values, Change, Kit }) {
+  const Shape = ShapeOf(Owner);
+  const Read = (Key, Initial) => (Values[Key] === undefined ? Initial : Values[Key]);
+  const Size = Measure(Shape, Read, Array.isArray(Values.Scale) ? Values.Scale : [1, 1, 1]);
+  const Shared = { Shape, Read, Change, Values, Size, Kit };
+  const Gravity = +Read("Physics Gravity Scale", 1);
+  return (
+    <div className="primitive-inspector pi-component" data-component={Component}>
+      {Component === "Mass" ? <MassCard {...Shared} {...MassOf(Read, Size)} Gravity={Gravity} /> : Component === "Rigid Body" ? <RigidBodyCards {...Shared} /> : <CollisionCards {...Shared} />}
+    </div>
   );
 }
 
@@ -1065,7 +1158,7 @@ function WireStudy({ Shape, Read, Scale, Size }) {
 
 // Geometry page from the editor's own building blocks: property cards (Kit.Card), the split-value pill slider and
 // switches (Kit.Control) and the large metric (Kit.Metric), so it matches every other inspector.
-function GeometryPage({ Shape, Read, Change, Values, Size, Kit, Previews = null }) {
+function GeometryPage({ Shape, Read, Change, Values, Size, Kit }) {
   const { Card: PropertyCard, Control, Metric } = Kit;
   const Primitive = Shapes[Shape];
   const Locked = !!Values.LOCKED;
@@ -1116,7 +1209,6 @@ function GeometryPage({ Shape, Read, Change, Values, Size, Kit, Previews = null 
         {Readout("Surface area", Fixed(Size.Area) + " m²")}
         {Readout("Volume", Fixed(Size.Volume, 3) + " m³")}
       </PropertyCard>
-      {Previews}
       <PropertyCard Title="Shading" Class="pi-shading-card">
         <Metric
           Value={Shading === "auto" ? Fixed(Threshold, 0) : Shading === "flat" ? String(Points.length) : "1"}
@@ -1243,7 +1335,7 @@ function Carousel({ Pages }) {
 //                                                    INSPECTOR
 //------------------------------------------------------------------------------------------------------------------------
 
-export default function PrimitiveInspector({ Subject, Values, Change, Hidden, ToggleHidden, MaterialCards, FractureCards, GeometryCards = null, Kit, Launcher = null }) {
+export default function PrimitiveInspector({ Subject, Values, Change, Hidden, ToggleHidden, MaterialCards, FractureCards, UvCards = null, SdfCards = null, LodCards = null, Components = null, Kit, Launcher = null }) {
   const Shape = ShapeOf(Subject);
   const Read = (Key, Initial) => (Values[Key] === undefined ? Initial : Values[Key]);
   const Size = Measure(Shape, Read, Array.isArray(Values.Scale) ? Values.Scale : [1, 1, 1]);
@@ -1254,11 +1346,13 @@ export default function PrimitiveInspector({ Subject, Values, Change, Hidden, To
       <Carousel
         key={Subject.Id}
         Pages={{
-          overview: <OverviewPage {...Shared} />,
-          physics: <PhysicsPage {...Shared} />,
-          geometry: <GeometryPage {...Shared} Previews={GeometryCards} />,
+          overview: <OverviewPage {...Shared} Components={Components} />,
+          geometry: <GeometryPage {...Shared} />,
           material: MaterialCards,
+          uv: UvCards,
           fracture: FractureCards,
+          sdf: SdfCards,
+          lod: LodCards,
         }}
       />
     </div>

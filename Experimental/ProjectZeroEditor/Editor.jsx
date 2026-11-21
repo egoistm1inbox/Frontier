@@ -23,6 +23,7 @@ import { FolderInventory } from "./FolderInventory.mjs";
 import DiagnosticsCard from "./DiagnosticsCard.jsx";
 import { WorkspaceView } from "./Workspaces.jsx";
 import { VehicleFolder, VehicleRows, VehiclePanel, VehicleSummary, EnsureVehicleFolder } from "./VehicleComponents.jsx";
+import { ComponentPanel, ComponentSummary, WithObjectComponents, EnsureObjectComponents, ComponentRowsFor, IsObjectOwner } from "./ObjectComponents.jsx";
 import { BrowserFPS } from "./BrowserTiming.js";
 import {
   EnsureEditorCamera,
@@ -206,6 +207,8 @@ InitialRows.splice(
   ...EffectRows.filter((Row) => Row.Parent === "post"),
 );
 InitialRows.push({ ...VehicleFolder }, ...VehicleRows.map((Row) => ({ ...Row })));
+// Each showcase object carries its Mass, Rigid Body and Collision components as outliner children.
+InitialRows.splice(0, InitialRows.length, ...WithObjectComponents(InitialRows));
 const DefaultSettings = {
   GI: 2,
   Reflection: 2,
@@ -267,6 +270,7 @@ function OutlinerMetadata(Row, Record = {}, Rows = []) {
   };
   const Position = LightProperties.pos || Record.Position || [0, 0, 0];
   if (IsEditorCamera(Row)) return "Editor · permanent";
+  if (Row.Panel === ComponentPanel) return ComponentSummary(Row, Rows.find((Each) => Each.Id === Row.Parent), Record);
   if (Row.Panel === "group") {
     const Count = Rows.filter((Item) => Item.Parent === Row.Id).length;
     return Count + (Count === 1 ? " item" : " items");
@@ -447,7 +451,7 @@ function App() {
     [Alias, ToggleAlias] = useState(true),
     [PatchError, SetPatchError] = useState(1);
   const [Rows, StoreRows] = useState(() =>
-      EnsureVehicleFolder(EnsureEnvironmentLight(
+      EnsureObjectComponents(EnsureVehicleFolder(EnsureEnvironmentLight(
         ArrangeCameraEffects(
           EnsureEditorCamera(
             PrepareLightRows(
@@ -460,7 +464,7 @@ function App() {
           Saved.Rows ? Saved.CameraEffectsRevision : 1,
         ),
         Saved.Rows ? Saved.EnvironmentLightRevision : 0,
-      ), Saved.Rows ? Saved.VehicleRevision : 0),
+      ), Saved.Rows ? Saved.VehicleRevision : 0), Saved.Rows ? Saved.ComponentRevision : 0),
     ),
     [Selected, Select] = useState(
       new URLSearchParams(location.search).get("inspect") ||
@@ -860,11 +864,14 @@ function App() {
       }),
     );
   };
+  // Components store their values on the object that owns them.
+  const SelectedRow = Rows.find((Row) => Row.Id === Selected);
+  const ValueOwner = SelectedRow?.Panel === ComponentPanel ? SelectedRow.Parent : Selected;
   const Change = (Key, Value) =>
     AssignValues((Previous) => ({
       ...Previous,
-      [Selected]: {
-        ...Previous[Selected],
+      [ValueOwner]: {
+        ...Previous[ValueOwner],
         [Key]: Key === "Fracture" ? { ...Value, EditedAt: Date.now() } : Value,
       },
     }));
@@ -892,6 +899,7 @@ function App() {
           CameraEffectsRevision: 1,
           EnvironmentLightRevision: 1,
           VehicleRevision: 1,
+          ComponentRevision: 1,
           Assets: AssetRecords,
           Selected,
           Values,
@@ -1060,6 +1068,7 @@ function App() {
             CameraEffectsRevision: 1,
             EnvironmentLightRevision: 1,
             VehicleRevision: 1,
+            ComponentRevision: 1,
             Collapsed,
             Assets: AssetRecords,
             Values,
@@ -1100,7 +1109,7 @@ function App() {
       )
         throw Error();
       AssignRows(
-        EnsureVehicleFolder(EnsureEnvironmentLight(
+        EnsureObjectComponents(EnsureVehicleFolder(EnsureEnvironmentLight(
           ArrangeCameraEffects(
             PrepareLightRows(
               Loaded.ReferenceDesignRevision === 1
@@ -1111,7 +1120,7 @@ function App() {
             Loaded.CameraEffectsRevision,
           ),
           Loaded.EnvironmentLightRevision,
-        ), Loaded.VehicleRevision),
+        ), Loaded.VehicleRevision), Loaded.ComponentRevision),
       );
       Collapse(ConsolidateAtmosphereFlags(Loaded.Collapsed, Loaded.Rows));
       const ImportedValues = NormalizeHeightFogValues(
@@ -1145,6 +1154,15 @@ function App() {
     }
     Event.target.value = "";
   };
+  // Adds rows under an owner, after the owner's existing children.
+  const InsertUnder = (OwnerId, Added) =>
+    AssignRows((Previous) => {
+      const Fresh = Added.filter((Row) => !Previous.some((Each) => Each.Id === Row.Id));
+      let At = Previous.findIndex((Row) => Row.Id === OwnerId);
+      if (At < 0 || !Fresh.length) return Previous;
+      while (At + 1 < Previous.length && Previous[At + 1].Parent === OwnerId) At++;
+      return [...Previous.slice(0, At + 1), ...Fresh, ...Previous.slice(At + 1)];
+    });
   const AddRow = (
     Template,
     Properties = Values[Template.Id] || {},
@@ -1164,17 +1182,20 @@ function App() {
     let Name = Stem,
       Suffix = 2;
     while (Names.has(Name)) Name = Stem + " " + Suffix++;
+    const Placed = {
+      ...Template,
+      Id,
+      Name,
+      Preview: true,
+      Parent: Rows.some((Subject) => Subject.Id === Template.Parent)
+        ? Template.Parent
+        : null,
+    };
+    // A new object gets its own components.
     AssignRows((Previous) => [
       ...Previous,
-      {
-        ...Template,
-        Id,
-        Name,
-        Preview: true,
-        Parent: Rows.some((Subject) => Subject.Id === Template.Parent)
-          ? Template.Parent
-          : null,
-      },
+      Placed,
+      ...(IsObjectOwner(Placed) ? ComponentRowsFor(Id) : []),
     ]);
     AssignValues((Previous) => ({
       ...Previous,
@@ -1483,8 +1504,8 @@ function App() {
             ) : (
               <div className="row-identity">
                 <span className="row-name">{Row.Name}</span>
-                <small title={OutlinerMetadata(Row, Values[Row.Id], Rows)}>
-                  {OutlinerMetadata(Row, Values[Row.Id], Rows)}
+                <small title={OutlinerMetadata(Row, Values[Row.Panel === ComponentPanel ? Row.Parent : Row.Id], Rows)}>
+                  {OutlinerMetadata(Row, Values[Row.Panel === ComponentPanel ? Row.Parent : Row.Id], Rows)}
                 </small>
               </div>
             )}
@@ -1902,7 +1923,7 @@ function App() {
           ) : (
             <Inspector
               Subject={Subject}
-              Values={Values[Selected] || {}}
+              Values={Values[ValueOwner] || {}}
               Change={Change}
               Hidden={Hidden[Selected]}
               ToggleHidden={() => ToggleHidden(Selected)}
@@ -1911,7 +1932,7 @@ function App() {
               Workspace={Workspace}
               OpenWorkspace={OpenWorkspace}
               SetWorkspace={SetWorkspace}
-              Scene={{ Rows, SelectRow }}
+              Scene={{ Rows, SelectRow, AddRows: InsertUnder }}
               OpenWind={() => {
                 WindOpener.current = document.activeElement;
                 EditWind(Selected);
@@ -2384,7 +2405,7 @@ function App() {
                       : "Enable fracture"}
                   </button>
                 )}
-                <button onClick={() => AddRow(Subject)}>Duplicate</button>
+                {Subject.Panel !== ComponentPanel && <button onClick={() => AddRow(Subject)}>Duplicate</button>}
                 {Subject.Panel !== "group" && (
                   <button
                     disabled={IsEditorCamera(Subject)}
@@ -2462,7 +2483,7 @@ function App() {
             EnvironmentRow,
             ...ReferenceLights,
           ]
-            .filter((Subject) => Subject.Panel !== "group")
+            .filter((Subject) => Subject.Panel !== "group" && Subject.Panel !== ComponentPanel)
             .map((Row) =>
               IsEditorCamera(Row)
                 ? { ...Row, Name: "Main Camera", Description: "Scene camera" }

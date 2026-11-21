@@ -132,7 +132,145 @@ function TorqueAt(Curve, Rpm) {
   return Curve[Curve.length - 1][1];
 }
 
+// Pointer drag inside an svg chart, reported in viewBox units. Each handle passes its own move function.
+function usePlotDrag() {
+  const Active = useRef(null);
+  const Local = (Event) => {
+    const Svg = Event.currentTarget.ownerSVGElement || Event.currentTarget;
+    const Point = Svg.createSVGPoint();
+    Point.x = Event.clientX;
+    Point.y = Event.clientY;
+    return Point.matrixTransform(Svg.getScreenCTM().inverse());
+  };
+  return (Move) => ({
+    onPointerDown: (Event) => {
+      Event.preventDefault();
+      Event.currentTarget.setPointerCapture(Event.pointerId);
+      Active.current = Move;
+    },
+    onPointerMove: (Event) => {
+      if (Active.current !== Move) return;
+      const { x, y } = Local(Event);
+      Move(x, y);
+    },
+    onPointerUp: () => (Active.current = null),
+    onPointerCancel: () => (Active.current = null),
+  });
+}
+const Clamp = (Amount, Low, High) => Math.min(High, Math.max(Low, Amount));
+const Snap = (Amount, Step) => +(Math.round(Amount / Step) * Step).toFixed(4);
+function Handle({ X, Y, Colour, Label, Drag, Shape = "circle" }) {
+  return (
+    <g className="vc-handle" {...Drag} role="slider" aria-label={Label}>
+      <circle cx={X} cy={Y} r="11" fill="transparent" />
+      {Shape === "bar" ? <rect x={X - 3} y={Y - 8} width="6" height="16" rx="3" fill="#1a1a1a" stroke={Colour} strokeWidth="1.6" /> : <circle cx={X} cy={Y} r="4.6" fill="#1a1a1a" stroke={Colour} strokeWidth="1.8" />}
+    </g>
+  );
+}
+
+// Suspension: the handle sits on the first peak. Up and down sets the overshoot (damping ratio); left and right sets when the
+// peak arrives (natural frequency).
+function SuspensionPlot({ Hz, Zeta, Write, Drag }) {
+  const HzField = ClassField("VehicleMovement", "springHz"), ZetaField = ClassField("VehicleMovement", "dampingRatio");
+  const X = (T) => 20 + (T / 2) * 290, Y = (Value) => 118 - Value * 58;
+  const W = 2 * Math.PI * Hz;
+  const Response = Array.from({ length: 161 }, (_, Index) => {
+    const T = (Index / 160) * 2;
+    if (Zeta < 1) {
+      const Wd = W * Math.sqrt(1 - Zeta * Zeta);
+      return 1 - Math.exp(-Zeta * W * T) * (Math.cos(Wd * T) + ((Zeta * W) / Wd) * Math.sin(Wd * T));
+    }
+    return 1 - Math.exp(-W * T) * (1 + W * T);
+  });
+  const Under = Math.min(Zeta, 0.99);
+  const PeakTime = 1 / (2 * Hz * Math.sqrt(1 - Under * Under));
+  const Overshoot = Zeta < 1 ? Math.exp((-Zeta * Math.PI) / Math.sqrt(1 - Zeta * Zeta)) : 0;
+  const Settle = 4 / Math.max(0.01, Zeta * W);
+  const Move = (Px, Py) => {
+    const Peak = Clamp((118 - Py) / 58 - 1, 0, 0.9);
+    let Next = Zeta >= 1 && Peak < 0.002 ? Zeta : Peak < 0.002 ? 1 : -Math.log(Peak) / Math.sqrt(Math.PI ** 2 + Math.log(Peak) ** 2);
+    Next = Clamp(Snap(Next, ZetaField.step || 0.01), ZetaField.min, ZetaField.max);
+    const Time = Clamp(((Px - 20) / 290) * 2, 0.05, 2);
+    const U = Math.min(Next, 0.99);
+    Write("dampingRatio", Next);
+    Write("springHz", Clamp(Snap(1 / (2 * Time * Math.sqrt(1 - U * U)), HzField.step || 0.05), HzField.min, HzField.max));
+  };
+  return (
+    <svg className="vc-visual vc-editable" viewBox="0 0 320 136" role="img" aria-label="Suspension step response" data-plot="suspension">
+      <line x1="20" x2="310" y1={Y(1)} y2={Y(1)} stroke="#ffffff22" strokeDasharray="3 4" />
+      <line x1="20" x2="310" y1={Y(0)} y2={Y(0)} stroke="#ffffff22" />
+      <path d={Response.map((Value, Index) => (Index ? "L" : "M") + X((Index / 160) * 2).toFixed(1) + " " + Y(Value).toFixed(1)).join("")} fill="none" stroke="#5fe0a0" strokeWidth="1.8" />
+      {Settle < 2 && <line x1={X(Settle)} x2={X(Settle)} y1="14" y2={Y(0)} stroke="#ffffff30" strokeDasharray="2 3" />}
+      <line x1={X(PeakTime)} x2={X(PeakTime)} y1={Y(1 + Overshoot)} y2={Y(0)} stroke="#5fe0a033" />
+      <Handle X={X(PeakTime)} Y={Y(1 + Overshoot)} Colour="#5fe0a0" Label="First peak: drag to set damping and frequency" Drag={Drag(Move)} />
+      <text x="20" y="130">0 s</text>
+      <text x="310" y="130" textAnchor="end">2 s · drag the peak</text>
+    </svg>
+  );
+}
+
+// Torque: every curve point can be dragged (rpm between its neighbours, torque 0–600 N·m); the idle edge and the redline drag
+// sideways.
+const TorqueTop = 600, PowerScale = 450, ChartRpm = 9000;
+function TorquePlot({ Curve, Idle, Redline, Write, Drag }) {
+  const IdleField = ClassField("VehicleMovement", "idleRpm"), RedField = ClassField("VehicleMovement", "redlineRpm");
+  const X = (Rpm) => 24 + (Rpm / ChartRpm) * 286, Yt = (T) => 116 - (T / TorqueTop) * 96, Yp = (P) => 116 - (P / PowerScale) * 96;
+  const Rpm = (Px) => ((Px - 24) / 286) * ChartRpm, Torque = (Py) => ((116 - Py) / 96) * TorqueTop;
+  const Torques = [], Powers = [];
+  for (let At = Curve[0][0]; At <= Math.min(ChartRpm, Curve[Curve.length - 1][0]); At += 50) {
+    Torques.push(`${X(At).toFixed(1)} ${Yt(TorqueAt(Curve, At)).toFixed(1)}`);
+    Powers.push(`${X(At).toFixed(1)} ${Yp((TorqueAt(Curve, At) * At * 2 * Math.PI) / 60 / 1000).toFixed(1)}`);
+  }
+  const MovePoint = (Index) => (Px, Py) => {
+    const Low = Index ? Curve[Index - 1][0] + 100 : 300, High = Index < Curve.length - 1 ? Curve[Index + 1][0] - 100 : ChartRpm;
+    const Next = Curve.map((Point) => Point.slice());
+    Next[Index] = [Clamp(Snap(Rpm(Px), 50), Low, High), Clamp(Math.round(Torque(Py)), 0, TorqueTop)];
+    Write("torqueCurve", Next);
+  };
+  return (
+    <svg className="vc-visual vc-editable" viewBox="0 0 320 140" role="img" aria-label="Torque and power curve" data-plot="torque">
+      <rect x={X(Idle)} y="20" width={Math.max(0, X(Redline) - X(Idle))} height="96" fill="#ffffff06" />
+      <line x1="24" x2="310" y1="116" y2="116" stroke="#ffffff22" />
+      <path d={"M" + Torques.join("L")} fill="none" stroke="#ff9f5a" strokeWidth="1.8" />
+      <path d={"M" + Powers.join("L")} fill="none" stroke="#7cb7ff" strokeWidth="1.8" strokeDasharray="5 3" />
+      <line x1={X(Redline)} x2={X(Redline)} y1="16" y2="116" stroke="#ff6b6b" strokeDasharray="3 3" />
+      <Handle X={X(Redline)} Y={22} Colour="#ff6b6b" Shape="bar" Label="Redline: drag sideways" Drag={Drag((Px) => Write("redlineRpm", Clamp(Snap(Rpm(Px), RedField.step || 50), RedField.min, RedField.max)))} />
+      <Handle X={X(Idle)} Y={110} Colour="#b0b0b0" Shape="bar" Label="Idle: drag sideways" Drag={Drag((Px) => Write("idleRpm", Clamp(Snap(Rpm(Px), IdleField.step || 50), IdleField.min, IdleField.max)))} />
+      {Curve.map(([At, Nm], Index) => (
+        <Handle key={Index} X={X(At)} Y={Yt(Nm)} Colour="#ff9f5a" Label={`Torque point ${Index + 1}: ${At} rpm, ${Nm} N·m`} Drag={Drag(MovePoint(Index))} />
+      ))}
+      <text x={X(Redline) - 7} y="14" textAnchor="end">redline {Fixed(Redline)}</text>
+      <text x="24" y="132">{Fixed(Idle)} rpm idle</text>
+      <text x="310" y="132" textAnchor="end">drag the torque points · power dashed</text>
+    </svg>
+  );
+}
+
+// Aero: one handle per line at 250 km/h; up and down sets the drag area (CdA) or the downforce area (ClA).
+const AeroSpeed = 250;
+function AeroPlot({ DragArea, Lift, Rho, Limit, Write, Drag }) {
+  const DragField = ClassField("VehicleMovement", "dragArea"), LiftField = ClassField("VehicleMovement", "liftArea");
+  const X = (Kmh) => 24 + (Kmh / 300) * 286, Y = (Newtons) => 110 - (Newtons / 6000) * 92;
+  const Force = (Area, Kmh) => 0.5 * Rho * Area * (Kmh / 3.6) ** 2;
+  const Line = (Area) => Array.from({ length: 61 }, (_, Index) => `${X(Index * 5).toFixed(1)} ${Math.max(14, Y(Force(Area, Index * 5))).toFixed(1)}`);
+  const AreaAt = (Py, Field) => Clamp(Snap(((110 - Py) / 92) * 6000 / Force(1, AeroSpeed), Field.step || 0.01), Field.min, Field.max);
+  return (
+    <svg className="vc-visual vc-editable" viewBox="0 0 320 130" role="img" aria-label="Drag and downforce against speed" data-plot="aero">
+      <line x1="24" x2="310" y1="110" y2="110" stroke="#ffffff22" />
+      <line x1={X(AeroSpeed)} x2={X(AeroSpeed)} y1="14" y2="110" stroke="#ffffff14" />
+      <path d={"M" + Line(DragArea).join("L")} fill="none" stroke="#ff9f5a" strokeWidth="1.8" />
+      <path d={"M" + Line(Lift).join("L")} fill="none" stroke="#5fe0a0" strokeWidth="1.8" strokeDasharray="5 3" />
+      {Limit > 0 && <line x1={X(Limit)} x2={X(Limit)} y1="14" y2="110" stroke="#ffffff35" strokeDasharray="2 3" />}
+      <Handle X={X(AeroSpeed)} Y={Y(Force(DragArea, AeroSpeed))} Colour="#ff9f5a" Label="Drag: drag up or down" Drag={Drag((_, Py) => Write("dragArea", AreaAt(Py, DragField)))} />
+      <Handle X={X(AeroSpeed)} Y={Y(Force(Lift, AeroSpeed))} Colour="#5fe0a0" Label="Downforce: drag up or down" Drag={Drag((_, Py) => Write("liftArea", AreaAt(Py, LiftField)))} />
+      <text x="24" y="124">0</text>
+      <text x="310" y="124" textAnchor="end">300 km/h · drag solid · downforce dashed</text>
+    </svg>
+  );
+}
+
 function MovementInspector({ Kit, V, Write }) {
+  const Grab = usePlotDrag();
   const { Card, Metric } = Kit;
   const Mass = +V("mass"), Front = +V("frontWeight") / 100, Com = +V("comHeight");
   const FrontLoad = Mass * Front, RearLoad = Mass - FrontLoad;
@@ -158,15 +296,6 @@ function MovementInspector({ Kit, V, Write }) {
     if (Need > PeakPower * VEHICLE_SHEET.driveEfficiency) break;
     PowerTop = Speed * 3.6;
   }
-  // Step response of the suspension (unit bump), 0–2 s.
-  const Response = Array.from({ length: 121 }, (_, Index) => {
-    const T = (Index / 120) * 2, W = 2 * Math.PI * Hz;
-    if (Zeta < 1) {
-      const Wd = W * Math.sqrt(1 - Zeta * Zeta);
-      return 1 - Math.exp(-Zeta * W * T) * (Math.cos(Wd * T) + ((Zeta * W) / Wd) * Math.sin(Wd * T));
-    }
-    return 1 - Math.exp(-W * T) * (1 + W * T);
-  });
   const Settle = 4 / Math.max(0.01, Zeta * 2 * Math.PI * Hz);
   const Overshoot = Zeta < 1 ? Math.exp((-Zeta * Math.PI) / Math.sqrt(1 - Zeta * Zeta)) * 100 : 0;
   return (
@@ -185,42 +314,14 @@ function MovementInspector({ Kit, V, Write }) {
         <Readouts Kit={Kit} Rows={[["Steering lock", ((Steer * 180) / Math.PI).toFixed(1) + "°"], ["Track", Track.toFixed(2) + " m"], ["Tyre circumference", (2 * Math.PI * Radius).toFixed(2) + " m"]]} />
       </Card>
       <Card Title="Suspension" Class="vc-card">
-        <svg className="vc-visual" viewBox="0 0 320 130" role="img" aria-label="Suspension step response">
-          <line x1="20" x2="310" y1="40" y2="40" stroke="#ffffff22" strokeDasharray="3 4" />
-          <line x1="20" x2="310" y1="110" y2="110" stroke="#ffffff22" />
-          <path d={Response.map((Value, Index) => (Index ? "L" : "M") + (20 + (Index / 120) * 290).toFixed(1) + " " + (110 - Value * 70).toFixed(1)).join("")} fill="none" stroke="#5fe0a0" strokeWidth="1.8" />
-          {Settle < 2 && <line x1={20 + (Settle / 2) * 290} x2={20 + (Settle / 2) * 290} y1="20" y2="110" stroke="#ffffff30" strokeDasharray="2 3" />}
-          <text x="20" y="124">0 s</text>
-          <text x="310" y="124" textAnchor="end">2 s · body after a bump</text>
-        </svg>
+        <SuspensionPlot Hz={Hz} Zeta={Zeta} Write={Write} Drag={Grab} />
         <Metric Value={Fixed(Overshoot, 1)} Unit="% overshoot" Caption={`Settles in ${Fixed(Settle, 2)} s`} />
         <ClassSlider Kit={Kit} V={V} Write={Write} Type="VehicleMovement" Key="springHz" />
         <ClassSlider Kit={Kit} V={V} Write={Write} Type="VehicleMovement" Key="dampingRatio" />
         <Readouts Kit={Kit} Rows={[["Spring rate per corner", Fixed(Stiffness / 1000, 1) + " kN/m"], ["Damping per corner", Fixed((2 * Zeta * Math.sqrt(Stiffness * Corner)) / 1000, 2) + " kN·s/m"]]} />
       </Card>
       <Card Title="Powertrain" Class="vc-card">
-        <svg className="vc-visual" viewBox="0 0 320 140" role="img" aria-label="Torque and power curve">
-          {(() => {
-            const MaxRpm = 9000, X = (Rpm) => 24 + (Rpm / MaxRpm) * 286, Yt = (T) => 116 - (T / 600) * 96, Yp = (P) => 116 - (P / 450) * 96;
-            const Torque = [], Power = [];
-            for (let Rpm = Curve[0][0]; Rpm <= Math.min(MaxRpm, Curve[Curve.length - 1][0]); Rpm += 100) {
-              Torque.push(`${X(Rpm).toFixed(1)} ${Yt(TorqueAt(Curve, Rpm)).toFixed(1)}`);
-              Power.push(`${X(Rpm).toFixed(1)} ${Yp((TorqueAt(Curve, Rpm) * Rpm * 2 * Math.PI) / 60 / 1000).toFixed(1)}`);
-            }
-            return (
-              <>
-                <rect x={X(Idle)} y="20" width={Math.max(0, X(Redline) - X(Idle))} height="96" fill="#ffffff06" />
-                <line x1={X(Redline)} x2={X(Redline)} y1="16" y2="116" stroke="#ff6b6b" strokeDasharray="3 3" />
-                <line x1="24" x2="310" y1="116" y2="116" stroke="#ffffff22" />
-                <path d={"M" + Torque.join("L")} fill="none" stroke="#ff9f5a" strokeWidth="1.8" />
-                <path d={"M" + Power.join("L")} fill="none" stroke="#7cb7ff" strokeWidth="1.8" strokeDasharray="5 3" />
-                <text x={X(Redline) - 4} y="14" textAnchor="end">redline {Fixed(Redline)}</text>
-                <text x="24" y="132">{Fixed(Idle)} rpm idle</text>
-                <text x="310" y="132" textAnchor="end">torque solid · power dashed</text>
-              </>
-            );
-          })()}
-        </svg>
+        <TorquePlot Curve={Curve} Idle={Idle} Redline={Redline} Write={Write} Drag={Grab} />
         <Metric Value={Fixed(PeakPower)} Unit="kW peak" Caption={`${Fixed(PeakTorque)} N·m peak torque · ${Fixed(PeakPower * 1.341)} hp at ${Fixed(PeakPowerRpm)} rpm`} />
         <ClassSlider Kit={Kit} V={V} Write={Write} Type="VehicleMovement" Key="finalDrive" />
         <ClassSlider Kit={Kit} V={V} Write={Write} Type="VehicleMovement" Key="idleRpm" />
@@ -228,25 +329,7 @@ function MovementInspector({ Kit, V, Write }) {
         <Readouts Kit={Kit} Rows={[["Gears", VEHICLE_SHEET.gearRatios.map((Ratio) => Ratio.toFixed(1)).join(" · ")], ["Top gear at redline", Fixed(GearedTop) + " km/h"]]} />
       </Card>
       <Card Title="Aerodynamics" Class="vc-card">
-        <svg className="vc-visual" viewBox="0 0 320 130" role="img" aria-label="Drag and downforce against speed">
-          {(() => {
-            const X = (Kmh) => 24 + (Kmh / 300) * 286, Y = (Newtons) => 110 - (Newtons / 6000) * 92;
-            const Line = (Area) => Array.from({ length: 61 }, (_, Index) => {
-              const Kmh = Index * 5, Speed = Kmh / 3.6;
-              return `${X(Kmh).toFixed(1)} ${Math.max(14, Y(0.5 * Rho * Area * Speed * Speed)).toFixed(1)}`;
-            });
-            return (
-              <>
-                <line x1="24" x2="310" y1="110" y2="110" stroke="#ffffff22" />
-                <path d={"M" + Line(Drag).join("L")} fill="none" stroke="#ff9f5a" strokeWidth="1.8" />
-                <path d={"M" + Line(Lift).join("L")} fill="none" stroke="#5fe0a0" strokeWidth="1.8" strokeDasharray="5 3" />
-                {PowerTop > 0 && <line x1={X(PowerTop)} x2={X(PowerTop)} y1="14" y2="110" stroke="#ffffff35" strokeDasharray="2 3" />}
-                <text x="24" y="124">0</text>
-                <text x="310" y="124" textAnchor="end">300 km/h · drag solid · downforce dashed</text>
-              </>
-            );
-          })()}
-        </svg>
+        <AeroPlot DragArea={Drag} Lift={Lift} Rho={Rho} Limit={PowerTop} Write={Write} Drag={Grab} />
         <Metric Value={Fixed(PowerTop)} Unit="km/h drag-limited" Caption="Where drag and rolling resistance use all the wheel power" />
         <ClassSlider Kit={Kit} V={V} Write={Write} Type="VehicleMovement" Key="dragArea" />
         <ClassSlider Kit={Kit} V={V} Write={Write} Type="VehicleMovement" Key="liftArea" />

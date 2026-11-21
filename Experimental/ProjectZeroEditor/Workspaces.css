@@ -490,3 +490,34 @@
   color: #8a8a8a;
   font-size: 12px;
 }
+/* SDF and LOD preview cards (their own carousel pages). */
+.ws-preview-sdf {
+  height: 220px;
+}
+.ws-preview-lod {
+  height: auto;
+  padding: 6px 4px 0;
+}
+.ws-preview-lod svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.ws-preview-lod text {
+  font: 9px "DM Sans", sans-serif;
+  fill: #8a8a8a;
+}
+/* Editable vehicle charts: drag the handles to change the fields behind the curve. */
+.vc-editable {
+  touch-action: none;
+}
+.vc-handle {
+  cursor: grab;
+}
+.vc-handle:active {
+  cursor: grabbing;
+}
+.vc-handle:hover circle:last-child,
+.vc-handle:hover rect {
+  fill: #2c2c2c;
+}

@@ -22,7 +22,7 @@ const Densities = [
 ];
 const ClusterSizes = [64, 128, 256];
 const Colourings = ["Cluster", "Level", "Group"];
-const LevelTones = ["#7ab8ff", "#7be0ad", "#edc181", "#e59a8a", "#c5a3ff", "#8fd3d8", "#d8d08f", "#b0b0b0"];
+export const LevelTones = ["#7ab8ff", "#7be0ad", "#edc181", "#e59a8a", "#c5a3ff", "#8fd3d8", "#d8d08f", "#b0b0b0"];
 // The cut is computed for a 1080-pixel-high view with a 60° vertical field, as a game camera would see it.
 const Focal = 1080 / (2 * Math.tan(Math.PI / 6));
 
@@ -86,7 +86,7 @@ export function useClusters(Subject, Values) {
 }
 
 // Simplification error in object units; flat faces simplify with no error at all.
-const ErrorText = (Error_, Level) => (!Level ? "0" : Error_ < 1e-6 ? "≈ 0 (flat)" : Error_ < 0.001 ? (Error_ * 1000).toFixed(3) + " mm" : FormatLength(Error_));
+export const ErrorText = (Error_, Level) => (!Level ? "0" : Error_ < 1e-6 ? "≈ 0 (flat)" : Error_ < 0.001 ? (Error_ * 1000).toFixed(3) + " mm" : FormatLength(Error_));
 
 const CutOf = (Workspace) => ({ Threshold: Workspace.LodThreshold ?? 1, Distance: Workspace.LodDistance ?? 4, Level: Workspace.LodLevel ?? -1, Colouring: Workspace.LodColour ?? 0, Wire: Workspace.LodWire !== false });
 

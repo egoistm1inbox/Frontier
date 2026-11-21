@@ -83,7 +83,7 @@ function SlicePoint(Volume, Axis, Depth, U, V) {
   return [Min[0] + D * Span, Min[1] + V * Span, Min[2] + U * Span];
 }
 
-function useSliceImage(Sdf, Axis, Depth, Mip, Iso) {
+export function useSliceImage(Sdf, Axis, Depth, Mip, Iso) {
   return useMemo(() => {
     if (!Sdf.Volume) return null;
     const Size = 192;

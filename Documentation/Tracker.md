@@ -1314,6 +1314,12 @@ in `Exhibits/LightCompute/Results/FogFacetRegression.txt`; this was a fixture-se
   joint at its pose (drag to set it) → Socket type → range card → **Attached to** (the asset's name as a link that selects it, plus an
   Attach to picker, offset and axis). `CheckVehicleSockets.mjs` rewritten (8 checks) and passes; InspectorOrder (109), EntityContext,
   SharedCards and InspectorLayout pass. Names unapproved.
+  Follow-up 40: Vehicle Movement charts are editable (suspension peak → damping/frequency, 18 torque points plus idle/redline,
+  CdA/ClA handles, clamped to Blueprint ranges). Primitive carousel is Overview/Geometry/Material/UV/Fracture/SDF/LOD with UV, SDF and
+  LOD preview cards on their own pages. Showcase objects carry Mass, Rigid Body and Collision component rows (`ObjectComponents.jsx`;
+  values on the owner, `ComponentRevision` migration, collision-shape card with an SDF option); the Physics page is gone. New
+  `CheckObjectComponents.mjs` (7) passes; InspectorOrder (137), EntityContext (68), VolumeWorkspaces, InstrumentStyle, SharedCards,
+  VehicleSockets and RenderSettings pass. Materials:62, QuickTools:296 and Construction:190 also fail on the base commit. Names unapproved.
   Follow-up 39: Atmosphere sky presets removed (tiles, preset names, `AtmospherePresets`); a plain **Sky colour** card keeps the
   noon / sunset preview from the current settings. **Bumper Trigger** removed from the Vehicle folder (saved scenes drop it on load).
   Vehicle Movement and Chassis Collision no longer draw the car: Vehicle Movement is figures, fields and readouts (plus its data

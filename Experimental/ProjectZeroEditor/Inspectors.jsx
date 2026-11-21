@@ -5,7 +5,8 @@ import HeightFogVisual from "./HeightFogVisual.jsx";
 import { HeightFogLayer, FogLightStudy, AerialRidges } from "./FogCards.jsx";
 import FracturePanel from "./FracturePanel.jsx";
 import RenderSettingsCards from "./RenderSettingsCards.jsx";
-import { UvPreviewCard, FracturePreviewCard } from "./WorkspacePreviews.jsx";
+import { UvPreviewCard, FracturePreviewCard, SdfPreviewCard, LodPreviewCard } from "./WorkspacePreviews.jsx";
+import { ComponentPanel, ComponentSheet, ComponentsCard } from "./ObjectComponents.jsx";
 import AtmosphereLab, { AtmosphereProfile } from "./AtmosphereLab.jsx";
 import {
   GraphContext,
@@ -20,7 +21,7 @@ import FogShapePanel from "./FogShapePanel.jsx";
 import { IsEditorCamera } from "./ScenePolicy.js";
 import TransformPanel from "./TransformPanel.jsx";
 import MaterialPanel from "./MaterialPanel.jsx";
-import PrimitiveInspector from "./PrimitiveInspector.jsx";
+import PrimitiveInspector, { ObjectComponentCards } from "./PrimitiveInspector.jsx";
 import { EffectSheets, IsEffectPanel, EffectStudy } from "./PostEffects.jsx";
 import {
   EnvironmentPanel,
@@ -54,6 +55,7 @@ export const Panels = {
   ...EffectSheets,
   [EnvironmentPanel]: EnvironmentSheet,
   [VehiclePanel]: VehicleSheet,
+  [ComponentPanel]: ComponentSheet,
 };
 export function Glyph({ Name, Size = 18 }) {
   if (Name === "celestial-orbit")
@@ -699,12 +701,36 @@ export function Inspector({
             Compact
           />
         }
-        GeometryCards={
+        UvCards={
           <UvPreviewCard
             Subject={Subject}
             Values={Values}
             Open={OpenWorkspace && (() => OpenWorkspace("uv"))}
             Kit={{ Card, Control, Metric }}
+          />
+        }
+        SdfCards={
+          <SdfPreviewCard
+            Subject={Subject}
+            Values={Values}
+            Open={OpenWorkspace && (() => OpenWorkspace("sdf"))}
+            Kit={{ Card, Control, Metric }}
+          />
+        }
+        LodCards={
+          <LodPreviewCard
+            Subject={Subject}
+            Values={Values}
+            Open={OpenWorkspace && (() => OpenWorkspace("lod"))}
+            Kit={{ Card, Control, Metric }}
+          />
+        }
+        Components={
+          <ComponentsCard
+            Owner={Subject}
+            Values={Values}
+            Scene={Scene}
+            Kit={{ Icon }}
           />
         }
         FractureCards={
@@ -792,6 +818,37 @@ export function Inspector({
       )}
     </>
     );
+  if (Subject.Panel === ComponentPanel) {
+    const Owner = Scene?.Rows?.find((Each) => Each.Id === Subject.Parent);
+    return (
+      <div className="generic-inspector object-component-inspector" data-panel={Subject.Panel}>
+        <header className="inspector-heading">
+          <div className="breadcrumbs">Inspector / {Owner ? Owner.Name : "Component"}</div>
+          <h1>{Subject.Name}</h1>
+          <p className="eyebrow">{Subject.Description}</p>
+          {/* Stored on the owner under the component's name, so it doesn't overwrite the object's own notes. */}
+          <EntityNotes Value={Values[`${Subject.Component} Notes`] || ""} Change={(Next) => Change(`${Subject.Component} Notes`, Next)} />
+        </header>
+        {Owner ? (
+          <>
+            <button type="button" className="vc-asset-link oc-owner" onClick={() => Scene?.SelectRow?.(Owner.Id)} title={`Select ${Owner.Name}`}>
+              <Icon Name={Owner.Icon} Size={22} />
+              <span>
+                <b>{Owner.Name}</b>
+                <small>Component of this object · values are stored on it</small>
+              </span>
+              <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+                <path d="M6 3.5L10.5 8 6 12.5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+            <ObjectComponentCards Component={Subject.Component} Owner={Owner} Values={Values} Change={Change} Kit={{ Card, Control, Metric }} />
+          </>
+        ) : (
+          <p className="vc-note">The object this component belonged to was removed.</p>
+        )}
+      </div>
+    );
+  }
   if (Subject.Panel === VehiclePanel)
     return (
       <div className="generic-inspector vehicle-component-inspector" data-panel={Subject.Panel}>

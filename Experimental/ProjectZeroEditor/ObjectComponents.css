@@ -1,0 +1,70 @@
+/* Object components: the Overview list of an object's components, and the component inspectors. */
+.pi-components-card .oc-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.oc-link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 50px;
+  padding: 8px 14px;
+  border-radius: 14px;
+  border: 1px solid #ffffff12;
+  background: #0d0d0d;
+  color: #e6e6e6;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+.oc-link:hover {
+  background: #1c1c1c;
+  border-color: #ffffff26;
+}
+.oc-link span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+.oc-link b {
+  font-weight: 500;
+  font-size: 13px;
+}
+.oc-link small {
+  font-size: 10px;
+  color: #7a7a7a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.oc-link > svg {
+  color: #7a7a7a;
+  flex: none;
+}
+.oc-add {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+.oc-add button {
+  height: 30px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px dashed #ffffff30;
+  background: transparent;
+  color: #cfcfcf;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+.oc-add button:hover {
+  background: #1c1c1c;
+}
+.oc-owner {
+  margin: 0 0 14px;
+}

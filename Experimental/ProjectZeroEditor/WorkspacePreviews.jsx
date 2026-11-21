@@ -1,14 +1,17 @@
 //============================================================================================================================================
 //                                                          WORKSPACEPREVIEWS.JSX
 //============================================================================================================================================
-// 🧰 Inspector preview cards for the edit-mode workspaces. The UV card shows the unwrap in its UDIM tiles and the fracture card the
-// current shatter with its recipe figures; each opens the full workspace. Both read the same data the workspaces edit.
+// 🧰 Inspector preview cards for the edit-mode workspaces, one per carousel page: the UV card shows the unwrap in its UDIM tiles, the
+// fracture card the current shatter, the SDF card the centre slice of the distance field and the LOD card the cluster levels. Each
+// opens its full workspace and reads the same data the workspace edits.
 
 import React from "react";
 import { pieceStats as PieceStats, bakeState as BakeState, storageEstimate as StorageEstimate, STATE_TEXT, MATERIAL, formatEnergy as FormatEnergy, formatLength as FormatLength, formatBytes as FormatBytes } from "../FractureEditor/FractureModel.js";
 import { useUvLayout, useShatter, PaintFracture, WorkspaceGlyph } from "./Workspaces.jsx";
 import { Surface, Hue } from "./WorkspaceSurface.jsx";
 import { CheckerTexture } from "./WorkspaceGeometry.js";
+import { useSdfVolume, useSliceImage } from "./SdfWorkspace.jsx";
+import { useClusters, LevelTones, ErrorText } from "./ClusterWorkspace.jsx";
 
 // UDIM numbering: 1001 + U tile + 10 × V tile, ten tiles per row.
 export const UdimOf = (U, V) => 1001 + Math.max(0, Math.min(9, Math.floor(U))) + 10 * Math.max(0, Math.floor(V));
@@ -143,6 +146,100 @@ export function FracturePreviewCard({ Subject, Values, Open, Kit }) {
       {Readout("Baked storage", Settings.Enabled ? FormatBytes(Storage.total) : "–")}
       <p className="ws-note">{STATE_TEXT[Standing]}</p>
       <OpenButton Tool="fracture" Label="Edit in fracture workspace" Open={Open} />
+    </Card>
+  );
+}
+
+// Bake status line shared by the SDF and LOD cards.
+function BakeLine({ Standing, Baked }) {
+  return (
+    <div className="ws-bake-status" data-status={Standing}>
+      <i />
+      {Standing === "ready" ? `Baked ${new Date(Baked.At).toLocaleTimeString()} · up to date` : Standing === "stale" ? "Changed since the last bake." : "Not baked yet."}
+    </div>
+  );
+}
+
+export function SdfPreviewCard({ Subject, Values, Open, Kit }) {
+  const { Card, Control, Metric } = Kit;
+  const Sdf = useSdfVolume(Subject, Values);
+  const { Volume, Settings } = Sdf;
+  const Image = useSliceImage(Sdf, 0, 0.5, 0, 0);
+  const Readout = (Label, Text) => <Control key={Label} Field={{ Label, Control: "Readout" }} Value={Text} />;
+  const Paint = (Brush, Width, Height) => {
+    Brush.fillStyle = "#121212";
+    Brush.fillRect(0, 0, Width, Height);
+    if (!Image) {
+      Brush.fillStyle = "#6a6a6a";
+      Brush.font = "11px 'DM Sans', sans-serif";
+      Brush.textAlign = "center";
+      Brush.fillText("Baking the distance field…", Width / 2, Height / 2);
+      return;
+    }
+    const Side = Math.min(Width, Height) - 16;
+    Brush.imageSmoothingEnabled = false;
+    Brush.drawImage(Image, (Width - Side) / 2, 8, Side, Side);
+    Brush.fillStyle = "#8a8a8a";
+    Brush.font = "9px 'DM Sans', sans-serif";
+    Brush.textAlign = "left";
+    Brush.fillText("centre slice · XY", 10, Height - 10);
+  };
+  return (
+    <Card Title="SDF preview" Class="ws-preview-card">
+      <Metric
+        Value={Volume ? String(Volume.allocatedBrickCount) : "…"}
+        Unit={Volume ? `of ${Volume.totalBricks} bricks` : "baking"}
+        Caption={Volume ? `${Volume.dim}³ voxels · ${Volume.prunedPercent}% of bricks pruned` : Sdf.Problem || "Building the sparse volume from the surface."}
+      />
+      <button type="button" className="ws-preview-canvas ws-preview-sdf" onClick={Open} disabled={!Open} aria-label="Open the SDF workspace">
+        <Surface Paint={Paint} Label={`${Subject.Name} distance field slice`} Deps={[Image]} />
+      </button>
+      {Readout("Resolution", `${Settings.Resolution}³ · ${Volume ? FormatLength(Volume.voxelStep) + " voxel" : "–"}`)}
+      {Readout("Narrow band", Volume ? `${Settings.Band.toFixed(1)} voxels · ${FormatLength(Volume.narrowBandMeters)}` : "–")}
+      {Readout("Memory", Volume ? `${FormatBytes(Volume.mip0Bytes + Volume.mip1Bytes)} · dense ${FormatBytes(Volume.denseBytes)}` : "–")}
+      {Readout("Source", `${(Sdf.Body.Indices.length / 3).toLocaleString("en-US")} triangles · ${Sdf.Closed ? "closed" : "open shell"}`)}
+      <BakeLine Standing={Sdf.Standing} Baked={Settings.Baked} />
+      <OpenButton Tool="sdf" Label="Edit in SDF workspace" Open={Open} />
+    </Card>
+  );
+}
+
+export function LodPreviewCard({ Subject, Values, Open, Kit }) {
+  const { Card, Control, Metric } = Kit;
+  const Build = useClusters(Subject, Values);
+  const { Dag, Settings } = Build;
+  const Source = Build.Body.Indices.length / 3;
+  const Levels = Dag?.levels || [];
+  const Top = Math.log10(Math.max(10, Source));
+  const Readout = (Label, Text) => <Control key={Label} Field={{ Label, Control: "Readout" }} Value={Text} />;
+  return (
+    <Card Title="LOD preview" Class="ws-preview-card">
+      <Metric
+        Value={Dag ? String(Levels.length) : "–"}
+        Unit="levels"
+        Caption={Dag ? `${Dag.clusterCount} clusters in ${Dag.groupCount} groups · ${Source.toLocaleString("en-US")} source triangles` : Build.Problem || ""}
+      />
+      <button type="button" className="ws-preview-canvas ws-preview-lod" onClick={Open} disabled={!Open} aria-label="Open the LOD workspace">
+        <svg viewBox="0 0 300 150" role="img" aria-label="Triangles per level">
+          {Levels.map((Each, Index) => {
+            const Width = 268 / Levels.length, X = 22 + Index * Width, Height = Math.max(3, (Math.log10(Math.max(1, Each.triangles)) / Top) * 104);
+            return (
+              <g key={Index}>
+                <rect x={X + 3} y={122 - Height} width={Width - 6} height={Height} rx="3" fill={LevelTones[Index % LevelTones.length]} opacity="0.75" />
+                <text x={X + Width / 2} y={116 - Height} textAnchor="middle">{Each.triangles.toLocaleString("en-US")}</text>
+                <text x={X + Width / 2} y="138" textAnchor="middle">L{Index}</text>
+              </g>
+            );
+          })}
+          <line x1="22" x2="290" y1="122" y2="122" stroke="#ffffff22" />
+        </svg>
+      </button>
+      {Readout("Cluster size", `${Settings.ClusterTriangles} triangles · ${Settings.GroupClusters} per group`)}
+      {Readout("Simplify to", `${Settings.SimplifyRatio.toFixed(2)} × per level`)}
+      {Readout("Coarsest level", Levels.length ? `${Levels[Levels.length - 1].triangles.toLocaleString("en-US")} triangles · ${ErrorText(Levels[Levels.length - 1].error, Levels.length - 1)} error` : "–")}
+      {Readout("Build time", Dag ? `${Dag.buildMs.toFixed(0)} ms` : "–")}
+      <BakeLine Standing={Build.Standing} Baked={Settings.Baked} />
+      <OpenButton Tool="lod" Label="Edit in LOD workspace" Open={Open} />
     </Card>
   );
 }
