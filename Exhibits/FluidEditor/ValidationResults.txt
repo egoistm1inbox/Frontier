@@ -158,6 +158,132 @@
   🟢 Smoke Ring Cannon: emitter shape Disc resolves
   🟢 Smoke Ring Cannon: boundary mode resolves
   🟢 Smoke Ring Cannon: resolution inside solver limits
+  🟢 UE5 Niagara Pyro Plume + Blast: force RadialBurst resolves
+  🟢 UE5 Niagara Pyro Plume + Blast: force DirectionalWind resolves
+  🟢 UE5 Niagara Pyro Plume + Blast: force CurlNoiseTurbulence resolves
+  🟢 UE5 Niagara Pyro Plume + Blast: force DragBaffle resolves
+  🟢 UE5 Niagara Pyro Plume + Blast: emitter shape Disc resolves
+  🟢 UE5 Niagara Pyro Plume + Blast: emitter shape Sphere resolves
+  🟢 UE5 Niagara Pyro Plume + Blast: boundary mode resolves
+  🟢 UE5 Niagara Pyro Plume + Blast: resolution inside solver limits
+  🟢 Ordnance Shrapnel Airburst: force RadialBurst resolves
+  🟢 Ordnance Shrapnel Airburst: force DirectionalWind resolves
+  🟢 Ordnance Shrapnel Airburst: force CurlNoiseTurbulence resolves
+  🟢 Ordnance Shrapnel Airburst: force DragBaffle resolves
+  🟢 Ordnance Shrapnel Airburst: emitter shape Sphere resolves
+  🟢 Ordnance Shrapnel Airburst: boundary mode resolves
+  🟢 Ordnance Shrapnel Airburst: resolution inside solver limits
+  🟢 Megaton Wide-Bounds Blast: force RadialBurst resolves
+  🟢 Megaton Wide-Bounds Blast: force DirectionalWind resolves
+  🟢 Megaton Wide-Bounds Blast: force CurlNoiseTurbulence resolves
+  🟢 Megaton Wide-Bounds Blast: force DragBaffle resolves
+  🟢 Megaton Wide-Bounds Blast: emitter shape Sphere resolves
+  🟢 Megaton Wide-Bounds Blast: boundary mode resolves
+  🟢 Megaton Wide-Bounds Blast: resolution inside solver limits
+  🟢 Low-End GPU Fast Mode: force RadialBurst resolves
+  🟢 Low-End GPU Fast Mode: force DirectionalWind resolves
+  🟢 Low-End GPU Fast Mode: force CurlNoiseTurbulence resolves
+  🟢 Low-End GPU Fast Mode: force DragBaffle resolves
+  🟢 Low-End GPU Fast Mode: emitter shape Disc resolves
+  🟢 Low-End GPU Fast Mode: emitter shape Sphere resolves
+  🟢 Low-End GPU Fast Mode: boundary mode resolves
+  🟢 Low-End GPU Fast Mode: resolution inside solver limits
+  🟢 Tactical C4 / HE Blast Wave: force RadialBurst resolves
+  🟢 Tactical C4 / HE Blast Wave: force DirectionalWind resolves
+  🟢 Tactical C4 / HE Blast Wave: force CurlNoiseTurbulence resolves
+  🟢 Tactical C4 / HE Blast Wave: force DragBaffle resolves
+  🟢 Tactical C4 / HE Blast Wave: emitter shape Sphere resolves
+  🟢 Tactical C4 / HE Blast Wave: boundary mode resolves
+  🟢 Tactical C4 / HE Blast Wave: resolution inside solver limits
+  🟢 Raging Oil Well Inferno: force DirectionalWind resolves
+  🟢 Raging Oil Well Inferno: force CurlNoiseTurbulence resolves
+  🟢 Raging Oil Well Inferno: force DragBaffle resolves
+  🟢 Raging Oil Well Inferno: emitter shape Disc resolves
+  🟢 Raging Oil Well Inferno: boundary mode resolves
+  🟢 Raging Oil Well Inferno: resolution inside solver limits
+  🟢 Voxel Collider Flow Deflection: force RadialBurst resolves
+  🟢 Voxel Collider Flow Deflection: force DirectionalWind resolves
+  🟢 Voxel Collider Flow Deflection: force CurlNoiseTurbulence resolves
+  🟢 Voxel Collider Flow Deflection: force DragBaffle resolves
+  🟢 Voxel Collider Flow Deflection: emitter shape Disc resolves
+  🟢 Voxel Collider Flow Deflection: emitter shape Sphere resolves
+  🟢 Voxel Collider Flow Deflection: boundary mode resolves
+  🟢 Voxel Collider Flow Deflection: resolution inside solver limits
+  🟢 Fire Tornado / Alchemical Vortex: force VortexColumn resolves
+  🟢 Fire Tornado / Alchemical Vortex: force RadialBurst resolves
+  🟢 Fire Tornado / Alchemical Vortex: force DirectionalWind resolves
+  🟢 Fire Tornado / Alchemical Vortex: force CurlNoiseTurbulence resolves
+  🟢 Fire Tornado / Alchemical Vortex: force DragBaffle resolves
+  🟢 Fire Tornado / Alchemical Vortex: emitter shape Disc resolves
+  🟢 Fire Tornado / Alchemical Vortex: emitter shape Sphere resolves
+  🟢 Fire Tornado / Alchemical Vortex: boundary mode resolves
+  🟢 Fire Tornado / Alchemical Vortex: resolution inside solver limits
+  🟢 Ashfall / Grey Fireflies: force RadialBurst resolves
+  🟢 Ashfall / Grey Fireflies: force DirectionalWind resolves
+  🟢 Ashfall / Grey Fireflies: force CurlNoiseTurbulence resolves
+  🟢 Ashfall / Grey Fireflies: force DragBaffle resolves
+  🟢 Ashfall / Grey Fireflies: emitter shape Sphere resolves
+  🟢 Ashfall / Grey Fireflies: boundary mode resolves
+  🟢 Ashfall / Grey Fireflies: resolution inside solver limits
+  🟢 Voxelized Stylized Grid: force RadialBurst resolves
+  🟢 Voxelized Stylized Grid: force DirectionalWind resolves
+  🟢 Voxelized Stylized Grid: force CurlNoiseTurbulence resolves
+  🟢 Voxelized Stylized Grid: force DragBaffle resolves
+  🟢 Voxelized Stylized Grid: emitter shape Disc resolves
+  🟢 Voxelized Stylized Grid: emitter shape Sphere resolves
+  🟢 Voxelized Stylized Grid: boundary mode resolves
+  🟢 Voxelized Stylized Grid: resolution inside solver limits
+  🟢 Dust Tornado / Debris Vortex: force VortexColumn resolves
+  🟢 Dust Tornado / Debris Vortex: force DirectionalWind resolves
+  🟢 Dust Tornado / Debris Vortex: force CurlNoiseTurbulence resolves
+  🟢 Dust Tornado / Debris Vortex: force DragBaffle resolves
+  🟢 Dust Tornado / Debris Vortex: emitter shape Disc resolves
+  🟢 Dust Tornado / Debris Vortex: boundary mode resolves
+  🟢 Dust Tornado / Debris Vortex: resolution inside solver limits
+  🟢 Tyre Burnout: force VortexColumn resolves
+  🟢 Tyre Burnout: force DirectionalWind resolves
+  🟢 Tyre Burnout: force CurlNoiseTurbulence resolves
+  🟢 Tyre Burnout: force DragBaffle resolves
+  🟢 Tyre Burnout: emitter shape Disc resolves
+  🟢 Tyre Burnout: boundary mode resolves
+  🟢 Tyre Burnout: resolution inside solver limits
+  🟢 Sand Falling From A Ledge: force DirectionalWind resolves
+  🟢 Sand Falling From A Ledge: force CurlNoiseTurbulence resolves
+  🟢 Sand Falling From A Ledge: force DragBaffle resolves
+  🟢 Sand Falling From A Ledge: emitter shape Disc resolves
+  🟢 Sand Falling From A Ledge: boundary mode resolves
+  🟢 Sand Falling From A Ledge: resolution inside solver limits
+  🟢 Settling Dust: force DirectionalWind resolves
+  🟢 Settling Dust: force CurlNoiseTurbulence resolves
+  🟢 Settling Dust: force DragBaffle resolves
+  🟢 Settling Dust: emitter shape Disc resolves
+  🟢 Settling Dust: boundary mode resolves
+  🟢 Settling Dust: resolution inside solver limits
+  🟢 Small Gust / Drifting Haze: force DirectionalWind resolves
+  🟢 Small Gust / Drifting Haze: force CurlNoiseTurbulence resolves
+  🟢 Small Gust / Drifting Haze: force DragBaffle resolves
+  🟢 Small Gust / Drifting Haze: emitter shape Disc resolves
+  🟢 Small Gust / Drifting Haze: boundary mode resolves
+  🟢 Small Gust / Drifting Haze: resolution inside solver limits
+  🟢 Fractured Brick Burst: force RadialBurst resolves
+  🟢 Fractured Brick Burst: force DirectionalWind resolves
+  🟢 Fractured Brick Burst: force CurlNoiseTurbulence resolves
+  🟢 Fractured Brick Burst: force DragBaffle resolves
+  🟢 Fractured Brick Burst: emitter shape Sphere resolves
+  🟢 Fractured Brick Burst: boundary mode resolves
+  🟢 Fractured Brick Burst: resolution inside solver limits
+  🟢 Lantern / Oil Lamp Flame: force DirectionalWind resolves
+  🟢 Lantern / Oil Lamp Flame: force CurlNoiseTurbulence resolves
+  🟢 Lantern / Oil Lamp Flame: force DragBaffle resolves
+  🟢 Lantern / Oil Lamp Flame: emitter shape Disc resolves
+  🟢 Lantern / Oil Lamp Flame: boundary mode resolves
+  🟢 Lantern / Oil Lamp Flame: resolution inside solver limits
+  🟢 Camp Fire: force DirectionalWind resolves
+  🟢 Camp Fire: force CurlNoiseTurbulence resolves
+  🟢 Camp Fire: force DragBaffle resolves
+  🟢 Camp Fire: emitter shape Disc resolves
+  🟢 Camp Fire: boundary mode resolves
+  🟢 Camp Fire: resolution inside solver limits
   🟢 Particle shape Point sampled by GLSL
   🟢 Particle shape Sphere sampled by GLSL
   🟢 Particle shape Box sampled by GLSL
@@ -279,6 +405,9 @@
   🟢 #pz-error-text exists in markup
   🟢 #transport-time is created by StudioPanels before lookup
   🟢 #transport-frame is created by StudioPanels before lookup
+  🟢 #flipbook-preview is created by StudioPanels before lookup
+  🟢 #flipbook-frame is created by StudioPanels before lookup
+  🟢 #flipbook-label is created by StudioPanels before lookup
   🟢 Styles/FluidEditor.css present
   🟢 Fonts/dm-sans-latin-300-normal.woff2 present
   🟢 Fonts/dm-sans-latin-400-normal.woff2 present
@@ -338,6 +467,24 @@
   🟢 Preset Celebration loads + reconfigures grid
   🟢 Preset Wind Tunnel loads + reconfigures grid
   🟢 Preset Smoke Ring Cannon loads + reconfigures grid
+  🟢 Preset UE5 Niagara Pyro Plume + Blast loads + reconfigures grid
+  🟢 Preset Ordnance Shrapnel Airburst loads + reconfigures grid
+  🟢 Preset Megaton Wide-Bounds Blast loads + reconfigures grid
+  🟢 Preset Low-End GPU Fast Mode loads + reconfigures grid
+  🟢 Preset Tactical C4 / HE Blast Wave loads + reconfigures grid
+  🟢 Preset Raging Oil Well Inferno loads + reconfigures grid
+  🟢 Preset Voxel Collider Flow Deflection loads + reconfigures grid
+  🟢 Preset Fire Tornado / Alchemical Vortex loads + reconfigures grid
+  🟢 Preset Ashfall / Grey Fireflies loads + reconfigures grid
+  🟢 Preset Voxelized Stylized Grid loads + reconfigures grid
+  🟢 Preset Dust Tornado / Debris Vortex loads + reconfigures grid
+  🟢 Preset Tyre Burnout loads + reconfigures grid
+  🟢 Preset Sand Falling From A Ledge loads + reconfigures grid
+  🟢 Preset Settling Dust loads + reconfigures grid
+  🟢 Preset Small Gust / Drifting Haze loads + reconfigures grid
+  🟢 Preset Fractured Brick Burst loads + reconfigures grid
+  🟢 Preset Lantern / Oil Lamp Flame loads + reconfigures grid
+  🟢 Preset Camp Fire loads + reconfigures grid
   🟢 Asset drawer lists every force generator card grouped by category
   🟢 MaxCells edits rebuild the solver fields at fixed world size (3×5×3 m → 29×48×29)
   🟢 Size edits keep the voxel count on the longest axis

@@ -67,14 +67,22 @@ export class VolumeRenderer
     //                                                  FRAME
     //------------------------------------------------------------------------------------------------------------------------
 
-    render(scene, camera, selection, deltaTime)
+    /**
+     * Draws one frame. `target` (optional) redirects it into an offscreen framebuffer — the flipbook bake uses this with
+     * { framebuffer, width, height, transparent } and gets no gizmos, so frames hold only what the scene shows.
+     */
+    render(scene, camera, selection, deltaTime, target = null)
     {
         const gl = this.gl, context = this.context, solver = this.solver;
         if (!solver.fields) return;
         const matrices = camera.matrices();
         const canvas = context.canvas;
-        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-        gl.viewport(0, 0, canvas.width, canvas.height);
+        this.viewportSize = target ? [target.width, target.height] : [canvas.width, canvas.height];
+        this.transparent = Boolean(target && target.transparent);
+        this.bakeTarget = target;
+        gl.bindFramebuffer(gl.FRAMEBUFFER, target ? target.framebuffer : null);
+        gl.viewport(0, 0, this.viewportSize[0], this.viewportSize[1]);
+        if (target) { gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT); }
         gl.disable(gl.DEPTH_TEST);
         gl.disable(gl.BLEND);
 
@@ -83,17 +91,43 @@ export class VolumeRenderer
         gl.enable(gl.BLEND);
         gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
         const visualizers = scene.Visualizers;
-        if (visualizers.ScalarSlice.Visible) this.renderSlice(visualizers.ScalarSlice, matrices);
+        // A flipbook frame holds what the scene shows — smoke, fire, debris, particles — not the flow diagnostics.
+        const diagnostics = !target;
+        if (diagnostics && visualizers.ScalarSlice.Visible) this.renderSlice(visualizers.ScalarSlice, matrices);
         gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
-        if (visualizers.VelocityVectors.Visible) this.renderVectors(visualizers.VelocityVectors, matrices);
-        if (visualizers.ForceVectors && visualizers.ForceVectors.Visible) this.renderForceVectors(visualizers.ForceVectors, matrices);
-        if (visualizers.Tracers.Visible) this.renderTracers(visualizers.Tracers, matrices, deltaTime);
+        if (diagnostics && visualizers.VelocityVectors.Visible) this.renderVectors(visualizers.VelocityVectors, matrices);
+        if (diagnostics && visualizers.ForceVectors && visualizers.ForceVectors.Visible) this.renderForceVectors(visualizers.ForceVectors, matrices);
+        if (diagnostics && visualizers.Tracers.Visible) this.renderTracers(visualizers.Tracers, matrices, deltaTime);
         gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
         if (visualizers.Debris && visualizers.Debris.Visible) this.renderDebris(visualizers.Debris, matrices);
         if (this.particles && scene.Particles) this.particles.render(scene, matrices, typeof window !== 'undefined' ? Math.min(window.devicePixelRatio || 1, 1.5) : 1, camera);
-        this.renderGizmos(scene, matrices, selection);
+        if (!target) this.renderGizmos(scene, matrices, selection);
         gl.disable(gl.BLEND);
+        if (target) gl.bindFramebuffer(gl.FRAMEBUFFER, null);
         return matrices;
+    }
+
+    /** 8-bit colour target for flipbook frames (readPixels needs RGBA8, not the solver's float formats). */
+    createBakeTarget(size)
+    {
+        const gl = this.gl;
+        const texture = gl.createTexture();
+        gl.bindTexture(gl.TEXTURE_2D, texture);
+        gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RGBA8, size, size);
+        const framebuffer = gl.createFramebuffer();
+        gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
+        const status = gl.checkFramebufferStatus(gl.FRAMEBUFFER);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+        if (status !== gl.FRAMEBUFFER_COMPLETE) { gl.deleteFramebuffer(framebuffer); gl.deleteTexture(texture); throw new Error('Flipbook frame target incomplete: 0x' + status.toString(16)); }
+        return { texture, framebuffer, width: size, height: size };
+    }
+
+    destroyBakeTarget(target)
+    {
+        if (!target) return;
+        this.gl.deleteFramebuffer(target.framebuffer);
+        this.gl.deleteTexture(target.texture);
     }
 
     renderScene(scene, camera, matrices, selection)
@@ -109,7 +143,7 @@ export class VolumeRenderer
         const position = camera.position;
         gl.uniform3f(uniforms.uCameraPosition, position[0], position[1], position[2]);
         gl.uniformMatrix4fv(uniforms.uInverseViewProjection, false, matrices.inverseViewProjection);
-        gl.uniform2f(uniforms.uViewport, context.canvas.width, context.canvas.height);
+        gl.uniform2f(uniforms.uViewport, this.viewportSize[0], this.viewportSize[1]);
         gl.uniform3fv(uniforms.uLightDirection, this.lightDirection);
         gl.uniform3fv(uniforms.uLightColour, this.lightColour);
         gl.uniform3fv(uniforms.uAlbedo, hexToRgb(volume.Albedo));
@@ -130,11 +164,12 @@ export class VolumeRenderer
         gl.uniform1i(uniforms.uShadowSteps, Math.round(volume.ShadowSteps));
         gl.uniform1f(uniforms.uGroundHeight, solver.sparse ? -0.02 : solver.domainCentre[1] - solver.domainHalfExtent[1] - 0.02);
         gl.uniform1i(uniforms.uShowVolume, volume.Visible ? 1 : 0);
+        gl.uniform1i(uniforms.uTransparent, this.transparent ? 1 : 0);
         gl.uniform1i(uniforms.uVoxelPreview, VolumeFilters.indexOf(volume.Filter) === 1 ? 1 : 0);
         gl.uniform1i(uniforms.uFrame, solver.frame & 1023);
         const selectedCollider = selection ? scene.Colliders.filter((c) => c.Enabled).findIndex((c) => c.Id === selection) : -1;
         gl.uniform1i(uniforms.uSelectedCollider, selectedCollider);
-        context.dispatch(null);
+        context.dispatch(this.bakeTarget);
     }
 
     renderVectors(settings, matrices)

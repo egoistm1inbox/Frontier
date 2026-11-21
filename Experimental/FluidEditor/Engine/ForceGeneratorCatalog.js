@@ -4,6 +4,7 @@
 //                                 Emitter Shapes, Colour Ramps, and Scene Presets
 //============================================================================================================================================
 
+import { PyroScenePresets } from './PyroScenePresets.js';
 export const MaximumForceGenerators = 16;
 export const MaximumEmitters = 6;
 export const MaximumColliders = 4;
@@ -184,7 +185,8 @@ export const FireLooks = Object.freeze({
     Magic: { FireEmber: '#5b0bb5', FireFlame: '#c84bff', FireCore: '#f6e3ff' },
 });
 
-export const ScenePresets = Object.freeze([
+// Fluid Studio's own scenes; the other editor's scenes are appended from PyroScenePresets.js below.
+const StudioScenePresets = [
     {
         Id: 'preset-blank', Name: 'Blank Stage', Icon: 'domain', Summary: 'Empty 4 × 6 × 4 m domain — build from the Asset Browser.',
         Domain: { Resolution: [48, 72, 48], Size: [4, 6, 4], Buoyancy: 1.2, AmbientTemperature: 0, Cooling: 0.6, Vorticity: 0.35, Dissipation: 0.996 },
@@ -429,7 +431,9 @@ export const ScenePresets = Object.freeze([
             { Type: 'VortexRing', Position: [0, 0, -1.3], Strength: 14, Radius: 0.5, Direction: [0, 0, 1], Frequency: 0.3 },
         ],
     },
-]);
+];
+
+export const ScenePresets = Object.freeze([...StudioScenePresets.map((preset) => ({ Family: 'Studio', ...preset })), ...PyroScenePresets]);
 
 //------------------------------------------------------------------------------------------------------------------------
 //                                                  TIMING KEYS
@@ -685,6 +689,7 @@ export function createDomain(overrides = {})
         TimeScale: overrides.TimeScale ?? 1.0,
         Combustion: overrides.Combustion ?? 1.0,
         Expansion: overrides.Expansion ?? 0.6,
+        ForceResponse: overrides.ForceResponse ?? 1.0,
         SceneLoop: overrides.SceneLoop ?? 0,
         Tiles: overrides.Tiles ? [...overrides.Tiles] : [1, 1, 1],
         Follow: overrides.Follow || 'None',

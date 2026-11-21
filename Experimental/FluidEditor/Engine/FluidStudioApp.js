@@ -13,6 +13,39 @@ import { ScenePresets, createDomain, createEmitter, createForceGenerator, create
 import { ParticleSimulation } from './ParticleSimulation.js';
 import { createParticleSystem, ParticleTemplateById, MaximumParticleSystems } from './ParticleCatalog.js';
 
+//------------------------------------------------------------------------------------------------------------------------
+//                                                  FLIPBOOK LAYOUT
+//------------------------------------------------------------------------------------------------------------------------
+
+export const FlipbookChoices = Object.freeze({ Count: [4, 16, 32, 64], Size: [64, 128, 256, 512], Rate: [12, 24, 30, 60] });
+
+/** Sheet layout for a bake: a near-square grid of `Count` tiles of `Size` pixels. */
+export function specifyFlipbook(count, size, rate, warmup)
+{
+    if (!FlipbookChoices.Count.includes(count) || !FlipbookChoices.Size.includes(size) || !FlipbookChoices.Rate.includes(rate) || !Number.isFinite(warmup) || warmup < 0 || warmup > 3)
+        throw new Error('Choose a supported frame count, tile size, frame rate and a 0–3 second warm-up.');
+    const columns = Math.ceil(Math.sqrt(count));
+    const rows = Math.ceil(count / columns);
+    return { Count: count, Size: size, Rate: rate, Warmup: warmup, Columns: columns, Rows: rows, Width: columns * size, Height: rows * size };
+}
+
+/** GL rows run bottom-up; flip them, and for transparent frames turn premultiplied colour into straight alpha. */
+export function unpackFrame(bytes, size, transparent)
+{
+    const pixels = new Uint8ClampedArray(bytes.length);
+    for (let row = 0; row < size; row += 1)
+        for (let column = 0; column < size; column += 1)
+        {
+            const source = ((size - 1 - row) * size + column) * 4;
+            const target = (row * size + column) * 4;
+            const alpha = transparent ? Math.max(bytes[source + 3], bytes[source], bytes[source + 1], bytes[source + 2]) : 255;
+            for (let channel = 0; channel < 3; channel += 1)
+                pixels[target + channel] = transparent ? (alpha ? Math.round(bytes[source + channel] * 255 / alpha) : 0) : bytes[source + channel];
+            pixels[target + 3] = alpha;
+        }
+    return pixels;
+}
+
 export class FluidStudioApp
 {
     constructor({ canvas, onMetrics, onStateChange, onError })
@@ -79,7 +112,7 @@ export class FluidStudioApp
     frame(time)
     {
         requestAnimationFrame((next) => this.frame(next));
-        if (!this.supported || !this.scene) return;
+        if (!this.supported || !this.scene || this.baking) return;
         const elapsed = this.lastFrameTime ? Math.min(0.1, (time - this.lastFrameTime) / 1000) : this.fixedDeltaTime;
         this.lastFrameTime = time;
         this.frameTimes.push(elapsed);
@@ -91,12 +124,7 @@ export class FluidStudioApp
         {
             if (this.playing || this.stepRequested)
             {
-                if (domain.SceneLoop > 0 && this.solver.time >= domain.SceneLoop) { this.solver.reset(); this.particles.resetAll(); this.recentreGrid(); }
-                this.followGrid();
-                this.solver.step(this.scene, deltaTime);
-                this.solver.updateTracers(deltaTime, this.scene.Visualizers.Tracers.Lifetime);
-                this.solver.updateDebris(deltaTime, this.scene.Visualizers.Debris);
-                this.particles.update(this.scene, deltaTime);
+                this.advanceSimulation(deltaTime);
                 this.stepRequested = false;
             }
             else
@@ -114,6 +142,111 @@ export class FluidStudioApp
             return;
         }
         this.reportMetrics(elapsed);
+    }
+
+    /** One simulation step of everything that moves: grid, tracers, debris and particle systems. */
+    advanceSimulation(deltaTime)
+    {
+        const domain = this.scene.Domain;
+        if (domain.SceneLoop > 0 && this.solver.time >= domain.SceneLoop) { this.solver.reset(); this.particles.resetAll(); this.recentreGrid(); }
+        this.followGrid();
+        this.solver.step(this.scene, deltaTime);
+        this.solver.updateTracers(deltaTime, this.scene.Visualizers.Tracers.Lifetime);
+        this.solver.updateDebris(deltaTime, this.scene.Visualizers.Debris);
+        this.particles.update(this.scene, deltaTime);
+    }
+
+    //------------------------------------------------------------------------------------------------------------------------
+    //                                                  FLIPBOOK BAKE
+    //------------------------------------------------------------------------------------------------------------------------
+
+    /**
+     * Renders `Count` square frames of the simulation into one sprite sheet (a canvas), left-to-right, top-to-bottom, plus
+     * the timing and UV metadata a game engine needs to play it back. Ported from the other fluid editor's FlipbookSequence:
+     * same frame counts, tile sizes, rates, warm-up and straight-alpha transparent mode.
+     *
+     * Unlike that editor, which bakes in a second, isolated WebGL context, this bakes on the live solver: it is paused for
+     * the bake, and the viewport carries on from the last baked frame. `Restart` begins the bake from an empty grid.
+     */
+    async bakeFlipbook(settings, onProgress = () => {}, isCancelled = () => false)
+    {
+        const layout = specifyFlipbook(settings.Count, settings.Size, settings.Rate, settings.Warmup);
+        if (this.baking) throw new Error('A flipbook bake is already running.');
+        this.baking = true;
+        const wasPlaying = this.playing;
+        const camera = this.camera;
+        const savedViewport = [...camera.viewport];
+        const savedAspect = camera.aspect;
+        const ratio = Math.min(window.devicePixelRatio || 1, 1.5);
+        const target = this.renderer.createBakeTarget(layout.Size);
+        target.transparent = Boolean(settings.Transparent);
+        const sheet = document.createElement('canvas');
+        sheet.width = layout.Width;
+        sheet.height = layout.Height;
+        const context2d = sheet.getContext('2d');
+        const readback = new Uint8Array(layout.Size * layout.Size * 4);
+        const gl = this.context.gl;
+        const deltaTime = this.fixedDeltaTime * this.scene.Domain.TimeScale;
+        const yieldToBrowser = () => new Promise((resolve) => setTimeout(resolve, 0));
+        const advanceTo = async (time) =>
+        {
+            let steps = 0;
+            while (this.solver.time < time - deltaTime * 0.5)
+            {
+                if (isCancelled()) throw new Error('Bake cancelled.');
+                this.advanceSimulation(deltaTime);
+                if (++steps % 4 === 0) await yieldToBrowser();
+            }
+        };
+        try
+        {
+            if (settings.Restart) { this.solver.reset(); this.particles.resetAll(); this.recentreGrid(); }
+            // Square frames: the camera keeps its vertical field of view and frames the same subject as the viewport.
+            camera.setViewport(layout.Size / ratio, layout.Size / ratio);
+            const start = this.solver.time;
+            if (layout.Warmup > 0) { onProgress(0, 'Warming up the simulation…'); await advanceTo(start + layout.Warmup); }
+            const frames = [];
+            const first = this.solver.time;
+            for (let index = 0; index < layout.Count; index += 1)
+            {
+                await advanceTo(first + (index + 1) / layout.Rate);
+                this.renderer.render(this.scene, camera, null, deltaTime, target);
+                gl.bindFramebuffer(gl.FRAMEBUFFER, target.framebuffer);
+                gl.readPixels(0, 0, layout.Size, layout.Size, gl.RGBA, gl.UNSIGNED_BYTE, readback);
+                gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+                if (gl.isContextLost()) throw new Error('GPU bake interrupted. Lower the voxel resolution or tile size and retry.');
+                const x = (index % layout.Columns) * layout.Size;
+                const y = Math.floor(index / layout.Columns) * layout.Size;
+                context2d.putImageData(new ImageData(unpackFrame(readback, layout.Size, target.transparent), layout.Size, layout.Size), x, y);
+                frames.push({ index, x, y, width: layout.Size, height: layout.Size, simulationTime: Number(this.solver.time.toFixed(4)), uv: [x / layout.Width, y / layout.Height, layout.Size / layout.Width, layout.Size / layout.Height] });
+                onProgress((index + 1) / layout.Count, `Baking frame ${index + 1} / ${layout.Count}`);
+                await yieldToBrowser();
+            }
+            const name = this.scene.Name.replace(/[^a-z0-9 _-]/gi, '').trim().replace(/\s+/g, '') || 'Scene';
+            const metadata = {
+                format: 'frontier-fluid-flipbook', version: 1, name, image: `${name}.flipbook.png`,
+                width: layout.Width, height: layout.Height, columns: layout.Columns, rows: layout.Rows,
+                frameCount: layout.Count, framesPerSecond: layout.Rate, playbackDuration: layout.Count / layout.Rate,
+                warmup: layout.Warmup, restarted: Boolean(settings.Restart),
+                origin: 'top-left', uvEncoding: 'normalized x, y, width, height', simulationTimeUnits: 'seconds',
+                frameOrder: 'left-to-right, top-to-bottom', colourSpace: 'srgb-tonemapped',
+                alphaMode: target.transparent ? 'straight-opacity-and-emission-coverage' : 'opaque',
+                camera: { position: camera.position, forward: camera.forward, up: camera.up, aspect: 1, fovY: camera.fovY },
+                scene: JSON.parse(this.exportJson()),
+                frames,
+            };
+            return { sheet, metadata, name };
+        }
+        finally
+        {
+            this.renderer.destroyBakeTarget(target);
+            camera.viewport = savedViewport;
+            camera.aspect = savedAspect;
+            this.baking = false;
+            this.playing = wasPlaying;
+            this.lastFrameTime = 0;
+            this.notify();
+        }
     }
 
     reportMetrics(elapsed)
@@ -146,6 +279,7 @@ export class FluidStudioApp
 
     loadPreset(presetId, announce = true)
     {
+        if (this.baking) return;
         const preset = ScenePresets.find((candidate) => candidate.Id === presetId) || ScenePresets[0];
         const domain = createDomain({ ...preset.Domain, Boundary: preset.Boundary });
         this.scene = {

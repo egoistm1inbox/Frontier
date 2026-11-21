@@ -584,7 +584,13 @@ void main()
         vec4 s = FetchCell(uSource, base + ivec3(x, y, z)) * uDissipation;
         lo = min(lo, s); hi = max(hi, s);
     }
-    fragColour = clamp(corrected, lo, hi);
+    // Where the correction overshoots its stencil, fall back to the plain semi-Lagrangian value (Selle et al. 2008)
+    // instead of clamping: clamped overshoots add energy every step, which is what made fast scenes spin up into chaos.
+    // The correction also fades out where gas crosses more than one cell per step, where it is no longer accurate.
+    bool overshoot = any(lessThan(corrected, lo)) || any(greaterThan(corrected, hi));
+    float courant = length(velocity) * uDeltaTime / uCellSize;
+    vec4 result = overshoot ? forward : mix(forward, corrected, 1.0 - smoothstep(1.0, 2.0, courant));
+    fragColour = clamp(result, lo, hi);
 }
 `;
 
@@ -687,7 +693,32 @@ uniform float uDeltaTime;
 uniform float uBuoyancy;
 uniform float uGravity;
 uniform float uAmbientTemperature;
+uniform float uForceResponse;   // seconds: a continuous force stops accelerating gas already moving at strength × this
 out vec4 fragColour;
+
+// Continuous force generators push the gas towards a speed instead of accelerating it without limit. Without this a
+// 0.35 m/s² breeze keeps adding speed for as long as the scene runs, so every scene starts clean and ends in chaos.
+// Bursts, pulses, shock shells, drag, containment and flow streams are already short-lived or velocity-relative.
+vec3 GasForce(vec3 world, vec3 velocity)
+{
+    vec3 total = vec3(0.0);
+    for (int i = 0; i < MAX_FORCES; i++)
+    {
+        if (i >= uForceCount) break;
+        vec3 force = EvaluateForceGenerator(i, world, velocity);
+        int type = int(uForceC[i].x + 0.5);
+        bool limited = !(type == 5 || type == 6 || type == 11 || type == 12 || type == 13 || type == 14 || type == 16);
+        float size = length(force);
+        if (limited && uForceResponse > 0.0 && size > 1e-5)
+        {
+            float along = dot(velocity, force / size);
+            force *= clamp(1.0 - along / (size * uForceResponse), 0.0, 1.0);
+        }
+        total += force;
+    }
+    return total;
+}
+
 void main()
 {
     ivec3 cell = CellFromFragment(gl_FragCoord.xy);
@@ -698,7 +729,7 @@ void main()
     vec4 state = FetchCell(uState, cell);
     float temperature = state.y - uAmbientTemperature;
     vec3 acceleration = vec3(0.0, uBuoyancy * temperature - uGravity * state.x, 0.0);
-    acceleration += EvaluateForceField(world, velocity);
+    acceleration += GasForce(world, velocity);
     fragColour = vec4(velocity + acceleration * uDeltaTime, 0.0);
 }
 `;
@@ -1126,6 +1157,7 @@ uniform int   uSteps;
 uniform int   uShadowSteps;
 uniform float uGroundHeight;
 uniform int   uShowVolume;
+uniform int   uTransparent;   // flipbook bake: no sky, floor or colliders; alpha = smoke coverage plus fire glow
 uniform int   uVoxelPreview;
 uniform int   uFrame;
 uniform int   uSelectedCollider;
@@ -1234,11 +1266,11 @@ void main()
 
     // Background gradient.
     float horizon = clamp(direction.y * 0.5 + 0.5, 0.0, 1.0);
-    vec3 colour = mix(vec3(0.055, 0.058, 0.068), vec3(0.028, 0.029, 0.034), pow(horizon, 0.6));
+    vec3 colour = uTransparent == 1 ? vec3(0.0) : mix(vec3(0.055, 0.058, 0.068), vec3(0.028, 0.029, 0.034), pow(horizon, 0.6));
 
     float sceneDepth = 1e9;
     // Ground plane with 1 m engineering grid.
-    if (direction.y < -1e-4)
+    if (direction.y < -1e-4 && uTransparent == 0)
     {
         float t = (uGroundHeight - origin.y) / direction.y;
         vec3 hit = origin + direction * t;
@@ -1262,7 +1294,7 @@ void main()
     // Analytic sphere colliders.
     for (int i = 0; i < MAX_COLLIDERS; i++)
     {
-        if (i >= uColliderCount) break;
+        if (i >= uColliderCount || uTransparent == 1) break;
         float t = IntersectSphere(origin, direction, uColliders[i].xyz, uColliders[i].w);
         if (t > 0.0 && t < sceneDepth)
         {
@@ -1276,6 +1308,7 @@ void main()
         }
     }
 
+    float coverage = 0.0;
     if (uShowVolume == 1)
     {
         vec3 half_ = GridHalf();
@@ -1332,13 +1365,16 @@ void main()
                 transmittance *= stepTransmittance;
             }
             colour = colour * transmittance + accumulated;
+            coverage = 1.0 - transmittance;
         }
     }
 
     // ACES filmic tone map with editable exposure.
     colour = AcesFilm(colour * uExposure);
     colour = pow(colour, vec3(1.0 / 2.2));
-    fragColour = vec4(colour, 1.0);
+    // Transparent bake: the colour is already premultiplied (black behind it); fire that emits through thin smoke still counts.
+    float alpha = uTransparent == 1 ? max(coverage, max(colour.r, max(colour.g, colour.b))) : 1.0;
+    fragColour = vec4(colour, alpha);
 }
 `;
 

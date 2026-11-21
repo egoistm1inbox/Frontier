@@ -1336,6 +1336,14 @@ in `Exhibits/LightCompute/Results/FogFacetRegression.txt`; this was a fixture-se
   multiple scattering, geometric shadow steps, a fire-light field diffused in the pressure loop, sky occlusion, floor shadows, stable
   jitter; plus a MacCormack limiter fix and an Infinite Grid texture-unit fix. FluidValidation 349 pass; inner divergence after 10 steps
   67% → 44%. Evidence in `Exhibits/FluidEditor/`. SwiftShader only. Names unapproved.
+  Follow-up 47: fluid scenes no longer start clean and then churn into noise.
+  - Cause: steady forces kept accelerating gas without limit, and MacCormack velocity advection added energy every step by clamping its
+    overshoots.
+  - Fix: a Domain *Force response* limit, and MacCormack now falls back to semi-Lagrangian where it overshoots.
+  - At 10 s, mean speed is down from 3.7–17.7 to 1.0–3.3 (`Exhibits/FluidEditor/StabilityResults.txt`, 28 runs).
+  - The other editor's 18 presets are translated in `Engine/PyroScenePresets.js`, shown as "Pyro scenes" (36 presets total).
+  - Flipbook drawer: sprite-sheet PNG plus timing/UV JSON, with an optional transparent background.
+  - FluidValidation: 496 checks pass. SwiftShader only. Names unapproved.
   Follow-up 40: Vehicle Movement charts are editable (suspension peak → damping/frequency, 18 torque points plus idle/redline,
   CdA/ClA handles, clamped to Blueprint ranges). Primitive carousel is Overview/Geometry/Material/UV/Fracture/SDF/LOD with UV, SDF and
   LOD preview cards on their own pages. Showcase objects carry Mass, Rigid Body and Collision component rows (`ObjectComponents.jsx`;

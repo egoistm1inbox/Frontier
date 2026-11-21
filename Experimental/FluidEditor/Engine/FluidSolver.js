@@ -628,6 +628,7 @@ export class FluidSolver
         gl.uniform1f(uniforms.uBuoyancy, domain.Buoyancy);
         gl.uniform1f(uniforms.uGravity, domain.Gravity);
         gl.uniform1f(uniforms.uAmbientTemperature, domain.AmbientTemperature);
+        gl.uniform1f(uniforms.uForceResponse, domain.ForceResponse ?? 1.0);
         context.dispatch(fields.velocity.write);
         fields.velocity.swap();
 

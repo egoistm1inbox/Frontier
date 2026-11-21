@@ -5,6 +5,7 @@
 //============================================================================================================================================
 
 import { icon } from './StudioIcons.js';
+import { FlipbookChoices } from '../Engine/FluidStudioApp.js';
 import {
     ForceGeneratorTypes, ForceTypeById, FalloffCurves, EmitterShapes, ColourRamps, SliceAxes, ScalarChannels, AdvectionSchemes, BoundaryModes,
     ScenePresets, RampStops, MaximumForceGenerators, SmokeLooks, FireLooks, ResolutionPresets, VolumeFilters, FalloffLabels, ForceCategories, VectorModes, timingEnvelope, isKeyed, DebrisKinds, EmitterPathKinds, GridFollowModes, MaximumGridTiles, GridModes, MaximumTilePool,
@@ -61,7 +62,8 @@ function nodeTint(node)
 
 export function mountStudioUI({ app, refs })
 {
-    const state = { searchTerm: '', collapsed: new Set(), drawerOpen: false, drawerTab: 'presets', notchOpen: false, mode: 'sim', snapshot: null, metrics: null };
+    const state = { searchTerm: '', collapsed: new Set(), drawerOpen: false, drawerTab: 'presets', notchOpen: false, mode: 'sim', snapshot: null, metrics: null,
+        flipbook: { Count: 16, Size: 256, Rate: 30, Warmup: 1, Transparent: false, Restart: true, baking: false, cancelled: false, progress: 0, label: 'Renders the viewport camera into one sprite sheet.', result: null, frame: 0, play: true } };
 
     //------------------------------------------------------------------------------------------------------------------------
     //                                                  OUTLINER
@@ -220,7 +222,7 @@ export function mountStudioUI({ app, refs })
         const current = preset.Id === currentId;
         const item = element('div', 'tree-item preset-item' + (current ? ' selected' : ''));
         const grid = preset.Domain.Grid === 'Infinite' ? ' · infinite grid' : preset.Domain.Tiles && preset.Domain.Tiles.some((count) => count > 1) ? ` · ${preset.Domain.Tiles.join('×')} tile grid` : '';
-        item.innerHTML = `<span class="item-icon" style="color:${current ? '#f5a524' : '#9aa3b2'}">${icon(preset.Icon, 15)}</span><span class="item-meta"><strong>${preset.Name}</strong><span>${preset.Domain.Resolution.join('×')} cells${grid}</span></span><span class="load-hint">${current ? 'loaded' : 'load'}</span>`;
+        item.innerHTML = `<span class="item-icon" style="color:${current ? '#f5a524' : '#9aa3b2'}">${icon(preset.Icon, 15)}</span><span class="item-meta"><strong>${preset.Name}</strong><span>${preset.Family === 'Pyro' ? 'Pyro · ' : ''}${preset.Domain.Resolution.join('×')} cells${grid}</span></span><span class="load-hint">${current ? 'loaded' : 'load'}</span>`;
         item.title = preset.Summary;
         item.addEventListener('click', () => app.loadPreset(preset.Id));
         return item;
@@ -499,6 +501,7 @@ export function mountStudioUI({ app, refs })
             slider(domain, 'Buoyancy', 'Thermal buoyancy', 0, 4, 0.05),
             slider(domain, 'Gravity', 'Smoke weight', 0, 2, 0.05),
             slider(domain, 'Vorticity', 'Vorticity confinement', 0, 2, 0.01),
+            slider(domain, 'ForceResponse', 'Force response (0 = unlimited)', 0, 5, 0.05, 's'),
             slider(domain, 'Cooling', 'Cooling rate', 0, 3, 0.05),
             slider(domain, 'Combustion', 'Combustion rate', 0, 3, 0.05),
             slider(domain, 'Expansion', 'Gas expansion', 0, 3, 0.05),
@@ -922,6 +925,10 @@ export function mountStudioUI({ app, refs })
         scenes.title = 'Open the scene preset browser';
         scenes.addEventListener('click', () => toggleDrawer(true, 'presets'));
         rowA.appendChild(scenes);
+        const flipbookButton = element('button', 'scenes-button', `${icon('download', 12)} Flipbook`);
+        flipbookButton.title = 'Bake the simulation into a sprite sheet';
+        flipbookButton.addEventListener('click', () => toggleDrawer(!state.drawerOpen || state.drawerTab !== 'flipbook', 'flipbook'));
+        rowA.appendChild(flipbookButton);
         rowA.appendChild(segmented);
         host.appendChild(rowA);
 
@@ -1065,26 +1072,37 @@ export function mountStudioUI({ app, refs })
         drawer.innerHTML = '';
         const head = element('div', 'drawer-head', `<span style="color:#ddd;font-size:12px">${icon('folder', 13)}</span>`);
         const seg = element('div', 'seg');
-        for (const [key, label] of [['presets', 'Scene Presets'], ['forces', 'Force Generators'], ['particles', 'Particle Systems'], ['emitters', 'Emitters & Colliders']])
+        for (const [key, label] of [['presets', 'Scene Presets'], ['forces', 'Force Generators'], ['particles', 'Particle Systems'], ['emitters', 'Emitters & Colliders'], ['flipbook', 'Flipbook']])
         {
             const button = element('button', state.drawerTab === key ? 'active' : '', label);
             button.addEventListener('click', () => { state.drawerTab = key; renderDrawer(); });
             seg.appendChild(button);
         }
         head.appendChild(seg);
-        head.appendChild(element('span', 'hint', state.drawerTab === 'forces' ? `Click a card to construct it in the domain · ${app.scene.Forces.length}/${MaximumForceGenerators} slots used` : state.drawerTab === 'particles' ? `Mograph-style GPU particles driven by the same force gizmos · ${(app.scene.Particles || []).length}/${MaximumParticleSystems} systems` : 'Click a card to construct'));
+        head.appendChild(element('span', 'hint', state.drawerTab === 'forces' ? `Click a card to construct it in the domain · ${app.scene.Forces.length}/${MaximumForceGenerators} slots used` : state.drawerTab === 'particles' ? `Mograph-style GPU particles driven by the same force gizmos · ${(app.scene.Particles || []).length}/${MaximumParticleSystems} systems` : state.drawerTab === 'flipbook' ? 'Bake the simulation into a sprite-sheet PNG + JSON for game engines' : 'Click a card to construct'));
         const close = element('button', 'icon-button', '×');
         close.addEventListener('click', () => toggleDrawer(false));
         head.appendChild(close);
         drawer.appendChild(head);
         const body = element('div', 'drawer-body');
-        if (state.drawerTab === 'presets')
+        if (state.drawerTab === 'flipbook') renderFlipbook(body);
+        else if (state.drawerTab === 'presets')
         {
-            for (const preset of ScenePresets)
+            body.classList.add('categorised');
+            for (const [family, title] of [['Studio', 'Fluid Studio scenes'], ['Pyro', 'Pyro scenes · from the other fluid editor']])
             {
-                const cardNode = element('button', 'asset-card', `<div class="thumb" style="background:linear-gradient(140deg,#2a2a2a,#141414)">${icon(preset.Icon, 34, 1)}</div><strong>${preset.Name}</strong><span>${preset.Summary}</span><span class="badge">${preset.Domain.Resolution.join('×')}</span>`);
-                cardNode.addEventListener('click', () => app.loadPreset(preset.Id));
-                body.appendChild(cardNode);
+                const members = ScenePresets.filter((preset) => preset.Family === family);
+                const group = element('div', 'asset-group');
+                group.appendChild(element('h4', '', `${title} <span>${members.length}</span>`));
+                const row = element('div', 'asset-row');
+                for (const preset of members)
+                {
+                    const cardNode = element('button', 'asset-card', `<div class="thumb" style="background:linear-gradient(140deg,#2a2a2a,#141414)">${icon(preset.Icon, 34, 1)}</div><strong>${preset.Name}</strong><span>${preset.Summary}</span><span class="badge">${preset.Domain.Resolution.join('×')}</span>`);
+                    cardNode.addEventListener('click', () => app.loadPreset(preset.Id));
+                    row.appendChild(cardNode);
+                }
+                group.appendChild(row);
+                body.appendChild(group);
             }
         }
         else if (state.drawerTab === 'forces')
@@ -1155,6 +1173,167 @@ export function mountStudioUI({ app, refs })
         refs.statusForces.textContent = `${metrics.forces} active · ${metrics.emitters} emitters${metrics.particleSystems ? ` · ${formatCells(metrics.particles)} particles` : ''}`;
         refs.statusText.innerHTML = `HTML preview · <b>WebGL2 GPU solver</b> · ${metrics.playing ? 'simulating' : 'paused'} · no engine connection`;
     }
+
+    //------------------------------------------------------------------------------------------------------------------------
+    //                                                  FLIPBOOK DRAWER
+    //------------------------------------------------------------------------------------------------------------------------
+
+    function renderFlipbook(body)
+    {
+        const settings = state.flipbook;
+        body.classList.add('flipbook-body');
+        const locked = settings.baking ? ' disabled' : '';
+
+        // Settings card.
+        const setup = element('div', 'flipbook-card');
+        setup.appendChild(element('h4', '', 'Sheet'));
+        const choice = (label, key, values, suffix) =>
+        {
+            const row = element('label', 'flipbook-row', `<span>${label}</span>`);
+            const select = document.createElement('select');
+            select.disabled = settings.baking;
+            for (const value of values)
+            {
+                const option = document.createElement('option');
+                option.value = value; option.textContent = `${value}${suffix}`; option.selected = value === settings[key];
+                select.appendChild(option);
+            }
+            select.addEventListener('change', () => { settings[key] = Number(select.value); renderDrawer(); });
+            row.appendChild(select);
+            return row;
+        };
+        setup.appendChild(choice('Frames', 'Count', FlipbookChoices.Count, ''));
+        setup.appendChild(choice('Tile size', 'Size', FlipbookChoices.Size, ' px'));
+        setup.appendChild(choice('Frame rate', 'Rate', FlipbookChoices.Rate, ' fps'));
+        const warm = element('label', 'flipbook-row', `<span>Warm-up</span><input type="number" min="0" max="3" step="0.5" value="${settings.Warmup}"${locked}><em>s</em>`);
+        warm.querySelector('input').addEventListener('change', (event) => { settings.Warmup = Math.max(0, Math.min(3, Number(event.target.value) || 0)); renderDrawer(); });
+        setup.appendChild(warm);
+        const columns = Math.ceil(Math.sqrt(settings.Count));
+        setup.appendChild(element('p', 'flipbook-note', `${columns} × ${Math.ceil(settings.Count / columns)} grid · ${columns * settings.Size} × ${Math.ceil(settings.Count / columns) * settings.Size} px · ${(settings.Count / settings.Rate).toFixed(2)} s of playback`));
+        body.appendChild(setup);
+
+        // Options + bake card.
+        const options = element('div', 'flipbook-card');
+        options.appendChild(element('h4', '', 'Bake'));
+        const toggle = (label, key, hint) =>
+        {
+            const row = element('label', 'flipbook-toggle', `<input type="checkbox"${settings[key] ? ' checked' : ''}${locked}><span><strong>${label}</strong><em>${hint}</em></span>`);
+            row.querySelector('input').addEventListener('change', (event) => { settings[key] = event.target.checked; });
+            return row;
+        };
+        options.appendChild(toggle('Start from an empty grid', 'Restart', 'Otherwise the bake continues from the current frame'));
+        options.appendChild(toggle('Transparent background', 'Transparent', 'No floor or sky; straight alpha from smoke and fire'));
+        const progress = element('div', 'flipbook-progress', `<div class="bar"><span style="width:${Math.round(settings.progress * 100)}%"></span></div><p id="flipbook-label">${settings.label}</p>`);
+        options.appendChild(progress);
+        const bake = element('button', 'pill primary', settings.baking ? `${icon('pause', 12)} Cancel` : `${icon('play', 12)} Bake flipbook`);
+        bake.addEventListener('click', () => { if (settings.baking) settings.cancelled = true; else startFlipbookBake(); });
+        options.appendChild(bake);
+        body.appendChild(options);
+
+        // Preview + export card.
+        const preview = element('div', 'flipbook-card flipbook-preview');
+        preview.appendChild(element('h4', '', 'Result'));
+        preview.insertAdjacentHTML('beforeend', '<canvas id="flipbook-preview" width="168" height="168"></canvas>');
+        const side = element('div', 'flipbook-side');
+        if (settings.result)
+        {
+            const metadata = settings.result.metadata;
+            side.appendChild(element('p', 'flipbook-note', `${settings.result.name}<br>${metadata.width} × ${metadata.height} · ${metadata.frameCount} frames · ${metadata.framesPerSecond} fps`));
+            const scrub = element('label', 'flipbook-row', `<span>Frame</span><input type="range" min="0" max="${metadata.frameCount - 1}" value="${settings.frame}"><em id="flipbook-frame">${settings.frame + 1}</em>`);
+            scrub.querySelector('input').addEventListener('input', (event) => { settings.play = false; settings.frame = Number(event.target.value); drawFlipbookPreview(); });
+            side.appendChild(scrub);
+            const play = element('label', 'flipbook-toggle', `<input type="checkbox"${settings.play ? ' checked' : ''}><span><strong>Loop playback</strong></span>`);
+            play.querySelector('input').addEventListener('change', (event) => { settings.play = event.target.checked; });
+            side.appendChild(play);
+            const png = element('button', 'pill', `${icon('download', 12)} Sheet .png`);
+            png.addEventListener('click', () => settings.result.sheet.toBlob((blob) => downloadBlob(blob, `${settings.result.name}.flipbook.png`), 'image/png'));
+            const json = element('button', 'pill', `${icon('download', 12)} Timing + UV .json`);
+            json.addEventListener('click', () => downloadBlob(new Blob([JSON.stringify(settings.result.metadata, null, 2)], { type: 'application/json' }), `${settings.result.name}.flipbook.json`));
+            side.append(png, json);
+        }
+        else side.appendChild(element('p', 'flipbook-note', 'No bake yet. The sheet uses the viewport camera, so frame the shot first.'));
+        preview.appendChild(side);
+        body.appendChild(preview);
+        drawFlipbookPreview();
+    }
+
+    function drawFlipbookPreview()
+    {
+        const settings = state.flipbook;
+        const canvas = document.getElementById('flipbook-preview');
+        if (!canvas) return;
+        const context = canvas.getContext('2d');
+        context.fillStyle = '#101010';
+        context.fillRect(0, 0, canvas.width, canvas.height);
+        if (!settings.result) return;
+        const frame = settings.result.metadata.frames[settings.frame];
+        if (settings.result.metadata.alphaMode !== 'opaque')
+        {
+            // Checkerboard behind transparent frames so the alpha is visible.
+            for (let y = 0; y < canvas.height; y += 12) for (let x = 0; x < canvas.width; x += 12) { context.fillStyle = ((x + y) / 12) % 2 ? '#2a2a2a' : '#1a1a1a'; context.fillRect(x, y, 12, 12); }
+        }
+        context.drawImage(settings.result.sheet, frame.x, frame.y, frame.width, frame.height, 0, 0, canvas.width, canvas.height);
+        const label = document.getElementById('flipbook-frame');
+        if (label) label.textContent = `${settings.frame + 1}`;
+    }
+
+    function downloadBlob(blob, name)
+    {
+        if (!blob) return;
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = name;
+        link.click();
+        setTimeout(() => URL.revokeObjectURL(link.href), 1500);
+    }
+
+    async function startFlipbookBake()
+    {
+        const settings = state.flipbook;
+        settings.baking = true;
+        settings.cancelled = false;
+        settings.progress = 0;
+        settings.label = 'Starting the bake…';
+        renderDrawer();
+        const report = (fraction, text) =>
+        {
+            settings.progress = fraction;
+            settings.label = text;
+            const bar = refs.drawer.querySelector('.flipbook-progress .bar span');
+            if (bar) bar.style.width = `${Math.round(fraction * 100)}%`;
+            const label = document.getElementById('flipbook-label');
+            if (label) label.textContent = text;
+        };
+        try
+        {
+            settings.result = await app.bakeFlipbook(settings, report, () => settings.cancelled);
+            settings.frame = 0;
+            settings.label = 'Bake complete — download the sheet and its timing / UV metadata.';
+            settings.progress = 1;
+        }
+        catch (error)
+        {
+            settings.label = error.message;
+        }
+        settings.baking = false;
+        renderDrawer();
+    }
+
+    // Loop the baked frames at their own rate while the Flipbook drawer is open.
+    let flipbookClock = 0;
+    function flipbookPlayback(time)
+    {
+        requestAnimationFrame(flipbookPlayback);
+        const settings = state.flipbook;
+        if (!settings.result || !settings.play || settings.baking || !state.drawerOpen || state.drawerTab !== 'flipbook') return;
+        if (time - flipbookClock < 1000 / settings.result.metadata.framesPerSecond) return;
+        flipbookClock = time;
+        settings.frame = (settings.frame + 1) % settings.result.metadata.frameCount;
+        drawFlipbookPreview();
+        const scrub = refs.drawer.querySelector('.flipbook-preview input[type=range]');
+        if (scrub) scrub.value = settings.frame;
+    }
+    requestAnimationFrame(flipbookPlayback);
 
     function renderAll(snapshot)
     {

@@ -293,3 +293,27 @@ button.mini { padding: 0 7px; height: 20px; min-width: 20px; border-radius: 8px;
 .tree-item.preset-item .load-hint { font-size: 9.5px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-muted); }
 .tree-item.preset-item:hover .load-hint { color: var(--accent-amber); }
 .tree-item.preset-item.selected .load-hint { color: var(--accent-amber); }
+
+/* ============================================================ FLIPBOOK DRAWER ============================================================ */
+.drawer-body.flipbook-body { overflow-x: auto; align-items: stretch; }
+.flipbook-card { flex: 0 0 auto; min-width: 230px; display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 14px; background: var(--bg-card); border: 1px solid var(--border-soft); }
+.flipbook-card h4 { margin: 0 0 2px; font-size: 9.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-secondary); font-weight: 500; }
+.flipbook-row { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--text-secondary); }
+.flipbook-row > span { flex: 0 0 72px; }
+.flipbook-row select, .flipbook-row input[type=number] { flex: 1; height: 26px; border-radius: 8px; border: 1px solid var(--border-strong); background: #1a1a1a; color: var(--text-primary); font: inherit; font-size: 11px; padding: 0 8px; }
+.flipbook-row input[type=range] { flex: 1; accent-color: var(--accent-amber); }
+.flipbook-row em { font-style: normal; color: var(--text-muted); min-width: 18px; font-variant-numeric: tabular-nums; }
+.flipbook-note { margin: 0; font-size: 10px; line-height: 1.45; color: var(--text-muted); }
+.flipbook-toggle { display: flex; gap: 8px; align-items: flex-start; font-size: 11px; cursor: pointer; }
+.flipbook-toggle input { margin-top: 2px; accent-color: var(--accent-amber); }
+.flipbook-toggle span { display: flex; flex-direction: column; gap: 2px; }
+.flipbook-toggle strong { font-weight: 400; color: var(--text-primary); }
+.flipbook-toggle em { font-style: normal; font-size: 10px; color: var(--text-muted); }
+.flipbook-progress .bar { height: 4px; border-radius: 2px; background: #222; overflow: hidden; }
+.flipbook-progress .bar span { display: block; height: 100%; background: var(--accent-amber); transition: width 0.15s; }
+.flipbook-progress p { margin: 6px 0 0; font-size: 10px; color: var(--text-muted); min-height: 14px; }
+.flipbook-card .pill { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; }
+.flipbook-preview { flex-direction: row; flex-wrap: wrap; min-width: 420px; }
+.flipbook-preview h4 { flex: 0 0 100%; }
+.flipbook-preview canvas { width: 168px; height: 168px; border-radius: 10px; border: 1px solid var(--border-soft); background: #101010; }
+.flipbook-side { flex: 1; min-width: 200px; display: flex; flex-direction: column; gap: 8px; }

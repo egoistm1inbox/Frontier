@@ -25,6 +25,10 @@
 > | Edges | Powder darkening on thin wisps | other editor |
 > | Noise | Fixed interleaved-gradient jitter (no shimmer without temporal accumulation) | other editor |
 > | Infinite Grid | The pressure loop no longer rebinds texture unit 0 over the tile lookup | fix |
+| Advection (Follow-up 47) | MacCormack falls back to the plain semi-Lagrangian value wherever its correction overshoots the stencil, and fades out above a Courant number of 1–2 (Selle et al. 2008). Clamping the overshoot instead fed energy back every step: scenes started clean and churned into noise after 6–10 s | fix |
+| Forces (Follow-up 47) | Steady pushes (wind, attractors, vortices, curl noise…) stop accelerating gas that already moves with them: each force is scaled by `clamp(1 − v·f̂ / (|f|·T), 0, 1)` with `T` = Domain *Force response* (default 1 s, 0 = off). Bursts, drag, containment and shocks are exempt | new |
+| Scene presets (Follow-up 47) | The other editor's 18 presets (`Engine/PyroScenePresets.js`): original parameter blocks kept, translated by stated ratios to emitters, forces and colliders. Listed as *Pyro scenes* in the browser | other editor |
+| Flipbook (Follow-up 47) | Toolbar *Flipbook* → bake 4/16/32/64 frames of 64–512 px at 12–60 fps, optional warm-up, empty-grid start and transparent background, into one PNG sheet plus timing/UV JSON | other editor |
 
 ---
 
