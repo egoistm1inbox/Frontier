@@ -3,13 +3,11 @@ import TransformPanel from "./TransformPanel.jsx";
 import PrimitiveGlyph from "./PrimitiveIcons.jsx";
 import "./PrimitiveInspector.css";
 
-// 🧩 Inspector for the Showcase primitives (Cube, Sphere, Cylinder, Torus, Cone): square quick controls first, then
-//    Transform, then a category carousel — Overview · Physics · Geometry · Material · Rendering · Fracture.
+// 🧩 Inspector for the Showcase primitives (Cube, Sphere, Cylinder, Torus, Cone): one category carousel —
+//    Overview (purpose, info cards, quick controls last) · Physics · Geometry (Transform first) · Material · Rendering · Fracture.
 // 📝 Every edit is a browser draft stored through Change(Key, Next) like the rest of the HTML editor; nothing reaches
 //    the native scene. Quick controls and carousel pages share the same keys (PHYSICS, DYNAMIC, "Cast shadows", GI,
 //    LOCKED), so a toggle in one place shows in the other.
-
-const TabStorageKey = "Frontier.ProjectZeroHtml.PrimitiveTab";
 
 const Shapes = {
   cube: {
@@ -327,9 +325,9 @@ function Dial({ Label, Reading, Assign, Tone, Disabled }) {
   );
 }
 
-function Card({ Title, Glyph, Tone, Aside, Pastel, children, className = "" }) {
+function Card({ Title, Glyph, Tone, Aside, children, className = "" }) {
   return (
-    <section className={"pi-card " + (Pastel ? "pi-pastel pi-pastel-" + Pastel + " " : "") + className}>
+    <section className={"pi-card " + className} data-card={Title}>
       {(Title || Aside) && (
         <header className="pi-card-head">
           {Glyph && (
@@ -365,12 +363,12 @@ function BigFigure({ Whole, Unit, Caption }) {
 //------------------------------------------------------------------------------------------------------------------------
 
 const QuickSet = [
-  ["Visible", "visible", "#2fd27a"],
-  ["Dynamic", "dynamic", "#ff8a3d"],
-  ["Shadows", "shadow", "#9b7bff"],
-  ["GI", "gi", "#ffc93d"],
-  ["Physics", "physics", "#3db4ff"],
-  ["Locked", "lock", "#ff4d6d"],
+  ["Visible", "visible"],
+  ["Dynamic", "dynamic"],
+  ["Shadows", "shadow"],
+  ["GI", "gi"],
+  ["Physics", "physics"],
+  ["Locked", "lock"],
 ];
 
 function QuickGrid({ Values, Change, Hidden, ToggleHidden }) {
@@ -392,24 +390,25 @@ function QuickGrid({ Values, Change, Hidden, ToggleHidden }) {
         </span>
       </header>
       <div className="pi-quick-grid">
-        {QuickSet.map(([Label, Glyph, Tone]) => {
+        {QuickSet.map(([Label, Glyph]) => {
           const [On, Toggle] = Switches[Label];
           return (
             <button
               key={Label}
               type="button"
               className={"pi-quick-tile" + (On ? " on" : "")}
-              style={{ "--pi-tone": Tone }}
               aria-pressed={!!On}
               aria-label={Label}
               data-quick-action={Label}
               onClick={Toggle}
             >
-              <span className="pi-quick-seat">
-                <PrimitiveGlyph Name={Glyph} Size={22} />
+              <span className={"pi-status-icon " + (On ? "ok" : "idle")}>
+                <PrimitiveGlyph Name={Glyph} Size={12} />
               </span>
-              <span className="pi-quick-label">{Label}</span>
-              <span className="pi-quick-status">{On ? "ON" : "OFF"}</span>
+              <span className="pi-quick-foot">
+                <span className="pi-quick-label">{Label}</span>
+                <span className="pi-quick-status">{On ? "On" : "Off"}</span>
+              </span>
             </button>
           );
         })}
@@ -442,7 +441,7 @@ function Checks({ Values, Hidden, Size }) {
   return Rows;
 }
 
-function OverviewPage({ Shape, Read, Change, Values, Hidden, Size }) {
+function OverviewPage({ Shape, Read, Change, Values, Hidden, ToggleHidden, Size }) {
   const Profile = Shapes[Shape];
   const Tags = Array.isArray(Values.Tags) ? Values.Tags : Profile.Tags;
   const [Draft, EditDraft] = useState("");
@@ -450,7 +449,7 @@ function OverviewPage({ Shape, Read, Change, Values, Hidden, Size }) {
   const Passed = Rows.filter(([Verdict]) => Verdict === "check").length;
   return (
     <>
-      <Card Title="Purpose" Glyph="purpose" Pastel="yellow" Aside={Profile.Name}>
+      <Card Title="Purpose" Glyph="purpose" Tone="#e6cf72" Aside={Profile.Name} className="pi-purpose">
         <label className="pi-text-block">
           <span>What it does</span>
           <textarea
@@ -551,6 +550,8 @@ function OverviewPage({ Shape, Read, Change, Values, Hidden, Size }) {
           onChange={(Event) => Change("Notes", Event.target.value)}
         />
       </Card>
+
+      <QuickGrid Values={Values} Change={Change} Hidden={Hidden} ToggleHidden={ToggleHidden} />
     </>
   );
 }
@@ -585,7 +586,7 @@ function PhysicsPage({ Shape, Read, Change, Values, Size }) {
         />
       </Card>
 
-      <Card Title="Mass" Glyph="weight" Pastel="blue" Aside={Manual ? "Manual" : "From density"}>
+      <Card Title="Mass" Glyph="weight" Tone="#a9bfdc" Aside={Manual ? "Manual" : "From density"}>
         <BigFigure Whole={Mass >= 100 ? Fixed(Mass, 0) : Fixed(Mass, Mass < 1 ? 3 : 1)} Unit="kg" />
         <Segmented
           Current={Manual ? "manual" : "auto"}
@@ -647,6 +648,7 @@ function GeometryPage({ Shape, Read, Change, Values, Size }) {
   const Shading = Read("Geometry Shading", "smooth");
   return (
     <>
+      <TransformPanel Values={Values} Change={Change} />
       <Card Title={Profile.Name + " shape"} Glyph="geometry" Tone="#5fe0a0" Aside={Locked ? "Locked" : "Primitive"}>
         {Profile.Parameters.map(([Label, Key, Initial, Minimum, Maximum, Step, Unit]) => (
           <Slider
@@ -758,17 +760,8 @@ function RenderingPage({ Read, Change, Values, Size }) {
 //                                                    CAROUSEL
 //------------------------------------------------------------------------------------------------------------------------
 
-function RememberedTab() {
-  try {
-    const Saved = localStorage.getItem(TabStorageKey);
-    return Categories.some(([Key]) => Key === Saved) ? Saved : "overview";
-  } catch {
-    return "overview";
-  }
-}
-
 function Carousel({ Pages }) {
-  const [Current, Choose] = useState(RememberedTab);
+  const [Current, Choose] = useState("overview");
   const [Direction, Turn] = useState("none");
   const Rail = useRef(null);
   const Index = Math.max(0, Categories.findIndex(([Key]) => Key === Current));
@@ -776,7 +769,6 @@ function Carousel({ Pages }) {
     const Target = (Next + Categories.length) % Categories.length;
     Turn(Target >= Index ? "next" : "previous");
     Choose(Categories[Target][0]);
-    try { localStorage.setItem(TabStorageKey, Categories[Target][0]); } catch {}
   };
   useEffect(() => {
     const Pill = Rail.current?.querySelector('[aria-selected="true"]');
@@ -859,12 +851,11 @@ export default function PrimitiveInspector({ Subject, Values, Change, Hidden, To
   const Shape = ShapeOf(Subject);
   const Read = (Key, Initial) => (Values[Key] === undefined ? Initial : Values[Key]);
   const Size = Measure(Shape, Read, Array.isArray(Values.Scale) ? Values.Scale : [1, 1, 1]);
-  const Shared = { Shape, Read, Change, Values, Hidden, Size };
+  const Shared = { Shape, Read, Change, Values, Hidden, ToggleHidden, Size };
   return (
     <div className="primitive-inspector">
-      <QuickGrid Values={Values} Change={Change} Hidden={Hidden} ToggleHidden={ToggleHidden} />
-      <TransformPanel Values={Values} Change={Change} />
       <Carousel
+        key={Subject.Id}
         Pages={{
           overview: <OverviewPage {...Shared} />,
           physics: <PhysicsPage {...Shared} />,

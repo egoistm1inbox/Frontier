@@ -1,6 +1,6 @@
-/* 🧩 Showcase primitive inspector — dark rounded cards, pill chips, big thin numerals, dial gauges, pastel accent
-      cards and vibrant square quick controls. Everything is scoped under .primitive-inspector so the global button and
-      range rules in Editor.css (bundled later) cannot override it. */
+/* 🧩 Showcase primitive inspector — one dark theme: rounded cards, pill chips, big thin numerals, dial gauges and small
+      round status badges. Everything is scoped under .primitive-inspector so the global button and range rules in
+      Editor.css (bundled later) cannot override it. */
 
 .primitive-inspector {
   --pi-card: #1a1a1a;
@@ -13,10 +13,6 @@
   flex-direction: column;
   gap: 12px;
   font-weight: 300;
-}
-.primitive-inspector > .transform-card {
-  margin-bottom: 0;
-  border-radius: 24px;
 }
 .primitive-inspector button {
   font-weight: 400;
@@ -74,60 +70,7 @@
   color: var(--pi-faint);
 }
 
-/* Pastel accent cards (the reference's pale yellow and blue tiles): dark ink on a light gradient. */
-.primitive-inspector .pi-pastel {
-  border: none;
-  color: #1b1b1b;
-  --pi-soft: #4d4d4d;
-  --pi-faint: #5f5f5f;
-  --pi-ink: #111;
-}
-.primitive-inspector .pi-pastel-yellow {
-  background: linear-gradient(150deg, #fbf3c9 0%, #f3e6a3 100%);
-}
-.primitive-inspector .pi-pastel-blue {
-  background: linear-gradient(150deg, #dde9f8 0%, #c3d6ee 100%);
-}
-.primitive-inspector .pi-pastel .pi-card-glyph {
-  color: #1b1b1b;
-  background: #ffffff8c;
-  box-shadow: none;
-}
-.primitive-inspector .pi-pastel textarea,
-.primitive-inspector .pi-pastel input[type="number"] {
-  background: #ffffff7a;
-  color: #151515;
-  border-color: #0000000d;
-}
-.primitive-inspector .pi-pastel .pi-segmented {
-  background: #00000012;
-}
-.primitive-inspector .pi-pastel .pi-segmented button {
-  color: #3c3c3c;
-}
-.primitive-inspector .pi-pastel .pi-segmented button.active {
-  background: #151515;
-  color: #f4f4f4;
-}
-.primitive-inspector .pi-pastel .pi-density button {
-  background: #ffffff70;
-  color: #2a2a2a;
-  border-color: #0000000a;
-}
-.primitive-inspector .pi-pastel .pi-density button.active {
-  background: #151515;
-  color: #f4f4f4;
-}
-.primitive-inspector .pi-pastel .pi-density button small {
-  color: inherit;
-  opacity: 0.55;
-}
-.primitive-inspector .pi-pastel .pi-slider input[type="range"] {
-  --pi-tone: #151515;
-  background: linear-gradient(90deg, #151515 var(--pi-fill), #00000018 var(--pi-fill));
-}
-
-/* ── Quick controls: square tiles, white glyph on a vibrant seat ───────────────────────────────────────────────── */
+/* ── Quick controls: dark square tiles in the style of the Checks passed / Warnings cards ─────────────────────────── */
 .primitive-inspector .pi-quick-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -139,94 +82,66 @@
   }
 }
 .primitive-inspector .pi-quick-tile {
-  position: relative;
   aspect-ratio: 1;
   min-height: 0;
-  padding: 10px;
+  padding: 12px;
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
+  align-items: stretch;
   justify-content: space-between;
   gap: 0;
-  border-radius: 18px;
+  border-radius: 20px;
   border: 1px solid var(--pi-line);
-  background: #202020;
+  background: var(--pi-raised);
   color: var(--pi-soft);
   text-align: left;
-  overflow: hidden;
   transition:
     background 160ms ease,
     border-color 160ms ease,
     transform 120ms ease;
 }
 .primitive-inspector .pi-quick-tile:hover {
-  background: #262626;
-  border-color: color-mix(in srgb, var(--pi-tone) 40%, transparent);
+  background: #2a2a2a;
+  border-color: #ffffff1c;
 }
 .primitive-inspector .pi-quick-tile:active {
   transform: scale(0.97);
 }
 .primitive-inspector .pi-quick-tile:focus-visible {
-  outline: 2px solid var(--pi-tone);
+  outline: 2px solid #d8d8d8;
   outline-offset: 2px;
 }
 .primitive-inspector .pi-quick-tile.on {
   color: var(--pi-ink);
-  background:
-    radial-gradient(120% 90% at 0% 0%, color-mix(in srgb, var(--pi-tone) 26%, transparent), transparent 70%),
-    #1f1f1f;
-  border-color: color-mix(in srgb, var(--pi-tone) 34%, transparent);
 }
-.primitive-inspector .pi-quick-seat {
-  display: grid;
-  place-items: center;
-  width: 38px;
-  height: 38px;
-  border-radius: 12px;
-  color: color-mix(in srgb, var(--pi-tone) 70%, #777);
-  background: color-mix(in srgb, var(--pi-tone) 12%, #262626);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--pi-tone) 18%, transparent);
-  transition:
-    background 160ms ease,
-    color 160ms ease,
-    box-shadow 160ms ease;
+.primitive-inspector .pi-quick-tile > .pi-status-icon {
+  width: 24px;
+  height: 24px;
 }
-.primitive-inspector .pi-quick-tile.on .pi-quick-seat {
-  color: #fff;
-  background: linear-gradient(
-    145deg,
-    color-mix(in srgb, var(--pi-tone) 80%, #fff) 0%,
-    var(--pi-tone) 55%,
-    color-mix(in srgb, var(--pi-tone) 78%, #000) 100%
-  );
-  box-shadow:
-    0 6px 16px -6px var(--pi-tone),
-    inset 0 1px 0 #ffffff55;
+.primitive-inspector .pi-quick-foot {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
 }
 .primitive-inspector .pi-quick-label {
   font-size: 12px;
   line-height: 1.1;
   font-weight: 400;
+  color: #cfcfcf;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 100%;
+  min-width: 0;
 }
 .primitive-inspector .pi-quick-status {
-  position: absolute;
-  top: 12px;
-  right: 10px;
-  font-size: 8px;
-  letter-spacing: 1.1px;
-  font-weight: 500;
-  padding: 3px 6px;
-  border-radius: 99px;
-  color: var(--pi-faint);
-  background: #ffffff08;
+  font-size: 26px;
+  line-height: 1;
+  font-weight: 200;
+  letter-spacing: -0.8px;
 }
-.primitive-inspector .pi-quick-tile.on .pi-quick-status {
-  color: color-mix(in srgb, var(--pi-tone) 85%, #fff);
-  background: color-mix(in srgb, var(--pi-tone) 16%, transparent);
+.primitive-inspector .pi-quick-tile:not(.on) .pi-quick-status {
+  color: var(--pi-faint);
 }
 
 /* ── Carousel ───────────────────────────────────────────────────────────────────────────────────────────────────── */
@@ -489,6 +404,10 @@
 }
 .primitive-inspector .pi-status-icon.ok {
   background: #34d17a;
+}
+.primitive-inspector .pi-status-icon.idle {
+  background: #3a3a3a;
+  color: #9a9a9a;
 }
 .primitive-inspector .pi-status-icon.warn {
   background: #ff5d5d;

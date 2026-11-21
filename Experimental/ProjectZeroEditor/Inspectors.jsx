@@ -6,7 +6,6 @@ import FracturePanel from "./FracturePanel.jsx";
 import AtmosphereLab, { AtmosphereProfile } from "./AtmosphereLab.jsx";
 import {
   GraphContext,
-  PropertyGraph,
   SunGraph,
   FogGraph,
   FogSpectrum,
@@ -361,9 +360,6 @@ export function Card({
         <span>{Title}</span>
       </h3>
       {children || Children}
-      {!GraphHandled && (
-        <PropertyGraph Children={children || Children} Title={Title} />
-      )}
     </section>
   );
 }
@@ -722,14 +718,6 @@ export function Inspector({
             <summary>{Group}</summary>
             {Sheet.filter((Field) => Field.Group === Group).map((Field) =>
               F(Field.Label),
-            )}
-            {["light", "post"].includes(Subject.Panel) && (
-              <PropertyGraph
-                Title={Group}
-                Children={Sheet.filter((Field) => Field.Group === Group).map(
-                  (Field) => F(Field.Label),
-                )}
-              />
             )}
           </details>
         ))}
@@ -1660,14 +1648,6 @@ export function Inspector({
                 Field.Group,
               ),
             ).map((Field) => F(Field.Label))}
-            <PropertyGraph
-              Title="Cloud shadows"
-              Children={Sheet.filter((Field) =>
-                ["Cloud Shadows", "Shadow Clock", "Tier Budget"].includes(
-                  Field.Group,
-                ),
-              ).map((Field) => F(Field.Label))}
-            />
           </details>
         )}
         <WindBinding

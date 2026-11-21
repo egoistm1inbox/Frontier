@@ -80,8 +80,8 @@ const Sections = {
     ".collection-browser",
     ".collection-notes",
   ],
-  // Showcase primitives: quick controls, Transform, then the category carousel (material and fracture live in it).
-  geometry: [".pi-quick", ".transform-card", ".pi-carousel"],
+  // Showcase primitives: the category carousel opens on Overview; Purpose first, quick controls last.
+  geometry: [".pi-carousel-bar", ".pi-purpose", ".pi-quick"],
   post: [".entity-capabilities"],
   camera: [Card("Lens + field of view"), Card("Aperture study")],
   atmosphere: [

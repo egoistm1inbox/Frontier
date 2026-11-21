@@ -52,23 +52,27 @@ starting point for the UI redesign.
 ## 🧱 Showcase Primitive Inspector
 
 Cube, Sphere, Cylinder, Torus and Cone (Outliner folder **Showcase**) use `PrimitiveInspector.jsx` instead of the generic geometry layout.
-Other geometry and every other panel are unchanged.
+Other geometry and every other panel are unchanged. Below the header there is one category carousel, which opens on **Overview** each
+time an object is selected. It has pill tabs (inactive pills show only an icon; the active one adds its label), ‹ › buttons, arrow keys,
+horizontal swipe and page dots. Everything uses the same dark theme.
 
-1. **Quick controls**: six square tiles (Visible, Dynamic, Shadows, GI, Physics, Locked). Each has its own vivid colour, a white duotone glyph
-   (`PrimitiveIcons.jsx`) when on and a dim tinted seat when off. Physics on also turns Dynamic on; Dynamic off also turns Physics off.
-2. **Transform**: the shared `TransformPanel`.
-3. **Category carousel**: pill chips (inactive pills show only an icon, the active one adds its label), ‹ › buttons, arrow keys, horizontal swipe
-   and page dots. The chosen page is remembered (`localStorage`, `Frontier.ProjectZeroHtml.PrimitiveTab`).
-   - **Overview**: an editable Purpose card ("What it does" / "Why it's here") with a default per shape, summary chips, Checks passed /
-     Warnings counters, Footprint (volume, world width / height / depth), a checks list, Tags and Notes (the same `Notes` as the header).
-   - **Physics**: simulate switch, body type, mass (from density presets or manual), dial gauges for friction, bounciness and damping, collider
-     shape, gravity scale, continuous collision and start asleep.
-   - **Geometry**: per-shape parameters (size and bevel, radius / segments / rings, …), triangle and vertex counts, a 3 × 3 origin picker with
-     offset readout, origin / world-origin / drop-to-floor actions, shading and UV projection.
-   - **Material**: the existing `MaterialPanel`.
-   - **Rendering**: shadows, GI, shadow detail, draw distance, LOD bias, reflections, motion vectors and a cost summary.
-   - **Fracture**: the existing `FracturePanel`.
+- **Overview**: an editable Purpose card ("What it does" / "Why it's here") with a default per shape, summary chips, Checks passed /
+  Warnings counters, Footprint (volume, world width / height / depth), a checks list, Tags, Notes (the same `Notes` as the header) and,
+  last, **Quick controls**. These are six dark square tiles (Visible, Dynamic, Shadows, GI, Physics, Locked), each with a small round badge
+  like the Checks passed / Warnings icons: green when on, grey when off. Physics on also turns Dynamic on; Dynamic off also turns
+  Physics off.
+- **Physics**: simulate switch, body type, mass (from density presets or manual), dial gauges for friction, bounciness and damping,
+  collider shape, gravity scale, continuous collision and start asleep.
+- **Geometry**: the shared `TransformPanel` first, then per-shape parameters, triangle and vertex counts, a 3 × 3 origin picker with
+  offset readout, origin / world-origin / drop-to-floor actions, shading and UV projection.
+- **Material**: the existing `MaterialPanel`.
+- **Rendering**: shadows, GI, shadow detail, draw distance, LOD bias, reflections, motion vectors and a cost summary.
+- **Fracture**: the existing `FracturePanel`.
 
 All values are browser drafts in the same per-object store as before. The quick controls keep their old keys (`DYNAMIC`, `Cast shadows`, `GI`,
 `PHYSICS`, `LOCKED`). New keys are prefixed `Physics …` / `Geometry …`, plus `Purpose`, `Reason`, `Tags`, `Origin` and the rendering labels.
 Nothing reaches a native scene.
+
+The generic "Live parameter map" bar chart (`PropertyGraph`), which was appended to cards across the editor, has been removed
+everywhere. Cards keep their purpose-built visuals (solar plots, fog spectra, cloud bounds, lens / iris graphics and so on). Stars, Moons,
+Lens Flare, Precipitation, Rainbow and Editor Camera had only the bar map, so they have no data graphic until proper ones are designed.

@@ -230,13 +230,6 @@ try {
   const PausedYaw = (await Saved()).Values.atmosphere["Space yaw"];
   await Page.waitForTimeout(500);
   assert.equal((await Saved()).Values.atmosphere["Space yaw"], PausedYaw);
-  const Ground = Card("Ground reflectance").getByRole("slider", {
-    name: "Ground reflectance: Ground Albedo R chart",
-    exact: true,
-  });
-  await Ground.focus();
-  await Page.keyboard.press("Home");
-  assert.match((await Saved()).Values.atmosphere["Ground Albedo"], /^#00/);
   await Page.reload({ waitUntil: "networkidle" });
   await Select("Atmosphere");
   assert.equal(
@@ -244,39 +237,32 @@ try {
     "Custom",
   );
   Checks.push(
-    "Reconstructed atlas preset and free-map editing; responsive orbital single-scatter preview; changed pixels for Mars/Arctic and orbit; animation, modal focus/inert, RGB graph editing and reload",
+    "Reconstructed atlas preset and free-map editing; responsive orbital single-scatter preview; changed pixels for Mars/Arctic and orbit; animation, modal focus/inert and reload",
   );
+  // Stars, Moons, Lens Flare, Precipitation, Rainbow and Editor Camera only had the removed bar maps.
   for (const Name of [
-    "Stars",
-    "Moons",
-    "Lens Flare",
-    "Precipitation",
-    "Rainbow",
     "Clouds",
     "Local Cloud",
     "Height Fog",
     "Atmospheric Fog",
     "Local Fog",
     "Wind",
-    "Editor Camera",
   ]) {
     await Select(Name);
     assert.ok(
-      await Page.locator(
-        ".property-graph,[data-live-plot],.wind-inspector",
-      ).count(),
+      await Page.locator("[data-live-plot],.wind-inspector").count(),
       Name + " has interactive data",
     );
   }
-  await Select("Post Process");
-  assert.ok(await Page.locator(".property-graph").count());
-  await Select("Area Light");
-  assert.ok(await Page.locator(".property-graph").count());
+  // Generic "Live parameter map" bar charts were removed; none may appear anywhere.
+  for (const Name of ["Post Process", "Area Light", "Clouds", "Cube"]) {
+    await Select(Name);
+    assert.equal(await Page.locator(".property-graph").count(), 0, Name);
+  }
   await Select("Cube");
-  assert.equal(await Page.locator(".property-graph").count(), 0);
   assert.equal(await Page.locator(".environment-live").count(), 0);
   Checks.push(
-    "Environment/camera/light/post cards expose actual data graphs; geometry and materials excluded",
+    "Environment/camera cards expose actual data graphs; no generic parameter bar maps anywhere",
   );
 
   await Select("Atmospheric Fog");
@@ -288,7 +274,7 @@ try {
     }),
     SpectralBefore = await Spectrum.locator("[data-series]").getAttribute("d");
   await Card("Medium")
-    .getByRole("slider", { name: "Medium: Mie Blend chart", exact: true })
+    .getByRole("slider", { name: "Mie Blend", exact: true })
     .focus();
   await Page.keyboard.press("End");
   assert.notEqual(
@@ -349,20 +335,6 @@ try {
   await Page.setViewportSize({ width: 1366, height: 768 });
   await Card("Local bounds").scrollIntoViewIfNeeded();
   await Page.screenshot({ path: Proof + "/LocalCloudBounds.png" });
-  await Select("Clouds");
-  assert.equal(
-    await Page.locator('[data-property-graph="Cloud shadows"]').count(),
-    1,
-  );
-  await Page.getByText("GPU cloud shadows · separate field", {
-    exact: true,
-  }).click();
-  await Page.getByRole("slider", {
-    name: "Cloud shadows: Shadow Coverage chart",
-    exact: true,
-  }).focus();
-  await Page.keyboard.press("Home");
-  assert.equal((await Saved()).Values.clouds["Shadow Coverage"], 0);
   await Select("Atmospheric Fog");
   const TouchPlot = Card("Visibility through fog").getByRole("slider", {
     name: "Fog distance probe",
@@ -400,7 +372,7 @@ try {
   assert.equal((await Saved()).Values["aerial-fog"]["Probe distance"], 2000);
   await CDP.detach();
   Checks.push(
-    "Aerial spectral mixture, cloud vertical probes, editable local bounds/derived extents, cloud-shadow parameter graph, and real touch drag/clamping",
+    "Aerial spectral mixture, cloud vertical probes, editable local bounds/derived extents, and real touch drag/clamping",
   );
   assert.deepEqual(Errors, []);
 } catch (Error) {

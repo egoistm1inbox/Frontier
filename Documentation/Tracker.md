@@ -1289,5 +1289,8 @@ in `Exhibits/LightCompute/Results/FogFacetRegression.txt`; this was a fixture-se
   controls, then Transform, then an Overview / Physics / Geometry / Material / Rendering / Fracture carousel styled after the dashboard
   references. Local rebuild made to work (`package.json`, `Experimental/FrontierEditor/` deps, `Build.mjs` asset fallback).
   `CheckInspectorOrder` updated to the new order: 71 checks pass. `CheckQuickTools` fails only on the blocked Fontshare requests. Names unapproved.
+  Follow-up 31: removed the generic "Live parameter map" bar charts (`PropertyGraph`) everywhere. Primitive inspector reworked:
+  Overview first, with quick controls at its bottom as dark tiles with green / grey round badges. Transform moved to the top of Geometry.
+  Purpose and Mass cards are dark. Checks updated: `CheckInspectorOrder` 71 pass, `CheckEnvironmentGraphs` passes.
   Follow-up 22: Agera RS (`AgeraRs`, cross-plane 90° crank), rubber tyre squeal per surface (`Singer`, `Concrete` surface, `Tyres-Drift` scene), ricochet warble, subsonic whizz flown past the ear.
   Live AudioWorklet bench with car switch + offline MP3 reel (101 files, 26 MB) with spectrogram plates (`Exhibits/CabinHmi/Audio/`). Names unapproved.
