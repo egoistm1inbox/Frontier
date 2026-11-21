@@ -3026,3 +3026,104 @@ img {
 .collection-heading > .entity-notes-add {
   margin-top: 4px;
 }
+
+/* Sun now: horizon panorama with the day's path, then six lighting figures. */
+.sun-now .sun-now-body > p {
+  margin: -6px 0 14px;
+}
+.sun-now .sun-panorama {
+  width: 100%;
+  height: auto;
+  display: block;
+  cursor: ew-resize;
+  touch-action: none;
+}
+.sun-now .sun-panorama text {
+  font:
+    9px "DM Sans",
+    sans-serif;
+  fill: #7d7d7d;
+}
+.sun-now .sun-panorama text.sun-now-faint {
+  fill: #ffffff8c;
+}
+.sun-now .sun-panorama text.sun-now-cardinal {
+  font-size: 10px;
+  fill: #e6e6e6;
+  font-weight: 600;
+}
+.sun-now .sun-facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 14px;
+}
+.sun-now .sun-facts > div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  padding: 10px 11px;
+  border-radius: 14px;
+  background: #1b1b1b;
+  border: 1px solid #ffffff08;
+}
+.sun-now .sun-facts small {
+  font-size: 9px;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: #8a8a8a;
+}
+.sun-now .sun-facts b {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 18px;
+  font-weight: 300;
+  color: #ececec;
+  font-variant-numeric: tabular-nums;
+}
+.sun-now .sun-facts b i {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex: none;
+}
+.sun-now .sun-facts span {
+  font-size: 9px;
+  color: #7a7a7a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Height Fog / Atmospheric Fog own cards. */
+.fog-own-card .fog-scene-wrap {
+  margin: 4px 0 14px;
+}
+.fog-own-card .fog-scene {
+  width: 100%;
+  height: auto;
+  display: block;
+  overflow: visible;
+}
+.fog-own-card .fog-scene text {
+  font:
+    8.5px "DM Sans",
+    sans-serif;
+  fill: #7d7d7d;
+}
+.fog-own-card .fog-scene text.fog-scene-strong {
+  fill: #f0f0f0;
+}
+.fog-own-card .fog-scene text.fog-scene-faint {
+  fill: #ffffffa6;
+}
+.fog-own-card .fog-scene-handle {
+  cursor: grab;
+  outline: none;
+}
+.fog-own-card .fog-scene-handle:focus-visible circle {
+  stroke: #ffffff;
+  stroke-width: 2;
+}

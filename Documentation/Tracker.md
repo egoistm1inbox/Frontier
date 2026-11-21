@@ -1298,6 +1298,14 @@ in `Exhibits/LightCompute/Results/FogFacetRegression.txt`; this was a fixture-se
   The Wind inspector's Composite flow card was removed; the WindEditor opens from Wind controls. Checks updated; InspectorOrder,
   EnvironmentGraphs, Wind, EntityContext, WorkspaceCards, LightDesign and SharedCards pass. CheckConstruction (Cube roughness) and
   CheckReference (hash) fail exactly as at HEAD. Names unapproved.
+  Follow-up 34: Sun hero replaced by a "Sun now" card (`SunNow.jsx`: horizon panorama with the day's path, six lighting figures);
+  Atmosphere atlas replaced by Sky preset tiles (noon / sunset gradients) plus the Rayleigh / Mie pill sliders; Height Fog (Fog layer,
+  Density by altitude, Light in the fog) and Atmospheric Fog (Aerial perspective, Spectral transmission) get their own cards
+  (`FogCards.jsx`), while Local Fog keeps the shared ones; Glitch study redrawn as signal trace plus test-frame break-up; primitive Overview
+  now runs Quick controls → Notes, with Purpose inside Notes; primitive Geometry rebuilt with the editor's property cards and pill
+  sliders (Shape wireframe, Resolution, Shading, Normals). Checks updated: InspectorOrder, InspectorLayout, EnvironmentGraphs,
+  InstrumentStyle, LightDesign, FogCards (now passing), Reference, Lighting. Construction:188, Reference:21 and QuickTools (fonts) fail as
+  before. Names unapproved.
   Follow-up 33: primitive inspector: Rendering tab, collision shape, origin and UV removed; quick tiles show state by icon only; Physics
   (Simulation drop study, Mass log ruler) and Geometry (Shape, Shading cross-section, Normals) rebuilt as camera-style cards. Post-process
   canvas preview replaced by one draggable infographic per effect. Environment Light added to Lighting (`EnvironmentLight.jsx`, one-time

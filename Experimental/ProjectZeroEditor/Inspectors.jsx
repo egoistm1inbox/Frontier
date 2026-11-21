@@ -2,6 +2,7 @@ import { CloudEdit, CloudValue } from "./CloudSpecification.js";
 import CloudDeckPanel from "./CloudDeckPanel.jsx";
 import { FogBeamChamber } from "./FogPanel.jsx";
 import HeightFogVisual from "./HeightFogVisual.jsx";
+import { HeightFogLayer, FogLightStudy, AerialRidges } from "./FogCards.jsx";
 import FracturePanel from "./FracturePanel.jsx";
 import AtmosphereLab, { AtmosphereProfile } from "./AtmosphereLab.jsx";
 import {
@@ -9,6 +10,7 @@ import {
   SunGraph,
   FogGraph,
   FogSpectrum,
+  FogDensity,
   CloudSection,
   CloudBounds,
 } from "./LiveGraph.jsx";
@@ -39,6 +41,7 @@ import {
 import { LunarSphere } from "../FrontierEditor/moon-controls.jsx";
 import Native from "./NativePanels.json";
 import { Solar } from "./Solar.mjs";
+import SunNow from "./SunNow.jsx";
 import { SensorField } from "./OpticalGraphic.jsx";
 
 export const Panels = {
@@ -353,6 +356,7 @@ export function Card({
   GraphHandled = false,
 }) {
   const Mark = {
+    "Sun now": "sun",
     "Sun direction": "celestial-orbit",
     "Sunlight intensity": "sun",
     Temperature: "SparklesAntiAliasing",
@@ -649,6 +653,7 @@ export function Inspector({
     <>
       {Header("Geometry")}
       <PrimitiveInspector
+        Kit={{ Card, Control, Metric }}
         Subject={Subject}
         Values={Values}
         Change={Change}
@@ -861,7 +866,9 @@ export function Inspector({
     Content = (
       <>
         {Header("Environment")}
-        {ReferenceCards}
+        <Card Title="Sun now" Class="sun-now" GraphHandled>
+          <SunNow V={V} Change={AssignProperty} />
+        </Card>
         <div className="section-caption">
           PROPERTIES <small>Light, direction & atmosphere</small>
         </div>
@@ -1341,7 +1348,21 @@ export function Inspector({
     Content = (
       <>
         {Header("Environment", "Atmosphere")}
-        <AtmosphereLab V={V} Change={AssignProperty} />
+        <AtmosphereLab
+          V={V}
+          Change={AssignProperty}
+          Slider={(Name, After) => (
+            <Control
+              key={Name}
+              Field={Sheet.find((Item) => Item.Label === Name)}
+              Value={V(Name)}
+              Change={(Next) => {
+                AssignProperty(Name, Next);
+                After?.();
+              }}
+            />
+          )}
+        />
         <Card Title="Atmosphere settings">{Tiles(["Line at civil only"])}</Card>
         <Card Title="Atmospheric scattering" Height={485} GraphHandled>
           <Metric
@@ -1729,10 +1750,71 @@ export function Inspector({
         )}
       </>
     );
+  } else if (Subject.Panel === "height-fog") {
+    // Height Fog: its own cards (layer cut-away, density profile, light in the fog).
+    const Ground = FogDensity("height-fog", V, 0, true),
+      Falloff = Math.max(10, V("Falloff Height")),
+      Readout = (Label, Text) => <Control key={Label} Field={{ Label, Control: "Readout" }} Value={Text} />,
+      Far = (Sigma) => (Sigma > 1e-9 ? 3.912 / Sigma : Infinity),
+      Metres = (Value) => (!isFinite(Value) ? "clear" : Value >= 1000 ? (Value / 1000).toFixed(1) + " km" : Math.round(Value) + " m");
+    Content = (
+      <>
+        {Header("Environment")}
+        <Card Title="Fog layer" Class="fog-own-card" GraphHandled>
+          {Tiles(["Enabled"])}
+          <Metric Value={Metres(Far(Ground))} Caption="How far you can see at ground level" />
+          <div className="graphic fog-scene-wrap">
+            <HeightFogLayer V={V} Change={AssignProperty} />
+          </div>
+          {Fields("Density", "Falloff Height")}
+        </Card>
+        <div className="card-grid fog-model-cards">
+          <Card Title="Density by altitude" Class="fog-own-card" GraphHandled>
+            <HeightFogVisual V={V} Change={AssignProperty} />
+            {Readout("Visibility at 0 m", Metres(Far(Ground)))}
+            {Readout(`Visibility at ${Metres(Falloff)}`, Metres(Far(FogDensity("height-fog", V, Falloff, true))))}
+            {Readout("Looking straight up", Number((Math.exp(-V("Density") * Falloff) * 100).toPrecision(2)) + " % of the light")}
+          </Card>
+          <Card Title="Light in the fog" Class="fog-own-card" GraphHandled>
+            <Metric Value={Number(V("Sun Scatter")).toFixed(2)} Unit="×" Caption="Forward glow around the sun" />
+            <div className="graphic fog-scene-wrap">
+              <FogLightStudy V={V} />
+            </div>
+            {Fields("Sun Scatter")}
+            {F("Colour")}
+          </Card>
+        </div>
+      </>
+    );
+  } else if (Subject.Panel === "aerial-fog") {
+    // Atmospheric Fog: its own cards (receding ridges, haze colour).
+    const Sigma = FogDensity("aerial-fog", V, 2, true),
+      Probe = V("Probe distance") ?? 200,
+      Metres = (Value) => (!isFinite(Value) ? "clear" : Value >= 1000 ? (Value / 1000).toFixed(1) + " km" : Math.round(Value) + " m");
+    Content = (
+      <>
+        {Header("Environment")}
+        <Card Title="Aerial perspective" Class="fog-own-card" GraphHandled>
+          {Tiles(["Enabled"])}
+          <Metric Value={Metres(Sigma > 1e-9 ? 3.912 / Sigma + V("Start") : Infinity)} Caption="Visibility, counting the clear air before Start" />
+          <div className="graphic fog-scene-wrap">
+            <AerialRidges V={V} Change={AssignProperty} />
+          </div>
+          {Fields("Density", "Start")}
+          <p>
+            {(Math.exp(-Sigma * Probe) * 100).toFixed(1)} % of the light survives {Metres(Probe)} of haze. Illustrative σ = 0.001 × density / m, not a
+            native atmosphere march.
+          </p>
+        </Card>
+        <Card Title="Spectral transmission" Class="fog-own-card" GraphHandled>
+          <Metric Value={Math.round(V("Mie Blend") * 100)} Unit="% aerosol" Caption={V("Mie Blend") < 0.5 ? "Blue, clean-air haze" : "Grey-white, dusty haze"} />
+          <FogSpectrum V={V} Change={AssignProperty} />
+          {Fields("Mie Blend")}
+        </Card>
+      </>
+    );
   } else if (Subject.Panel.includes("fog")) {
-    const Local = Subject.Panel === "local-fog",
-      Aerial = Subject.Panel === "aerial-fog",
-      Height = !Local && !Aerial;
+    // Local Fog keeps the shared fog cards.
     Content = (
       <>
         {Header("Environment")}
@@ -1744,30 +1826,10 @@ export function Inspector({
         </Card>
         <div className="card-grid fog-model-cards">
           <Card Title="Medium" Height={416}>
-            {Fields(
-              "Density",
-              Local ? "Coverage" : Aerial ? "Start" : "Falloff Height",
-              Local ? "Feature Scale" : Aerial ? "Mie Blend" : "Sun Scatter",
-              ...(Local ? ["Anisotropy"] : []),
-            )}
+            {Fields("Density", "Coverage", "Feature Scale", "Anisotropy")}
             <FogBeamChamber Kind={Subject.Panel} V={V} />
           </Card>
-          {Local ? (
-            <FogShapePanel Values={Values} Change={Change} />
-          ) : (
-            <Card
-              Title={Aerial ? "Spectral transmission" : "Height and tint"}
-              Height={416}
-              GraphHandled
-            >
-              {Aerial ? (
-                <FogSpectrum V={V} Change={AssignProperty} />
-              ) : (
-                <HeightFogVisual V={V} Change={AssignProperty} />
-              )}
-              {Height && F("Colour")}
-            </Card>
-          )}
+          <FogShapePanel Values={Values} Change={Change} />
         </div>
       </>
     );

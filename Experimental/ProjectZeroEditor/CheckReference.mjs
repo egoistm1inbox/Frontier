@@ -101,12 +101,7 @@ try {
       if (Id === "height-fog") {
         assert.deepEqual(
           Actual.Cards,
-          [
-            "Fog settings",
-            "Visibility through fog",
-            "Medium",
-            "Height and tint",
-          ],
+          ["Fog layer", "Density by altitude", "Light in the fog"],
         );
       }
       if (Id === "lighting") {
@@ -131,6 +126,7 @@ try {
         "lighting",
         "camera",
         "moon",
+        "sun",
         "height-fog",
       ].includes(Id)
     ) {
@@ -173,7 +169,6 @@ try {
     );
   }
   for (const [Id, Selectors] of [
-    ["sun", [".mp-hero", ".mp-rail", ".mp-duo"]],
     ["wind", [".wf-trace", ".mp-rail", ".mp-duo"]],
     ["clouds", [".cl-hero", ".mp-rail", ".mp-duo"]],
     [
@@ -311,7 +306,7 @@ try {
       0,
       "Rejected C041 controls are absent",
     );
-    if (["sun", "wind", "clouds", "reference-rim-point"].includes(Id)) {
+    if (["wind", "clouds", "reference-rim-point"].includes(Id)) {
       await Page.locator(".reference-inspector-copy")
         .first()
         .evaluate((Node) => Node.scrollIntoView({ block: "start" }));
@@ -320,7 +315,7 @@ try {
     }
     Results.push(Id + ": only selected imported cards are added");
   }
-  for (const Id of ["wind", "sun"]) {
+  for (const Id of ["wind"]) {
     const Frame = await Open(Id);
     assert.equal(await Frame.locator(".ident").count(), 0);
     if (Id === "wind") {

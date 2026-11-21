@@ -386,20 +386,25 @@ try {
   Checks.push(
     "Wind heading → Anemometer and statistics (Composite Flow card removed), retaining the live trace",
   );
-  for (const Id of ["height-fog", "aerial-fog", "local-fog"]) {
+  // Height Fog and Atmospheric Fog own their cards; each headline visual responds to model density.
+  for (const [Id, Picture] of [
+    ["height-fog", '[data-card="Fog layer"] .fog-scene'],
+    ["aerial-fog", '[data-card="Aerial perspective"] .fog-scene'],
+    ["local-fog", '[data-card="Visibility through fog"] [data-series]'],
+  ]) {
     await Open(Id);
-    const Visibility = Page.locator('[data-card="Visibility through fog"] [data-series]'),
-      Before = await Visibility.getAttribute("d");
+    const Visual = Page.locator(Picture),
+      Before = await Visual.evaluate((Node) => Node.outerHTML);
     await Page.getByLabel("Density value", { exact: true }).fill(
       Id === "height-fog" ? "0.08" : "2",
     );
-    assert.notEqual(await Visibility.getAttribute("d"), Before);
+    assert.notEqual(await Visual.evaluate((Node) => Node.outerHTML), Before);
     assert.equal(
       await Page.locator('[data-card="Medium"] .fog-shared-beam').count(),
-      1,
+      Id === "local-fog" ? 1 : 0,
     );
     await Capture(Id);
-    Checks.push(Id + ": shared Visibility and Medium cards respond to model density");
+    Checks.push(Id + ": fog cards respond to model density");
   }
   assert.deepEqual(Errors, []);
   console.log("Light design checks passed:", Checks.length);

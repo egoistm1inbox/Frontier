@@ -4,7 +4,7 @@ import PrimitiveGlyph from "./PrimitiveIcons.jsx";
 import "./PrimitiveInspector.css";
 
 // 🧩 Inspector for the Showcase primitives (Cube, Sphere, Cylinder, Torus, Cone): one category carousel —
-//    Overview (purpose, info cards, quick controls last) · Physics · Geometry (Transform first) · Material · Fracture.
+//    Overview (info cards, then quick controls, then notes with the purpose) · Physics · Geometry (Transform first) · Material · Fracture.
 // 📝 Every edit is a browser draft stored through Change(Key, Next) like the rest of the HTML editor; nothing reaches
 //    the native scene. Quick controls and carousel pages share the same keys (PHYSICS, DYNAMIC, "Cast shadows", GI,
 //    LOCKED), so a toggle in one place shows in the other.
@@ -17,9 +17,9 @@ const Shapes = {
     Reason: "Its six flat faces show how the key light, GI bounce and shadow softness read on planar surfaces.",
     Tags: ["reference", "lighting"],
     Parameters: [
-      ["Size X", "Geometry Size X", 1, 0.01, 100, 0.01, "m"],
-      ["Size Y", "Geometry Size Y", 1, 0.01, 100, 0.01, "m"],
-      ["Size Z", "Geometry Size Z", 1, 0.01, 100, 0.01, "m"],
+      ["Size X", "Geometry Size X", 1, 0.01, 10, 0.01, "m"],
+      ["Size Y", "Geometry Size Y", 1, 0.01, 10, 0.01, "m"],
+      ["Size Z", "Geometry Size Z", 1, 0.01, 10, 0.01, "m"],
       ["Bevel", "Geometry Bevel", 0, 0, 0.25, 0.005, "m"],
       ["Bevel segments", "Geometry Bevel Segments", 1, 1, 8, 1, ""],
     ],
@@ -31,7 +31,7 @@ const Shapes = {
     Reason: "A curved surface shows the full range of light angles at once, so material and exposure changes are easy to judge.",
     Tags: ["reference", "material"],
     Parameters: [
-      ["Radius", "Geometry Radius", 0.5, 0.01, 50, 0.01, "m"],
+      ["Radius", "Geometry Radius", 0.5, 0.01, 5, 0.01, "m"],
       ["Segments", "Geometry Segments", 32, 3, 128, 1, ""],
       ["Rings", "Geometry Rings", 16, 2, 64, 1, ""],
     ],
@@ -43,8 +43,8 @@ const Shapes = {
     Reason: "Its caps and wall together test smoothing groups, ambient occlusion at the base and rolling physics.",
     Tags: ["reference", "physics"],
     Parameters: [
-      ["Radius", "Geometry Radius", 0.5, 0.01, 50, 0.01, "m"],
-      ["Height", "Geometry Height", 1, 0.01, 100, 0.01, "m"],
+      ["Radius", "Geometry Radius", 0.5, 0.01, 5, 0.01, "m"],
+      ["Height", "Geometry Height", 1, 0.01, 10, 0.01, "m"],
       ["Segments", "Geometry Segments", 32, 3, 128, 1, ""],
     ],
     Caps: true,
@@ -56,8 +56,8 @@ const Shapes = {
     Reason: "Light has to bounce into the hole, so it shows whether indirect light and occlusion behave on concave shapes.",
     Tags: ["reference", "GI"],
     Parameters: [
-      ["Major radius", "Geometry Major Radius", 0.5, 0.05, 50, 0.01, "m"],
-      ["Minor radius", "Geometry Minor Radius", 0.15, 0.01, 20, 0.005, "m"],
+      ["Major radius", "Geometry Major Radius", 0.5, 0.05, 5, 0.01, "m"],
+      ["Minor radius", "Geometry Minor Radius", 0.15, 0.01, 2, 0.005, "m"],
       ["Segments", "Geometry Segments", 48, 3, 192, 1, ""],
       ["Sides", "Geometry Sides", 16, 3, 64, 1, ""],
     ],
@@ -69,8 +69,8 @@ const Shapes = {
     Reason: "The narrowing surface shows normal interpolation and shadow-bias problems near the tip.",
     Tags: ["reference", "silhouette"],
     Parameters: [
-      ["Radius", "Geometry Radius", 0.5, 0.01, 50, 0.01, "m"],
-      ["Height", "Geometry Height", 1, 0.01, 100, 0.01, "m"],
+      ["Radius", "Geometry Radius", 0.5, 0.01, 5, 0.01, "m"],
+      ["Height", "Geometry Height", 1, 0.01, 10, 0.01, "m"],
       ["Segments", "Geometry Segments", 32, 3, 128, 1, ""],
     ],
     Caps: true,
@@ -445,27 +445,6 @@ function OverviewPage({ Shape, Read, Change, Values, Hidden, ToggleHidden, Size 
   const Passed = Rows.filter(([Verdict]) => Verdict === "check").length;
   return (
     <>
-      <Card Title="Purpose" Glyph="purpose" Tone="#e6cf72" Aside={Profile.Name} className="pi-purpose">
-        <label className="pi-text-block">
-          <span>What it does</span>
-          <textarea
-            rows={3}
-            aria-label="What it does"
-            value={Read("Purpose", Profile.Purpose)}
-            onChange={(Event) => Change("Purpose", Event.target.value)}
-          />
-        </label>
-        <label className="pi-text-block">
-          <span>Why it's here</span>
-          <textarea
-            rows={3}
-            aria-label="Why it's here"
-            value={Read("Reason", Profile.Reason)}
-            onChange={(Event) => Change("Reason", Event.target.value)}
-          />
-        </label>
-      </Card>
-
       <div className="pi-chip-row" aria-label="Summary">
         <span className="pi-chip"><b>{Size.Triangles.toLocaleString("en-US")}</b> tris</span>
         <span className="pi-chip"><b>{Size.Vertices.toLocaleString("en-US")}</b> verts</span>
@@ -536,18 +515,43 @@ function OverviewPage({ Shape, Read, Change, Values, Hidden, ToggleHidden, Size 
         </div>
       </Card>
 
-      <Card Title="Notes" Glyph="notes" Tone="#c9c9c9" Aside="Shared with the header">
-        <textarea
-          className="pi-notes"
-          rows={3}
-          aria-label="Notes"
-          placeholder="Ownership, review notes, links…"
-          value={Values.Notes || ""}
-          onChange={(Event) => Change("Notes", Event.target.value)}
-        />
-      </Card>
-
       <QuickGrid Values={Values} Change={Change} Hidden={Hidden} ToggleHidden={ToggleHidden} />
+      <Card Title="Notes" Glyph="notes" Tone="#c9c9c9" Aside="Shared with the header" className="pi-notes-card">
+        <div className="pi-purpose" data-card="Purpose">
+          <span className="pi-notes-heading">
+            <PrimitiveGlyph Name="purpose" Size={13} /> Purpose · {Profile.Name}
+          </span>
+          <label className="pi-text-block">
+            <span>What it does</span>
+            <textarea
+              rows={3}
+              aria-label="What it does"
+              value={Read("Purpose", Profile.Purpose)}
+              onChange={(Event) => Change("Purpose", Event.target.value)}
+            />
+          </label>
+          <label className="pi-text-block">
+            <span>Why it's here</span>
+            <textarea
+              rows={3}
+              aria-label="Why it's here"
+              value={Read("Reason", Profile.Reason)}
+              onChange={(Event) => Change("Reason", Event.target.value)}
+            />
+          </label>
+        </div>
+        <label className="pi-text-block">
+          <span>Notes</span>
+          <textarea
+            className="pi-notes"
+            rows={3}
+            aria-label="Notes"
+            placeholder="Ownership, review notes, links…"
+            value={Values.Notes || ""}
+            onChange={(Event) => Change("Notes", Event.target.value)}
+          />
+        </label>
+      </Card>
     </>
   );
 }
@@ -908,9 +912,126 @@ function ShadingStudy({ Points, Mode, Threshold, Flip }) {
   );
 }
 
-function GeometryPage({ Shape, Read, Change, Values, Size }) {
+// Wireframe of the authored primitive: the real segment / ring / side counts and bevel, projected at a three-quarter
+// view. Edges facing away from the viewer are drawn fainter, so the density of the mesh reads at a glance.
+function WireLines(Shape, Read, Scale) {
+  const P = (Key, Initial) => +Read(Key, Initial);
+  const Circle = (Count, At) => Array.from({ length: Count + 1 }, (_, Index) => At((2 * Math.PI * (Index % Count)) / Count));
+  const Lines = [];
+  if (Shape === "cube") {
+    const Half = [P("Geometry Size X", 1) / 2, P("Geometry Size Y", 1) / 2, P("Geometry Size Z", 1) / 2];
+    const Bevel = Math.min(P("Geometry Bevel", 0), ...Half.map((Each) => Each * 0.98));
+    const Steps = Bevel > 0 ? Math.max(1, Math.round(P("Geometry Bevel Segments", 1))) : 0;
+    for (let Axis = 0; Axis < 3; Axis++) {
+      const [A, B] = [0, 1, 2].filter((Each) => Each !== Axis);
+      for (const SignA of [-1, 1])
+        for (const SignB of [-1, 1])
+          for (let Step = 0; Step <= Steps; Step++) {
+            const Turn = Steps ? (Step / Steps) * (Math.PI / 2) : 0;
+            const Point = (Along) => {
+              const Spot = [0, 0, 0];
+              Spot[Axis] = Along * (Half[Axis] - Bevel);
+              Spot[A] = SignA * (Half[A] - Bevel + Bevel * Math.cos(Turn));
+              Spot[B] = SignB * (Half[B] - Bevel + Bevel * Math.sin(Turn));
+              return Spot;
+            };
+            Lines.push([Point(-1), Point(1)]);
+          }
+    }
+  } else if (Shape === "sphere") {
+    const R = P("Geometry Radius", 0.5), Segments = Math.round(P("Geometry Segments", 32)), Rings = Math.round(P("Geometry Rings", 16));
+    for (let Ring = 1; Ring < Rings; Ring++) {
+      const Phi = (Math.PI * Ring) / Rings;
+      Lines.push(Circle(Segments, (Theta) => [R * Math.sin(Phi) * Math.cos(Theta), R * Math.cos(Phi), R * Math.sin(Phi) * Math.sin(Theta)]));
+    }
+    for (let Segment = 0; Segment < Segments; Segment++) {
+      const Theta = (2 * Math.PI * Segment) / Segments;
+      Lines.push(Array.from({ length: Rings + 1 }, (_, Ring) => {
+        const Phi = (Math.PI * Ring) / Rings;
+        return [R * Math.sin(Phi) * Math.cos(Theta), R * Math.cos(Phi), R * Math.sin(Phi) * Math.sin(Theta)];
+      }));
+    }
+  } else if (Shape === "cylinder" || Shape === "cone") {
+    const R = P("Geometry Radius", 0.5), H = P("Geometry Height", 1), Segments = Math.round(P("Geometry Segments", 32));
+    const Base = Circle(Segments, (Theta) => [R * Math.cos(Theta), -H / 2, R * Math.sin(Theta)]);
+    Lines.push(Base);
+    if (Shape === "cylinder") {
+      Lines.push(Circle(Segments, (Theta) => [R * Math.cos(Theta), H / 2, R * Math.sin(Theta)]));
+      for (let Segment = 0; Segment < Segments; Segment++) {
+        const Theta = (2 * Math.PI * Segment) / Segments;
+        Lines.push([[R * Math.cos(Theta), -H / 2, R * Math.sin(Theta)], [R * Math.cos(Theta), H / 2, R * Math.sin(Theta)]]);
+      }
+    } else
+      for (let Segment = 0; Segment < Segments; Segment++) Lines.push([Base[Segment], [0, H / 2, 0]]);
+  } else {
+    const Major = P("Geometry Major Radius", 0.5), Minor = P("Geometry Minor Radius", 0.15);
+    const Segments = Math.round(P("Geometry Segments", 48)), Sides = Math.round(P("Geometry Sides", 16));
+    for (let Segment = 0; Segment < Segments; Segment++) {
+      const Theta = (2 * Math.PI * Segment) / Segments;
+      Lines.push(Circle(Sides, (Phi) => [(Major + Minor * Math.cos(Phi)) * Math.cos(Theta), Minor * Math.sin(Phi), (Major + Minor * Math.cos(Phi)) * Math.sin(Theta)]));
+    }
+    for (let Side = 0; Side < Sides; Side++) {
+      const Phi = (2 * Math.PI * Side) / Sides;
+      Lines.push(Circle(Segments, (Theta) => [(Major + Minor * Math.cos(Phi)) * Math.cos(Theta), Minor * Math.sin(Phi), (Major + Minor * Math.cos(Phi)) * Math.sin(Theta)]));
+    }
+  }
+  return Lines.map((Line) => Line.map(([X, Y, Z]) => [X * Scale[0], Y * Scale[1], Z * Scale[2]]));
+}
+
+const Yaw = (-35 * Math.PI) / 180, Pitch = (24 * Math.PI) / 180;
+function Project([X, Y, Z]) {
+  const Across = X * Math.cos(Yaw) + Z * Math.sin(Yaw);
+  const Deep = -X * Math.sin(Yaw) + Z * Math.cos(Yaw);
+  return [Across, Y * Math.cos(Pitch) - Deep * Math.sin(Pitch), Y * Math.sin(Pitch) + Deep * Math.cos(Pitch)];
+}
+
+function WireStudy({ Shape, Read, Scale, Size }) {
+  const Lines = WireLines(Shape, Read, Scale).map((Line) => Line.map(Project));
+  const All = Lines.flat();
+  const Span = (Index) => [Math.min(...All.map((Point) => Point[Index])), Math.max(...All.map((Point) => Point[Index]))];
+  const [Xl, Xh] = Span(0), [Yl, Yh] = Span(1), [Dl, Dh] = Span(2);
+  const Fit = Math.min(176 / Math.max(1e-6, Xh - Xl), 118 / Math.max(1e-6, Yh - Yl));
+  const Cx = 136 - ((Xl + Xh) / 2) * Fit, Cy = 78 + ((Yl + Yh) / 2) * Fit;
+  const Screen = ([X, Y]) => [Cx + X * Fit, Cy - Y * Fit];
+  // Front edges (towards the viewer, larger depth) bright; back edges faint.
+  const Strokes = [];
+  Lines.forEach((Line, Index) => {
+    for (let Start = 0; Start < Line.length - 1; Start += 6) {
+      const Chunk = Line.slice(Start, Math.min(Line.length, Start + 7));
+      const Depth = Chunk.reduce((Sum, Point) => Sum + Point[2], 0) / Chunk.length;
+      const Near = (Depth - Dl) / Math.max(1e-6, Dh - Dl);
+      Strokes.push(
+        <path
+          key={Index + "-" + Start}
+          d={Chunk.map((Point, Each) => (Each ? "L" : "M") + Screen(Point).map((Value) => Value.toFixed(1)).join(" ")).join("")}
+          stroke="#d8d8d8"
+          strokeOpacity={(0.1 + 0.75 * Near ** 1.4).toFixed(2)}
+          strokeWidth=".8"
+          fill="none"
+        />,
+      );
+    }
+  });
+  const Left = Cx + Xl * Fit, Right = Cx + Xh * Fit, Top = Cy - Yh * Fit, Bottom = Cy - Yl * Fit;
+  return (
+    <svg className="pi-wire-svg" viewBox="0 0 300 170" role="img" aria-label="Primitive wireframe" data-study="wireframe">
+      <ellipse cx={(Left + Right) / 2} cy={Bottom + 6} rx={(Right - Left) * 0.42} ry="5" fill="#000" opacity=".45" />
+      {Strokes}
+      <path d={`M${Left} ${Bottom + 16}H${Right}M${Left} ${Bottom + 12}v8M${Right} ${Bottom + 12}v8`} stroke="#9a9a9a" strokeWidth=".8" />
+      <text x={(Left + Right) / 2} y={Bottom + 27} textAnchor="middle">W {Fixed(Size.Bounds[0])} m · D {Fixed(Size.Bounds[2])} m</text>
+      <path d={`M${Right + 14} ${Top}V${Bottom}M${Right + 10} ${Top}h8M${Right + 10} ${Bottom}h8`} stroke="#9a9a9a" strokeWidth=".8" />
+      <text x={Right + 20} y={(Top + Bottom) / 2 + 3}>H {Fixed(Size.Bounds[1])} m</text>
+    </svg>
+  );
+}
+
+// Geometry page from the editor's own building blocks: property cards (Kit.Card), the split-value pill slider and
+// switches (Kit.Control) and the large metric (Kit.Metric), so it matches every other inspector.
+function GeometryPage({ Shape, Read, Change, Values, Size, Kit }) {
+  const { Card: PropertyCard, Control, Metric } = Kit;
   const Primitive = Shapes[Shape];
   const Locked = !!Values.LOCKED;
+  const Scale = Array.isArray(Values.Scale) ? Values.Scale : [1, 1, 1];
   const Shading = Read("Geometry Shading", "smooth");
   const Threshold = +Read("Geometry Smooth Angle", 40);
   const Flip = !!Read("Geometry Flip Normals", false);
@@ -918,61 +1039,76 @@ function GeometryPage({ Shape, Read, Change, Values, Size }) {
   const Result = ShadeProfile(Points, Shading, Threshold, Flip);
   const CornerAngle = Result.Corners.reduce((Largest, Corner) => Math.max(Largest, Corner.Angle), 0);
   const Groups = Shading === "smooth" ? 1 : Shading === "flat" ? Points.length : Math.max(1, Result.HardCount);
+  const Parameter = ([Label, Key, Initial, Minimum, Maximum, Step, Suffix]) => (
+    <Control
+      key={Key}
+      Field={{ Label, Control: "Slider", Minimum, Maximum, Default: Initial, Unit: Suffix, Decimals: Step >= 1 ? 0 : Step >= 0.01 ? 2 : 3 }}
+      Value={Read(Key, Initial)}
+      Disabled={Locked}
+      Change={(Next) => Change(Key, Step >= 1 ? Math.round(Next) : Next)}
+    />
+  );
+  const Toggle = (Label, Key, Initial) => (
+    <Control key={Key} Field={{ Label, Control: "Switch" }} Value={!!Read(Key, Initial)} Disabled={Locked} Change={(Next) => Change(Key, Next)} />
+  );
+  const Readout = (Label, Text) => <Control key={Label} Field={{ Label, Control: "Readout" }} Value={Text} />;
+  const Dimensions = Primitive.Parameters.filter((Entry) => Entry[6] === "m");
+  const Resolution = Primitive.Parameters.filter((Entry) => Entry[6] !== "m");
+  const [Lead] = Dimensions;
+  const Modes = ["smooth", "auto", "flat"];
   return (
     <>
       <TransformPanel Values={Values} Change={Change} />
-      <Card Title={Primitive.Name + " shape"} Glyph="geometry" Tone="#5fe0a0" Aside={Locked ? "Locked" : "Primitive"}>
-        {Primitive.Parameters.map(([Label, Key, Initial, Minimum, Maximum, Step, Suffix]) => (
-          <Slider
-            key={Key}
-            Label={Label}
-            Reading={Read(Key, Initial)}
-            Minimum={Minimum}
-            Maximum={Maximum}
-            Step={Step}
-            Unit={Suffix}
-            Digits={Step >= 1 ? 0 : Step >= 0.01 ? 2 : 3}
-            Disabled={Locked}
-            Tone="#5fe0a0"
-            Assign={(Next) => Change(Key, Step >= 1 ? Math.round(Next) : Next)}
-          />
-        ))}
-        {Primitive.Caps && (
-          <Switch Label="Caps" Detail="Close the ends" On={Read("Geometry Caps", true) !== false} Disabled={Locked} Assign={(Next) => Change("Geometry Caps", Next)} />
-        )}
-        <div className="pi-stat-grid">
-          <div><span>Triangles</span><b>{Size.Triangles.toLocaleString("en-US")}</b></div>
-          <div><span>Vertices</span><b>{Size.Vertices.toLocaleString("en-US")}</b></div>
-          <div><span>Closed</span><b>{Size.Closed ? "Yes" : "No"}</b></div>
-        </div>
-      </Card>
-
-      <Card Title="Shading" Glyph="material" Tone="#ff7eb6" Aside={Shading === "auto" ? "Auto smooth" : Shading === "flat" ? "Flat" : "Smooth"} className="pi-study-card">
-        <BigFigure
-          Whole={Shading === "auto" ? Fixed(Threshold, 0) : Shading === "flat" ? String(Points.length) : "1"}
-          Unit={Shading === "auto" ? "° smoothing angle" : Shading === "flat" ? "flat faces" : "smooth surface"}
-          Caption={`Profile corners turn ${Fixed(CornerAngle, 1)}° · ${Result.HardCount} of ${Points.length} shown hard`}
+      <PropertyCard Title="Shape" Class="pi-shape-card">
+        <Metric
+          Value={Fixed(+Read(Lead[1], Lead[2]))}
+          Unit={"m · " + Lead[0]}
+          Caption={`${Primitive.Name} · ${Fixed(Size.Bounds[0])} × ${Fixed(Size.Bounds[1])} × ${Fixed(Size.Bounds[2])} m with scale`}
         />
-        <div className="pi-study">
+        <div className="graphic pi-wire">
+          <WireStudy Shape={Shape} Read={Read} Scale={Scale} Size={Size} />
+        </div>
+        {Dimensions.map(Parameter)}
+        {Locked && <p>Locked · unlock in Quick controls to edit the shape.</p>}
+      </PropertyCard>
+      <PropertyCard Title="Resolution" Class="pi-resolution-card">
+        <Metric Value={Size.Triangles.toLocaleString("en-US")} Unit="triangles" Caption={`${Size.Vertices.toLocaleString("en-US")} vertices · ${Size.Closed ? "closed" : "open"} surface`} />
+        {Resolution.map(Parameter)}
+        {Primitive.Caps && Toggle("Caps", "Geometry Caps", true)}
+        {Readout("Surface area", Fixed(Size.Area) + " m²")}
+        {Readout("Volume", Fixed(Size.Volume, 3) + " m³")}
+      </PropertyCard>
+      <PropertyCard Title="Shading" Class="pi-shading-card">
+        <Metric
+          Value={Shading === "auto" ? Fixed(Threshold, 0) : Shading === "flat" ? String(Points.length) : "1"}
+          Unit={Shading === "auto" ? "° smoothing angle" : Shading === "flat" ? "flat faces" : "smooth surface"}
+          Caption={`Profile corners turn ${Fixed(CornerAngle, 1)}° · ${Result.HardCount} of ${Points.length} hard`}
+        />
+        <div className="graphic pi-study">
           <ShadingStudy Points={Points} Mode={Shading} Threshold={Threshold} Flip={Flip} />
         </div>
-        <Segmented Label="Shading" Current={Shading} Choices={[["Smooth", "smooth"], ["Auto", "auto"], ["Flat", "flat"]]} Disabled={Locked} Assign={(Next) => Change("Geometry Shading", Next)} />
-        <Slider Label="Smoothing angle" Reading={Threshold} Minimum={0} Maximum={180} Step={1} Digits={0} Unit="°" Disabled={Locked || Shading !== "auto"} Tone="#ff7eb6" Assign={(Next) => Change("Geometry Smooth Angle", Next)} />
-        <p className="pi-study-note">
-          Green: shared normals (soft). Amber: split normals (hard edge). Raise the segments to make the same angle read smoother.
-        </p>
-      </Card>
-
-      <Card Title="Normals" Glyph="geometry" Tone="#7cb7ff" Aside={Flip ? "Flipped" : "Outward"}>
-        <div className="pi-stat-grid">
-          <div><span>Smoothing groups</span><b>{Groups}</b></div>
-          <div><span>Hard edges</span><b>{Result.HardCount}</b></div>
-          <div><span>Largest corner</span><b>{Fixed(CornerAngle, 0)}<small>°</small></b></div>
-        </div>
-        <Switch Label="Weighted normals" Detail="Big faces pull shared normals towards them" On={Read("Geometry Weighted Normals", true)} Disabled={Locked} Assign={(Next) => Change("Geometry Weighted Normals", Next)} />
-        <Switch Label="Double-sided" Detail="Render back faces too" On={Read("Geometry Double Sided", false)} Disabled={Locked} Assign={(Next) => Change("Geometry Double Sided", Next)} />
-        <Switch Label="Flip normals" Detail={Flip ? "Inside-out: the lit side faces away from the light" : "Point normals inwards"} On={Flip} Disabled={Locked} Assign={(Next) => Change("Geometry Flip Normals", Next)} />
-      </Card>
+        <Control
+          Field={{ Label: "Shading", Control: "Select", Options: ["Smooth", "Auto smooth", "Flat"] }}
+          Value={Math.max(0, Modes.indexOf(Shading))}
+          Disabled={Locked}
+          Change={(Next) => Change("Geometry Shading", Modes[Next] || "smooth")}
+        />
+        <Control
+          Field={{ Label: "Smoothing angle", Control: "Slider", Minimum: 0, Maximum: 180, Default: 40, Unit: "°", Decimals: 0 }}
+          Value={Threshold}
+          Disabled={Locked || Shading !== "auto"}
+          Change={(Next) => Change("Geometry Smooth Angle", Math.round(Next))}
+        />
+        <p>Green: shared normals (soft). Amber: split normals (hard edge).</p>
+      </PropertyCard>
+      <PropertyCard Title="Normals" Class="pi-normals-card">
+        {Readout("Smoothing groups", String(Groups))}
+        {Readout("Hard edges", String(Result.HardCount))}
+        {Readout("Largest corner", Fixed(CornerAngle, 0) + "°")}
+        {Toggle("Weighted normals", "Geometry Weighted Normals", true)}
+        {Toggle("Double-sided", "Geometry Double Sided", false)}
+        {Toggle("Flip normals", "Geometry Flip Normals", false)}
+      </PropertyCard>
     </>
   );
 }
@@ -1068,11 +1204,11 @@ function Carousel({ Pages }) {
 //                                                    INSPECTOR
 //------------------------------------------------------------------------------------------------------------------------
 
-export default function PrimitiveInspector({ Subject, Values, Change, Hidden, ToggleHidden, MaterialCards, FractureCards }) {
+export default function PrimitiveInspector({ Subject, Values, Change, Hidden, ToggleHidden, MaterialCards, FractureCards, Kit }) {
   const Shape = ShapeOf(Subject);
   const Read = (Key, Initial) => (Values[Key] === undefined ? Initial : Values[Key]);
   const Size = Measure(Shape, Read, Array.isArray(Values.Scale) ? Values.Scale : [1, 1, 1]);
-  const Shared = { Shape, Read, Change, Values, Hidden, ToggleHidden, Size };
+  const Shared = { Shape, Read, Change, Values, Hidden, ToggleHidden, Size, Kit };
   return (
     <div className="primitive-inspector">
       <Carousel

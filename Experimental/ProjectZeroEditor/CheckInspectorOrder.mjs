@@ -80,8 +80,8 @@ const Sections = {
     ".collection-browser",
     ".collection-notes",
   ],
-  // Showcase primitives: the category carousel opens on Overview; Purpose first, quick controls last.
-  geometry: [".pi-carousel-bar", ".pi-purpose", ".pi-quick"],
+  // Showcase primitives: the category carousel opens on Overview; quick controls, then Notes holding the Purpose.
+  geometry: [".pi-carousel-bar", ".pi-quick", ".pi-purpose"],
   post: [".entity-capabilities"],
   ...Object.fromEntries(
     [
@@ -106,9 +106,7 @@ const Sections = {
     Card("Baked atmosphere"),
   ],
   sun: [
-    [null, ".mp-hero"],
-    [null, ".mp-rail"],
-    [null, ".mp-duo"],
+    Card("Sun now"),
     ".sun-tiles",
     ".sun-properties",
     Card("Sun lighting bake"),
@@ -134,16 +132,8 @@ const Sections = {
     [null, ".mp-duo"],
     Card("Wind controls"),
   ],
-  "height-fog": [
-    Card("Fog settings"),
-    Card("Visibility through fog"),
-    Card("Medium"),
-  ],
-  "aerial-fog": [
-    Card("Fog settings"),
-    Card("Visibility through fog"),
-    Card("Medium"),
-  ],
+  "height-fog": [Card("Fog layer"), Card("Density by altitude")],
+  "aerial-fog": [Card("Aerial perspective"), Card("Spectral transmission")],
   "local-fog": [
     Card("Fog settings"),
     Card("Visibility through fog"),
@@ -392,7 +382,7 @@ try {
     ["atmosphere", true, "AtmosphereBakingLast", Card("Atmosphere bake")],
     ["stars", false, "StarsBakingLast", Card("Star field bake")],
     ["clouds", true, "CloudOrder", null],
-    ["height-fog", false, "HeightFogOrder", Card("Fog settings")],
+    ["height-fog", false, "HeightFogOrder", Card("Fog layer")],
     ["wind", true, "WindOrder", Card("Wind controls")],
   ]) {
     await Open(Id, Wide);

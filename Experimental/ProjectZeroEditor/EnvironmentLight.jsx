@@ -19,16 +19,16 @@ export const EnvironmentPanel = "environment-light";
 const Sources = [
   {
     Name: "Sky atmosphere",
-    Zenith: "#3f7fe0",
-    Horizon: "#bcd6f2",
+    Overhead: "#3f7fe0",
+    Skyline: "#bcd6f2",
     Ground: "#5a5248",
     Lux: 12000,
     Patches: [[140, 38, "#fff1c8", 0.55]],
   },
   {
     Name: "HDRI · studio",
-    Zenith: "#2c2c2c",
-    Horizon: "#707070",
+    Overhead: "#2c2c2c",
+    Skyline: "#707070",
     Ground: "#1e1e1e",
     Lux: 900,
     Patches: [
@@ -38,24 +38,24 @@ const Sources = [
   },
   {
     Name: "HDRI · overcast",
-    Zenith: "#a4adb6",
-    Horizon: "#d4d8dc",
+    Overhead: "#a4adb6",
+    Skyline: "#d4d8dc",
     Ground: "#4a4a46",
     Lux: 2500,
     Patches: [],
   },
   {
     Name: "HDRI · sunset",
-    Zenith: "#2a3f7a",
-    Horizon: "#ff9a5a",
+    Overhead: "#2a3f7a",
+    Skyline: "#ff9a5a",
     Ground: "#3a2c24",
     Lux: 1400,
     Patches: [[250, 6, "#ffc46a", 0.6]],
   },
   {
     Name: "Uniform colour",
-    Zenith: null,
-    Horizon: null,
+    Overhead: null,
+    Skyline: null,
     Ground: null,
     Lux: 1000,
     Patches: [],
@@ -225,8 +225,8 @@ function Palette(V) {
   return {
     Source,
     Exposure,
-    Zenith: Colour(Source.Zenith),
-    Horizon: Colour(Source.Horizon),
+    Overhead: Colour(Source.Overhead),
+    Skyline: Colour(Source.Skyline),
     Ground: Develop(
       Source.Ground || Tint,
       Exposure * (0.35 + Bounce),
@@ -289,20 +289,20 @@ function DomeChart({ V, Turn }) {
     >
       <defs>
         <linearGradient id="envSky" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor={Paint.Zenith} />
-          <stop offset="1" stopColor={Paint.Horizon} />
+          <stop offset="0" stopColor={Paint.Overhead} />
+          <stop offset="1" stopColor={Paint.Skyline} />
         </linearGradient>
         <radialGradient id="envBall" cx={0.5 + Lean * 0.22} cy="0.3" r="0.8">
           <stop
             offset="0"
-            stopColor={Diffuse ? (Key ? Key.Shade : Paint.Zenith) : "#2a2a2a"}
+            stopColor={Diffuse ? (Key ? Key.Shade : Paint.Overhead) : "#2a2a2a"}
           />
-          <stop offset=".55" stopColor={Diffuse ? Paint.Horizon : "#202020"} />
+          <stop offset=".55" stopColor={Diffuse ? Paint.Skyline : "#202020"} />
           <stop offset="1" stopColor={Diffuse ? Paint.Ground : "#151515"} />
         </radialGradient>
         <radialGradient id="envTop" cx="0.5" cy="0.5" r="0.5">
-          <stop offset="0" stopColor={Paint.Zenith} />
-          <stop offset="1" stopColor={Paint.Horizon} />
+          <stop offset="0" stopColor={Paint.Overhead} />
+          <stop offset="1" stopColor={Paint.Skyline} />
         </radialGradient>
         <radialGradient id="envPatch" cx="0.5" cy="0.5" r="0.5">
           <stop offset="0" stopColor="#ffffff" />

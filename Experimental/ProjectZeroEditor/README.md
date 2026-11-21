@@ -49,6 +49,24 @@ starting point for the UI redesign.
 
 ---
 
+## Follow-up 34 inspector cards
+
+- **Sun**: the imported sky picture and stat tiles are replaced by a **Sun now** card (`SunNow.jsx`). It has the local time and
+  daylight name, a 360° horizon panorama centred on the noon sun with the whole day's path, hour marks, the sun disc in its apparent
+  colour and compass points (drag it to change Local Hours), then six figures: sunrise, sunset, daylight length, light colour,
+  clear-sky ground light (an estimate) and shadow length. It uses the same `Solar.mjs` solver as the Sun direction card.
+- **Atmosphere**: the scatter-map atlas is replaced by **Sky presets**. It shows the current sky at noon and at sunset, then one tile
+  per preset (a noon / sunset sky drawn from that preset's Rayleigh, Mie, ozone, scale heights, tint and albedo), then the standard
+  Rayleigh and Mie pill sliders. Colours are an illustrative single-scatter estimate, not the native sky.
+- **Height Fog** now has its own cards. **Fog layer** shows a valley cut-away with the fog thinning with altitude, the visibility at
+  ground and higher up, and a dashed falloff line you can drag. **Density by altitude** has the interactive profile and visibility
+  readouts. **Light in the fog** shows the view towards and away from the sun, with Sun Scatter and Colour.
+- **Atmospheric Fog** now has its own cards. **Aerial perspective** shows ridges fading into haze, each labelled with its distance and
+  how much light survives, with a distance probe. **Spectral transmission** has the spectrum with Mie Blend.
+- **Local Fog** keeps the shared cards: Fog settings, Visibility through fog, Medium with Beam Chamber, and Fog volume shape.
+- **Glitch** effect study: "Signal break-up". It shows one second of signal with its bursts and an SMPTE-style test frame. Rows one
+  block tall are displaced and split into red / green / blue. Dragging sets Intensity.
+
 ## 🧱 Showcase Primitive Inspector
 
 Cube, Sphere, Cylinder, Torus and Cone (Outliner folder **Showcase**) use `PrimitiveInspector.jsx` instead of the generic geometry layout.
@@ -56,10 +74,11 @@ Other geometry and every other panel are unchanged. Below the header there is on
 time an object is selected. It has pill tabs (inactive pills show only an icon; the active one adds its label), ‹ › buttons, arrow keys,
 horizontal swipe and page dots. Everything uses the same dark theme.
 
-- **Overview**: an editable Purpose card ("What it does" / "Why it's here") with a default per shape, summary chips, Checks passed /
-  Warnings counters, Footprint (volume, world width / height / depth), a checks list, Tags, Notes (the same `Notes` as the header) and,
-  last, **Quick controls**. These are six dark square tiles (Visible, Dynamic, Shadows, GI, Physics, Locked). There is no On/Off text:
-  the round icon badge is lit green when on and dimmed when off. Physics on also turns Dynamic on; Dynamic off also turns Physics off.
+- **Overview**: summary chips, Checks passed / Warnings counters, Footprint (volume, world width / height / depth), a checks list,
+  Tags, then **Quick controls**, then **Notes**. Quick controls are six dark square tiles (Visible, Dynamic, Shadows, GI, Physics,
+  Locked). There is no On/Off text: the round icon badge is lit green when on and dimmed when off. Physics on also turns Dynamic on;
+  Dynamic off also turns Physics off. The Notes card holds the **Purpose** block first ("What it does" / "Why it's here", with a
+  default per shape), then the free notes (the same `Notes` as the header).
 - **Physics**, in the Cine Camera card style (title, big figure, a diagram that redraws from the values, caption, controls):
   - **Simulation**: impact speed, a 3 m drop study (height over 2 s with rebounds, from gravity scale, linear damping and bounciness;
     a dashed "if simulated as dynamic" path while simulation is off), Rebound / Comes to rest / Gravity, then simulate, body type,
@@ -67,9 +86,11 @@ horizontal swipe and page dots. Everything uses the same dark theme.
   - **Mass**: the mass in kg on a log ruler from 10 g to 10 t with everyday objects (phone, brick, person, car …) and a comparison
     caption, from density presets or manual.
   - **Surface response**: dial gauges for friction, bounciness and damping.
-- **Geometry**: the shared `TransformPanel` first, then **Shape** (per-shape parameters, caps, triangle and vertex counts),
-  **Shading** (a cross-section with its normals and the lit band it produces; Smooth / Auto / Flat and the smoothing angle) and
-  **Normals** (weighted, double-sided, flip). There is no collision shape, origin picker or UV card any more.
+- **Geometry** is built from the editor's own property cards, split-value pill sliders, switches and readout rows (passed in as
+  `Kit` from `Inspectors.jsx`): the shared `TransformPanel`, then **Shape** (the lead dimension as a big figure, a three-quarter wireframe
+  drawn from the real segment / ring / side counts and bevel with W / D / H dimension lines, and the size sliders), **Resolution**
+  (triangle count, segment sliders, caps, area and volume), **Shading** (a cross-section with its normals and the lit band it produces;
+  shading select and smoothing angle) and **Normals** (smoothing groups, hard edges, weighted, double-sided, flip).
 - **Material**: the existing `MaterialPanel`.
 - **Fracture**: the existing `FracturePanel`.
 

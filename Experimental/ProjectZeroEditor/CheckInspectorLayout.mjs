@@ -75,43 +75,26 @@ try {
   );
   await Open("sun");
   assert.equal(
-    await Page.locator(
-      '[data-panel="sun"] > header + .reference-inspector-copy',
-    ).count(),
+    await Page.locator('[data-panel="sun"] > header + [data-card="Sun now"]').count(),
     1,
   );
-  const SunFrame = Page.frameLocator("iframe").first();
-  await SunFrame.locator(".mp-rail").waitFor();
+  assert.equal(await Page.locator('[data-panel="sun"] .reference-inspector-copy').count(), 0);
+  assert.equal(await Page.locator('[data-card="Sun now"] [data-sun-fact]').count(), 6);
   assert(
-    await SunFrame.locator(".mp-pill,.mp-stat").evaluateAll((Nodes) =>
-      Nodes.every((Node) => {
-        const Style = getComputedStyle(Node);
-        return Style.borderRadius === "12px" && Style.borderTopWidth === "0px";
-      }),
+    await Page.locator('[data-card="Sun now"] [data-sun-fact]').evaluateAll((Nodes) =>
+      Nodes.every((Node) => Node.scrollWidth <= Node.clientWidth + 1),
     ),
   );
   await Page.screenshot({ path: path.join(Proof, "sun-header.png") });
-  Checks.push(
-    "sun: header precedes imported cards; borderless twelve-pixel metric corners",
-  );
+  Checks.push("sun: header precedes the Sun now card; six unclipped lighting figures; no imported sky hero");
 
   await Open("height-fog");
   assert.equal(await Page.locator(".reference-inspector-copy").count(), 0);
-  for (const Title of [
-    "Fog settings",
-    "Visibility through fog",
-    "Medium",
-    "Height and tint",
-  ])
+  for (const Title of ["Fog layer", "Density by altitude", "Light in the fog"])
     assert.equal(await Page.locator(`[data-card="${Title}"]`).count(), 1);
-  assert.equal(
-    await Page.locator('[data-card="Medium"] > .fog-shared-beam').count(),
-    1,
-  );
+  assert.equal(await Page.locator(".fog-shared-beam").count(), 0);
   await Page.screenshot({ path: path.join(Proof, "height-fog-header.png") });
-  Checks.push(
-    "height-fog: shared C++-aligned Fog cards; Beam Chamber remains nested in Medium",
-  );
+  Checks.push("height-fog: its own Fog layer / Density by altitude / Light in the fog cards");
   await Open("wind");
   await Page.locator(".reference-inspector-copy").evaluate((Node) =>
     Node.scrollIntoView({ block: "start" }),
@@ -139,7 +122,17 @@ try {
   Checks.push(
     "Anemometer retains its live trace and removes all four secondary readouts",
   );
-  for (const Id of ["aerial-fog", "local-fog"]) {
+  await Open("aerial-fog");
+  assert.equal(await Page.locator('[data-card="Aerial perspective"] .metric').count(), 1);
+  {
+    const Before = await Page.locator('[data-card="Aerial perspective"] .metric').innerText();
+    await Page.getByLabel("Density value", { exact: true }).fill("2");
+    assert.notEqual(await Page.locator('[data-card="Aerial perspective"] .metric').innerText(), Before);
+    await Open("aerial-fog");
+    assert.equal(await Page.getByLabel("Density value", { exact: true }).inputValue(), "2");
+    Checks.push("aerial-fog: own Aerial perspective card responds to Density and persists");
+  }
+  for (const Id of ["local-fog"]) {
     await Open(Id);
     assert.equal(await Page.locator(".reference-inspector-copy,.fog-instruments").count(), 0);
     assert.equal(await Page.getByLabel("Fog probe distance", { exact: true }).count(), 1);

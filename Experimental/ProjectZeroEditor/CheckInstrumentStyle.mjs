@@ -50,7 +50,7 @@ const Capture = async (Name) => {
   await Page.screenshot({ path: path.join(Proof, Name + ".png") });
 };
 try {
-  for (const Id of ["wind", "sun", "clouds", "local-cloud"]) {
+  for (const Id of ["wind", "clouds", "local-cloud"]) {
     await Open(Id);
     await Frame().locator(".mp-stat").first().waitFor();
     const Tiles = await Frame()
@@ -148,7 +148,8 @@ try {
   Checks.push(
     "Anemometer pixels have no green, retain neutral highlights/amber sample, animate, expand and resize to 240px",
   );
-  for (const Id of ["height-fog", "aerial-fog", "local-fog"]) {
+  // Height Fog and Atmospheric Fog have their own cards; only Local Fog keeps the shared chamber.
+  for (const Id of ["local-fog"]) {
     await Open(Id);
     const Beam = Page.locator('[data-card="Medium"] .fog-shared-beam');
     assert.equal(await Beam.count(), 1);

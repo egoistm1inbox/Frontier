@@ -488,6 +488,24 @@
   text-transform: uppercase;
   color: var(--pi-soft);
 }
+/* Notes card: the purpose sits in its own inset block above the free notes. */
+.primitive-inspector .pi-notes-card .pi-purpose {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  margin-bottom: 12px;
+  border-radius: 18px;
+  background: #ffffff05;
+  border: 1px solid var(--pi-line);
+}
+.primitive-inspector .pi-notes-heading {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: #e6cf72;
+}
 .primitive-inspector textarea {
   width: 100%;
   resize: vertical;

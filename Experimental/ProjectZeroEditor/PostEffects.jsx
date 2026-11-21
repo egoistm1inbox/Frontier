@@ -205,7 +205,7 @@ function Readouts(Panel, P) {
     case "heat-shimmer":
       return [["Starts at", Fixed(P("Start distance"), 0) + " m"], ["Peak shift", (P("Strength") * 7).toFixed(1) + " px"], ["Rise", Percent(1 - P("Height falloff"))]];
     case "glitch":
-      return [["Bursts", Fixed(P("Frequency"), 1) + " Hz"], ["RGB split", Fixed(P("RGB split"), 0) + " px"], ["Blocks", Fixed(P("Block size"), 0) + " px"]];
+      return [["Bursts", Fixed(P("Frequency"), 1) + " / s"], ["Block", Fixed(P("Block size"), 0) + " px"], ["RGB split", Fixed(P("RGB split"), 0) + " px"]];
     case "chromatic-aberration":
       return [["Corner fringe", Fixed(P("Strength"), 1) + " px"], ["Half-way", Fixed(P("Strength") * 0.5 ** P("Falloff"), 1) + " px"], ["Mode", ["Radial", "Lateral"][P("Mode")] || "Radial"]];
     case "film-grain": {
@@ -237,7 +237,7 @@ function Headline(Panel, P) {
     case "heat-shimmer":
       return { Title: "Refraction profile", Whole: Fixed(P("Start distance"), 0), Unit: "m to first shimmer", Caption: "Side view from the lens · drag to move where the shimmer starts", Drag: ["Start distance", 0, 400] };
     case "glitch":
-      return { Title: "Signal timeline", Whole: Fixed(P("Frequency"), 1), Unit: "bursts / s", Caption: "Two seconds of signal and one corrupted frame · drag to change the burst rate", Drag: ["Frequency", 0, 10] };
+      return { Title: "Signal break-up", Whole: String(Math.round(P("Intensity") * 100)), Unit: "% intensity", Caption: "The signal trace and a test frame during a burst · drag to change the intensity", Drag: ["Intensity", 0, 1] };
     case "chromatic-aberration":
       return { Title: "Fringe across the frame", Whole: Fixed(P("Strength"), 1), Unit: "px at the corners", Caption: "Red and blue separation from centre to corner · drag to change the strength", Drag: ["Strength", 0, 12] };
     case "film-grain":
@@ -361,47 +361,93 @@ function HeatShimmerChart({ P }) {
   );
 }
 
+// SMPTE-style colour bars (75 %) and the lower calibration strip: a familiar test frame, so displaced blocks and the
+// red / green / blue channel separation read at a glance.
+const TestBars = ["#bfbfbf", "#bfbf00", "#00bfbf", "#00bf00", "#bf00bf", "#bf0000", "#0000bf"];
+const TestStrip = ["#0000bf", "#131313", "#bf00bf", "#131313", "#00bfbf", "#131313", "#bfbfbf"];
+const Channel = (Hex, Index) => {
+  const Level = parseInt(Hex.slice(1 + Index * 2, 3 + Index * 2), 16);
+  return "rgb(" + [0, 1, 2].map((Slot) => (Slot === Index ? Level : 0)).join(",") + ")";
+};
+
 function GlitchChart({ P }) {
-  const Left = 14, Right = 306, Frequency = P("Frequency"), Intensity = P("Intensity");
-  const Count = Math.round(Frequency * 2);
-  const Bursts = Array.from({ length: Count }, (_, Index) => {
-    const At = (Index + 0.2 + Random(Index, 7) * 0.6) / Math.max(1, Count);
-    return { X: Left + At * (Right - Left), H: Intensity * (0.45 + 0.55 * Random(Index, 11)) * 36, W: 2 + Random(Index, 3) * 4 };
-  });
-  const Block = P("Block size"), Split = P("RGB split"), Jitter = P("Scanline jitter");
-  const Band = 3 + (Block / 64) * 18, FrameTop = 84, FrameHeight = 70;
-  const Rows = Math.ceil(FrameHeight / Band);
+  const Left = 14, Right = 306, Width = Right - Left;
+  const Intensity = P("Intensity"), Frequency = P("Frequency"), Block = P("Block size");
+  const Split = P("RGB split") * 0.8, Jitter = P("Scanline jitter"), Drift = !!P("Colour drift");
+  // Oscilloscope trace: one second of signal. Each burst is a short jagged stretch whose height follows Intensity.
+  const Count = Math.round(Frequency);
+  const Bursts = Array.from({ length: Count }, (_, Index) => ({
+    At: (Index + 0.25 + Random(Index, 7) * 0.5) / Math.max(1, Count),
+    Span: 0.025 + 0.05 * Intensity * (0.6 + 0.8 * Random(Index, 3)),
+  }));
+  const Base = 30;
+  const Trace = Path(
+    Array.from({ length: 293 }, (_, Step) => {
+      const T = Step / 292;
+      const Hit = Bursts.find((Burst) => Math.abs(T - Burst.At) < Burst.Span / 2);
+      const Noise = (Random(Step, 17) - 0.5) * 1.4;
+      return [Left + T * Width, Base + Noise + (Hit ? (Random(Step, 29) - 0.5) * 34 * Intensity : 0)];
+    }),
+  );
+  // Test frame: rows one block tall; a hit row is pushed sideways and its channels pull apart.
+  const Top = 58, Height = 92, Band = Clamp(Block * 0.6, 3, 34), Rows = Math.ceil(Height / Band);
+  const Bar = Width / 7, Split70 = Top + Height * 0.72;
+  const Paint = (Colours, Y, H, Fill) =>
+    Colours.map((Colour, Index) => <rect key={Index} x={Left + Index * Bar} y={Y} width={Bar + 0.5} height={H} fill={Fill ? Fill(Colour) : Colour} />);
+  const TestFrame = (Fill) => (
+    <>
+      {Paint(TestBars, Top, Split70 - Top, Fill)}
+      {Paint(TestStrip, Split70, Top + Height - Split70, Fill)}
+    </>
+  );
+  let Displaced = 0;
   return (
     <>
-      <text x={Left} y="16">2 SECONDS</text>
-      <line x1={Left} x2={Right} y1="62" y2="62" stroke="#4a4a4a" />
-      {[0, 0.5, 1, 1.5, 2].map((Second) => (
-        <text key={Second} x={Left + (Second / 2) * (Right - Left)} y="74" textAnchor="middle">{Second} s</text>
-      ))}
+      <text x={Left} y="10">1 SECOND OF SIGNAL · {Count} BURST{Count === 1 ? "" : "S"}</text>
       {Bursts.map((Burst, Index) => (
-        <rect key={Index} x={Burst.X - Burst.W / 2} y={62 - Burst.H} width={Burst.W} height={Burst.H} rx="1" fill="#c86bff" opacity=".85" />
+        <rect key={Index} x={Left + (Burst.At - Burst.Span / 2) * Width} y="14" width={Burst.Span * Width} height="32" rx="3" fill="#b06bff" opacity=".14" />
       ))}
-      {!Count && <text x="160" y="50" textAnchor="middle">no bursts</text>}
-      <clipPath id="fx-glitch-frame">
-        <rect x={Left} y={FrameTop} width={Right - Left} height={FrameHeight} rx="8" />
-      </clipPath>
+      <path d={Trace} fill="none" stroke="#b9a2ff" strokeWidth="1.1" strokeLinejoin="round" />
+      <defs>
+        <clipPath id="fx-glitch-frame">
+          <rect x={Left} y={Top} width={Width} height={Height} rx="6" />
+        </clipPath>
+        {Array.from({ length: Rows }, (_, Row) => (
+          <clipPath key={Row} id={"fx-glitch-row-" + Row}>
+            <rect x={Left} y={Top + Row * Band} width={Width} height={Band + 0.6} />
+          </clipPath>
+        ))}
+      </defs>
       <g clipPath="url(#fx-glitch-frame)">
-        <rect x={Left} y={FrameTop} width={Right - Left} height={FrameHeight} fill="#121212" />
+        <rect x={Left} y={Top} width={Width} height={Height} fill="#070707" />
         {Array.from({ length: Rows }, (_, Row) => {
-          const Hit = Random(Row, 5) < Intensity * 0.7;
-          const Shift = Hit ? (Random(Row, 9) - 0.5) * 60 * Intensity : (Random(Row, 13) - 0.5) * 6 * Jitter;
-          const Y = FrameTop + Row * Band;
+          const Hit = Random(Row, 5) < Intensity * 0.75;
+          if (Hit) Displaced++;
+          const Shift = Hit ? (Random(Row, 9) - 0.5) * 2 * 46 * Intensity : (Random(Row, 13) - 0.5) * 5 * Jitter;
           return (
-            <g key={Row} transform={`translate(${Shift.toFixed(1)} 0)`}>
-              <rect x={Left + 40} y={Y + 1} width={160} height={Band - 1} fill={Hit && P("Colour drift") ? (Row % 2 ? "#3a2b4f" : "#24394a") : "#262626"} />
-              <rect x={Left + 120 - Split} y={Y + 2} width="56" height={Band - 3} fill="#ff2a2a" style={Screen} />
-              <rect x={Left + 120} y={Y + 2} width="56" height={Band - 3} fill="#2aff5a" style={Screen} />
-              <rect x={Left + 120 + Split} y={Y + 2} width="56" height={Band - 3} fill="#2a5aff" style={Screen} />
+            <g key={Row} clipPath={`url(#fx-glitch-row-${Row})`}>
+              {Hit ? (
+                <>
+                  {[0, 1, 2].map((Index) => (
+                    <g key={Index} transform={`translate(${(Shift + (Index - 1) * Split).toFixed(1)} 0)`} style={Screen}>
+                      {TestFrame((Colour) => Channel(Colour, Index))}
+                    </g>
+                  ))}
+                  {Drift && <rect x={Left} y={Top + Row * Band} width={Width} height={Band} fill="#8b6cff" opacity=".2" />}
+                </>
+              ) : (
+                <g transform={`translate(${Shift.toFixed(1)} 0)`}>{TestFrame()}</g>
+              )}
             </g>
           );
         })}
       </g>
-      <text x={Right} y={FrameTop + FrameHeight + 12} textAnchor="end">one corrupted frame · {Fixed(Block, 0)} px blocks · {Fixed(Split, 0)} px RGB split</text>
+      <rect x={Left} y={Top} width={Width} height={Height} rx="6" fill="none" stroke="#ffffff14" />
+      <line x1={Left - 6} x2={Left - 6} y1={Top} y2={Top + Band} stroke="#d6d6d6" />
+      <line x1={Left - 9} x2={Left - 3} y1={Top} y2={Top} stroke="#d6d6d6" />
+      <line x1={Left - 9} x2={Left - 3} y1={Top + Band} y2={Top + Band} stroke="#d6d6d6" />
+      <text x={Left} y="166">one block = {Fixed(Block, 0)} px · channels {Fixed(P("RGB split"), 0)} px apart</text>
+      <text x={Right} y="166" textAnchor="end" className="fx-accent">{Displaced} of {Rows} rows hit</text>
     </>
   );
 }

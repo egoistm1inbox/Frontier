@@ -317,7 +317,7 @@ try {
   Checks.push(
     "Emission tint changes the preview and survives reload; incomplete number edits restore the saved value on blur",
   );
-  for (const Id of ["sun", "wind"]) {
+  for (const Id of ["wind"]) {
     const Environment = await Open(Id);
     await Environment.locator(".mp-rail").waitFor();
     await Square(Environment);
@@ -338,15 +338,10 @@ try {
   }
   await Open("height-fog");
   assert.equal(await Page.locator(".reference-inspector-copy").count(), 0);
-  assert.equal(await Page.locator('[data-card="Visibility through fog"]').count(), 1);
-  assert.equal(
-    await Page.locator('[data-card="Medium"] > .fog-shared-beam').count(),
-    1,
-  );
+  assert.equal(await Page.locator('[data-card="Fog layer"]').count(), 1);
+  assert.equal(await Page.locator(".fog-shared-beam").count(), 0);
   await Page.screenshot({ path: path.join(Proof, "height-fog-tiles.png") });
-  Checks.push(
-    "height-fog: coordinated shared Visibility and Medium-owned Beam Chamber",
-  );
+  Checks.push("height-fog: its own Fog layer card; no shared Beam Chamber");
 
   Frame = await Open("reference-ece-low-beam");
   await Page.locator('iframe[title^="Reference inspector"]').evaluate(

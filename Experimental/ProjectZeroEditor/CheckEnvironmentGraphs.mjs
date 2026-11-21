@@ -55,17 +55,20 @@ try {
   await Page.evaluate(() => document.fonts.ready);
   await Select("Height Fog");
   await Page.getByRole("button", { name: "Enabled", exact: true }).click();
-  assert.equal(await Card("Visibility through fog").count(), 1);
-  assert.equal(
-    await Card("Medium").locator(".fog-shared-beam").count(),
-    1,
-  );
+  assert.equal(await Card("Fog layer").count(), 1);
+  assert.equal(await Card("Visibility through fog").count(), 0);
   await Page.getByLabel("Density value", { exact: true }).fill("0.02");
   await Page.getByLabel("Density value", { exact: true }).press("Tab");
-  await Card("Visibility through fog").scrollIntoViewIfNeeded();
-  await Page.screenshot({ path: Proof + "/HeightFogVisibility.png" });
+  await Card("Fog layer").scrollIntoViewIfNeeded();
+  await Page.screenshot({ path: Proof + "/HeightFogLayer.png" });
 
   await Select("Atmospheric Fog");
+  assert.equal(await Card("Aerial perspective").count(), 1);
+  await Card("Aerial perspective").getByRole("slider", { name: "Fog distance probe", exact: true }).focus();
+  await Page.keyboard.press("End");
+  assert.equal((await Saved()).Values["aerial-fog"]["Probe distance"], 2000);
+
+  await Select("Local Fog");
   const Visibility = Card("Visibility through fog");
   assert.equal(await Visibility.locator(".graph-metric").count(), 1);
   await Page.getByRole("button", { name: "Enabled", exact: true }).click();
@@ -75,11 +78,11 @@ try {
     exact: true,
   }).focus();
   await Page.keyboard.press("End");
-  assert.equal((await Saved()).Values["aerial-fog"]["Probe distance"], 2000);
+  assert.equal((await Saved()).Values["local-fog"]["Probe distance"], 2000);
   await Visibility.scrollIntoViewIfNeeded();
-  await Page.screenshot({ path: Proof + "/AtmosphericFogVisibility.png" });
+  await Page.screenshot({ path: Proof + "/LocalFogVisibility.png" });
   Checks.push(
-    "Height Fog retains the rich imported Visibility visual and places Beam Chamber in Medium; Atmospheric remains at C054",
+    "Height Fog and Atmospheric Fog own their cards and probes; Local Fog keeps the shared Visibility card",
   );
   await Select("Sun");
   const Day = Page.getByRole("slider", {
@@ -112,7 +115,7 @@ try {
     "Solar daylight and seasonal plots update real time/date controls using the existing solver; relative intensity graph edits gain",
   );
   await Select("Atmosphere");
-  assert.equal(await Card("Atmosphere atlas").count(), 1);
+  assert.equal(await Card("Sky presets").count(), 1);
   assert.equal(await Card("Baked atmosphere").count(), 1);
   await Page.getByRole("button", {
     name: "Expand AtmosphereLab",
@@ -145,7 +148,7 @@ try {
   }).click();
   assert.equal((await Saved()).Values.atmosphere["Planet radius"], 6371);
   await Page.waitForTimeout(350);
-  await Page.screenshot({ path: Proof + "/AtmosphereAtlas.png" });
+  await Page.screenshot({ path: Proof + "/AtmospherePresets.png" });
   await Page.setViewportSize({ width: 1366, height: 768 });
   await Page.screenshot({ path: Proof + "/AtmosphereDesktop.png" });
   await Page.setViewportSize({ width: 1440, height: 1000 });
@@ -182,11 +185,7 @@ try {
   await Page.waitForTimeout(650);
   assert.notEqual((await Saved()).Values.atmosphere["Space yaw"], Tick);
   await Lab.getByRole("button", { name: "Pause orbit", exact: true }).click();
-  const Map = Lab.getByRole("group", {
-    name: "Atmosphere type atlas",
-    exact: true,
-  });
-  await Drag(Map, 0.8);
+  await Lab.getByRole("slider", { name: "Rayleigh", exact: true }).fill("3.5");
   assert.ok((await Saved()).Values.atmosphere.Rayleigh > 3);
   assert.equal(
     (await Saved()).Values.atmosphere["Atmosphere preset"],
@@ -237,7 +236,7 @@ try {
     "Custom",
   );
   Checks.push(
-    "Reconstructed atlas preset and free-map editing; responsive orbital single-scatter preview; changed pixels for Mars/Arctic and orbit; animation, modal focus/inert and reload",
+    "Sky preset tiles and Rayleigh slider editing; responsive orbital single-scatter preview; changed pixels for Mars/Arctic and orbit; animation, modal focus/inert and reload",
   );
   // Stars, Moons, Lens Flare, Precipitation, Rainbow and Editor Camera only had the removed bar maps.
   for (const Name of [
@@ -272,7 +271,7 @@ try {
       exact: true,
     }),
     SpectralBefore = await Spectrum.locator("[data-series]").getAttribute("d");
-  await Card("Medium")
+  await Card("Spectral transmission")
     .getByRole("slider", { name: "Mie Blend", exact: true })
     .focus();
   await Page.keyboard.press("End");
@@ -334,7 +333,7 @@ try {
   await Page.setViewportSize({ width: 1366, height: 768 });
   await Card("Local bounds").scrollIntoViewIfNeeded();
   await Page.screenshot({ path: Proof + "/LocalCloudBounds.png" });
-  await Select("Atmospheric Fog");
+  await Select("Local Fog");
   const TouchPlot = Card("Visibility through fog").getByRole("slider", {
     name: "Fog distance probe",
     exact: true,
@@ -368,7 +367,7 @@ try {
     type: "touchEnd",
     touchPoints: [],
   });
-  assert.equal((await Saved()).Values["aerial-fog"]["Probe distance"], 2000);
+  assert.equal((await Saved()).Values["local-fog"]["Probe distance"], 2000);
   await CDP.detach();
   Checks.push(
     "Aerial spectral mixture, cloud vertical probes, editable local bounds/derived extents, and real touch drag/clamping",

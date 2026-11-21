@@ -210,218 +210,114 @@ export function AtmosphereProfile({ V, Change, Mode }) {
     />
   );
 }
-function Atlas({ V, Change }) {
-  const Root = useRef(null),
-    Drag = useRef(false),
-    [Hover, Inspect] = useState(null);
-  const Set = (E) => {
-    const Point = Root.current.createSVGPoint();
-    Point.x = E.clientX;
-    Point.y = E.clientY;
-    const Position = Point.matrixTransform(
-      Root.current.getScreenCTM().inverse(),
-    );
-    const X = Clamp(Position.x, 40, 465),
-      Y = Clamp(Position.y, 22, 264);
-    Change("Rayleigh", +((4 * (X - 40)) / 425).toFixed(2));
-    Change("Mie", +((6 * (264 - Y)) / 242).toFixed(2));
-    Change("Atmosphere preset", "Custom");
+// Sky colour from the authored scattering: an illustrative single-scatter estimate, enough to show how each preset
+// differs at noon and at sunset. Rayleigh scatters blue (λ⁻⁴), aerosols (Mie) scatter all colours and whiten the
+// horizon, ozone takes some green and red out of the long sunset path.
+const Wavelength = [0.43, 1, 2.23];
+function SkyColours(Settings) {
+  const S = { ...Defaults, Rayleigh: 1, Mie: 1, ...Settings };
+  const Rayleigh = Wavelength.map((K) => 0.11 * S.Rayleigh * K * (S["Rayleigh Scale H"] / 8000));
+  const Mie = 0.045 * S.Mie * Math.sqrt(S["Mie Scale H"] / 1200);
+  const Ozone = [0.035, 0.06, 0.008].map((K) => K * S.Ozone);
+  const Tint = Hex(S["Sky Tint"]), Albedo = Hex(S["Ground Albedo"]), Gain = S["Sky Brightness"];
+  const Develop = (Rgb) =>
+    "rgb(" + Rgb.map((C, I) => Math.round(255 * Math.pow((1 - Math.exp(-1.7 * C * Tint[I] * Gain)) / (1 - Math.exp(-1.7)), 1 / 1.6))).join(",") + ")";
+  const Sunset = Wavelength.map((_, I) => Math.exp(-22 * (Rayleigh[I] + Mie + Ozone[I])));
+  return {
+    Overhead: Develop(Wavelength.map((_, I) => 2.6 * (1 - Math.exp(-(Rayleigh[I] + 0.35 * Mie))))),
+    Skyline: Develop(Wavelength.map((_, I) => 1.15 * (1 - Math.exp(-7 * (Rayleigh[I] + Mie))) * Math.exp(-Ozone[I]))),
+    DuskOverhead: Develop(Wavelength.map((_, I) => 0.55 * (1 - Math.exp(-2.5 * Rayleigh[I])) + 0.9 * Sunset[I] * Mie)),
+    DuskSkyline: Develop(Wavelength.map((_, I) => 3.2 * Sunset[I] * (1 - Math.exp(-7 * (Rayleigh[I] + Mie))) + 0.04)),
+    Sun: Develop(Sunset.map((C) => 0.4 + 2 * C)),
+    Ground: Develop(Albedo.map((C) => C * 0.55)),
+    DuskGround: Develop(Albedo.map((C, I) => C * (0.05 + 0.3 * Sunset[I]))),
   };
+}
+
+let SkyCount = 0;
+function SkyPanel({ X, Y, W, H, Top, Bottom, Ground, Sun, SunX, SunY, Glow, Label, Round = 10 }) {
+  const Id = React.useMemo(() => "sky" + ++SkyCount, []);
+  const Skyline = Y + H * 0.76;
+  return (
+    <g>
+      <defs>
+        <linearGradient id={Id} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor={Top} />
+          <stop offset="1" stopColor={Bottom} />
+        </linearGradient>
+        <radialGradient id={Id + "g"} cx="50%" cy="50%" r="50%">
+          <stop offset="0" stopColor={Sun} stopOpacity=".95" />
+          <stop offset="1" stopColor={Sun} stopOpacity="0" />
+        </radialGradient>
+        <clipPath id={Id + "c"}>
+          <rect x={X} y={Y} width={W} height={H} rx={Round} />
+        </clipPath>
+      </defs>
+      <g clipPath={`url(#${Id}c)`}>
+        <rect x={X} y={Y} width={W} height={Skyline - Y} fill={`url(#${Id})`} />
+        <circle cx={SunX} cy={SunY} r={Glow} fill={`url(#${Id}g)`} />
+        <circle cx={SunX} cy={SunY} r={Math.max(2, Glow * 0.16)} fill="#fffdf4" />
+        <rect x={X} y={Skyline} width={W} height={Y + H - Skyline} fill={Ground} />
+      </g>
+      {Label && (
+        <text x={X + 8} y={Y + 14} className="sky-label">
+          {Label}
+        </text>
+      )}
+    </g>
+  );
+}
+
+function SkyPresets({ V, Change, Slider }) {
   const Apply = (P) => {
-    for (const [Key, Value] of Object.entries({
-      ...Defaults,
-      ...P.Settings,
-      Rayleigh: P.X,
-      Mie: P.Y,
-    }))
-      Change(Key, Value);
+    for (const [Key, Value] of Object.entries({ ...Defaults, ...P.Settings, Rayleigh: P.X, Mie: P.Y })) Change(Key, Value);
     Change("Atmosphere preset", P.Name);
   };
   const Active = AtmospherePresets.find(
     (P) =>
       P.Name === V("Atmosphere preset") &&
-      Object.entries({
-        ...Defaults,
-        ...P.Settings,
-        Rayleigh: P.X,
-        Mie: P.Y,
-      }).every(([Key, Value]) => (V(Key) ?? Defaults[Key]) === Value),
+      Object.entries({ ...Defaults, ...P.Settings, Rayleigh: P.X, Mie: P.Y }).every(([Key, Value]) => (V(Key) ?? Defaults[Key]) === Value),
   );
+  const Current = SkyColours(Object.fromEntries([...Object.keys(Defaults), "Rayleigh", "Mie"].map((Key) => [Key, V(Key) ?? Defaults[Key]])));
+  const Custom = () => Change("Atmosphere preset", "Custom");
   return (
-    <section
-      className="property-card atmosphere-atlas"
-      data-card="Atmosphere atlas"
-    >
+    <section className="property-card atmosphere-presets" data-card="Sky presets">
       <h3>
-        Atmosphere atlas <small>AUTHORING PALETTE</small>
+        Sky presets <small>AUTHORING PALETTE</small>
       </h3>
       <div className="graph-metric">{Active?.Name || "Custom atmosphere"}</div>
-      <p>Molecular scattering → / aerosol load ↑</p>
-      <svg
-        ref={Root}
-        className="atmosphere-map"
-        viewBox="0 0 500 310"
-        role="group"
-        aria-label="Atmosphere type atlas"
-        tabIndex={0}
-        onKeyDown={(E) => {
-          if (
-            ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(E.key)
-          ) {
-            E.preventDefault();
-            Change(
-              "Rayleigh",
-              +Clamp(
-                V("Rayleigh") +
-                  (E.key === "ArrowRight"
-                    ? 0.04
-                    : E.key === "ArrowLeft"
-                      ? -0.04
-                      : 0),
-                0,
-                4,
-              ).toFixed(2),
-            );
-            Change(
-              "Mie",
-              +Clamp(
-                V("Mie") +
-                  (E.key === "ArrowUp"
-                    ? 0.06
-                    : E.key === "ArrowDown"
-                      ? -0.06
-                      : 0),
-                0,
-                6,
-              ).toFixed(2),
-            );
-            Change("Atmosphere preset", "Custom");
-          }
-        }}
-        onPointerDown={(E) => {
-          if (E.button !== 0 || E.target.closest("[data-preset]")) return;
-          Drag.current = true;
-          Root.current.focus();
-          Root.current.setPointerCapture(E.pointerId);
-          Set(E);
-        }}
-        onPointerMove={(E) => {
-          if (Drag.current) Set(E);
-        }}
-        onPointerUp={() => (Drag.current = false)}
-        onPointerCancel={() => (Drag.current = false)}
-        onLostPointerCapture={(E) => {
-          if (E.target === Root.current) Drag.current = false;
-        }}
-      >
-        {Array.from({ length: 24 * 16 }, (_, I) => {
-          const X = ((I % 24) / 23) * 4,
-            Y = ((15 - Math.floor(I / 24)) / 15) * 6;
-          let Sum = 0,
-            RGB = [0, 0, 0];
-          for (const P of AtmospherePresets) {
-            const W =
-              1 / (0.02 + ((X - P.X) / 4) ** 2 + ((Y - P.Y) / 6) ** 2) ** 2;
-            Sum += W;
-            Hex(P.Colour).forEach((C, A) => (RGB[A] += C * W));
-          }
+      <p>
+        Rayleigh {V("Rayleigh").toFixed(2)} × · Mie {V("Mie").toFixed(2)} × · Ozone {(V("Ozone") ?? Defaults.Ozone).toFixed(2)} ×
+      </p>
+      <svg className="sky-preview" viewBox="0 0 300 116" role="img" aria-label="Current sky at noon and at sunset">
+        <SkyPanel X={0} Y={0} W={147} H={100} Top={Current.Overhead} Bottom={Current.Skyline} Ground={Current.Ground} Sun="#fff8e0" SunX={112} SunY={20} Glow={22} Label="NOON" />
+        <SkyPanel X={153} Y={0} W={147} H={100} Top={Current.DuskOverhead} Bottom={Current.DuskSkyline} Ground={Current.DuskGround} Sun={Current.Sun} SunX={226} SunY={74} Glow={30} Label="SUNSET" />
+        <text x="0" y="113">sun high · 60°</text>
+        <text x="300" y="113" textAnchor="end">sun on the horizon · long light path</text>
+      </svg>
+      <div className="sky-preset-grid">
+        {AtmospherePresets.map((P) => {
+          const Sky = SkyColours({ ...P.Settings, Rayleigh: P.X, Mie: P.Y });
           return (
-            <rect
-              key={I}
-              x={40 + ((I % 24) * 425) / 24}
-              y={22 + (Math.floor(I / 24) * 242) / 16}
-              width={425 / 24 + 1}
-              height={242 / 16 + 1}
-              fill={`rgb(${RGB.map((C) => Math.round((C / Sum) * 255)).join(",")})`}
-              opacity=".3"
-            />
+            <button key={P.Name} aria-label={"Atmosphere preset " + P.Name} aria-pressed={Active?.Name === P.Name} onClick={() => Apply(P)}>
+              <svg viewBox="0 0 96 56" aria-hidden="true">
+                <SkyPanel X={0} Y={0} W={60} H={56} Top={Sky.Overhead} Bottom={Sky.Skyline} Ground={Sky.Ground} Sun="#fff8e0" SunX={44} SunY={12} Glow={12} Round={0} />
+                <SkyPanel X={60} Y={0} W={36} H={56} Top={Sky.DuskOverhead} Bottom={Sky.DuskSkyline} Ground={Sky.DuskGround} Sun={Sky.Sun} SunX={78} SunY={42} Glow={14} Round={0} />
+              </svg>
+              <span>{P.Name}</span>
+            </button>
           );
         })}
-        {[0, 1, 2, 3, 4].map((X) => (
-          <g key={X}>
-            <path d={`M${40 + (X / 4) * 425} 22V264`} stroke="#ffffff12" />
-            <text x={40 + (X / 4) * 425} y="284" textAnchor="middle">
-              {X}
-            </text>
-          </g>
-        ))}
-        {[0, 2, 4, 6].map((Y) => (
-          <g key={Y}>
-            <path d={`M40 ${264 - (Y / 6) * 242}H465`} stroke="#ffffff12" />
-            <text x="27" y={268 - (Y / 6) * 242} textAnchor="end">
-              {Y}
-            </text>
-          </g>
-        ))}
-        {AtmospherePresets.map((P) => (
-          <g
-            key={P.Name}
-            role="button"
-            tabIndex={0}
-            data-preset={P.Name}
-            aria-label={"Apply " + P.Name}
-            onClick={() => Apply(P)}
-            onKeyDown={(E) => {
-              if (E.key === "Enter" || E.key === " ") {
-                E.preventDefault();
-                Apply(P);
-              }
-            }}
-            onPointerEnter={() => Inspect(P.Name)}
-            onPointerLeave={() => Inspect(null)}
-          >
-            <circle
-              cx={40 + (P.X / 4) * 425}
-              cy={264 - (P.Y / 6) * 242}
-              r="12"
-              fill="transparent"
-            />
-            <circle
-              cx={40 + (P.X / 4) * 425}
-              cy={264 - (P.Y / 6) * 242}
-              r="4.5"
-              fill={P.Colour}
-              stroke="#ece9df"
-            />
-            <title>{P.Name}</title>
-          </g>
-        ))}
-        <circle
-          className="atlas-current"
-          cx={40 + (V("Rayleigh") / 4) * 425}
-          cy={264 - (V("Mie") / 6) * 242}
-          r="9"
-          stroke="#fff"
-          strokeWidth="1.5"
-          fill="none"
-          pointerEvents="none"
-        />
-        <text x="250" y="306" textAnchor="middle">
-          RAYLEIGH STRENGTH
-        </text>
-      </svg>
-      <p className="atlas-hover">
-        {Hover ||
-          `Rayleigh ${V("Rayleigh").toFixed(2)} × · Mie ${V("Mie").toFixed(2)} ×`}
-      </p>
-      <div className="atlas-presets">
-        {AtmospherePresets.map((P) => (
-          <button
-            key={P.Name}
-            aria-label={"Atmosphere preset " + P.Name}
-            aria-pressed={Active?.Name === P.Name}
-            onClick={() => Apply(P)}
-          >
-            <i style={{ background: P.Colour }} />
-            {P.Name}
-          </button>
-        ))}
       </div>
+      {Slider && (
+        <div className="sky-sliders">
+          {Slider("Rayleigh", Custom)}
+          {Slider("Mie", Custom)}
+        </div>
+      )}
       <p className="graph-note">
-        Reconstructed palette, not a recovered historical atlas or an exhaustive
-        scientific classification. Named dots apply complete presets;
-        empty-space dragging edits Rayleigh/Mie only. Mars-like is a stylized
-        setting, not a composition-accurate Mars model.
+        Each tile shows the preset at noon (left) and at sunset (right). Tiles apply complete presets; the sliders edit Rayleigh / Mie
+        only. Illustrative single-scatter colours, not the native sky; Mars-like is a stylised setting.
       </p>
     </section>
   );
@@ -673,7 +569,7 @@ function Space({ V, Change, Expand, Turn, Orbit }) {
     </section>
   );
 }
-export default function AtmosphereLab({ V, Change }) {
+export default function AtmosphereLab({ V, Change, Slider }) {
   const [Open, Expand] = useState(false),
     Root = useRef(null),
     Opener = useRef(null),
@@ -733,7 +629,7 @@ export default function AtmosphereLab({ V, Change }) {
   return (
     <>
       <div className="card-grid atmosphere-lab-cards">
-        <Atlas V={V} Change={Change} />
+        <SkyPresets V={V} Change={Change} Slider={Slider} />
         <Space
           Turn={Turn}
           Orbit={Orbit}
@@ -769,7 +665,7 @@ export default function AtmosphereLab({ V, Change }) {
                 </button>
               </header>
               <div className="atmosphere-lab-body">
-                <Atlas V={V} Change={Change} />
+                <SkyPresets V={V} Change={Change} Slider={Slider} />
                 <Space V={V} Change={Change} Turn={Turn} Orbit={Orbit} />
               </div>
             </section>
