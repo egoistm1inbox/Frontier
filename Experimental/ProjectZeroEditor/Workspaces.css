@@ -253,6 +253,10 @@
   background: #141414;
   border: 1px solid #ffffff0b;
 }
+.vc-visual {
+  user-select: none;
+  -webkit-user-select: none;
+}
 .vc-visual text {
   font: 8.5px sans-serif;
   fill: #8f8f8f;
@@ -285,20 +289,20 @@
   font-size: 9.5px;
   cursor: pointer;
 }
-.vc-socket-kinds button i {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--k);
-  opacity: 0.6;
+.vc-socket-kinds button svg {
+  color: #8d8d8d;
+  transition: color 0.15s;
+}
+.vc-socket-kinds button:hover svg {
+  color: color-mix(in srgb, var(--k) 70%, #d0d0d0);
 }
 .vc-socket-kinds button[aria-checked="true"] {
   background: #353535;
   color: #f0f0f0;
   border-color: color-mix(in srgb, var(--k) 55%, transparent);
 }
-.vc-socket-kinds button[aria-checked="true"] i {
-  opacity: 1;
+.vc-socket-kinds button[aria-checked="true"] svg {
+  color: var(--k);
 }
 .vc-text input {
   width: 100%;
@@ -308,4 +312,63 @@
   border: 1px solid #ffffff12;
   background: #0d0d0d;
   color: #e6e6e6;
+}
+
+/* Socket study: the live joint, its 6 s trace and the test-drive controls. */
+.vc-draggable {
+  cursor: grab;
+  touch-action: none;
+}
+.vc-draggable:active {
+  cursor: grabbing;
+}
+.vc-socket-scene .vc-trace text,
+.vc-range text {
+  fill: #6f6f6f;
+}
+.vc-socket-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px;
+}
+.vc-socket-bar button {
+  height: 30px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid #ffffff12;
+  background: #222;
+  color: #cfcfcf;
+  font-size: 11px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  white-space: nowrap;
+  flex: none;
+}
+.vc-socket-bar button:hover {
+  background: #2c2c2c;
+}
+.vc-socket-bar .vc-run[aria-pressed="true"] {
+  background: #e6e6e6;
+  color: #151515;
+}
+.vc-hint {
+  margin-left: auto;
+  font-size: 10px;
+  color: #7a7a7a;
+  text-align: right;
+}
+.vc-event {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.vc-event i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--k);
+  flex: none;
 }

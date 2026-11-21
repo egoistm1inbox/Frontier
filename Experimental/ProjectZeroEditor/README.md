@@ -68,6 +68,21 @@ starting point for the UI redesign.
   - Other inspectors: the **Front Suspension / Steering / Tow Hitch** sockets (diagram plus kind picker), **Chassis Collision** and
     **Bumper Trigger** (shape over the car), **Headlights** and **Brake Lights** (beam plus an illuminance estimate), and **Body** (LOD chain).
   - These are browser drafts: nothing drives a physics simulation.
+- **Socket inspectors** (Front Suspension, Steering, Tow Hitch; any of the eight kinds) are four cards:
+  - **Live study**: the joint drawn from the Component Viewer's own `stepSocket`, with a 6 s trace of its key quantity over the test
+    drive's speed. **Run test drive** loops accelerate (3.5 m/s²) → cruise → brake (5.25 m/s²) → stand and feeds the socket the
+    acceleration, speed, road distance (spring bumps) and aero load Simulate would. Parked, springs and pendulums still settle.
+    Drag the hinge arm, slider carriage, ball stick, spring plate or tether weight to set the pose / starting swing; click a dock to
+    connect or release it. Dock events (released at N kN, snapped home, rejected) are listed under the reading.
+  - **Socket type**: drawn glyph per kind; switching keeps every number.
+  - **Range card** (Range of motion / Travel / Swing cone / Spring & damper / Rate / Pendulum / Coupling): a range strip with the
+    live value and pose target, the kind's sliders (Cycle time only while sweeping), then derived figures — sweep rate, stroke speed,
+    reachable solid angle, spring period / overshoot / settle time / bump rate, rim speed, pendulum period / braking lean / drag
+    half-life, hanging mass the coupling holds.
+  - **Mount**: the socket on the car's side view (drag it along; `mount`, metres ahead of the wheelbase centre) with its axis. The
+    position feeds the study: a front spring dives under braking, a rear one squats under acceleration. Outliner summaries name the
+    spot (front axle, rear bumper, …). `CheckVehicleSockets.mjs` covers the card order, test drive, drags, mount, type switching and the
+    dock pull test.
 - **IES authoring** (`IesProfile.js`): you can edit the candela curve directly. It is symmetric by default, with an optional separate
   C90 plane. Profiles can be saved to a library in the editor (`Frontier.IesProfiles.v1`), exported as LM-63-2002 Type C and imported.
 - **Light inspector layout**: one Preview card holds the visual, the readings rail and the source sliders. The analytical study now

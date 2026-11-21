@@ -1298,6 +1298,11 @@ in `Exhibits/LightCompute/Results/FogFacetRegression.txt`; this was a fixture-se
   The Wind inspector's Composite flow card was removed; the WindEditor opens from Wind controls. Checks updated; InspectorOrder,
   EnvironmentGraphs, Wind, EntityContext, WorkspaceCards, LightDesign and SharedCards pass. CheckConstruction (Cube roughness) and
   CheckReference (hash) fail exactly as at HEAD. Names unapproved.
+  Follow-up 36: socket inspectors rebuilt as live study (Component Viewer `stepSocket` driven by a looping test drive, 6 s trace,
+  drag-to-pose, dock click / pull-test events) → Socket type (drawn glyphs) → per-kind range card (range strip, sliders, derived
+  figures) → Mount (side-view marker; position feeds spring dive / squat; outliner summary names the spot). New
+  `CheckVehicleSockets.mjs` (8 checks) passes; InspectorOrder (109) and EntityContext pass; Construction still fails at its pre-existing
+  step. Names unapproved.
   Follow-up 35: in-place UV and Fracture edit workspaces for showcase primitives (`Workspaces.jsx`, `WorkspaceGeometry.js`; the viewport
   isolates the object, the inspector switches workspaces, Esc/Leave/Done exit), replacing the pop-out fracture window; Vehicle outliner
   folder (`VehicleComponents.jsx`: Vehicle Movement, Body, three sockets, two collisions, two lights, built from ComponentViewer
