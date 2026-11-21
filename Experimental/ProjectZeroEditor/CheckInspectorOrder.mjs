@@ -80,12 +80,8 @@ const Sections = {
     ".collection-browser",
     ".collection-notes",
   ],
-  geometry: [
-    ".transform-card",
-    ".entity-capabilities",
-    ".material-panel",
-    ".fracture-card",
-  ],
+  // Showcase primitives: quick controls, Transform, then the category carousel (material and fracture live in it).
+  geometry: [".pi-quick", ".transform-card", ".pi-carousel"],
   post: [".entity-capabilities"],
   camera: [Card("Lens + field of view"), Card("Aperture study")],
   atmosphere: [
@@ -176,7 +172,7 @@ const BakeCards = {
   flare: ["Lens flare image"],
   stars: ["Star field bake"],
   rainbow: ["Bake / image"],
-  geometry: ["Fracture"],
+  // Showcase geometry keeps Fracture on its own carousel page, so it has no "last card" rule.
 };
 try {
   await Open("sun");

@@ -7,15 +7,21 @@ import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 const Folder = path.dirname(fileURLToPath(import.meta.url)),
   Frontier = path.resolve(Folder, "../..");
-const Require = createRequire(
-  path.resolve(Folder, "../FrontierEditor/package.json"),
-);
+const Require = createRequire(path.resolve(Folder, "package.json"));
 const { build } = Require("esbuild");
 
 let Assets;
 let Fonts;
 
-if (fs.existsSync(path.join(Frontier, "EngineContent/Icons"))) {
+// Rebuild the embedded assets only when every source is present; otherwise reuse the ones inside the current index.html.
+const SourceAssets = [
+  "EngineContent/Icons",
+  "EngineContent/Fonts/SunReference",
+  "EngineContent/CelestialTextures",
+  "Engine/DisplayPresentation/VectorCodec.cpp",
+  "Exhibits/DistanceFieldGI/ShaderBall.mesh",
+];
+if (SourceAssets.every((Entry) => fs.existsSync(path.join(Frontier, Entry)))) {
   const { createCanvas, loadImage } = Require("@napi-rs/canvas");
   Assets = {
     Icons: {},
@@ -132,7 +138,7 @@ const ReferenceOutput = await build({
     },
   ],
   entryPoints: [path.join(Folder, "InspectorHost.js")],
-  nodePaths: [path.join(Folder, "../FrontierEditor/node_modules")],
+  nodePaths: [path.join(Folder, "node_modules")],
   define: {
     "process.env.NODE_ENV": '"production"',
     __LIGHT_ICONS__: JSON.stringify(
@@ -339,7 +345,7 @@ const Output = await build({
   minify: true,
   format: "iife",
   outfile: "Editor.js",
-  nodePaths: [path.join(Folder, "../FrontierEditor/node_modules")],
+  nodePaths: [path.join(Folder, "node_modules")],
   define: { "process.env.NODE_ENV": '"production"' },
   target: ["chrome110", "firefox115", "safari16"],
 });

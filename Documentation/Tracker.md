@@ -1283,5 +1283,11 @@ in `Exhibits/LightCompute/Results/FogFacetRegression.txt`; this was a fixture-se
   (`ServeParticleEditor.py`, "/" opens the editor), UI copies, fonts, particle engine (moved from CabinHmi/Filament), car facets
   (`VehicleFacets`) and three.js. It loads nothing outside its folder; the CabinHmi showroom imports the engine from it. Launcher card
   removed. Checks in `Exhibits/ParticleEditor/`: 7 captures (identical to before), 0 console errors, 0 out-of-folder requests.
+  Follow-up 29: Project Zero editor UI copied from `unassignedinbox/Frontier` (`arena/ad7fa01c-frontier`, UI-only build) into
+  `Experimental/ProjectZeroEditor/`; served with `Serve.py`.
+  Follow-up 30: Showcase primitive inspector (`PrimitiveInspector.jsx`, `PrimitiveIcons.jsx`, `PrimitiveInspector.css`): square vivid quick
+  controls, then Transform, then an Overview / Physics / Geometry / Material / Rendering / Fracture carousel styled after the dashboard
+  references. Local rebuild made to work (`package.json`, `Experimental/FrontierEditor/` deps, `Build.mjs` asset fallback).
+  `CheckInspectorOrder` updated to the new order: 71 checks pass. `CheckQuickTools` fails only on the blocked Fontshare requests. Names unapproved.
   Follow-up 22: Agera RS (`AgeraRs`, cross-plane 90° crank), rubber tyre squeal per surface (`Singer`, `Concrete` surface, `Tyres-Drift` scene), ricochet warble, subsonic whizz flown past the ear.
   Live AudioWorklet bench with car switch + offline MP3 reel (101 files, 26 MB) with spectrogram plates (`Exhibits/CabinHmi/Audio/`). Names unapproved.

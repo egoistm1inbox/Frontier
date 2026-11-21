@@ -18,6 +18,7 @@ import { IsEditorCamera } from "./ScenePolicy.js";
 import { WindInspector, WindBinding } from "./WindPanel.jsx";
 import TransformPanel from "./TransformPanel.jsx";
 import MaterialPanel from "./MaterialPanel.jsx";
+import PrimitiveInspector from "./PrimitiveInspector.jsx";
 import { ColourSlotDropProps } from "./ColourCodex.js";
 import ActionIcon, { QuickSymbol } from "./ActionIcon.jsx";
 import React, { useState, useEffect, useRef } from "react";
@@ -640,7 +641,39 @@ export function Inspector({
       )}
     </section>
   );
-  const Generic = () => (
+  const Showcase = () => (
+    <>
+      {Header("Geometry")}
+      <PrimitiveInspector
+        Subject={Subject}
+        Values={Values}
+        Change={Change}
+        Hidden={Hidden}
+        ToggleHidden={ToggleHidden}
+        MaterialCards={
+          <MaterialPanel
+            Subject={Subject}
+            Values={Values}
+            Change={Change}
+            Expand={OpenShader}
+            Compact
+          />
+        }
+        FractureCards={
+          <FracturePanel
+            Subject={Subject}
+            Values={Values}
+            Change={Change}
+            Expand={OpenFracture}
+          />
+        }
+      />
+    </>
+  );
+  const Generic = () =>
+    Subject.Panel === "geometry" && Subject.Parent === "showcase" ? (
+      Showcase()
+    ) : (
     <>
       {Header(
         Subject.Panel === "light"
@@ -709,7 +742,7 @@ export function Inspector({
         />
       )}
     </>
-  );
+    );
   if (["geometry", "light", "post", "group"].includes(Subject.Panel))
     return (
       <GraphContext.Provider
