@@ -1,4 +1,5 @@
 import { LightNames, LightIcons } from "./LightSpecification.js";
+import { PresetGlyphs } from "./LightGlyphs.js";
 import React, { useEffect, useRef, useState } from "react";
 
 export const ReferenceLights = [
@@ -18,7 +19,7 @@ export const ReferenceLights = [
   ReferencePreset: Name,
   ReferenceOnly: true,
   Panel: "light",
-  Icon: LightIcons[ReferenceType],
+  Icon: PresetGlyphs[Name] || LightIcons[ReferenceType],
   Parent: "lighting",
   Description: "Light authoring · HTML preview",
 }));
@@ -59,7 +60,9 @@ export function PrepareLightRows(Rows, Revision = 0) {
       ? {
           ...Row,
           Icon:
-            LightIcons[Row.ReferenceType || "arealight"] || "editor-area-light",
+            PresetGlyphs[Row.ReferencePreset] ||
+            LightIcons[Row.ReferenceType || "arealight"] ||
+            "editor-area-light",
           Description: Row.ReferenceOnly
             ? (LightNames[Row.ReferenceType] || "Light") + " · HTML authoring"
             : Row.Description,

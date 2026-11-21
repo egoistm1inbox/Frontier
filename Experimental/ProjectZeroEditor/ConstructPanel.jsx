@@ -1,3 +1,4 @@
+import { EnvironmentPanel } from "./EnvironmentLight.jsx";
 import React, { useEffect, useRef, useState } from "react";
 import ReferencePanel from "./ReferencePanel.jsx";
 import { IsEffectPanel } from "./PostEffects.jsx";
@@ -32,7 +33,8 @@ export function ConstructGroup(Subject) {
   )
     return "Cameras";
   if (Subject.Panel === "geometry") return "Geometry";
-  if (Subject.Panel === "light") return "Lighting";
+  if (Subject.Panel === "light" || Subject.Panel === EnvironmentPanel)
+    return "Lighting";
   return "Environment";
 }
 

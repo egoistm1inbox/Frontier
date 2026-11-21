@@ -46,16 +46,17 @@ try {
   await Page.waitForTimeout(500);
 
   const Labels = await Page.locator(".row-identity small").allTextContents();
-  assert.equal(Labels.length, 43);
+  assert.equal(Labels.length, 44);
   assert(Labels.every((Label) => Label.trim().length));
   Checks.push(
-    "All 43 default outliner entities expose a non-empty contextual value line",
+    "All 44 default outliner entities expose a non-empty contextual value line",
   );
 
   assert.equal(await Metadata("Area Light"), "32 lx · Area · 0,0,0");
   assert.equal(await Metadata("Precipitation"), "Rain · 12 mm/h");
   assert.equal(await Metadata("Key Spot"), "90 cd · Spot · -6,8.5,5");
   assert.equal(await Metadata("Fill Point"), "10 cd · Point · -3.5,1.6,4.6");
+  assert.equal(await Metadata("Environment Light"), "Sky atmosphere · 12k lx");
   assert.equal(await Metadata("LED Strip"), "2,400 lm · Strip · 0,2,0");
   assert.equal(await Metadata("Moons"), "Lunar phase 223° · 62%");
   assert.equal(await Metadata("Wind"), "7 m/s · 250°");

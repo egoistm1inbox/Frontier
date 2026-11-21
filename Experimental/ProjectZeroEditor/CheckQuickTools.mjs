@@ -114,8 +114,9 @@ try {
           Label + " toggles",
         );
         assert.equal(
-          await Tile.locator(".quick-status").innerText(),
-          Before === "true" ? "OFF" : "ON",
+          await Tile.locator(".quick-status").count(),
+          0,
+          Label + " shows its state by icon only",
         );
         await Tile.press("Space");
         assert.equal(

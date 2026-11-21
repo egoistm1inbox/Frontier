@@ -52,6 +52,12 @@ import {
   IsEffectPanel,
   ArrangeCameraEffects,
 } from "./PostEffects.jsx";
+import {
+  EnsureEnvironmentLight,
+  EnvironmentPanel,
+  EnvironmentRow,
+  EnvironmentSummary,
+} from "./EnvironmentLight.jsx";
 import CheckerViewport, { PreviewVisible } from "./CheckerViewport.jsx";
 import "./Editor.css";
 const InitialRows = [
@@ -272,6 +278,7 @@ function OutlinerMetadata(Row, Record = {}, Rows = []) {
       CompactNumber(V("Aperture"))
     );
   if (IsEffectPanel(Row.Panel)) return EffectSummary(Row.Panel, V);
+  if (Row.Panel === EnvironmentPanel) return EnvironmentSummary(V);
   if (Row.Panel === "post")
     return (
       "EV " +
@@ -430,16 +437,19 @@ function App() {
     [Alias, ToggleAlias] = useState(true),
     [PatchError, SetPatchError] = useState(1);
   const [Rows, StoreRows] = useState(() =>
-      ArrangeCameraEffects(
-        EnsureEditorCamera(
-          PrepareLightRows(
-            Saved.ReferenceDesignRevision === 1
-              ? Saved.Rows || EnsureReferenceLights(InitialRows)
-              : EnsureReferenceLights(Saved.Rows || InitialRows),
-            Saved.LightDesignRevision,
+      EnsureEnvironmentLight(
+        ArrangeCameraEffects(
+          EnsureEditorCamera(
+            PrepareLightRows(
+              Saved.ReferenceDesignRevision === 1
+                ? Saved.Rows || EnsureReferenceLights(InitialRows)
+                : EnsureReferenceLights(Saved.Rows || InitialRows),
+              Saved.LightDesignRevision,
+            ),
           ),
+          Saved.Rows ? Saved.CameraEffectsRevision : 1,
         ),
-        Saved.Rows ? Saved.CameraEffectsRevision : 1,
+        Saved.Rows ? Saved.EnvironmentLightRevision : 0,
       ),
     ),
     [Selected, Select] = useState(
@@ -870,6 +880,7 @@ function App() {
           ReferenceDesignRevision: 1,
           LightDesignRevision: 1,
           CameraEffectsRevision: 1,
+          EnvironmentLightRevision: 1,
           Assets: AssetRecords,
           Selected,
           Values,
@@ -993,7 +1004,7 @@ function App() {
                 Row.Panel === "flare" ||
                 IsEffectPanel(Row.Panel)
               : Filter === "Lights"
-                ? ["sun", "light"].includes(Row.Panel)
+                ? ["sun", "light", EnvironmentPanel].includes(Row.Panel)
                 : Filter === "Geometry"
                   ? Row.Panel === "geometry"
                   : Filter === "Bodies"
@@ -1030,6 +1041,7 @@ function App() {
             ReferenceDesignRevision: 1,
             LightDesignRevision: 1,
             CameraEffectsRevision: 1,
+            EnvironmentLightRevision: 1,
             Collapsed,
             Assets: AssetRecords,
             Values,
@@ -1070,14 +1082,17 @@ function App() {
       )
         throw Error();
       AssignRows(
-        ArrangeCameraEffects(
-          PrepareLightRows(
-            Loaded.ReferenceDesignRevision === 1
-              ? Loaded.Rows
-              : EnsureReferenceLights(Loaded.Rows),
-            Loaded.LightDesignRevision,
+        EnsureEnvironmentLight(
+          ArrangeCameraEffects(
+            PrepareLightRows(
+              Loaded.ReferenceDesignRevision === 1
+                ? Loaded.Rows
+                : EnsureReferenceLights(Loaded.Rows),
+              Loaded.LightDesignRevision,
+            ),
+            Loaded.CameraEffectsRevision,
           ),
-          Loaded.CameraEffectsRevision,
+          Loaded.EnvironmentLightRevision,
         ),
       );
       Collapse(ConsolidateAtmosphereFlags(Loaded.Collapsed, Loaded.Rows));
@@ -1877,13 +1892,6 @@ function App() {
                 WindOpener.current = document.activeElement;
                 EditWind(Selected);
               }}
-              OpenWindField={(Id) => {
-                WindOpener.current = document.activeElement;
-                EditWind(Id);
-              }}
-              WindFields={WindFields}
-              AllValues={Values}
-              AllHidden={Hidden}
               ReferenceDetailCards={
                 Subject.Panel === "light" && !Subject.ReferenceOnly
                   ? ReferenceCards("details")
@@ -2276,7 +2284,9 @@ function App() {
                 <button
                   onClick={() => {
                     AssignRows(
-                      PrepareLightRows(EnsureReferenceLights(InitialRows), 1),
+                      EnsureEnvironmentLight(
+                        PrepareLightRows(EnsureReferenceLights(InitialRows), 1),
+                      ),
                     );
                     AssignValues(
                       Object.fromEntries(
@@ -2432,7 +2442,11 @@ function App() {
       )}
       {Construct && (
         <ConstructPanel
-          Catalogue={[...PrepareLightRows(InitialRows, 1), ...ReferenceLights]
+          Catalogue={[
+            ...PrepareLightRows(InitialRows, 1),
+            EnvironmentRow,
+            ...ReferenceLights,
+          ]
             .filter((Subject) => Subject.Panel !== "group")
             .map((Row) =>
               IsEditorCamera(Row)

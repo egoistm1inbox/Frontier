@@ -1,4 +1,4 @@
-/* 🧩 Preview card for the camera / post-process effects. */
+/* 🧩 Infographic study card for the camera / post-process effects (camera-card composition). */
 .effect-study {
   display: flex;
   flex-direction: column;
@@ -20,61 +20,61 @@
   color: #8a8a8a;
   text-align: right;
 }
-.effect-canvas-seat {
-  border-radius: 16px;
-  overflow: hidden;
-  background: #0b0b0b;
-  border: 1px solid #ffffff0f;
-  line-height: 0;
+.effect-figure {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  color: #f2f2f2;
 }
-.effect-canvas-seat canvas {
+.effect-figure-number {
+  font-size: 42px;
+  line-height: 1;
+  font-weight: 200;
+  letter-spacing: -1.6px;
+  font-variant-numeric: tabular-nums;
+}
+.effect-figure-fraction {
+  color: #6a6a6a;
+}
+.effect-figure small {
+  font-size: 13px;
+  color: #9a9a9a;
+}
+.effect-chart {
+  border-radius: 18px;
+  background: #161616;
+  border: 1px solid #ffffff0a;
+  padding: 8px 6px 4px;
+  line-height: 0;
+  transition: opacity 160ms ease;
+}
+.effect-chart.is-off {
+  opacity: 0.45;
+  filter: grayscale(1);
+}
+.effect-chart svg {
   width: 100%;
   height: auto;
-  aspect-ratio: 16 / 9;
   display: block;
+  overflow: visible;
+  cursor: ew-resize;
   touch-action: pan-y;
 }
-.effect-canvas-seat.is-split canvas {
-  cursor: ew-resize;
+.effect-chart svg text {
+  font:
+    8px "DM Sans",
+    sans-serif;
+  fill: #7a7a7a;
+  letter-spacing: 0.2px;
 }
-.effect-study-bar {
-  display: flex;
-  gap: 8px;
-  align-items: center;
+.effect-chart svg text.fx-accent {
+  fill: #d6d6d6;
 }
-.effect-segmented {
-  flex: 1;
-  display: flex;
-  gap: 2px;
-  padding: 3px;
-  border-radius: 99px;
-  background: #121212;
-  border: 1px solid #ffffff0f;
+.effect-chart svg text.fx-red {
+  fill: #ff7a7a;
 }
-.effect-segmented button {
-  flex: 1;
-  min-height: 26px;
-  padding: 3px 8px;
-  border: none;
-  border-radius: 99px;
-  background: transparent;
-  color: #9a9a9a;
-  font-size: 11px;
-}
-.effect-segmented button:hover {
-  color: #e0e0e0;
-  background: #ffffff08;
-}
-.effect-segmented button.active {
-  background: #2e2e2e;
-  color: #f2f2f2;
-  box-shadow: 0 1px 6px #0007;
-}
-.effect-pause {
-  min-height: 32px;
-  padding: 4px 14px;
-  border-radius: 99px;
-  font-size: 11px;
+.effect-chart svg text.fx-blue {
+  fill: #7aa2ff;
 }
 .effect-readouts {
   display: grid;

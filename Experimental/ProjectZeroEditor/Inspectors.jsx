@@ -14,12 +14,18 @@ import {
 } from "./LiveGraph.jsx";
 import FogShapePanel from "./FogShapePanel.jsx";
 import { IsEditorCamera } from "./ScenePolicy.js";
-import { WindBinding } from "./WindPanel.jsx";
 import TransformPanel from "./TransformPanel.jsx";
 import MaterialPanel from "./MaterialPanel.jsx";
 import PrimitiveInspector from "./PrimitiveInspector.jsx";
 import { EffectSheets, IsEffectPanel, EffectStudy } from "./PostEffects.jsx";
+import {
+  EnvironmentPanel,
+  EnvironmentSheet,
+  EnvironmentStudy,
+  EnvironmentSymbols,
+} from "./EnvironmentLight.jsx";
 import PostEffectIcon, { IsEffectIcon } from "./PostEffectIcons.jsx";
+import { LightGlyphSource } from "./LightGlyphs.js";
 import { ColourSlotDropProps } from "./ColourCodex.js";
 import ActionIcon, { QuickSymbol } from "./ActionIcon.jsx";
 import React, { useState, useEffect, useRef } from "react";
@@ -35,7 +41,11 @@ import Native from "./NativePanels.json";
 import { Solar } from "./Solar.mjs";
 import { SensorField } from "./OpticalGraphic.jsx";
 
-export const Panels = { ...Native.Panels, ...EffectSheets };
+export const Panels = {
+  ...Native.Panels,
+  ...EffectSheets,
+  [EnvironmentPanel]: EnvironmentSheet,
+};
 export function Glyph({ Name, Size = 18 }) {
   if (Name === "celestial-orbit")
     return (
@@ -171,7 +181,7 @@ export function Icon({ Name, Size = 24 }) {
       </span>
     );
   if (IsEffectIcon(Name)) return <PostEffectIcon Name={Name} Size={Size} />;
-  const Source = window.NativeAssets?.Icons[Name];
+  const Source = LightGlyphSource(Name) || window.NativeAssets?.Icons[Name];
   return Source ? (
     <img
       className="native-icon"
@@ -389,9 +399,8 @@ export function Tile({
         <ActionIcon Name={QuickSymbol(Label, Context, IconName)} Size={26} />
       </span>
       <span className="quick-label">{Label}</span>
-      <small className="quick-status">
-        {Disabled ? "UNAVAILABLE" : On ? "ON" : "OFF"}
-      </small>
+      {/* The icon seat carries on/off (lit or dimmed); only an unavailable action is spelled out. */}
+      {Disabled && <small className="quick-status">UNAVAILABLE</small>}
     </button>
   );
 }
@@ -487,10 +496,6 @@ export function Inspector({
   OpenShader,
   OpenFracture,
   OpenWind,
-  OpenWindField,
-  WindFields = [],
-  AllValues = {},
-  AllHidden = {},
   ReferenceCards = null,
   CloudCoverageCards = null,
   ReferenceDetailCards = null,
@@ -734,8 +739,10 @@ export function Inspector({
       )}
     </>
     );
-  if (IsEffectPanel(Subject.Panel)) {
+  const Environment = Subject.Panel === EnvironmentPanel;
+  if (IsEffectPanel(Subject.Panel) || Environment) {
     const Symbols = {
+      ...EnvironmentSymbols,
       "Object motion": "motion",
       "Camera motion": "orbit",
       "Show mask": "image",
@@ -746,8 +753,18 @@ export function Inspector({
     };
     return (
       <div className="generic-inspector effect-inspector" data-panel={Subject.Panel}>
-        {Header(Subject.Panel === "motion-blur" ? "Camera" : "Post processing")}
-        <EffectStudy Panel={Subject.Panel} Read={V} Active={!Hidden} />
+        {Header(
+          Environment
+            ? "Lighting"
+            : Subject.Panel === "motion-blur"
+              ? "Camera"
+              : "Post processing",
+        )}
+        {Environment ? (
+          <EnvironmentStudy Read={V} Assign={AssignProperty} Active={!Hidden} />
+        ) : (
+          <EffectStudy Panel={Subject.Panel} Read={V} Assign={AssignProperty} Active={!Hidden} />
+        )}
         <section
           className="generic-card entity-capabilities"
           data-card="Quick controls"
@@ -1626,7 +1643,7 @@ export function Inspector({
         )}
         {ReferenceCards}
         <Card Title="Cloud settings" Height={165}>
-          {Tiles(["Enabled", "Follow Wind"])}
+          {Tiles(["Enabled"])}
         </Card>
         <section
           className="cloud-coverage-replacement"
@@ -1710,14 +1727,6 @@ export function Inspector({
             ).map((Field) => F(Field.Label))}
           </details>
         )}
-        <WindBinding
-          Values={Values}
-          Change={Change}
-          Fields={WindFields}
-          Open={OpenWindField}
-          AllValues={AllValues}
-          Hidden={AllHidden}
-        />
       </>
     );
   } else if (Subject.Panel.includes("fog")) {
@@ -1728,7 +1737,7 @@ export function Inspector({
       <>
         {Header("Environment")}
         <Card Title="Fog settings" Height={142}>
-          {Tiles(Local ? ["Enabled", "Follow Wind"] : ["Enabled"])}
+          {Tiles(["Enabled"])}
         </Card>
         <Card Title="Visibility through fog" Height={435} GraphHandled>
           <FogGraph Kind={Subject.Panel} V={V} Change={AssignProperty} />
@@ -1760,9 +1769,6 @@ export function Inspector({
             </Card>
           )}
         </div>
-        <Card Title="Wind binding">
-          {Fields("Wind source", "Owned wind component")}
-        </Card>
       </>
     );
   } else Content = Generic();

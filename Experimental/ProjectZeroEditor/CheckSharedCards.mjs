@@ -232,7 +232,10 @@ try {
       (Name) => window.NativeAssets.Icons[Name],
       Record.Icon,
     );
-    assert.equal(await Image.getAttribute("src"), Asset);
+    // Rim Point, Fill Point and LED Emitter use drawn preset glyphs (LightGlyphs.js) instead of shipped artwork.
+    if (Record.Icon.startsWith("glyph-"))
+      assert.match(await Image.getAttribute("src"), /^data:image\/svg\+xml/);
+    else assert.equal(await Image.getAttribute("src"), Asset);
     assert(!Record.Icon.startsWith("light-arealight"));
     if (["light", "reference-softbox"].includes(Id))
       assert.equal(Record.Icon, "editor-area-light");

@@ -149,14 +149,14 @@ try {
   const Names = await Page.locator(".construct-entity").evaluateAll((Buttons) =>
     Buttons.map((Button) => Button.getAttribute("aria-label")),
   );
-  // Cameras include Motion Blur, Lens Flare, Post Process and its 7 effects.
-  assert.equal(Names.length, 39);
+  // Cameras include Motion Blur, Lens Flare, Post Process and its 7 effects; Lighting includes the Environment Light.
+  assert.equal(Names.length, 40);
   for (const [Group, Expected] of [
     ["Environment", 5],
     ["Weather", 7],
     ["Cameras", 12],
     ["Geometry", 5],
-    ["Lighting", 10],
+    ["Lighting", 11],
   ]) {
     await Page.getByRole("navigation", { name: "Construct categories" })
       .getByRole("button", { name: Group, exact: true })

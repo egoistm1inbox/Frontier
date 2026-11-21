@@ -93,6 +93,7 @@ const Sections = {
       "lens-distortion",
       "scanlines",
       "sharpen",
+      "environment-light",
     ].map((Panel) => [Panel, [".effect-study", ".entity-capabilities"]]),
   ),
   camera: [Card("Lens + field of view"), Card("Aperture study")],
@@ -137,19 +138,16 @@ const Sections = {
     Card("Fog settings"),
     Card("Visibility through fog"),
     Card("Medium"),
-    Card("Wind binding"),
   ],
   "aerial-fog": [
     Card("Fog settings"),
     Card("Visibility through fog"),
     Card("Medium"),
-    Card("Wind binding"),
   ],
   "local-fog": [
     Card("Fog settings"),
     Card("Visibility through fog"),
     Card("Medium"),
-    Card("Wind binding"),
   ],
   clouds: [
     ["summary", ".cl-hero"],

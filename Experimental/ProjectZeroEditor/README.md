@@ -58,16 +58,22 @@ horizontal swipe and page dots. Everything uses the same dark theme.
 
 - **Overview**: an editable Purpose card ("What it does" / "Why it's here") with a default per shape, summary chips, Checks passed /
   Warnings counters, Footprint (volume, world width / height / depth), a checks list, Tags, Notes (the same `Notes` as the header) and,
-  last, **Quick controls**. These are six dark square tiles (Visible, Dynamic, Shadows, GI, Physics, Locked), each with a small round badge
-  like the Checks passed / Warnings icons: green when on, grey when off. Physics on also turns Dynamic on; Dynamic off also turns
-  Physics off.
-- **Physics**: simulate switch, body type, mass (from density presets or manual), dial gauges for friction, bounciness and damping,
-  collider shape, gravity scale, continuous collision and start asleep.
-- **Geometry**: the shared `TransformPanel` first, then per-shape parameters, triangle and vertex counts, a 3 × 3 origin picker with
-  offset readout, origin / world-origin / drop-to-floor actions, shading and UV projection.
+  last, **Quick controls**. These are six dark square tiles (Visible, Dynamic, Shadows, GI, Physics, Locked). There is no On/Off text:
+  the round icon badge is lit green when on and dimmed when off. Physics on also turns Dynamic on; Dynamic off also turns Physics off.
+- **Physics**, in the Cine Camera card style (title, big figure, a diagram that redraws from the values, caption, controls):
+  - **Simulation**: impact speed, a 3 m drop study (height over 2 s with rebounds, from gravity scale, linear damping and bounciness;
+    a dashed "if simulated as dynamic" path while simulation is off), Rebound / Comes to rest / Gravity, then simulate, body type,
+    gravity scale, collides, continuous collision and start asleep.
+  - **Mass**: the mass in kg on a log ruler from 10 g to 10 t with everyday objects (phone, brick, person, car …) and a comparison
+    caption, from density presets or manual.
+  - **Surface response**: dial gauges for friction, bounciness and damping.
+- **Geometry**: the shared `TransformPanel` first, then **Shape** (per-shape parameters, caps, triangle and vertex counts),
+  **Shading** (a cross-section with its normals and the lit band it produces; Smooth / Auto / Flat and the smoothing angle) and
+  **Normals** (weighted, double-sided, flip). There is no collision shape, origin picker or UV card any more.
 - **Material**: the existing `MaterialPanel`.
-- **Rendering**: shadows, GI, shadow detail, draw distance, LOD bias, reflections, motion vectors and a cost summary.
 - **Fracture**: the existing `FracturePanel`.
+
+There is no Rendering tab for now.
 
 All values are browser drafts in the same per-object store as before. The quick controls keep their old keys (`DYNAMIC`, `Cast shadows`, `GI`,
 `PHYSICS`, `LOCKED`). New keys are prefixed `Physics …` / `Geometry …`, plus `Purpose`, `Reason`, `Tags`, `Origin` and the rendering labels.
@@ -85,12 +91,21 @@ The **Cameras** Outliner group now holds Editor Camera, Cine Camera, **Motion Bl
 and **Post Process**. Post Process has seven children: **Heat Shimmer**, **Glitch**, **Chromatic Aberration**, **Film Grain**,
 **Lens Distortion**, **Scanlines** and **Sharpen**. Each effect has its own gradient icon (`PostEffectIcons.jsx`).
 
-The sheets, rows and preview live in `PostEffects.jsx` / `PostEffects.css`. Each effect inspector shows:
+The sheets, rows and studies live in `PostEffects.jsx` / `PostEffects.css`. Each effect inspector shows:
 
-- **Effect preview**: a procedural dusk-road scene with a moving car. It is run through that effect with the current values, so
-  the picture changes as you move a slider. It has Effect / Split / Original modes, a draggable divider and Pause, plus three readouts.
-  Some effects add overlays: the shutter dial (Motion Blur), the line where shimmer starts (Heat Shimmer) and the grain-vs-brightness
-  curve (Film Grain).
+- **Effect study**: an infographic in the camera-card style, with a big reading, a diagram that redraws from the values and three
+  readouts. Dragging across the diagram sets the effect's main value.
+
+  | Effect | Diagram | Drag sets |
+  |---|---|---|
+  | Motion Blur | shutter disc, exposure in each frame, streak with its samples | Shutter angle |
+  | Heat Shimmer | displacement against distance over shimmering air layers | Start distance |
+  | Glitch | two seconds of bursts and one corrupted frame with RGB split | Frequency |
+  | Chromatic Aberration | red / blue shift from centre to corner and split dots in a frame | Strength |
+  | Film Grain | grain strength across a shadows → highlights strip | Amount |
+  | Lens Distortion | straight grid against the warped grid, corner arrows | Distortion |
+  | Scanlines | curved tube and a magnified brightness profile | Line count |
+  | Sharpen | brightness across one edge before / after, with the overshoot | Amount |
 - **Quick controls**: Enabled plus the effect's switches, as dark tiles.
 - Grouped property cards.
 
@@ -99,7 +114,29 @@ moves to Cameras and missing effects are added. After that, deleted effects stay
 under **Cameras**, so a deleted one can be added again. The Outliner **Camera** filter shows these effects and Lens Flare; **Lights** no
 longer shows Lens Flare.
 
-The previews run in the browser only. Values are drafts and nothing reaches the native renderer.
+The studies are diagrams of the authored values. Values are drafts and nothing reaches the native renderer.
 
 The Wind inspector's "Composite flow · Wind field" card has been removed. The WindEditor opens from the **Open WindEditor** button
 in the Wind controls card.
+
+---
+
+## 💡 Lighting
+
+- **Environment Light** (`EnvironmentLight.jsx`, first child of **Lighting**): image-based light from the whole sky. Source (sky atmosphere,
+  HDRI studio / overcast / sunset presets, uniform colour), colour, rotation, intensity, exposure, saturation, ground bounce, and the
+  Diffuse / Specular / Ambient occlusion / Visible to camera switches as quick controls. Its **Sky dome** study shows a side view of the
+  dome lighting a ball and a top view of where the brightest light comes from, with illuminance in lux. Dragging rotates the environment.
+  Saved scenes get it once (`EnsureEnvironmentLight`, `EnvironmentLightRevision: 1`); after that a deleted one stays deleted and can be
+  added again from the construct menu.
+- **Rim Point**, **Fill Point**, **LED Emitter** and the Environment Light have their own drawn icons (`LightGlyphs.js`). These are used in the
+  Outliner, the construct menu and the light inspector's source badge.
+- The light inspector (`LightPanel.css`) now uses the main theme. Cards use the `property-card` gradient, border and 22px corners.
+  Green-tinted greys were replaced with neutral greys, and readings, buttons and pills have 12px corners. The switch green matches
+  the editor toggles.
+
+Clouds, Local Cloud and the three fogs no longer have a wind binding: the Wind binding card, wind-field picker and Follow Wind tile
+were removed (`WindBinding` deleted). Precipitation keeps its Follow Wind tile.
+
+Generic quick-control tiles across the inspector no longer print ON / OFF. The icon is lit or dimmed, and only an unavailable action
+is labelled.

@@ -1298,5 +1298,12 @@ in `Exhibits/LightCompute/Results/FogFacetRegression.txt`; this was a fixture-se
   The Wind inspector's Composite flow card was removed; the WindEditor opens from Wind controls. Checks updated; InspectorOrder,
   EnvironmentGraphs, Wind, EntityContext, WorkspaceCards, LightDesign and SharedCards pass. CheckConstruction (Cube roughness) and
   CheckReference (hash) fail exactly as at HEAD. Names unapproved.
+  Follow-up 33: primitive inspector: Rendering tab, collision shape, origin and UV removed; quick tiles show state by icon only; Physics
+  (Simulation drop study, Mass log ruler) and Geometry (Shape, Shading cross-section, Normals) rebuilt as camera-style cards. Post-process
+  canvas preview replaced by one draggable infographic per effect. Environment Light added to Lighting (`EnvironmentLight.jsx`, one-time
+  migration); Rim Point / Fill Point / LED Emitter icons (`LightGlyphs.js`); light inspector re-themed to the main colours and rounding.
+  Wind binding removed from clouds, local cloud and fogs. Checks updated: InspectorOrder, EntityContext, Wind, InspectorLayout,
+  WorkspaceCards, EnvironmentGraphs, InstrumentStyle, LightDesign and SharedCards pass. Construction:188, Reference:21, QuickTools
+  (fonts) and FogCards (Colour label) fail exactly as at f8746f3. Names unapproved.
   Follow-up 22: Agera RS (`AgeraRs`, cross-plane 90° crank), rubber tyre squeal per surface (`Singer`, `Concrete` surface, `Tyres-Drift` scene), ricochet warble, subsonic whizz flown past the ear.
   Live AudioWorklet bench with car switch + offline MP3 reel (101 files, 26 MB) with spectrogram plates (`Exhibits/CabinHmi/Audio/`). Names unapproved.

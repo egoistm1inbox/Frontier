@@ -1,9 +1,9 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useRef } from "react";
 import "./PostEffects.css";
 
 // 🧩 Camera / post-process effect components: Motion Blur (under Cameras) and the Post Process sub-effects. Each has a
-//    property sheet in the NativePanels format and a live preview: a small procedural scene (dusk sky, road, a car)
-//    processed in the browser with the authored values, so every slider visibly changes the picture.
+//    property sheet in the NativePanels format and an infographic study (shutter disc, refraction profile, grid warp,
+//    edge profile …) that redraws from the authored values, so every slider visibly changes the diagram.
 // 📝 Browser study only. Nothing here reaches the native renderer.
 
 //------------------------------------------------------------------------------------------------------------------------
@@ -140,388 +140,56 @@ export function ArrangeCameraEffects(Rows = [], Revision) {
 }
 
 //------------------------------------------------------------------------------------------------------------------------
-//                                                    SCENE PAINT
+//                                                   INFOGRAPHICS
 //------------------------------------------------------------------------------------------------------------------------
+// One diagram per effect in the camera-card style: a big reading, a schematic that redraws from the authored values,
+// and a caption. Dragging across a diagram sets that effect's main value. Nothing here renders the scene itself.
 
-const Width = 512, Height = 288, SkyLine = Math.round(Height * 0.54);
-
-// PCG-style integer hash → [0, 1).
+// PCG-style integer hash → [0, 1): fixed pseudo-random layout, identical on every redraw.
 function Random(A, B = 0, C = 0) {
   let N = (Math.imul(A | 0, 73856093) ^ Math.imul(B | 0, 19349663) ^ Math.imul(C | 0, 83492791)) >>> 0;
   N = (Math.imul(N, 747796405) + 2891336453) >>> 0;
   const W = Math.imul((N >>> ((N >>> 28) + 4)) ^ N, 277803737) >>> 0;
   return (((W >>> 22) ^ W) >>> 0) / 4294967296;
 }
-
-function Ridge(X, Seed, Amplitude, Floor) {
-  return Floor - Amplitude * (0.55 * Math.sin(X * 0.011 + Seed) + 0.3 * Math.sin(X * 0.027 + Seed * 2.1) + 0.15 * Math.sin(X * 0.063 + Seed * 3.7));
-}
-
-// Pose: Pan (camera px), Travel (road px), Car (centre x), Spin (wheel radians).
-export function PaintScene(Context, Pose, Chart = false) {
-  const Sky = Context.createLinearGradient(0, 0, 0, SkyLine);
-  Sky.addColorStop(0, "#1b2747");
-  Sky.addColorStop(0.55, "#5b4f7a");
-  Sky.addColorStop(1, "#f0a46a");
-  Context.fillStyle = Sky;
-  Context.fillRect(0, 0, Width, SkyLine);
-  const SunX = Width * 0.7 - Pose.Pan * 0.05, SunY = SkyLine - 44;
-  const Glow = Context.createRadialGradient(SunX, SunY, 2, SunX, SunY, 70);
-  Glow.addColorStop(0, "#fff4d6");
-  Glow.addColorStop(0.18, "#ffe1a6");
-  Glow.addColorStop(1, "#ffb36a00");
-  Context.fillStyle = Glow;
-  Context.fillRect(SunX - 70, SunY - 70, 140, 140);
-  Context.fillStyle = "#fff6e2";
-  Context.beginPath();
-  Context.arc(SunX, SunY, 13, 0, Math.PI * 2);
-  Context.fill();
-  for (const [Seed, Amplitude, Floor, Colour, Parallax] of [
-    [1.3, 26, SkyLine - 18, "#55456b", 0.25],
-    [4.1, 18, SkyLine - 4, "#2f2a44", 0.55],
-  ]) {
-    Context.fillStyle = Colour;
-    Context.beginPath();
-    Context.moveTo(0, SkyLine + 1);
-    for (let X = 0; X <= Width; X += 6) Context.lineTo(X, Ridge(X + Pose.Pan * Parallax, Seed, Amplitude, Floor));
-    Context.lineTo(Width, SkyLine + 1);
-    Context.fill();
-  }
-  const Ground = Context.createLinearGradient(0, SkyLine, 0, Height);
-  Ground.addColorStop(0, "#3a3036");
-  Ground.addColorStop(1, "#161417");
-  Context.fillStyle = Ground;
-  Context.fillRect(0, SkyLine, Width, Height - SkyLine);
-  // Road towards a vanishing point.
-  const Vanish = Width * 0.5 - Pose.Pan * 0.02;
-  Context.fillStyle = "#2a2a2f";
-  Context.beginPath();
-  Context.moveTo(Vanish - 3, SkyLine);
-  Context.lineTo(Vanish + 3, SkyLine);
-  Context.lineTo(Width * 1.02, Height);
-  Context.lineTo(-Width * 0.02, Height);
-  Context.fill();
-  Context.strokeStyle = "#d9d3c4";
-  Context.lineWidth = 1.4;
-  Context.beginPath();
-  Context.moveTo(Vanish - 3, SkyLine);
-  Context.lineTo(-Width * 0.02, Height);
-  Context.moveTo(Vanish + 3, SkyLine);
-  Context.lineTo(Width * 1.02, Height);
-  Context.stroke();
-  // Centre dashes: equal spacing in depth (1 / z), moving with Travel.
-  Context.fillStyle = "#f3d27a";
-  for (let Index = 0; Index < 16; Index++) {
-    const Depth = 1 + ((Index * 4 - (Pose.Travel % 4) + 64) % 64);
-    const Near = Depth - 1.6;
-    if (Near <= 0.6) continue;
-    const Y0 = SkyLine + (Height - SkyLine) * (1.6 / Depth), Y1 = SkyLine + (Height - SkyLine) * (1.6 / Near);
-    const W0 = 3 * (1.6 / Depth), W1 = 3 * (1.6 / Near);
-    Context.beginPath();
-    Context.moveTo(Vanish - W0, Y0);
-    Context.lineTo(Vanish + W0, Y0);
-    Context.lineTo(Vanish + W1, Math.min(Height, Y1));
-    Context.lineTo(Vanish - W1, Math.min(Height, Y1));
-    Context.fill();
-  }
-  // Roadside poles.
-  Context.strokeStyle = "#191519";
-  for (let Index = 0; Index < 7; Index++) {
-    const Depth = 1 + ((Index * 6 - (Pose.Travel % 6) + 42) % 42);
-    const Scale = 1.6 / Depth;
-    const Y = SkyLine + (Height - SkyLine) * Scale;
-    const X = Vanish + (Width * 0.62) * Scale * 1.6;
-    Context.lineWidth = Math.max(1, 5 * Scale);
-    Context.beginPath();
-    Context.moveTo(X, Y);
-    Context.lineTo(X, Y - 150 * Scale);
-    Context.stroke();
-  }
-  // Car with spoked wheels.
-  const CarY = Height - 52, CarW = 118, Left = Pose.Car - CarW / 2;
-  Context.fillStyle = "#00000055";
-  Context.beginPath();
-  Context.ellipse(Pose.Car, CarY + 28, CarW * 0.55, 6, 0, 0, Math.PI * 2);
-  Context.fill();
-  const Body = Context.createLinearGradient(0, CarY - 22, 0, CarY + 20);
-  Body.addColorStop(0, "#ff6b55");
-  Body.addColorStop(1, "#b52a22");
-  Context.fillStyle = Body;
-  Context.beginPath();
-  Context.moveTo(Left + 4, CarY + 16);
-  Context.lineTo(Left + 2, CarY + 2);
-  Context.quadraticCurveTo(Left + 8, CarY - 6, Left + 28, CarY - 8);
-  Context.lineTo(Left + 42, CarY - 24);
-  Context.lineTo(Left + 82, CarY - 24);
-  Context.lineTo(Left + 100, CarY - 8);
-  Context.quadraticCurveTo(Left + CarW, CarY - 6, Left + CarW - 2, CarY + 4);
-  Context.lineTo(Left + CarW - 4, CarY + 16);
-  Context.closePath();
-  Context.fill();
-  Context.fillStyle = "#cfe6ff";
-  Context.beginPath();
-  Context.moveTo(Left + 46, CarY - 20);
-  Context.lineTo(Left + 60, CarY - 20);
-  Context.lineTo(Left + 60, CarY - 9);
-  Context.lineTo(Left + 35, CarY - 9);
-  Context.closePath();
-  Context.moveTo(Left + 64, CarY - 20);
-  Context.lineTo(Left + 80, CarY - 20);
-  Context.lineTo(Left + 93, CarY - 9);
-  Context.lineTo(Left + 64, CarY - 9);
-  Context.closePath();
-  Context.fill();
-  Context.fillStyle = "#fff3c4";
-  Context.fillRect(Left + CarW - 8, CarY - 2, 5, 4);
-  for (const WheelX of [Left + 28, Left + CarW - 28]) {
-    Context.fillStyle = "#121212";
-    Context.beginPath();
-    Context.arc(WheelX, CarY + 16, 13, 0, Math.PI * 2);
-    Context.fill();
-    Context.fillStyle = "#bfc4c9";
-    Context.beginPath();
-    Context.arc(WheelX, CarY + 16, 8, 0, Math.PI * 2);
-    Context.fill();
-    Context.strokeStyle = "#3a3d42";
-    Context.lineWidth = 2;
-    Context.beginPath();
-    for (let Spoke = 0; Spoke < 5; Spoke++) {
-      const A = Pose.Spin + (Spoke * Math.PI * 2) / 5;
-      Context.moveTo(WheelX, CarY + 16);
-      Context.lineTo(WheelX + Math.cos(A) * 8, CarY + 16 + Math.sin(A) * 8);
-    }
-    Context.stroke();
-  }
-  if (Chart) {
-    Context.strokeStyle = "#ffffff70";
-    Context.lineWidth = 1;
-    Context.beginPath();
-    for (let X = 0; X <= Width; X += Width / 16) {
-      Context.moveTo(Math.round(X) + 0.5, 0);
-      Context.lineTo(Math.round(X) + 0.5, Height);
-    }
-    for (let Y = 0; Y <= Height; Y += Height / 9) {
-      Context.moveTo(0, Math.round(Y) + 0.5);
-      Context.lineTo(Width, Math.round(Y) + 0.5);
-    }
-    Context.stroke();
-  }
-}
-
-const CarSpeed = Width * 1.4, PanSpeed = Width * 0.22, RoadSpeed = 10;
-function PoseAt(Time, Speed) {
-  const Distance = Time * Speed;
-  const Span = Width + 260;
-  return {
-    Pan: Distance * PanSpeed,
-    Travel: Distance * RoadSpeed,
-    Car: (((Distance * CarSpeed) % Span) + Span) % Span - 130,
-    Spin: (Distance * CarSpeed) / 13,
-  };
-}
-
-//------------------------------------------------------------------------------------------------------------------------
-//                                                    PROCESSORS
-//------------------------------------------------------------------------------------------------------------------------
-
-function Bilinear(Source, X, Y, Channel) {
-  if (X < 0) X = 0; else if (X > Width - 1.001) X = Width - 1.001;
-  if (Y < 0) Y = 0; else if (Y > Height - 1.001) Y = Height - 1.001;
-  const X0 = X | 0, Y0 = Y | 0, Fx = X - X0, Fy = Y - Y0;
-  const I = (Y0 * Width + X0) * 4 + Channel;
-  const A = Source[I], B = Source[I + 4], Cc = Source[I + Width * 4], D = Source[I + Width * 4 + 4];
-  return (A + (B - A) * Fx) * (1 - Fy) + (Cc + (D - Cc) * Fx) * Fy;
-}
-
-const Smooth = (A, B, X) => {
-  const T = Math.min(1, Math.max(0, (X - A) / (B - A)));
-  return T * T * (3 - 2 * T);
-};
-
-// Metres to the ground row at screen y (camera 1.6 m above a flat road).
-const GroundDistance = (Y) => (Y <= SkyLine ? Infinity : (1.6 * (Height - SkyLine) * 3.2) / (Y - SkyLine));
-const GroundRow = (Metres) => SkyLine + (1.6 * (Height - SkyLine) * 3.2) / Math.max(0.01, Metres);
-
-const Treatments = {
-  "heat-shimmer"(Source, Target, P, Time) {
-    const Strength = P("Strength"), Scale = P("Scale"), Speed = P("Speed"), Start = P("Start distance");
-    const Falloff = P("Height falloff"), Mask = P("Show mask");
-    const Rise = Height * 0.35 * (1 - Falloff) + 4;
-    const Far = Smooth(Start, Start * 1.6 + 25, 400);
-    for (let Y = 0; Y < Height; Y++) {
-      const Weight = Y > SkyLine ? Smooth(Start, Start * 1.6 + 25, GroundDistance(Y)) : Far * Math.exp(-(SkyLine - Y) / Rise);
-      const Amplitude = Strength * 7 * Weight;
-      for (let X = 0; X < Width; X++) {
-        const O = (Y * Width + X) * 4;
-        if (Amplitude < 0.02) {
-          Target[O] = Source[O]; Target[O + 1] = Source[O + 1]; Target[O + 2] = Source[O + 2]; Target[O + 3] = 255;
-        } else {
-          const Wave = Math.sin(Y * 0.42 / Scale + Time * 7 * Speed + Math.sin(X * 0.045 / Scale + Time * 2.3 * Speed) * 1.7);
-          const Dx = Amplitude * Wave, Dy = Amplitude * 0.45 * Math.sin(X * 0.09 / Scale - Time * 5.5 * Speed);
-          for (let Channel = 0; Channel < 3; Channel++) Target[O + Channel] = Bilinear(Source, X + Dx, Y + Dy, Channel);
-          Target[O + 3] = 255;
-        }
-        if (Mask) {
-          Target[O] = Target[O] * (1 - Weight * 0.55) + 255 * Weight * 0.55;
-          Target[O + 1] = Target[O + 1] * (1 - Weight * 0.55) + 120 * Weight * 0.55;
-          Target[O + 2] = Target[O + 2] * (1 - Weight * 0.55) + 40 * Weight * 0.55;
-        }
-      }
-    }
-  },
-  glitch(Source, Target, P, Time) {
-    const Intensity = P("Intensity"), Frequency = P("Frequency"), Block = Math.max(2, Math.round(P("Block size")));
-    const Split = P("RGB split"), Jitter = P("Scanline jitter"), Drift = P("Colour drift");
-    const Tick = Math.floor(Time * 12);
-    const Burst = Intensity > 0 && Random(Tick, 7) < Math.min(1, Frequency / 12) * 1.6;
-    const Gain = Burst ? 1 : 0.25;
-    const Rows = Math.ceil(Height / Block);
-    const Shift = new Float32Array(Rows), Swap = new Uint8Array(Rows);
-    if (Burst)
-      for (let Row = 0; Row < Rows; Row++) {
-        const R = Random(Tick, Row, 3);
-        if (R < Intensity * 0.55) Shift[Row] = (Random(Tick, Row, 5) - 0.5) * 2 * Intensity * Width * 0.18;
-        if (Drift && R < Intensity * 0.12) Swap[Row] = 1;
-      }
-    const Offset = Split * Gain;
-    for (let Y = 0; Y < Height; Y++) {
-      const Row = (Y / Block) | 0;
-      const Line = Shift[Row] + (Burst ? (Random(Tick, Y, 11) - 0.5) * Jitter * 10 : 0);
-      const Noise = Burst && Random(Tick, Y, 13) < Intensity * 0.015;
-      for (let X = 0; X < Width; X++) {
-        const O = (Y * Width + X) * 4;
-        if (Noise) {
-          const N = Random(Tick, X, Y) * 255;
-          Target[O] = Target[O + 1] = Target[O + 2] = N; Target[O + 3] = 255;
-          continue;
-        }
-        const Sx = X + Line;
-        const Wrap = (V) => ((Math.round(V) % Width) + Width) % Width;
-        const RowStart = Y * Width * 4;
-        let R = Source[RowStart + Wrap(Sx + Offset) * 4], G = Source[RowStart + Wrap(Sx) * 4 + 1], B = Source[RowStart + Wrap(Sx - Offset) * 4 + 2];
-        if (Swap[Row]) [R, G, B] = [B, R, G];
-        Target[O] = R; Target[O + 1] = G; Target[O + 2] = B; Target[O + 3] = 255;
-      }
-    }
-  },
-  "chromatic-aberration"(Source, Target, P) {
-    const Strength = P("Strength"), Falloff = P("Falloff"), Lateral = P("Mode") === 1;
-    const Cx = Width / 2, Cy = Height / 2, Reach = Math.hypot(Cx, Cy);
-    for (let Y = 0; Y < Height; Y++)
-      for (let X = 0; X < Width; X++) {
-        const O = (Y * Width + X) * 4, Dx = X - Cx, Dy = Y - Cy, R = Math.hypot(Dx, Dy) / Reach;
-        const K = Strength * Math.pow(R, Falloff);
-        let Ux, Uy;
-        if (Lateral) { Ux = Math.sign(Dx) || 0; Uy = 0; } else { Ux = R > 0 ? Dx / (R * Reach) : 0; Uy = R > 0 ? Dy / (R * Reach) : 0; }
-        Target[O] = Bilinear(Source, X + Ux * K, Y + Uy * K, 0);
-        Target[O + 1] = Source[O + 1];
-        Target[O + 2] = Bilinear(Source, X - Ux * K, Y - Uy * K, 2);
-        Target[O + 3] = 255;
-      }
-  },
-  "film-grain"(Source, Target, P, Time) {
-    const Amount = P("Amount"), Size = P("Size"), Response = P("Luminance response"), Coloured = P("Coloured");
-    const Tick = P("Animated") ? Math.floor(Time * 24) : 0;
-    for (let Y = 0; Y < Height; Y++)
-      for (let X = 0; X < Width; X++) {
-        const O = (Y * Width + X) * 4, Gx = Math.floor(X / Size), Gy = Math.floor(Y / Size);
-        const L = (0.2126 * Source[O] + 0.7152 * Source[O + 1] + 0.0722 * Source[O + 2]) / 255;
-        const Weight = (1 - Response) + Response * 4 * L * (1 - L) * 1.15;
-        const Amplitude = Amount * Weight * 110;
-        const N = Random(Gx, Gy, Tick) + Random(Gx, Gy, Tick + 9973) - 1;
-        for (let Channel = 0; Channel < 3; Channel++) {
-          const Jitter = Coloured ? Random(Gx, Gy, Tick * 3 + Channel + 17) + Random(Gy, Gx, Tick * 5 + Channel) - 1 : N;
-          Target[O + Channel] = Source[O + Channel] + Jitter * Amplitude;
-        }
-        Target[O + 3] = 255;
-      }
-  },
-  "lens-distortion"(Source, Target, P) {
-    const K = P("Distortion"), Zoom = P("Scale");
-    const Cx = Width * (0.5 + P("Centre X") * 0.5), Cy = Height * (0.5 + P("Centre Y") * 0.5);
-    const Reach = Math.hypot(Width / 2, Height / 2);
-    for (let Y = 0; Y < Height; Y++)
-      for (let X = 0; X < Width; X++) {
-        const O = (Y * Width + X) * 4, Dx = (X - Cx) / Reach, Dy = (Y - Cy) / Reach, R2 = Dx * Dx + Dy * Dy;
-        const F = (1 + K * R2 + K * 0.35 * R2 * R2) / Zoom;
-        const Sx = Cx + Dx * F * Reach, Sy = Cy + Dy * F * Reach;
-        if (Sx < 0 || Sy < 0 || Sx > Width - 1 || Sy > Height - 1) {
-          Target[O] = Target[O + 1] = Target[O + 2] = 10; Target[O + 3] = 255;
-          continue;
-        }
-        for (let Channel = 0; Channel < 3; Channel++) Target[O + Channel] = Bilinear(Source, Sx, Sy, Channel);
-        Target[O + 3] = 255;
-      }
-  },
-  scanlines(Source, Target, P, Time) {
-    const Lines = P("Line count"), Intensity = P("Intensity"), Curve = P("Curvature"), Flicker = P("Flicker"), Mask = P("Phosphor mask");
-    const Pulse = 1 - Flicker * 0.18 * (0.5 + 0.5 * Math.sin(Time * 38)) - Flicker * 0.08 * Random(Math.floor(Time * 30), 1);
-    for (let Y = 0; Y < Height; Y++)
-      for (let X = 0; X < Width; X++) {
-        const O = (Y * Width + X) * 4;
-        const U = (X / Width) * 2 - 1, V = (Y / Height) * 2 - 1;
-        const Uc = U * (1 + Curve * V * V), Vc = V * (1 + Curve * U * U);
-        if (Math.abs(Uc) > 1 || Math.abs(Vc) > 1) {
-          Target[O] = Target[O + 1] = Target[O + 2] = 6; Target[O + 3] = 255;
-          continue;
-        }
-        const Sx = ((Uc + 1) / 2) * (Width - 1), Sy = ((Vc + 1) / 2) * (Height - 1);
-        const Phase = ((Vc + 1) / 2) * Lines;
-        const Dark = 1 - Intensity * (0.5 - 0.5 * Math.cos(Phase * Math.PI * 2));
-        const Edge = Smooth(1, 0.82, Math.max(Math.abs(Uc), Math.abs(Vc)));
-        const Gain = Dark * Pulse * (0.35 + 0.65 * Edge) * (1 + Intensity * 0.25);
-        const Column = X % 3;
-        for (let Channel = 0; Channel < 3; Channel++) {
-          const Phosphor = Mask ? (Column === Channel ? 1.12 : 0.78) : 1;
-          Target[O + Channel] = Bilinear(Source, Sx, Sy, Channel) * Gain * Phosphor;
-        }
-        Target[O + 3] = 255;
-      }
-  },
-  sharpen(Source, Target, P) {
-    const Amount = P("Amount"), Radius = Math.round(P("Radius")), Threshold = P("Threshold") * 255;
-    const Temp = new Float32Array(Width * Height * 3), Blur = new Float32Array(Width * Height * 3);
-    const Span = Radius * 2 + 1;
-    for (let Y = 0; Y < Height; Y++)
-      for (let X = 0; X < Width; X++)
-        for (let Channel = 0; Channel < 3; Channel++) {
-          let Sum = 0;
-          for (let K = -Radius; K <= Radius; K++) Sum += Source[(Y * Width + Math.min(Width - 1, Math.max(0, X + K))) * 4 + Channel];
-          Temp[(Y * Width + X) * 3 + Channel] = Sum / Span;
-        }
-    for (let Y = 0; Y < Height; Y++)
-      for (let X = 0; X < Width; X++)
-        for (let Channel = 0; Channel < 3; Channel++) {
-          let Sum = 0;
-          for (let K = -Radius; K <= Radius; K++) Sum += Temp[(Math.min(Height - 1, Math.max(0, Y + K)) * Width + X) * 3 + Channel];
-          Blur[(Y * Width + X) * 3 + Channel] = Sum / Span;
-        }
-    for (let I = 0, J = 0; I < Width * Height * 4; I += 4, J += 3) {
-      for (let Channel = 0; Channel < 3; Channel++) {
-        const Detail = Source[I + Channel] - Blur[J + Channel];
-        Target[I + Channel] = Math.abs(Detail) > Threshold ? Source[I + Channel] + Detail * Amount : Source[I + Channel];
-      }
-      Target[I + 3] = 255;
-    }
-  },
-};
-
-const ChartPanels = new Set(["chromatic-aberration", "lens-distortion"]);
+const Clamp = (Amount, Low, High) => Math.max(Low, Math.min(High, Amount));
+const Path = (Points) => Points.map(([X, Y], Index) => (Index ? "L" : "M") + X.toFixed(1) + " " + Y.toFixed(1)).join("");
 const Rates = [24, 30, 60, 120];
+const Screen = { mixBlendMode: "screen" };
 
 export function MotionBlurSpan(P) {
   const Rate = Rates[P("Reference rate")] || 24;
-  const Exposure = (P("Shutter angle") / 360) / Rate;
-  const Speed = P("Preview speed");
-  const Travel = CarSpeed * Speed * Exposure;
-  const Limit = (P("Max blur") / 100) * Width;
-  const Span = Travel > Limit && Travel > 0 ? Exposure * (Limit / Travel) : Exposure;
-  return { Rate, Exposure, Span, Blur: Math.min(Travel, Limit), Clamped: Travel > Limit + 0.01 };
+  const Exposure = P("Shutter angle") / 360 / Rate;
+  // Reference: a fast object that crosses the whole frame in a quarter second at preview speed 1×.
+  const Travel = P("Preview speed") * Exposure * 400;
+  const Limit = P("Max blur");
+  return { Rate, Exposure, Streak: Math.min(Travel, Limit), Clamped: Travel > Limit + 0.01 };
 }
-
-//------------------------------------------------------------------------------------------------------------------------
-//                                                      PREVIEW
-//------------------------------------------------------------------------------------------------------------------------
+const GrainWeight = (R, L) => 1 - R + R * 4 * L * (1 - L) * 1.15;
+const SharpenProfile = (P) => {
+  const Amount = P("Amount"), Radius = P("Radius"), Threshold = P("Threshold");
+  const Edge = (X) => 0.2 + 0.6 / (1 + Math.exp(-X * 2.6));
+  const Blur = (X) => {
+    let Sum = 0, Weight = 0;
+    for (let Offset = -3 * Radius; Offset <= 3 * Radius; Offset += 0.25) {
+      const W = Math.exp(-(Offset * Offset) / (2 * Radius * Radius));
+      Sum += Edge(X + Offset) * W;
+      Weight += W;
+    }
+    return Sum / Weight;
+  };
+  return Array.from({ length: 121 }, (_, Index) => {
+    const X = -6 + Index * 0.1, Original = Edge(X), Detail = Original - Blur(X);
+    // Soft threshold: only the part of the detail above the threshold is boosted, so there is no jump.
+    const Kept = Math.sign(Detail) * Math.max(0, Math.abs(Detail) - Threshold);
+    return [X, Original, Original + Amount * Kept];
+  });
+};
+const Bend = (K, Scale, Cx, Cy) => ([U, V]) => {
+  const Dx = U - Cx, Dy = (V - Cy) * 0.5625, R2 = Dx * Dx + Dy * Dy;
+  const F = (1 + K * R2 * 0.6) / Scale;
+  return [Cx + Dx * F, Cy + (Dy * F) / 0.5625];
+};
 
 function Readouts(Panel, P) {
   const Percent = (Amount) => Math.round(Amount * 100) + "%";
@@ -530,7 +198,7 @@ function Readouts(Panel, P) {
       const Span = MotionBlurSpan(P);
       return [
         ["Exposure", Span.Exposure > 0 ? "1/" + Math.round(1 / Span.Exposure) + " s" : "Closed"],
-        ["Car streak", Span.Blur.toFixed(0) + " px" + (Span.Clamped ? " · capped" : "")],
+        [Span.Clamped ? "Streak · capped" : "Streak width", Span.Streak.toFixed(1) + "%"],
         ["Samples", Fixed(P("Samples"), 0)],
       ];
     }
@@ -539,248 +207,467 @@ function Readouts(Panel, P) {
     case "glitch":
       return [["Bursts", Fixed(P("Frequency"), 1) + " Hz"], ["RGB split", Fixed(P("RGB split"), 0) + " px"], ["Blocks", Fixed(P("Block size"), 0) + " px"]];
     case "chromatic-aberration":
-      return [["Edge fringe", Fixed(P("Strength"), 1) + " px"], ["Centre", "0 px"], ["Mode", ["Radial", "Lateral"][P("Mode")] || "Radial"]];
-    case "film-grain":
-    {
-      const R = P("Luminance response"), Weight = (L) => 1 - R + R * 4 * L * (1 - L) * 1.15;
-      return [["Amount", Percent(P("Amount"))], ["Grain size", Fixed(P("Size"), 1) + " px"], ["Shadows vs mids", Percent(Weight(0.08) / Weight(0.5))]];
+      return [["Corner fringe", Fixed(P("Strength"), 1) + " px"], ["Half-way", Fixed(P("Strength") * 0.5 ** P("Falloff"), 1) + " px"], ["Mode", ["Radial", "Lateral"][P("Mode")] || "Radial"]];
+    case "film-grain": {
+      const R = P("Luminance response");
+      return [["Amount", Percent(P("Amount"))], ["Grain size", Fixed(P("Size"), 1) + " px"], ["Shadows vs mids", Percent(GrainWeight(R, 0.08) / GrainWeight(R, 0.5))]];
     }
     case "lens-distortion": {
-      const K = P("Distortion");
-      const Edge = (1 + K + K * 0.35) / P("Scale") - 1;
-      return [["Type", Math.abs(K) < 0.005 ? "None" : K < 0 ? "Barrel" : "Pincushion"], ["Corner shift", (Edge * 100).toFixed(0) + "%"], ["Scale", Fixed(P("Scale")) + "×"]];
+      const K = P("Distortion"), Corner = Bend(K, P("Scale"), 0, 0)([1, 1]);
+      return [["Type", Math.abs(K) < 0.005 ? "None" : K < 0 ? "Barrel" : "Pincushion"], ["Corner shift", ((Corner[0] - 1) * 100).toFixed(0) + "%"], ["Scale", Fixed(P("Scale")) + "×"]];
     }
     case "scanlines":
-      return [["Lines", Fixed(P("Line count"), 0)], ["Darkening", Percent(P("Intensity"))], ["Curvature", Fixed(P("Curvature"))]];
-    case "sharpen":
-      return [["Amount", Fixed(P("Amount")) + "×"], ["Radius", Fixed(P("Radius"), 0) + " px"], ["Threshold", Math.round(P("Threshold") * 255) + " / 255"]];
+      return [["Lines", Fixed(P("Line count"), 0)], ["Darkening", Percent(P("Intensity"))], ["Flicker", Percent(P("Flicker"))]];
+    case "sharpen": {
+      const Peak = Math.max(...SharpenProfile(P).map(([, Original, Sharp]) => Sharp - Original));
+      return [["Amount", Fixed(P("Amount")) + "×"], ["Overshoot", "+" + Math.round(Peak * 255) + " / 255"], ["Threshold", Math.round(P("Threshold") * 255) + " / 255"]];
+    }
     default:
       return [];
   }
 }
 
-function DrawOverlays(Context, Panel, P, Split, Mode, Active) {
-  Context.save();
-  Context.font = "500 10px 'DM Sans', sans-serif";
-  Context.textBaseline = "middle";
-  if (Panel === "motion-blur") {
-    const Angle = (P("Shutter angle") / 360) * Math.PI * 2, X = Width - 34, Y = 34;
-    Context.fillStyle = "#000000a0";
-    Context.beginPath();
-    Context.arc(X, Y, 24, 0, Math.PI * 2);
-    Context.fill();
-    Context.fillStyle = "#3a3a3a";
-    Context.beginPath();
-    Context.arc(X, Y, 19, 0, Math.PI * 2);
-    Context.fill();
-    if (Angle > 0) {
-      Context.fillStyle = "#f5c46a";
-      Context.beginPath();
-      Context.moveTo(X, Y);
-      Context.arc(X, Y, 19, -Math.PI / 2, -Math.PI / 2 + Angle);
-      Context.closePath();
-      Context.fill();
+// Main reading and caption shown large above the diagram; also which value a horizontal drag edits.
+function Headline(Panel, P) {
+  switch (Panel) {
+    case "motion-blur": {
+      const Span = MotionBlurSpan(P);
+      return { Title: "Shutter study", Whole: Span.Exposure > 0 ? "1/" + Math.round(1 / Span.Exposure) : "0", Unit: "s exposure", Caption: `${Fixed(P("Shutter angle"), 0)}° shutter at ${Span.Rate} fps · drag to change the shutter angle`, Drag: ["Shutter angle", 0, 360] };
     }
-    Context.fillStyle = "#fff";
-    Context.textAlign = "center";
-    Context.fillText(Math.round(P("Shutter angle")) + "°", X, Y + 33);
-  }
-  if (Panel === "heat-shimmer") {
-    const Y = GroundRow(Math.max(1, P("Start distance")));
-    if (Y < Height - 2) {
-      Context.strokeStyle = "#ffb36acc";
-      Context.setLineDash([4, 4]);
-      Context.beginPath();
-      Context.moveTo(0, Y + 0.5);
-      Context.lineTo(Width, Y + 0.5);
-      Context.stroke();
-      Context.setLineDash([]);
-      Context.fillStyle = "#ffb36a";
-      Context.textAlign = "left";
-      Context.fillText("shimmer starts · " + Fixed(P("Start distance"), 0) + " m", 8, Y - 8);
+    case "heat-shimmer":
+      return { Title: "Refraction profile", Whole: Fixed(P("Start distance"), 0), Unit: "m to first shimmer", Caption: "Side view from the lens · drag to move where the shimmer starts", Drag: ["Start distance", 0, 400] };
+    case "glitch":
+      return { Title: "Signal timeline", Whole: Fixed(P("Frequency"), 1), Unit: "bursts / s", Caption: "Two seconds of signal and one corrupted frame · drag to change the burst rate", Drag: ["Frequency", 0, 10] };
+    case "chromatic-aberration":
+      return { Title: "Fringe across the frame", Whole: Fixed(P("Strength"), 1), Unit: "px at the corners", Caption: "Red and blue separation from centre to corner · drag to change the strength", Drag: ["Strength", 0, 12] };
+    case "film-grain":
+      return { Title: "Grain response", Whole: String(Math.round(P("Amount") * 100)), Unit: "% grain", Caption: "Grain strength across the brightness range · drag to change the amount", Drag: ["Amount", 0, 1] };
+    case "lens-distortion": {
+      const K = P("Distortion");
+      return { Title: "Grid warp", Whole: Fixed(Math.abs(K), 2), Unit: Math.abs(K) < 0.005 ? "no distortion" : K < 0 ? "barrel" : "pincushion", Caption: "Dashed: straight grid · solid: where it lands · drag left for barrel, right for pincushion", Drag: ["Distortion", -1, 1] };
     }
+    case "scanlines":
+      return { Title: "Tube profile", Whole: Fixed(P("Line count"), 0), Unit: "lines", Caption: "Screen shape and a magnified slice of the lines · drag to change the line count", Drag: ["Line count", 32, 144] };
+    case "sharpen":
+      return { Title: "Edge profile", Whole: Fixed(P("Amount"), 2), Unit: "× edge contrast", Caption: "Brightness across one soft edge, before and after · drag to change the amount", Drag: ["Amount", 0, 3] };
+    default:
+      return { Title: "Effect", Whole: "", Unit: "", Caption: "" };
   }
-  if (Panel === "film-grain") {
-    const X = Width - 96, Y = Height - 56, W = 86, H = 44, R = P("Luminance response");
-    Context.fillStyle = "#000000b0";
-    Context.fillRect(X - 6, Y - 14, W + 12, H + 22);
-    Context.strokeStyle = "#ffffff30";
-    Context.strokeRect(X, Y, W, H);
-    Context.strokeStyle = "#f2f2f2";
-    Context.beginPath();
-    for (let I = 0; I <= 40; I++) {
-      const L = I / 40, Weight = (1 - R) + R * 4 * L * (1 - L) * 1.15;
-      Context[I ? "lineTo" : "moveTo"](X + L * W, Y + H - Math.min(1.15, Weight) / 1.15 * H);
-    }
-    Context.stroke();
-    Context.fillStyle = "#cfcfcf";
-    Context.textAlign = "left";
-    Context.fillText("grain vs brightness", X, Y - 7);
-  }
-  if (Mode === "split") {
-    const X = Math.round(Split * Width);
-    Context.fillStyle = "#ffffff";
-    Context.fillRect(X - 1, 0, 2, Height);
-    Context.beginPath();
-    Context.arc(X, Height / 2, 9, 0, Math.PI * 2);
-    Context.fill();
-    Context.fillStyle = "#111";
-    Context.beginPath();
-    Context.moveTo(X - 5, Height / 2);
-    Context.lineTo(X - 2, Height / 2 - 3);
-    Context.lineTo(X - 2, Height / 2 + 3);
-    Context.moveTo(X + 5, Height / 2);
-    Context.lineTo(X + 2, Height / 2 - 3);
-    Context.lineTo(X + 2, Height / 2 + 3);
-    Context.fill();
-    Context.fillStyle = "#000000a0";
-    Context.textAlign = "left";
-    for (const [Label, Left] of [["Original", 8], [Active ? "Effect" : "Effect · off", X + 8]]) {
-      const W = Context.measureText(Label).width + 14;
-      if (Left === 8 && X < W + 12) continue;
-      if (Left !== 8 && X > Width - W - 12) continue;
-      Context.fillStyle = "#000000a0";
-      Context.beginPath();
-      Context.roundRect(Left, Height - 26, W, 18, 9);
-      Context.fill();
-      Context.fillStyle = "#f2f2f2";
-      Context.fillText(Label, Left + 7, Height - 17);
-    }
-  }
-  if (!Active && Mode !== "split") {
-    Context.fillStyle = "#000000a0";
-    Context.beginPath();
-    Context.roundRect(8, 8, 96, 20, 10);
-    Context.fill();
-    Context.fillStyle = "#ff8c7a";
-    Context.textAlign = "left";
-    Context.fillText("Effect disabled", 16, 18);
-  }
-  Context.restore();
 }
 
-export function EffectStudy({ Panel, Read, Active }) {
-  const Canvas = useRef(null);
-  const Latest = useRef({ Read, Active });
-  Latest.current = { Read, Active };
-  const [Mode, SetMode] = useState("split");
-  const [Split, SetSplit] = useState(0.5);
-  const [Paused, Pause] = useState(false);
-  const Settings = useRef({ Mode, Split, Paused });
-  Settings.current = { Mode, Split, Paused };
+const Axis = ({ X1, X2, Y, Labels }) => (
+  <g>
+    <line x1={X1} x2={X2} y1={Y} y2={Y} stroke="#4a4a4a" />
+    {Labels.map(([Text, X], Index) => (
+      <text key={Index} x={X} y={Y + 11} textAnchor="middle">{Text}</text>
+    ))}
+  </g>
+);
+
+function MotionBlurChart({ P }) {
+  const Angle = Clamp(P("Shutter angle"), 0, 360), Span = MotionBlurSpan(P);
+  const Cx = 58, Cy = 80, R = 40, Wedge = (Angle / 360) * Math.PI * 2;
+  const End = [Cx + R * Math.sin(Wedge), Cy - R * Math.cos(Wedge)];
+  const Open = Angle >= 359.5 ? `M${Cx} ${Cy - R}A${R} ${R} 0 1 1 ${Cx - 0.01} ${Cy - R}Z` : `M${Cx} ${Cy}L${Cx} ${Cy - R}A${R} ${R} 0 ${Angle > 180 ? 1 : 0} 1 ${End[0].toFixed(2)} ${End[1].toFixed(2)}Z`;
+  const Left = 128, Width = 180, FrameWidth = Width / 3;
+  // The track shows a quarter of the frame width, magnified 4×, so a few percent of blur is readable.
+  const Streak = (Span.Streak / 25) * Width, Count = Math.max(2, Math.round(P("Samples")));
+  const Ball = Left + Width * 0.62, Track = 128;
+  return (
+    <>
+      <circle cx={Cx} cy={Cy} r={R + 6} fill="none" stroke="#3a3a3a" strokeDasharray="1.5 3" />
+      <circle cx={Cx} cy={Cy} r={R} fill="#101010" stroke="#4a4a4a" />
+      {Angle > 0.5 && <path d={Open} fill="#f5b04f" opacity=".85" />}
+      <line x1={Cx} y1={Cy} x2={Cx} y2={Cy - R - 6} stroke="#f2f2f2" strokeDasharray="1.5 2" />
+      <circle cx={Cx} cy={Cy} r="3" fill="#f2f2f2" />
+      <text x={Cx} y={Cy + R + 18} textAnchor="middle" className="fx-accent">{Fixed(Angle, 0)}° open</text>
+      <text x={Left} y="22">FRAMES · {Span.Rate} FPS</text>
+      {[0, 1, 2].map((Index) => (
+        <g key={Index}>
+          <rect x={Left + Index * FrameWidth + 1} y="30" width={FrameWidth - 2} height="22" rx="5" fill="#151515" stroke="#ffffff12" />
+          <rect x={Left + Index * FrameWidth + 4} y="35" width={Math.max(0, (FrameWidth - 8) * (Angle / 360))} height="12" rx="3" fill="#f5b04f" opacity=".8" />
+        </g>
+      ))}
+      <text x={Left} y="64">shutter open {Span.Exposure > 0 ? "1/" + Math.round(1 / Span.Exposure) + " s" : "—"} of each 1/{Span.Rate} s frame</text>
+      <text x={Left} y="96">OBJECT CROSSING THE FRAME IN {Fixed(0.25 / Math.max(0.01, P("Preview speed")), 2)} s · 4× ZOOM</text>
+      <rect x={Left} y="104" width={Width} height="46" rx="8" fill="#121212" stroke="#ffffff10" />
+      {P("Camera motion") &&
+        Array.from({ length: 8 }, (_, Index) => (
+          <line key={Index} x1={Left + 12 + Index * 21} x2={Left + 12 + Index * 21 + Clamp(Streak * 0.35, 1, 15)} y1="144" y2="144" stroke="#5a5a5a" strokeWidth="2" strokeLinecap="round" />
+        ))}
+      {P("Object motion") ? (
+        <>
+          <defs>
+            <linearGradient id="fx-streak" x1="0" x2="1">
+              <stop offset="0" stopColor="#f5b04f" stopOpacity="0" />
+              <stop offset="1" stopColor="#f5b04f" stopOpacity=".9" />
+            </linearGradient>
+          </defs>
+          <rect x={Ball - Streak} y={Track - 7} width={Math.max(0.5, Streak)} height="14" rx="7" fill="url(#fx-streak)" />
+          {Array.from({ length: Count }, (_, Index) => (
+            <circle key={Index} cx={Ball - Streak + (Streak * Index) / (Count - 1)} cy={Track} r="1.3" fill="#fff" opacity=".7" />
+          ))}
+          <circle cx={Ball} cy={Track} r="7" fill="#f2f2f2" />
+        </>
+      ) : (
+        <>
+          <circle cx={Ball} cy={Track} r="7" fill="#9a9a9a" />
+          <text x={Left + 8} y={Track + 3}>object motion off</text>
+        </>
+      )}
+      {Span.Clamped && <line x1={Ball - Streak} x2={Ball - Streak} y1="108" y2="148" stroke="#ff8c7a" strokeDasharray="2 2" />}
+      <text x={Left + Width} y="164" textAnchor="end">{Count} samples along the streak{Span.Clamped ? " · capped by Max blur" : ""}</text>
+    </>
+  );
+}
+
+function HeatShimmerChart({ P }) {
+  const Left = 36, Right = 308, Ground = 142, Top = 22;
+  const Px = (Metres) => Left + (Metres / 400) * (Right - Left);
+  const Start = P("Start distance"), Strength = P("Strength"), Scale = P("Scale"), Falloff = P("Height falloff");
+  const Ramp = (Metres) => Strength * Clamp((Metres - Start) / 60, 0, 1);
+  const Curve = Array.from({ length: 81 }, (_, Index) => {
+    const Metres = Index * 5;
+    return [Px(Metres), 70 - Ramp(Metres) * 40];
+  });
+  const Layers = [8, 18, 30, 44].map((Height) => {
+    const Decay = Math.exp(-Height * Falloff * 0.06);
+    const Points = [];
+    for (let X = Px(Start); X <= Right; X += 2) {
+      const Metres = ((X - Left) / (Right - Left)) * 400;
+      Points.push([X, Ground - Height - Math.sin((X / (22 / Scale)) * Math.PI * 2 + Height) * Ramp(Metres) * 6 * Decay]);
+    }
+    return { Height, Decay, Points };
+  });
+  return (
+    <>
+      <text x={Left} y={Top}>DISPLACEMENT</text>
+      {[0, 0.5, 1].map((Level) => (
+        <g key={Level}>
+          <line x1={Left} x2={Right} y1={70 - Level * 40} y2={70 - Level * 40} stroke="#ffffff10" strokeDasharray="2 4" />
+          <text x={Left - 6} y={73 - Level * 40} textAnchor="end">{(Level * 7).toFixed(1)}</text>
+        </g>
+      ))}
+      <path d={Path(Curve)} fill="none" stroke="#ff8a4c" strokeWidth="1.6" />
+      <rect x={Left} y={Ground} width={Right - Left} height="8" fill="#2a211c" />
+      {Layers.map(({ Height, Decay, Points }) =>
+        Points.length > 1 ? <path key={Height} d={Path(Points)} fill="none" stroke="#ffb36a" strokeWidth="1.1" opacity={0.15 + 0.75 * Decay} /> : null,
+      )}
+      <line x1={Px(Start)} x2={Px(Start)} y1={Top + 4} y2={Ground} stroke="#ffb36a" strokeDasharray="3 3" />
+      <text x={Clamp(Px(Start) + 4, Left, Right - 70)} y={Ground - 52} className="fx-accent">starts {Fixed(Start, 0)} m</text>
+      <path d={`M${Left - 22} ${Ground - 10}h12v8h-12z M${Left - 10} ${Ground - 8}l6 -3v10l-6 -3z`} fill="#9a9a9a" />
+      <Axis X1={Left} X2={Right} Y={Ground + 8} Labels={[0, 100, 200, 300, 400].map((Metres) => [Metres + " m", Px(Metres)])} />
+    </>
+  );
+}
+
+function GlitchChart({ P }) {
+  const Left = 14, Right = 306, Frequency = P("Frequency"), Intensity = P("Intensity");
+  const Count = Math.round(Frequency * 2);
+  const Bursts = Array.from({ length: Count }, (_, Index) => {
+    const At = (Index + 0.2 + Random(Index, 7) * 0.6) / Math.max(1, Count);
+    return { X: Left + At * (Right - Left), H: Intensity * (0.45 + 0.55 * Random(Index, 11)) * 36, W: 2 + Random(Index, 3) * 4 };
+  });
+  const Block = P("Block size"), Split = P("RGB split"), Jitter = P("Scanline jitter");
+  const Band = 3 + (Block / 64) * 18, FrameTop = 84, FrameHeight = 70;
+  const Rows = Math.ceil(FrameHeight / Band);
+  return (
+    <>
+      <text x={Left} y="16">2 SECONDS</text>
+      <line x1={Left} x2={Right} y1="62" y2="62" stroke="#4a4a4a" />
+      {[0, 0.5, 1, 1.5, 2].map((Second) => (
+        <text key={Second} x={Left + (Second / 2) * (Right - Left)} y="74" textAnchor="middle">{Second} s</text>
+      ))}
+      {Bursts.map((Burst, Index) => (
+        <rect key={Index} x={Burst.X - Burst.W / 2} y={62 - Burst.H} width={Burst.W} height={Burst.H} rx="1" fill="#c86bff" opacity=".85" />
+      ))}
+      {!Count && <text x="160" y="50" textAnchor="middle">no bursts</text>}
+      <clipPath id="fx-glitch-frame">
+        <rect x={Left} y={FrameTop} width={Right - Left} height={FrameHeight} rx="8" />
+      </clipPath>
+      <g clipPath="url(#fx-glitch-frame)">
+        <rect x={Left} y={FrameTop} width={Right - Left} height={FrameHeight} fill="#121212" />
+        {Array.from({ length: Rows }, (_, Row) => {
+          const Hit = Random(Row, 5) < Intensity * 0.7;
+          const Shift = Hit ? (Random(Row, 9) - 0.5) * 60 * Intensity : (Random(Row, 13) - 0.5) * 6 * Jitter;
+          const Y = FrameTop + Row * Band;
+          return (
+            <g key={Row} transform={`translate(${Shift.toFixed(1)} 0)`}>
+              <rect x={Left + 40} y={Y + 1} width={160} height={Band - 1} fill={Hit && P("Colour drift") ? (Row % 2 ? "#3a2b4f" : "#24394a") : "#262626"} />
+              <rect x={Left + 120 - Split} y={Y + 2} width="56" height={Band - 3} fill="#ff2a2a" style={Screen} />
+              <rect x={Left + 120} y={Y + 2} width="56" height={Band - 3} fill="#2aff5a" style={Screen} />
+              <rect x={Left + 120 + Split} y={Y + 2} width="56" height={Band - 3} fill="#2a5aff" style={Screen} />
+            </g>
+          );
+        })}
+      </g>
+      <text x={Right} y={FrameTop + FrameHeight + 12} textAnchor="end">one corrupted frame · {Fixed(Block, 0)} px blocks · {Fixed(Split, 0)} px RGB split</text>
+    </>
+  );
+}
+
+function ChromaticChart({ P }) {
+  const Left = 34, Right = 196, Top = 24, Bottom = 136, Strength = P("Strength"), Falloff = P("Falloff");
+  const Lateral = P("Mode") === 1;
+  const Px = (R) => Left + R * (Right - Left);
+  const Py = (Shift) => (Top + Bottom) / 2 - (Shift / 12) * ((Bottom - Top) / 2);
+  const Curve = (Sign) => Path(Array.from({ length: 41 }, (_, Index) => [Px(Index / 40), Py(Sign * Strength * (Index / 40) ** Falloff)]));
+  const Fx = 214, Fy = 34, Fw = 92, Fh = 92 * 0.5625 * 1.4;
+  return (
+    <>
+      <text x={Left} y="16">SHIFT · px</text>
+      {[-12, -6, 0, 6, 12].map((Shift) => (
+        <g key={Shift}>
+          <line x1={Left} x2={Right} y1={Py(Shift)} y2={Py(Shift)} stroke={Shift ? "#ffffff10" : "#4a4a4a"} strokeDasharray={Shift ? "2 4" : ""} />
+          <text x={Left - 6} y={Py(Shift) + 3} textAnchor="end">{Shift}</text>
+        </g>
+      ))}
+      <path d={Curve(1)} fill="none" stroke="#ff5a5a" strokeWidth="1.7" />
+      <path d={Curve(-1)} fill="none" stroke="#5a8cff" strokeWidth="1.7" />
+      <text x={Right} y={Py(Strength) - 5} textAnchor="end" className="fx-red">red out</text>
+      <text x={Right} y={Py(-Strength) + 11} textAnchor="end" className="fx-blue">blue in</text>
+      <Axis X1={Left} X2={Right} Y={Bottom + 4} Labels={[["centre", Left], ["half-way", Px(0.5)], ["corner", Right]]} />
+      <rect x={Fx} y={Fy} width={Fw} height={Fh} rx="6" fill="#121212" stroke="#ffffff14" />
+      {[
+        [0.5, 0.5],
+        [0.78, 0.5],
+        [0.93, 0.12],
+      ].map(([U, V], Index) => {
+        const Dx = U - 0.5, Dy = V - 0.5, R = Math.min(1, Math.hypot(Dx, Dy) / 0.6);
+        const Shift = Strength * R ** Falloff * 1.6, Angle = Lateral ? 0 : Math.atan2(Dy, Dx);
+        const X = Fx + U * Fw, Y = Fy + V * Fh, Ox = Math.cos(Angle) * Shift, Oy = Math.sin(Angle) * Shift;
+        return (
+          <g key={Index}>
+            <circle cx={X + Ox} cy={Y + Oy} r="6" fill="#ff2a2a" style={Screen} />
+            <circle cx={X} cy={Y} r="6" fill="#2aff5a" style={Screen} />
+            <circle cx={X - Ox} cy={Y - Oy} r="6" fill="#2a5aff" style={Screen} />
+          </g>
+        );
+      })}
+      <text x={Fx + Fw / 2} y={Fy + Fh + 13} textAnchor="middle">{Lateral ? "lateral · horizontal only" : "radial · away from centre"}</text>
+      <text x={Fx + Fw / 2} y={Fy + Fh + 24} textAnchor="middle">fringes magnified</text>
+    </>
+  );
+}
+
+function FilmGrainChart({ P }) {
+  const Left = 30, Right = 306, Top = 22, Bottom = 92, R = P("Luminance response"), Amount = P("Amount"), Size = P("Size");
+  const Px = (L) => Left + L * (Right - Left);
+  const Py = (W) => Bottom - (W / 1.2) * (Bottom - Top);
+  const Curve = Array.from({ length: 51 }, (_, Index) => [Px(Index / 50), Py(GrainWeight(R, Index / 50) * Amount * 1.6)]);
+  const Strip = 104, StripHeight = 40, Coloured = P("Coloured");
+  const Dots = [];
+  for (let Index = 0; Index < 900; Index++) {
+    const L = Random(Index, 1), Y = Random(Index, 2);
+    const Strength = GrainWeight(R, L) * Amount;
+    if (Random(Index, 3) > Strength * 1.4) continue;
+    const Tint = Coloured ? ["#ff9a9a", "#9aff9a", "#9ab8ff"][Index % 3] : L > 0.5 ? "#000" : "#fff";
+    Dots.push(<circle key={Index} cx={Px(L)} cy={Strip + 2 + Y * (StripHeight - 4)} r={0.35 + Size * 0.35} fill={Tint} opacity={0.25 + 0.5 * Random(Index, 4)} />);
+  }
+  return (
+    <>
+      <defs>
+        <linearGradient id="fx-luma" x1="0" x2="1">
+          <stop offset="0" stopColor="#050505" />
+          <stop offset="1" stopColor="#f0f0f0" />
+        </linearGradient>
+      </defs>
+      <text x={Left} y="14">GRAIN STRENGTH</text>
+      {[0, 0.4, 0.8, 1.2].map((Level) => (
+        <line key={Level} x1={Left} x2={Right} y1={Py(Level)} y2={Py(Level)} stroke="#ffffff10" strokeDasharray="2 4" />
+      ))}
+      <path d={Path([...Curve, [Px(1), Bottom], [Px(0), Bottom]])} fill="#e6cf7222" />
+      <path d={Path(Curve)} fill="none" stroke="#e6cf72" strokeWidth="1.6" />
+      <rect x={Left} y={Strip} width={Right - Left} height={StripHeight} rx="6" fill="url(#fx-luma)" />
+      {Dots}
+      <Axis X1={Left} X2={Right} Y={Strip + StripHeight + 4} Labels={[["shadows", Px(0.08)], ["mid-tones", Px(0.5)], ["highlights", Px(0.92)]]} />
+    </>
+  );
+}
+
+function LensDistortionChart({ P }) {
+  const Fx = 40, Fy = 14, Fw = 240, Fh = 135;
+  const Warp = Bend(P("Distortion"), P("Scale"), P("Centre X") * 2, P("Centre Y") * 2);
+  const At = ([U, V]) => [Fx + ((U + 1) / 2) * Fw, Fy + ((V + 1) / 2) * Fh];
+  const Lines = [];
+  for (let Index = 0; Index <= 8; Index++) {
+    const U = -1 + Index / 4;
+    Lines.push(Array.from({ length: 25 }, (_, Step) => [U, -1 + Step / 12]));
+  }
+  for (let Index = 0; Index <= 6; Index++) {
+    const V = -1 + Index / 3;
+    Lines.push(Array.from({ length: 33 }, (_, Step) => [-1 + Step / 16, V]));
+  }
+  return (
+    <>
+      <clipPath id="fx-lens-frame">
+        <rect x={Fx} y={Fy} width={Fw} height={Fh} rx="8" />
+      </clipPath>
+      <rect x={Fx} y={Fy} width={Fw} height={Fh} rx="8" fill="#121212" stroke="#ffffff14" />
+      <g clipPath="url(#fx-lens-frame)">
+        {Lines.map((Line, Index) => (
+          <path key={"s" + Index} d={Path(Line.map(At))} fill="none" stroke="#ffffff16" strokeDasharray="2 3" />
+        ))}
+        {Lines.map((Line, Index) => (
+          <path key={"w" + Index} d={Path(Line.map(Warp).map(At))} fill="none" stroke="#5fc8ff" strokeWidth="1.1" opacity=".85" />
+        ))}
+      </g>
+      {[[-1, -1], [1, -1], [1, 1], [-1, 1]].map((Corner, Index) => {
+        const [X1, Y1] = At(Corner), [X2, Y2] = At(Warp(Corner));
+        return <line key={Index} x1={X1} y1={Y1} x2={X2} y2={Y2} stroke="#f2f2f2" strokeWidth="1.2" markerEnd="url(#fx-arrow)" />;
+      })}
+      <defs>
+        <marker id="fx-arrow" viewBox="0 0 6 6" refX="5" refY="3" markerWidth="5" markerHeight="5" orient="auto">
+          <path d="M0 0L6 3L0 6Z" fill="#f2f2f2" />
+        </marker>
+      </defs>
+      <circle cx={At([P("Centre X") * 2, P("Centre Y") * 2])[0]} cy={At([P("Centre X") * 2, P("Centre Y") * 2])[1]} r="3" fill="#ffc93d" />
+      <text x="160" y="164" textAnchor="middle">arrows: where each corner moves · amber: distortion centre</text>
+    </>
+  );
+}
+
+function ScanlinesChart({ P }) {
+  const Count = Math.round(P("Line count")), Intensity = P("Intensity"), Curvature = P("Curvature");
+  const Sx = 16, Sy = 18, Sw = 170, Sh = 128, Bulge = Curvature * 40;
+  const Screen = `M${Sx} ${Sy}Q${Sx + Sw / 2} ${Sy - Bulge} ${Sx + Sw} ${Sy}Q${Sx + Sw + Bulge} ${Sy + Sh / 2} ${Sx + Sw} ${Sy + Sh}Q${Sx + Sw / 2} ${Sy + Sh + Bulge} ${Sx} ${Sy + Sh}Q${Sx - Bulge} ${Sy + Sh / 2} ${Sx} ${Sy}Z`;
+  const Lines = Array.from({ length: Count }, (_, Index) => {
+    const T = (Index + 0.5) / Count, Y = Sy + T * Sh, Edge = Bulge * (1 - (2 * T - 1) ** 2);
+    return `M${Sx - Edge} ${Y}Q${Sx + Sw / 2} ${Y + (T - 0.5) * Bulge * 0.6} ${Sx + Sw + Edge} ${Y}`;
+  });
+  const Zx = 206, Zy = 22, Zw = 100, Zh = 120;
+  const Profile = Array.from({ length: 61 }, (_, Index) => {
+    const T = Index / 60, Brightness = 1 - Intensity * (0.5 - 0.5 * Math.cos(T * Math.PI * 2 * 4));
+    return [Zx + 10 + Brightness * (Zw - 20), Zy + T * Zh];
+  });
+  return (
+    <>
+      <clipPath id="fx-tube">
+        <path d={Screen} />
+      </clipPath>
+      <path d={Screen} fill="#1d2a24" stroke="#5a5a5a" />
+      <g clipPath="url(#fx-tube)">
+        <rect x={Sx - 20} y={Sy - 20} width={Sw + 40} height={Sh + 40} fill="url(#fx-tube-glow)" />
+        {Lines.map((Line, Index) => (
+          <path key={Index} d={Line} stroke="#000" strokeWidth={Math.max(0.4, (Sh / Count) * 0.5)} opacity={Intensity} fill="none" />
+        ))}
+      </g>
+      <defs>
+        <radialGradient id="fx-tube-glow" cx="50%" cy="45%" r="65%">
+          <stop offset="0" stopColor="#6fe0a8" stopOpacity=".55" />
+          <stop offset="1" stopColor="#6fe0a8" stopOpacity="0" />
+        </radialGradient>
+      </defs>
+      <rect x={Sx + Sw * 0.62} y={Sy + Sh * 0.3} width="22" height="26" fill="none" stroke="#f2f2f2" strokeDasharray="2 2" />
+      <line x1={Sx + Sw * 0.62 + 22} y1={Sy + Sh * 0.3} x2={Zx} y2={Zy} stroke="#ffffff30" />
+      <rect x={Zx} y={Zy} width={Zw} height={Zh} rx="8" fill="#121212" stroke="#ffffff14" />
+      {P("Phosphor mask") &&
+        Array.from({ length: 12 }, (_, Index) => (
+          <rect key={Index} x={Zx + 6 + Index * 7.4} y={Zy + 4} width="6" height={Zh - 8} fill={["#ff4d4d", "#4dff88", "#4d8cff"][Index % 3]} opacity=".12" />
+        ))}
+      <path d={Path(Profile)} fill="none" stroke="#6fe0a8" strokeWidth="1.6" />
+      <text x={Zx + Zw / 2} y={Zy + Zh + 13} textAnchor="middle">brightness across 4 lines</text>
+      <text x={Sx + Sw / 2} y={Sy + Sh + 22} textAnchor="middle">{Count} lines · curvature {Fixed(Curvature)}</text>
+    </>
+  );
+}
+
+function SharpenChart({ P }) {
+  const Left = 30, Right = 306, Top = 20, Bottom = 116;
+  const Rows = SharpenProfile(P);
+  const Px = (X) => Left + ((X + 6) / 12) * (Right - Left);
+  const Py = (L) => Bottom - L * (Bottom - Top);
+  const Before = Rows.map(([X, Original]) => [Px(X), Py(Original)]);
+  const After = Rows.map(([X, , Sharp]) => [Px(X), Py(Clamp(Sharp, -0.1, 1.1))]);
+  const Threshold = P("Threshold");
+  return (
+    <>
+      <defs>
+        <linearGradient id="fx-edge-before" x1="0" x2="1">
+          {Rows.filter((_, Index) => Index % 10 === 0).map(([X, Original]) => {
+            const Level = Math.round(Clamp(Original, 0, 1) * 255);
+            return <stop key={X} offset={(X + 6) / 12} stopColor={`rgb(${Level},${Level},${Level})`} />;
+          })}
+        </linearGradient>
+        <linearGradient id="fx-edge-after" x1="0" x2="1">
+          {Rows.filter((_, Index) => Index % 5 === 0).map(([X, , Sharp]) => {
+            const Level = Math.round(Clamp(Sharp, 0, 1) * 255);
+            return <stop key={X} offset={(X + 6) / 12} stopColor={`rgb(${Level},${Level},${Level})`} />;
+          })}
+        </linearGradient>
+      </defs>
+      <text x={Left} y="14">BRIGHTNESS</text>
+      {[0, 0.5, 1].map((Level) => (
+        <line key={Level} x1={Left} x2={Right} y1={Py(Level)} y2={Py(Level)} stroke="#ffffff10" strokeDasharray="2 4" />
+      ))}
+      <path d={Path([...After, ...Before.slice().reverse()])} fill="#5fe0ff22" />
+      <path d={Path(Before)} fill="none" stroke="#8a8a8a" strokeWidth="1.2" strokeDasharray="3 3" />
+      <path d={Path(After)} fill="none" stroke="#5fe0ff" strokeWidth="1.7" />
+      <text x={Px(-4.5)} y={Py(0.2) + 12}>dark edge</text>
+      <text x={Px(4.5)} y={Py(0.8) - 6} textAnchor="end" className="fx-accent">bright edge</text>
+      <rect x={Left} y="126" width={Right - Left} height="12" rx="3" fill="url(#fx-edge-before)" />
+      <rect x={Left} y="142" width={Right - Left} height="12" rx="3" fill="url(#fx-edge-after)" />
+      <text x={Left - 4} y="135" textAnchor="end">before</text>
+      <text x={Left - 4} y="151" textAnchor="end">after</text>
+      <text x={Right} y="166" textAnchor="end">details under {Math.round(Threshold * 255)} / 255 are left alone</text>
+    </>
+  );
+}
+
+const Charts = {
+  "motion-blur": MotionBlurChart,
+  "heat-shimmer": HeatShimmerChart,
+  glitch: GlitchChart,
+  "chromatic-aberration": ChromaticChart,
+  "film-grain": FilmGrainChart,
+  "lens-distortion": LensDistortionChart,
+  scanlines: ScanlinesChart,
+  sharpen: SharpenChart,
+};
+
+export function EffectStudy({ Panel, Read, Assign, Active }) {
   const Drag = useRef(false);
-
-  useEffect(() => {
-    const Target = Canvas.current;
-    if (!Target) return;
-    const Context = Target.getContext("2d");
-    const Scratch = document.createElement("canvas");
-    Scratch.width = Width;
-    Scratch.height = Height;
-    const Paint = Scratch.getContext("2d", { willReadFrequently: true });
-    const Original = document.createElement("canvas");
-    Original.width = Width;
-    Original.height = Height;
-    const OriginalPaint = Original.getContext("2d");
-    const Output = Context.createImageData(Width, Height);
-    let Clock = 0, Before = performance.now(), Tick = 0, Handle = 0, Visible = true;
-    const Watch = new IntersectionObserver(([Entry]) => (Visible = Entry.isIntersecting));
-    Watch.observe(Target);
-    const Render = (Now) => {
-      Handle = requestAnimationFrame(Render);
-      const Step = Math.min(0.1, (Now - Before) / 1000);
-      if (Step < 1 / 40 && Tick > 0) return;
-      Before = Now;
-      if (!Visible && Tick > 0) return;
-      const { Read: P, Active: On } = Latest.current;
-      const { Mode: View, Split: Divide, Paused: Hold } = Settings.current;
-      if (!Hold) Clock += Step;
-      Tick++;
-      const Speed = Panel === "motion-blur" ? P("Preview speed") : 0.35;
-      const Pose = PoseAt(Clock, Speed);
-      const Chart = ChartPanels.has(Panel);
-      OriginalPaint.globalAlpha = 1;
-      PaintScene(OriginalPaint, Pose, Chart);
-      const Apply = On && View !== "original";
-      if (!Apply) {
-        Context.drawImage(Original, 0, 0);
-      } else if (Panel === "motion-blur") {
-        const Span = MotionBlurSpan(P).Span, Count = Math.max(2, Math.round(P("Samples")));
-        const Objects = P("Object motion"), Camera = P("Camera motion");
-        Paint.globalAlpha = 1;
-        for (let Index = 0; Index < Count; Index++) {
-          const Offset = Span * (Index / (Count - 1) - 0.5);
-          const Shifted = PoseAt(Clock + Offset, Speed);
-          const Mixed = {
-            Pan: Camera ? Shifted.Pan : Pose.Pan,
-            Travel: Camera ? Shifted.Travel : Pose.Travel,
-            Car: Objects ? Shifted.Car : Pose.Car,
-            Spin: Objects ? Shifted.Spin : Pose.Spin,
-          };
-          Paint.globalAlpha = 1 / (Index + 1);
-          PaintScene(Paint, Mixed, false);
-        }
-        Paint.globalAlpha = 1;
-        Context.drawImage(Scratch, 0, 0);
-      } else {
-        const Source = OriginalPaint.getImageData(0, 0, Width, Height).data;
-        Treatments[Panel]?.(Source, Output.data, P, Clock);
-        Context.putImageData(Output, 0, 0);
-      }
-      if (Apply && View === "split") {
-        const X = Math.round(Divide * Width);
-        if (X > 0) Context.drawImage(Original, 0, 0, X, Height, 0, 0, X, Height);
-      }
-      DrawOverlays(Context, Panel, P, Divide, View, On);
-      Target.dataset.tick = String(Tick);
-    };
-    Handle = requestAnimationFrame(Render);
-    return () => {
-      cancelAnimationFrame(Handle);
-      Watch.disconnect();
-    };
-  }, [Panel]);
-
-  const Move = (Event) => {
-    const Box = Canvas.current.getBoundingClientRect();
-    SetSplit(Math.min(1, Math.max(0, (Event.clientX - Box.left) / Box.width)));
+  const Lead = Headline(Panel, Read);
+  const Chart = Charts[Panel];
+  const [Integer, Fraction] = String(Lead.Whole).split(".");
+  const Pick = (Event) => {
+    if (!Lead.Drag || !Assign) return;
+    const [Key, Low, High] = Lead.Drag;
+    const Box = Event.currentTarget.getBoundingClientRect();
+    const Ratio = Clamp((Event.clientX - Box.left) / Box.width, 0, 1);
+    const Step = High - Low > 20 ? 1 : 0.01;
+    Assign(Key, +(Math.round((Low + Ratio * (High - Low)) / Step) * Step).toFixed(2));
   };
   return (
-    <section className="generic-card effect-study" data-card="Effect preview">
+    <section className="generic-card effect-study" data-card="Effect study" data-effect-study={Panel}>
       <header className="effect-study-head">
-        <h3>Effect preview</h3>
-        <span>{Active ? "Authored values · browser render" : "Disabled · showing original"}</span>
+        <h3>{Lead.Title}</h3>
+        <span>{Active ? "Authored values" : "Effect disabled"}</span>
       </header>
-      <div className={"effect-canvas-seat" + (Mode === "split" ? " is-split" : "")}>
-        <canvas
-          ref={Canvas}
-          width={Width}
-          height={Height}
+      <div className="effect-figure">
+        <span className="effect-figure-number">
+          {Integer}
+          {Fraction !== undefined && <span className="effect-figure-fraction">.{Fraction}</span>}
+        </span>
+        <small>{Lead.Unit}</small>
+      </div>
+      <div className={"effect-chart" + (Active ? "" : " is-off")}>
+        <svg
+          viewBox="0 0 320 172"
           role="img"
-          aria-label={Panel.replaceAll("-", " ") + " live preview"}
-          data-effect-preview={Panel}
+          aria-label={Lead.Title}
+          data-effect-chart={Panel}
           onPointerDown={(Event) => {
-            if (Mode !== "split") return;
             Drag.current = true;
             Event.currentTarget.setPointerCapture(Event.pointerId);
-            Move(Event);
+            Pick(Event);
           }}
-          onPointerMove={(Event) => Drag.current && Move(Event)}
+          onPointerMove={(Event) => Drag.current && Pick(Event)}
           onPointerUp={() => (Drag.current = false)}
           onPointerCancel={() => (Drag.current = false)}
-        />
-      </div>
-      <div className="effect-study-bar">
-        <div className="effect-segmented" role="radiogroup" aria-label="Preview mode">
-          {[["Effect", "effect"], ["Split", "split"], ["Original", "original"]].map(([Label, Key]) => (
-            <button key={Key} role="radio" aria-checked={Mode === Key} className={Mode === Key ? "active" : ""} onClick={() => SetMode(Key)}>
-              {Label}
-            </button>
-          ))}
-        </div>
-        <button className="effect-pause" aria-pressed={Paused} onClick={() => Pause(!Paused)}>
-          {Paused ? "Resume" : "Pause"}
-        </button>
+        >
+          {Chart && <Chart P={Read} />}
+        </svg>
       </div>
       <div className="effect-readouts">
         {Readouts(Panel, Read).map(([Label, Text]) => (
@@ -790,9 +677,7 @@ export function EffectStudy({ Panel, Read, Active }) {
           </div>
         ))}
       </div>
-      <p className="graph-note">
-        {Mode === "split" ? "Drag the divider to compare. " : ""}Procedural test scene processed with the values below; not the native renderer.
-      </p>
+      <p className="graph-note">{Lead.Caption}. Diagram of the authored values; not the native renderer.</p>
     </section>
   );
 }

@@ -102,7 +102,6 @@ try {
     "Visibility through fog",
     "Medium",
     "Height and tint",
-    "Wind binding",
   ])
     assert.equal(await Page.locator(`[data-card="${Title}"]`).count(), 1);
   assert.equal(

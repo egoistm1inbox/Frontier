@@ -166,11 +166,11 @@ try {
     await Frame()
       .locator(".mp-pill")
       .evaluateAll((Tiles) =>
-        Tiles.every((Tile) => getComputedStyle(Tile).borderRadius === "6px"),
+        Tiles.every((Tile) => getComputedStyle(Tile).borderRadius === "12px"),
       ),
   );
   Checks.push(
-    "Light-card rounding and layout remain outside this environment-only change",
+    "Light readings share the 12px theme rounding of the environment statistic cards",
   );
   assert.deepEqual(Errors, []);
   console.log("Instrument styling checks passed:", Checks.length);

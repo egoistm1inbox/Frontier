@@ -255,7 +255,8 @@ try {
   await Page.locator(".construct-categories")
     .getByRole("button", { name: "Lighting", exact: true })
     .click();
-  assert.equal(await Page.locator(".construct-entity").count(), 10);
+  // Nine reference presets, the Area Light and the Environment Light.
+  assert.equal(await Page.locator(".construct-entity").count(), 11);
   await Page.getByRole("button", { name: "LED Strip", exact: true }).click();
   const Construct = Page.frameLocator(".construct-properties iframe");
   await Construct.locator(".lp-preview").waitFor();

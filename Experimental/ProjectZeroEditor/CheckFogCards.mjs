@@ -81,7 +81,6 @@ try {
       "Visibility through fog",
       "Medium",
       Model.Technical,
-      "Wind binding",
     ])
       assert.equal(
         await Page.locator(`[data-card="${Title}"]`).count(),
@@ -100,7 +99,8 @@ try {
     }
     assert.equal(
       await Page.getByRole("button", { name: "Follow Wind", exact: true }).count(),
-      Model.Id === "local-fog" ? 1 : 0,
+      0,
+      `${Model.Id} has no wind binding`,
     );
     assert.equal(
       await Page.getByLabel("Colour value", { exact: true }).count(),

@@ -114,15 +114,23 @@
 .primitive-inspector .pi-quick-tile.on {
   color: var(--pi-ink);
 }
+/* The badge alone tells the state: green and lit when on, grey and dim when off. */
 .primitive-inspector .pi-quick-tile > .pi-status-icon {
-  width: 24px;
-  height: 24px;
+  width: 38px;
+  height: 38px;
+  transition:
+    background 160ms ease,
+    color 160ms ease,
+    box-shadow 160ms ease;
 }
-.primitive-inspector .pi-quick-foot {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
+.primitive-inspector .pi-quick-tile.on > .pi-status-icon {
+  box-shadow: 0 0 0 4px #2fd27a1f, 0 0 18px #2fd27a33;
+}
+.primitive-inspector .pi-quick-tile:not(.on) > .pi-status-icon {
+  opacity: 0.7;
+}
+.primitive-inspector .pi-quick-tile:not(.on) .pi-quick-label {
+  color: var(--pi-faint);
 }
 .primitive-inspector .pi-quick-label {
   font-size: 12px;
@@ -133,15 +141,6 @@
   overflow: hidden;
   text-overflow: ellipsis;
   min-width: 0;
-}
-.primitive-inspector .pi-quick-status {
-  font-size: 26px;
-  line-height: 1;
-  font-weight: 200;
-  letter-spacing: -0.8px;
-}
-.primitive-inspector .pi-quick-tile:not(.on) .pi-quick-status {
-  color: var(--pi-faint);
 }
 
 /* ── Carousel ───────────────────────────────────────────────────────────────────────────────────────────────────── */
@@ -793,88 +792,42 @@
 }
 
 /* ── Origin picker ─────────────────────────────────────────────────────────────────────────────────────────────── */
-.primitive-inspector .pi-origin {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-.primitive-inspector .pi-pivot-grid {
-  flex: none;
-  display: grid;
-  grid-template-columns: repeat(3, 28px);
-  gap: 4px;
-  padding: 6px;
-  border-radius: 16px;
-  background: #121212;
-  border: 1px dashed #3a3a3a;
-}
-.primitive-inspector .pi-pivot-grid button {
-  width: 28px;
-  height: 28px;
-  min-height: 0;
-  padding: 0;
-  border-radius: 9px;
-  border: none;
-  background: transparent;
-}
-.primitive-inspector .pi-pivot-grid button > span {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #4a4a4a;
-  transition: all 160ms ease;
-}
-.primitive-inspector .pi-pivot-grid button:hover > span {
-  background: #8a8a8a;
-}
-.primitive-inspector .pi-pivot-grid button.active {
-  background: #ffc93d22;
-}
-.primitive-inspector .pi-pivot-grid button.active > span {
-  width: 11px;
-  height: 11px;
-  background: #ffc93d;
-  box-shadow: 0 0 0 3px #ffc93d33;
-}
-.primitive-inspector .pi-origin-readout {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-}
-.primitive-inspector .pi-origin-readout span {
-  font-size: 10px;
-  letter-spacing: 0.8px;
-  text-transform: uppercase;
-  color: var(--pi-faint);
-}
-.primitive-inspector .pi-origin-readout b {
-  font-size: 20px;
-  font-weight: 200;
-  letter-spacing: -0.4px;
-  white-space: pre;
-  font-variant-numeric: tabular-nums;
-}
-.primitive-inspector .pi-origin-readout small {
-  font-size: 10px;
-  color: var(--pi-soft);
-}
-.primitive-inspector .pi-actions {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 6px;
-}
-.primitive-inspector .pi-actions button {
-  min-height: 32px;
-  padding: 4px 10px;
-  border-radius: 99px;
-  font-size: 11px;
-  background: var(--pi-raised);
-  border: 1px solid var(--pi-line);
-}
-.primitive-inspector .pi-actions button:hover {
-  background: #2c2c2c;
-}
 .primitive-inspector button:disabled {
   cursor: default;
+}
+
+/* Study cards (Simulation, Mass, Shading): big reading, a diagram on a dark inset, a caption, then controls —
+   the same composition as the camera lens cards. */
+.primitive-inspector .pi-study {
+  border-radius: 18px;
+  background: #161616;
+  border: 1px solid #ffffff0a;
+  padding: 10px 8px 6px;
+  line-height: 0;
+}
+.primitive-inspector .pi-study-svg {
+  width: 100%;
+  height: auto;
+  display: block;
+  overflow: visible;
+}
+.primitive-inspector .pi-study-svg text {
+  font:
+    8px "DM Sans",
+    sans-serif;
+  fill: #7a7a7a;
+  letter-spacing: 0.2px;
+}
+.primitive-inspector .pi-study-svg text.pi-study-accent {
+  fill: #cfcfcf;
+}
+.primitive-inspector .pi-study-svg text.pi-study-dark {
+  fill: #111;
+  font-weight: 600;
+}
+.primitive-inspector .pi-study-note {
+  margin: -2px 0 0;
+  font-size: 10px;
+  line-height: 1.5;
+  color: var(--pi-faint);
 }

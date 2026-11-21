@@ -332,58 +332,16 @@ try {
     name: "Close WindEditor",
     exact: true,
   }).click();
-  await Select("Clouds");
-  await Page.getByLabel("Cloud wind field", { exact: true }).selectOption(
-    SecondId,
-  );
-  assert.equal((await Saved()).Values.clouds.WindFieldId, SecondId);
-  await Page.locator('[data-card="Wind binding"]').scrollIntoViewIfNeeded();
-  await Page.getByRole("button", {
-    name: "Edit wind field ↗",
-    exact: true,
-  }).click();
-  assert.equal(
-    await Dialog.getByLabel("Edited wind field", { exact: true }).inputValue(),
-    SecondId,
-  );
-  await Dialog.getByLabel("Component Strength (m/s)", { exact: true }).fill(
-    "9.5",
-  );
-  await Page.keyboard.press("Tab");
-  assert.equal(
-    (await Saved()).Values[SecondId].WindField.Components[0].Strength,
-    9.5,
-  );
-  assert.equal(
-    (await Saved()).Values.clouds.WindField,
-    undefined,
-    "Editing a bound field must not write components to the cloud",
-  );
-  await Dialog.getByRole("button", {
-    name: "Close WindEditor",
-    exact: true,
-  }).click();
-  await Page.getByRole("button", { name: "Follow Wind", exact: true }).click();
-  assert.equal(
-    await Page.locator(".wind-binding canvas").getAttribute("data-active"),
-    "false",
-  );
-  await Page.getByRole("button", { name: "Follow Wind", exact: true }).click();
-  await Page.locator('[data-card="Wind binding"]').scrollIntoViewIfNeeded();
-  await Page.screenshot({ path: Proof + "/CloudWindBinding.png" });
-  await Select("Local Cloud");
-  await Page.getByLabel("Cloud wind field", { exact: true }).selectOption(
-    "wind",
-  );
-  assert.equal((await Saved()).Values["local-cloud"].WindFieldId, "wind");
+  // Follow-up 33: clouds, local clouds and fogs no longer carry a wind field binding or a Follow Wind control.
+  for (const Name of ["Clouds", "Local Cloud", "Height Fog", "Atmospheric Fog", "Local Fog"]) {
+    await Select(Name);
+    assert.equal(await Page.getByLabel("Cloud wind field", { exact: true }).count(), 0, Name);
+    assert.equal(await Page.locator('[data-card="Wind binding"],.wind-binding').count(), 0, Name);
+    assert.equal(await Page.getByRole("button", { name: "Follow Wind", exact: true }).count(), 0, Name);
+  }
   // Single-file page: "networkidle" is unreliable while the font CDN is unreachable.
   await Page.reload({ waitUntil: "load" });
   await Page.locator(".outliner-row").first().waitFor();
-  await Select("Clouds");
-  assert.equal(
-    await Page.getByLabel("Cloud wind field", { exact: true }).inputValue(),
-    SecondId,
-  );
   await Select("Wind");
   await Page.getByRole("button", {
     name: "Expand WindEditor",
@@ -410,24 +368,16 @@ try {
       "Expand WindEditor",
   );
   Checks.push(
-    "Multiple independent wind fields, global/local cloud binding, reload persistence, Escape and 1024/1280/1366/1920 layouts",
+    "Multiple independent wind fields, reload persistence, Escape and 1024/1280/1366/1920 layouts",
   );
   await Select("Valley wind");
   await Page.locator(".outliner-row.selected").click({ button: "right" });
   await Page.getByRole("menu")
     .getByRole("button", { name: "Remove from HTML scene", exact: true })
     .click();
-  await Select("Clouds");
-  assert.match(
-    await Page.getByLabel("Cloud wind field", { exact: true })
-      .locator("option:checked")
-      .innerText(),
-    /Missing field/,
-  );
-  await Page.getByLabel("Cloud wind field", { exact: true }).selectOption("");
-  assert.equal(await Page.locator(".wind-binding canvas").count(), 0);
+  assert.equal(await Page.locator(".outliner-row", { hasText: "Valley wind" }).count(), 0);
   Checks.push(
-    "Cloud-bound editor ownership, Follow Wind gating, missing-field handling and explicit still-air selection",
+    "Clouds, Local Cloud and all three fogs carry no wind binding, field picker or Follow Wind tile; extra wind fields remove cleanly",
   );
   assert.deepEqual(Errors, []);
 } catch (Error) {

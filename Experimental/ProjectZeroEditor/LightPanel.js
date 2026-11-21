@@ -4,6 +4,7 @@
 // 📦 Type-specific browser light instruments with live emission and aperture illustrations.
 
 import { LightIcons } from "./LightSpecification.js";
+import { LightGlyphSource, PresetGlyphs } from "./LightGlyphs.js";
 import { ProjectLight, ProjectResponse } from "./LightProjection.js";
 import { MountLightTransform } from "./EmitterPanel.jsx";
 import { el } from "./InspectorDepot/kit.js";
@@ -169,7 +170,9 @@ export function LightPanel(Subject, Context) {
   );
   const Glyph = el("span", "lp-source-icon");
   const SourceIcon = el("img");
-  SourceIcon.src = __LIGHT_ICONS__[LightIcons[Style]];
+  SourceIcon.src =
+    LightGlyphSource(PresetGlyphs[Subject.name]) ||
+    __LIGHT_ICONS__[LightIcons[Style]];
   SourceIcon.alt = "";
   Glyph.append(SourceIcon);
   Preview.querySelector("header").prepend(Glyph);

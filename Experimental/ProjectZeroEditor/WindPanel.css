@@ -53,14 +53,6 @@
   margin-top: 12px;
   padding: 12px !important;
 }
-.wind-binding select {
-  display: block;
-  width: 100%;
-  margin: 10px 0 18px;
-}
-.wind-binding canvas {
-  height: 180px;
-}
 .entity-capabilities .tiles {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -391,7 +383,4 @@
 }
 .entity-capabilities .quick-tile .quick-icon-seat {
   border-radius: 50%;
-}
-.wind-binding > .wind-wide-button {
-  margin-bottom: 14px;
 }

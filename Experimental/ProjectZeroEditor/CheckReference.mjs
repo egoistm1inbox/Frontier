@@ -106,15 +106,14 @@ try {
             "Visibility through fog",
             "Medium",
             "Height and tint",
-            "Wind binding",
           ],
         );
       }
       if (Id === "lighting") {
-        assert(Actual.Headings.includes("Browse contents 10 matches"));
+        assert(Actual.Headings.includes("Browse contents 11 matches"));
         Expected.Headings = Expected.Headings.map((Heading) =>
           Heading === "Browse contents 7 matches"
-            ? "Browse contents 10 matches"
+            ? "Browse contents 11 matches"
             : Heading,
         );
       }

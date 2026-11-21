@@ -36,6 +36,7 @@ export function QuickSymbol(Label, Context = "", Fallback = "visible") {
         "local-fog": "fog",
         precipitation: "rain",
         rainbow: "rainbow",
+        "environment-light": "sunlight",
       }[Context] || "visible"
     );
   return Named[Label] || Fallback;
