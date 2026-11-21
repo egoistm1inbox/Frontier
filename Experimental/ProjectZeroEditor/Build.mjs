@@ -116,6 +116,11 @@ if (SourceAssets.every((Entry) => fs.existsSync(path.join(Frontier, Entry)))) {
     ShaderBall: Embedded.ShaderBall,
     Notices: Embedded.Notices,
   };
+  // Icons added to the repository since the embedded copy was made still ship, even without the other sources.
+  const IconFolder = path.join(Frontier, "EngineContent/Icons");
+  if (fs.existsSync(IconFolder))
+    for (const File of fs.readdirSync(IconFolder).filter((Name) => Name.endsWith(".svg")))
+      Assets.Icons[File.slice(0, -4)] ??= "data:image/svg+xml;base64," + fs.readFileSync(path.join(IconFolder, File)).toString("base64");
 }
 
 // Preserve the reference's document-wide CSS and control behaviour without restyling the current editor.

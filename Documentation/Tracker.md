@@ -1303,6 +1303,13 @@ in `Exhibits/LightCompute/Results/FogFacetRegression.txt`; this was a fixture-se
   figures) → Mount (side-view marker; position feeds spring dive / squat; outliner summary names the spot). New
   `CheckVehicleSockets.mjs` (8 checks) passes; InspectorOrder (109) and EntityContext pass; Construction still fails at its pre-existing
   step. Names unapproved.
+  Follow-up 37: per-camera **Render settings** (ported from unassignedinbox/Frontier `arena/28ada475-frontier`: engine, master quality,
+  shadows, GI, reflections, exposure / resolution / edge AA) as a Quality / Lighting / Output section with its own icon on every camera,
+  stored on that camera only. Primitives gain **UV preview** and **Fracture preview** cards that open the full workspaces, and two new
+  workspaces: **SDF Bake** (Geometry Compiler `SparseSdfBaker`, slice view, probe, `.fvol` export) and **LOD Clusters** (`ClusterHierarchy`
+  DAG, distance-driven cut, OBJ export). New `CheckRenderSettings.mjs` (6) and `CheckVolumeWorkspaces.mjs` (4) pass; InspectorOrder,
+  SharedCards, InspectorLayout, EntityContext, InstrumentStyle, FogCards, LightDesign, VehicleSockets, WorkspaceCards pass. Browser draft;
+  no renderer connected. Names unapproved.
   Follow-up 35: in-place UV and Fracture edit workspaces for showcase primitives (`Workspaces.jsx`, `WorkspaceGeometry.js`; the viewport
   isolates the object, the inspector switches workspaces, Esc/Leave/Done exit), replacing the pop-out fracture window; Vehicle outliner
   folder (`VehicleComponents.jsx`: Vehicle Movement, Body, three sockets, two collisions, two lights, built from ComponentViewer

@@ -49,6 +49,23 @@ starting point for the UI redesign.
 
 ---
 
+## Follow-up 37: render settings per camera, preview cards, SDF Bake and LOD Clusters
+
+- **Render settings** (`RenderSettings.js`, `RenderSettingsCards.jsx`, `RenderSettings.css`, icon `EngineContent/Icons/render-settings.svg`):
+  every camera (Editor, Cine, and any placed from Construct) carries its own copy of the render settings ported from
+  unassignedinbox/Frontier `arena/28ada475-frontier`. The section has summary chips, a Reset button and three tabs:
+  - **Quality**: engine (OpenPBR / GTX / BVH4 / path tracer), master quality ladder, sample budget.
+  - **Lighting**: shadows (algorithm, preset, map size, PCSS taps, contact rays), GI, reflections, each with a small study drawing.
+  - **Output**: exposure gain, resolution scale, edge anti-aliasing.
+  The source rules are kept: the engine pick sets the GI algorithm, the shadow preset sets rays / taps / map size, and reflection quality sets bounces.
+- **UV preview** and **Fracture preview** cards (`WorkspacePreviews.jsx`) sit in the primitive inspector: the UDIM tile with islands and
+  usage, or the fracture summary (pieces, energy, sizes, storage). Each has a button that opens the full workspace.
+- **SDF Bake** workspace (`SdfWorkspace.jsx`): bakes the primitive with the Geometry Compiler's `SparseSdfBaker` (resolution, padding,
+  narrow band), shows a slice you can move and probe, the brick count, pruning and size, and exports `.fvol`.
+- **LOD Clusters** workspace (`ClusterWorkspace.jsx`): Nanite-style cluster DAG from `ClusterHierarchy.js`, a level table with errors,
+  a camera-distance cut that shows which clusters draw, and welded OBJ export per level.
+- Checks: `CheckRenderSettings.mjs` (6) and `CheckVolumeWorkspaces.mjs` (4).
+
 ## Follow-up 35: edit workspaces, Vehicle folder, IES authoring
 
 - **Edit workspaces** (`Workspaces.jsx`, `WorkspaceGeometry.js`, `Workspaces.css`): showcase primitives now have **UV** and **Fracture**

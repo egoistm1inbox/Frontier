@@ -372,3 +372,119 @@
   background: var(--k);
   flex: none;
 }
+
+/* Follow-up 37: preview cards in the primitive inspector and the two volume workspaces. */
+.ws-tabs {
+  flex-wrap: wrap;
+}
+.ws-tabs button {
+  flex: 1 1 calc(50% - 3px);
+}
+.ws-preview-canvas {
+  display: block;
+  width: 100%;
+  margin: 14px 0 10px;
+  padding: 0;
+  border-radius: 14px;
+  border: 1px solid #ffffff0a;
+  background: #161616;
+  cursor: pointer;
+  overflow: hidden;
+}
+.ws-preview-canvas:hover:not(:disabled) {
+  border-color: #ffffff24;
+}
+.ws-preview-canvas:disabled {
+  cursor: default;
+}
+.ws-preview-canvas .ws-surface {
+  pointer-events: none;
+  cursor: inherit;
+}
+.ws-preview-uv {
+  height: 200px;
+}
+.ws-preview-fracture {
+  height: 210px;
+}
+.ws-udims {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.ws-udims span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 7px 8px;
+  border-radius: 10px;
+  background: #1c1c1c;
+  border: 1px solid #ffffff0a;
+  color: #6f6f6f;
+}
+.ws-udims span.on {
+  background: #262626;
+  border-color: #ffffff1c;
+  color: #d6d6d6;
+}
+.ws-udims b {
+  font-size: 11px;
+  font-weight: 500;
+}
+.ws-udims small {
+  font-size: 9px;
+  color: #8a8a8a;
+}
+.ws-actions .ws-open {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: #e6e6e6;
+  background: #2e2e2e;
+  border-color: #ffffff1c;
+}
+.ws-level-table {
+  display: grid;
+  grid-template-columns: auto 1fr 1fr 1fr;
+  gap: 4px 10px;
+  margin: 10px 0 4px;
+  font-size: 10px;
+  color: #b3b3b3;
+  font-variant-numeric: tabular-nums;
+}
+.ws-level-table b {
+  font-weight: 500;
+  color: #7f7f7f;
+  font-size: 9px;
+  letter-spacing: 0.4px;
+}
+.ws-level-table span:nth-child(4n + 1) {
+  color: #e0e0e0;
+}
+.ws-level-table .cut {
+  color: #ffc785;
+}
+.ws-bake-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: #cfcfcf;
+}
+.ws-bake-status i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #6a6a6a;
+}
+.ws-bake-status[data-status="ready"] i {
+  background: #95c3ad;
+}
+.ws-bake-status[data-status="stale"] i {
+  background: #edc181;
+}
+.ws-surface.ws-slice {
+  cursor: crosshair;
+}

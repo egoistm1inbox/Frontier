@@ -2,8 +2,8 @@
 //                                                              WORKSPACES.JSX
 //============================================================================================================================================
 // 🧰 Edit-mode workspaces. Instead of a dedicated editor window per tool, the selection is isolated in the viewport and the tool works on
-// it there, with its controls in the inspector. UV (unwrap, islands, checker) and Fracture (recipe, impact, pieces) are the first two;
-// further workspaces register in `WorkspaceTools`. Browser authoring only; the native renderer is not connected.
+// it there, with its controls in the inspector. UV (unwrap, islands, checker), Fracture (recipe, impact, pieces), SDF Bake (sparse
+// distance field, slices) and LOD Clusters (cluster DAG, error cut) register in `WorkspaceTools`. Browser authoring only; the native renderer is not connected.
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { unwrapCharts, packCharts, cornerUvs, layoutStatistics } from "../GeometryCompiler/Engine/UvCharts.js";
@@ -26,79 +26,21 @@ import {
 } from "../FractureEditor/FractureModel.js";
 import { PrimitiveSurface, OrbitView, PaintPolygons, TexturedTriangle, CheckerTexture, Normal } from "./WorkspaceGeometry.js";
 import { ShapeOf } from "./PrimitiveInspector.jsx";
+import { Surface, useOrbit, Download, Hue, Clamp, GeometryKeys } from "./WorkspaceSurface.jsx";
+import { SdfView, SdfPanel } from "./SdfWorkspace.jsx";
+import { ClusterView, ClusterPanel } from "./ClusterWorkspace.jsx";
 import "./Workspaces.css";
 
 export const WorkspaceTools = [
   { Tool: "uv", Name: "UV", Caption: "Unwrap islands, move and pack them; the object shows the checker." },
   { Tool: "fracture", Name: "Fracture", Caption: "Shatter with a recipe; click the object to place the impact." },
+  { Tool: "sdf", Name: "SDF Bake", Caption: "Bake a sparse signed distance field from the surface and read it slice by slice." },
+  { Tool: "lod", Name: "LOD Clusters", Caption: "Split the surface into clusters, simplify them into a level DAG and pick a cut by screen error." },
 ];
-const Hue = (Index) => (Index * 137.508) % 360;
-const Clamp = (Amount, Minimum, Maximum) => Math.max(Minimum, Math.min(Maximum, Amount));
-
-function Download(Name, Text, Type = "text/plain") {
-  const Link = document.createElement("a");
-  Link.href = URL.createObjectURL(new Blob([Text], { type: Type }));
-  Link.download = Name;
-  Link.click();
-  setTimeout(() => URL.revokeObjectURL(Link.href), 2000);
-}
-
-// A canvas that repaints on size change and hands the painter CSS-pixel dimensions.
-function Surface({ Paint, Label, Class = "", Handlers = {}, Deps = [] }) {
-  const Ref = useRef(null);
-  const PaintRef = useRef(Paint);
-  PaintRef.current = Paint;
-  const Draw = () => {
-    const Canvas = Ref.current;
-    if (!Canvas) return;
-    const Width = Canvas.clientWidth || 300, Height = Canvas.clientHeight || 300, Ratio = Math.min(devicePixelRatio || 1, 2);
-    if (Canvas.width !== Math.round(Width * Ratio) || Canvas.height !== Math.round(Height * Ratio)) {
-      Canvas.width = Math.round(Width * Ratio);
-      Canvas.height = Math.round(Height * Ratio);
-    }
-    const Brush = Canvas.getContext("2d");
-    Brush.setTransform(Ratio, 0, 0, Ratio, 0, 0);
-    Brush.clearRect(0, 0, Width, Height);
-    PaintRef.current(Brush, Width, Height);
-  };
-  useEffect(() => {
-    const Observer = new ResizeObserver(Draw);
-    Observer.observe(Ref.current);
-    return () => Observer.disconnect();
-  }, []);
-  useEffect(Draw);
-  return <canvas ref={Ref} className={"ws-surface " + Class} role="img" aria-label={Label} {...Handlers} />;
-}
-
-// Orbit + click handling shared by both stages: drag turns the view, a click without movement is passed to `Pick`.
-function useOrbit(Workspace, SetWorkspace) {
-  const Drag = useRef(null);
-  return {
-    onPointerDown: (Event) => {
-      Drag.current = { X: Event.clientX, Y: Event.clientY, Yaw: Workspace.Yaw ?? 0.7, Pitch: Workspace.Pitch ?? 0.45, Moved: false };
-      Event.currentTarget.setPointerCapture(Event.pointerId);
-    },
-    onPointerMove: (Event) => {
-      const Start = Drag.current;
-      if (!Start) return;
-      const Dx = Event.clientX - Start.X, Dy = Event.clientY - Start.Y;
-      if (Math.hypot(Dx, Dy) > 3) Start.Moved = true;
-      if (Start.Moved) SetWorkspace((Previous) => ({ ...Previous, Yaw: Start.Yaw + Dx * 0.01, Pitch: Clamp(Start.Pitch + Dy * 0.01, -1.45, 1.45) }));
-    },
-    onWheel: (Event) => SetWorkspace((Previous) => ({ ...Previous, Zoom: Clamp((Previous.Zoom ?? 1) * (Event.deltaY > 0 ? 0.9 : 1.1), 0.4, 4) })),
-    End: (Event, Pick) => {
-      const Start = Drag.current;
-      Drag.current = null;
-      if (Start && !Start.Moved && Pick) Pick(Event);
-    },
-  };
-}
-
 //------------------------------------------------------------------------------------------------------------------------
 //                                                   UV
 //------------------------------------------------------------------------------------------------------------------------
 
-const GeometryKeys = ["Geometry Size X", "Geometry Size Y", "Geometry Size Z", "Geometry Radius", "Geometry Height", "Geometry Segments", "Geometry Rings", "Geometry Major Radius", "Geometry Minor Radius", "Geometry Sides", "Geometry Caps"];
 
 // The unwrap for the selection, with any island edits stored in Values["UV Layout"] re-applied when the mesh has not changed since.
 export function useUvLayout(Subject, Values) {
@@ -383,18 +325,15 @@ const OwnerOf = (Subject, Values) => ({
     return Number.isFinite(Amount) ? Math.min(1000, Math.max(0.001, Amount)) : 1;
   }),
 });
-function useShatter(Subject, Values) {
+export function useShatter(Subject, Values) {
   const Owner = OwnerOf(Subject, Values);
   const Settings = NormalizeRecipe(Values.Fracture);
   const Key = RecipeSignature(Owner, Settings) + Settings.Enabled;
   return { Owner, Settings, Result: useMemo(() => (Settings.Enabled ? Shatter(Owner, Settings) : Intact(Owner)), [Key]) };
 }
 
-function FractureView({ Subject, Values, Change, Workspace, SetWorkspace }) {
-  const { Owner, Settings, Result } = useShatter(Subject, Values);
-  const Orbit = useOrbit(Workspace, SetWorkspace);
-  const Explode = Workspace.Explode ?? 0.25;
-  const Last = useRef({ Drawn: [], View: null });
+// Exploded pieces with the impact rings; shared by the fracture workspace and the inspector's preview card.
+export function PaintFracture(Brush, Width, Height, { Owner, Settings, Result, Yaw = 0.7, Pitch = 0.45, Zoom = 1, Explode = 0.25 }) {
   const Tone = MATERIAL[Settings.Material]?.tone || "#a29d94";
   const Radius = Math.hypot(...Owner.Scale) / 2;
   const Offset = (Cell) => {
@@ -402,56 +341,63 @@ function FractureView({ Subject, Values, Change, Workspace, SetWorkspace }) {
     const Length = Math.hypot(...D) || 1;
     return D.map((Each) => (Each / Length) * Explode * Radius * (0.4 + Length / Radius));
   };
-  const Paint = (Brush, Width, Height) => {
-    const View = OrbitView({ Yaw: Workspace.Yaw ?? 0.7, Pitch: Workspace.Pitch ?? 0.45, Radius: Radius * (1 + Explode * 0.9), Width, Height, Zoom: Workspace.Zoom ?? 1 });
-    const Polygons = [];
-    const Biggest = Math.max(...Result.cells.map((Cell) => Cell.size)) || 1;
-    Result.cells.forEach((Cell, Index) => {
-      const Shift = Settings.Enabled ? Offset(Cell) : [0, 0, 0];
-      for (const Face of Cell.faces) {
-        if (Face.pts.length < 3) continue;
-        const Points = Face.pts.map((Point) => [Point[0] + Shift[0], Point[1] + Shift[1], Point[2] + Shift[2]]);
-        Polygons.push({
-          Points,
-          Normal: Normal(Face.pts[0], Face.pts[1], Face.pts[2]),
-          Cell: Index,
-          Face,
-          Shift,
-          Paint: (B, Screen, Lit) => {
-            B.beginPath();
-            Screen.forEach(([X, Y], Slot) => (Slot ? B.lineTo(X, Y) : B.moveTo(X, Y)));
-            B.closePath();
-            const Inner = Face.kind === "inner";
-            const Size = Cell.size / Biggest;
-            const Light = Math.round((Inner ? 70 : 40 + Cell.shade * 14 + Size * 10) * Lit);
-            B.fillStyle = Inner ? `hsl(28 30% ${Light}%)` : Tone;
+  const View = OrbitView({ Yaw, Pitch, Radius: Radius * (1 + Explode * 0.9), Width, Height, Zoom });
+  const Polygons = [];
+  const Biggest = Math.max(...Result.cells.map((Cell) => Cell.size)) || 1;
+  Result.cells.forEach((Cell, Index) => {
+    const Shift = Settings.Enabled ? Offset(Cell) : [0, 0, 0];
+    for (const Face of Cell.faces) {
+      if (Face.pts.length < 3) continue;
+      const Points = Face.pts.map((Point) => [Point[0] + Shift[0], Point[1] + Shift[1], Point[2] + Shift[2]]);
+      Polygons.push({
+        Points,
+        Normal: Normal(Face.pts[0], Face.pts[1], Face.pts[2]),
+        Cell: Index,
+        Face,
+        Shift,
+        Paint: (B, Screen, Lit) => {
+          B.beginPath();
+          Screen.forEach(([X, Y], Slot) => (Slot ? B.lineTo(X, Y) : B.moveTo(X, Y)));
+          B.closePath();
+          const Inner = Face.kind === "inner";
+          const Size = Cell.size / Biggest;
+          const Light = Math.round((Inner ? 70 : 40 + Cell.shade * 14 + Size * 10) * Lit);
+          B.fillStyle = Inner ? `hsl(28 30% ${Light}%)` : Tone;
+          B.fill();
+          if (!Inner) {
+            B.fillStyle = `rgba(0,0,0,${(1 - Lit) * 0.7 + (1 - Size) * 0.12})`;
             B.fill();
-            if (!Inner) {
-              B.fillStyle = `rgba(0,0,0,${(1 - Lit) * 0.7 + (1 - Size) * 0.12})`;
-              B.fill();
-            }
-            B.strokeStyle = Inner ? "#00000055" : "#00000080";
-            B.lineWidth = 0.7;
-            B.stroke();
-          },
-        });
-      }
-    });
-    Last.current.Drawn = PaintPolygons(Brush, View, Polygons);
-    Last.current.View = View;
-    // Impact marker.
-    if (Settings.Enabled) {
-      const [X, Y] = View.Project(Result.impact);
-      Brush.strokeStyle = "#ffb15a";
-      Brush.lineWidth = 1.5;
-      for (const Ring of [5, 10, 16]) {
-        Brush.globalAlpha = 1 - Ring / 20;
-        Brush.beginPath();
-        Brush.arc(X, Y, Ring, 0, Math.PI * 2);
-        Brush.stroke();
-      }
-      Brush.globalAlpha = 1;
+          }
+          B.strokeStyle = Inner ? "#00000055" : "#00000080";
+          B.lineWidth = 0.7;
+          B.stroke();
+        },
+      });
     }
+  });
+  const Drawn = PaintPolygons(Brush, View, Polygons);
+  // Impact marker.
+  if (Settings.Enabled) {
+    const [X, Y] = View.Project(Result.impact);
+    Brush.strokeStyle = "#ffb15a";
+    Brush.lineWidth = 1.5;
+    for (const Ring of [5, 10, 16]) {
+      Brush.globalAlpha = 1 - Ring / 20;
+      Brush.beginPath();
+      Brush.arc(X, Y, Ring, 0, Math.PI * 2);
+      Brush.stroke();
+    }
+    Brush.globalAlpha = 1;
+  }
+  return { Drawn, View };
+}
+
+function FractureView({ Subject, Values, Change, Workspace, SetWorkspace }) {
+  const { Owner, Settings, Result } = useShatter(Subject, Values);
+  const Orbit = useOrbit(Workspace, SetWorkspace);
+  const Last = useRef({ Drawn: [], View: null });
+  const Paint = (Brush, Width, Height) => {
+    Last.current = PaintFracture(Brush, Width, Height, { Owner, Settings, Result, Yaw: Workspace.Yaw ?? 0.7, Pitch: Workspace.Pitch ?? 0.45, Zoom: Workspace.Zoom ?? 1, Explode: Workspace.Explode ?? 0.25 });
   };
   // Click: front-most face under the pointer, then the ray/plane hit in the object's unexploded space.
   const Pick = (Event) => {
@@ -587,7 +533,7 @@ export function WorkspaceView(Props) {
           Leave <kbd>Esc</kbd>
         </button>
       </div>
-      {Workspace.Tool === "uv" ? <UvView {...Props} /> : <FractureView {...Props} />}
+      {Workspace.Tool === "uv" ? <UvView {...Props} /> : Workspace.Tool === "sdf" ? <SdfView {...Props} /> : Workspace.Tool === "lod" ? <ClusterView {...Props} /> : <FractureView {...Props} />}
     </div>
   );
 }
@@ -611,7 +557,7 @@ export function WorkspacePanel(Props) {
           ))}
         </div>
       </section>
-      {Workspace.Tool === "uv" ? <UvPanel {...Props} /> : <FracturePanelBody {...Props} />}
+      {Workspace.Tool === "uv" ? <UvPanel {...Props} /> : Workspace.Tool === "sdf" ? <SdfPanel {...Props} /> : Workspace.Tool === "lod" ? <ClusterPanel {...Props} /> : <FracturePanelBody {...Props} />}
     </div>
   );
 }
@@ -636,10 +582,23 @@ export function WorkspaceLauncher({ Open }) {
   );
 }
 
-function WorkspaceGlyph({ Tool }) {
+export function WorkspaceGlyph({ Tool, Size = 16 }) {
   return (
-    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      {Tool === "uv" ? (
+    <svg viewBox="0 0 24 24" width={Size} height={Size} aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      {Tool === "sdf" ? (
+        <>
+          <circle cx="12" cy="12" r="3.2" />
+          <circle cx="12" cy="12" r="6.4" opacity="0.6" />
+          <circle cx="12" cy="12" r="9.4" opacity="0.32" />
+        </>
+      ) : Tool === "lod" ? (
+        <>
+          <rect x="9" y="3.5" width="6" height="4.5" rx="1.2" />
+          <rect x="4" y="11" width="6" height="4" rx="1.1" opacity="0.8" />
+          <rect x="14" y="11" width="6" height="4" rx="1.1" opacity="0.8" />
+          <path d="M12 8v1.6M7 11V9.6h10V11M3.5 18.5h3M8.5 18.5h3M12.5 18.5h3M17.5 18.5h3" opacity="0.55" />
+        </>
+      ) : Tool === "uv" ? (
         <>
           <rect x="4" y="4" width="16" height="16" rx="3.5" />
           <path d="M4 12h16M12 4v16" opacity="0.55" />

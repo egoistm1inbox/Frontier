@@ -1065,7 +1065,7 @@ function WireStudy({ Shape, Read, Scale, Size }) {
 
 // Geometry page from the editor's own building blocks: property cards (Kit.Card), the split-value pill slider and
 // switches (Kit.Control) and the large metric (Kit.Metric), so it matches every other inspector.
-function GeometryPage({ Shape, Read, Change, Values, Size, Kit }) {
+function GeometryPage({ Shape, Read, Change, Values, Size, Kit, Previews = null }) {
   const { Card: PropertyCard, Control, Metric } = Kit;
   const Primitive = Shapes[Shape];
   const Locked = !!Values.LOCKED;
@@ -1116,6 +1116,7 @@ function GeometryPage({ Shape, Read, Change, Values, Size, Kit }) {
         {Readout("Surface area", Fixed(Size.Area) + " m²")}
         {Readout("Volume", Fixed(Size.Volume, 3) + " m³")}
       </PropertyCard>
+      {Previews}
       <PropertyCard Title="Shading" Class="pi-shading-card">
         <Metric
           Value={Shading === "auto" ? Fixed(Threshold, 0) : Shading === "flat" ? String(Points.length) : "1"}
@@ -1242,7 +1243,7 @@ function Carousel({ Pages }) {
 //                                                    INSPECTOR
 //------------------------------------------------------------------------------------------------------------------------
 
-export default function PrimitiveInspector({ Subject, Values, Change, Hidden, ToggleHidden, MaterialCards, FractureCards, Kit, Launcher = null }) {
+export default function PrimitiveInspector({ Subject, Values, Change, Hidden, ToggleHidden, MaterialCards, FractureCards, GeometryCards = null, Kit, Launcher = null }) {
   const Shape = ShapeOf(Subject);
   const Read = (Key, Initial) => (Values[Key] === undefined ? Initial : Values[Key]);
   const Size = Measure(Shape, Read, Array.isArray(Values.Scale) ? Values.Scale : [1, 1, 1]);
@@ -1255,7 +1256,7 @@ export default function PrimitiveInspector({ Subject, Values, Change, Hidden, To
         Pages={{
           overview: <OverviewPage {...Shared} />,
           physics: <PhysicsPage {...Shared} />,
-          geometry: <GeometryPage {...Shared} />,
+          geometry: <GeometryPage {...Shared} Previews={GeometryCards} />,
           material: MaterialCards,
           fracture: FractureCards,
         }}

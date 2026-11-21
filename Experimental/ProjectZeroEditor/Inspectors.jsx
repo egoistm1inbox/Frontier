@@ -4,6 +4,8 @@ import { FogBeamChamber } from "./FogPanel.jsx";
 import HeightFogVisual from "./HeightFogVisual.jsx";
 import { HeightFogLayer, FogLightStudy, AerialRidges } from "./FogCards.jsx";
 import FracturePanel from "./FracturePanel.jsx";
+import RenderSettingsCards from "./RenderSettingsCards.jsx";
+import { UvPreviewCard, FracturePreviewCard } from "./WorkspacePreviews.jsx";
 import AtmosphereLab, { AtmosphereProfile } from "./AtmosphereLab.jsx";
 import {
   GraphContext,
@@ -696,13 +698,29 @@ export function Inspector({
             Compact
           />
         }
-        FractureCards={
-          <FracturePanel
+        GeometryCards={
+          <UvPreviewCard
             Subject={Subject}
             Values={Values}
-            Change={Change}
-            Expand={OpenFracture}
+            Open={OpenWorkspace && (() => OpenWorkspace("uv"))}
+            Kit={{ Card, Control, Metric }}
           />
+        }
+        FractureCards={
+          <>
+            <FracturePanel
+              Subject={Subject}
+              Values={Values}
+              Change={Change}
+              Expand={OpenFracture}
+            />
+            <FracturePreviewCard
+              Subject={Subject}
+              Values={Values}
+              Open={OpenWorkspace && (() => OpenWorkspace("fracture"))}
+              Kit={{ Card, Control, Metric }}
+            />
+          </>
         }
       />
       )}
@@ -1170,6 +1188,12 @@ export function Inspector({
           <Control Field={{ Label: "Hyperfocal distance", Control: "Readout" }} Value={Optics.hyperfocal.toFixed(1) + " m"} />
           <p>Pinhole renderer: the sensor sets the field of view and depth of field, not exposure.</p>
         </Card>
+        <RenderSettingsCards
+          Subject={Subject}
+          Values={Values}
+          Change={Change}
+          Kit={{ Card, Control, Metric, Icon }}
+        />
       </>
     );
   } else if (Subject.Panel === "stars") {
