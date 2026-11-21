@@ -331,7 +331,7 @@ try {
         ).evaluateAll((Nodes) =>
           Nodes.slice(0, 3).map((Node) => Node.dataset.card || "Reference"),
         ),
-        ["Reference", "Wind controls", "Wind field"],
+        ["Reference", "Wind controls", "Atmospheric modifiers · native draft"],
       );
       assert.equal(
         await Frame.locator(".mpanel > :first-child").getAttribute("class"),

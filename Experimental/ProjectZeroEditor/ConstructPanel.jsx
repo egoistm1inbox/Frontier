@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import ReferencePanel from "./ReferencePanel.jsx";
+import { IsEffectPanel } from "./PostEffects.jsx";
 import { Glyph, Icon, Inspector } from "./Inspectors.jsx";
 
 export const ConstructGroups = [
@@ -23,7 +24,13 @@ export function ConstructGroup(Subject) {
     ].includes(Subject.Panel)
   )
     return "Weather";
-  if (Subject.Panel === "camera") return "Cameras";
+  if (
+    Subject.Panel === "camera" ||
+    Subject.Panel === "flare" ||
+    Subject.Panel === "post" ||
+    IsEffectPanel(Subject.Panel)
+  )
+    return "Cameras";
   if (Subject.Panel === "geometry") return "Geometry";
   if (Subject.Panel === "light") return "Lighting";
   return "Environment";

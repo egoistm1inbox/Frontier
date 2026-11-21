@@ -46,6 +46,12 @@ import { Inspector, Icon, Glyph, Panels } from "./Inspectors.jsx";
 import Notch from "./Notch.jsx";
 import ActionIcon from "./ActionIcon.jsx";
 import ConstructPanel from "./ConstructPanel.jsx";
+import {
+  EffectRows,
+  EffectSummary,
+  IsEffectPanel,
+  ArrangeCameraEffects,
+} from "./PostEffects.jsx";
 import CheckerViewport, { PreviewVisible } from "./CheckerViewport.jsx";
 import "./Editor.css";
 const InitialRows = [
@@ -80,6 +86,14 @@ const InitialRows = [
     "Inactive optical study",
   ],
   [
+    "flare",
+    "Lens Flare",
+    "flare",
+    "lens-flare",
+    "cameras",
+    "Camera optical effect · sun-driven",
+  ],
+  [
     "post",
     "Post Process",
     "post",
@@ -97,7 +111,6 @@ const InitialRows = [
     "Procedural sky",
   ],
   ["sun", "Sun", "sun", "sun", "world", "Directional light"],
-  ["flare", "Lens Flare", "flare", "lens-flare", "sun", "Sun optical effect"],
   ["moon", "Moons", "moon", "moon", "world", "Lunar bodies · four slots"],
   [
     "stars",
@@ -174,6 +187,17 @@ const InitialRows = [
   Parent,
   Description,
 }));
+// Motion Blur sits under Cameras before Lens Flare; the post effects follow Post Process.
+InitialRows.splice(
+  InitialRows.findIndex((Row) => Row.Id === "flare"),
+  0,
+  ...EffectRows.filter((Row) => Row.Parent === "cameras"),
+);
+InitialRows.splice(
+  InitialRows.findIndex((Row) => Row.Id === "post") + 1,
+  0,
+  ...EffectRows.filter((Row) => Row.Parent === "post"),
+);
 const DefaultSettings = {
   GI: 2,
   Reflection: 2,
@@ -247,6 +271,7 @@ function OutlinerMetadata(Row, Record = {}, Rows = []) {
       " mm · f/" +
       CompactNumber(V("Aperture"))
     );
+  if (IsEffectPanel(Row.Panel)) return EffectSummary(Row.Panel, V);
   if (Row.Panel === "post")
     return (
       "EV " +
@@ -405,13 +430,16 @@ function App() {
     [Alias, ToggleAlias] = useState(true),
     [PatchError, SetPatchError] = useState(1);
   const [Rows, StoreRows] = useState(() =>
-      EnsureEditorCamera(
-        PrepareLightRows(
-          Saved.ReferenceDesignRevision === 1
-            ? Saved.Rows || EnsureReferenceLights(InitialRows)
-            : EnsureReferenceLights(Saved.Rows || InitialRows),
-          Saved.LightDesignRevision,
+      ArrangeCameraEffects(
+        EnsureEditorCamera(
+          PrepareLightRows(
+            Saved.ReferenceDesignRevision === 1
+              ? Saved.Rows || EnsureReferenceLights(InitialRows)
+              : EnsureReferenceLights(Saved.Rows || InitialRows),
+            Saved.LightDesignRevision,
+          ),
         ),
+        Saved.Rows ? Saved.CameraEffectsRevision : 1,
       ),
     ),
     [Selected, Select] = useState(
@@ -841,6 +869,7 @@ function App() {
           Rows,
           ReferenceDesignRevision: 1,
           LightDesignRevision: 1,
+          CameraEffectsRevision: 1,
           Assets: AssetRecords,
           Selected,
           Values,
@@ -959,9 +988,12 @@ function App() {
         (!Filters.length ||
           Filters.some((Filter) =>
             Filter === "Camera"
-              ? Row.Panel === "camera"
+              ? Row.Panel === "camera" ||
+                Row.Panel === "post" ||
+                Row.Panel === "flare" ||
+                IsEffectPanel(Row.Panel)
               : Filter === "Lights"
-                ? ["sun", "light", "flare"].includes(Row.Panel)
+                ? ["sun", "light"].includes(Row.Panel)
                 : Filter === "Geometry"
                   ? Row.Panel === "geometry"
                   : Filter === "Bodies"
@@ -997,6 +1029,7 @@ function App() {
             Rows,
             ReferenceDesignRevision: 1,
             LightDesignRevision: 1,
+            CameraEffectsRevision: 1,
             Collapsed,
             Assets: AssetRecords,
             Values,
@@ -1037,11 +1070,14 @@ function App() {
       )
         throw Error();
       AssignRows(
-        PrepareLightRows(
-          Loaded.ReferenceDesignRevision === 1
-            ? Loaded.Rows
-            : EnsureReferenceLights(Loaded.Rows),
-          Loaded.LightDesignRevision,
+        ArrangeCameraEffects(
+          PrepareLightRows(
+            Loaded.ReferenceDesignRevision === 1
+              ? Loaded.Rows
+              : EnsureReferenceLights(Loaded.Rows),
+            Loaded.LightDesignRevision,
+          ),
+          Loaded.CameraEffectsRevision,
         ),
       );
       Collapse(ConsolidateAtmosphereFlags(Loaded.Collapsed, Loaded.Rows));

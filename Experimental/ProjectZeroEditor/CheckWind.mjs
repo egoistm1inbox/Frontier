@@ -108,15 +108,16 @@ try {
   });
   await Page.evaluate(() => document.fonts.ready);
   await Select("Cube");
-  const Cap = Page.locator(".entity-capabilities");
+  // Showcase primitives: quick controls live at the bottom of the Overview page.
+  const Quick = Page.locator(".pi-quick");
   assert.deepEqual(
-    await Cap.locator(".quick-tile").evaluateAll((Nodes) =>
+    await Quick.locator(".pi-quick-tile").evaluateAll((Nodes) =>
       Nodes.map((Node) => Node.getAttribute("aria-label")),
     ),
-    ["Visible", "Dynamic", "Cast shadows", "GI", "Physics", "Locked"],
+    ["Visible", "Dynamic", "Shadows", "GI", "Physics", "Locked"],
   );
-  for (const Label of ["Dynamic", "Cast shadows", "GI", "Physics", "Locked"]) {
-    const Button = Cap.getByRole("button", { name: Label, exact: true });
+  for (const Label of ["Dynamic", "Shadows", "GI", "Physics", "Locked"]) {
+    const Button = Quick.getByRole("button", { name: Label, exact: true });
     const Before = await Button.getAttribute("aria-pressed");
     await Button.click();
     assert.notEqual(await Button.getAttribute("aria-pressed"), Before);
@@ -124,18 +125,19 @@ try {
     assert.equal(await Button.getAttribute("aria-pressed"), Before);
   }
   assert.equal(
-    await Cap.locator(".quick-icon-seat")
+    await Quick.locator(".pi-status-icon")
       .first()
       .evaluate((Node) => getComputedStyle(Node).borderRadius),
     "50%",
   );
-  await Cap.getByRole("button", { name: "Physics", exact: true }).click();
+  await Quick.getByRole("button", { name: "Physics", exact: true }).click();
   assert.equal((await Saved()).Values.cube.DYNAMIC, true);
-  await Cap.getByRole("button", { name: "Dynamic", exact: true }).click();
+  await Quick.getByRole("button", { name: "Dynamic", exact: true }).click();
   assert.equal((await Saved()).Values.cube.PHYSICS, false);
-  await Cap.getByRole("button", { name: "Visible", exact: true }).click();
+  await Quick.getByRole("button", { name: "Visible", exact: true }).click();
   assert.equal((await Saved()).Hidden.cube, true);
-  await Cap.getByRole("button", { name: "Visible", exact: true }).click();
+  await Quick.getByRole("button", { name: "Visible", exact: true }).click();
+  const Cap = Page.locator(".entity-capabilities");
   await Page.screenshot({ path: Proof + "/EntityQuickTiles.png" });
   await Select("Post Process");
   assert.equal(await Cap.locator(".quick-tile").count(), 1);
@@ -157,13 +159,8 @@ try {
     1,
   );
   await Select("Wind");
-  const Mini = Page.locator(".wind-inspector canvas");
-  await Page.waitForFunction(
-    () => +document.querySelector(".wind-inspector canvas").dataset.frame > 2,
-  );
-  const Before = await Mini.evaluate((Node) => Node.toDataURL());
-  await Page.waitForTimeout(350);
-  assert.notEqual(await Mini.evaluate((Node) => Node.toDataURL()), Before);
+  // The composite-flow "Wind field" card was removed; the WindEditor opens from Wind controls.
+  assert.equal(await Page.locator(".wind-inspector").count(), 0);
   await Page.screenshot({ path: Proof + "/WindInspector.png" });
   await Page.getByRole("button", {
     name: "Expand WindEditor",
@@ -379,7 +376,9 @@ try {
     "wind",
   );
   assert.equal((await Saved()).Values["local-cloud"].WindFieldId, "wind");
-  await Page.reload({ waitUntil: "networkidle" });
+  // Single-file page: "networkidle" is unreliable while the font CDN is unreachable.
+  await Page.reload({ waitUntil: "load" });
+  await Page.locator(".outliner-row").first().waitFor();
   await Select("Clouds");
   assert.equal(
     await Page.getByLabel("Cloud wind field", { exact: true }).inputValue(),

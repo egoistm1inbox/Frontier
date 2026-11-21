@@ -46,10 +46,10 @@ try {
   await Page.waitForTimeout(500);
 
   const Labels = await Page.locator(".row-identity small").allTextContents();
-  assert.equal(Labels.length, 35);
+  assert.equal(Labels.length, 43);
   assert(Labels.every((Label) => Label.trim().length));
   Checks.push(
-    "All 35 default outliner entities expose a non-empty contextual value line",
+    "All 43 default outliner entities expose a non-empty contextual value line",
   );
 
   assert.equal(await Metadata("Area Light"), "32 lx · Area · 0,0,0");

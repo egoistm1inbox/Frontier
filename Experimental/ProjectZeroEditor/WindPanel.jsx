@@ -192,69 +192,6 @@ export function WindCanvas({
   );
 }
 
-export function WindInspector({ Values, Change, Open, Hidden }) {
-  const Field = ResolveWind(Values),
-    [Playing, Play] = useState(true);
-  return (
-    <section className="property-card wind-inspector" data-card="Wind field">
-      <div className="wind-section-head">
-        <div>
-          <span className="eyebrow">COMPOSITE FLOW</span>
-          <h2>Wind field</h2>
-        </div>
-        <button
-          onClick={Open}
-          aria-label="Expand WindEditor"
-          title="Expand WindEditor"
-        >
-          ↗
-        </button>
-      </div>
-      <WindCanvas Field={Field} Active={!Hidden} Playing={Playing} />
-      <div className="wind-section-head">
-        <span>
-          {Field.Components.filter((Item) => Item.Enabled).length} active /{" "}
-          {Field.Components.length} components
-        </span>
-        <button aria-pressed={!Playing} onClick={() => Play(!Playing)}>
-          {Playing ? "Pause preview" : "Resume preview"}
-        </button>
-      </div>
-      <div className="wind-component-summary">
-        {Field.Components.map((Item) => (
-          <button
-            key={Item.Id}
-            aria-pressed={Item.Enabled}
-            onClick={() =>
-              Change("WindField", {
-                ...Field,
-                Components: Field.Components.map((Part) =>
-                  Part.Id === Item.Id
-                    ? { ...Part, Enabled: !Part.Enabled }
-                    : Part,
-                ),
-              })
-            }
-          >
-            <i className={Item.Enabled ? "green" : "red"} />
-            <span>{Item.Name}</span>
-            <small>
-              {Item.Type} · {Item.Strength} m/s
-            </small>
-          </button>
-        ))}
-      </div>
-      <button className="wind-wide-button" onClick={Open}>
-        Open WindEditor · place and combine components
-      </button>
-      <p>
-        All enabled components sum into one field. Browser evaluation only;
-        native simulation binding is deferred.
-      </p>
-    </section>
-  );
-}
-
 export function WindBinding({
   Values,
   Change,

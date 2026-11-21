@@ -1292,5 +1292,11 @@ in `Exhibits/LightCompute/Results/FogFacetRegression.txt`; this was a fixture-se
   Follow-up 31: removed the generic "Live parameter map" bar charts (`PropertyGraph`) everywhere. Primitive inspector reworked:
   Overview first, with quick controls at its bottom as dark tiles with green / grey round badges. Transform moved to the top of Geometry.
   Purpose and Mass cards are dark. Checks updated: `CheckInspectorOrder` 71 pass, `CheckEnvironmentGraphs` passes.
+  Follow-up 32: Cameras now hold Motion Blur (new) and Lens Flare (moved from Sun). Post Process has 7 effect children (Heat Shimmer, Glitch,
+  Chromatic Aberration, Film Grain, Lens Distortion, Scanlines, Sharpen), each with its own icon (`PostEffects.jsx`, `PostEffectIcons.jsx`,
+  `PostEffects.css`). Each effect inspector has a split-view preview that changes as the values change. Old saves are rearranged once on load.
+  The Wind inspector's Composite flow card was removed; the WindEditor opens from Wind controls. Checks updated; InspectorOrder,
+  EnvironmentGraphs, Wind, EntityContext, WorkspaceCards, LightDesign and SharedCards pass. CheckConstruction (Cube roughness) and
+  CheckReference (hash) fail exactly as at HEAD. Names unapproved.
   Follow-up 22: Agera RS (`AgeraRs`, cross-plane 90° crank), rubber tyre squeal per surface (`Singer`, `Concrete` surface, `Tyres-Drift` scene), ricochet warble, subsonic whizz flown past the ear.
   Live AudioWorklet bench with car switch + offline MP3 reel (101 files, 26 MB) with spectrogram plates (`Exhibits/CabinHmi/Audio/`). Names unapproved.

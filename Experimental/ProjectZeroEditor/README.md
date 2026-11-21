@@ -20,7 +20,7 @@
 ## 🔍 Local Preview
 
 ```bash
-python3 Experimental/ProjectZeroEditor/Serve.py 8092
+python3 Experimental/ProjectZeroEditor/Serve.py 8097
 ```
 
 ---
@@ -76,3 +76,30 @@ Nothing reaches a native scene.
 The generic "Live parameter map" bar chart (`PropertyGraph`), which was appended to cards across the editor, has been removed
 everywhere. Cards keep their purpose-built visuals (solar plots, fog spectra, cloud bounds, lens / iris graphics and so on). Stars, Moons,
 Lens Flare, Precipitation, Rainbow and Editor Camera had only the bar map, so they have no data graphic until proper ones are designed.
+
+---
+
+## 🎥 Camera Effects & Post-Process Effects
+
+The **Cameras** Outliner group now holds Editor Camera, Cine Camera, **Motion Blur** (new), **Lens Flare** (moved from under Sun)
+and **Post Process**. Post Process has seven children: **Heat Shimmer**, **Glitch**, **Chromatic Aberration**, **Film Grain**,
+**Lens Distortion**, **Scanlines** and **Sharpen**. Each effect has its own gradient icon (`PostEffectIcons.jsx`).
+
+The sheets, rows and preview live in `PostEffects.jsx` / `PostEffects.css`. Each effect inspector shows:
+
+- **Effect preview**: a procedural dusk-road scene with a moving car. It is run through that effect with the current values, so
+  the picture changes as you move a slider. It has Effect / Split / Original modes, a draggable divider and Pause, plus three readouts.
+  Some effects add overlays: the shutter dial (Motion Blur), the line where shimmer starts (Heat Shimmer) and the grain-vs-brightness
+  curve (Film Grain).
+- **Quick controls**: Enabled plus the effect's switches, as dark tiles.
+- Grouped property cards.
+
+Saved scenes from before this change are rearranged once when loaded (`ArrangeCameraEffects`, `CameraEffectsRevision: 1`). Lens Flare
+moves to Cameras and missing effects are added. After that, deleted effects stay deleted. The construct menu lists every camera effect
+under **Cameras**, so a deleted one can be added again. The Outliner **Camera** filter shows these effects and Lens Flare; **Lights** no
+longer shows Lens Flare.
+
+The previews run in the browser only. Values are drafts and nothing reaches the native renderer.
+
+The Wind inspector's "Composite flow · Wind field" card has been removed. The WindEditor opens from the **Open WindEditor** button
+in the Wind controls card.

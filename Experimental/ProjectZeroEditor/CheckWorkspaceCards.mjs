@@ -107,9 +107,10 @@ try {
     await Page.locator("[data-collection-total]").getAttribute(
       "data-collection-total",
     ),
-    "13",
+    "12",
   );
-  assert.equal(await Page.locator(".collection-entry").count(), 13);
+  // Lens Flare moved from World (under Sun) to Cameras.
+  assert.equal(await Page.locator(".collection-entry").count(), 12);
   await Page.getByLabel("Collection scope", { exact: true }).selectOption(
     "direct",
   );
@@ -132,7 +133,7 @@ try {
     "Environment review notes",
   );
   await Page.getByRole("button", {
-    name: "Hide collection entry Sun",
+    name: "Hide collection entry Atmosphere", // Rainbow inherits it (Lens Flare left Sun)
     exact: true,
   }).click();
   assert.equal(
@@ -153,7 +154,7 @@ try {
     "all",
   );
   await Page.getByRole("button", {
-    name: "Show collection entry Sun",
+    name: "Show collection entry Atmosphere",
     exact: true,
   }).click();
   await Page.locator(".inspector-scroll").evaluate((N) => (N.scrollTop = 0));

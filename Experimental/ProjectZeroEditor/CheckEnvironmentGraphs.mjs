@@ -246,11 +246,10 @@ try {
     "Height Fog",
     "Atmospheric Fog",
     "Local Fog",
-    "Wind",
   ]) {
     await Select(Name);
     assert.ok(
-      await Page.locator("[data-live-plot],.wind-inspector").count(),
+      await Page.locator("[data-live-plot]").count(),
       Name + " has interactive data",
     );
   }

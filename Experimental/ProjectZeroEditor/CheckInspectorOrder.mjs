@@ -83,6 +83,18 @@ const Sections = {
   // Showcase primitives: the category carousel opens on Overview; Purpose first, quick controls last.
   geometry: [".pi-carousel-bar", ".pi-purpose", ".pi-quick"],
   post: [".entity-capabilities"],
+  ...Object.fromEntries(
+    [
+      "motion-blur",
+      "heat-shimmer",
+      "glitch",
+      "chromatic-aberration",
+      "film-grain",
+      "lens-distortion",
+      "scanlines",
+      "sharpen",
+    ].map((Panel) => [Panel, [".effect-study", ".entity-capabilities"]]),
+  ),
   camera: [Card("Lens + field of view"), Card("Aperture study")],
   atmosphere: [
     ".atmosphere-lab-cards",
@@ -120,7 +132,6 @@ const Sections = {
     [null, ".mp-rail"],
     [null, ".mp-duo"],
     Card("Wind controls"),
-    Card("Wind field"),
   ],
   "height-fog": [
     Card("Fog settings"),

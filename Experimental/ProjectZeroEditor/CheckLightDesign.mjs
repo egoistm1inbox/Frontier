@@ -380,10 +380,10 @@ try {
   ).evaluateAll((Cards) =>
     Cards.map((Card) => Card.dataset.card || "Anemometer"),
   );
-  assert.deepEqual(Order, ["Anemometer", "Wind field"]);
+  assert.deepEqual(Order, ["Anemometer"]);
   await Capture("WindOrder");
   Checks.push(
-    "Wind heading → Anemometer and statistics → Composite Flow, retaining the live trace",
+    "Wind heading → Anemometer and statistics (Composite Flow card removed), retaining the live trace",
   );
   for (const Id of ["height-fog", "aerial-fog", "local-fog"]) {
     await Open(Id);

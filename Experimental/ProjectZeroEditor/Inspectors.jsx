@@ -14,10 +14,12 @@ import {
 } from "./LiveGraph.jsx";
 import FogShapePanel from "./FogShapePanel.jsx";
 import { IsEditorCamera } from "./ScenePolicy.js";
-import { WindInspector, WindBinding } from "./WindPanel.jsx";
+import { WindBinding } from "./WindPanel.jsx";
 import TransformPanel from "./TransformPanel.jsx";
 import MaterialPanel from "./MaterialPanel.jsx";
 import PrimitiveInspector from "./PrimitiveInspector.jsx";
+import { EffectSheets, IsEffectPanel, EffectStudy } from "./PostEffects.jsx";
+import PostEffectIcon, { IsEffectIcon } from "./PostEffectIcons.jsx";
 import { ColourSlotDropProps } from "./ColourCodex.js";
 import ActionIcon, { QuickSymbol } from "./ActionIcon.jsx";
 import React, { useState, useEffect, useRef } from "react";
@@ -33,7 +35,7 @@ import Native from "./NativePanels.json";
 import { Solar } from "./Solar.mjs";
 import { SensorField } from "./OpticalGraphic.jsx";
 
-export const Panels = Native.Panels;
+export const Panels = { ...Native.Panels, ...EffectSheets };
 export function Glyph({ Name, Size = 18 }) {
   if (Name === "celestial-orbit")
     return (
@@ -168,6 +170,7 @@ export function Icon({ Name, Size = 24 }) {
         <ActionIcon Name="rain" Size={Size} />
       </span>
     );
+  if (IsEffectIcon(Name)) return <PostEffectIcon Name={Name} Size={Size} />;
   const Source = window.NativeAssets?.Icons[Name];
   return Source ? (
     <img
@@ -731,6 +734,61 @@ export function Inspector({
       )}
     </>
     );
+  if (IsEffectPanel(Subject.Panel)) {
+    const Symbols = {
+      "Object motion": "motion",
+      "Camera motion": "orbit",
+      "Show mask": "image",
+      "Colour drift": "split",
+      Coloured: "rainbow",
+      Animated: "play",
+      "Phosphor mask": "diagnostics",
+    };
+    return (
+      <div className="generic-inspector effect-inspector" data-panel={Subject.Panel}>
+        {Header(Subject.Panel === "motion-blur" ? "Camera" : "Post processing")}
+        <EffectStudy Panel={Subject.Panel} Read={V} Active={!Hidden} />
+        <section
+          className="generic-card entity-capabilities"
+          data-card="Quick controls"
+        >
+          <h4>QUICK CONTROLS</h4>
+          <div className="tiles">
+            <Tile
+              Label="Enabled"
+              Context={Subject.Panel}
+              IconName="visible"
+              On={!Hidden}
+              Action={ToggleHidden}
+            />
+            {Sheet.filter((Field) => Field.Control === "Switch").map(
+              (Field) => (
+                <Tile
+                  key={Field.Label}
+                  Label={Field.Label}
+                  Context={Subject.Panel}
+                  IconName={Symbols[Field.Label] || "visible"}
+                  On={V(Field.Label)}
+                  Action={() => AssignProperty(Field.Label, !V(Field.Label))}
+                />
+              ),
+            )}
+          </div>
+        </section>
+        {[...new Set(Sheet.map((Field) => Field.Group))].map((Group) => {
+          const Members = Sheet.filter(
+            (Field) => Field.Group === Group && Field.Control !== "Switch",
+          );
+          return Members.length ? (
+            <details open className="generic-card" key={Group}>
+              <summary>{Group}</summary>
+              {Members.map((Field) => F(Field.Label))}
+            </details>
+          ) : null;
+        })}
+      </div>
+    );
+  }
   if (["geometry", "light", "post", "group"].includes(Subject.Panel))
     return (
       <GraphContext.Provider
@@ -1337,7 +1395,7 @@ export function Inspector({
   } else if (Subject.Panel === "flare") {
     Content = (
       <>
-        {Header("Environment / Optics", "Lens Flare")}
+        {Header("Camera / Optics", "Lens Flare")}
         <Card Title="Flare composite" Height={430}>
           <Metric Value={V("Intensity").toFixed(2)} Unit="×" />
           <div
@@ -1442,13 +1500,15 @@ export function Inspector({
               Action={() => AssignProperty("Air shear", !V("Air shear"))}
             />
           </div>
+          <button
+            className="wind-wide-button"
+            onClick={OpenWind}
+            aria-label="Expand WindEditor"
+            title="Expand WindEditor"
+          >
+            Open WindEditor · place and combine components
+          </button>
         </Card>
-        <WindInspector
-          Values={Values}
-          Change={Change}
-          Open={OpenWind}
-          Hidden={Hidden}
-        />
         <Card Title="Atmospheric modifiers · native draft">
           {Fields("Shear", "Veer", "Turbulence", "Steadiness")}
           {F("Force")}
