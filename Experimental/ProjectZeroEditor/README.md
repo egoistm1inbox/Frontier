@@ -49,6 +49,38 @@ starting point for the UI redesign.
 
 ---
 
+## Follow-up 43: unique Sun and Atmosphere card previews
+
+Every Sun and Atmosphere card had the same shape (a big number, a generic line chart, a slider). Each now has its own kind of picture,
+and each picture edits the same field as the control under it (`SunStudies.jsx`, `AtmosphereStudies.jsx`, `SkyStudies.css`):
+
+- **Sun direction → shadow plate.** The sky folded flat onto a ground plate (zenith centre, horizon rim) with a pole: the day's sun path,
+  the pole's shadow and the sundial trace of its tip, plus a side view of the elevation angle and shadow length. Drag the sun or the
+  shadow to set Local Hours. The disabled azimuth / elevation sliders are now three readouts.
+- **Sunlight intensity → lit ball.** A white ball at a fixed exposure lit by Intensity × Direct in the sun colour; clipped highlights get
+  zebra stripes. A gauge in photographic stops edits Intensity.
+- **Temperature → cube under this light vs 6500 K**, over a blackbody ribbon marked with candle / tungsten / sunrise / noon / overcast /
+  shade / blue sky. Dragging the ribbon switches the colour source to Temperature.
+- **Daylight cycle → 24-hour dial.** Midnight at the bottom, noon at the top; the ring is coloured day / golden / civil / nautical / astro /
+  night, the inner curve is the sun's height. Drag round the dial to set the time.
+- **Sun disc → magnified disc** with limb darkening against the Moon's 0.52° (dashed), and the shadow-edge softness it causes
+  (e.g. 9.3 cm at 10 m for 0.53°). Drag the rim to resize.
+- **Dynamic settings → analemma** (the sun at this clock time on every day of 2026) and a daylight-through-the-year strip; drag either to
+  set the date.
+- **Atmospheric scattering → beam through air.** White sunlight crossing one path of air: blue scatters out sideways (the glow), the far
+  end is the reddened sun. A probe reads the side glow and what gets through.
+- **Aerosol haze → five ridges** washed toward the haze colour with distance, plus the Henyey-Greenstein phase lobe (log radius). Mie
+  Anisotropy moved here from the native list; drag the lobe to change it.
+- **Ozone absorption → twilight skies with and without ozone** (sun 3° below the horizon) over a spectrum with the Chappuis band taken
+  out. Drag the dip to set Ozone.
+- **Density falloff → altitude column** (square-root scale) for molecules and aerosols with landmarks (Everest, airliner, ozone layer,
+  stratopause); drag the handles to set both scale heights.
+- **Ground reflectance → bounce light** on a white ball from the ground colour, with a reflectance scale of familiar surfaces for
+  reference only (no presets).
+- **Native atmosphere controls → dusk horizon** showing Horizon Glow, White Line, Sky Tint and Sky Brightness.
+
+All are illustrative browser drawings; solar geometry still comes from `Solar.mjs`. `CheckSkyStudies.mjs` (5) covers the previews.
+
 ## Follow-up 42: one Render Engine component, per-renderer shadows; Rigid Body and Mass redesigned
 
 - **One render component per camera.** The MatCap, Shadow Maps, SDF Tracing and Ray Tracing rows are gone; each camera keeps a single

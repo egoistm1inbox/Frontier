@@ -7,10 +7,11 @@ import FracturePanel from "./FracturePanel.jsx";
 import { RenderComponentCards } from "./RenderComponents.jsx";
 import { UvPreviewCard, FracturePreviewCard, SdfPreviewCard, LodPreviewCard } from "./WorkspacePreviews.jsx";
 import { ComponentPanel, ComponentSheet, ComponentsCard, OwnerKind } from "./ObjectComponents.jsx";
-import AtmosphereLab, { AtmosphereProfile } from "./AtmosphereLab.jsx";
+import AtmosphereLab from "./AtmosphereLab.jsx";
+import { ShadowPlate, LitSphere, KelvinRibbon, DayDial, SolarDisc, Analemma } from "./SunStudies.jsx";
+import { AirBeam, HazeRidges, OzoneZenith, AltitudeColumn, GroundBounce, TwilightBand } from "./AtmosphereStudies.jsx";
 import {
   GraphContext,
-  SunGraph,
   FogGraph,
   FogSpectrum,
   FogDensity,
@@ -34,7 +35,6 @@ import { LightGlyphSource } from "./LightGlyphs.js";
 import { ColourSlotDropProps } from "./ColourCodex.js";
 import ActionIcon, { QuickSymbol } from "./ActionIcon.jsx";
 import React, { useState, useEffect, useRef } from "react";
-import { SunGizmo } from "../FrontierEditor/environment-graphics.jsx";
 import { DepthOfField } from "../FrontierEditor/camera-graphics.jsx";
 import { Iris, CloudCoverage } from "../FrontierEditor/property-graphics.jsx";
 import {
@@ -1022,100 +1022,31 @@ export function Inspector({
           <Glyph Name="arrow" />
         </div>
         <div className="card-grid sun-properties">
-          <Card Title="Sun direction" Height={711} Class="direction-card">
-            <Metric
-              Value={Elevation.toFixed(1) + "°"}
-              Caption={
-                Elevation < 0 ? "Below the horizon" : "Above the horizon"
-              }
-            />
-            <div
-              className="graphic tall solved-gizmo"
-              title="Solved direction. Edit Local Hours to change it."
-            >
-              <SunGizmo
-                azimuth={Azimuth}
-                elevation={Elevation}
-                onChange={() => {}}
-              />
-            </div>
+          <Card Title="Sun direction" Class="direction-card">
+            <ShadowPlate V={V} Change={AssignProperty} />
             {F("Local Hours")}
-            <div className="solved-directions">
-              <div>
-                <small>Azimuth</small>
-                <Metric Value={Azimuth.toFixed(1) + "°"} />
-                <input
-                  type="range"
-                  disabled
-                  value={Azimuth}
-                  min="0"
-                  max="360"
-                />
-              </div>
-              <div>
-                <small>Elevation</small>
-                <Metric Value={Elevation.toFixed(1) + "°"} />
-                <input
-                  type="range"
-                  disabled
-                  value={Elevation}
-                  min="-90"
-                  max="90"
-                />
-              </div>
-            </div>
-            <p>Shared time above · angles solved by date / location</p>
           </Card>
           <Card Title="Sunlight intensity" Height={347} GraphHandled>
-            <Metric
-              Value={Number(V("Intensity")).toFixed(1)}
-              Unit="×"
-              Caption="Sunlight intensity multiplier"
-            />
-            <SunGraph V={V} Change={AssignProperty} Mode="gain" />
+            <LitSphere V={V} Change={AssignProperty} />
             {F("Intensity")}
-            <div className="ends">
-              <span>0 ×</span>
-              <span>60 ×</span>
-            </div>
           </Card>
           <Card Title="Temperature" Height={347} GraphHandled>
-            <Metric
-              Value={V("Colour source") ? V("Temperature") : "RGB"}
-              Unit={V("Colour source") ? "K" : ""}
-            />
+            <KelvinRibbon V={V} Change={AssignProperty} />
             {F("Colour source")}
-            <div className="temperature-spectrum" />
-            <SunGraph V={V} Change={AssignProperty} Mode="temperature" />
-            <div className="ends">
-              <span>Warm</span>
-              <span>Cool</span>
-            </div>
             {F("Temperature", !V("Colour source"))}
-            <p>Blackbody tint approximation · linear RGB</p>
             {F("Sun Tint", !!V("Colour source"))}
           </Card>
           <Card Title="Daylight cycle" Height={329} GraphHandled>
-            <Metric
-              Value={`${String(Math.floor(Time)).padStart(2, "0")}:${String(Math.floor((Time % 1) * 60)).padStart(2, "0")}`}
-            />
-            <SunGraph V={V} Change={AssignProperty} Mode="day" />
+            <DayDial V={V} Change={AssignProperty} />
             {F("Local Hours")}
           </Card>
           <Card Title="Sun disc" Height={329}>
-            <Metric Value={Number(V("Angular Diameter")).toFixed(2) + "°"} />
-            <div
-              className="solar-disc"
-              style={{
-                "--diameter":
-                  Math.min(120, 20 + V("Angular Diameter") * 30) + "px",
-              }}
-            />
+            <SolarDisc V={V} Change={AssignProperty} />
             {F("Angular Diameter")}
           </Card>
         </div>
         <Card Title="Dynamic settings" Wide GraphHandled>
-          <SunGraph V={V} Change={AssignProperty} Mode="year" />
+          <Analemma V={V} Change={AssignProperty} />
           {Fields(
             "Animate",
             "Day duration",
@@ -1475,50 +1406,37 @@ export function Inspector({
         {Header("Environment", "Atmosphere")}
         <AtmosphereLab V={V} Change={AssignProperty} />
         <Card Title="Atmosphere settings">{Tiles(["Line at civil only"])}</Card>
-        <Card Title="Atmospheric scattering" Height={485} GraphHandled>
-          <Metric
-            Value={V("Rayleigh").toFixed(1)}
-            Unit="×"
-            Caption="How air molecules scatter sunlight"
-          />
-          <AtmosphereProfile V={V} Change={AssignProperty} Mode="spectrum" />
+        <Card Title="Atmospheric scattering" GraphHandled>
+          <AirBeam V={V} Change={AssignProperty} />
           {F("Rayleigh")}
         </Card>
         <div className="card-grid">
           <Card Title="Aerosol haze" Height={380} GraphHandled>
-            <Metric
-              Value={V("Mie").toFixed(2)}
-              Unit="×"
-              Caption="Suspended particles soften and attenuate light"
-            />
-            <AtmosphereProfile V={V} Change={AssignProperty} Mode="haze" />
+            <HazeRidges V={V} Change={AssignProperty} />
             {F("Mie")}
+            {F("Mie Anisotropy")}
           </Card>
           <Card Title="Ozone absorption" Height={380} GraphHandled>
-            <Metric
-              Value={V("Ozone").toFixed(2)}
-              Unit="×"
-              Caption="Selective absorption across visible wavelengths"
-            />
-            <AtmosphereProfile V={V} Change={AssignProperty} Mode="ozone" />
+            <OzoneZenith V={V} Change={AssignProperty} />
             {F("Ozone")}
           </Card>
         </div>
         <Card Title="Density falloff" Height={410} GraphHandled>
+          <AltitudeColumn V={V} Change={AssignProperty} />
           {F("Rayleigh Scale H")}
-          <AtmosphereProfile V={V} Change={AssignProperty} Mode="height" />
           {F("Mie Scale H")}
         </Card>
         <Card Title="Ground reflectance" Height={150}>
+          <GroundBounce V={V} />
           {F("Ground Albedo")}
-          <p>
-            Original RGB ground albedo · applied separately, not stored in the
-            smooth dome bake.
+          <p className="study-note">
+            RGB ground albedo · applied separately, not stored in the smooth
+            dome bake.
           </p>
         </Card>
         <Card Title="Native atmosphere controls">
+          <TwilightBand V={V} />
           {Fields(
-            "Mie Anisotropy",
             "Atmosphere",
             "Horizon Glow",
             "White Line",
