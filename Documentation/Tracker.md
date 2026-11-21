@@ -1319,13 +1319,6 @@ in `Exhibits/LightCompute/Results/FogFacetRegression.txt`; this was a fixture-se
   design, plus an in-use strip for the current engine. MatCap gains six editor-only fields. `ComponentRevision` 2 migrates saved scenes.
   RenderSettings (9), InspectorOrder (157), EntityContext (78), ObjectComponents, SharedCards, InspectorLayout, VolumeWorkspaces, FogCamera
   and InstrumentStyle (passes on rerun) pass; Construction:190 and QuickTools:296 also fail on the base commit. Names unapproved.
-  Follow-up 43: the Sun and Atmosphere cards each get their own preview instead of the shared number + line chart: shadow plate with
-  side view, lit ball with clipping zebra and stop gauge, cube vs 6500 K over a blackbody ribbon, 24-hour twilight dial, magnified disc
-  with Moon reference and shadow-edge softness, analemma with daylight strip; beam through air, haze ridges with Mie phase lobe (Mie
-  Anisotropy moved there), twilight skies with / without ozone over the Chappuis band, altitude column with scale-height handles, ground
-  bounce with reflectance scale, dusk horizon for the native controls. New SkyStudies (5); EnvironmentGraphs, InspectorOrder (141),
-  LightDesign (22), SharedCards (14) pass; InspectorLayout passes the Sun section and stops at the known Wind canvas flake (:115).
-  Reference:21 is pre-existing. Names unapproved.
   Follow-up 42: each camera has one Render Engine component with Engine / PBR / SDF / Ray traced / MatCap tabs. Every renderer has its own
   shadow algorithm and settings (`Pbr*`, `Sdf*`, `Ray*`, `Matcap*` keys; old shared keys are upgraded on read; MatCap gains a studio
   shadow). The engine card is decluttered; Quality and Output are kept. `ComponentRevision` 3 drops the four retired rows, and their icons
