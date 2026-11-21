@@ -40,10 +40,10 @@ const Saved = () =>
 
 const Values = async (Id) => ((await Saved())?.Values || {})[Id] || {};
 const Scene = () => Page.locator(".vc-socket-scene");
-const TracePath = () => Scene().locator(".vc-trace path").last().getAttribute("d");
+const Link = () => Page.locator('[data-card="Attached to"] .vc-asset-link');
 
 try {
-  // Each socket row: live study first, then type, range and mount cards.
+  // Each socket row: the joint at its pose, then type, range and the asset it is attached to.
   for (const [Id, Kind, Range] of [
     ["vehicle-suspension", "Spring", "Spring & damper"],
     ["vehicle-steering", "Hinge", "Range of motion"],
@@ -51,50 +51,51 @@ try {
   ]) {
     await Open(Id);
     const Titles = await Page.locator(".vehicle-inspector [data-card]").evaluateAll((Cards) => Cards.map((Card) => Card.dataset.card));
-    assert.deepEqual(Titles, [Kind + " socket", "Socket type", Range, "Mount"]);
+    assert.deepEqual(Titles, [Kind + " socket", "Socket type", Range, "Attached to"]);
     assert.equal(await Page.locator('.vc-socket-kinds [role="radio"][aria-checked="true"]').innerText(), Kind);
     assert.equal(await Page.locator(".vc-socket-kinds svg").count(), 8);
-    const Study = await Scene().boundingBox(), Metric = await Page.locator(".vc-socket-study .metric").boundingBox();
-    assert(Study.y < Metric.y);
-    Checks.push(`${Id}: study → Socket type → ${Range} → Mount; drawn kind glyphs`);
+    // No test drive, trace or vehicle drawing any more.
+    assert.equal(await Page.getByRole("button", { name: /test drive|Restart/ }).count(), 0);
+    assert.equal(await Page.locator(".vc-trace, [data-card='Attached to'] .side-view, [data-card='Attached to'] .vc-visual").count(), 0);
+    assert.equal((await Link().innerText()).split("\n")[0].trim(), "Body");
+    Checks.push(`${Id}: pose → Socket type → ${Range} → Attached to (Body link); no animation or vehicle drawing`);
   }
 
-  // The test drive runs the Component Viewer's stepSocket: the spring trace moves and the phase label follows the drive.
+  // Static: the drawing does not change on its own.
   await Open("vehicle-suspension");
-  await Page.getByRole("button", { name: "Run test drive" }).click();
-  await Page.waitForTimeout(1500);
-  const Before = await TracePath();
-  await Page.waitForTimeout(900);
-  assert.notEqual(await TracePath(), Before);
-  assert.match(await Scene().textContent(), /(Accelerating|Cruising|Braking|Standing) · \d+ km\/h/);
-  await Page.screenshot({ path: path.join(Proof, "SpringStudy.png") });
-  await Page.getByRole("button", { name: "Stop" }).click();
-  assert.match(await Scene().textContent(), /parked/);
-  Checks.push("Test drive animates the spring and its 6 s trace; Stop parks it");
+  const Before = await Scene().innerHTML();
+  await Page.waitForTimeout(800);
+  assert.equal(await Scene().innerHTML(), Before);
+  await Page.screenshot({ path: path.join(Proof, "SpringPose.png") });
+  Checks.push("Socket drawing is static");
 
-  // Dragging the plate sets the preload (pose); the summary names the mount.
+  // Dragging the plate sets the preload (pose); the drawing follows.
   await Scene().scrollIntoViewIfNeeded();
   const Box = await Scene().boundingBox();
-  await Page.mouse.move(Box.x + Box.width / 2, Box.y + Box.height * 0.3);
+  await Page.mouse.move(Box.x + Box.width / 2, Box.y + Box.height * 0.42);
   await Page.mouse.down();
-  await Page.mouse.move(Box.x + Box.width / 2, Box.y + Box.height * 0.12, { steps: 4 });
+  await Page.mouse.move(Box.x + Box.width / 2, Box.y + Box.height * 0.18, { steps: 4 });
   await Page.mouse.up();
   await Page.waitForTimeout(300);
   assert((await Values("vehicle-suspension")).pose > 0.5);
-  assert(await Page.getByText("Spring socket · front axle").count());
-  Checks.push("Dragging the spring plate writes the preload pose; outliner summary names the front axle");
+  assert.notEqual(await Scene().innerHTML(), Before);
+  assert(await Page.getByText("Spring socket · on Body").count());
+  Checks.push("Dragging the spring plate writes the preload pose; outliner summary names the attached asset");
 
-  // Mount: dragging the marker moves the socket along the car and changes the spring's note.
-  const Mount = Page.locator('[data-card="Mount"] svg').first();
-  await Mount.scrollIntoViewIfNeeded();
-  const Area = await Mount.boundingBox();
-  await Page.mouse.click(Area.x + Area.width * 0.2, Area.y + Area.height * 0.5);
-  await Page.waitForTimeout(300);
-  assert((await Values("vehicle-suspension")).mount < -1);
-  assert(await Page.getByText(/Rear of the car: it squats under acceleration/).count());
-  Checks.push("Mount marker drags along the car; a rear spring explains squat");
+  // Attachment: changing the target relinks; the link selects the asset in the outliner.
+  await Page.locator('[data-card="Attached to"] select').first().selectOption({ label: "Chassis Collision" });
+  await Page.waitForTimeout(200);
+  assert.equal((await Values("vehicle-suspension")).attach, "vehicle-collision");
+  assert.equal((await Link().innerText()).split("\n")[0].trim(), "Chassis Collision");
+  await Link().scrollIntoViewIfNeeded();
+  await Page.screenshot({ path: path.join(Proof, "AttachedTo.png") });
+  await Link().click();
+  await Page.locator(".vehicle-inspector[data-component='BoxCollision']").waitFor();
+  assert.equal(await Page.locator(".inspector-heading h1").innerText(), "Chassis Collision");
+  Checks.push("Attach to relinks the socket; clicking the asset name selects that asset");
 
-  // Switching type keeps the numbers and swaps the study, range card and figures.
+  // Switching type keeps the numbers and swaps the drawing, range card and figures.
+  await Open("vehicle-suspension");
   await Page.locator(".vc-socket-kinds button", { hasText: "Tether" }).click();
   assert.equal((await Values("vehicle-suspension")).kind, "tether");
   await Page.locator('[data-card="Pendulum"]').waitFor();
@@ -103,24 +104,16 @@ try {
   assert((await Values("vehicle-suspension")).pose > 0.5);
   Checks.push("Switching to Tether shows the Pendulum card; switching back keeps the spring numbers");
 
-  // Dock: a click on the study releases the coupling, and the pull test raises a release event.
+  // Dock: a click on the drawing releases and reconnects the coupling.
   await Open("vehicle-tow");
   await Scene().click();
   assert.equal((await Values("vehicle-tow")).connected, false);
-  await Page.waitForTimeout(200);
+  assert.match(await Page.locator(".vc-socket-pose .metric").innerText(), /Released/);
   await Scene().click();
   await Page.waitForTimeout(200);
   assert.equal((await Values("vehicle-tow")).connected, true);
-  await Page.locator('[data-card="Coupling"] select').selectOption({ index: 1 });
-  await Page.getByRole("button", { name: "Restart" }).click();
-  await Page.waitForTimeout(100);
-  const Early = await Page.locator(".vc-event").allTextContents();
-  assert.deepEqual(Early, [], JSON.stringify(Early));
-  await Page.getByRole("button", { name: "Run test drive" }).click();
-  // Pull test ramps the load at 40 % of the break force per second, so it lets go at about 1.5 kN after ~2.5 s.
-  await Page.locator(".vc-event", { hasText: /Released at 1\.[5-9]\d kN/ }).waitFor({ timeout: 8000 });
-  await Page.screenshot({ path: path.join(Proof, "DockPullTest.png") });
-  Checks.push("Dock toggles on click; the pull test breaks the coupling and reports the release load");
+  await Page.screenshot({ path: path.join(Proof, "DockPose.png") });
+  Checks.push("Dock toggles connected / released on click");
 } catch (Error) {
   Errors.push(Error.stack);
 } finally {

@@ -1310,6 +1310,10 @@ in `Exhibits/LightCompute/Results/FogFacetRegression.txt`; this was a fixture-se
   DAG, distance-driven cut, OBJ export). New `CheckRenderSettings.mjs` (6) and `CheckVolumeWorkspaces.mjs` (4) pass; InspectorOrder,
   SharedCards, InspectorLayout, EntityContext, InstrumentStyle, FogCards, LightDesign, VehicleSockets, WorkspaceCards pass. Browser draft;
   no renderer connected. Names unapproved.
+  Follow-up 38: socket inspectors made static: the animated test drive, 6 s trace and vehicle side view are gone. Cards are now the
+  joint at its pose (drag to set it) → Socket type → range card → **Attached to** (the asset's name as a link that selects it, plus an
+  Attach to picker, offset and axis). `CheckVehicleSockets.mjs` rewritten (8 checks) and passes; InspectorOrder (109), EntityContext,
+  SharedCards and InspectorLayout pass. Names unapproved.
   Follow-up 35: in-place UV and Fracture edit workspaces for showcase primitives (`Workspaces.jsx`, `WorkspaceGeometry.js`; the viewport
   isolates the object, the inspector switches workspaces, Esc/Leave/Done exit), replacing the pop-out fracture window; Vehicle outliner
   folder (`VehicleComponents.jsx`: Vehicle Movement, Body, three sockets, two collisions, two lights, built from ComponentViewer

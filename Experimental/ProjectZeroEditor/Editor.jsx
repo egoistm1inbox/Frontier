@@ -1911,6 +1911,7 @@ function App() {
               Workspace={Workspace}
               OpenWorkspace={OpenWorkspace}
               SetWorkspace={SetWorkspace}
+              Scene={{ Rows, SelectRow }}
               OpenWind={() => {
                 WindOpener.current = document.activeElement;
                 EditWind(Selected);

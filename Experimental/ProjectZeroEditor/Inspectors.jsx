@@ -522,6 +522,7 @@ export function Inspector({
   Workspace = null,
   OpenWorkspace = null,
   SetWorkspace = null,
+  Scene = null,
 }) {
   const Sheet = Panels[Subject.Panel] || Panels.geometry;
   const [MoonSlot, SelectMoon] = useState(0);
@@ -795,7 +796,7 @@ export function Inspector({
     return (
       <div className="generic-inspector vehicle-component-inspector" data-panel={Subject.Panel}>
         {Header("Vehicle")}
-        <VehicleInspector Subject={Subject} Values={Values} Change={Change} Kit={{ Card, Control, Metric }} />
+        <VehicleInspector Subject={Subject} Values={Values} Change={Change} Kit={{ Card, Control, Metric, Icon }} Scene={Scene} />
       </div>
     );
   const Environment = Subject.Panel === EnvironmentPanel;

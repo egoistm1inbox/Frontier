@@ -5,9 +5,9 @@
 // outliner rows with their own inspectors. Component data, defaults and socket parameters come straight from
 // Experimental/ComponentViewer (Blueprint.js, Sockets.js); the icons are the baked EngineContent set. Browser authoring only.
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useRef } from "react";
 import { COMPONENT_CLASSES, VEHICLE_SHEET, createComponent } from "../ComponentViewer/Blueprint.js";
-import { SOCKET_KINDS, SOCKET_KIND, SOCKET_FIELDS, SOCKET_PARAMS, DRIVES, DOCK_COLORS, socketDefaults, poseLabel, createSocketState, stepSocket, socketReadout } from "../ComponentViewer/Sockets.js";
+import { SOCKET_KINDS, SOCKET_KIND, SOCKET_FIELDS, SOCKET_PARAMS, DRIVES, DOCK_COLORS, socketDefaults, poseLabel, createSocketState, socketReadout } from "../ComponentViewer/Sockets.js";
 
 export const VehiclePanel = "vehicle-component";
 export const VehicleSheet = [];
@@ -16,7 +16,7 @@ export const VehicleSheet = [];
 const Components = [
   ["vehicle-movement", "Vehicle Movement", "VehicleMovement", "arcade-joystick", "Chassis, suspension, powertrain and aero"],
   ["vehicle-body", "Body", "StaticMesh", "editor-mesh", "Static Mesh · body shell"],
-  ["vehicle-suspension", "Front Suspension", "Socket", "editor-pivot", "Spring socket · front axle", { Joint: "spring", Mount: 1.7 }],
+  ["vehicle-suspension", "Front Suspension", "Socket", "editor-pivot", "Spring socket · suspension strut", { Joint: "spring", Mount: 1.7 }],
   ["vehicle-steering", "Steering", "Socket", "editor-pivot", "Hinge socket · steering knuckle", { Joint: "hinge", Mount: 1.7 }],
   ["vehicle-tow", "Tow Hitch", "Socket", "editor-pivot", "Dock socket · trailer coupling", { Joint: "dock", Mount: -2.6 }],
   ["vehicle-collision", "Chassis Collision", "BoxCollision", "editor-box-collider", "Box collision · blocks all"],
@@ -68,7 +68,10 @@ export function VehicleSummary(Row, Values = {}) {
     case "VehicleMovement":
       return `${Math.round(V("mass"))} kg · ${V("wheels")?.length || 4} wheels`;
     case "Socket":
-      return `${SOCKET_KIND[V("kind")]?.label || "Fixed"} socket · ${MountSpot(+V("mount") || 0)}`;
+      {
+      const Id = Values.attach ?? Row.Attach ?? "vehicle-body";
+      return `${SOCKET_KIND[V("kind")]?.label || "Fixed"} socket · on ${VehicleRows.find((Each) => Each.Id === Id)?.Name || "another asset"}`;
+    }
     case "BoxCollision":
       return (V("extent") || [0, 0, 0]).map((Each) => (+Each * 2).toFixed(1)).join(" × ") + " m";
     case "SphereCollision":
@@ -298,106 +301,64 @@ function MovementInspector({ Kit, V, Write }) {
 //                                                   SOCKETS
 //------------------------------------------------------------------------------------------------------------------------
 
-// A socket inspector is four cards: the live study (the joint moving through a test drive, with a 6 s trace), the socket type,
-// the range the joint may move through, and where the socket sits on the car. The study runs the Component Viewer's own
-// stepSocket, so what moves here is what moves in Simulate.
+// A socket inspector is four cards: the joint drawn at its pose (drag to set it), the socket type, the range it may move
+// through, and the asset it is attached to. Everything is drawn from the settings and nothing animates here; the joint
+// moves in Simulate, through the Component Viewer's own stepSocket.
 
 const Degree = Math.PI / 180;
-const TraceSeconds = 6;
-const DriveLoop = 10;
-const SocketCentre = 162, PixelsPerMetre = 152 / Wheelbase; // SideView axles sit at x 86 (rear) and 238 (front).
+const RoadSpeed = 50 / 3.6; // vehicle-driven spin is quoted at 50 km/h
 
-// Test drive the study rides through: accelerate, cruise, brake, stand. The socket sees the acceleration, speed, road
-// distance and aero load (Vehicle Movement's default lift area) that Simulate would feed it.
-function DrivePhase(Time) {
-  const Phase = Time % DriveLoop;
-  if (Phase < 3) return { Accel: 3.5, Name: "Accelerating" };
-  if (Phase < 6) return { Accel: 0, Name: "Cruising" };
-  if (Phase < 8) return { Accel: -5.25, Name: "Braking" };
-  return { Accel: 0, Name: "Standing" };
+// The joint resting in its pose: where stepSocket settles with no drive input.
+function PosedJoint(P) {
+  const S = createSocketState();
+  const Clamp = (Amount) => Math.min(1, Math.max(0, Amount));
+  switch (P.kind) {
+    case "hinge":
+      S.angle = Lerp(P.angleMin, P.angleMax, Clamp(P.pose));
+      break;
+    case "slider":
+      S.travel = Lerp(P.travelMin, P.travelMax, Clamp(P.pose));
+      break;
+    case "ball":
+      S.theta = P.cone * Degree * Clamp(P.pose);
+      break;
+    case "spring":
+      S.x = Lerp(-P.springTravel, P.springTravel, Clamp(P.pose)) * 0.5;
+      break;
+    case "spin":
+      S.rate = P.spinSource === "vehicle" ? RoadSpeed / Math.max(0.05, P.spinRadius) : (P.rpm * 2 * Math.PI) / 60;
+      break;
+    case "tether":
+      S.theta = P.swing * Degree;
+      break;
+    case "dock":
+      Object.assign(S.dock, { phase: P.connected ? "connected" : "released", gap: P.connected ? 0 : Math.max(0.05, P.snapRadius) * 1.8 });
+      break;
+  }
+  return S;
 }
 
 // The single number each socket kind is about, with the range it may take.
 function Quantity(P, S) {
   switch (P.kind) {
     case "hinge":
-      return { Value: S.angle, Low: Math.min(P.angleMin, P.angleMax), High: Math.max(P.angleMin, P.angleMax), Unit: "°", Digits: 0, Caption: `steered angle · ${P.angleMin}° to ${P.angleMax}°` };
+      return { Value: S.angle, Low: Math.min(P.angleMin, P.angleMax), High: Math.max(P.angleMin, P.angleMax), Unit: "°", Digits: 0, Caption: `posed angle · ${P.angleMin}° to ${P.angleMax}°` };
     case "slider":
       return { Value: S.travel * 1000, Low: Math.min(P.travelMin, P.travelMax) * 1000, High: Math.max(P.travelMin, P.travelMax) * 1000, Unit: "mm", Digits: 0, Caption: "along the rail from the mount" };
     case "ball":
       return { Value: S.theta / Degree, Low: 0, High: P.cone, Unit: "°", Digits: 0, Caption: `tilt inside the ${P.cone}° cone` };
     case "spring":
-      return { Value: S.x * 1000, Low: -P.springTravel * 1000, High: P.springTravel * 1000, Unit: "mm", Digits: 0, Caption: S.x > 0.0005 ? "compressed toward the bump stop" : S.x < -0.0005 ? "extended toward full droop" : "at ride height" };
+      return { Value: S.x * 1000, Low: -P.springTravel * 1000, High: P.springTravel * 1000, Unit: "mm", Digits: 0, Caption: S.x > 0.0005 ? "preloaded toward the bump stop" : S.x < -0.0005 ? "set toward full droop" : "rests at ride height" };
     case "spin": {
-      const Peak = P.spinSource === "vehicle" ? (10.5 / Math.max(0.05, P.spinRadius)) * (60 / (2 * Math.PI)) : Math.max(10, Math.abs(P.rpm));
-      return { Value: ((S.rate || 0) * 60) / (2 * Math.PI), Low: -Peak, High: Peak, Unit: "rpm", Digits: 0, Caption: P.spinSource === "vehicle" ? "follows the test drive's road speed" : "fixed rate" };
+      const Peak = P.spinSource === "vehicle" ? (RoadSpeed / Math.max(0.05, P.spinRadius)) * (60 / (2 * Math.PI)) : Math.max(10, Math.abs(P.rpm));
+      return { Value: ((S.rate || 0) * 60) / (2 * Math.PI), Low: -Peak, High: Peak, Unit: "rpm", Digits: 0, Caption: P.spinSource === "vehicle" ? "follows road speed · shown at 50 km/h" : "fixed rate" };
     }
     case "tether":
-      return { Value: S.theta / Degree, Low: -90, High: 90, Unit: "°", Digits: 0, Caption: S.theta > 0 ? "trailing backwards" : S.theta < 0 ? "swinging forwards" : "hanging straight" };
+      return { Value: S.theta / Degree, Low: -90, High: 90, Unit: "°", Digits: 0, Caption: S.theta > 0 ? "starts trailing backwards" : S.theta < 0 ? "starts swung forwards" : "hangs straight" };
     case "dock":
-      return { Value: S.dock.load / 1000, Low: 0, High: (P.breakForce * 1.2) / 1000, Unit: "kN", Digits: 2, Caption: `${S.dock.phase || "released"} · breaks at ${(P.breakForce / 1000).toFixed(2)} kN` };
+      return { Value: S.dock.load / 1000, Low: 0, High: (P.breakForce * 1.2) / 1000, Unit: "kN", Digits: 2, Caption: `breaks at ${(P.breakForce / 1000).toFixed(2)} kN` };
   }
   return { Value: 0, Low: -1, High: 1, Unit: "", Digits: 0, Caption: "children ride along exactly" };
-}
-
-// Steps the socket every frame. The test drive only advances while it runs; parked, springs and pendulums still settle.
-function useSocketMotion(P, Mount, Running) {
-  const Motion = useRef(null);
-  if (!Motion.current) Motion.current = { S: createSocketState(), Drive: { T: 0, Speed: 0, Distance: 0, Accel: 0, Name: "Parked" }, Trace: [], Events: [], Clock: 0, Peak: 0 };
-  const Latest = useRef(null);
-  Latest.current = { P, Mount, Running };
-  const [, Repaint] = useState(0);
-  useEffect(() => {
-    Motion.current.S = createSocketState();
-    Motion.current.Trace = [];
-    Motion.current.Events = [];
-    Motion.current.Peak = 0;
-  }, [P.kind]);
-  useEffect(() => {
-    Motion.current.S.thetaInit = false;
-  }, [P.swing, P.length]);
-  useEffect(() => {
-    let Handle = 0, Last = performance.now();
-    const Advance = (Now) => {
-      const Dt = Math.min(0.05, Math.max(0, (Now - Last) / 1000));
-      Last = Now;
-      const { P, Mount, Running } = Latest.current;
-      const M = Motion.current, Drive = M.Drive;
-      if (Running) {
-        const Before = Drive.T % DriveLoop;
-        Drive.T += Dt;
-        if (Drive.T % DriveLoop < Before) Drive.Speed = 0;
-        Object.assign(Drive, DrivePhase(Drive.T));
-        Drive.Speed = Math.max(0, Drive.Speed + Drive.Accel * Dt);
-        Drive.Distance += Drive.Speed * Dt;
-      } else Object.assign(Drive, { Accel: 0, Speed: 0, Name: "Parked" });
-      const Raised = stepSocket(M.S, P, Dt, {
-        simulate: Running,
-        accel: Drive.Accel,
-        speed: Drive.Speed,
-        distance: Drive.Distance,
-        along: Mount,
-        downforce: 0.5 * 1.225 * 1.1 * Drive.Speed ** 2,
-        accepts: true,
-      });
-      M.Clock += Dt;
-      Raised.forEach((Event) => M.Events.unshift({ ...Event, At: M.Clock }));
-      M.Events.length = Math.min(M.Events.length, 4);
-      const Q = Quantity(P, M.S);
-      M.Peak = Math.max(M.Peak * Math.exp(-Dt * 0.4), Math.abs(P.kind === "tether" ? M.S.theta : 0));
-      M.Trace.push([M.Clock, Q.Value, Drive.Speed]);
-      while (M.Trace.length && M.Trace[0][0] < M.Clock - TraceSeconds) M.Trace.shift();
-      Repaint((Count) => (Count + 1) & 0xffff);
-      Handle = requestAnimationFrame(Advance);
-    };
-    Handle = requestAnimationFrame(Advance);
-    return () => cancelAnimationFrame(Handle);
-  }, []);
-  const Restart = () => {
-    Object.assign(Motion.current, { S: createSocketState(), Trace: [], Events: [], Peak: 0 });
-    Object.assign(Motion.current.Drive, { T: 0, Speed: 0, Distance: 0, Accel: 0 });
-  };
-  return [Motion.current, Restart];
 }
 
 // Small drawn glyph per socket kind, for the type picker.
@@ -457,17 +418,6 @@ export function SocketGlyph({ Variant, Size = 22 }) {
       {Paths[Variant] || Paths.fixed}
     </svg>
   );
-}
-
-// Where a socket sits along the car, in words.
-function MountSpot(Mount) {
-  const Axle = Wheelbase / 2;
-  if (Math.abs(Mount - Axle) < 0.25) return "front axle";
-  if (Math.abs(Mount + Axle) < 0.25) return "rear axle";
-  if (Mount > 2.2) return "front bumper";
-  if (Mount < -2.2) return "rear bumper";
-  if (Math.abs(Mount) < 0.3) return "centre of the wheelbase";
-  return `${Math.abs(Mount).toFixed(2)} m ${Mount > 0 ? "ahead of" : "behind"} centre`;
 }
 
 // The joint itself, drawn from the live state. Returns the drawing and how a drag on it maps back to properties.
@@ -589,18 +539,13 @@ function SocketScene({ P, S, Colour, Peak }) {
       const Out = Math.max(0.05, P.snapRadius) * 1.8, Scale = 92 / Out, Face = 132;
       const Phase = S.dock.phase || "released";
       const Tint = DOCK_COLORS[Phase] || DOCK_COLORS.seeking;
-      const Load = Math.min(1.2, S.dock.load / Math.max(1, P.breakForce));
       return (
         <>
           <rect x={Face} y="48" width={P.snapRadius * Scale} height="48" fill={Colour + "12"} stroke={Colour} strokeDasharray="3 3" />
           <text x={Face + 4} y="42">snap {P.snapRadius.toFixed(2)} m</text>
           <rect x="84" y="50" width={Face - 84} height="44" rx="6" fill="#262626" stroke="#8a8a8a" />
           <rect x={Face + S.dock.gap * Scale} y="56" width="40" height="32" rx="7" fill="#ededed" stroke={Tint} strokeWidth="2.5" className="vc-grip" />
-          {S.dock.ripple > 0 && <circle cx={Face} cy="72" r={(0.6 - S.dock.ripple) * 90} fill="none" stroke={DOCK_COLORS.connected} opacity={S.dock.ripple / 0.6} />}
-          <rect x="60" y="110" width="200" height="6" rx="3" fill="#ffffff14" />
-          <rect x="60" y="110" width={(Load / 1.2) * 200} height="6" rx="3" fill={Load >= 1 ? DOCK_COLORS.rejected : Colour} />
-          <line x1={60 + 200 / 1.2} x2={60 + 200 / 1.2} y1="105" y2="121" stroke="#ededed" />
-          <text x={60 + 200 / 1.2} y="131" textAnchor="middle">break {(P.breakForce / 1000).toFixed(2)} kN</text>
+          <text x="160" y="124" textAnchor="middle">{P.connected ? `holds up to ${(P.breakForce / 1000).toFixed(2)} kN` : `snaps home inside ${P.snapRadius.toFixed(2)} m`}</text>
         </>
       );
     }
@@ -644,31 +589,10 @@ function DragToProperties(P, X, Y) {
   return null;
 }
 
-// 6 s of the socket's quantity (kind colour) over the test drive's speed (grey), limits dashed.
-function TraceStrip({ Trace, Q, Colour, Clock, Phase }) {
-  const Left = 16, Right = 304, Top = 150, Bottom = 192;
-  const X = (Time) => Right - ((Clock - Time) / TraceSeconds) * (Right - Left);
-  const Y = (Value) => Bottom - Math.min(1, Math.max(0, (Value - Q.Low) / Math.max(1e-6, Q.High - Q.Low))) * (Bottom - Top);
-  const Speed = (Value) => Bottom - Math.min(1, Value / 12) * (Bottom - Top);
-  const Line = (Map, Slot) => Trace.map((Sample, Index) => (Index ? "L" : "M") + X(Sample[0]).toFixed(1) + " " + Map(Sample[Slot]).toFixed(1)).join("");
-  const Zero = Q.Low < 0 && Q.High > 0 ? Y(0) : null;
-  return (
-    <g className="vc-trace">
-      <line x1={Left} x2={Right} y1={Top} y2={Top} stroke="#ffffff1f" strokeDasharray="2 3" />
-      <line x1={Left} x2={Right} y1={Bottom} y2={Bottom} stroke="#ffffff1f" strokeDasharray="2 3" />
-      {Zero !== null && <line x1={Left} x2={Right} y1={Zero} y2={Zero} stroke="#ffffff12" />}
-      {Trace.some((Sample) => Sample[2] > 0.05) && <path d={Line(Speed, 2)} fill="none" stroke="#ffffff38" strokeWidth="1.2" />}
-      {Trace.length > 1 && <path d={Line(Y, 1)} fill="none" stroke={Colour} strokeWidth="1.8" strokeLinejoin="round" />}
-      <text x={Left} y={Top - 4}>last {TraceSeconds} s</text>
-      <text x={Right} y={Top - 4} textAnchor="end">{Phase}</text>
-    </g>
-  );
-}
-
-function SocketStudy({ Kit, P, Write, M, Restart, Running, SetRunning }) {
+function SocketPose({ Kit, P, S, Write }) {
   const { Card, Metric } = Kit;
   const Variant = SOCKET_KIND[P.kind] || SOCKET_KIND.fixed, Colour = Variant.color;
-  const Q = Quantity(P, M.S);
+  const Q = Quantity(P, S);
   const Svg = useRef(null), Dragging = useRef(false);
   const Local = (Event) => {
     const Point = Svg.current.createSVGPoint();
@@ -681,10 +605,11 @@ function SocketStudy({ Kit, P, Write, M, Restart, Running, SetRunning }) {
     const Changes = DragToProperties(P, x, y);
     if (Changes) Object.entries(Changes).forEach(([Key, Next]) => Write(Key, Next));
   };
+  const Draggable = !!DragToProperties(P, 0, 0);
   const Handlers = {
     onPointerDown: (Event) => {
       if (P.kind === "dock") return Write("connected", !P.connected);
-      if (!DragToProperties(P, 0, 0)) return;
+      if (!Draggable) return;
       Dragging.current = true;
       Event.currentTarget.setPointerCapture(Event.pointerId);
       Apply(Event);
@@ -692,39 +617,22 @@ function SocketStudy({ Kit, P, Write, M, Restart, Running, SetRunning }) {
     onPointerMove: (Event) => Dragging.current && Apply(Event),
     onPointerUp: () => (Dragging.current = false),
   };
-  const Drive = M.Drive, Last = M.Events[0];
-  const Hint = { hinge: "Drag the arm to set the pose", slider: "Drag the carriage to set the pose", ball: "Drag the stick to set the tilt", spring: "Drag the plate to set the preload", tether: "Drag the weight to set the starting swing", dock: "Click to connect or release", spin: "", fixed: "" }[P.kind];
+  const Hint = { hinge: "drag the arm to set the pose", slider: "drag the carriage to set the pose", ball: "drag the stick to set the tilt", spring: "drag the plate to set the preload", tether: "drag the weight to set the starting swing", dock: "click to connect or release" }[P.kind];
   const Shown = Q.Value.toFixed(Q.Digits).replace(/^-0(\.0+)?$/, "0").replace("-", "−");
+  const Word = P.kind === "dock" ? (P.connected ? "Connected" : "Released") : P.kind === "fixed" ? "Rigid" : null;
   return (
-    <Card Title={`${Variant.label} socket`} Class="vc-card vc-socket-study">
-      <svg ref={Svg} className={"vc-visual vc-socket-scene" + (DragToProperties(P, 0, 0) || P.kind === "dock" ? " vc-draggable" : "")} viewBox="0 0 320 200" role="img" aria-label={`${Variant.label} socket study`} {...Handlers}>
+    <Card Title={`${Variant.label} socket`} Class="vc-card vc-socket-pose">
+      <svg ref={Svg} className={"vc-visual vc-socket-scene" + (Draggable || P.kind === "dock" ? " vc-draggable" : "")} viewBox="0 0 320 150" role="img" aria-label={`${Variant.label} socket at its pose`} {...Handlers}>
         <defs>
           <marker id="VcArrow" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto">
             <path d="M0 0L10 5L0 10z" fill="#e8e8e8" />
           </marker>
         </defs>
         <text x="16" y="18">axis {P.axis}</text>
-        <text x="304" y="18" textAnchor="end">{socketReadout(P, M.S)}</text>
-        <SocketScene P={P} S={M.S} Colour={Colour} Peak={M.Peak} />
-        <TraceStrip Trace={M.Trace} Q={Q} Colour={Colour} Clock={M.Clock} Phase={Running ? `${Drive.Name} · ${(Drive.Speed * 3.6).toFixed(0)} km/h` : "parked"} />
+        <text x="304" y="18" textAnchor="end">{socketReadout(P, S)}</text>
+        <SocketScene P={P} S={S} Colour={Colour} Peak={0} />
       </svg>
-      <div className="vc-socket-bar">
-        <button type="button" className="vc-run" aria-pressed={Running} onClick={() => SetRunning(!Running)}>
-          <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
-            {Running ? <path d="M4 3h3v10H4zM9 3h3v10H9z" fill="currentColor" /> : <path d="M4 2.5l9 5.5-9 5.5z" fill="currentColor" />}
-          </svg>
-          {Running ? "Stop" : "Run test drive"}
-        </button>
-        <button type="button" onClick={Restart}>Restart</button>
-        {Hint && <span className="vc-hint">{Hint}</span>}
-      </div>
-      <Metric Value={P.kind === "dock" ? (M.S.dock.phase || "released").replace(/^./, (Letter) => Letter.toUpperCase()) : P.kind === "fixed" ? "Rigid" : Shown} Unit={P.kind === "dock" || P.kind === "fixed" ? "" : Q.Unit} Caption={P.kind === "dock" ? `${Q.Value.toFixed(2)} kN on the coupling · breaks at ${(P.breakForce / 1000).toFixed(2)} kN` : Q.Caption} />
-      {Last && (
-        <p className="vc-note vc-event" style={{ "--k": DOCK_COLORS[Last.type] || Colour }}>
-          <i />
-          {Last.type === "released" ? `Released at ${(Last.load / 1000).toFixed(2)} kN` : Last.type === "connected" ? "Snapped home and connected" : "Rejected: key did not match"} · {(M.Clock - Last.At).toFixed(1)} s ago
-        </p>
-      )}
+      <Metric Value={Word || Shown} Unit={Word ? "" : Q.Unit} Caption={[Q.Caption, Hint].filter(Boolean).join(" · ")} />
     </Card>
   );
 }
@@ -813,7 +721,7 @@ function SocketRange({ Kit, P, Write, S }) {
   const Fields = SOCKET_FIELDS[P.kind].filter((Key) => Key !== "axis" && (Key !== "period" || P.drive === "sweep"));
   return (
     <Card Title={Title} Class="vc-card">
-      <RangeStrip P={P} Q={Quantity(P, S)} Colour={Variant.color} />
+      {P.kind !== "dock" && <RangeStrip P={P} Q={Quantity(P, S)} Colour={Variant.color} />}
       {Fields.map((Key) => {
         const Param = SOCKET_PARAMS[Key];
         if (Param.type === "range") return <Slider key={Key} Kit={Kit} V={(Name) => P[Name]} Write={Write} Key={Key} Label={Param.label} Minimum={Param.min} Maximum={Param.max} Step={Param.step} Unit={Param.unit} />;
@@ -855,83 +763,54 @@ function SocketType({ Kit, P, Write }) {
   );
 }
 
-function SocketMount({ Kit, P, Mount, Write }) {
-  const { Card, Control, Metric } = Kit;
-  const Variant = SOCKET_KIND[P.kind] || SOCKET_KIND.fixed;
-  const X = SocketCentre + Mount * PixelsPerMetre, Y = 82;
-  const Dragging = useRef(false);
-  const Move = (Event) => {
-    const Svg = Event.currentTarget, Point = Svg.createSVGPoint();
-    Point.x = Event.clientX;
-    Point.y = Event.clientY;
-    const Local = Point.matrixTransform(Svg.getScreenCTM().inverse());
-    Write("mount", +Math.min(2.8, Math.max(-2.8, (Local.x - SocketCentre) / PixelsPerMetre)).toFixed(2));
-  };
-  const Arrow = { X: [22, 0], Y: [0, -22], Z: null }[P.axis];
-  const Effect =
-    P.kind === "spring"
-      ? Mount > 0.3
-        ? "Front of the car: it dives under braking and lifts under acceleration."
-        : Mount < -0.3
-          ? "Rear of the car: it squats under acceleration and lifts under braking."
-          : "Near the centre, acceleration barely loads it; road bumps still reach it."
-      : P.kind === "tether"
-        ? "Hangs from here; acceleration swings it backwards, braking forwards."
-        : "Children of this socket are placed here and move with the joint.";
+// The asset this socket hangs from, as a link: one click selects it. No picture of the vehicle; the offset is numeric.
+function AttachmentTarget(Row, Rows, Values) {
+  const Id = Values?.attach ?? Row.Attach ?? "vehicle-body";
+  return { Id, Target: Rows.find((Each) => Each.Id === Id) || null };
+}
+const ComponentLabel = (Row) => COMPONENT_CLASSES[Row?.Component]?.label || (Row?.Panel === "group" ? "Folder" : "Asset");
+
+function SocketAttachment({ Kit, P, Mount, Write, Row, Scene, Values }) {
+  const { Card, Control, Icon } = Kit;
+  const Rows = Scene?.Rows || [];
+  const { Id, Target } = AttachmentTarget(Row, Rows, Values);
+  const Candidates = Rows.filter((Each) => Each.Id !== Row.Id && Each.Component !== "Socket" && (Each.Parent === Row.Parent || Each.Id === Row.Parent));
+  const Choice = Math.max(0, Candidates.findIndex((Each) => Each.Id === Id));
   return (
-    <Card Title="Mount" Class="vc-card">
-      <SideView
-        Label={`Socket mounted at the ${MountSpot(Mount)}`}
-        Handlers={{
-          className: "vc-visual vc-draggable",
-          onPointerDown: (Event) => {
-            Dragging.current = true;
-            Event.currentTarget.setPointerCapture(Event.pointerId);
-            Move(Event);
-          },
-          onPointerMove: (Event) => Dragging.current && Move(Event),
-          onPointerUp: () => (Dragging.current = false),
-        }}
-      >
-        <defs>
-          <marker id="VcMountArrow" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto">
-            <path d="M0 0L10 5L0 10z" fill="#ededed" />
-          </marker>
-        </defs>
-        <line x1={X} x2={X} y1="22" y2="128" stroke={Variant.color} strokeDasharray="2 3" opacity="0.6" />
-        {Arrow ? (
-          <line x1={X} y1={Y} x2={X + Arrow[0]} y2={Y + Arrow[1]} stroke="#ededed" strokeWidth="1.6" markerEnd="url(#VcMountArrow)" />
-        ) : (
-          <>
-            <circle cx={X + 16} cy={Y - 16} r="5" fill="none" stroke="#ededed" />
-            <circle cx={X + 16} cy={Y - 16} r="1.4" fill="#ededed" />
-          </>
-        )}
-        <circle cx={X} cy={Y} r="7" fill="#1b1b1b" stroke={Variant.color} strokeWidth="2.4" className="vc-grip" />
-        <text x={Math.min(280, Math.max(40, X))} y="16" textAnchor="middle">{MountSpot(Mount)}</text>
-        <text x="16" y="146">rear</text>
-        <text x="304" y="146" textAnchor="end">front</text>
-      </SideView>
-      <Metric Value={Mount.toFixed(2).replace("-", "−")} Unit="m" Caption={`${Mount >= 0 ? "Ahead of" : "Behind"} the centre of the wheelbase · ${MountSpot(Mount)}`} />
-      <Slider Kit={Kit} V={() => Mount} Write={Write} Key="mount" Label="Position along the car" Minimum={-2.8} Maximum={2.8} Step={0.01} Unit="m" />
-      <Control Field={{ Label: "Joint axis", Control: "Select", Options: ["X · along the car", "Y · up", "Z · across the car"] }} Value={["X", "Y", "Z"].indexOf(P.axis)} Change={(Index) => Write("axis", ["X", "Y", "Z"][Index])} />
-      <p className="vc-note">{Effect}</p>
+    <Card Title="Attached to" Class="vc-card vc-attachment">
+      {Target ? (
+        <button type="button" className="vc-asset-link" onClick={() => Scene?.SelectRow?.(Target.Id)} title={`Select ${Target.Name}`} data-target={Target.Id}>
+          {Icon && <Icon Name={Target.Icon} Size={22} />}
+          <span>
+            <b>{Target.Name}</b>
+            <small>{ComponentLabel(Target)}</small>
+          </span>
+          <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+            <path d="M6 3.5L10.5 8 6 12.5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
+      ) : (
+        <p className="vc-asset-link vc-missing">{Id ? "The attached asset was removed" : "Not attached"}</p>
+      )}
+      {Candidates.length > 1 && (
+        <Control Field={{ Label: "Attach to", Control: "Select", Options: Candidates.map((Each) => Each.Name) }} Value={Choice} Change={(Index) => Write("attach", Candidates[Index].Id)} />
+      )}
+      <Slider Kit={Kit} V={() => Mount} Write={Write} Key="mount" Label="Offset along X" Minimum={-2.8} Maximum={2.8} Step={0.01} Unit="m" />
+      <Control Field={{ Label: "Joint axis", Control: "Select", Options: ["X", "Y", "Z"] }} Value={["X", "Y", "Z"].indexOf(P.axis)} Change={(Index) => Write("axis", ["X", "Y", "Z"][Index])} />
     </Card>
   );
 }
 
-function SocketInspector({ Kit, V, Write }) {
+function SocketInspector({ Kit, V, Write, Row, Scene, Values }) {
   const P = { ...socketDefaults(V("kind") || "fixed"), ...Object.fromEntries(Object.keys(SOCKET_PARAMS).concat("kind").map((Key) => [Key, V(Key)]).filter(([, Value]) => Value !== undefined)) };
   const Mount = Number.isFinite(+V("mount")) ? +V("mount") : 0;
-  // One live state for the whole inspector, so the study and the range strip show the same moment.
-  const [Running, SetRunning] = useState(false);
-  const [M, Restart] = useSocketMotion(P, Mount, Running);
+  const S = PosedJoint(P);
   return (
     <>
-      <SocketStudy Kit={Kit} P={P} Write={Write} M={M} Restart={Restart} Running={Running} SetRunning={SetRunning} />
+      <SocketPose Kit={Kit} P={P} S={S} Write={Write} />
       <SocketType Kit={Kit} P={P} Write={Write} />
-      <SocketRange Kit={Kit} P={P} Write={Write} S={M.S} />
-      <SocketMount Kit={Kit} P={P} Mount={Mount} Write={Write} />
+      <SocketRange Kit={Kit} P={P} Write={Write} S={S} />
+      <SocketAttachment Kit={Kit} P={P} Mount={Mount} Write={Write} Row={Row} Scene={Scene} Values={Values} />
     </>
   );
 }
@@ -1058,10 +937,10 @@ function BodyInspector({ Kit, V, Write }) {
   );
 }
 
-export function VehicleInspector({ Subject, Values, Change, Kit }) {
+export function VehicleInspector({ Subject, Values, Change, Kit, Scene = null }) {
   const V = Reader(Subject, Values);
   const Write = (Key, Next) => Change(Key, Next);
-  const Wiring = { Kit, V, Write, Row: Subject };
+  const Wiring = { Kit, V, Write, Row: Subject, Scene, Values };
   const Body =
     Subject.Component === "VehicleMovement" ? <MovementInspector {...Wiring} />
       : Subject.Component === "Socket" ? <SocketInspector {...Wiring} />
