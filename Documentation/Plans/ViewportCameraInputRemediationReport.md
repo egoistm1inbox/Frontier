@@ -43,7 +43,7 @@ appeared completely broken.
 | `CameraInteractiveDrag` | Included any plain-`LMB` movement | `RightHeld \|\| MiddleHeld \|\| (AltHeld && (LeftHeld \|\| RightHeld \|\| MiddleHeld)) \|\| QueryDragging() \|\| CameraMoved` |
 | Gizmo ownership | Comment: "preempt LMB camera walk" | Gizmo handle drag now exclusively owns the `LMB` press |
 
-**Resulting single model (unchanged, verified):**
+**Resulting single model (existing bindings preserved, `LMB` navigation removed):**
 
 | Gesture | Action |
 | :--- | :--- |
