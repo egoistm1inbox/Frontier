@@ -49,6 +49,26 @@ starting point for the UI redesign.
 
 ---
 
+## Follow-up 41: render settings as camera components
+
+- Render settings are no longer a section inside the camera inspector. Every camera (Editor, Cine and any placed from Construct) has
+  five **render components** as outliner children, split by render path. They all edit the camera's one `Values["Render Settings"]`
+  record (`RenderSettings.js`, unchanged source rules):
+  - **Render Engine**: engines grouped by family (MatCap · Raster · SDF · Ray traced), chips showing which components the engine uses
+    (each selects that component), the quality tier as pills with the per-pass sample bar, and Output (exposure, scale pills, edge AA)
+    with Reset.
+  - **MatCap**: a studio sphere shaded in the browser; drag around it to move the light. Channel pills (Shaded / Normals / Roughness /
+    Cavity), rim, cavity, clay tint and wire overlay. These six `Matcap*` fields are editor additions: the source engine has no settings.
+  - **Shadow Maps**: a texel-grid study with the filter footprint (3 × 3 PCF, Vogel-disk PCSS taps with the blocker search, contact rays,
+    SMRT march steps), algorithm tiles, map-resolution pills, tier and filtering; then a penumbra card.
+  - **SDF Tracing**: a sphere-tracing study that changes with the penumbra mode, the six modes as a rail, and the cone GI card.
+  - **Ray Tracing**: the ray budget, then one switch each for shadows, GI and reflections; each traced pass gets its own card.
+- Every component opens with an **In use / Not used** strip for the current engine, with a button that switches to the engine that runs it.
+- New files: `RenderComponents.jsx`, `RenderStudies.jsx` (the earlier studies moved here). Icons: `render-matcap`, `render-shadow-maps`,
+  `render-sdf`, `render-ray-tracing`. `RenderSettingsCards.jsx` is removed. Cameras use the same component rows as objects
+  (`ObjectComponents.jsx`); `ComponentRevision` 2 adds the camera components to older saved scenes once.
+- Checks: `CheckRenderSettings.mjs` rewritten (9); InspectorOrder (157), EntityContext (78 rows) and ObjectComponents (7) updated and passing.
+
 ## Follow-up 40: editable vehicle curves, one page per workspace, object components
 
 - **Editable curves** (`VehicleComponents.jsx`): the three Vehicle Movement charts take drags and write the fields behind them.

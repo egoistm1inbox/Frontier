@@ -1,47 +1,61 @@
 //============================================================================================================================================
 //                                                          OBJECTCOMPONENTS.JSX
 //============================================================================================================================================
-// 🧩 Object components: Mass, Rigid Body and Collision hang under each showcase object in the outliner, the way the post effects hang
-// under Post Process. They are outliner rows with their own inspectors, but their values live on the owning object (Values[Owner]),
-// so the object's viewport, checks and quick controls keep reading the same keys. Browser authoring only.
+// 🧩 Components: outliner rows that hang under an owner the way the post effects hang under Post Process. Showcase objects carry
+// Mass, Rigid Body and Collision; cameras carry their render settings split by path (Render Engine, MatCap, Shadow Maps, SDF Tracing,
+// Ray Tracing; RenderComponents.jsx). Each row has its own inspector, but the values live on the owner (Values[Owner]), so the
+// owner's viewport, checks and quick controls keep reading the same keys. Browser authoring only.
 
 import React from "react";
 import "./ObjectComponents.css";
 import { ShapeOf, Measure, MassOf, CollisionProxy } from "./PrimitiveInspector.jsx";
+import { RenderComponentTypes, RenderSummary } from "./RenderComponents.jsx";
 
 export const ComponentPanel = "object-component";
 export const ComponentSheet = [];
 
-// Component, baked icon, description.
-export const ObjectComponentTypes = [
-  ["Mass", "editor-mass", "Density, mass and spin resistance"],
-  ["Rigid Body", "editor-physics", "Simulation and surface response"],
-  ["Collision", "editor-box-collider", "Collision shape and filtering"],
-];
+// Component, baked icon, description, per owner kind.
+export const ComponentTypes = {
+  object: [
+    ["Mass", "editor-mass", "Density, mass and spin resistance"],
+    ["Rigid Body", "editor-physics", "Simulation and surface response"],
+    ["Collision", "editor-box-collider", "Collision shape and filtering"],
+  ],
+  camera: RenderComponentTypes.map(([Name, Icon, Description]) => [Name, Icon, Description]),
+};
+// The revision each kind's components arrived in (saved scenes below it gain them once).
+const Arrival = { object: 1, camera: 2 };
+export const ComponentRevision = 2;
 
 const Slug = (Component) => Component.toLowerCase().replace(/\s+/g, "-");
-export const IsObjectOwner = (Row) => Row?.Panel === "geometry" && Row.Parent === "showcase";
+export const OwnerKind = (Row) => (Row?.Panel === "geometry" && Row.Parent === "showcase" ? "object" : Row?.Panel === "camera" ? "camera" : null);
+const TypesOf = (Row) => ComponentTypes[OwnerKind(Row)] || [];
 
-export function ComponentRow(OwnerId, Component) {
-  const [, Icon, Description] = ObjectComponentTypes.find(([Name]) => Name === Component) || ObjectComponentTypes[0];
-  return { Id: `${OwnerId}-${Slug(Component)}`, Name: Component, Panel: ComponentPanel, Icon, Parent: OwnerId, Description, Component };
+export function ComponentRow(Owner, Component) {
+  const Types = TypesOf(Owner);
+  const [, Icon, Description] = Types.find(([Name]) => Name === Component) || Types[0];
+  return { Id: `${Owner.Id}-${Slug(Component)}`, Name: Component, Panel: ComponentPanel, Icon, Parent: Owner.Id, Description, Component };
 }
-export const ComponentRowsFor = (OwnerId) => ObjectComponentTypes.map(([Component]) => ComponentRow(OwnerId, Component));
+export const ComponentRowsFor = (Owner) => TypesOf(Owner).map(([Component]) => ComponentRow(Owner, Component));
 
-// Inserts each owner's components right after the owner (and anything already under it).
-export function WithObjectComponents(Rows) {
+// Inserts each owner's components right after the owner, for owner kinds that arrived after `Revision`.
+export function WithObjectComponents(Rows, Revision = 0) {
   const Result = [];
   for (const Row of Rows) {
     Result.push(Row);
-    if (IsObjectOwner(Row) && !Rows.some((Each) => Each.Parent === Row.Id && Each.Panel === ComponentPanel)) Result.push(...ComponentRowsFor(Row.Id));
+    const Kind = OwnerKind(Row);
+    if (!Kind || Arrival[Kind] <= Revision) continue;
+    const Present = new Set(Rows.filter((Each) => Each.Parent === Row.Id && Each.Panel === ComponentPanel).map((Each) => Each.Component));
+    Result.push(...ComponentRowsFor(Row).filter((Each) => !Present.has(Each.Component)));
   }
   return Result;
 }
 
-// Saved scenes get components once (ComponentRevision), so a component removed later stays removed.
+// Saved scenes gain each kind's components once (ComponentRevision), so a component removed later stays removed.
 export function EnsureObjectComponents(Rows = [], Revision) {
-  if (!Array.isArray(Rows) || Revision >= 1) return Rows;
-  return WithObjectComponents(Rows);
+  const Seen = +Revision || 0;
+  if (!Array.isArray(Rows) || Seen >= ComponentRevision) return Rows;
+  return WithObjectComponents(Rows, Seen);
 }
 
 const Read = (Values) => (Key, Initial) => (Values?.[Key] === undefined ? Initial : Values[Key]);
@@ -51,6 +65,7 @@ const Proxies = { box: "Box", sphere: "Sphere", capsule: "Capsule", convex: "Con
 // Outliner value line, read from the owner's values.
 export function ComponentSummary(Row, Owner, Values = {}) {
   if (!Owner) return "Owner removed";
+  if (OwnerKind(Owner) === "camera") return RenderSummary(Row.Component, Values);
   const R = Read(Values);
   if (Row.Component === "Mass") {
     const { Mass, Manual, Density } = MassOf(R, SizeOf(Owner, Values));
@@ -65,15 +80,15 @@ export function ComponentSummary(Row, Owner, Values = {}) {
 }
 
 // Overview card listing the object's components: each is a link that selects it; missing ones can be added back.
-export function ComponentsCard({ Owner, Values, Scene, Kit }) {
+export function ComponentsCard({ Owner, Values, Scene, Kit, Title = "Components" }) {
   const { Icon } = Kit;
   const Rows = Scene?.Rows || [];
   const Present = Rows.filter((Each) => Each.Parent === Owner.Id && Each.Panel === ComponentPanel);
-  const Missing = ObjectComponentTypes.filter(([Component]) => !Present.some((Each) => Each.Component === Component));
+  const Missing = TypesOf(Owner).filter(([Component]) => !Present.some((Each) => Each.Component === Component));
   return (
     <section className="pi-card pi-components-card" data-card="Components">
       <header className="pi-card-head">
-        <h3>Components</h3>
+        <h3>{Title}</h3>
         <span className="pi-card-aside">{Present.length} on this object</span>
       </header>
       <div className="oc-list">
@@ -93,7 +108,7 @@ export function ComponentsCard({ Owner, Values, Scene, Kit }) {
       {Missing.length > 0 && Scene?.AddRows && (
         <div className="oc-add">
           {Missing.map(([Component]) => (
-            <button key={Component} type="button" onClick={() => Scene.AddRows(Owner.Id, [ComponentRow(Owner.Id, Component)])}>
+            <button key={Component} type="button" onClick={() => Scene.AddRows(Owner.Id, [ComponentRow(Owner, Component)])}>
               + {Component}
             </button>
           ))}

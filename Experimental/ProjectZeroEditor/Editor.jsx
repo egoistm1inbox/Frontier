@@ -23,7 +23,7 @@ import { FolderInventory } from "./FolderInventory.mjs";
 import DiagnosticsCard from "./DiagnosticsCard.jsx";
 import { WorkspaceView } from "./Workspaces.jsx";
 import { VehicleFolder, VehicleRows, VehiclePanel, VehicleSummary, EnsureVehicleFolder } from "./VehicleComponents.jsx";
-import { ComponentPanel, ComponentSummary, WithObjectComponents, EnsureObjectComponents, ComponentRowsFor, IsObjectOwner } from "./ObjectComponents.jsx";
+import { ComponentPanel, ComponentSummary, WithObjectComponents, EnsureObjectComponents, ComponentRowsFor, OwnerKind, ComponentRevision } from "./ObjectComponents.jsx";
 import { BrowserFPS } from "./BrowserTiming.js";
 import {
   EnsureEditorCamera,
@@ -207,7 +207,7 @@ InitialRows.splice(
   ...EffectRows.filter((Row) => Row.Parent === "post"),
 );
 InitialRows.push({ ...VehicleFolder }, ...VehicleRows.map((Row) => ({ ...Row })));
-// Each showcase object carries its Mass, Rigid Body and Collision components as outliner children.
+// Showcase objects carry Mass, Rigid Body and Collision; cameras carry their render components (all outliner children).
 InitialRows.splice(0, InitialRows.length, ...WithObjectComponents(InitialRows));
 const DefaultSettings = {
   GI: 2,
@@ -899,7 +899,7 @@ function App() {
           CameraEffectsRevision: 1,
           EnvironmentLightRevision: 1,
           VehicleRevision: 1,
-          ComponentRevision: 1,
+          ComponentRevision,
           Assets: AssetRecords,
           Selected,
           Values,
@@ -1068,7 +1068,7 @@ function App() {
             CameraEffectsRevision: 1,
             EnvironmentLightRevision: 1,
             VehicleRevision: 1,
-            ComponentRevision: 1,
+            ComponentRevision,
             Collapsed,
             Assets: AssetRecords,
             Values,
@@ -1195,7 +1195,7 @@ function App() {
     AssignRows((Previous) => [
       ...Previous,
       Placed,
-      ...(IsObjectOwner(Placed) ? ComponentRowsFor(Id) : []),
+      ...(OwnerKind(Placed) ? ComponentRowsFor(Placed) : []),
     ]);
     AssignValues((Previous) => ({
       ...Previous,

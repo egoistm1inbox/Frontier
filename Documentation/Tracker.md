@@ -1314,6 +1314,11 @@ in `Exhibits/LightCompute/Results/FogFacetRegression.txt`; this was a fixture-se
   joint at its pose (drag to set it) → Socket type → range card → **Attached to** (the asset's name as a link that selects it, plus an
   Attach to picker, offset and axis). `CheckVehicleSockets.mjs` rewritten (8 checks) and passes; InspectorOrder (109), EntityContext,
   SharedCards and InspectorLayout pass. Names unapproved.
+  Follow-up 41: render settings became camera components: Render Engine, MatCap, Shadow Maps, SDF Tracing and Ray Tracing rows under
+  every camera (`RenderComponents.jsx`, `RenderStudies.jsx`, four new icons; `RenderSettingsCards.jsx` removed). Each has its own card
+  design, plus an in-use strip for the current engine. MatCap gains six editor-only fields. `ComponentRevision` 2 migrates saved scenes.
+  RenderSettings (9), InspectorOrder (157), EntityContext (78), ObjectComponents, SharedCards, InspectorLayout, VolumeWorkspaces, FogCamera
+  and InstrumentStyle (passes on rerun) pass; Construction:190 and QuickTools:296 also fail on the base commit. Names unapproved.
   Follow-up 40: Vehicle Movement charts are editable (suspension peak → damping/frequency, 18 torque points plus idle/redline,
   CdA/ClA handles, clamped to Blueprint ranges). Primitive carousel is Overview/Geometry/Material/UV/Fracture/SDF/LOD with UV, SDF and
   LOD preview cards on their own pages. Showcase objects carry Mass, Rigid Body and Collision component rows (`ObjectComponents.jsx`;

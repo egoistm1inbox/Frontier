@@ -57,6 +57,15 @@ export const QUALITY_PRESETS = [
 
 export const RENDER_SCALES = [50, 75, 100, 125];
 
+// MatCap engine (engine 0): which channel the studio sphere shades, and the studio light. Editor additions; the source engine has
+// no settings of its own beyond the pick.
+export const MATCAP_CHANNELS = [
+  { id: "shaded", label: "Shaded", desc: "Clay shading lit by the studio light, with rim and cavity." },
+  { id: "normal", label: "Normals", desc: "View-space normals as colour." },
+  { id: "roughness", label: "Roughness", desc: "The specular lobe in grey, to read surface finish." },
+  { id: "cavity", label: "Cavity", desc: "Creases and grooves only." },
+];
+
 // CanonicalEditorCamera.ExposureGain in the source scene is 1.35.
 export const CanonicalRenderSettings = {
   RenderEngine: "gtx_sdf_gi",
@@ -87,6 +96,13 @@ export const CanonicalRenderSettings = {
   ExposureGain: 1.35,
   RenderScale: 100,
   AntiAliasing: true,
+
+  MatcapChannel: "shaded",
+  MatcapLight: 40,
+  MatcapRim: 0.35,
+  MatcapCavity: 0.5,
+  MatcapWire: false,
+  MatcapTint: "#cfc6ba",
 };
 
 const Bounded = (Amount, Minimum, Maximum, Fallback, Whole = false) => {
@@ -127,6 +143,12 @@ export function ResolveRenderSettings(Stored) {
     ExposureGain: Bounded(Merged.ExposureGain, 0.2, 3.5, C.ExposureGain),
     RenderScale: RENDER_SCALES.includes(Number(Merged.RenderScale)) ? Number(Merged.RenderScale) : 100,
     AntiAliasing: Merged.AntiAliasing !== false,
+    MatcapChannel: Known(MATCAP_CHANNELS, Merged.MatcapChannel, C.MatcapChannel),
+    MatcapLight: Bounded(Merged.MatcapLight, 0, 360, C.MatcapLight, true),
+    MatcapRim: Bounded(Merged.MatcapRim, 0, 1, C.MatcapRim),
+    MatcapCavity: Bounded(Merged.MatcapCavity, 0, 1, C.MatcapCavity),
+    MatcapWire: Boolean(Merged.MatcapWire),
+    MatcapTint: /^#[0-9a-f]{6}$/i.test(Merged.MatcapTint) ? Merged.MatcapTint : C.MatcapTint,
   };
 }
 

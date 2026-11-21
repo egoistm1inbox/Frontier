@@ -4,9 +4,9 @@ import { FogBeamChamber } from "./FogPanel.jsx";
 import HeightFogVisual from "./HeightFogVisual.jsx";
 import { HeightFogLayer, FogLightStudy, AerialRidges } from "./FogCards.jsx";
 import FracturePanel from "./FracturePanel.jsx";
-import RenderSettingsCards from "./RenderSettingsCards.jsx";
+import { RenderComponentCards } from "./RenderComponents.jsx";
 import { UvPreviewCard, FracturePreviewCard, SdfPreviewCard, LodPreviewCard } from "./WorkspacePreviews.jsx";
-import { ComponentPanel, ComponentSheet, ComponentsCard } from "./ObjectComponents.jsx";
+import { ComponentPanel, ComponentSheet, ComponentsCard, OwnerKind } from "./ObjectComponents.jsx";
 import AtmosphereLab, { AtmosphereProfile } from "./AtmosphereLab.jsx";
 import {
   GraphContext,
@@ -835,13 +835,17 @@ export function Inspector({
               <Icon Name={Owner.Icon} Size={22} />
               <span>
                 <b>{Owner.Name}</b>
-                <small>Component of this object · values are stored on it</small>
+                <small>Component of this {OwnerKind(Owner) === "camera" ? "camera" : "object"} · values are stored on it</small>
               </span>
               <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
                 <path d="M6 3.5L10.5 8 6 12.5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </button>
-            <ObjectComponentCards Component={Subject.Component} Owner={Owner} Values={Values} Change={Change} Kit={{ Card, Control, Metric }} />
+            {OwnerKind(Owner) === "camera" ? (
+              <RenderComponentCards Component={Subject.Component} Owner={Owner} Values={Values} Change={Change} Kit={{ Card, Control, Metric }} Scene={Scene} />
+            ) : (
+              <ObjectComponentCards Component={Subject.Component} Owner={Owner} Values={Values} Change={Change} Kit={{ Card, Control, Metric }} />
+            )}
           </>
         ) : (
           <p className="vc-note">The object this component belonged to was removed.</p>
@@ -1246,12 +1250,7 @@ export function Inspector({
           <Control Field={{ Label: "Hyperfocal distance", Control: "Readout" }} Value={Optics.hyperfocal.toFixed(1) + " m"} />
           <p>Pinhole renderer: the sensor sets the field of view and depth of field, not exposure.</p>
         </Card>
-        <RenderSettingsCards
-          Subject={Subject}
-          Values={Values}
-          Change={Change}
-          Kit={{ Card, Control, Metric, Icon }}
-        />
+        <ComponentsCard Owner={Subject} Values={Values} Scene={Scene} Kit={{ Icon }} Title="Render components" />
       </>
     );
   } else if (Subject.Panel === "stars") {

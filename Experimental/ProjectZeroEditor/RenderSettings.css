@@ -1,90 +1,8 @@
-/* Follow-up 37: per-camera render settings. Neutral cards; pass colours only on the small dots and the study strokes. */
-.rs-section {
-  margin-top: 28px;
-}
-.rs-heading {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 14px 14px 14px 16px;
-  border-radius: 20px;
-  background: #1b1b1b;
-  border: 1px solid #ffffff0d;
-}
-.rs-heading > div {
-  flex: 1;
-  min-width: 0;
+/* Render components under each camera (RenderComponents.jsx). Neutral cards; colour only on dots, studies and the active marks. */
+.rc-cards {
   display: flex;
   flex-direction: column;
-  gap: 3px;
-}
-.rs-heading b {
-  font-size: 13px;
-  font-weight: 500;
-  color: #ececec;
-}
-.rs-heading small {
-  font-size: 10px;
-  color: #8a8a8a;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.rs-heading button {
-  padding: 6px 14px;
-  border-radius: 999px;
-  border: 1px solid #ffffff18;
-  background: #2a2a2a;
-  color: #e6e6e6;
-  font-size: 10px;
-  cursor: pointer;
-}
-.rs-heading button:disabled {
-  opacity: 0.4;
-  cursor: default;
-}
-.rs-summary {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin: 10px 0;
-}
-.rs-summary span {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  padding: 5px 11px 5px 9px;
-  border-radius: 999px;
-  background: #1f1f1f;
-  border: 1px solid #ffffff0d;
-  font-size: 10px;
-  color: #bdbdbd;
-}
-.rs-summary i {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  flex: none;
-}
-.rs-tabs {
-  display: flex;
-  gap: 6px;
-  margin-bottom: 14px;
-}
-.rs-tabs button {
-  flex: 1;
-  min-height: 32px;
-  border-radius: 999px;
-  border: 1px solid #ffffff0d;
-  background: #242424;
-  color: #b9b9b9;
-  font-size: 11px;
-  cursor: pointer;
-}
-.rs-tabs button[aria-selected="true"] {
-  background: #3b3b3b;
-  color: #f2f2f2;
-  border-color: #ffffff26;
+  gap: 14px;
 }
 .property-card.rs-card .rs-graphic {
   margin: 14px 0 10px;
@@ -94,7 +12,14 @@
   border: 1px solid #ffffff0a;
 }
 .rs-study {
+  display: block;
+  width: 100%;
+  height: auto;
   user-select: none;
+}
+.rs-study text {
+  font: 10.5px "DM Sans", sans-serif;
+  fill: #8a8a8a;
 }
 .property-card .rs-note,
 .rs-note {
@@ -103,6 +28,328 @@
   color: #8f8f8f;
   margin: 4px 0 12px;
 }
-.rs-footer {
-  margin: 2px 4px 0;
+
+/* In use / not used strip. */
+.rc-use {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: #1b1b1b;
+  border: 1px solid #ffffff0d;
+}
+.rc-use > i {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #5a5a5a;
+  flex: none;
+}
+.rc-use.on > i {
+  background: #2fd27a;
+  box-shadow: 0 0 0 4px #2fd27a22;
+}
+.rc-use span {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.rc-use b {
+  font-size: 12px;
+  font-weight: 500;
+  color: #ececec;
+}
+.rc-use small {
+  font-size: 10px;
+  color: #8a8a8a;
+}
+.rc-use button,
+.rc-reset button {
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1px solid #ffffff18;
+  background: #2a2a2a;
+  color: #e6e6e6;
+  font-size: 10px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.rc-reset button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.rc-reset {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 0 4px;
+  font-size: 10px;
+  color: #8a8a8a;
+}
+
+/* Radio tiles, segments. */
+.rc-tiles {
+  display: grid;
+  grid-template-columns: repeat(var(--rc-columns, 2), minmax(0, 1fr));
+  gap: 6px;
+  margin: 4px 0 12px;
+}
+.rc-tiles button,
+.rc-rail button,
+.rc-family button {
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  color: #cfcfcf;
+  background: #161616;
+  border: 1px solid #ffffff0d;
+}
+.rc-tiles button {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 9px 11px;
+  border-radius: 12px;
+}
+.rc-tiles b {
+  font-size: 11px;
+  font-weight: 500;
+}
+.rc-tiles small {
+  font-size: 9.5px;
+  line-height: 1.35;
+  color: #7a7a7a;
+}
+.rc-tiles button[aria-checked="true"],
+.rc-rail button[aria-pressed="true"],
+.rc-family button[aria-pressed="true"] {
+  background: #2c2c2c;
+  border-color: #ffffff30;
+  color: #f2f2f2;
+}
+.rc-segments {
+  display: flex;
+  gap: 4px;
+  padding: 3px;
+  margin: 4px 0 12px;
+  border-radius: 999px;
+  background: #121212;
+  border: 1px solid #ffffff0b;
+}
+.rc-segments button {
+  flex: 1;
+  min-height: 28px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #9a9a9a;
+  font: inherit;
+  font-size: 10.5px;
+  cursor: pointer;
+}
+.rc-segments button[aria-checked="true"] {
+  background: #e6e6e6;
+  color: #141414;
+}
+
+/* Render Engine: families and the "uses" chips. */
+.rc-families {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 14px 0 12px;
+}
+.rc-family {
+  display: grid;
+  grid-template-columns: 74px 1fr;
+  align-items: start;
+  gap: 8px;
+}
+.rc-family > span {
+  padding-top: 8px;
+  font-size: 9.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #7a7a7a;
+}
+.rc-family > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.rc-family button {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 32px;
+  padding: 0 10px;
+  border-radius: 10px;
+  font-size: 11px;
+}
+.rc-family button i,
+.rc-rail button i {
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #262626;
+  color: #9a9a9a;
+  font-style: normal;
+  font-size: 9.5px;
+  flex: none;
+}
+.rc-family button[aria-pressed="true"] i,
+.rc-rail button[aria-pressed="true"] i {
+  background: #e6e6e6;
+  color: #141414;
+}
+.rc-uses {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.rc-uses button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 11px 6px 9px;
+  border-radius: 999px;
+  border: 1px solid #ffffff0d;
+  background: #1f1f1f;
+  color: #8a8a8a;
+  font: inherit;
+  font-size: 10px;
+  cursor: pointer;
+}
+.rc-uses button i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #4a4a4a;
+}
+.rc-uses button.on {
+  color: #e6e6e6;
+}
+.rc-uses button.on i {
+  background: #2fd27a;
+}
+
+/* MatCap: the shaded sphere. */
+.rc-matcap-stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  margin: 12px 0 12px;
+  padding: 14px 0 10px;
+  border-radius: 14px;
+  background: radial-gradient(circle at 50% 40%, #262626, #141414 70%);
+  border: 1px solid #ffffff0a;
+}
+.rc-matcap {
+  width: 180px;
+  height: 180px;
+  cursor: crosshair;
+  touch-action: none;
+}
+.rc-matcap-stage small {
+  font-size: 9.5px;
+  color: #7a7a7a;
+}
+
+/* SDF: the penumbra rail. */
+.rc-rail {
+  list-style: none;
+  margin: 4px 0 4px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.rc-rail button {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 12px;
+}
+.rc-rail span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.rc-rail b {
+  font-size: 11px;
+  font-weight: 500;
+}
+.rc-rail small {
+  font-size: 9.5px;
+  color: #7a7a7a;
+  line-height: 1.35;
+}
+
+/* Ray Tracing: one switch per traced pass. */
+.rc-lanes {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+.rc-lanes button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 10px 11px;
+  border-radius: 12px;
+  border: 1px solid #ffffff0d;
+  background: #161616;
+  color: #9a9a9a;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+.rc-lanes button i {
+  width: 22px;
+  height: 4px;
+  border-radius: 2px;
+  background: #3a3a3a;
+}
+.rc-lanes button[aria-checked="true"] {
+  background: #262626;
+  border-color: #ffffff26;
+  color: #f2f2f2;
+}
+.rc-lanes button[aria-checked="true"] i {
+  background: var(--rc-tone);
+}
+.rc-lanes small {
+  font-size: 9.5px;
+  color: #7a7a7a;
+}
+/* Global button rules centre content; these choices read left to right. */
+.property-card .rc-tiles button,
+.property-card .rc-rail button,
+.property-card .rc-family button {
+  justify-content: flex-start;
+  align-items: flex-start;
+  text-align: left;
+}
+.property-card .rc-family button {
+  align-items: center;
+}
+.rc-segments button {
+  min-width: 0;
+  padding: 0 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rc-segments:has(> :nth-child(5)) button {
+  font-size: 9.5px;
 }
