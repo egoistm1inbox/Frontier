@@ -37,14 +37,14 @@
 
 | Input | Action | Notes |
 | :--- | :--- | :--- |
-| `RMB` Drag + `W`/`A`/`S`/`D`/`Q`/`E` | Fly camera (`Q` down, `E` up; `Shift` boosts fly speed) | Active while holding `RMB` in viewport |
-| `Alt+LMB` Drag | Orbit camera around `TargetPoint` | — |
-| `MMB` Drag or `Shift+RMB` Drag | Pan camera | — |
-| `Mouse Wheel` | Dolly camera toward/away from target | — |
+| `RMB` Drag + `W`/`A`/`S`/`D`/`Q`/`E` | Fly camera (`Q` down, `E` up; `Shift` 3× sprint) | Sole fly camera. Cursor locked while `RMB` is held |
+| `Alt+LMB` Drag | Orbit camera around `TargetPoint` | Requires `Alt`; plain `LMB` never orbits or walks |
+| `MMB` Drag or `LMB+RMB` | Pan camera | `Shift` is sprint-only and never converts `RMB` look into pan |
+| `Mouse Wheel` | Adjust fly speed (`CameraFlySpeedScalar`) | Dolly stays on `Alt+RMB` drag and the `+/-` capsule |
 | `W` / `E` / `R` / `U` | `TransformGizmo`: `Translate` / `Rotate` / `Scale` / `Universal` | When not flying `RMB` or typing |
 | Hold `Ctrl` (during gizmo drag) | Snap transform to `GizmoSnapSettings` grid | — |
 | `F` | Frame selected object in camera (`FrameShowcaseCameraSelection`) | — |
-| `LMB` Click | Pick `TransformGizmo` handle or 3D scene object | — |
+| `LMB` Click / Drag | Pick `TransformGizmo` handle or 3D scene object | Never yaw, walk, or fly the camera |
 
 ### 3.2 Global Panel & Editor Shortcuts (`InputSettings` & `Engine/Components/Panes/`)
 

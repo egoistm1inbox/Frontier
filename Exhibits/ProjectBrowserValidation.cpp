@@ -540,6 +540,46 @@ int main()
         // Release RMB cleanly
         StepRmbFly(ImVec2(960.0f, 420.0f), false, ImGuiKey_None, false, 1.0 / 60.0);
 
+        // LMB must never fly / yaw-walk: it is TransformGizmo + pick only
+        auto StepLmb = [&](ImVec2 Pos, bool LmbDown, ImGuiKey HeldKey, double Dt = 0.050)
+        {
+            Io.AddMousePosEvent(Pos.x, Pos.y);
+            Io.AddMouseButtonEvent(ImGuiMouseButton_Left, LmbDown);
+            if (HeldKey != ImGuiKey_None)
+            {
+                Io.AddKeyEvent(HeldKey, true);
+            }
+            ImGui::NewFrame();
+            EditorSession.PresentPrimaryEditorImGui(Dt);
+            ImGui::Render();
+            if (HeldKey != ImGuiKey_None)
+            {
+                Io.AddKeyEvent(HeldKey, false);
+            }
+        };
+
+        const Mathematics::Axis3D OriginBeforeLmb = LiveBundle->EditorCamera.CameraOrigin;
+        const Mathematics::Axis3D TargetBeforeLmb = LiveBundle->EditorCamera.TargetPoint;
+        StepLmb(ImVec2(960.0f, 420.0f), true, ImGuiKey_W, 0.050);
+        StepLmb(ImVec2(1040.0f, 480.0f), true, ImGuiKey_None, 0.050);
+        const Mathematics::Axis3D OriginAfterLmb = LiveBundle->EditorCamera.CameraOrigin;
+        const Mathematics::Axis3D TargetAfterLmb = LiveBundle->EditorCamera.TargetPoint;
+        const float LmbOriginDriftSq = Mathematics::EvaluateDot(
+            OriginAfterLmb - OriginBeforeLmb,
+            OriginAfterLmb - OriginBeforeLmb);
+        const float LmbTargetDriftSq = Mathematics::EvaluateDot(
+            TargetAfterLmb - TargetBeforeLmb,
+            TargetAfterLmb - TargetBeforeLmb);
+        StepLmb(ImVec2(1040.0f, 480.0f), false, ImGuiKey_None, 1.0 / 60.0);
+
+        Io.AddKeyEvent(ImGuiKey_W, true);
+        ImGui::NewFrame();
+        EditorSession.PresentPrimaryEditorImGui(1.0 / 60.0);
+        ImGui::Render();
+        Io.AddKeyEvent(ImGuiKey_W, false);
+        const Editor::GizmoHandleFilter FilterAfterIdleW =
+            EditorSession.AccessTransformGizmo().QueryHandleFilter();
+
         // Wheel must adjust Fly Speed (never Dolly-Zoom), with and without RMB held
         auto StepWheel = [&](bool RmbDown, float WheelNotches)
         {
@@ -577,11 +617,14 @@ int main()
             SpeedAfterRmbWheel > SpeedAfterWheelUp * 0.90f ||
             SpeedAfterRmbWheel < SpeedBeforeWheel * 1.05f ||
             WheelOriginDriftSq > 1.0e-6f ||
-            WheelTargetDriftSq > 1.0e-6f)
+            WheelTargetDriftSq > 1.0e-6f ||
+            LmbOriginDriftSq > 1.0e-6f ||
+            LmbTargetDriftSq > 1.0e-6f ||
+            FilterAfterIdleW != Editor::GizmoHandleFilter::TranslateOnly)
         {
             std::fprintf(
                 stderr,
-                "[FAIL] Unreal Engine camera controls validation failed (NormalW=%.3f, SprintW=%.3f, dZE=%.3f, dZShiftQ=%.3f, OutBoundsStrafeSq=%.4f, SpeedBefore=%.3f, SpeedWheelUp=%.3f, SpeedRmbWheel=%.3f, WheelDriftSq=%.6f/%.6f).\n",
+                "[FAIL] Unreal Engine camera controls validation failed (NormalW=%.3f, SprintW=%.3f, dZE=%.3f, dZShiftQ=%.3f, OutBoundsStrafeSq=%.4f, SpeedBefore=%.3f, SpeedWheelUp=%.3f, SpeedRmbWheel=%.3f, WheelDriftSq=%.6f/%.6f, LmbDriftSq=%.6f/%.6f, IdleWFilter=%u).\n",
                 NormalStepDist,
                 SprintStepDist,
                 ZAfterE - ZBeforeE,
@@ -591,7 +634,10 @@ int main()
                 SpeedAfterWheelUp,
                 SpeedAfterRmbWheel,
                 WheelOriginDriftSq,
-                WheelTargetDriftSq);
+                WheelTargetDriftSq,
+                LmbOriginDriftSq,
+                LmbTargetDriftSq,
+                static_cast<unsigned>(FilterAfterIdleW));
             EditorSession.Finalize();
             ImGui::DestroyContext(Ctx);
             return 1;
