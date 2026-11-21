@@ -113,7 +113,7 @@
   outline: 1px solid #dac6a1;
   outline-offset: 3px;
 }
-/* Sky colour: the current sky at noon / sunset. */
+/* Sky colour card shell (SkyDome.jsx). */
 .atmosphere-presets > h3 {
   display: flex;
   justify-content: space-between;
@@ -123,12 +123,6 @@
 .atmosphere-presets h3 small {
   font-size: 8px;
   color: #8a8a8a;
-}
-.atmosphere-presets .sky-preview {
-  width: 100%;
-  height: auto;
-  display: block;
-  margin: 16px 0 6px;
 }
 .atmosphere-presets svg text {
   font:
@@ -327,4 +321,31 @@
 .fog-visibility-sample strong {
   color: #d8cbb0;
   font-weight: 500;
+}
+/* Sky colour: all-sky dome, readings and the sun-height strip (SkyDome.jsx). */
+.atmosphere-presets .sky-dome {
+  width: 100%;
+  height: auto;
+  display: block;
+  margin: 12px 0 6px;
+  user-select: none;
+  touch-action: none;
+}
+.atmosphere-presets .sky-dome .sky-dome-grab {
+  cursor: crosshair;
+}
+.atmosphere-presets .sky-dome .sky-dome-grab:focus {
+  outline: none;
+}
+.atmosphere-presets svg text.sky-reading-label {
+  font-size: 8.5px;
+  fill: #a7a7a7;
+}
+.atmosphere-presets svg text.sky-reading-rgb {
+  font-size: 8px;
+  fill: #6f6f6f;
+}
+.atmosphere-presets svg text.sky-faint {
+  font-size: 7.5px;
+  fill: #6a6a6a;
 }

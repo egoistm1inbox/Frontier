@@ -1326,6 +1326,11 @@ in `Exhibits/LightCompute/Results/FogFacetRegression.txt`; this was a fixture-se
   directly in g / kg / t / lb / oz. RenderSettings (9), EntityContext (70), InspectorOrder (141), ObjectComponents, SharedCards,
   InspectorLayout, VolumeWorkspaces, FogCamera, Browser, WorkspaceCards and Wind pass. InstrumentStyle:118 is flaky (it also fails on
   the base commit and passes on rerun). Construction:190 and QuickTools:296 are pre-existing failures. Names unapproved.
+  Follow-up 45: the Follow-up 43 per-card Sun/Atmosphere studies are reverted. Sun now (`SunNow.jsx`) is a lit set (block, post, ball)
+  whose light, sky and soft shadows follow the sun; drag it or the day track to scrub Local Hours. Six figures sit on hairlines. Sky colour
+  (`SkyDome.jsx`) is a draggable all-sky fisheye from a single-scatter estimate of the Atmosphere settings, with four colour readings and a
+  sky-at-every-sun-height strip. EnvironmentGraphs, InspectorOrder, LightDesign and SharedCards pass. InspectorLayout:115 (Wind canvas)
+  fails the same way on the base commit. Names unapproved.
   Follow-up 40: Vehicle Movement charts are editable (suspension peak → damping/frequency, 18 torque points plus idle/redline,
   CdA/ClA handles, clamped to Blueprint ranges). Primitive carousel is Overview/Geometry/Material/UV/Fracture/SDF/LOD with UV, SDF and
   LOD preview cards on their own pages. Showcase objects carry Mass, Rigid Body and Collision component rows (`ObjectComponents.jsx`;

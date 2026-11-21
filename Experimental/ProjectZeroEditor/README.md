@@ -49,6 +49,23 @@ starting point for the UI redesign.
 
 ---
 
+## Follow-up 45: Sun now and Sky colour redesigned
+
+- The Follow-up 43 per-card Sun and Atmosphere studies are reverted (`git revert e234f72`).
+- **Sun now** (`SunNow.jsx`) is a small lit set: a block, a post and a ball on a gridded plate with a north arrow, seen from a fixed
+  camera. The sun position, colour, sky gradient and blurred shadows (softened by Angular Diameter) all come from the sun settings. Drag the
+  set or the day track below it (night / twilight / day bands, arrow keys work) to change Local Hours. Six figures sit on hairlines:
+  sunrise, sunset, daylight (with peak height), colour, ground light and shadow length.
+- **Sky colour** (`SkyDome.jsx`) is an all-sky fisheye looking straight up. It is a single-scatter estimate from the Atmosphere settings
+  (Kasten-Young air mass, Rayleigh and Henyey-Greenstein phases, ozone), tone-mapped on luminance so hues hold. Drag the sun on the dome.
+  Four readings sit beside it (overhead, horizon toward and away from the sun, sunlight). A strip below shows the sky at every sun height
+  from -12° to overhead; drag it to set the height. The preview sun is stored as `Sky preview elevation` / `Sky preview azimuth` and is
+  editor-only. The old noon / sunset panels are removed.
+- EnvironmentGraphs, InspectorOrder, LightDesign and SharedCards pass. InspectorLayout:115 (Wind canvas timing) fails the same way on the
+  base commit. Headless SwiftShader only. Names unapproved.
+
+---
+
 ## Follow-up 42: one Render Engine component, per-renderer shadows; Rigid Body and Mass redesigned
 
 - **One render component per camera.** The MatCap, Shadow Maps, SDF Tracing and Ray Tracing rows are gone; each camera keeps a single

@@ -3027,74 +3027,122 @@ img {
   margin-top: 4px;
 }
 
-/* Sun now: horizon panorama with the day's path, then six lighting figures. */
-.sun-now .sun-now-body > p {
-  margin: -6px 0 14px;
+/* Sun now: a small lit set, the day track, then six lighting figures on hairlines. */
+.sun-now .sun-now-line {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+  row-gap: 2px;
+  margin: -8px 0 12px;
+  min-width: 0;
 }
-.sun-now .sun-panorama {
+.sun-now .sun-now-line b {
+  font-size: 22px;
+  font-weight: 300;
+  color: #f0f0f0;
+  font-variant-numeric: tabular-nums;
+}
+.sun-now .sun-now-line span {
+  font-size: 12px;
+  color: #d8c49c;
+  white-space: nowrap;
+}
+.sun-now .sun-now-line small {
+  margin-left: auto;
+  font-size: 10px;
+  color: #8a8a8a;
+  white-space: nowrap;
+}
+.sun-now .sun-set {
   width: 100%;
   height: auto;
   display: block;
   cursor: ew-resize;
   touch-action: none;
+  user-select: none;
 }
-.sun-now .sun-panorama text {
+.sun-now .sun-set text {
   font:
     9px "DM Sans",
     sans-serif;
-  fill: #7d7d7d;
 }
-.sun-now .sun-panorama text.sun-now-faint {
-  fill: #ffffff8c;
-}
-.sun-now .sun-panorama text.sun-now-cardinal {
-  font-size: 10px;
-  fill: #e6e6e6;
+.sun-now .sun-set text.sun-set-north {
+  font-size: 8px;
   font-weight: 600;
+  fill: #ffffffb0;
+}
+.sun-now .sun-set text.sun-set-note {
+  fill: #ffffffa0;
+}
+.sun-now .sun-track {
+  width: 100%;
+  height: auto;
+  display: block;
+  margin-top: 8px;
+  cursor: ew-resize;
+  touch-action: none;
+  user-select: none;
+}
+.sun-now .sun-track:focus-visible {
+  outline: 1px solid #8fa3b4;
+  outline-offset: 2px;
+}
+.sun-now .sun-track text {
+  font:
+    8px "DM Sans",
+    sans-serif;
+  fill: #767676;
 }
 .sun-now .sun-facts {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
-  margin-top: 14px;
+  margin-top: 10px;
+  border-top: 1px solid #ffffff12;
 }
 .sun-now .sun-facts > div {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  row-gap: 1px;
   min-width: 0;
-  padding: 10px 11px;
-  border-radius: 14px;
-  background: #1b1b1b;
-  border: 1px solid #ffffff08;
+  padding: 9px 8px 9px 0;
+  border-bottom: 1px solid #ffffff12;
+}
+.sun-now .sun-facts > div:nth-child(3n + 2),
+.sun-now .sun-facts > div:nth-child(3n) {
+  padding-left: 10px;
+  border-left: 1px solid #ffffff12;
 }
 .sun-now .sun-facts small {
   font-size: 9px;
-  letter-spacing: 0.6px;
+  letter-spacing: 0.4px;
   text-transform: uppercase;
-  color: #8a8a8a;
+  color: #7f7f7f;
 }
 .sun-now .sun-facts b {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 18px;
+  gap: 5px;
+  font-size: 15px;
   font-weight: 300;
   color: #ececec;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 .sun-now .sun-facts b i {
-  width: 9px;
-  height: 9px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
   flex: none;
 }
 .sun-now .sun-facts span {
   font-size: 9px;
-  color: #7a7a7a;
+  color: #6f6f6f;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  min-width: 0;
+  padding-bottom: 2px;
 }
 
 /* Height Fog / Atmospheric Fog own cards. */
