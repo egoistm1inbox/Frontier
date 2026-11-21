@@ -654,16 +654,24 @@ export class FluidSolver
         this.applyColliderUniforms(uniforms);
         this.applyBoundaryUniform(uniforms, domain);
         context.bindTexture('uVelocity', fields.velocity.read.texture);
+        context.bindTexture('uState', fields.state.read.texture);
+        const look = (scene.Visualizers && scene.Visualizers.Volume) || {};
+        gl.uniform1f(uniforms.uExpansion, domain.Expansion ?? 0);
+        gl.uniform1f(uniforms.uFireThreshold, look.FireThreshold ?? 1.0);
+        gl.uniform1f(uniforms.uFireSoftness, look.FireSoftness ?? 3.5);
         context.dispatch(fields.divergence);
 
-        context.clearTarget(fields.pressure.read);
+        // Warm start: the previous step's pressure is the first guess (it is close, so the Jacobi iterations go further),
+        // slightly forgotten each step so closed boxes cannot drift. Its .y channel carries the fire-light field.
         uniforms = context.use(programs.pressure);
         this.applyVolumeUniforms(uniforms);
         this.applyColliderUniforms(uniforms);
         this.applyBoundaryUniform(uniforms, domain);
+        const pressureUnit = context.textureUnit;
         for (let iteration = 0; iteration < domain.PressureIterations; iteration += 1)
         {
-            context.textureUnit = 0;
+            context.textureUnit = pressureUnit;
+            gl.uniform1f(uniforms.uRetain, iteration === 0 ? 0.96 : 1.0);
             context.bindTexture('uPressure', fields.pressure.read.texture);
             context.bindTexture('uDivergence', fields.divergence.texture);
             context.dispatch(fields.pressure.write);

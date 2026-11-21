@@ -6,6 +6,26 @@
 > scalar heat-map slices, and inspector gizmos — all framed in the exact Project-Zero chrome (trapezoidal dock tabs, top Notch,
 > Outliner entity cards, hero / metric / status-tile Inspector, bottom Asset Browser drawer).
 
+
+> **Combined build (2026-11-16).** Imported from `c7egoist/Frontier-1@2b62585` (commit `26152b6` here is the unchanged copy), then
+> merged with the strongest algorithms of the other Fluid Editor. Evidence: `Exhibits/FluidEditor/`.
+>
+> | Area | Change | From |
+> | :--- | :--- | :--- |
+> | Pressure | Warm start: last step's pressure is the first guess (retain 0.96 on iteration 1). Inner divergence after 10 steps 67% → 44% | other editor |
+> | Combustion | Burning gas expands (`Expansion`, *Gas expansion* slider, default 0.6): the burn rate in `state.w` becomes a divergence source | other editor |
+> | Advection | MacCormack limiter brackets the same RK2 departure point as the forward trace | fix |
+> | Light sum | Energy-conserving step `S·(1 − e^{−σΔ})/σ` instead of `S·Δ` | other editor |
+> | Phase | Two-lobe Henyey-Greenstein (forward g, back −0.25) | other editor |
+> | Multiple scattering | Three octaves (energy, optical depth and anisotropy halve each octave), normalised to the old lit brightness | Wrenninge, in place of the other editor's blend |
+> | Self-shadow | Geometric shadow steps (×1.35), default 8 | other editor |
+> | Fire light | A screened-diffusion fire-light field solved in `pressure.y` during the Jacobi loop lights all nearby smoke and the floor (*Fire lights smoke* slider) | other editor |
+> | Sky light | Ambient blocked by the smoke just above (two upward samples) | new |
+> | Floor | Smoke shadows the floor | other editor |
+> | Edges | Powder darkening on thin wisps | other editor |
+> | Noise | Fixed interleaved-gradient jitter (no shimmer without temporal accumulation) | other editor |
+> | Infinite Grid | The pressure loop no longer rebinds texture unit 0 over the tile lookup | fix |
+
 ---
 
 ## 🏷️ 1. Layout & Surfaces

@@ -1331,6 +1331,11 @@ in `Exhibits/LightCompute/Results/FogFacetRegression.txt`; this was a fixture-se
   (`SkyDome.jsx`) is a draggable all-sky fisheye from a single-scatter estimate of the Atmosphere settings, with four colour readings and a
   sky-at-every-sun-height strip. EnvironmentGraphs, InspectorOrder, LightDesign and SharedCards pass. InspectorLayout:115 (Wind canvas)
   fails the same way on the base commit. Names unapproved.
+  Follow-up 46: `Experimental/FluidEditor/` added: c7egoist Fluid Studio (imported unchanged as `26152b6`) combined with the other Fluid
+  Editor's strongest algorithms: warm-start pressure, combustion gas expansion, energy-conserving light sum, two-lobe phase, octave
+  multiple scattering, geometric shadow steps, a fire-light field diffused in the pressure loop, sky occlusion, floor shadows, stable
+  jitter; plus a MacCormack limiter fix and an Infinite Grid texture-unit fix. FluidValidation 349 pass; inner divergence after 10 steps
+  67% → 44%. Evidence in `Exhibits/FluidEditor/`. SwiftShader only. Names unapproved.
   Follow-up 40: Vehicle Movement charts are editable (suspension peak → damping/frequency, 18 torque points plus idle/redline,
   CdA/ClA handles, clamped to Blueprint ranges). Primitive carousel is Overview/Geometry/Material/UV/Fracture/SDF/LOD with UV, SDF and
   LOD preview cards on their own pages. Showcase objects carry Mass, Rigid Body and Collision component rows (`ObjectComponents.jsx`;

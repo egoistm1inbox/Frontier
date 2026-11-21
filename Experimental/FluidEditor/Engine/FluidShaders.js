@@ -566,8 +566,10 @@ void main()
     ivec3 cell = CellFromFragment(gl_FragCoord.xy);
     if (!CellInside(cell)) { fragColour = vec4(0.0); return; }
     vec3 centre = vec3(cell) + 0.5;
+    // Clamp around the same RK2 departure point the forward trace used, so the limiter brackets the right cells.
     vec3 velocity = FetchCell(uVelocity, cell).xyz;
-    vec3 origin = centre - uDeltaTime * velocity / uCellSize;
+    vec3 midpoint = centre - 0.5 * uDeltaTime * velocity / uCellSize;
+    vec3 origin = centre - uDeltaTime * SampleVolume(uVelocity, midpoint).xyz / uCellSize;
     vec4 forward = FetchCell(uForward, cell);
     vec4 backward = FetchCell(uBackward, cell);
     vec4 source = FetchCell(uSource, cell);
@@ -750,6 +752,10 @@ ${VolumeChunk}
 ${ColliderChunk}
 ${BoundaryChunk}
 uniform sampler2D uVelocity;
+uniform sampler2D uState;
+uniform float uExpansion;      // divergence added per unit of fuel burned per second
+uniform float uFireThreshold;  // the Volume Render fire ramp, so the light field matches the visible flame
+uniform float uFireSoftness;
 out vec4 fragColour;
 float Component(ivec3 cell, ivec3 neighbour, int axis, float centreComponent)
 {
@@ -770,7 +776,13 @@ void main()
     float yp = Component(cell, cell + ivec3(0, 1, 0), 1, c.y), ym = Component(cell, cell - ivec3(0, 1, 0), 1, c.y);
     float zp = Component(cell, cell + ivec3(0, 0, 1), 2, c.z), zm = Component(cell, cell - ivec3(0, 0, 1), 2, c.z);
     float divergence = 0.5 * ((xp - xm) + (yp - ym) + (zp - zm)) / uCellSize;
-    fragColour = vec4(divergence, 0.0, 0.0, 0.0);
+    vec4 state = FetchCell(uState, cell);
+    // Burning gas expands: the projection must leave this much outflow instead of cancelling it.
+    divergence -= uExpansion * 0.08 * state.w;
+    // Flame brightness (same curve as FireRadiance) is the source of the fire-light field solved with the pressure.
+    float flame = clamp((state.y - uFireThreshold) / max(uFireSoftness, 0.05), 0.0, 1.0);
+    float presence = smoothstep(uFireThreshold * 0.7, uFireThreshold * 1.15, state.y);
+    fragColour = vec4(divergence, min(8.0, presence * (0.2 + 4.0 * flame * flame)), 0.0, 0.0);
 }
 `;
 
@@ -781,6 +793,7 @@ ${ColliderChunk}
 ${BoundaryChunk}
 uniform sampler2D uPressure;
 uniform sampler2D uDivergence;
+uniform float uRetain;   // < 1 on the first iteration: the previous step's pressure is reused (warm start) but slowly forgotten
 out vec4 fragColour;
 float Neighbour(ivec3 neighbour, float centre)
 {
@@ -788,17 +801,28 @@ float Neighbour(ivec3 neighbour, float centre)
     if (SolidAtCell(neighbour)) return centre;
     return FetchCell(uPressure, neighbour).x;
 }
+// Fire light leaves through every domain face and reflects off solids.
+float Light(ivec3 neighbour, float centre)
+{
+    if (!CellInside(neighbour)) return 0.0;
+    if (SolidAtCell(neighbour)) return centre;
+    return FetchCell(uPressure, neighbour).y;
+}
 void main()
 {
     ivec3 cell = CellFromFragment(gl_FragCoord.xy);
     if (!CellInside(cell)) { fragColour = vec4(0.0); return; }
-    float centre = FetchCell(uPressure, cell).x;
-    float divergence = FetchCell(uDivergence, cell).x;
-    float sum = Neighbour(cell + ivec3(1, 0, 0), centre) + Neighbour(cell - ivec3(1, 0, 0), centre)
-              + Neighbour(cell + ivec3(0, 1, 0), centre) + Neighbour(cell - ivec3(0, 1, 0), centre)
-              + Neighbour(cell + ivec3(0, 0, 1), centre) + Neighbour(cell - ivec3(0, 0, 1), centre);
+    vec2 centre = FetchCell(uPressure, cell).xy;
+    vec2 source = FetchCell(uDivergence, cell).xy;
+    float sum = Neighbour(cell + ivec3(1, 0, 0), centre.x) + Neighbour(cell - ivec3(1, 0, 0), centre.x)
+              + Neighbour(cell + ivec3(0, 1, 0), centre.x) + Neighbour(cell - ivec3(0, 1, 0), centre.x)
+              + Neighbour(cell + ivec3(0, 0, 1), centre.x) + Neighbour(cell - ivec3(0, 0, 1), centre.x);
+    float light = Light(cell + ivec3(1, 0, 0), centre.y) + Light(cell - ivec3(1, 0, 0), centre.y)
+                + Light(cell + ivec3(0, 1, 0), centre.y) + Light(cell - ivec3(0, 1, 0), centre.y)
+                + Light(cell + ivec3(0, 0, 1), centre.y) + Light(cell - ivec3(0, 0, 1), centre.y);
     float h2 = uCellSize * uCellSize;
-    fragColour = vec4((sum - divergence * h2) / 6.0, 0.0, 0.0, 0.0);
+    // Screened diffusion (6.28 > 6): flame light spreads a few cells and fades, the way glow fills nearby smoke.
+    fragColour = vec4((sum * uRetain - source.x * h2) / 6.0, (light + source.y * 0.55) / 6.28, 0.0, 0.0);
 }
 `;
 
@@ -872,9 +896,11 @@ void main()
     float sponge = OutflowSponge(cell);
     float density = state.x * sponge, temperature = uAmbientTemperature + (state.y - uAmbientTemperature) * sponge, fuel = state.z * sponge;
     const float ignition = 0.9;
+    float reaction = 0.0;
     if (fuel > 0.0 && temperature > ignition && uCombustion > 0.0)
     {
         float burn = min(fuel, uCombustion * 2.5 * uDeltaTime * fuel * smoothstep(ignition, ignition + 1.0, temperature));
+        reaction = burn / max(uDeltaTime, 1e-4);
         fuel -= burn;
         temperature += burn * 12.0;
         density += burn * 0.55;
@@ -883,7 +909,7 @@ void main()
     // Newtonian + radiative (T^4 shaped) cooling.
     excess = max(0.0, excess - uDeltaTime * uCooling * (0.35 * excess + 0.02 * excess * excess * excess));
     temperature = uAmbientTemperature + excess;
-    fragColour = vec4(max(density, 0.0), temperature, max(fuel, 0.0), 0.0);
+    fragColour = vec4(max(density, 0.0), temperature, max(fuel, 0.0), reaction);
 }
 `;
 
@@ -1075,6 +1101,8 @@ ${VolumeChunk}
 ${NoiseChunk}
 ${ColliderChunk}
 uniform sampler2D uState;
+uniform sampler2D uPressure;   // .y = fire-light field solved alongside the pressure
+uniform float uFireLight;      // how strongly that field lights the smoke and the floor
 uniform vec3  uCameraPosition;
 uniform mat4  uInverseViewProjection;
 uniform vec2  uViewport;
@@ -1139,7 +1167,24 @@ float FirePresence(float temperature)
 float HenyeyGreenstein(float cosTheta, float g)
 {
     float g2 = g * g;
-    return (1.0 - g2) / (4.0 * 3.14159265 * pow(1.0 + g2 - 2.0 * g * cosTheta, 1.5));
+    return (1.0 - g2) / (4.0 * 3.14159265 * max(1e-4, pow(1.0 + g2 - 2.0 * g * cosTheta, 1.5)));
+}
+
+// Smoke scatters mostly forward with a weak backward lobe; scaled so isotropic scattering is 1.
+float SmokePhase(float cosTheta, float g)
+{
+    return mix(HenyeyGreenstein(cosTheta, -0.25), HenyeyGreenstein(cosTheta, g), 0.72) * 4.0 * 3.14159265;
+}
+
+// Fixed per-pixel offset (interleaved gradient noise): no frame-to-frame shimmer without temporal accumulation.
+float StableJitter(vec2 pixel)
+{
+    return fract(52.9829189 * fract(dot(pixel, vec2(0.06711056, 0.00583715))));
+}
+
+vec3 FireGlowColour()
+{
+    return mix(uFireEmber, uFireFlame, 0.6);
 }
 
 vec3 AcesFilm(vec3 x)
@@ -1157,20 +1202,27 @@ float GroundGrid(vec3 world)
     return max(minorLine * 0.35, majorLine * 0.7);
 }
 
-float ShadowTransmittance(vec3 world, vec3 boxMin, vec3 boxMax)
+// Smoke optical depth from a point toward the sun. Steps grow geometrically, so detail next to the sample stays sharp
+// while the far side of the plume is still covered. Works from inside the box and from below it (the floor).
+float SunOpticalDepth(vec3 world, vec3 boxMin, vec3 boxMax)
 {
-    if (uShadowSteps <= 0) return 1.0;
+    if (uShadowSteps <= 0) return 0.0;
     vec2 span = IntersectBox(world, uLightDirection, boxMin, boxMax);
-    float length_ = max(span.y, 0.0);
-    float step_ = length_ / float(uShadowSteps);
-    float optical = 0.0;
+    float start = max(span.x, 0.0);
+    float length_ = span.y - start;
+    if (length_ <= 0.0) return 0.0;
+    const float Growth = 1.35;
+    float step_ = length_ * (Growth - 1.0) / (pow(Growth, float(uShadowSteps)) - 1.0);
+    float t = start, optical = 0.0;
     for (int i = 0; i < 16; i++)
     {
         if (i >= uShadowSteps) break;
-        vec3 p = world + uLightDirection * (float(i) + 0.5) * step_;
-        optical += SampleVolume(uState, CellFromWorld(p)).x * uDensityScale * uAbsorption * step_;
+        vec3 p = world + uLightDirection * (t + 0.5 * step_);
+        optical += SampleVolume(uState, CellFromWorld(p)).x * step_;
+        t += step_;
+        step_ *= Growth;
     }
-    return exp(-optical);
+    return optical * uDensityScale * uAbsorption;
 }
 
 void main()
@@ -1194,6 +1246,16 @@ void main()
         vec3 ground = vec3(0.075, 0.078, 0.088);
         float grid = GroundGrid(hit) * fade;
         colour = mix(ground * fade + colour * (1.0 - fade), vec3(0.32, 0.34, 0.40), grid);
+        if (uShowVolume == 1)
+        {
+            // The plume shadows the floor and the flame lights it.
+            vec3 floorHalf = GridHalf();
+            float shade = exp(-SunOpticalDepth(hit, uGridCentre - floorHalf, uGridCentre + floorHalf));
+            colour *= mix(0.4, 1.0, shade);
+            vec3 near = CellFromWorld(hit + vec3(0.0, uCellSize * 1.5, 0.0));
+            if (all(greaterThanEqual(near, vec3(0.0))) && all(lessThanEqual(near, vec3(uGrid))))
+                colour += FireGlowColour() * SampleVolume(uPressure, near).y * uFireLight * uFireIntensity * 0.08 * fade;
+        }
         sceneDepth = t;
     }
 
@@ -1224,11 +1286,15 @@ void main()
         {
             float marchLength = exit - entry;
             float step_ = marchLength / float(uSteps);
-            float jitter = Hash31(vec3(gl_FragCoord.xy, float(uFrame)));
+            float jitter = StableJitter(gl_FragCoord.xy);
             float transmittance = 1.0;
             vec3 accumulated = vec3(0.0);
-            float phase = HenyeyGreenstein(dot(direction, uLightDirection), uAnisotropy) * 4.0 * 3.14159265;
-            vec3 sunLight = uLightColour * uLightIntensity * mix(1.0, phase, 0.6);
+            // Multiple scattering, after Wrenninge's octave method: each octave carries half the energy, sees half the
+            // optical depth and a flatter phase. Phases depend only on the ray, so they are evaluated once.
+            float cosTheta = dot(direction, uLightDirection);
+            vec3 octavePhase = vec3(SmokePhase(cosTheta, uAnisotropy), SmokePhase(cosTheta, uAnisotropy * 0.5), SmokePhase(cosTheta, uAnisotropy * 0.25));
+            vec3 sunLight = uLightColour * uLightIntensity;
+            vec3 up = vec3(0.0, uCellSize, 0.0);
             for (int i = 0; i < 256; i++)
             {
                 if (i >= uSteps || transmittance < 0.005) break;
@@ -1243,12 +1309,27 @@ void main()
                 float sigmaSmoke = density * uAbsorption;
                 float sigmaFire = fire * uFireOpacity;
                 float sigma = sigmaSmoke + sigmaFire;
-                float lightTransmittance = (sigmaSmoke > 0.0) ? ShadowTransmittance(p, uGridCentre - half_, uGridCentre + half_) : 1.0;
-                // Soot is lit by the sun, the ambient sky, and the flame it is wrapped around.
-                vec3 scattering = uAlbedo * (uAmbientColour + sunLight * lightTransmittance + emission * 0.6);
-                vec3 contribution = scattering * sigmaSmoke * step_ + emission * (1.0 + sigmaFire) * step_;
+                vec3 scattering = vec3(0.0);
+                if (sigmaSmoke > 0.0)
+                {
+                    float tau = SunOpticalDepth(p, uGridCentre - half_, uGridCentre + half_);
+                    // Divided by 1.75 (the octave weights' sum) so a fully lit surface matches the presets' calibrated brightness.
+                    float sun = (octavePhase.x * exp(-tau) + 0.5 * octavePhase.y * exp(-tau * 0.5) + 0.25 * octavePhase.z * exp(-tau * 0.25)) / 1.75;
+                    // Thin wisps scatter less light back out than dense cores ("powder" darkening at the edges).
+                    float powder = 1.0 - 0.45 * exp(-sigmaSmoke * 2.2);
+                    // Sky light is blocked by the smoke just above: two short samples straight up.
+                    float above = SampleVolume(uState, coordinate + vec3(0.0, 2.0, 0.0)).x * 2.0 + SampleVolume(uState, coordinate + vec3(0.0, 6.0, 0.0)).x * 4.0;
+                    float sky = exp(-0.6 * above * uCellSize * uDensityScale * uAbsorption);
+                    // Light from every nearby flame, not only the flame at this sample.
+                    vec3 fireLight = FireGlowColour() * SampleVolume(uPressure, coordinate).y * uFireLight * uFireIntensity * 0.35;
+                    scattering = uAlbedo * (uAmbientColour * sky + sunLight * sun * powder + fireLight);
+                }
+                // Energy-conserving step: integrate the source against the transmittance across the step, not at its start.
+                vec3 source = scattering * sigmaSmoke + emission * (1.0 + sigmaFire);
+                float stepTransmittance = exp(-sigma * step_);
+                vec3 contribution = sigma > 1e-4 ? source * (1.0 - stepTransmittance) / sigma : source * step_;
                 accumulated += transmittance * contribution;
-                transmittance *= exp(-sigma * step_);
+                transmittance *= stepTransmittance;
             }
             colour = colour * transmittance + accumulated;
         }

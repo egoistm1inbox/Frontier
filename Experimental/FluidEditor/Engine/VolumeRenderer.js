@@ -104,6 +104,8 @@ export class VolumeRenderer
         solver.applyVolumeUniforms(uniforms);
         solver.applyColliderUniforms(uniforms);
         context.bindTexture('uState', solver.fields.state.read.texture);
+        context.bindTexture('uPressure', solver.fields.pressure.read.texture);
+        gl.uniform1f(uniforms.uFireLight, volume.FireLight ?? 1.0);
         const position = camera.position;
         gl.uniform3f(uniforms.uCameraPosition, position[0], position[1], position[2]);
         gl.uniformMatrix4fv(uniforms.uInverseViewProjection, false, matrices.inverseViewProjection);

@@ -501,6 +501,7 @@ export function mountStudioUI({ app, refs })
             slider(domain, 'Vorticity', 'Vorticity confinement', 0, 2, 0.01),
             slider(domain, 'Cooling', 'Cooling rate', 0, 3, 0.05),
             slider(domain, 'Combustion', 'Combustion rate', 0, 3, 0.05),
+            slider(domain, 'Expansion', 'Gas expansion', 0, 3, 0.05),
             slider(domain, 'AmbientTemperature', 'Ambient temperature', -1, 2, 0.05),
         ]));
         host.appendChild(card('Solver', 'Stability', [
@@ -816,6 +817,7 @@ export function mountStudioUI({ app, refs })
             host.appendChild(card('Lighting', 'Sun + sky', [
                 choice(visualizer, 'Filter', 'Volume filtering', VolumeFilters, { Smooth: 'Smooth (trilinear)', Voxel: 'Voxel (show cells)' }),
                 slider(visualizer, 'LightIntensity', 'Sun intensity', 0, 4, 0.05),
+                slider(visualizer, 'FireLight', 'Fire lights smoke', 0, 4, 0.05),
                 colour(visualizer, 'Ambient', 'Ambient sky'),
                 slider(visualizer, 'Exposure', 'Exposure', 0.2, 4, 0.05),
                 slider(visualizer, 'Steps', 'March steps', 24, 256, 4, '', 0),
