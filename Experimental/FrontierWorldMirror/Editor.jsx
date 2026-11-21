@@ -41,6 +41,7 @@ import {
   GetActiveColourSlot,
 } from "./ColourCodex.js";
 import ShaderPanel from "./ShaderPanel.jsx";
+import SectionStageSwitcher from "./SectionStageSwitcher.jsx";
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { createRoot } from "react-dom/client";
 import { Inspector, Icon, Glyph, Panels } from "./Inspectors.jsx";
@@ -1372,11 +1373,52 @@ function App() {
     Select(Id);
     ShowMenu(null);
   };
+  const [OutlinerScope, AssignOutlinerScope] = useState("all");
+  const [ViewportStage, AssignViewportStage] = useState("view");
   const SceneInventory = useMemo(
     () => FolderInventory(Rows, null, Hidden),
     [Rows, Hidden],
   );
   const HasChildren = (Id) => SceneInventory.Children.has(Id);
+  const RowBelongsToDomain = (Row, Domain) => {
+    if (Domain === "all") return true;
+    let Cursor = Row;
+    const Visited = new Set();
+    while (Cursor && !Visited.has(Cursor.Id)) {
+      Visited.add(Cursor.Id);
+      if (
+        (Domain === "showcase" && (Cursor.Id === "showcase" || Cursor.Id === "scene")) ||
+        (Domain === "cameras" && Cursor.Id === "cameras") ||
+        (Domain === "world" && (Cursor.Id === "world" || Cursor.Id === "forces")) ||
+        (Domain === "lighting" && Cursor.Id === "lighting")
+      ) {
+        return true;
+      }
+      Cursor = Cursor.Parent ? SceneInventory.ById.get(Cursor.Parent) : null;
+    }
+    if (Domain === "showcase") return Row.Panel === "geometry";
+    if (Domain === "cameras") return ["camera", "render-settings", "post"].includes(Row.Panel);
+    if (Domain === "lighting") return Row.Panel === "light";
+    if (Domain === "world") {
+      return [
+        "sun",
+        "stars",
+        "moon",
+        "atmosphere",
+        "flare",
+        "wind",
+        "precipitation",
+        "rainbow",
+        "clouds",
+        "local-cloud",
+        "height-fog",
+        "aerial-fog",
+        "local-fog",
+        "force",
+      ].includes(Row.Panel);
+    }
+    return true;
+  };
   const DisplayRows = () => {
     const Result = [];
     const Seen = new Set(),
@@ -1387,6 +1429,7 @@ function App() {
       const { Row, Depth } = Stack.pop();
       if (Seen.has(Row.Id)) continue;
       Seen.add(Row.Id);
+      if (!RowBelongsToDomain(Row, OutlinerScope)) continue;
       const Match =
         (!Query || Row.Name.toLowerCase().includes(Query.toLowerCase())) &&
         (!Filters.length ||
@@ -1414,8 +1457,8 @@ function App() {
                         "precipitation",
                       ].includes(Row.Panel),
           ));
-      if (Match) Result.push({ ...Row, Depth });
-      if (!Collapsed[Row.Id] || Query || Filters.length) {
+      if (Match) Result.push({ ...Row, Depth: OutlinerScope === "all" ? Depth : Math.max(0, Depth) });
+      if (!Collapsed[Row.Id] || Query || Filters.length || OutlinerScope !== "all") {
         const Children = SceneInventory.Children.get(Row.Id) || [];
         for (let I = Children.length - 1; I >= 0; I--)
           Stack.push({ Row: Children[I], Depth: Depth + 1 });
@@ -2019,6 +2062,22 @@ function App() {
           <Glyph Name="chevron" Size={12} />
         </button>
       </div>
+      <div className="outliner-stage-shell">
+        <SectionStageSwitcher
+          ScopeKey="outliner:domain"
+          ActiveId={OutlinerScope}
+          OnSelect={AssignOutlinerScope}
+          Compact
+          AriaLabel="Outliner domain switcher"
+          Sections={[
+            { Id: "all", Label: "All", Accent: "#7ab8ff" },
+            { Id: "showcase", Label: "Showcase", Accent: "#b9c7ae" },
+            { Id: "cameras", Label: "Camera", Accent: "#c5a3ff" },
+            { Id: "world", Label: "World", Accent: "#7be0ad" },
+            { Id: "lighting", Label: "Lights", Accent: "#ffd166" },
+          ]}
+        />
+      </div>
       {!!Filters.length && (
         <div className="filter-chips">
           {Filters.map((Label) => (
@@ -2260,164 +2319,194 @@ function App() {
           </div>
         </div>
         <div className="viewport-action-row">
-          <button
-            className="viewport-construct"
-            aria-label="Construct"
-            title="Construct an entity · Ctrl+A"
-            onClick={() => OpenConstruct(true)}
-          >
-            <ActionIcon Name="construct" Size={18} />
-            <span>Construct</span>
-            <kbd>Ctrl+A</kbd>
-          </button>
-          <button
-            className="viewport-icon-button"
-            aria-label="Frame selected"
-            title={
-              Subject.Preview
-                ? "Frame selected entity in EditorCamera"
-                : "Reset EditorCamera to canonical gallery view"
-            }
-            onClick={() => {
-              const TargetRec = Values[Selected] || {};
-              if (Subject.Preview && Array.isArray(TargetRec.Position)) {
-                const TargetPos = TargetRec.Position;
-                const Ext = Array.isArray(TargetRec.Scale)
-                  ? Math.max(...TargetRec.Scale.map((S) => Math.abs(Number(S) || 0.8)))
-                  : 1.0;
-                const ViewDir = NormalizeVec3(
-                  [
-                    CamPosition[0] - TargetPos[0],
-                    CamPosition[1] - TargetPos[1],
-                    CamPosition[2] - TargetPos[2],
-                  ],
-                  [0, -1, 0.12],
-                );
-                const Dist = Math.max(1.35, Math.min(6.5, Ext * 1.65));
-                UpdateEditorCamera({
-                  Position: TargetPos.map(
-                    (Axis, Idx) => +(Axis + ViewDir[Idx] * Dist).toFixed(4),
-                  ),
-                  Target: TargetPos.map((Axis) => +Number(Axis).toFixed(4)),
-                });
-              } else {
-                UpdateEditorCamera({
-                  Position: [...CanonicalEditorCamera.Position],
-                  Target: [...CanonicalEditorCamera.Target],
-                });
-              }
-            }}
-          >
-            <ActionIcon Name="focus" Size={17} />
-          </button>
-          <span className="viewport-tool-divider" />
-          <label
-            className="viewport-projection"
-            title="Projection preference"
-          >
-            <Icon Name="camera" Size={16} />
-            <select
-              aria-label="Viewport projection"
-              value={Projection}
-              onChange={(Event) => SetProjection(Event.target.value)}
-            >
-              {[
-                ["PERSP", "Perspective"],
-                ["ORTHO", "Orthographic"],
-                ["TOP", "Top"],
-                ["FRONT", "Front"],
-                ["RIGHT", "Right"],
-              ].map(([Key, Label]) => (
-                <option key={Key} value={Key}>
-                  {Label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <span className="viewport-tool-divider" />
-          <label
-            className="viewport-projection viewport-debug-select"
-            title="Debug render views · F3 / Shift+F3"
-          >
-            <select
-              aria-label="Debug views"
-              value={Debug}
-              onChange={(Event) => SetDebug(+Event.target.value)}
-            >
-              {DebugViews.map((View, Index) => (
-                <option key={View} value={Index}>
-                  {Index === 0 ? "Debug: Off" : `Debug: ${View}`}
-                </option>
-              ))}
-            </select>
-          </label>
-          <div className="viewport-secondary-tools">
+          <div className="viewport-primary-actions">
             <button
-              className="viewport-icon-button gizmo-pill"
-              aria-label="Toggle 3D transform gizmo"
-              aria-pressed={ShowGizmo}
+              className="viewport-construct"
+              aria-label="Construct"
+              title="Construct an entity · Ctrl+A"
+              onClick={() => OpenConstruct(true)}
+            >
+              <ActionIcon Name="construct" Size={18} />
+              <span>Construct</span>
+              <kbd>Ctrl+A</kbd>
+            </button>
+            <button
+              className="viewport-icon-button"
+              aria-label="Frame selected"
               title={
-                ShowGizmo
-                  ? "Hide 3D Slate GizmoPRO manipulator"
-                  : "Show 3D Slate GizmoPRO manipulator"
+                Subject.Preview
+                  ? "Frame selected entity in EditorCamera"
+                  : "Reset EditorCamera to canonical gallery view"
               }
-              onClick={() => SetShowGizmo((Previous) => !Previous)}
-            >
-              GIZMO
-            </button>
-            <button
-              className="viewport-icon-button gizmo-pill"
-              aria-label="Toggle 3D ForceField overlay"
-              aria-pressed={ForceOverlaySettings.Enabled !== false}
-              title="Toggle 3D ForceField Streamlines + GPU Slice Heatmap overlay"
-              onClick={() =>
-                SetForceOverlaySettings((Prev) => ({
-                  ...Prev,
-                  Enabled: Prev.Enabled === false,
-                }))
-              }
-            >
-              FORCES
-            </button>
-            <button
-              className="viewport-icon-button gizmo-pill"
-              aria-label="ForceField visualization layers"
-              aria-expanded={ForceVizOpen}
-              title="VectorField Studio Streamlines, Heatmap, Bokeh & Rig controls"
               onClick={() => {
-                ShowViewportSettings(false);
-                SetForceVizOpen((Prev) => !Prev);
+                const TargetRec = Values[Selected] || {};
+                if (Subject.Preview && Array.isArray(TargetRec.Position)) {
+                  const TargetPos = TargetRec.Position;
+                  const Ext = Array.isArray(TargetRec.Scale)
+                    ? Math.max(...TargetRec.Scale.map((S) => Math.abs(Number(S) || 0.8)))
+                    : 1.0;
+                  const ViewDir = NormalizeVec3(
+                    [
+                      CamPosition[0] - TargetPos[0],
+                      CamPosition[1] - TargetPos[1],
+                      CamPosition[2] - TargetPos[2],
+                    ],
+                    [0, -1, 0.12],
+                  );
+                  const Dist = Math.max(1.35, Math.min(6.5, Ext * 1.65));
+                  UpdateEditorCamera({
+                    Position: TargetPos.map(
+                      (Axis, Idx) => +(Axis + ViewDir[Idx] * Dist).toFixed(4),
+                    ),
+                    Target: TargetPos.map((Axis) => +Number(Axis).toFixed(4)),
+                  });
+                } else {
+                  UpdateEditorCamera({
+                    Position: [...CanonicalEditorCamera.Position],
+                    Target: [...CanonicalEditorCamera.Target],
+                  });
+                }
               }}
             >
-              FORCE VIZ ▾
+              <ActionIcon Name="focus" Size={17} />
             </button>
-            <button
-              className="viewport-icon-button"
-              aria-label="Split viewport"
-              aria-pressed={SplitView}
-              title={SplitView ? "Return to single view" : "Split viewport"}
-              onClick={() => SetSplitView((Previous) => !Previous)}
-            >
-              <ActionIcon Name="split" Size={17} />
-            </button>
-            <button
-              className="viewport-icon-button"
-              aria-label="Viewport diagnostics"
-              aria-pressed={DiagnosticsOpen}
-              title="Diagnostics & performance telemetry"
-              onClick={() => SetDiagnosticsOpen((Previous) => !Previous)}
-            >
-              <ActionIcon Name="diagnostics" Size={16} />
-            </button>
-            <button
-              className="viewport-icon-button"
-              aria-label="Viewport settings"
-              aria-expanded={ViewportSettings}
-              title="Viewport settings and debug views"
-              onClick={() => ShowViewportSettings(!ViewportSettings)}
-            >
-              <ActionIcon Name="settings" Size={17} />
-            </button>
+          </div>
+
+          <div className="viewport-stage-shell">
+            <SectionStageSwitcher
+              ScopeKey="viewport:toolbar"
+              ActiveId={ViewportStage}
+              OnSelect={AssignViewportStage}
+              Compact
+              AriaLabel="Viewport tool stages"
+              Sections={[
+                { Id: "view", Label: "View", Accent: "#7ab8ff" },
+                { Id: "overlays", Label: "Overlays", Accent: "#7be0ad" },
+                { Id: "debug", Label: "Debug", Accent: "#c5a3ff" },
+              ]}
+            />
+          </div>
+
+          <div className="viewport-secondary-tools">
+            {ViewportStage === "view" && (
+              <>
+                <label
+                  className="viewport-projection"
+                  title="Projection preference"
+                >
+                  <Icon Name="camera" Size={16} />
+                  <select
+                    aria-label="Viewport projection"
+                    value={Projection}
+                    onChange={(Event) => SetProjection(Event.target.value)}
+                  >
+                    {[
+                      ["PERSP", "Perspective"],
+                      ["ORTHO", "Orthographic"],
+                      ["TOP", "Top"],
+                      ["FRONT", "Front"],
+                      ["RIGHT", "Right"],
+                    ].map(([Key, Label]) => (
+                      <option key={Key} value={Key}>
+                        {Label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <button
+                  className="viewport-icon-button"
+                  aria-label="Split viewport"
+                  aria-pressed={SplitView}
+                  title={SplitView ? "Return to single view" : "Split viewport"}
+                  onClick={() => SetSplitView((Previous) => !Previous)}
+                >
+                  <ActionIcon Name="split" Size={17} />
+                </button>
+              </>
+            )}
+
+            {ViewportStage === "overlays" && (
+              <>
+                <button
+                  className="viewport-icon-button gizmo-pill"
+                  aria-label="Toggle 3D transform gizmo"
+                  aria-pressed={ShowGizmo}
+                  title={
+                    ShowGizmo
+                      ? "Hide 3D Slate GizmoPRO manipulator"
+                      : "Show 3D Slate GizmoPRO manipulator"
+                  }
+                  onClick={() => SetShowGizmo((Previous) => !Previous)}
+                >
+                  GIZMO
+                </button>
+                <button
+                  className="viewport-icon-button gizmo-pill"
+                  aria-label="Toggle 3D ForceField overlay"
+                  aria-pressed={ForceOverlaySettings.Enabled !== false}
+                  title="Toggle 3D ForceField Streamlines + GPU Slice Heatmap overlay"
+                  onClick={() =>
+                    SetForceOverlaySettings((Prev) => ({
+                      ...Prev,
+                      Enabled: Prev.Enabled === false,
+                    }))
+                  }
+                >
+                  FORCES
+                </button>
+                <button
+                  className="viewport-icon-button gizmo-pill"
+                  aria-label="ForceField visualization layers"
+                  aria-expanded={ForceVizOpen}
+                  title="VectorField Studio Streamlines, Heatmap, Bokeh & Rig controls"
+                  onClick={() => {
+                    ShowViewportSettings(false);
+                    SetForceVizOpen((Prev) => !Prev);
+                  }}
+                >
+                  FORCE VIZ ▾
+                </button>
+              </>
+            )}
+
+            {ViewportStage === "debug" && (
+              <>
+                <label
+                  className="viewport-projection viewport-debug-select"
+                  title="Debug render views · F3 / Shift+F3"
+                >
+                  <select
+                    aria-label="Debug views"
+                    value={Debug}
+                    onChange={(Event) => SetDebug(+Event.target.value)}
+                  >
+                    {DebugViews.map((View, Index) => (
+                      <option key={View} value={Index}>
+                        {Index === 0 ? "Debug: Off" : `Debug: ${View}`}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <button
+                  className="viewport-icon-button"
+                  aria-label="Viewport diagnostics"
+                  aria-pressed={DiagnosticsOpen}
+                  title="Diagnostics & performance telemetry"
+                  onClick={() => SetDiagnosticsOpen((Previous) => !Previous)}
+                >
+                  <ActionIcon Name="diagnostics" Size={16} />
+                </button>
+                <button
+                  className="viewport-icon-button"
+                  aria-label="Viewport settings"
+                  aria-expanded={ViewportSettings}
+                  title="Viewport settings and debug views"
+                  onClick={() => ShowViewportSettings(!ViewportSettings)}
+                >
+                  <ActionIcon Name="settings" Size={17} />
+                </button>
+              </>
+            )}
           </div>
         </div>
       </div>

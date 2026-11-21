@@ -1,5 +1,6 @@
 import React, { useMemo, useState, useEffect, useRef } from "react";
 import TransformPanel from "./TransformPanel.jsx";
+import SectionStageSwitcher from "./SectionStageSwitcher.jsx";
 import {
   FORCE_MODELS,
   FORCE_MODEL_SVG_PATHS,
@@ -498,26 +499,26 @@ export default function ForceFieldPanel({
           </div>
         </div>
 
-        <div role="tablist" aria-label="ForceField Inspector Tabs" style={{ display: "flex", gap: 5 }}>
-          {["Field", "Formula", "Layers", "Cache"].map((Tab) => (
-            <button
-              key={Tab}
-              type="button"
-              role="tab"
-              aria-selected={ActiveTab === Tab}
-              style={TabButtonStyle(ActiveTab === Tab)}
-              onClick={() => SetActiveTab(Tab)}
-            >
-              {Tab}
-            </button>
-          ))}
-        </div>
+        <SectionStageSwitcher
+          ScopeKey={`force:${Subject?.Id || "force"}`}
+          ActiveId={ActiveTab}
+          OnSelect={SetActiveTab}
+          Compact
+          AriaLabel="ForceField Inspector Tabs"
+          Sections={[
+            { Id: "Field", Label: "Field", Subtitle: "19-law force model, envelope & motion path", Accent: Meta.Color },
+            { Id: "Probe", Label: "Probe", Subtitle: "Anemometer wind gauge & differential tensor", Accent: "#7ef2c2" },
+            { Id: "Formula", Label: "Formula", Subtitle: "Symbolic GPU vector expression", Accent: "#ffd480" },
+            { Id: "Layers", Label: "Layers", Subtitle: "GPU slice, bokeh & RK4 streamlines", Accent: "#7ab8ff" },
+            { Id: "Cache", Label: "Cache", Subtitle: "4-tier cascade clipmap & TOML export", Accent: "#c5a3ff" },
+          ]}
+        />
       </div>
 
       {/* ============================================================================================================
-          TAB 1: FIELD — (1) ANEMOMETER · PROBE WIND, (2) PROBE SAMPLE TENSOR, (3) SELECTED FORCE MODEL + MOTION SPLINE
+          TAB 2: PROBE — (1) ANEMOMETER · PROBE WIND, (2) PROBE SAMPLE TENSOR
          ============================================================================================================ */}
-      {ActiveTab === "Field" && (
+      {ActiveTab === "Probe" && (
         <>
           {/* CARD 1: ANEMOMETER · PROBE WIND (1:1 with VectorFieldVisualizer) */}
           <div style={CARD_STYLE}>
@@ -739,8 +740,14 @@ export default function ForceFieldPanel({
               </div>
             </div>
           </div>
+        </>
+      )}
 
-          {/* CARD 3: SELECTED 19-LAW FORCE MODEL + RADIAL ENVELOPE + WAYPOINT CURVE ANIMATION */}
+      {/* ============================================================================================================
+          TAB 1: FIELD — SELECTED 19-LAW FORCE MODEL + RADIAL ENVELOPE + WAYPOINT CURVE ANIMATION
+         ============================================================================================================ */}
+      {ActiveTab === "Field" && (
+        <>
           <div style={CARD_STYLE}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 6 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 6, flex: 1, minWidth: 0 }}>

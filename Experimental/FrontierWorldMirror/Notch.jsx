@@ -1,6 +1,7 @@
 import DrawerPanel from "./DrawerPanel.jsx";
 import React, { useState, useRef, useEffect } from "react";
 import { Glyph, Control, Card, Icon } from "./Inspectors.jsx";
+import SectionStageSwitcher from "./SectionStageSwitcher.jsx";
 const Qualities = ["Minimal", "Economy", "Standard", "Ultra", "Reference"];
 const Channels = [
   "01 base colour",
@@ -143,6 +144,23 @@ export default function Notch({
     >
       <div className="shade">
         <div className="drawer-backdrop" aria-hidden="true" />
+        <div className="control-stage-shell">
+          <SectionStageSwitcher
+            ScopeKey="notch:page"
+            ActiveId={Page === "Settings" ? "Dashboard" : Page}
+            OnSelect={SelectPage}
+            Compact
+            AriaLabel="Control Center sections"
+            Sections={[
+              { Id: "Dashboard", Label: "Quick Toggles", Accent: "#7ab8ff" },
+              { Id: "Render Settings", Label: "Render", Accent: "#7be0ad" },
+              { Id: "Appearance", Label: "Appearance", Accent: "#c5a3ff" },
+              { Id: "Input", Label: "Input", Accent: "#e3d598" },
+              { Id: "Notifications", Label: "Alerts", Accent: "#f59e0b" },
+              { Id: "Materials", Label: "Materials", Accent: "#8bd0b8" },
+            ]}
+          />
+        </div>
         {Page === "Dashboard" ? (
           <div className="control-dashboard">
             <header>
@@ -331,17 +349,20 @@ export default function Notch({
               </button>
             </header>
             {Page === "Appearance" && (
-              <nav className="appearance-tabs">
-                {["Display", "Fonts", "Theme"].map((Label) => (
-                  <button
-                    key={Label}
-                    className={Tab === Label ? "active" : ""}
-                    onClick={() => SelectTab(Label)}
-                  >
-                    {Label}
-                  </button>
-                ))}
-              </nav>
+              <div className="appearance-stage-shell">
+                <SectionStageSwitcher
+                  ScopeKey="notch:appearance"
+                  ActiveId={Tab}
+                  OnSelect={SelectTab}
+                  Compact
+                  AriaLabel="Appearance sections"
+                  Sections={[
+                    { Id: "Display", Label: "Display", Accent: "#7ab8ff" },
+                    { Id: "Fonts", Label: "Fonts", Accent: "#c5a3ff" },
+                    { Id: "Theme", Label: "Theme", Accent: "#7be0ad" },
+                  ]}
+                />
+              </div>
             )}
             <div className="settings-body" data-drawer-scroll>
               {Page === "Render Settings" ? (

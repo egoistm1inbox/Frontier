@@ -18,6 +18,7 @@ import {
   GradientValue,
 } from "./MaterialSpecification.js";
 import { ColourSlotDropProps } from "./ColourCodex.js";
+import SectionStageSwitcher from "./SectionStageSwitcher.jsx";
 import "./MaterialPanel.css";
 
 function NumericInput(Props) {
@@ -547,7 +548,8 @@ export default function MaterialPanel({
   Latest.current = Material;
   LatestChange.current = Change;
   const [Selected, Select] = useState("colour"),
-    [Query, Search] = useState("");
+    [Query, Search] = useState(""),
+    [CompactStage, AssignCompactStage] = useState("preset");
   const Field = MaterialChannels.find((Item) => Item.Id === Selected),
     Channel = Material.Channels[Selected];
   const Apply = (Next) => LatestChange.current("Material", Next);
@@ -555,6 +557,105 @@ export default function MaterialPanel({
   const Authored = Object.values(Material.Channels).filter(
     (Item) => Item.Source !== "Fill",
   ).length;
+  const ChannelLibraryPane = (
+    <aside className="channel-library">
+      <div className="material-section-title">
+        <h3>Channels</h3>
+        <small>ALL 20</small>
+      </div>
+      <input
+        className="channel-search"
+        aria-label="Search material channels"
+        placeholder="Search channels…"
+        value={Query}
+        onChange={(Event) => Search(Event.target.value)}
+      />
+      <div className="channel-list">
+        {MaterialChannels.filter((Item) =>
+          (Item.Label + Item.Group)
+            .toLowerCase()
+            .includes(Query.toLowerCase()),
+        ).map((Item) => {
+          const Data = Material.Channels[Item.Id];
+          return (
+            <button
+              className={Selected === Item.Id ? "active" : ""}
+              key={Item.Id}
+              data-material-channel={Item.Id}
+              aria-pressed={Selected === Item.Id}
+              onClick={() => {
+                Select(Item.Id);
+                if (Compact) AssignCompactStage("source");
+              }}
+              {...(Item.Kind === "Colour"
+                ? ColourSlotDropProps({
+                    Key: Subject.Id + ":material:" + Item.Id,
+                    Label: Subject.Name + " · " + Item.Label,
+                    AssignHex: (Hex) => {
+                      Select(Item.Id);
+                      Assign(Item.Id, { Source: "Fill", Fill: Hex });
+                    },
+                  })
+                : {})}
+            >
+              <span
+                className="channel-swatch"
+                style={{
+                  background:
+                    Data.Source === "Gradient"
+                      ? GradientCss(Data, Item)
+                      : Item.Kind === "Colour"
+                        ? Data.Fill
+                        : undefined,
+                }}
+              >
+                {Item.Kind !== "Colour" && Data.Source !== "Gradient"
+                  ? "◈"
+                  : ""}
+              </span>
+              <span className="channel-name">
+                {Item.Label}
+                <small>{Item.Group}</small>
+              </span>
+              <span className="channel-value">
+                {Data.Source === "Fill"
+                  ? Item.Kind === "Colour"
+                    ? Data.Fill
+                    : (+Data.Fill).toFixed(2)
+                  : SourceNames[Data.Source]}
+                <small
+                  className={Data.Source === "Code" ? "unresolved" : ""}
+                >
+                  {Data.Source === "Code"
+                    ? "unresolved"
+                    : Data.Source === "Texture"
+                      ? Data.Texture
+                        ? "embedded"
+                        : "unassigned"
+                      : Data.Source === "Gradient"
+                        ? Data.Stops.length + " stops"
+                        : "constant"}
+                </small>
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      {!MaterialChannels.some((Item) =>
+        (Item.Label + Item.Group)
+          .toLowerCase()
+          .includes(Query.toLowerCase()),
+      ) && <p>No matching channels.</p>}
+    </aside>
+  );
+  const SourcePane = (
+    <SourceEditor
+      key={Subject.Id + Selected}
+      Field={Field}
+      Channel={Channel}
+      Change={(Patch) => Assign(Selected, Patch)}
+    />
+  );
   return (
     <div
       className={
@@ -581,149 +682,159 @@ export default function MaterialPanel({
           </button>
         )}
       </header>
-      <div className="material-properties">
-        <label>
-          Material name
-          <input
-            aria-label="Material name"
-            value={Material.Name}
-            maxLength={80}
-            onChange={(Event) =>
-              Apply({ ...Material, Name: Event.target.value })
-            }
-          />
-        </label>
-        <label>
-          Material type
-          <select
-            aria-label="Material type"
-            value={Material.Type}
-            onChange={(Event) =>
-              Apply(ChooseMaterialType(Material, Event.target.value))
-            }
-          >
-            {MaterialTypes.map((Name) => (
-              <option key={Name}>{Name}</option>
-            ))}
-          </select>
-        </label>
-      </div>
-      <p className="material-type-note">
-        {Material.Type === "SSR"
-          ? "SSR is a reflection route, not a BSDF. Reflective preset here; screen-space tracing needs the native renderer."
-          : "Type presets adjust fill defaults without removing gradient, texture or code drafts."}
-      </p>
-      <div className="material-stats">
-        <div>
-          <span>
-            <i className="material-dot" />
-            Surface channels
-          </span>
-          <strong>20</strong>
-        </div>
-        <div>
-          <span>
-            <i className="material-dot linked" />
-            Non-fill sources
-          </span>
-          <strong>{Authored}</strong>
-        </div>
-      </div>
-      <div className="material-workbench">
-        <aside className="channel-library">
-          <div className="material-section-title">
-            <h3>Channels</h3>
-            <small>ALL 20</small>
-          </div>
-          <input
-            className="channel-search"
-            aria-label="Search material channels"
-            placeholder="Search channels…"
-            value={Query}
-            onChange={(Event) => Search(Event.target.value)}
-          />
-          <div className="channel-list">
-            {MaterialChannels.filter((Item) =>
-              (Item.Label + Item.Group)
-                .toLowerCase()
-                .includes(Query.toLowerCase()),
-            ).map((Item) => {
-              const Data = Material.Channels[Item.Id];
-              return (
-                <button
-                  className={Selected === Item.Id ? "active" : ""}
-                  key={Item.Id}
-                  data-material-channel={Item.Id}
-                  aria-pressed={Selected === Item.Id}
-                  onClick={() => Select(Item.Id)}
-                  {...(Item.Kind === "Colour"
-                    ? ColourSlotDropProps({
-                        Key: Subject.Id + ":material:" + Item.Id,
-                        Label: Subject.Name + " · " + Item.Label,
-                        AssignHex: (Hex) => {
-                          Select(Item.Id);
-                          Assign(Item.Id, { Source: "Fill", Fill: Hex });
-                        },
-                      })
-                    : {})}
-                >
-                  <span
-                    className="channel-swatch"
-                    style={{
-                      background:
-                        Data.Source === "Gradient"
-                          ? GradientCss(Data, Item)
-                          : Item.Kind === "Colour"
-                            ? Data.Fill
-                            : undefined,
-                    }}
-                  >
-                    {Item.Kind !== "Colour" && Data.Source !== "Gradient"
-                      ? "◈"
-                      : ""}
-                  </span>
-                  <span className="channel-name">
-                    {Item.Label}
-                    <small>{Item.Group}</small>
-                  </span>
-                  <span className="channel-value">
-                    {Data.Source === "Fill"
-                      ? Item.Kind === "Colour"
-                        ? Data.Fill
-                        : (+Data.Fill).toFixed(2)
-                      : SourceNames[Data.Source]}
-                    <small
-                      className={Data.Source === "Code" ? "unresolved" : ""}
+      {Compact ? (
+        <SectionStageSwitcher
+          ScopeKey={`material:${Subject.Id}`}
+          ActiveId={CompactStage}
+          OnSelect={AssignCompactStage}
+          Compact
+          AriaLabel="Material inspector sections"
+          Sections={[
+            {
+              Id: "preset",
+              Label: "Preset",
+              Subtitle: "Surface model, preset type & shaderball preview",
+              Accent: "#7ab8ff",
+              Content: (
+                <>
+                  <div className="material-properties">
+                    <label>
+                      Material name
+                      <input
+                        aria-label="Material name"
+                        value={Material.Name}
+                        maxLength={80}
+                        onChange={(Event) =>
+                          Apply({ ...Material, Name: Event.target.value })
+                        }
+                      />
+                    </label>
+                    <label>
+                      Material type
+                      <select
+                        aria-label="Material type"
+                        value={Material.Type}
+                        onChange={(Event) =>
+                          Apply(ChooseMaterialType(Material, Event.target.value))
+                        }
+                      >
+                        {MaterialTypes.map((Name) => (
+                          <option key={Name}>{Name}</option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                  <div className="material-stats">
+                    <div>
+                      <span>
+                        <i className="material-dot" />
+                        Surface channels
+                      </span>
+                      <strong>20</strong>
+                    </div>
+                    <div>
+                      <span>
+                        <i className="material-dot linked" />
+                        Non-fill sources
+                      </span>
+                      <strong>{Authored}</strong>
+                    </div>
+                  </div>
+                  <ShaderballPanel Material={Material} Compact={Compact} />
+                </>
+              ),
+            },
+            {
+              Id: "channels",
+              Label: `Channels (${Authored}/20)`,
+              Subtitle: "Select any OpenPBR surface channel to inspect",
+              Accent: "#7be0ad",
+              Content: ChannelLibraryPane,
+            },
+            {
+              Id: "source",
+              Label: Field ? Field.Label : "Source",
+              Subtitle: "Constant, gradient, texture or shader source",
+              Accent: "#e3d598",
+              Content: (
+                <>
+                  <label className="material-compact-channel-select">
+                    Active channel
+                    <select
+                      aria-label="Active material channel"
+                      value={Selected}
+                      onChange={(Event) => Select(Event.target.value)}
                     >
-                      {Data.Source === "Code"
-                        ? "unresolved"
-                        : Data.Source === "Texture"
-                          ? Data.Texture
-                            ? "embedded"
-                            : "unassigned"
-                          : Data.Source === "Gradient"
-                            ? Data.Stops.length + " stops"
-                            : "constant"}
-                    </small>
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-          {!MaterialChannels.some((Item) =>
-            (Item.Label + Item.Group)
-              .toLowerCase()
-              .includes(Query.toLowerCase()),
-          ) && <p>No matching channels.</p>}
-        </aside>
-        <SourceEditor
-          key={Subject.Id + Selected}
-          Field={Field}
-          Channel={Channel}
-          Change={(Patch) => Assign(Selected, Patch)}
+                      {MaterialChannels.map((Item) => (
+                        <option key={Item.Id} value={Item.Id}>
+                          {Item.Label} · {Item.Group}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  {SourcePane}
+                </>
+              ),
+            },
+          ]}
         />
-        <ShaderballPanel Material={Material} Compact={Compact} />
-      </div>
+      ) : (
+        <>
+          <div className="material-properties">
+            <label>
+              Material name
+              <input
+                aria-label="Material name"
+                value={Material.Name}
+                maxLength={80}
+                onChange={(Event) =>
+                  Apply({ ...Material, Name: Event.target.value })
+                }
+              />
+            </label>
+            <label>
+              Material type
+              <select
+                aria-label="Material type"
+                value={Material.Type}
+                onChange={(Event) =>
+                  Apply(ChooseMaterialType(Material, Event.target.value))
+                }
+              >
+                {MaterialTypes.map((Name) => (
+                  <option key={Name}>{Name}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <p className="material-type-note">
+            {Material.Type === "SSR"
+              ? "SSR is a reflection route, not a BSDF. Reflective preset here; screen-space tracing needs the native renderer."
+              : "Type presets adjust fill defaults without removing gradient, texture or code drafts."}
+          </p>
+          <div className="material-stats">
+            <div>
+              <span>
+                <i className="material-dot" />
+                Surface channels
+              </span>
+              <strong>20</strong>
+            </div>
+            <div>
+              <span>
+                <i className="material-dot linked" />
+                Non-fill sources
+              </span>
+              <strong>{Authored}</strong>
+            </div>
+          </div>
+          <div className="material-workbench">
+            {ChannelLibraryPane}
+            {SourcePane}
+            <ShaderballPanel Material={Material} Compact={Compact} />
+          </div>
+        </>
+      )}
     </div>
   );
 }

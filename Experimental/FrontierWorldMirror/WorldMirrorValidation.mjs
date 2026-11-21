@@ -1682,6 +1682,43 @@ assert.ok(
   assert.ok(FSun[3] > FMoon[3] * 2.0, `Daytime sunlight strongly illuminates the scene above moonlight (sun=${FSun[3].toFixed(4)} vs moon=${FMoon[3].toFixed(4)})`);
 }
 
+// 20. Horizontal SectionStageSwitcher UI Architecture ({ Section A | Section B | Section C })
+{
+  const SwitcherSrc = fs.readFileSync(path.join(Folder, "SectionStageSwitcher.jsx"), "utf8");
+  const InspectorsSrc = fs.readFileSync(path.join(Folder, "Inspectors.jsx"), "utf8");
+  const EditorSrc = fs.readFileSync(path.join(Folder, "Editor.jsx"), "utf8");
+  const FolderSrc = fs.readFileSync(path.join(Folder, "FolderInspector.jsx"), "utf8");
+  const MaterialSrc = fs.readFileSync(path.join(Folder, "MaterialPanel.jsx"), "utf8");
+  const ForceSrc = fs.readFileSync(path.join(Folder, "ForceFieldPanel.jsx"), "utf8");
+  const NotchSrc = fs.readFileSync(path.join(Folder, "Notch.jsx"), "utf8");
+  const CssSrc = fs.readFileSync(path.join(Folder, "Editor.css"), "utf8");
+  const BuiltHtml = fs.readFileSync(path.join(Folder, "index.html"), "utf8");
+
+  assert.ok(SwitcherSrc.includes("RememberedSectionByScope"), "SectionStageSwitcher persists active stage per scope");
+  assert.ok(SwitcherSrc.includes("section-stage-brace") && SwitcherSrc.includes("section-stage-separator"), "SectionStageSwitcher renders { A | B | C } horizontal frame");
+  for (const ScopeKey of [
+    "inspector:sun",
+    "inspector:camera",
+    "inspector:render-settings",
+    "inspector:stars",
+    "inspector:moon",
+    "inspector:atmosphere",
+    "inspector:flare",
+    "inspector:wind",
+    "inspector:precipitation",
+    "inspector:rainbow",
+  ]) {
+    assert.ok(InspectorsSrc.includes(ScopeKey), `Inspectors.jsx wires SectionStageSwitcher for ${ScopeKey}`);
+  }
+  assert.ok(EditorSrc.includes('ScopeKey="outliner:domain"') && EditorSrc.includes('ScopeKey="viewport:toolbar"'), "Editor.jsx wires Outliner & Viewport horizontal stage switchers");
+  assert.ok(FolderSrc.includes("SectionStageSwitcher"), "FolderInspector.jsx uses SectionStageSwitcher");
+  assert.ok(MaterialSrc.includes("SectionStageSwitcher"), "MaterialPanel.jsx uses SectionStageSwitcher in Compact mode");
+  assert.ok(ForceSrc.includes("SectionStageSwitcher"), "ForceFieldPanel.jsx uses SectionStageSwitcher");
+  assert.ok(NotchSrc.includes('ScopeKey="notch:page"'), "Notch.jsx uses SectionStageSwitcher");
+  assert.ok(CssSrc.includes(".section-stage-switcher") && CssSrc.includes(".section-stage-option.active"), "Editor.css defines SectionStageSwitcher styles");
+  assert.ok(BuiltHtml.includes("section-stage-switcher"), "Bundled standalone index.html contains compiled SectionStageSwitcher");
+}
+
 console.log(
-  "[WorldMirrorValidation] ALL 19 SUITES PASSED: ShadowAlgorithmLab Parity (PCF/PCSS/SMRT/BVH, LTC Area Lights, Cone & 2-Bounce BVH GI, BVH Reflections, No SDF Shadows/Reflections), Sun+Moon+Starlight Illumination, Moon Atlas, Physical Sky/Clouds, RenderSettings, ControlVehicle BVH, and ProjectBrowser verified!",
+  "[WorldMirrorValidation] ALL 20 SUITES PASSED: ShadowAlgorithmLab Parity, Sun+Moon+Starlight Illumination, Moon Atlas, Physical Sky/Clouds, RenderSettings, ControlVehicle BVH, ProjectBrowser, and Horizontal SectionStageSwitcher UI verified!",
 );
