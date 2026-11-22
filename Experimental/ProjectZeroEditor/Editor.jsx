@@ -29,7 +29,7 @@ import { StartThoughtLog, useThoughtScope, OpenThought } from "./ThoughtLog.js";
 import { ResolveRenderSettings, RenderSettingsKey } from "./RenderSettings.js";
 import { WorkspaceView } from "./Workspaces.jsx";
 import { VehicleFolder, VehicleRows, VehiclePanel, VehicleSummary, EnsureVehicleFolder } from "./VehicleComponents.jsx";
-import { ComponentPanel, ComponentSummary, WithObjectComponents, EnsureObjectComponents, ComponentRowsFor, OwnerKind, ComponentRevision } from "./ObjectComponents.jsx";
+import { ComponentPanel, ComponentSummary, WithObjectComponents, EnsureObjectComponents, ComponentRowsFor, OwnerKind, ComponentRevision, ComponentAddress } from "./ObjectComponents.jsx";
 import { BrowserFPS } from "./BrowserTiming.js";
 import {
   EnsureEditorCamera,
@@ -67,6 +67,7 @@ import {
   EnvironmentSummary,
 } from "./EnvironmentLight.jsx";
 import CheckerViewport, { PreviewVisible } from "./CheckerViewport.jsx";
+import ComponentViewerPanel from "./ComponentViewerPanel.jsx";
 import "./Editor.css";
 import "./ProjectZeroSpecification.css";
 const InitialRows = [
@@ -126,6 +127,7 @@ const InitialRows = [
     "Procedural sky",
   ],
   ["sun", "Sun", "sun", "sun", "world", "Directional light"],
+  [GodRaysRow.Id, GodRaysRow.Name, GodRaysRow.Panel, GodRaysRow.Icon, GodRaysRow.Parent, GodRaysRow.Description],
   ["moon", "Moons", "moon", "moon", "world", "Lunar bodies · six slots"],
   [
     "stars",
@@ -167,7 +169,6 @@ const InitialRows = [
     "world",
     "Local volumetric fog · bounded medium",
   ],
-  [GodRaysRow.Id, GodRaysRow.Name, GodRaysRow.Panel, GodRaysRow.Icon, GodRaysRow.Parent, GodRaysRow.Description],
   ["clouds", "Clouds", "clouds", "clouds", "world", "Global cloud layer"],
   [
     "precipitation",
@@ -290,6 +291,8 @@ function OutlinerMetadata(Row, Record = {}, Rows = []) {
       "× · ozone " +
       CompactNumber(V("Ozone"))
     );
+  if (Row.Panel === GodRaysRow.Panel)
+    return V("Enabled") === false ? "Off · sun component" : CompactNumber(V("Intensity")) + "× · " + CompactNumber(V("Steps"), 0) + " steps";
   if (Row.Panel === "sun")
     return (
       CompactNumber(V("Intensity")) +
@@ -452,6 +455,7 @@ function App() {
   const [Debug, SetDebug] = useState(0),
     [Diagnostics, ShowDiagnostics] = useState(false),
     [ProjectsOpen, OpenProjects] = useState(false),
+    [ComponentViewerOpen, OpenComponentViewer] = useState(false),
     [ProjectCatalogue, StoreProjectCatalogue] = useState(RestoreProjects),
     [HiZ, ToggleHiZ] = useState(true),
     [Alias, ToggleAlias] = useState(true),
@@ -472,11 +476,15 @@ function App() {
         Saved.Rows ? Saved.EnvironmentLightRevision : 0,
       ), Saved.Rows ? Saved.VehicleRevision : 0), Saved.Rows ? Saved.ComponentRevision : 0)),
     ),
-    [Selected, Select] = useState(
-      new URLSearchParams(location.search).get("inspect") ||
-        Saved.Selected ||
-        "sun",
-    ),
+    // An older component address (`cube-mass`) selects the object and opens that entry of its component stack.
+    [Selected, Select] = useState(() => {
+      const Wanted = new URLSearchParams(location.search).get("inspect") || Saved.Selected || "sun";
+      return ComponentAddress(Wanted, Rows)?.Owner || Wanted;
+    }),
+    [ComponentFocus, FocusComponent] = useState(() => {
+      const Address = ComponentAddress(new URLSearchParams(location.search).get("inspect") || Saved.Selected, Rows);
+      return Address ? { ...Address, Stamp: 1 } : null;
+    }),
     [Values, AssignValues] = useState(() => {
       const Restored = { ...Saved.Values };
       for (const Row of Saved.Rows || InitialRows) {
@@ -1043,9 +1051,22 @@ function App() {
     };
   }, [LeftWidth]);
   const SelectRow = (Id) => {
-    Select(Id);
+    const Address = ComponentAddress(Id, Rows);
+    Select(Address ? Address.Owner : Id);
+    FocusComponent(Address ? { ...Address, Stamp: Date.now() } : null);
     ShowMenu(null);
   };
+  // Opens one entry of an object's component stack, from anywhere (the Overview card, search, an older link).
+  const OpenComponent = (Owner, Component) => {
+    Select(Owner);
+    FocusComponent({ Owner, Component, Stamp: Date.now() });
+    ShowMenu(null);
+  };
+  // A component focus belongs to its object; selecting anything else drops it, so coming back opens the Overview again.
+  useEffect(() => {
+    if (ComponentFocus && ComponentFocus.Owner !== Selected) FocusComponent(null);
+  }, [Selected]);
+  const PatchRow = (Id, Patch) => AssignRows((Previous) => Previous.map((Row) => (Row.Id === Id ? { ...Row, ...Patch } : Row)));
   const Workspace = WorkspaceState && WorkspaceState.Id === Selected ? WorkspaceState : null;
   const OpenWorkspace = (Tool) => {
     SetRunMode("EDIT");
@@ -1693,6 +1714,15 @@ function App() {
             <Icon Name="folder-scene" Size={18} />
           </button>
           <button
+            className="viewport-icon-button viewport-component-viewer"
+            aria-label="Component Viewer"
+            aria-pressed={ComponentViewerOpen}
+            title="Component Viewer · inspect, compile and bake components"
+            onClick={() => OpenComponentViewer((Previous) => !Previous)}
+          >
+            <Icon Name="component-viewer" Size={18} />
+          </button>
+          <button
             className="viewport-icon-button"
             aria-label="Frame selected"
             title={
@@ -1894,6 +1924,7 @@ function App() {
             View={2}
           />
         )}
+        {ComponentViewerOpen && <ComponentViewerPanel Close={() => OpenComponentViewer(false)} Icon={Icon} />}
         {ProjectsOpen && (
           <ProjectBrowser
             Catalogue={ProjectCatalogue}
@@ -2030,7 +2061,7 @@ function App() {
               Workspace={Workspace}
               OpenWorkspace={OpenWorkspace}
               SetWorkspace={SetWorkspace}
-              Scene={{ Rows, SelectRow, AddRows: InsertUnder }}
+              Scene={{ Rows, SelectRow, AddRows: InsertUnder, PatchRow, OpenComponent, Focus: ComponentFocus }}
               OpenWind={() => {
                 WindOpener.current = document.activeElement;
                 EditWind(Selected);

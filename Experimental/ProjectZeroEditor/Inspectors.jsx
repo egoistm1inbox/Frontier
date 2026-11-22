@@ -6,7 +6,7 @@ import { HeightFogLayer, FogLightStudy, AerialRidges } from "./FogCards.jsx";
 import FracturePanel from "./FracturePanel.jsx";
 import { RenderComponentCards } from "./RenderComponents.jsx";
 import { UvPreviewCard, FracturePreviewCard, SdfPreviewCard, LodPreviewCard } from "./WorkspacePreviews.jsx";
-import { ComponentPanel, ComponentSheet, ComponentsCard, OwnerKind } from "./ObjectComponents.jsx";
+import { ComponentPanel, ComponentSheet, ComponentsCard, ComponentStack, OwnerKind } from "./ObjectComponents.jsx";
 import AtmosphereLab, { AtmosphereProfile } from "./AtmosphereLab.jsx";
 import {
   GraphContext,
@@ -752,6 +752,21 @@ export function Inspector({
             Values={Values}
             Scene={Scene}
             Kit={{ Icon }}
+          />
+        }
+        Focus={Scene?.Focus}
+        ComponentPage={
+          <ComponentStack
+            Owner={Scene?.Rows?.find((Each) => Each.Id === Subject.Id) || Subject}
+            Values={Values}
+            Change={Change}
+            Scene={Scene}
+            Focus={Scene?.Focus}
+            Kit={{ Card, Control, Metric, Icon }}
+            Notes={(Component) => (
+              // Stored on the owner under the component's name, so it doesn't overwrite the object's own notes.
+              <EntityNotes Value={Values[`${Component} Notes`] || ""} Change={(Next) => Change(`${Component} Notes`, Next)} />
+            )}
           />
         }
         FractureCards={

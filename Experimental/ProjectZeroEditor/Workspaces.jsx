@@ -3,7 +3,8 @@
 //============================================================================================================================================
 // 🧰 Edit-mode workspaces. Instead of a dedicated editor window per tool, the selection is isolated in the viewport and the tool works on
 // it there, with its controls in the inspector. UV (unwrap, islands, checker), Fracture (recipe, impact, pieces), SDF Bake (sparse
-// distance field, slices) and LOD Clusters (cluster DAG, error cut) register in `WorkspaceTools`. Browser authoring only; the native renderer is not connected.
+// distance field, slices), LOD Clusters (cluster DAG, error cut, back-face cone culling), Collision Fit (fitted proxies, mesh check) and
+// Icon Capture (square box, transparent PNG thumbnail) register in `WorkspaceTools`. Browser authoring only; the native renderer is not connected.
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { unwrapCharts, packCharts, cornerUvs, layoutStatistics } from "../GeometryCompiler/Engine/UvCharts.js";
@@ -29,6 +30,8 @@ import { ShapeOf } from "./PrimitiveInspector.jsx";
 import { Surface, useOrbit, Download, Hue, Clamp, GeometryKeys } from "./WorkspaceSurface.jsx";
 import { SdfView, SdfPanel } from "./SdfWorkspace.jsx";
 import { ClusterView, ClusterPanel } from "./ClusterWorkspace.jsx";
+import { CollisionView, CollisionPanel } from "./CollisionWorkspace.jsx";
+import { CaptureView, CapturePanel } from "./CaptureWorkspace.jsx";
 import "./Workspaces.css";
 
 export const WorkspaceTools = [
@@ -36,7 +39,12 @@ export const WorkspaceTools = [
   { Tool: "fracture", Name: "Fracture", Caption: "Shatter with a recipe; click the object to place the impact." },
   { Tool: "sdf", Name: "SDF Bake", Caption: "Bake a sparse signed distance field from the surface and read it slice by slice." },
   { Tool: "lod", Name: "LOD Clusters", Caption: "Split the surface into clusters, simplify them into a level DAG and pick a cut by screen error." },
+  { Tool: "collision", Name: "Collision Fit", Caption: "Fit box, sphere and capsule proxies, compare how tightly each wraps the object and check the surface is closed." },
+  { Tool: "capture", Name: "Icon Capture", Caption: "Frame the object in a square box and capture a transparent PNG thumbnail." },
 ];
+// One view and one panel per tool; Fracture is the fallback.
+const ToolViews = { uv: UvView, sdf: SdfView, lod: ClusterView, collision: CollisionView, capture: CaptureView };
+const ToolPanels = { uv: UvPanel, sdf: SdfPanel, lod: ClusterPanel, collision: CollisionPanel, capture: CapturePanel };
 //------------------------------------------------------------------------------------------------------------------------
 //                                                   UV
 //------------------------------------------------------------------------------------------------------------------------
@@ -533,7 +541,7 @@ export function WorkspaceView(Props) {
           Leave <kbd>Esc</kbd>
         </button>
       </div>
-      {Workspace.Tool === "uv" ? <UvView {...Props} /> : Workspace.Tool === "sdf" ? <SdfView {...Props} /> : Workspace.Tool === "lod" ? <ClusterView {...Props} /> : <FractureView {...Props} />}
+      {React.createElement(ToolViews[Workspace.Tool] || FractureView, Props)}
     </div>
   );
 }
@@ -557,7 +565,7 @@ export function WorkspacePanel(Props) {
           ))}
         </div>
       </section>
-      {Workspace.Tool === "uv" ? <UvPanel {...Props} /> : Workspace.Tool === "sdf" ? <SdfPanel {...Props} /> : Workspace.Tool === "lod" ? <ClusterPanel {...Props} /> : <FracturePanelBody {...Props} />}
+      {React.createElement(ToolPanels[Workspace.Tool] || FracturePanelBody, Props)}
     </div>
   );
 }
@@ -597,6 +605,17 @@ export function WorkspaceGlyph({ Tool, Size = 16 }) {
           <rect x="4" y="11" width="6" height="4" rx="1.1" opacity="0.8" />
           <rect x="14" y="11" width="6" height="4" rx="1.1" opacity="0.8" />
           <path d="M12 8v1.6M7 11V9.6h10V11M3.5 18.5h3M8.5 18.5h3M12.5 18.5h3M17.5 18.5h3" opacity="0.55" />
+        </>
+      ) : Tool === "collision" ? (
+        <>
+          <path d="M12 3.5 19 7.5v9L12 20.5 5 16.5v-9z" strokeDasharray="2.4 2.2" opacity="0.7" />
+          <path d="M12 8.2 15.4 10v4L12 15.8 8.6 14v-4z" fill="currentColor" stroke="none" />
+        </>
+      ) : Tool === "capture" ? (
+        <>
+          <path d="M4 8.5V5.5a1.5 1.5 0 0 1 1.5-1.5h3M15.5 4h3A1.5 1.5 0 0 1 20 5.5v3M20 15.5v3a1.5 1.5 0 0 1-1.5 1.5h-3M8.5 20h-3A1.5 1.5 0 0 1 4 18.5v-3" />
+          <path d="M12 8.2 15.3 10v3.9L12 15.8 8.7 13.9V10z" opacity="0.8" />
+          <path d="M8.7 10 12 11.9 15.3 10M12 11.9v3.9" opacity="0.5" />
         </>
       ) : Tool === "uv" ? (
         <>

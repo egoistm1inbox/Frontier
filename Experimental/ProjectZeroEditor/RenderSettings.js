@@ -88,6 +88,19 @@ export const TRACE_RESOLUTIONS = [
   { id: 0.25, pick: "¼" },
 ];
 
+// Follow-up 46: ambient occlusion belongs to each renderer. PBR raster keeps XeGTAO (screen-space horizon slices); SDF and ray tracing
+// get their own methods, stored under their own keys so switching renderers keeps each setup.
+export const SDF_AO = [
+  { id: "sdf_multitap", pick: "Multi-tap SDF AO", desc: "Distance samples stepped along the normal; cheap and view independent." },
+  { id: "sdf_cone", pick: "Cone-traced SDF AO", desc: "A few wide cones marched through the distance field; soft, large-scale occlusion." },
+  { id: "sdf_clipmap", pick: "Voxel clipmap AO", desc: "Occlusion read from the 3D voxel clipmap the penumbra modes already build." },
+];
+export const RAY_AO = [
+  { id: "rtao", pick: "RTAO", desc: "Cosine-weighted short rays through the BVH, then denoised." },
+  { id: "rtao_bent", pick: "RTAO + bent normal", desc: "RTAO that also keeps the least occluded direction, for specular occlusion." },
+  { id: "traced_gi", pick: "From traced GI", desc: "No separate pass: occlusion falls out of the traced GI; suits the path tracers." },
+];
+
 // CanonicalEditorCamera.ExposureGain in the source scene is 1.35; the counts are the source's Medium (GTX) tier.
 export const CanonicalRenderSettings = {
   RenderEngine: "gtx_sdf_gi",
@@ -147,6 +160,21 @@ export const CanonicalRenderSettings = {
   TraceResolution: 1,
   XeGtao: true,
   XeGtaoStrength: 1.0,
+  XeGtaoRadius: 0.5,
+  XeGtaoSlices: 2,
+
+  SdfAo: true,
+  SdfAoMethod: "sdf_cone",
+  SdfAoTaps: 5,
+  SdfAoCones: 4,
+  SdfAoRadius: 1.0,
+  SdfAoStrength: 1.0,
+
+  RayAo: true,
+  RayAoMethod: "rtao",
+  RayAoRays: 2,
+  RayAoRadius: 1.0,
+  RayAoStrength: 1.0,
 };
 
 const Bounded = (Amount, Minimum, Maximum, Fallback, Whole = false) => {
@@ -241,6 +269,21 @@ export function ResolveRenderSettings(Stored) {
     TraceResolution: TRACE_RESOLUTIONS.some((Option) => Option.id === Number(M.TraceResolution)) ? Number(M.TraceResolution) : C.TraceResolution,
     XeGtao: Flag("XeGtao"),
     XeGtaoStrength: Bounded(M.XeGtaoStrength, 0, 2, C.XeGtaoStrength),
+    XeGtaoRadius: Bounded(M.XeGtaoRadius, 0.1, 3, C.XeGtaoRadius),
+    XeGtaoSlices: Bounded(M.XeGtaoSlices, 1, 9, C.XeGtaoSlices, true),
+
+    SdfAo: Flag("SdfAo"),
+    SdfAoMethod: Known(SDF_AO, M.SdfAoMethod, C.SdfAoMethod),
+    SdfAoTaps: Bounded(M.SdfAoTaps, 3, 12, C.SdfAoTaps, true),
+    SdfAoCones: Bounded(M.SdfAoCones, 1, 9, C.SdfAoCones, true),
+    SdfAoRadius: Bounded(M.SdfAoRadius, 0.1, 4, C.SdfAoRadius),
+    SdfAoStrength: Bounded(M.SdfAoStrength, 0, 2, C.SdfAoStrength),
+
+    RayAo: Flag("RayAo"),
+    RayAoMethod: Known(RAY_AO, M.RayAoMethod, C.RayAoMethod),
+    RayAoRays: Bounded(M.RayAoRays, 1, 16, C.RayAoRays, true),
+    RayAoRadius: Bounded(M.RayAoRadius, 0.1, 5, C.RayAoRadius),
+    RayAoStrength: Bounded(M.RayAoStrength, 0, 2, C.RayAoStrength),
   };
 }
 
@@ -285,8 +328,29 @@ export function SampleBudget(Settings) {
 
 export const Find = (List, Id) => List.find((Option) => Option.id === Id) || List[0];
 
+// The active renderer's ambient occlusion: its switch and strength keys and a short line. MatCap has none (its cavity term is shape only).
+export function OcclusionOf(Settings) {
+  const Renderer = RendererOf(Settings.RenderEngine).id;
+  if (Renderer === "pbr") return { Renderer, Label: "XeGTAO", Switch: "XeGtao", Strength: "XeGtaoStrength", Line: Settings.XeGtao ? `XeGTAO · ${Settings.XeGtaoSlices} slices · ${Settings.XeGtaoRadius.toFixed(2)} m` : "Off" };
+  if (Renderer === "sdf") {
+    const Method = Find(SDF_AO, Settings.SdfAoMethod);
+    const Count = Method.id === "sdf_multitap" ? `${Settings.SdfAoTaps} taps` : Method.id === "sdf_cone" ? `${Settings.SdfAoCones} cones` : "clipmap";
+    return { Renderer, Label: Method.pick, Switch: "SdfAo", Strength: "SdfAoStrength", Line: Settings.SdfAo ? `${Method.pick} · ${Count}` : "Off" };
+  }
+  if (Renderer === "ray") {
+    const Method = Find(RAY_AO, Settings.RayAoMethod);
+    return { Renderer, Label: Method.pick, Switch: "RayAo", Strength: "RayAoStrength", Line: Settings.RayAo ? (Method.id === "traced_gi" ? Method.pick : `${Method.pick} · ${Settings.RayAoRays} rays`) : "Off" };
+  }
+  return null;
+}
+
 // Short "shadows · GI · reflections" lines for the active renderer.
 export function RendererLines(Settings) {
+  const Occlusion = OcclusionOf(Settings);
+  const Lines = RendererLinesWithoutOcclusion(Settings);
+  return Occlusion ? [...Lines, ["AO", Occlusion.Line]] : Lines;
+}
+function RendererLinesWithoutOcclusion(Settings) {
   const Renderer = RendererOf(Settings.RenderEngine).id;
   if (Renderer === "pbr") return [["Shadows", `${Find(PBR_SHADOWS, Settings.PbrShadow).pick} · ${Settings.PbrMapRes}²`], ["GI", "Ambient fill"], ["Reflections", "Sky / env"]];
   if (Renderer === "sdf") return [["Shadows", Find(SDF_SHADOWS, Settings.SdfShadow).pick], ["GI", Settings.SdfGi ? `${Settings.SdfCones} SDF cones` : "Ambient fill"], ["Reflections", "Sky / env"]];

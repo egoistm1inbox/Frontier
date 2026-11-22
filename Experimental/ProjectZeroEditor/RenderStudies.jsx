@@ -412,3 +412,111 @@ export function StudioShadowStudy({ Mode, Strength, Softness, Light }) {
     </svg>
   );
 }
+
+// Follow-up 46: ambient occlusion per renderer. A point on the floor beside a wall, with the method's samples: XeGTAO horizon
+// slices, SDF taps / cones / clipmap voxels, or traced rays (with a bent normal, or GI paths). Radius is 0–1 of the drawing's reach.
+export function OcclusionStudy({ Method = "off", Count = 4, Radius = 0.3 }) {
+  const Floor = 104, Wall = 214, Px = 182, Reach = 24 + 70 * Math.max(0, Math.min(1, Radius));
+  const Tone = "#e0b07b";
+  const Hit = (Dx, Dy) => {
+    // Distance along (Dx, Dy) from the point to the wall, or Infinity when the ray leaves past it.
+    if (Dx <= 0) return Infinity;
+    const T = (Wall - Px) / Dx;
+    return Floor - Dy * T >= 20 ? T : Infinity;
+  };
+  const Rays = (Total) =>
+    Array.from({ length: Total }, (_, Index) => {
+      const U = (Index + 0.5) / Total, Angle = Math.acos(1 - 2 * U);
+      const Dx = Math.cos(Angle), Dy = Math.sin(Angle) || 0.01;
+      const Length = Math.min(Reach, Hit(Dx, Dy));
+      return { Dx, Dy, Length, Blocked: Length < Reach };
+    });
+  let Body = null, Caption = "no ambient occlusion";
+  if (Method === "xegtao") {
+    const Slices = Math.max(1, Count);
+    const Right = Math.atan2(Math.min(84, Reach * 0.9) * (Reach > Wall - Px ? 1 : 0.15), Wall - Px);
+    Body = (
+      <>
+        <path d={`M${Px} ${Floor}L${Px - Reach} ${Floor}A${Reach} ${Reach} 0 0 1 ${Px + Math.cos(Right) * Reach} ${Floor - Math.sin(Right) * Reach}Z`} fill={Tone} fillOpacity="0.12" />
+        {Array.from({ length: Slices }, (_, Index) => {
+          const Tilt = (Index + 0.5) / Slices - 0.5;
+          return <ellipse key={Index} cx={Px} cy={Floor} rx={Reach} ry={Math.abs(Tilt) * 22 + 2} fill="none" stroke={Tone} strokeOpacity="0.35" strokeWidth="0.8" />;
+        })}
+        <path d={`M${Px} ${Floor}L${Px + Math.cos(Right) * Reach} ${Floor - Math.sin(Right) * Reach}`} stroke={Tone} strokeWidth="1.4" />
+        <path d={`M${Px} ${Floor}L${Px - Reach} ${Floor}`} stroke={Tone} strokeWidth="1.4" />
+      </>
+    );
+    Caption = `${Slices} slice${Slices === 1 ? "" : "s"} · horizon search in screen space`;
+  } else if (Method === "sdf_multitap") {
+    const Taps = Math.max(1, Count);
+    Body = Array.from({ length: Taps }, (_, Index) => {
+      const Y = Floor - ((Index + 1) / Taps) * Reach * 0.9, Distance = Math.min(Wall - Px, Floor - Y);
+      return (
+        <g key={Index}>
+          <circle cx={Px} cy={Y} r={Distance} fill="none" stroke={Tone} strokeOpacity="0.28" strokeWidth="0.8" />
+          <circle cx={Px} cy={Y} r="2.4" fill={Tone} />
+        </g>
+      );
+    });
+    Caption = `${Taps} taps along the normal · each reads the field`;
+  } else if (Method === "sdf_cone") {
+    const Cones = Math.max(1, Count);
+    Body = Array.from({ length: Cones }, (_, Index) => {
+      const Angle = Math.PI * ((Index + 0.5) / Cones), Half = (Math.PI / Cones) * 0.38;
+      const Length = Math.min(Reach, Hit(Math.cos(Angle), Math.sin(Angle)));
+      const P = (A) => [Px + Math.cos(A) * Length, Floor - Math.sin(A) * Length];
+      const [X1, Y1] = P(Angle - Half), [X2, Y2] = P(Angle + Half);
+      return <path key={Index} d={`M${Px} ${Floor}L${X1} ${Y1}L${X2} ${Y2}Z`} fill={Tone} fillOpacity={Length < Reach ? 0.42 : 0.14} stroke={Tone} strokeOpacity="0.55" strokeWidth="0.7" />;
+    });
+    Caption = `${Cones} cone${Cones === 1 ? "" : "s"} · darker ones meet the wall`;
+  } else if (Method === "sdf_clipmap") {
+    const Cell = 12, Cells = [];
+    for (let X = Px - Reach; X < Px + Reach; X += Cell)
+      for (let Y = Floor - Reach; Y < Floor; Y += Cell) {
+        if (Math.hypot(X + Cell / 2 - Px, Y + Cell / 2 - Floor) > Reach) continue;
+        const Near = Math.max(0, 1 - Math.min(Wall - (X + Cell), Floor - (Y + Cell)) / 36);
+        Cells.push(<rect key={X + "," + Y} x={X + 0.5} y={Y + 0.5} width={Cell - 1} height={Cell - 1} fill={Tone} fillOpacity={0.06 + 0.4 * Near} />);
+      }
+    Body = <>{Cells}</>;
+    Caption = "voxel clipmap · occupancy near the point";
+  } else if (Method === "rtao" || Method === "rtao_bent") {
+    const List = Rays(Math.min(24, Math.max(1, Count) * 4));
+    let Bx = 0, By = 0;
+    for (const Each of List) if (!Each.Blocked) { Bx += Each.Dx; By += Each.Dy; }
+    const Bent = Math.hypot(Bx, By) || 1;
+    Body = (
+      <>
+        <circle cx={Px} cy={Floor} r={Reach} fill="none" stroke="#ffffff1a" strokeDasharray="3 3" />
+        {List.map((Each, Index) => (
+          <path key={Index} d={`M${Px} ${Floor}L${Px + Each.Dx * Each.Length} ${Floor - Each.Dy * Each.Length}`} stroke={Each.Blocked ? Tone : "#ffffff"} strokeOpacity={Each.Blocked ? 0.9 : 0.25} strokeWidth="0.9" />
+        ))}
+        {Method === "rtao_bent" && <path d={`M${Px} ${Floor}L${Px + (Bx / Bent) * 60} ${Floor - (By / Bent) * 60}`} stroke="#7ab8ff" strokeWidth="2" />}
+      </>
+    );
+    Caption = `${Math.max(1, Count)} ray${Count === 1 ? "" : "s"} / px · ${List.filter((Each) => Each.Blocked).length} of ${List.length} drawn hit${Method === "rtao_bent" ? " · blue: bent normal" : ""}`;
+  } else if (Method === "traced_gi") {
+    Body = (
+      <>
+        <path d={`M${Px} ${Floor}L${Wall} 52L118 20`} stroke={Tone} strokeOpacity="0.8" strokeWidth="1" fill="none" />
+        <path d={`M${Px} ${Floor}L96 30`} stroke="#ffffff" strokeOpacity="0.3" strokeWidth="1" fill="none" />
+        <path d={`M${Px} ${Floor}L${Wall} 86L150 ${Floor}L120 40`} stroke={Tone} strokeOpacity="0.6" strokeWidth="1" fill="none" />
+      </>
+    );
+    Caption = "occlusion comes from the traced GI paths";
+  }
+  return (
+    <svg className="rs-study" viewBox="0 0 300 130" role="img" aria-label="Ambient occlusion" data-ao={Method}>
+      <path d={`M14 ${Floor}H${Wall}V20`} stroke="#8a8a8a" strokeWidth="1.4" fill="none" />
+      <path d={`M${Wall} ${Floor}H286`} stroke="#4a4a4a" />
+      <rect x={Wall} y="20" width={286 - Wall} height={Floor - 20} fill="#ffffff08" />
+      <clipPath id="rs-ao-clip">
+        <rect x="0" y="0" width="300" height={Floor + 1} />
+      </clipPath>
+      <g clipPath="url(#rs-ao-clip)">{Body}</g>
+      <circle cx={Px} cy={Floor} r="3" fill="#e6e6e6" />
+      <text x="14" y="122" style={{ fill: "#8a8a8a", fontSize: 11 }}>
+        {Caption}
+      </text>
+    </svg>
+  );
+}

@@ -36,11 +36,13 @@ import {
   SampleBudget,
   RendererLines,
   Find,
+  SDF_AO,
+  RAY_AO,
 } from "./RenderSettings.js";
-import { PenumbraStudy, HemisphereStudy, BounceStudy, ScaleStudy, KernelStudy, SdfTraceStudy, MatcapBall, BudgetBar, StudioShadowStudy } from "./RenderStudies.jsx";
+import { PenumbraStudy, HemisphereStudy, BounceStudy, ScaleStudy, KernelStudy, SdfTraceStudy, MatcapBall, BudgetBar, StudioShadowStudy, OcclusionStudy } from "./RenderStudies.jsx";
 import "./RenderSettings.css";
 
-const Tones = { Shadow: "#7ab8ff", Gi: "#7be0ad", Reflection: "#c5a3ff" };
+const Tones = { Shadow: "#7ab8ff", Gi: "#7be0ad", Reflection: "#c5a3ff", Occlusion: "#e0b07b" };
 
 // Component, baked icon, description. One component per camera.
 export const RenderComponentTypes = [["Render Engine", "render-settings", "Renderer, per-renderer shadows, quality and output"]];
@@ -197,8 +199,6 @@ export function RenderComponentCards({ Component, Owner, Values, Change, Kit }) 
             <Segments Label="Reflection source" Options={REFLECTION_SOURCES.map((Each) => [Each.id, Each.pick])} Active={Settings.ReflectionSource} Choose={(Next) => Assign({ ReflectionSource: Next })} />
             <small className="rc-caption">Trace resolution</small>
             <Segments Label="Trace resolution" Options={TRACE_RESOLUTIONS.map((Each) => [Each.id, Each.pick])} Active={Settings.TraceResolution} Choose={(Next) => Assign({ TraceResolution: Next })} />
-            {Switch("XeGTAO", "XeGtao")}
-            {Settings.XeGtao && Slide("XeGTAO strength", "XeGtaoStrength", 0, 2, 2, "×")}
           </Card>
           <div className="rc-reset">
             <span>{Changed ? `${Changed} of ${Object.keys(CanonicalRenderSettings).length} settings differ from the defaults` : "Source defaults"} · this camera only</span>
@@ -246,6 +246,20 @@ export function RenderComponentCards({ Component, Owner, Values, Change, Kit }) 
             {Slide("Sky & ambient fill", "PbrFill", 0.2, 2.5, 2, "×")}
             <p className="rs-note">OpenPBR Direct has no GI and no SDF: indirect light is the sky and ambient fill only.</p>
           </Card>
+          <Card Title="Ambient occlusion" Class="rs-card rc-ao-card" Accent={Tones.Occlusion}>
+            <Metric Value={Settings.XeGtao ? String(Settings.XeGtaoSlices) : "Off"} Unit={Settings.XeGtao ? "XeGTAO slices" : ""} Caption={Settings.XeGtao ? `Screen-space horizon search within ${Settings.XeGtaoRadius.toFixed(2)} m · strength ${Settings.XeGtaoStrength.toFixed(2)} ×` : "No ambient occlusion on the PBR raster."} />
+            <div className="graphic rs-graphic">
+              <OcclusionStudy Method={Settings.XeGtao ? "xegtao" : "off"} Count={Settings.XeGtaoSlices} Radius={Settings.XeGtaoRadius / 3} />
+            </div>
+            {Switch("XeGTAO", "XeGtao")}
+            {Settings.XeGtao && (
+              <>
+                {Slide("XeGTAO strength", "XeGtaoStrength", 0, 2, 2, "×")}
+                {Slide("Effect radius", "XeGtaoRadius", 0.1, 3, 2, "m")}
+                {Slide("Slices", "XeGtaoSlices", 1, 9)}
+              </>
+            )}
+          </Card>
         </>
       );
     }
@@ -291,6 +305,22 @@ export function RenderComponentCards({ Component, Owner, Values, Change, Kit }) 
               </>
             )}
             {Slide("Sky & ambient fill", "SdfFill", 0.2, 2.5, 2, "×")}
+          </Card>
+          <Card Title="SDF ambient occlusion" Class="rs-card rc-ao-card" Accent={Tones.Occlusion}>
+            <Metric Value={Settings.SdfAo ? (Settings.SdfAoMethod === "sdf_multitap" ? String(Settings.SdfAoTaps) : Settings.SdfAoMethod === "sdf_cone" ? String(Settings.SdfAoCones) : "3D") : "Off"} Unit={Settings.SdfAo ? (Settings.SdfAoMethod === "sdf_multitap" ? "taps" : Settings.SdfAoMethod === "sdf_cone" ? "cones" : "clipmap") : ""} Caption={Settings.SdfAo ? `${Find(SDF_AO, Settings.SdfAoMethod).desc} Radius ${Settings.SdfAoRadius.toFixed(2)} m.` : "No ambient occlusion on the SDF tracer."} />
+            <div className="graphic rs-graphic">
+              <OcclusionStudy Method={Settings.SdfAo ? Settings.SdfAoMethod : "off"} Count={Settings.SdfAoMethod === "sdf_multitap" ? Settings.SdfAoTaps : Settings.SdfAoCones} Radius={Settings.SdfAoRadius / 4} />
+            </div>
+            {Switch("SDF ambient occlusion", "SdfAo")}
+            {Settings.SdfAo && (
+              <>
+                <Tiles Label="SDF AO method" Options={SDF_AO.map((Option) => ({ ...Option, line: Option.desc.split(";")[0] }))} Active={Settings.SdfAoMethod} Choose={(Id) => Assign({ SdfAoMethod: Id })} />
+                {Settings.SdfAoMethod === "sdf_multitap" && Slide("Taps", "SdfAoTaps", 3, 12)}
+                {Settings.SdfAoMethod === "sdf_cone" && Slide("Cones", "SdfAoCones", 1, 9)}
+                {Slide("AO radius", "SdfAoRadius", 0.1, 4, 2, "m")}
+                {Slide("AO strength", "SdfAoStrength", 0, 2, 2, "×")}
+              </>
+            )}
           </Card>
         </>
       );
@@ -346,6 +376,25 @@ export function RenderComponentCards({ Component, Owner, Values, Change, Kit }) 
               </>
             ) : (
               <p className="rs-note">Reflections show the sky, clouds, moon and stars only.</p>
+            )}
+          </Card>
+          <Card Title="Traced ambient occlusion" Class="rs-card rc-ao-card" Accent={Tones.Occlusion}>
+            <Metric Value={Settings.RayAo ? (Settings.RayAoMethod === "traced_gi" ? "GI" : String(Settings.RayAoRays)) : "Off"} Unit={Settings.RayAo ? (Settings.RayAoMethod === "traced_gi" ? "occlusion" : "AO rays / pixel") : ""} Caption={Settings.RayAo ? `${Find(RAY_AO, Settings.RayAoMethod).desc}${Settings.RayAoMethod === "traced_gi" ? "" : ` Rays reach ${Settings.RayAoRadius.toFixed(2)} m.`}` : "No ambient occlusion on the ray tracer."} />
+            <div className="graphic rs-graphic">
+              <OcclusionStudy Method={Settings.RayAo ? Settings.RayAoMethod : "off"} Count={Settings.RayAoRays} Radius={Settings.RayAoRadius / 5} />
+            </div>
+            {Switch("Traced ambient occlusion", "RayAo")}
+            {Settings.RayAo && (
+              <>
+                <Tiles Label="Ray-traced AO method" Options={RAY_AO.map((Option) => ({ ...Option, line: Option.desc.split(",")[0] }))} Active={Settings.RayAoMethod} Choose={(Id) => Assign({ RayAoMethod: Id })} />
+                {Settings.RayAoMethod !== "traced_gi" && (
+                  <>
+                    {Slide("AO rays", "RayAoRays", 1, 16)}
+                    {Slide("AO radius", "RayAoRadius", 0.1, 5, 2, "m")}
+                  </>
+                )}
+                {Slide("AO strength", "RayAoStrength", 0, 2, 2, "×")}
+              </>
             )}
           </Card>
         </>

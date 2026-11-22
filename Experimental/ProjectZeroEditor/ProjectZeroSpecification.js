@@ -217,7 +217,8 @@ export const PanelSpecification = {
   },
 };
 
-// God rays: a new world row (§7). Shafts through clouds and fog, sun-driven.
+// God rays (§7): shafts through clouds and fog, driven by the sun. Follow-up 46 makes it a component of the Sun (an outliner child
+// with its own icon) instead of a world row after Local Fog.
 export const GodRaysPanel = "god-rays";
 export const GodRaysSheet = [
   { Label: "Enabled", Control: "Switch", Default: true, Group: "Shafts" },
@@ -235,9 +236,9 @@ export const GodRaysRow = {
   Id: "god-rays",
   Name: "God Rays",
   Panel: GodRaysPanel,
-  Icon: "sun",
-  Parent: "world",
-  Description: "Volumetric light shafts · clouds and fog occlude the sun",
+  Icon: "god-rays",
+  Parent: "sun",
+  Description: "Sun component · volumetric light shafts that clouds and fog occlude",
 };
 
 // Applies the overlay to one native sheet. Native fields keep their order; added fields follow.
@@ -261,12 +262,18 @@ export function SpecifyPanels(NativeSheets) {
   return Result;
 }
 
-// Inserts the God Rays row after Local Fog in scenes saved before Follow-up 48.
+// Keeps God Rays as the Sun's component: scenes saved before Follow-up 48 gain the row, and scenes saved before Follow-up 46 (a world
+// row after Local Fog, sun icon) have it moved under the Sun. Its values stay keyed by its Id, so settings carry over.
 export function EnsureGodRays(Rows) {
-  if (!Array.isArray(Rows) || Rows.some((Row) => Row.Id === GodRaysRow.Id)) return Rows;
-  if (!Rows.some((Row) => Row.Id === "world")) return Rows;
-  const After = Rows.findIndex((Row) => Row.Id === "local-fog");
-  const Next = [...Rows];
-  Next.splice(After >= 0 ? After + 1 : Next.length, 0, { ...GodRaysRow });
+  if (!Array.isArray(Rows)) return Rows;
+  const Sun = Rows.find((Row) => Row.Id === "sun");
+  const Existing = Rows.find((Row) => Row.Id === GodRaysRow.Id);
+  if (!Sun) return Existing || !Rows.some((Row) => Row.Id === "world") ? Rows : [...Rows, { ...GodRaysRow, Parent: "world" }];
+  if (Existing && Existing.Parent === Sun.Id && Existing.Icon === GodRaysRow.Icon) return Rows;
+  const Moved = { ...GodRaysRow, ...(Existing || {}), Parent: Sun.Id, Icon: GodRaysRow.Icon, Description: GodRaysRow.Description };
+  const Next = Rows.filter((Row) => Row.Id !== GodRaysRow.Id);
+  let At = Next.findIndex((Row) => Row.Id === Sun.Id);
+  while (At + 1 < Next.length && Next[At + 1].Parent === Sun.Id) At++;
+  Next.splice(At + 1, 0, Moved);
   return Next;
 }

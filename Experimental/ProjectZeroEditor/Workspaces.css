@@ -123,10 +123,12 @@
 }
 .ws-tabs {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
 }
 .ws-tabs button {
-  flex: 1;
+  flex: 1 1 calc(33.333% - 6px);
+  white-space: nowrap;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -507,6 +509,15 @@
   font: 9px "DM Sans", sans-serif;
   fill: #8a8a8a;
 }
+/* Follow-up 46: in-card preview sliders and the LOD cut picture. */
+.ws-preview-lod-cut {
+  height: 200px;
+  margin-top: 0;
+  cursor: default;
+}
+.ws-preview-control {
+  margin: 0 0 8px;
+}
 /* Editable vehicle charts: drag the handles to change the fields behind the curve. */
 .vc-editable {
   touch-action: none;
@@ -520,4 +531,165 @@
 .vc-handle:hover circle:last-child,
 .vc-handle:hover rect {
   fill: #2c2c2c;
+}
+
+/* Collision Fit */
+.ws-fit-compare {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 44px 22px 18px;
+}
+.ws-fit-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.ws-fit-bar {
+  display: grid;
+  grid-template-columns: 112px 1fr 60px;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  border: 1px solid #ffffff0b;
+  background: #161616;
+  color: #cfcfcf;
+  font-size: 11px;
+  text-align: left;
+  cursor: pointer;
+}
+.ws-fit-bar.active {
+  border-color: color-mix(in srgb, var(--tone) 55%, transparent);
+  background: #1d1d1d;
+}
+.ws-fit-name {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.ws-fit-name b {
+  font-weight: 500;
+  color: var(--tone);
+}
+.ws-fit-name small {
+  font-size: 8.5px;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: #8c8c8c;
+}
+.ws-fit-name small.used {
+  color: #d9d9d9;
+}
+.ws-fit-track {
+  height: 8px;
+  border-radius: 999px;
+  background: #ffffff0c;
+  overflow: hidden;
+}
+.ws-fit-track i {
+  display: block;
+  width: var(--fill);
+  height: 100%;
+  border-radius: inherit;
+  background: var(--tone);
+}
+.ws-fit-figure {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: #e6e6e6;
+}
+.ws-fit-foot {
+  margin: 16px 2px 0;
+  font-size: 10px;
+  color: #8a8a8a;
+}
+.ws-fit-table {
+  display: grid;
+  grid-template-columns: 1fr auto auto auto;
+  align-items: center;
+  gap: 6px 12px;
+  margin: 10px 0 8px;
+  font-size: 10.5px;
+  color: #c4c4c4;
+  font-variant-numeric: tabular-nums;
+}
+.ws-fit-table > b {
+  font-weight: 500;
+  color: #7f7f7f;
+  font-size: 9px;
+  letter-spacing: 0.4px;
+}
+.ws-fit-pick {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #bdbdbd;
+  font-size: 11px;
+  cursor: pointer;
+}
+.ws-fit-pick i {
+  width: 9px;
+  height: 9px;
+  border-radius: 3px;
+  border: 1.5px solid var(--tone);
+}
+.ws-fit-pick.active {
+  color: #f2f2f2;
+}
+.ws-fit-pick.active i {
+  background: var(--tone);
+}
+.ws-fit-use {
+  min-height: 24px;
+  padding: 3px 12px;
+  border-radius: 999px;
+  border: 1px solid #ffffff12;
+  background: #272727;
+  color: #d4d4d4;
+  font-size: 10px;
+  cursor: pointer;
+}
+.ws-fit-use:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+/* Icon Capture */
+.ws-capture-shelf {
+  flex: 0 0 34%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.ws-capture-plate {
+  width: min(82%, 300px);
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  border: 1px solid #ffffff12;
+  background: repeating-conic-gradient(#1f1f1f 0 25%, #171717 0 50%) 0 0 / 20px 20px;
+  overflow: hidden;
+}
+.ws-capture-plate img {
+  width: 100%;
+  height: 100%;
+  image-rendering: auto;
+}
+.ws-capture-plate small {
+  font-size: 10px;
+  color: #808080;
+}
+.ws-actions button.ws-primary {
+  background: #e6e6e6;
+  color: #151515;
+  border-color: transparent;
+  font-weight: 600;
+}
+.ws-notice {
+  color: #c9c9c9;
 }

@@ -49,6 +49,39 @@ starting point for the UI redesign.
 
 ---
 
+## Follow-up 46: object Components stack, live preview cards, God Rays, AO per renderer, Geometry Compiler workspaces
+
+- **Components pill on objects.** Mass, Rigid Body and Collision are no longer outliner rows under objects. Each object has a
+  **Components** page in the inspector carousel with a stack: add, remove, switch on or off, and reorder (drag, or the up and down buttons). Each entry opens its own
+  page with the same cards as before; opening Mass goes to the Mass page. The stack is `Row.Components = [{ Component, Enabled }]`; values
+  stay in `Values[owner]`. `ComponentRevision` 4 folds old rows into the stack once. Cameras keep their Render Engine rows.
+- **Live preview cards.** The Fracture, SDF and LOD preview cards each get one control that redraws only the card (the viewport is
+  unchanged): Fracture has an explode slider, SDF a slice-depth slider, LOD a level slider (triangles and clusters per level).
+- **God Rays** is a component under the Sun with its own icon (`god-rays`); saved values carry over.
+- **Ambient occlusion per renderer**, stored per renderer like the shadows (`RenderSettings.js`: `SDF_AO`, `RAY_AO`, `OcclusionOf`):
+  - **PBR**: XeGTAO (strength, radius, slices). It moved out of the Engine Output card into its own card.
+  - **SDF**: Multi-tap, Cone-traced (default) or Voxel clipmap, with taps or cones, radius and strength.
+  - **Ray traced**: RTAO (default), RTAO + bent normal, or From traced GI, with rays, radius and strength.
+  - MatCap has none. Each AO card has a small study (`OcclusionStudy`). The viewport header's AO toggle and strength follow the renderer.
+- **Geometry Compiler algorithms in new workspaces** (the compiler's UI is not reused). The launcher now has six tools:
+  - **Collision Fit** (`CollisionWorkspace.jsx`): `MeshAnalysis.fitCollision` box, Ritter sphere and capsule fits drawn over the
+    object, with a bar for how much of each shape the object fills (enclosed volume ÷ shape volume) and the tightest marked. A surface check
+    (`analyseTopology` on a positional weld, `surfaceArea`) gives open and non-manifold edges, area, volume and bounds. **Use** writes
+    `Collision Shape` on the Collision component; there is also a margin slider and a JSON export.
+  - **Icon Capture** (`CaptureWorkspace.jsx`): `IconCapture.js` framing, i.e. a square box that is the exact crop, a three-quarter
+    default angle (yaw 0.7, pitch 0.38) and the bounding sphere filling 82 % of the half side. The PNG is transparent at 128, 256 or 512 px,
+    in Clay or Normals. Save keeps a 128 px thumbnail in `Values["Icon Capture"]`; Download and Copy use the full size.
+  - **LOD Clusters** (Nanite port from the Component Viewer): now builds with the Shared `ClusterHierarchy.js`. **Keep surface parts
+    apart** clusters the cube's six sides or the caps and walls of cylinders and cones as separate material families, with their seams
+    held. **Cull back-facing clusters** uses each cluster's normal cone. There is a **Part** colouring.
+- **Component Viewer** (`Experimental/ComponentViewer`, already ported unchanged from Frontier-1) opens from a new viewport button
+  (`component-viewer` icon). It fills the window above the editor, keeps its own page and storage, has Open in new tab, and closes with Esc.
+- Checks: new `CheckGeometryWorkspaces.mjs` (6). `CheckObjectComponents.mjs` (11) and `CheckRenderSettings.mjs` (10) are extended. The
+  remaining checks match the base commit. Evidence is in `Exhibits/ProjectZeroEditor/FollowUp46/`. Headless SwiftShader only. Names are
+  unapproved.
+
+---
+
 ## Follow-up 45: Sun now and Sky colour redesigned
 
 - The Follow-up 43 per-card Sun and Atmosphere studies are reverted (`git revert e234f72`).

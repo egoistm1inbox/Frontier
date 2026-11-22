@@ -115,7 +115,8 @@ try {
   await Page.getByLabel("Collection scope", { exact: true }).selectOption(
     "direct",
   );
-  assert.equal(await Page.locator(".collection-entry").count(), 11);
+  // 10: Follow-up 46 moves God Rays from World into the Sun, so it is no longer a direct entry (the total stays 13).
+  assert.equal(await Page.locator(".collection-entry").count(), 10);
   await Page.getByLabel("Collection scope", { exact: true }).selectOption(
     "all",
   );

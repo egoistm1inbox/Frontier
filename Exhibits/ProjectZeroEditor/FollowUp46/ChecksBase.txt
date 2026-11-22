@@ -1,0 +1,25 @@
+CheckAssets.mjs | 30s | }  Node.js v22.22.3 
+CheckBrowser.mjs | 28s |     }   ] } 
+CheckCloudPlacement.mjs | 22s | Cloud and Light placement checks passed: 14 
+CheckColourCodex.mjs | 0s | }  Node.js v22.22.3 
+CheckConstruction.mjs | 15s |   - waiting for locator('.construct-properties [data-material-channel=roughness]')      at /tmp/pzb/Experimental/ProjectZeroEditor/CheckConstruction.mjs:190:5 [] 
+CheckEntityContext.mjs | 15s | Entity context checks passed: 6 
+CheckEnvironmentGraphs.mjs | 17s |   ],   "Errors": [] } 
+CheckFogCamera.mjs | 7s |   ],   "Errors": [] } 
+CheckFogCards.mjs | 8s | Height Fog correction checks passed: 6 
+CheckInspectorLayout.mjs | 5s |   operator: 'notStrictEqual',   diff: 'simple' } 
+CheckInspectorOrder.mjs | 142s | Inspector order checks passed: 143 
+CheckInstrumentStyle.mjs | 6s |   operator: 'notStrictEqual',   diff: 'simple' } 
+CheckLightDesign.mjs | 33s | Light design checks passed: 22 
+CheckLighting.mjs | 0s | }  Node.js v22.22.3 
+CheckMaterials.mjs | 2s | }  Node.js v22.22.3 
+CheckObjectComponents.mjs | 12s | Object component checks passed: 7 
+CheckQuickTools.mjs | 9s | }  Node.js v22.22.3 
+CheckReference.mjs | 0s | }  Node.js v22.22.3 
+CheckRenderSettings.mjs | 8s | Render settings checks passed: 9 
+CheckSharedCards.mjs | 27s | Shared-card checks passed: 14 
+CheckVehicleSockets.mjs | 7s | Vehicle socket checks passed: 8 
+CheckVolumeWorkspaces.mjs | 9s | Volume workspace checks passed: 4 
+CheckWind.mjs | 16s |     }   ] } 
+CheckWorkspaceCards.mjs | 28s |   "Errors": [],   "FontFailures": [] } 
+DONE

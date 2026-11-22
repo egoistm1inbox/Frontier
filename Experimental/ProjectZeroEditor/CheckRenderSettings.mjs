@@ -3,7 +3,7 @@ import path from "node:path";
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
-import { ResolveRenderSettings, CanonicalRenderSettings, MasterQualityPatch, RendererPatch, MasterTier, PbrShadowPatch } from "./RenderSettings.js";
+import { ResolveRenderSettings, CanonicalRenderSettings, MasterQualityPatch, RendererPatch, MasterTier, PbrShadowPatch, OcclusionOf, RendererLines } from "./RenderSettings.js";
 
 // Per-camera render settings as one Render Engine component: every camera (Editor, Cine, Construct-placed) has a single row whose
 // inspector has an Engine tab (renderer, Quality, Output) and one tab per renderer (PBR, SDF, Ray traced, MatCap), each with its own
@@ -37,6 +37,12 @@ assert.equal(RendererPatch("ray", { RayTracer: "pt_final" }).RenderEngine, "pt_f
 const Upgraded = ResolveRenderSettings({ RenderEngine: "pt_realtime", ShadowAlgorithm: "pcf", ShadowMapRes: 1024, SdfPenumbraMode: "analytic_cone", GiAlgorithm: "bvh", GiSamples: 12, ReflectionAlgorithm: "env" });
 assert.deepEqual([Upgraded.PbrShadow, Upgraded.PbrMapRes, Upgraded.SdfShadow, Upgraded.RayGi, Upgraded.SdfGi, Upgraded.RayGiSamples, Upgraded.RayReflections, Upgraded.RayTracer], ["pcf", 1024, "analytic_cone", true, false, 12, false, "pt_realtime"]);
 Checks.push("Defaults, clamps, unknown-id fallback, per-renderer tier fan-out and the upgrade of the shared Follow-up 41 keys");
+// Follow-up 46: each renderer has its own ambient occlusion keys; MatCap has none.
+const Occluded = ResolveRenderSettings({ SdfAoMethod: "hbao", SdfAoTaps: 40, RayAoRays: 0, XeGtaoSlices: 12, RayAoMethod: "rtao_bent" });
+assert.deepEqual([Occluded.SdfAoMethod, Occluded.SdfAoTaps, Occluded.RayAoRays, Occluded.XeGtaoSlices, Occluded.RayAoMethod], ["sdf_cone", 12, 1, 9, "rtao_bent"]);
+assert.deepEqual(["openpbr_direct", "gtx_sdf_gi", "pt_final", "matcap"].map((RenderEngine) => OcclusionOf({ ...CanonicalRenderSettings, RenderEngine })?.Switch ?? null), ["XeGtao", "SdfAo", "RayAo", null]);
+assert.deepEqual(RendererLines(CanonicalRenderSettings).at(-1), ["AO", "Cone-traced SDF AO · 4 cones"]);
+Checks.push("Ambient occlusion per renderer: XeGTAO (PBR), SDF AO and traced AO keys clamp and fall back; MatCap has none; the summary gains an AO line");
 
 const Browser = await chromium.launch({ executablePath: process.env.FRONTIER_BROWSER_EXECUTABLE || "/tmp/chromium", args: ["--no-sandbox", "--disable-gpu"] });
 const Page = await Browser.newPage({ viewport: { width: 1365, height: 900 } });
@@ -92,7 +98,11 @@ try {
   // Each renderer keeps its own shadow algorithm: PBR PCF at Low, SDF Sobol cap; neither touches the other.
   await Tab("pbr");
   assert.equal(await InUse(), "true");
-  assert.deepEqual(await Cards(), ["Shadow algorithm", "Penumbra", "Direct lighting"]);
+  assert.deepEqual(await Cards(), ["Shadow algorithm", "Penumbra", "Direct lighting", "Ambient occlusion"]);
+  assert.match(await Page.locator('[data-card="Ambient occlusion"]').innerText(), /XeGTAO/);
+  await Page.getByRole("switch", { name: "XeGTAO", exact: true }).click();
+  assert.equal((await Stored("camera")).XeGtao, false);
+  await Page.getByRole("switch", { name: "XeGTAO", exact: true }).click();
   await Page.getByLabel("Shadow quality", { exact: true }).selectOption({ label: "Low" });
   await Page.getByRole("radio", { name: /PCF Bilinear/ }).click();
   Settings = await Stored("camera");
@@ -101,11 +111,16 @@ try {
   await Page.locator(".rc-cards").screenshot({ path: path.join(Proof, "Pbr.png") });
   await Tab("sdf");
   assert.equal(await InUse(), "false");
-  assert.deepEqual(await Cards(), ["Distance-field shadows", "Cone GI"]);
+  assert.deepEqual(await Cards(), ["Distance-field shadows", "Cone GI", "SDF ambient occlusion"]);
+  await Page.getByRole("radiogroup", { name: "SDF AO method" }).getByRole("radio", { name: /Multi-tap SDF AO/ }).click();
+  await Page.locator('[data-card="SDF ambient occlusion"] input[type=range][aria-label="Taps"]').fill("8");
+  assert.equal(await Page.locator('[data-card="SDF ambient occlusion"] [data-ao="sdf_multitap"]').count(), 1);
+  await Page.locator('[data-card="SDF ambient occlusion"]').screenshot({ path: path.join(Proof, "SdfAmbientOcclusion.png") });
   await Page.locator(".rc-rail button", { hasText: "Hybrid Sobol Cap" }).click();
   Settings = await Stored("camera");
   assert.deepEqual([Settings.SdfShadow, Settings.PbrShadow, Settings.RenderEngine], ["hybrid_sobol_cap", "pcf", "openpbr_direct"]);
   await Page.locator(".rc-cards").screenshot({ path: path.join(Proof, "Sdf.png") });
+  assert.deepEqual([Settings.SdfAoMethod, Settings.SdfAoTaps, Settings.XeGtao], ["sdf_multitap", 8, true]);
   Checks.push("PBR stores PCF at Low (1024², 8 taps) and SDF stores the Sobol cap separately; editing SDF leaves PBR rendering");
 
   // Global tier: Custom after a renderer tier, then Ultra fans out to every renderer.
@@ -124,6 +139,10 @@ try {
   await Page.getByRole("radiogroup", { name: "Tracer" }).getByRole("radio", { name: "PT final", exact: true }).click();
   await Page.getByRole("radio", { name: /WideTree RayQuery · area/ }).click();
   await Page.getByRole("switch", { name: "Trace reflections", exact: true }).click();
+  await Page.getByRole("radiogroup", { name: "Ray-traced AO method" }).getByRole("radio", { name: /RTAO \+ bent normal/ }).click();
+  await Page.locator('[data-card="Traced ambient occlusion"] input[type=range][aria-label="AO rays"]').fill("6");
+  await Page.locator('[data-card="Traced ambient occlusion"]').screenshot({ path: path.join(Proof, "RayAmbientOcclusion.png") });
+  assert.deepEqual([(await Stored("camera")).RayAoMethod, (await Stored("camera")).RayAoRays, (await Stored("camera")).SdfAoMethod], ["rtao_bent", 6, "sdf_multitap"]);
   Settings = await Stored("camera");
   assert.deepEqual([Settings.RenderEngine, Settings.RayTracer, Settings.RayShadow, Settings.RayReflections], ["pt_final", "pt_final", "bvh_area", false]);
   await Tab("engine");
@@ -184,7 +203,8 @@ try {
   await Open("cine-render-engine");
   const Restored = (await Saved()).Rows;
   assert.deepEqual(Restored.filter((Row) => Row.Parent === "cine" && Row.Panel === "object-component").map((Row) => Row.Name), ["Render Engine"]);
-  assert.equal(Restored.filter((Row) => Row.Parent === "cube" && Row.Panel === "object-component").length, 3);
+  // Follow-up 46: object components are no longer outliner rows (they live in each object's component stack).
+  assert.equal(Restored.filter((Row) => Row.Parent === "cube" && Row.Panel === "object-component").length, 0);
   await Tab("pbr");
   assert.equal(await InUse(), "true");
   assert.equal(await Page.getByRole("radio", { name: /PCF Bilinear/ }).getAttribute("aria-checked"), "true");

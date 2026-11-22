@@ -169,6 +169,13 @@ const Drawings = {
       <path d="M12 8v1.6M7 11V9.6h10V11M4 19h16" {...Strokes} strokeOpacity=".6" />
     </>
   ),
+  components: (
+    <>
+      <path d="M12 3.5 20.5 8 12 12.5 3.5 8Z" fill="currentColor" opacity=".45" />
+      <path d="M12 3.5 20.5 8 12 12.5 3.5 8Z" {...Strokes} />
+      <path d="m3.5 12 8.5 4.5 8.5-4.5M3.5 16l8.5 4.5 8.5-4.5" {...Strokes} />
+    </>
+  ),
   plus: <path d="M12 5v14M5 12h14" {...Strokes} strokeWidth="2" />,
   close: <path d="M7 7l10 10M17 7 7 17" {...Strokes} strokeWidth="2" />,
 };

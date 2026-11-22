@@ -18,6 +18,7 @@ import {
   EnginePatch,
   MasterQualityPatch,
   MasterTier,
+  OcclusionOf,
 } from "./RenderSettings.js";
 
 // The specification's five shadow algorithms: four shadow-map filters (PBR raster) and WideTree ray queries (ray tracing).
@@ -56,6 +57,7 @@ function Toggle({ Label, On, Change }) {
 export default function ViewportRenderHeader({ Render, AssignRender, Settings, AssignSetting, Hidden, SetVisible, CloudShadows, SetCloudShadows, SplitView, SetSplitView }) {
   const Renderer = RendererOf(Render.RenderEngine).id;
   const Tier = MasterTier(Render);
+  const Occlusion = OcclusionOf(Render);
   const Shadow = Renderer === "ray" ? "widetree" : Render.PbrShadow;
   const ChooseShadow = (Id) => {
     if (Id === "widetree") AssignRender({ RayShadow: "bvh_disk", ...EnginePatch(Render.RayTracer) });
@@ -106,27 +108,30 @@ export default function ViewportRenderHeader({ Render, AssignRender, Settings, A
         <Toggle Label="Reflections" On={Settings.Reflection > 0} Change={(On) => AssignSetting("Reflection", On ? 2 : 0)} />
         <Toggle Label="Anti-aliasing" On={Render.AntiAliasing} Change={(On) => { AssignRender({ AntiAliasing: On }); AssignSetting("AA", On); }} />
         <Toggle Label="Raytracing" On={Settings.Raytracing} Change={(On) => AssignSetting("Raytracing", On)} />
-        <Toggle Label="XeGTAO" On={Render.XeGtao} Change={(On) => AssignRender({ XeGtao: On })} />
+        {/* Follow-up 46: the active renderer's own ambient occlusion (XeGTAO on PBR, SDF AO, traced AO); MatCap has none. */}
+        {Occlusion && <Toggle Label={Occlusion.Renderer === "pbr" ? "XeGTAO" : "Ambient occlusion"} On={Render[Occlusion.Switch]} Change={(On) => AssignRender({ [Occlusion.Switch]: On })} />}
         <Toggle Label="Atmosphere" On={!Hidden.atmosphere} Change={(On) => SetVisible("atmosphere", On)} />
         <Toggle Label="Clouds" On={!Hidden.clouds} Change={(On) => SetVisible("clouds", On)} />
         <Toggle Label="Cloud shadows" On={CloudShadows} Change={SetCloudShadows} />
         <Toggle Label="Stars" On={!Hidden.stars} Change={(On) => SetVisible("stars", On)} />
         <Toggle Label="Split viewport" On={SplitView} Change={SetSplitView} />
       </div>
-      <label className="vrh-field vrh-slider">
-        <span>XeGTAO strength</span>
-        <input
-          type="range"
-          aria-label="XeGTAO strength"
-          min="0"
-          max="2"
-          step="0.05"
-          value={Render.XeGtaoStrength}
-          disabled={!Render.XeGtao}
-          onChange={(Event) => AssignRender({ XeGtaoStrength: +Event.target.value })}
-        />
-        <output>{Render.XeGtaoStrength.toFixed(2)} ×</output>
-      </label>
+      {Occlusion && (
+        <label className="vrh-field vrh-slider" title={Occlusion.Line}>
+          <span>{Occlusion.Renderer === "pbr" ? "XeGTAO strength" : `AO strength · ${Occlusion.Label}`}</span>
+          <input
+            type="range"
+            aria-label={Occlusion.Renderer === "pbr" ? "XeGTAO strength" : "AO strength"}
+            min="0"
+            max="2"
+            step="0.05"
+            value={Render[Occlusion.Strength]}
+            disabled={!Render[Occlusion.Switch]}
+            onChange={(Event) => AssignRender({ [Occlusion.Strength]: +Event.target.value })}
+          />
+          <output>{Render[Occlusion.Strength].toFixed(2)} ×</output>
+        </label>
+      )}
     </div>
   );
 }

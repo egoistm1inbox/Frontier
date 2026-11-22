@@ -87,9 +87,10 @@ export const Densities = [
   ["Steel", 7850],
 ];
 
-// Mass, rigid body and collision are the object's own components (outliner children); each edit workspace has its own page.
+// Mass, rigid body and collision sit in the object's component stack (Components page); each edit workspace has its own page.
 const Categories = [
   ["overview", "Overview", "overview", "#7cb7ff"],
+  ["components", "Components", "components", "#b59cff"],
   ["geometry", "Geometry", "geometry", "#5fe0a0"],
   ["material", "Material", "material", "#ff7eb6"],
   ["uv", "UV", "uv", "#7ab8ff"],
@@ -205,7 +206,7 @@ function Slider({ Label, Reading, Assign, Minimum, Maximum, Step = 0.01, Unit = 
   );
 }
 
-function Switch({ Label, Detail, On, Assign, Disabled, Tone }) {
+export function Switch({ Label, Detail, On, Assign, Disabled, Tone }) {
   return (
     <button
       type="button"
@@ -1239,8 +1240,8 @@ function GeometryPage({ Shape, Read, Change, Values, Size, Kit }) {
 //                                                    CAROUSEL
 //------------------------------------------------------------------------------------------------------------------------
 
-function Carousel({ Pages }) {
-  const [Current, Choose] = useState("overview");
+function Carousel({ Pages, Focus = null }) {
+  const [Current, Choose] = useState(Focus ? "components" : "overview");
   const [Direction, Turn] = useState("none");
   const Rail = useRef(null);
   const Index = Math.max(0, Categories.findIndex(([Key]) => Key === Current));
@@ -1249,6 +1250,10 @@ function Carousel({ Pages }) {
     Turn(Target >= Index ? "next" : "previous");
     Choose(Categories[Target][0]);
   };
+  // Opening a component from elsewhere turns to the Components page.
+  useEffect(() => {
+    if (Focus && Current !== "components") { Turn("next"); Choose("components"); }
+  }, [Focus?.Stamp]);
   useEffect(() => {
     const Pill = Rail.current?.querySelector('[aria-selected="true"]');
     Pill?.scrollIntoView?.({ block: "nearest", inline: "center", behavior: "smooth" });
@@ -1305,9 +1310,10 @@ function Carousel({ Pages }) {
         aria-label={Label}
         data-page={Key}
         onPointerDown={(Event) => {
-          if (Event.target.closest("input, textarea, button, select, [role=slider], label")) return;
-          Swipe.current = { X: Event.clientX, Y: Event.clientY };
+          // A press on a control (or a drag grip, whose pointerup never arrives) is not a swipe; drop any stale start too.
+          Swipe.current = Event.target.closest("input, textarea, button, select, [role=slider], label, [draggable=true]") ? null : { X: Event.clientX, Y: Event.clientY };
         }}
+        onDragStart={() => (Swipe.current = null)}
         onPointerUp={(Event) => {
           const Start = Swipe.current;
           Swipe.current = null;
@@ -1326,7 +1332,7 @@ function Carousel({ Pages }) {
 //                                                    INSPECTOR
 //------------------------------------------------------------------------------------------------------------------------
 
-export default function PrimitiveInspector({ Subject, Values, Change, Hidden, ToggleHidden, MaterialCards, FractureCards, UvCards = null, SdfCards = null, LodCards = null, Components = null, Kit, Launcher = null }) {
+export default function PrimitiveInspector({ Subject, Values, Change, Hidden, ToggleHidden, MaterialCards, FractureCards, UvCards = null, SdfCards = null, LodCards = null, Components = null, ComponentPage = null, Focus = null, Kit, Launcher = null }) {
   const Shape = ShapeOf(Subject);
   const Read = (Key, Initial) => (Values[Key] === undefined ? Initial : Values[Key]);
   const Size = Measure(Shape, Read, Array.isArray(Values.Scale) ? Values.Scale : [1, 1, 1]);
@@ -1336,8 +1342,10 @@ export default function PrimitiveInspector({ Subject, Values, Change, Hidden, To
       {Launcher}
       <Carousel
         key={Subject.Id}
+        Focus={Focus?.Owner === Subject.Id ? Focus : null}
         Pages={{
           overview: <OverviewPage {...Shared} Components={Components} />,
+          components: ComponentPage,
           geometry: <GeometryPage {...Shared} />,
           material: MaterialCards,
           uv: UvCards,
