@@ -8,8 +8,9 @@ import { icon } from './StudioIcons.js';
 import { FlipbookChoices } from '../Engine/FluidStudioApp.js';
 import {
     ForceGeneratorTypes, ForceTypeById, FalloffCurves, EmitterShapes, ColourRamps, SliceAxes, ScalarChannels, AdvectionSchemes, BoundaryModes,
-    ScenePresets, RampStops, MaximumForceGenerators, SmokeLooks, FireLooks, ResolutionPresets, VolumeFilters, FalloffLabels, ForceCategories, VectorModes, timingEnvelope, isKeyed, DebrisKinds, EmitterPathKinds, GridFollowModes, MaximumGridTiles, GridModes, MaximumTilePool,
+    RampStops, MaximumForceGenerators, SmokeLooks, FireLooks, ResolutionPresets, VolumeFilters, FalloffLabels, ForceCategories, VectorModes, timingEnvelope, isKeyed, DebrisKinds, EmitterPathKinds, GridFollowModes, MaximumGridTiles, GridModes, MaximumTilePool,
 } from '../Engine/ForceGeneratorCatalog.js';
+import { ScenePresets } from '../Engine/PresetScenes.js';
 import { LayerSpecificationByCode, GasLayerSpecifications, BlendModes, PhaseOrder, MaximumLayers, SourceLayerCode } from '../Engine/LayerStack.js';
 import { ParticleTemplates, ParticleTemplateById, ParticleCategories, ParticleShapes, ParticleModes, ParticleColourModes, ParticleColourLabels, ParticleBlendModes, ParticleRenderStyles, ParticleRampSources, PalettePresets, MaximumPaletteStops, MaximumParticleSystems, ParticleSprites, ParticleSizeModes, ParticleTrailModes, ParticleTrailColours, MaximumTrailLength } from '../Engine/ParticleCatalog.js';
 const BoundaryLabels = { ClosedBox: 'Closed Box', OpenTop: 'Open Top', OpenAll: 'Open All' };
@@ -222,8 +223,8 @@ export function mountStudioUI({ app, refs })
     {
         const current = preset.Id === currentId;
         const item = element('div', 'tree-item preset-item' + (current ? ' selected' : ''));
-        const grid = preset.Domain.Grid === 'Infinite' ? ' · infinite grid' : preset.Domain.Tiles && preset.Domain.Tiles.some((count) => count > 1) ? ` · ${preset.Domain.Tiles.join('×')} tile grid` : '';
-        item.innerHTML = `<span class="item-icon" style="color:${current ? '#f5a524' : '#9aa3b2'}">${icon(preset.Icon, 15)}</span><span class="item-meta"><strong>${preset.Name}</strong><span>${preset.Family === 'Pyro' ? 'Pyro · ' : ''}${preset.Domain.Resolution.join('×')} cells${grid}</span></span><span class="load-hint">${current ? 'loaded' : 'load'}</span>`;
+        const grid = preset.Grid.Grid === 'Infinite' ? ' · infinite grid' : preset.Grid.Tiles && preset.Grid.Tiles.some((count) => count > 1) ? ` · ${preset.Grid.Tiles.join('×')} tile grid` : '';
+        item.innerHTML = `<span class="item-icon" style="color:${current ? '#f5a524' : '#9aa3b2'}">${icon(preset.Icon, 15)}</span><span class="item-meta"><strong>${preset.Name}</strong><span>${preset.Family === 'Pyro' ? 'Pyro · ' : ''}${preset.Grid.Resolution.join('×')} cells${grid}</span></span><span class="load-hint">${current ? 'loaded' : 'load'}</span>`;
         item.title = preset.Summary;
         item.addEventListener('click', () => app.loadPreset(preset.Id));
         return item;
@@ -1175,9 +1176,16 @@ export function mountStudioUI({ app, refs })
             });
             input.click();
         });
+        const presetButton = element('button', '', `<strong>${icon('download', 12)} Save as preset</strong><span>.toml document</span>`);
+        presetButton.title = 'Writes a frontier-fluid-preset document. Put it in Experimental/FluidEditor/Presets/ and run node GeneratePresetLibrary.mjs to add it to the Scenes list.';
+        presetButton.addEventListener('click', () =>
+        {
+            const slug = app.scene.Name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'custom';
+            downloadBlob(new Blob([app.exportPresetToml({ Id: `preset-${slug}`, Family: 'Custom' })], { type: 'application/toml' }), `${slug}.toml`);
+        });
         const resetButton = element('button', '', `<strong>${icon('reset', 12)} Reload</strong><span>Reset preset</span>`);
         resetButton.addEventListener('click', () => app.loadPreset(app.scene.PresetId || ScenePresets[0].Id));
-        documentRow.append(exportButton, importButton, resetButton);
+        documentRow.append(exportButton, importButton, presetButton, resetButton);
         menu.appendChild(documentRow);
         menu.appendChild(element('p', 'note', 'Shortcuts — Space play/pause · . step · R reset · F frame · Delete remove selection · LMB orbit · RMB/MMB pan · Wheel dolly · drag gizmo to move (Shift locks height).'));
         document.addEventListener('pointerdown', (event) =>
@@ -1225,7 +1233,7 @@ export function mountStudioUI({ app, refs })
                 const row = element('div', 'asset-row');
                 for (const preset of members)
                 {
-                    const cardNode = element('button', 'asset-card', `<div class="thumb" style="background:linear-gradient(140deg,#2a2a2a,#141414)">${icon(preset.Icon, 34, 1)}</div><strong>${preset.Name}</strong><span>${preset.Summary}</span><span class="badge">${preset.Domain.Resolution.join('×')}</span>`);
+                    const cardNode = element('button', 'asset-card', `<div class="thumb" style="background:linear-gradient(140deg,#2a2a2a,#141414)">${icon(preset.Icon, 34, 1)}</div><strong>${preset.Name}</strong><span>${preset.Summary}</span><span class="badge">${preset.Grid.Resolution.join('×')}</span>`);
                     cardNode.addEventListener('click', () => app.loadPreset(preset.Id));
                     row.appendChild(cardNode);
                 }

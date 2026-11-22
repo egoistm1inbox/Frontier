@@ -1,0 +1,116 @@
+# Stardust — Fluid Studio scene preset (Studio). No smoke — Particular-style micro-motes in a slow turbulence field with an orbit and a vortex sweeping them into ribbons; bokeh depth of field.
+# Converted from the legacy preset object by script; scene fingerprint e8fc2beffa2dd7d8 (checked by FluidValidation.mjs).
+
+[Document]
+Format = "frontier-fluid-preset"
+Revision = 1
+SpecificationHash = "6ffdeaf3bfb2fc84"
+
+[Scene]
+Order = 13
+Id = "preset-stardust"
+Name = "Stardust"
+Family = "Studio"
+Icon = "stardust"
+Summary = "No smoke — Particular-style micro-motes in a slow turbulence field with an orbit and a vortex sweeping them into ribbons; bokeh depth of field."
+
+[Grid]
+Resolution = [48, 32, 48]
+Size = [9, 6, 9]
+
+[Render]
+Visible = false
+
+[[Volume]]
+  Token = "gas-volume"
+  Category = 1
+
+  [[Volume.Layer]]
+    Token = "layer-1"
+    Category = 101
+    Enabled = true
+    Solo = false
+    Weight = 1.0
+    Blend = 0
+    Parameters = { Gravity = 0.25, ForceResponse = 1.0, PressureIterations = 8, TimeScale = 1.0, SceneLoop = 0.0, Advection = 1 }
+
+  [[Volume.Layer]]
+    Token = "layer-2"
+    Category = 104
+    Enabled = true
+    Solo = false
+    Weight = 1.0
+    Blend = 0
+    Parameters = { Combustion = 1.0, Expansion = 0.6 }
+
+  [[Volume.Layer]]
+    Token = "layer-3"
+    Category = 106
+    Enabled = true
+    Solo = false
+    Weight = 1.0
+    Blend = 0
+    Parameters = { Dissipation = 0.99, VelocityDissipation = 0.999 }
+
+  [[Volume.Layer]]
+    Token = "layer-4"
+    Category = 107
+    Enabled = true
+    Solo = false
+    Weight = 1.0
+    Blend = 0
+    Parameters = { Density = 1.0, Albedo = "#8e8f94", Absorption = 3.2, Anisotropy = 0.45, Ambient = "#3a414c", LightIntensity = 1.4 }
+
+  [[Volume.Layer]]
+    Token = "layer-5"
+    Category = 108
+    Enabled = true
+    Solo = false
+    Weight = 1.0
+    Blend = 0
+    Parameters = { FireIntensity = 4.0, FireThreshold = 1.0, FireSoftness = 3.5, FireOpacity = 1.4, FireEmber = "#ff2a05", FireFlame = "#ff8a16", FireCore = "#fff3cf", FireLight = 1.0 }
+
+[[Force]]
+  Type = "VortexColumn"
+  Name = "Sweep"
+  Position = [0, 0, 0]
+  Strength = 1.6
+  Radius = 4.2
+  Falloff = "Plateau"
+  Direction = [0.3, 1, 0.2]
+  Frequency = 0.25
+  Secondary = 0
+
+[[Force]]
+  Type = "WindShear"
+  Name = "Layered Drift"
+  Position = [0, 0, 0]
+  Strength = 0.35
+  Radius = 4.5
+  Falloff = "Constant"
+  Direction = [1, 0, 0.2]
+  Frequency = 0.3
+  Secondary = 1.2
+
+[[Force]]
+  Type = "PointAttractor"
+  Name = "Gravity Well"
+  Position = [-1.5, -0.3, 0.8]
+  Strength = 2.5
+  Radius = 2.6
+  Falloff = "Gaussian"
+  Secondary = 0.3
+
+[[Particle]]
+  Template = "stardust"
+  Name = "Stardust"
+  Position = [0, 0, 0]
+  Radius = 3.6
+
+[[Particle]]
+  Template = "nebula"
+  Name = "Nebula Core"
+  Position = [0.6, 0.2, -0.4]
+  Radius = 0.4
+  Count = 8192
+  Rate = 1.5

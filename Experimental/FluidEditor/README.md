@@ -27,7 +27,7 @@
 > | Infinite Grid | The pressure loop no longer rebinds texture unit 0 over the tile lookup | fix |
 | Advection (Follow-up 47) | MacCormack falls back to the plain semi-Lagrangian value wherever its correction overshoots the stencil, and fades out above a Courant number of 1–2 (Selle et al. 2008). Clamping the overshoot instead fed energy back every step: scenes started clean and churned into noise after 6–10 s | fix |
 | Forces (Follow-up 47) | Steady pushes (wind, attractors, vortices, curl noise…) stop accelerating gas that already moves with them: each force is scaled by `clamp(1 − v·f̂ / (|f|·T), 0, 1)` with `T` = Domain *Force response* (default 1 s, 0 = off). Bursts, drag, containment and shocks are exempt | new |
-| Scene presets (Follow-up 47) | The other editor's 18 presets (`Engine/PyroScenePresets.js`): original parameter blocks kept, translated by stated ratios to emitters, forces and colliders. Listed as *Pyro scenes* in the browser | other editor |
+| Scene presets (Follow-up 47) | The other editor's 18 presets (now `Presets/pyro-*.toml`; `Engine/PyroScenePresets.js` is kept as the unloaded record of the original blocks), translated by stated ratios to emitters, forces and colliders. Listed as *Pyro scenes* in the browser | other editor |
 | Flipbook (Follow-up 47) | Toolbar *Flipbook* → bake 4/16/32/64 frames of 64–512 px at 12–60 fps, optional warm-up, empty-grid start and transparent background, into one PNG sheet plus timing/UV JSON | other editor |
 
 ---
@@ -86,6 +86,10 @@ A self-contained GPU particle module that shares the force-generator gizmos with
   Weight 0–1, Blend (Replace / Add / Multiply / Maximum) and Solo per layer. Without the Domain layer the gas stops and particles keep running.
 - **Presets:** all 36 convert on load and evaluate to the identical fields (checked). Existing Domain and Volume Render sliders write into
   the owning layer. Each emitter has a linked Source layer.
+- **Presets are documents:** `Presets/*.toml` (36 `frontier-fluid-preset` files: scene summary, grid, render settings, debris, the gas
+  stack, emitters, force fields, colliders, particle systems). After editing run `node Experimental/FluidEditor/GeneratePresetLibrary.mjs`
+  (writes `Engine/PresetLibrary.js`). *Save as preset* in the top menu downloads the current scene as a document. The conversion from the
+  old hardcoded objects is recorded in `Exhibits/FluidEditor/Results/PresetConversion.json` (36/36 identical scenes, identical FluidMetrics).
 - **Files:** scene JSON Version 3 adds `GasStack`; Version 2 files convert. Stack TOML (`frontier-effect-stack`) round-trips byte for byte;
   unknown categories and parameters are kept verbatim and inert.
 

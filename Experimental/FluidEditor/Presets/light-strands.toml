@@ -1,0 +1,140 @@
+# Light Strands — Fluid Studio scene preset (Studio). No smoke — aerodynamic light strands streaming past a sphere collider wake, plus a bundle of silk ribbons twisting through an orbit field.
+# Converted from the legacy preset object by script; scene fingerprint d8a5b2e3fad7b4be (checked by FluidValidation.mjs).
+
+[Document]
+Format = "frontier-fluid-preset"
+Revision = 1
+SpecificationHash = "6ffdeaf3bfb2fc84"
+
+[Scene]
+Order = 14
+Id = "preset-light-strands"
+Name = "Light Strands"
+Family = "Studio"
+Icon = "strands"
+Summary = "No smoke — aerodynamic light strands streaming past a sphere collider wake, plus a bundle of silk ribbons twisting through an orbit field."
+Boundary = "OpenAll"
+
+[Grid]
+Resolution = [96, 36, 48]
+Size = [16, 6, 8]
+
+[Render]
+Visible = false
+
+[[Volume]]
+  Token = "gas-volume"
+  Category = 1
+
+  [[Volume.Layer]]
+    Token = "layer-1"
+    Category = 101
+    Enabled = true
+    Solo = false
+    Weight = 1.0
+    Blend = 0
+    Parameters = { Gravity = 0.25, ForceResponse = 1.0, PressureIterations = 16, TimeScale = 1.0, SceneLoop = 0.0, Advection = 1 }
+
+  [[Volume.Layer]]
+    Token = "layer-2"
+    Category = 104
+    Enabled = true
+    Solo = false
+    Weight = 1.0
+    Blend = 0
+    Parameters = { Combustion = 1.0, Expansion = 0.6 }
+
+  [[Volume.Layer]]
+    Token = "layer-3"
+    Category = 105
+    Enabled = true
+    Solo = false
+    Weight = 1.0
+    Blend = 0
+    Parameters = { Vorticity = 0.2 }
+
+  [[Volume.Layer]]
+    Token = "layer-4"
+    Category = 106
+    Enabled = true
+    Solo = false
+    Weight = 1.0
+    Blend = 0
+    Parameters = { Dissipation = 0.995, VelocityDissipation = 0.999 }
+
+  [[Volume.Layer]]
+    Token = "layer-5"
+    Category = 107
+    Enabled = true
+    Solo = false
+    Weight = 1.0
+    Blend = 0
+    Parameters = { Density = 1.0, Albedo = "#8e8f94", Absorption = 3.2, Anisotropy = 0.45, Ambient = "#3a414c", LightIntensity = 1.4 }
+
+  [[Volume.Layer]]
+    Token = "layer-6"
+    Category = 108
+    Enabled = true
+    Solo = false
+    Weight = 1.0
+    Blend = 0
+    Parameters = { FireIntensity = 4.0, FireThreshold = 1.0, FireSoftness = 3.5, FireOpacity = 1.4, FireEmber = "#ff2a05", FireFlame = "#ff8a16", FireCore = "#fff3cf", FireLight = 1.0 }
+
+[[Force]]
+  Type = "DirectionalWind"
+  Name = "Tunnel Wind"
+  Position = [0, 0, 0]
+  Strength = 0.9
+  Direction = [1, 0, 0]
+  Falloff = "Constant"
+  Frequency = 0.2
+  Secondary = 0.1
+
+[[Force]]
+  Type = "Orbit"
+  Name = "Twist"
+  Position = [2, -0.6, 1.4]
+  Strength = 2.2
+  Radius = 2.6
+  Falloff = "Gaussian"
+  Direction = [1, 0.2, 0]
+  Frequency = 0.15
+  Secondary = 0.3
+
+[[Force]]
+  Type = "CurlNoiseTurbulence"
+  Name = "Weave"
+  Position = [0, 0, 0]
+  Strength = 0.35
+  Radius = 8
+  Falloff = "Plateau"
+  Frequency = 0.4
+  Secondary = 0.12
+
+[[Force]]
+  Type = "DragBaffle"
+  Name = "Air Resistance"
+  Position = [0, 0, 0]
+  Strength = 0.25
+  Radius = 9
+  Falloff = "Constant"
+
+[[Collider]]
+  Name = "Bluff Body"
+  Position = [-1, 0, 0]
+  Radius = 1
+
+[[Particle]]
+  Template = "light-strands"
+  Name = "Streamlines"
+  Position = [-7.4, 0.2, 0]
+  Radius = 1.6
+  GasInfluence = 1.5
+  Count = 1536
+
+[[Particle]]
+  Template = "silk-ribbons"
+  Name = "Silk Bundle"
+  Position = [-7, -1.6, 2.2]
+  Radius = 0.35
+  Count = 1024

@@ -269,7 +269,9 @@ export function writeStackDocument(stacks)
     };
 }
 
-export function writeStackToml(stacks) { return writeToml(writeStackDocument(stacks), new Set(['Weight'])); }
+// Keys always written with a decimal point: layer Weight and every Float32 parameter (toml++ then reads them as floating point).
+export const FloatKeys = Object.freeze(new Set(['Weight', ...LayerSpecifications.flatMap((layer) => layer.Parameter.filter((parameter) => parameter.Type === 'Float32').map((parameter) => parameter.Name))]));
+export function writeStackToml(stacks) { return writeToml(writeStackDocument(stacks), FloatKeys); }
 
 export function readStackToml(text)
 {

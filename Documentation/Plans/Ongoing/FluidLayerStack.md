@@ -289,7 +289,7 @@ flowchart LR
 | Phase | Deliverable                                                                  | Verification                                                     |
 |-------|------------------------------------------------------------------------------|------------------------------------------------------------------|
 | 1 ✔️  | `LayerSpecifications.toml` + browser loader + inert-unknown round trip        | Round-trip unit tests; specification hash printed                 |
-| 2 🚧  | Gas stack evaluation; 36 presets converted; old preset objects removed        | `FluidMetrics` per preset before/after; `FluidValidation`         |
+| 2 ✔️  | Gas stack evaluation; 36 presets converted; old preset objects removed        | `FluidMetrics` per preset before/after; `FluidValidation`         |
 | 3     | Particle stack; 26 templates converted                                        | Template capture before/after; particle counts and colours        |
 | 4     | Timeline, keys, auto-key, curves, checkpoints, scrubbing                      | Envelope conversion test (≤ 1e-6); scrub determinism hash         |
 | 5     | Heat shimmer, glitch, distortion, dissolve layers                             | Captures + parameter sweeps in `Exhibits/FluidEditor/`            |
@@ -315,6 +315,6 @@ flowchart LR
 | Phase | State | What exists |
 |-------|-------|-------------|
 | 1 | ✔️ done | `Engine/LayerSpecifications.toml` (8 gas categories, codes 101–108) → `GenerateLayerSpecifications.mjs` → `Engine/LayerSpecifications.js` + hash; `Engine/TomlSubset.js` reader/writer; `Engine/LayerSpecificationValidation.js` rules + FNV-1a 64 hash; unknown categories and parameters kept verbatim. |
-| 2 | 🚧 in progress | `Engine/LayerStack.js` evaluates the gas stack into `scene.Domain` / `Visualizers.Volume`, so the GPU code is unchanged. All 36 presets convert on load and evaluate to identical fields (checked in `FluidValidation.mjs` §7). Inspector shows the stack (add, enable, reorder, weight, blend, solo, delete). Scene JSON is Version 3 with `GasStack`; Version 2 files convert. **Left:** preset objects still live in the catalogue (converted at load, not stored as stack documents); the `FluidMetrics` before/after table. |
+| 2 | ✔️ done | `Engine/LayerStack.js` evaluates the gas stack into `scene.Domain` / `Visualizers.Volume` (GPU code unchanged). Inspector stack UI (add, enable, reorder, weight, blend, solo, delete). **Presets are documents:** `Presets/*.toml` (36, `frontier-fluid-preset`) → `GeneratePresetLibrary.mjs` → `Engine/PresetLibrary.js`; loaded by `Engine/PresetScenes.js`. Legacy objects removed from the runtime after all 36 rebuilt identical scenes (fingerprints in `Exhibits/FluidEditor/Results/PresetConversion.json`) and FluidMetrics matched exactly on Campfire, Smoke Plume, Tornado, Wind Tunnel. *Save as preset* writes a document. Scene JSON Version 3 carries `GasStack`. `PyroScenePresets.js` is kept as an unloaded 📝 reference of the original values. |
 | 3–5 | ⏳ | Particle stack, timeline + keys, effect layers. |
 | 6 | ⏸ | C++ — out of scope this round (HTML only). |

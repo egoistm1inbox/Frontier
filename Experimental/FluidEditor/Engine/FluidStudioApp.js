@@ -9,13 +9,15 @@ import { GpuContext } from './GpuContext.js';
 import { FluidSolver } from './FluidSolver.js';
 import { VolumeRenderer } from './VolumeRenderer.js';
 import { OrbitCamera, Vec3 } from './OrbitCamera.js';
-import { ScenePresets, createDomain, createEmitter, createForceGenerator, createCollider, createVisualizerSet, ForceTypeById, resolveDomainGrid, emitterTransform, gridWindowCentre, gridTileOf } from './ForceGeneratorCatalog.js';
+import { createDomain, createEmitter, createForceGenerator, createCollider, createVisualizerSet, ForceTypeById, resolveDomainGrid, emitterTransform, gridWindowCentre, gridTileOf } from './ForceGeneratorCatalog.js';
 import { ParticleSimulation } from './ParticleSimulation.js';
 import { createParticleSystem, ParticleTemplateById, MaximumParticleSystems } from './ParticleCatalog.js';
 import {
     convertSceneToGasStack, evaluateGasStack, applyGasEvaluation, owningLayer, createLayer, createLinkedSource, readGasStack, coerceAmount,
-    LayerSpecificationByCode, SourceLayerCode, MaximumLayers, SpecificationHash,
+    LayerSpecificationByCode, SourceLayerCode, MaximumLayers, SpecificationHash, FloatKeys,
 } from './LayerStack.js';
+import { ScenePresets, ScenePresetById, buildSceneFromDocument, sceneToDocument } from './PresetScenes.js';
+import { writeToml } from './TomlSubset.js';
 
 //------------------------------------------------------------------------------------------------------------------------
 //                                                  FLIPBOOK LAYOUT
@@ -286,22 +288,10 @@ export class FluidStudioApp
     loadPreset(presetId, announce = true)
     {
         if (this.baking) return;
-        const preset = ScenePresets.find((candidate) => candidate.Id === presetId) || ScenePresets[0];
-        const domain = createDomain({ ...preset.Domain, Boundary: preset.Boundary });
-        this.scene = {
-            Name: preset.Name,
-            PresetId: preset.Id,
-            Domain: domain,
-            Emitters: (preset.Emitters || []).map((emitter) => createEmitter(emitter)),
-            Forces: (preset.Forces || []).map((force) => createForceGenerator(force.Type, force)),
-            Colliders: (preset.Colliders || []).map((collider) => createCollider(collider)),
-            Particles: (preset.Particles || []).map((node) => createParticleSystem(node.Template, node)),
-            Visualizers: createVisualizerSet(),
-        };
-        Object.assign(this.scene.Visualizers.Volume, preset.Look || {});
+        const preset = ScenePresetById[presetId] || ScenePresets[0];
+        // Presets are documents (Presets/*.toml): grid, emitters, force fields, colliders, particles and the gas layer stack.
+        this.scene = buildSceneFromDocument(preset.Document);
         this.particles.resetAll();
-        for (const [key, overrides] of Object.entries(preset.Visualizers || {})) Object.assign(this.scene.Visualizers[key], overrides);
-        this.scene.GasStack = convertSceneToGasStack(this.scene);
         this.selectedLayer = null;
         this.evaluateStack();
         this.applyDomainResolution();
@@ -708,6 +698,13 @@ export class FluidStudioApp
         const { Domain, Emitters, Forces, Colliders, Particles, Visualizers, Name, GasStack } = this.scene;
         // Version 3 adds the gas layer stack; Domain / Volume still hold the evaluated amounts so Version 2 readers keep working.
         return JSON.stringify({ Format: 'FrontierFluidScene', Version: 3, SpecificationHash, Name, Domain, Emitters, Forces, Colliders, Particles, Visualizers, GasStack }, null, 2);
+    }
+
+    /** Current scene as a `frontier-fluid-preset` TOML document (Save as preset). Add it to Presets/ and run GeneratePresetLibrary.mjs. */
+    exportPresetToml(summary = {})
+    {
+        const document = sceneToDocument(this.scene, summary);
+        return `# ${document.Scene.Name} — Fluid Studio scene preset (saved from the editor).\n\n` + writeToml(document, FloatKeys);
     }
 
     importJson(text)

@@ -3,6 +3,11 @@
 //               The Other Fluid Editor's Eighteen Scene Presets, Kept With Their Original Values and Translated to Fluid Studio Scenes
 //============================================================================================================================================
 //
+// 📝 Reference only — not loaded by the editor. Since the layer stack phase 2 the 18 pyro scenes are the documents
+//    Presets/pyro-*.toml (converted by script; FluidValidation checks they build the identical scenes). This file is kept because it
+//    holds the other editor's original values and the calibration rules behind every translated number. Remove it once you no longer
+//    need that record.
+//
 // The other editor (the one whose pressure warm start, gas expansion and lighting were merged in Follow-up 46) describes a
 // scene as one flat block of parameters on a single box: one emitter, one blast, one obstacle, a global wind and a global
 // turbulence. Fluid Studio describes a scene as nodes: a domain, emitters, force generators and colliders.

@@ -16,8 +16,9 @@ import { GpuContext } from './Engine/GpuContext.js';
 import { FluidSolver } from './Engine/FluidSolver.js';
 import { VolumeRenderer } from './Engine/VolumeRenderer.js';
 import { OrbitCamera } from './Engine/OrbitCamera.js';
+import { ScenePresets, ScenePresetById, buildSceneFromDocument } from './Engine/PresetScenes.js';
 import {
-    ForceGeneratorTypes, ForceTypeById, FalloffCurves, EmitterShapes, BoundaryModes, ScenePresets, createDomain, createEmitter, createForceGenerator,
+    ForceGeneratorTypes, ForceTypeById, FalloffCurves, EmitterShapes, BoundaryModes, createDomain, createEmitter, createForceGenerator,
     createCollider, createVisualizerSet, MaximumForceGenerators, timingEnvelope,
 } from './Engine/ForceGeneratorCatalog.js';
 
@@ -49,7 +50,7 @@ for (const preset of ScenePresets)
     for (const force of preset.Forces || []) check(Boolean(ForceTypeById[force.Type]), `${preset.Name}: force ${force.Type} resolves`);
     for (const emitter of preset.Emitters || []) check(EmitterShapes.includes(emitter.Shape), `${preset.Name}: emitter shape ${emitter.Shape} resolves`);
     check(!preset.Boundary || BoundaryModes.includes(preset.Boundary), `${preset.Name}: boundary mode resolves`);
-    check(preset.Domain.Resolution.every((cells) => cells >= 8 && cells <= 160), `${preset.Name}: resolution inside solver limits`);
+    check(preset.Grid.Resolution.every((cells) => cells >= 8 && cells <= 160), `${preset.Name}: resolution inside solver limits`);
 }
 
 for (const shape of ParticleShapes) check(shape === 'Point' || ParticleShaders.ParticleShapeChunk.includes(`uShape == ${ParticleShapes.indexOf(shape)}`), `Particle shape ${shape} sampled by GLSL`);
@@ -163,8 +164,8 @@ const particles = new ParticleSimulation(context, solver);
 renderer.particles = particles;
 for (const programRecord of [...Object.values(solver.programs), ...Object.values(renderer.programs), ...Object.values(particles.programs)]) mockGl.__labelProgram(programRecord);
 
-const preset = ScenePresets.find((candidate) => candidate.Id === 'preset-wind-tunnel');
-const domain = createDomain({ ...preset.Domain, Boundary: preset.Boundary });
+const preset = ScenePresetById['preset-wind-tunnel'];
+const domain = buildSceneFromDocument(preset.Document).Domain;
 check(domain.Resolution.join() === '96,48,48' && Math.abs(domain.CellSize - 6 / 96) < 1e-9, 'Domain grid derives 96×48×48 @ 6.25 cm from Size 6×3×3 / MaxCells 96');
 const scene = {
     Name: preset.Name, Domain: domain,
@@ -290,7 +291,7 @@ app.addEmitter('Disc'); app.addCollider();
 for (const visualizer of Object.values(app.scene.Visualizers)) { app.select(visualizer.Id); check(refs.inspector.children.length >= 4, `${visualizer.Name} inspector renders`); }
 app.frame(16); app.frame(33); app.stepOnce(); app.frame(50);
 check(app.solver.frame === 4, `Solver advanced ${app.solver.frame} frames through the app loop (3 live + 1 stepped)`);
-for (const preset of ScenePresets) { app.loadPreset(preset.Id); check(app.scene.Name === preset.Name && app.solver.layout.width === preset.Domain.Resolution[0], `Preset ${preset.Name} loads + reconfigures grid`); }
+for (const preset of ScenePresets) { app.loadPreset(preset.Id); check(app.scene.Name === preset.Name && app.solver.layout.width === preset.Grid.Resolution[0], `Preset ${preset.Name} loads + reconfigures grid`); }
 ui.toggleDrawer(true, 'forces');
 check(refs.drawer.children.length === 2 && refs.drawer.children[1].children.reduce((sum, group) => sum + group.children[1].children.length, 0) === ForceGeneratorTypes.length, 'Asset drawer lists every force generator card grouped by category');
 app.loadPreset('preset-campfire');
@@ -366,21 +367,30 @@ console.log('\n[7] Layer specifications + gas layer stack');
     broken.Layer[2].Parameter[0].Default = 99;
     check(validateLayerSpecifications(broken).length >= 2, 'Validator refuses duplicate choice codes and out-of-range defaults');
 
-    // Every preset: the converted stack evaluates back to the exact flat fields the solver used before (so the simulation is identical).
+    // Presets are documents: each must build the exact scene the legacy preset object built (fingerprints recorded at conversion).
+    const PresetGenerator = await import('./GeneratePresetLibrary.mjs');
+    const Presets = await import('./Engine/PresetScenes.js');
+    check(fs.readFileSync(PresetGenerator.PresetLibraryOutput, 'utf8') === PresetGenerator.generatePresetLibrary(), `Engine/PresetLibrary.js is up to date with Presets/*.toml (run node GeneratePresetLibrary.mjs) · library ${Presets.PresetLibraryHash}`);
+    const conversion = JSON.parse(fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '../../Exhibits/FluidEditor/Results/PresetConversion.json'), 'utf8'));
     let exact = 0, roundTrips = 0;
     for (const preset of ScenePresets)
     {
+        const fingerprint = Presets.sceneFingerprint(Presets.buildSceneFromDocument(preset.Document));
+        const recorded = conversion.Presets[preset.Id];
+        if (recorded && fingerprint === recorded.Legacy) exact += 1;
+        else console.log(`     ↳ ${preset.Id}: ${fingerprint} ≠ recorded ${recorded ? recorded.Legacy : 'none'} (if you changed this preset on purpose, update Exhibits/FluidEditor/Results/PresetConversion.json)`);
         app.loadPreset(preset.Id);
-        const scene = { Domain: createDomain({ ...preset.Domain, Boundary: preset.Boundary }), Emitters: app.scene.Emitters.map((emitter) => ({ ...emitter, Enabled: true })), Visualizers: createVisualizerSet() };
-        Object.assign(scene.Visualizers.Volume, preset.Look || {});
-        const owned = (block, target) => Object.keys(Stack.ParameterOwners[target]).map((name) => JSON.stringify(block[name])).join();
-        if (owned(app.scene.Domain, 'Domain') === owned(scene.Domain, 'Domain') && owned(app.scene.Visualizers.Volume, 'Volume') === owned(scene.Visualizers.Volume, 'Volume') && !app.gasEvaluation.Problems.length) exact += 1;
-        else console.log(`     ↳ ${preset.Id} differs after conversion`);
+        if (app.gasEvaluation.Problems.length) console.log(`     ↳ ${preset.Id}: stack problems ${JSON.stringify(app.gasEvaluation.Problems)}`);
         const tomlText = Stack.writeStackToml([app.scene.GasStack]);
-        if (Stack.writeStackToml(Stack.readStackToml(tomlText).Stacks) === tomlText) roundTrips += 1;
+        if (Stack.writeStackToml(Stack.readStackToml(tomlText).Stacks) === tomlText && !app.gasEvaluation.Problems.length) roundTrips += 1;
     }
-    check(exact === ScenePresets.length, `${exact}/${ScenePresets.length} presets convert to stacks that evaluate to the identical solver and render fields`);
-    check(roundTrips === ScenePresets.length, `${roundTrips}/${ScenePresets.length} stacks round-trip through TOML byte for byte`);
+    check(exact === ScenePresets.length && ScenePresets.length === Object.keys(conversion.Presets).length, `${exact}/${ScenePresets.length} preset documents build the identical scene the legacy preset objects built`);
+    check(roundTrips === ScenePresets.length, `${roundTrips}/${ScenePresets.length} preset stacks evaluate without problems and round-trip through TOML byte for byte`);
+    const tweaked = JSON.parse(JSON.stringify(ScenePresetById['preset-campfire'].Document));
+    tweaked.Volume[0].Layer.find((layer) => layer.Category === 105).Parameters.Vorticity += 0.01;
+    check(Presets.sceneFingerprint(Presets.buildSceneFromDocument(tweaked)) !== conversion.Presets['preset-campfire'].Legacy, 'Fingerprint detects a 0.01 change in one layer parameter');
+    const saved = parseToml(app.exportPresetToml({ Id: 'preset-saved', Family: 'Custom' }));
+    check(Presets.validatePresetDocument(saved).length === 0 && Presets.sceneFingerprint(Presets.buildSceneFromDocument(saved)) === Presets.sceneFingerprint(app.scene), 'Save as preset writes a valid document that rebuilds the current scene exactly');
 
     // Unknown (newer) categories and parameters stay verbatim and inert.
     app.loadPreset('preset-campfire');

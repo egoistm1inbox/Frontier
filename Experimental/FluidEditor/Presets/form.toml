@@ -1,0 +1,102 @@
+# Dissolving Form — Fluid Studio scene preset (Studio). No smoke — a solid particle sphere peeling into noise, with a bioluminescent bloom rising beneath it.
+# Converted from the legacy preset object by script; scene fingerprint e5f33ce106baf73a (checked by FluidValidation.mjs).
+
+[Document]
+Format = "frontier-fluid-preset"
+Revision = 1
+SpecificationHash = "6ffdeaf3bfb2fc84"
+
+[Scene]
+Order = 15
+Id = "preset-form"
+Name = "Dissolving Form"
+Family = "Studio"
+Icon = "swarm"
+Summary = "No smoke — a solid particle sphere peeling into noise, with a bioluminescent bloom rising beneath it."
+
+[Grid]
+Resolution = [48, 48, 48]
+Size = [6, 6, 6]
+
+[Render]
+Visible = false
+
+[[Volume]]
+  Token = "gas-volume"
+  Category = 1
+
+  [[Volume.Layer]]
+    Token = "layer-1"
+    Category = 101
+    Enabled = true
+    Solo = false
+    Weight = 1.0
+    Blend = 0
+    Parameters = { Gravity = 0.25, ForceResponse = 1.0, PressureIterations = 8, TimeScale = 1.0, SceneLoop = 0.0, Advection = 1 }
+
+  [[Volume.Layer]]
+    Token = "layer-2"
+    Category = 104
+    Enabled = true
+    Solo = false
+    Weight = 1.0
+    Blend = 0
+    Parameters = { Combustion = 1.0, Expansion = 0.6 }
+
+  [[Volume.Layer]]
+    Token = "layer-3"
+    Category = 106
+    Enabled = true
+    Solo = false
+    Weight = 1.0
+    Blend = 0
+    Parameters = { Dissipation = 0.99, VelocityDissipation = 0.999 }
+
+  [[Volume.Layer]]
+    Token = "layer-4"
+    Category = 107
+    Enabled = true
+    Solo = false
+    Weight = 1.0
+    Blend = 0
+    Parameters = { Density = 1.0, Albedo = "#8e8f94", Absorption = 3.2, Anisotropy = 0.45, Ambient = "#3a414c", LightIntensity = 1.4 }
+
+  [[Volume.Layer]]
+    Token = "layer-5"
+    Category = 108
+    Enabled = true
+    Solo = false
+    Weight = 1.0
+    Blend = 0
+    Parameters = { FireIntensity = 4.0, FireThreshold = 1.0, FireSoftness = 3.5, FireOpacity = 1.4, FireEmber = "#ff2a05", FireFlame = "#ff8a16", FireCore = "#fff3cf", FireLight = 1.0 }
+
+[[Force]]
+  Type = "CurlNoiseTurbulence"
+  Name = "Peel"
+  Position = [0, 0.4, 0]
+  Strength = 1.2
+  Radius = 2.2
+  Falloff = "Gaussian"
+  Frequency = 0.8
+  Secondary = 0.35
+
+[[Force]]
+  Type = "ThermalUpdraft"
+  Name = "Lift"
+  Position = [0, -1.5, 0]
+  Strength = 0.5
+  Radius = 2.4
+  Falloff = "Plateau"
+
+[[Particle]]
+  Template = "dissolving-sphere"
+  Name = "Form Sphere"
+  Position = [0, 0.4, 0]
+  Radius = 1.4
+
+[[Particle]]
+  Template = "bioluminescent"
+  Name = "Bloom"
+  Position = [0, -2.9, 0]
+  Radius = 2.2
+  Count = 8192

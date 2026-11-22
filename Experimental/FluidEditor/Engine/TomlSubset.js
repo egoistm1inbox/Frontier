@@ -140,19 +140,20 @@ export function parseToml(text)
     return root;
 }
 
-function formatScalar(value)
+function formatScalar(value, floatKeys = new Set(), key = '')
 {
     if (typeof value === 'string') return JSON.stringify(value);
     if (typeof value === 'boolean') return value ? 'true' : 'false';
     if (typeof value === 'number')
     {
         if (!Number.isFinite(value)) throw new TomlSubsetError('inf and nan cannot be written');
+        if (floatKeys.has(key) && Number.isInteger(value) && Math.abs(value) < 1e15) return `${value}.0`;
         // Round-trip exact: shortest JS representation, with ".0" so integers written as floats stay floats.
         const text = String(value);
         return Number.isInteger(value) && !/e/i.test(text) ? text : text.replace(/^(-?\d+)e/i, '$1.0e');
     }
-    if (Array.isArray(value)) return `[${value.map(formatScalar).join(', ')}]`;
-    if (value && typeof value === 'object') return `{ ${Object.entries(value).map(([key, item]) => `${key} = ${formatScalar(item)}`).join(', ')} }`;
+    if (Array.isArray(value)) return `[${value.map((item) => formatScalar(item, floatKeys, key)).join(', ')}]`;
+    if (value && typeof value === 'object') return `{ ${Object.entries(value).map(([name, item]) => `${name} = ${formatScalar(item, floatKeys, name)}`).join(', ')} }`;
     throw new TomlSubsetError(`cannot write ${typeof value}`);
 }
 
@@ -163,7 +164,7 @@ function formatScalar(value)
 export function writeToml(document, floatKeys = new Set())
 {
     const lines = [];
-    const scalarText = (key, value) => (floatKeys.has(key) && typeof value === 'number' && Number.isInteger(value) ? `${value}.0` : formatScalar(value));
+    const scalarText = (key, value) => formatScalar(value, floatKeys, key);
     const isTableArray = (value) => Array.isArray(value) && value.length > 0 && value.every((item) => item && typeof item === 'object' && !Array.isArray(item));
     function emit(table, path, indent)
     {
