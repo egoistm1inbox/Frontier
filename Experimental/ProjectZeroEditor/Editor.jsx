@@ -52,6 +52,10 @@ import React, { useState, useEffect, useRef, useMemo } from "react";
 import { createRoot } from "react-dom/client";
 import { Inspector, Icon, Glyph, Panels } from "./Inspectors.jsx";
 import Viewport3D from "./Viewport3D.jsx";
+import { CameraBodies, CameraBodyOf } from "./EditorAssets.js";
+// Cameras show their editor asset (EditorAssets.js) as their outliner icon; everything else its own.
+const OutlinerIcon = (Row, Values) =>
+  Row.Panel === "camera" && window.NativeAssets?.Icons ? CameraBodies.find((Body) => Body.Id === CameraBodyOf(Row.Id, Values[Row.Id]?.["Camera body"]))?.Icon || Row.Icon : Row.Icon;
 import Notch from "./Notch.jsx";
 import ActionIcon from "./ActionIcon.jsx";
 import ConstructPanel from "./ConstructPanel.jsx";
@@ -1631,6 +1635,7 @@ function App() {
           <div
             key={Row.Id}
             role="treeitem"
+            data-outliner-row={Row.Id}
             aria-selected={Chosen.includes(Row.Id)}
             aria-expanded={HasChildren(Row.Id) ? !Collapsed[Row.Id] : undefined}
             tabIndex={0}
@@ -1681,7 +1686,7 @@ function App() {
             >
               <Glyph Name="chevron" Size={12} />
             </button>
-            <Icon Name={Row.Icon} Size={24} />
+            <Icon Name={OutlinerIcon(Row, Values)} Size={24} />
             {Rename === Row.Id && !IsEditorCamera(Row) ? (
               <input
                 autoFocus

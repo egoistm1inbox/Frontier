@@ -60,9 +60,25 @@ async function Open(Id, Wide = false) {
     await Iframe.contentFrame().locator(".mpanel > *").first().waitFor();
   await Page.waitForTimeout(150);
 }
+// Inspectors with lettered tabs (InspectorTabs.jsx): opens the tab holding an entry, returning its place among the tabs (or -1).
+async function Reveal(Entry) {
+  if (typeof Entry !== "string") return -1;
+  const Tab = await Node(Entry).evaluate((Each) => Each.closest("[data-tab-page]")?.dataset.tabPage || null);
+  if (!Tab) return -1;
+  if (await Page.locator(`[data-tab-page="${Tab}"]`).isHidden()) {
+    await Page.locator(`[data-tab-for="${Tab}"]`).click();
+    await Page.locator(`[data-tab-page="${Tab}"]`).waitFor();
+  }
+  return Page.locator(`[data-tab-for="${Tab}"]`).evaluate((Each) => [...Each.parentElement.querySelectorAll("[data-tab-for]")].indexOf(Each));
+}
 async function Sequence(Name, Entries) {
-  let Bottom = -Infinity;
+  let Bottom = -Infinity, Opened = -1;
   for (const Entry of Entries) {
+    // Entries run through the tabs in order; each tab starts at its own top.
+    const Tab = await Reveal(Entry);
+    assert(Tab >= Opened, Name + " tab order " + JSON.stringify(Entry));
+    if (Tab !== Opened) Bottom = -Infinity;
+    Opened = Tab;
     const Rect = await Node(Entry).boundingBox();
     assert(Rect && Rect.height > 0, Name + " missing " + JSON.stringify(Entry));
     assert(

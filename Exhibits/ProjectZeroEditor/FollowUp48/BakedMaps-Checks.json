@@ -1,5 +1,6 @@
 {
   "Checks": [
+    "Unbaked maps show the bake tab (Not baked · planned 256 × 64) until Bake; baked maps list resolution, format, bake time and axes (−12° → 90°, 60 km → 0 km) and read the cursor (8x°, 4x–5x km near the top right)",
     "Atmosphere bake: transmittance LUT 256 × 64 (low near the horizon rgb(141, 65, 7), high looking up rgb(255, 255, 255)) and the viewport's 1024 × 512 sky-view map (zenith rgb(76, 103, 137)); Bake again bakes again",
     "Sun bakes: lighting LUT (beam rgb(248, 239, 224) high, none below the horizon; fill moonlit rgb(100, 118, 161) at night) and the 192 × 192 disc map (centre rgb(255, 255, 255))",
     "Star map 1024 × 512: 3059 lit pixels at limiting magnitude 5.5, 1071 at 3",

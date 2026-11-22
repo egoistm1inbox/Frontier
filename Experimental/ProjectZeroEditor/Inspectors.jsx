@@ -46,11 +46,13 @@ import Native from "./NativePanels.json";
 import { SpecifyPanels, SpecificationNoteMark, MoonSlotCount, MoonPresets, MoonPresetSizes, SensorGates } from "./ProjectZeroSpecification.js";
 import { Solar } from "./Solar.mjs";
 import SunCard from "./SunCards.jsx";
-import { SkyMedium } from "./SkyShader.js";
+import { SkyMedium, SunAngularRadius } from "./SkyShader.js";
 import { SunLight } from "./Viewport3D.jsx";
-import { TransmittanceMap, SkyViewMap, SunLightingMap, SunDiscMap, StarMap, StarSettings, FlareAtlasMap, LightingSpan, TransmittanceSpan } from "./BakedMaps.js";
+import { TransmittanceMap, SkyViewMap, SunLightingMap, SunDiscMap, StarMap, StarSettings, FlareAtlasMap, LightingSpan, TransmittanceSpan, TransmittanceElevation } from "./BakedMaps.js";
 import { FlareSettings } from "./LensFlare.js";
 import { BakedMap, FlarePreview } from "./BakedMapCards.jsx";
+import { InspectorTabs } from "./InspectorTabs.jsx";
+import { CameraBodies, CameraBodyOf } from "./EditorAssets.js";
 import "./SunCards.css";
 import { SensorField } from "./OpticalGraphic.jsx";
 import SensorFormats, { Formats } from "./SensorFormats.jsx";
@@ -517,6 +519,8 @@ function Bake({ Title, Sun = false }) {
     </Card>
   );
 }
+// The bake tab's parts for the BAKING maps (BakedMapCards.jsx).
+const BakeKit = { Tile, Glyph };
 function MoonImage({ Preset = 0, Phase = 0.62, Size = 150, Rotation = 0 }) {
   return (
     <div
@@ -1077,9 +1081,14 @@ export function Inspector({
     Content = (
       <>
         {Header("Environment")}
+        <InspectorTabs Owner="sun" Look="arc" Pages={[
+          { Id: "now", Label: "Now", Content: (<>
+
         <Card Title="Sun now" Class="sun-now" GraphHandled>
           <SunCard V={V} Change={AssignProperty} Air={Scene?.Air} />
         </Card>
+        </>) },
+          { Id: "light", Label: "Light", Content: (<>
         <div className="section-caption">
           PROPERTIES <small>Light, direction & atmosphere</small>
         </div>
@@ -1215,6 +1224,8 @@ export function Inspector({
             {F("Flare / glare")}
           </Card>
         </div>
+        </>) },
+          { Id: "cycle", Label: "Day cycle", Content: (<>
         <Card Title="Dynamic settings" Wide GraphHandled>
           <SunGraph V={V} Change={AssignProperty} Mode="year" />
           {Fields(
@@ -1243,6 +1254,8 @@ export function Inspector({
           JavaScript. No GPU lighting is running.
         </p>
         {SpecificationCard()}
+        </>) },
+          { Id: "baking", Label: "Baking", Content: (<>
         <div className="section-caption">
           BAKING <small>Browser bakes · the 3D viewport uses these</small>
         </div>
@@ -1256,8 +1269,12 @@ export function Inspector({
                   Make={(Again) => SunLightingMap(Medium, Light.Tint, Again)}
                   Signature={JSON.stringify([Medium, Light.Tint])}
                   Marker={{ At: (Light.Elevation - LightingSpan.Low) / (LightingSpan.High - LightingSpan.Low), Label: `Now ${Light.Elevation.toFixed(1)}°` }}
-                  Legend={[`${LightingSpan.Low}°`, "Sun elevation", `${LightingSpan.High}°`]}
-                  Caption="Top: the sun beam the viewport's sun light takes, its colour after the air, fading out across the horizon. Bottom: the sky fill its hemisphere light takes, moonlit blue after dusk."
+                  Kit={BakeKit}
+                  Planned={["256 × 64", "RGBA8 sRGB · beam over fill"]}
+                  Axes={{
+                    X: { Name: "Sun elevation", Unit: "°", At: (U) => LightingSpan.Low + (LightingSpan.High - LightingSpan.Low) * U },
+                    Y: { Name: "Light", At: (V) => (V < 0.5 ? "Beam" : "Fill"), Ticks: [0.25, 0.75] },
+                  }}
                 />
               </Card>
               <Card Title="Sun disk bake">
@@ -1265,12 +1282,19 @@ export function Inspector({
                   Name="Sun disc map"
                   Make={(Again) => SunDiscMap(Medium, Light, Again)}
                   Signature={JSON.stringify([Medium, Light.Elevation, Light.Azimuth, Light.Tint])}
-                  Caption="The sun as the viewport's sky draws it, looked at straight on: the disc (drawn four times life size so it reads), its limb darkening and glow, coloured by the air at this elevation. Below the horizon the ground is in the way."
+                  Kit={BakeKit}
+                  Planned={["192 × 192", "RGBA8 sRGB · perspective"]}
+                  Axes={{
+                    X: { Name: "Off sun", Unit: "°", At: (U) => (U * 2 - 1) * SunAngularRadius * 12 * (180 / Math.PI), Ticks: [0, 0.5, 1] },
+                    Y: { Name: "Off sun", Unit: "°", At: (V) => (1 - V * 2) * SunAngularRadius * 12 * (180 / Math.PI), Ticks: [0, 0.5, 1] },
+                  }}
                 />
               </Card>
             </>
           );
         })()}
+        </>) },
+        ]} />
       </>
     );
   } else if (Subject.Panel === "camera") {
@@ -1304,6 +1328,9 @@ export function Inspector({
             hidden. Construct adds separate scene cameras.
           </div>
         )}
+        <InspectorTabs Owner="camera" Look="viewfinder" Pages={[
+          { Id: "lens", Label: "Lens", Content: (<>
+
         <Card Title="Lens + field of view" Height={440}>
           <Metric Value={Focal.toFixed(1)} Unit="mm" />
           <div className="graphic lens">
@@ -1326,6 +1353,8 @@ export function Inspector({
             {Optics.frameWidth.toFixed(2)} × {Optics.frameHeight.toFixed(2)} m
           </p>
         </Card>
+        </>) },
+          { Id: "focus", Label: "Focus", Content: (<>
         <div className="card-grid">
           <Card Title="Aperture study" Height={464}>
             <Metric Value={"f / " + Aperture.toFixed(1)} />
@@ -1360,6 +1389,43 @@ export function Inspector({
             </p>
           </Card>
         </div>
+        </>) },
+          { Id: "body", Label: "Body", Content: (<>
+        {(() => {
+          // The camera's editor asset (EditorAssets.js): what the viewport stands on a tripod and the outliner shows.
+          const Chosen = CameraBodies.find((Body) => Body.Id === CameraBodyOf(Subject.Id, V("Camera body")));
+          return (
+            <Card Title="Camera body" Class="camera-body-card">
+              <div className="camera-body-hero" data-camera-body-shown={Chosen.Id}>
+                <Icon Name={Chosen.Icon} Size={168} />
+                <div>
+                  <b>
+                    {Chosen.Letter} · {Chosen.Name}
+                  </b>
+                  <small>{Chosen.Caption}</small>
+                </div>
+              </div>
+              <div className="camera-body-choices" role="radiogroup" aria-label="Camera body">
+                {CameraBodies.map((Body) => (
+                  <button
+                    key={Body.Id}
+                    type="button"
+                    role="radio"
+                    aria-checked={Body.Id === Chosen.Id}
+                    className={Body.Id === Chosen.Id ? "on" : ""}
+                    data-camera-body={Body.Id}
+                    onClick={() => AssignProperty("Camera body", Body.Id)}
+                  >
+                    <Icon Name={Body.Icon} Size={52} />
+                    <span>
+                      <b>{Body.Letter}</b> {Body.Name}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </Card>
+          );
+        })()}
         <Card Title="Sensor / support" Height={196} Class="sensor-card">
           <Metric
             Value={(36 / Sensor).toFixed(2)}
@@ -1375,13 +1441,20 @@ export function Inspector({
           <Control Field={{ Label: "Hyperfocal distance", Control: "Readout" }} Value={Optics.hyperfocal.toFixed(1) + " m"} />
           <p>Pinhole renderer: the sensor sets the field of view and depth of field, not exposure.</p>
         </Card>
+        </>) },
+          { Id: "render", Label: "Render", Content: (<>
         <ComponentsCard Owner={Subject} Values={Values} Scene={Scene} Kit={{ Icon }} Title="Render" />
+        </>) },
+        ]} />
       </>
     );
   } else if (Subject.Panel === "stars") {
     Content = (
       <>
         {Header("Environment", "Stars")}
+        <InspectorTabs Owner="stars" Look="constellation" Pages={[
+          { Id: "field", Label: "Field", Content: (<>
+
         <Card Title="Star field" Height={444}>
           <Metric
             Value={V("Limiting magnitude").toFixed(1)}
@@ -1429,6 +1502,8 @@ export function Inspector({
           </div>
           <p>Catalogue field controls.</p>
         </Card>
+        </>) },
+          { Id: "motion", Label: "Motion", Content: (<>
         <div className="card-grid">
           <Card Title="Twinkle" Height={547}>
             <Metric
@@ -1455,6 +1530,8 @@ export function Inspector({
             {F("Celestial rotation")}
           </Card>
         </div>
+        </>) },
+          { Id: "renderer", Label: "Renderer", Content: (<>
         <Card Title="Renderer scale" Height={168}>
           {Fields("Brightness", "Point Size", "Loaded", "Sidereal Time")}
           <p>
@@ -1463,6 +1540,8 @@ export function Inspector({
           </p>
         </Card>
         {SpecificationCard()}
+        </>) },
+          { Id: "baking", Label: "Baking", Content: (<>
         <div className="section-caption">
           BAKING <small>Browser bake · the 3D viewport uses this</small>
         </div>
@@ -1471,12 +1550,16 @@ export function Inspector({
             Name="Star map"
             Make={(Again) => StarMap(StarSettings(V), Again)}
             Signature={JSON.stringify(StarSettings(V))}
-            Caption={
-              (StarSettings(V).Shown ? "" : "Star field is off, so the viewport draws none of these. ") +
-              "The catalogue the viewport's star field draws, in sky coordinates: right ascension across, declination up, the celestial pole along the top. Brightness, Point Size and Limiting magnitude apply; the viewport turns it about the pole by Celestial rotation and the hour. Twinkle is not baked."
-            }
+            Kit={BakeKit}
+            Planned={["1024 × 512", "RGBA8 sRGB · equirectangular, celestial"]}
+            Axes={{
+              X: { Name: "Right ascension", Unit: "h", At: (U) => U * 24 },
+              Y: { Name: "Declination", Unit: "°", At: (V) => 90 - V * 180 },
+            }}
           />
         </Card>
+        </>) },
+        ]} />
       </>
     );
   } else if (Subject.Panel === "moon") {
@@ -1484,6 +1567,9 @@ export function Inspector({
     Content = (
       <>
         {Header("Environment", "Moon")}
+        <InspectorTabs Owner="moon" Look="phases" Pages={[
+          { Id: "phase", Label: "Phase", Content: (<>
+
         <Card Title="Lunar phase" Height={443}>
           <Metric
             Value={(V("Phase") * 29.53).toFixed(1)}
@@ -1536,6 +1622,8 @@ export function Inspector({
             )}
           </div>
         </Card>
+        </>) },
+          { Id: "light", Label: "Light", Content: (<>
         <div className="card-grid">
           <Card Title="Moonlight" Height={452}>
             <Metric
@@ -1560,6 +1648,10 @@ export function Inspector({
               Natural size · 0.52°
             </button>
           </Card>
+        </div>
+        </>) },
+          { Id: "sky", Label: "Sky", Content: (<>
+        <div className="card-grid">
           <Card Title="Lunar position" Height={484}>
             <p>
               {V("Follow Sky")
@@ -1595,14 +1687,21 @@ export function Inspector({
             </button>
           </Card>
         </div>
+        </>) },
+        ]} />
       </>
     );
   } else if (Subject.Panel === "atmosphere") {
     Content = (
       <>
         {Header("Environment", "Atmosphere")}
+        <InspectorTabs Owner="atmosphere" Look="strata" Pages={[
+          { Id: "look", Label: "Look", Content: (<>
+
         <AtmosphereLab V={V} Change={AssignProperty} />
         <Card Title="Atmosphere settings">{Tiles(["Line at civil only"])}</Card>
+        </>) },
+          { Id: "scattering", Label: "Scattering", Content: (<>
         <Card Title="Atmospheric scattering" Height={485} GraphHandled>
           <Metric
             Value={V("Rayleigh").toFixed(1)}
@@ -1644,6 +1743,8 @@ export function Inspector({
             smooth dome bake.
           </p>
         </Card>
+        </>) },
+          { Id: "controls", Label: "Controls", Content: (<>
         <Card Title="Native atmosphere controls">
           {Fields(
             "Mie Anisotropy",
@@ -1657,6 +1758,8 @@ export function Inspector({
           )}
         </Card>
         {SpecificationCard()}
+        </>) },
+          { Id: "baking", Label: "Baking", Content: (<>
         <div className="section-caption">
           BAKING <small>Browser bakes · the 3D viewport uses these</small>
         </div>
@@ -1668,16 +1771,24 @@ export function Inspector({
                 Name="Transmittance LUT"
                 Make={(Again) => TransmittanceMap(Medium, Again)}
                 Signature={JSON.stringify(Medium)}
-                Legend={[`${TransmittanceSpan.Low}°`, "View elevation · horizon widened", `${TransmittanceSpan.High}°`]}
                 Pixelated
-                Caption="Sunlight left after crossing the air to space, from the ground (bottom row) to the top of the atmosphere (top row). Black is below the planet's edge. The viewport's sun colour comes from the same march."
+                Kit={BakeKit}
+                Planned={["256 × 64", "RGBA8 sRGB · elevation × altitude"]}
+                Axes={{
+                  X: { Name: "View elevation", Unit: "°", At: TransmittanceElevation, Ticks: [0, 0.35, 0.6, 0.8, 1] },
+                  Y: { Name: "Altitude", Unit: " km", At: (V) => (2 + (Medium.Top - 2) * (1 - V) ** 2) / 1000, Ticks: [0, 0.5, 1] },
+                }}
               />
               <BakedMap
                 Name="Sky-view map"
                 Make={(Again) => SkyViewMap(Medium, Light, Again)}
                 Signature={JSON.stringify([Medium, Light.Elevation, Light.Azimuth, Light.Tint])}
-                Legend={["360° around", "Horizon across the middle", "Sun included"]}
-                Caption="The whole sky the viewport draws as its background, sun included. Below the horizon it carries the horizon colour down, where the viewport's ground covers it. The viewport's sky light and haze take their colours from it."
+                Kit={BakeKit}
+                Planned={["1024 × 512", "RGBA8 sRGB · equirectangular"]}
+                Axes={{
+                  X: { Name: "Azimuth", Unit: "°", At: (U) => U * 360 },
+                  Y: { Name: "Elevation", Unit: "°", At: (V) => 90 - V * 180 },
+                }}
               />
             </Card>
           );
@@ -1691,12 +1802,17 @@ export function Inspector({
           {F("Fetch Baked Dome", true)}
           {Fields("Dome Path", "Sheet")}
         </Card>
+        </>) },
+        ]} />
       </>
     );
   } else if (Subject.Panel === "flare") {
     Content = (
       <>
         {Header("Camera / Optics", "Lens Flare")}
+        <InspectorTabs Owner="flare" Look="aperture" Pages={[
+          { Id: "composite", Label: "Composite", Content: (<>
+
         <Card Title="Flare composite" Height={430}>
           <Metric Value={V("Intensity").toFixed(2)} Unit="×" />
           <FlarePreview
@@ -1718,6 +1834,8 @@ export function Inspector({
           {Tiles(["Enabled", "Anamorphic", "Streaks", "Starburst"])}
         </Card>
         <Card Title="Flare source">{Fields("Intensity", "Type")}</Card>
+        </>) },
+          { Id: "optics", Label: "Optics", Content: (<>
         <div className="card-grid">
           <Card Title="Flare layers" Height={565}>
             <p>
@@ -1739,10 +1857,14 @@ export function Inspector({
         <Card Title="Halo & optical response">
           {Fields("Halo Radius", "Halo brightness", "Halo width", "Chromatic")}
         </Card>
+        </>) },
+          { Id: "legacy", Label: "Legacy", Content: (<>
         <Card Title="Legacy preset settings">
           {Fields("Aperture Blades", "Preview X", "Preview Y")}
         </Card>
         {SpecificationCard()}
+        </>) },
+          { Id: "baking", Label: "Baking", Content: (<>
         <div className="section-caption">
           BAKING <small>Browser bake · the 3D viewport uses this</small>
         </div>
@@ -1751,10 +1873,16 @@ export function Inspector({
             Name="Flare atlas"
             Make={(Again) => FlareAtlasMap(FlareSettings(V), Baking().Light.Colour, Again)}
             Signature={JSON.stringify([FlareSettings(V), Baking().Light.Colour.map((C) => +C.toFixed(2))])}
-            Legend={["Glow · Starburst · Halo · Streak", "Ghosts: amber · green · blue · violet"]}
-            Caption={`Eight 256 px sprites: the glow, the starburst (${FlareSettings(V).Blades % 2 ? FlareSettings(V).Blades * 2 : FlareSettings(V).Blades} spikes from ${FlareSettings(V).Blades} blades), the halo ring split by Chromatic, the streak, and the ${["round", "hexagonal", "octagonal"][FlareSettings(V).GhostShape]} ghost in four tints, all in the sun's colour after the air. The viewport's flare and the preview above are put together from it.`}
+            Kit={BakeKit}
+            Planned={["1024 × 512", "RGBA8 sRGB · 4 × 2 sprites"]}
+            Axes={{
+              X: { Name: "Sprite", At: (U) => String(Math.min(3, Math.floor(U * 4)) + 1), Ticks: [0.125, 0.375, 0.625, 0.875] },
+              Y: { Name: "Row", At: (V) => (V < 0.5 ? "Lights" : "Ghosts"), Ticks: [0.25, 0.75] },
+            }}
           />
         </Card>
+        </>) },
+        ]} />
       </>
     );
   } else if (Subject.Panel === "wind") {

@@ -27,6 +27,8 @@ export function WatchBakes(Callback) {
   Watchers.add(Callback);
   return () => Watchers.delete(Callback);
 }
+// The bake held under a name (from any settings), or null when it was never baked.
+export const HeldBake = (Name) => Held.get(Name) || null;
 function Bake(Name, Key, Make, Again = false) {
   const Before = Held.get(Name);
   if (!Again && Before && Before.Key === Key) return Before;

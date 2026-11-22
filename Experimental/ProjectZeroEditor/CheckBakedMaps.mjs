@@ -26,9 +26,24 @@ const Open = async (Id) => {
   await Page.waitForTimeout(600);
 };
 const Map = (Name) => Page.locator(`[data-baked-map="${Name}"]`);
+// Opens the inspector tab (InspectorTabs.jsx) holding a selector.
+const Reveal = async (Selector) => {
+  const Tab = await Page.locator(Selector).first().evaluate((Each) => Each.closest("[data-tab-page]")?.dataset.tabPage || null);
+  if (Tab && (await Page.locator(`[data-tab-page="${Tab}"]`).isHidden())) await Page.locator(`[data-tab-for="${Tab}"]`).click();
+};
+// A map nobody baked yet shows the bake tab with its planned resolution; Bake bakes it. Returns whether it had to be baked here.
 const Baked = async (Name, Size) => {
+  await Page.waitForSelector(`[data-baked-map="${Name}"]`, { state: "attached" });
+  await Reveal(`[data-baked-map="${Name}"]`);
+  await Page.waitForTimeout(200);
+  const Unbaked = (await Map(Name).getAttribute("data-baked-state")) === "unbaked";
+  if (Unbaked) {
+    assert.match(await Map(Name).innerText(), new RegExp("Not baked[\\s\\S]*" + Size.replace("x", " × ")));
+    await Map(Name).getByRole("button", { name: "Bake " + Name }).click();
+  }
   await Page.waitForSelector(`[data-baked-map="${Name}"][data-baked-size="${Size}"]`);
   await Page.waitForTimeout(150);
+  return Unbaked;
 };
 // Pixels of a map's canvas (x, y in its own pixels).
 const Pixels = (Name, Points) => Map(Name).locator("canvas").evaluate((Canvas, Points) => Points.map(([X, Y]) => [...Canvas.getContext("2d").getImageData(X, Y, 1, 1).data].slice(0, 3)), Points);
@@ -41,6 +56,7 @@ const BrightCount = (Name, Level) =>
     return Count;
   }, Level);
 const Shot = async (Card, Name) => {
+  await Reveal(`[data-card="${Card}"]`);
   const Section = Page.locator(`[data-card="${Card}"]`);
   await Section.scrollIntoViewIfNeeded();
   await Page.waitForTimeout(300);
@@ -56,8 +72,26 @@ try {
 
   // Atmosphere: transmittance LUT (clearer up high and looking up) and the sky-view map (blue sky by day).
   await Open("atmosphere");
-  await Baked("Transmittance LUT", "256x64");
-  await Baked("Sky-view map", "1024x512");
+  await Reveal('[data-baked-map="Transmittance LUT"]');
+  const UnbakedShot = path.join(Proof, "BakedMaps-Unbaked.png");
+  await Page.locator('[data-card="Atmosphere bake"]').screenshot({ path: UnbakedShot });
+  assert(await Baked("Transmittance LUT", "256x64"), "the transmittance LUT waits for Bake");
+  // The viewport bakes its sky-view map, so its card is baked already.
+  assert(!(await Baked("Sky-view map", "1024x512")), "the sky-view map comes baked from the viewport");
+  const Facts = await Map("Transmittance LUT").locator(".baked-map-facts").innerText();
+  assert.match(Facts, /Resolution\s+256 × 64/i);
+  assert.match(Facts, /Format\s+RGBA8 sRGB/i);
+  assert.match(Facts, /Baked\s+.*\d+ ms/i);
+  assert.match(Facts, /View elevation -12° → 90°/i);
+  assert.match(Facts, /Altitude 60 km → 0 km/i);
+  assert.deepEqual(await Map("Sky-view map").locator(".baked-map-x span").allInnerTexts(), ["0°", "90°", "180°", "270°", "360°"]);
+  await Map("Transmittance LUT").locator(".baked-map-image").scrollIntoViewIfNeeded();
+  const Plot = await Map("Transmittance LUT").locator(".baked-map-image").boundingBox();
+  await Page.mouse.move(Plot.x + Plot.width * 0.5, Plot.y + Plot.height * 0.5);
+  await Page.mouse.move(Plot.x + Plot.width * 0.96, Plot.y + 5, { steps: 4 });
+  await Page.waitForTimeout(150);
+  assert.match(await Map("Transmittance LUT").locator("[data-baked-cursor]").innerText(), /^8\d\.\d°, [45]\d\.\d km\s*rgb\(\d+, \d+, \d+\)$/);
+  Checks.push("Unbaked maps show the bake tab (Not baked · planned 256 × 64) until Bake; baked maps list resolution, format, bake time and axes (−12° → 90°, 60 km → 0 km) and read the cursor (8x°, 4x–5x km near the top right)");
   const [LowFlat, HighUp, BelowEdge] = await Pixels("Transmittance LUT", [[92, 62], [250, 1], [0, 62]]);
   assert(Luma(HighUp) > Luma(LowFlat) + 40, `clearer up high: ${HighUp} vs ${LowFlat}`);
   assert(LowFlat[0] > LowFlat[2], "low, near the horizon, sunlight is reddened: " + LowFlat);

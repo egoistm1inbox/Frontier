@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
+import { OpenTabWith } from "./TabReveal.mjs";
 const Require = createRequire(
   process.env.FRONTIER_BROWSER_PACKAGE ||
     new URL("../FrontierEditor/package.json", import.meta.url),
@@ -85,6 +86,8 @@ try {
     "Height Fog and Atmospheric Fog own their cards and probes; Local Fog keeps the shared Visibility card",
   );
   await Select("Sun");
+  // The Sun's graphs sit on its lettered tabs (B · Light, C · Day cycle).
+  await OpenTabWith(Page, "Sun daylight graph");
   const Day = Page.getByRole("slider", {
     name: "Sun daylight graph",
     exact: true,
@@ -92,6 +95,7 @@ try {
   await Drag(Day, 0.8);
   assert.ok((await Saved()).Values.sun["Local Hours"] > 17);
   const DayPath = await Day.locator("[data-series]").getAttribute("d");
+  await OpenTabWith(Page, "Sun seasonal graph");
   await Page.getByRole("slider", {
     name: "Sun seasonal graph",
     exact: true,
@@ -99,12 +103,17 @@ try {
   await Page.keyboard.press("Home");
   assert.equal((await Saved()).Values.sun.Month, 1);
   assert.equal((await Saved()).Values.sun["Day of Month"], 1);
+  // The daylight graph is on B · Light; it draws the new date when shown.
+  await OpenTabWith(Page, "Sun daylight graph");
+  await Page.waitForTimeout(200);
   assert.notEqual(
     await Day.locator("[data-series]").getAttribute("d"),
     DayPath,
   );
+  await OpenTabWith(Page, "Dynamic settings");
   await Card("Dynamic settings").scrollIntoViewIfNeeded();
   await Page.screenshot({ path: Proof + "/SunSeasonalGraph.png" });
+  await OpenTabWith(Page, "Sunlight gain graph");
   await Page.getByRole("slider", {
     name: "Sunlight gain graph",
     exact: true,

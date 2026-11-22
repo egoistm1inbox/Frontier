@@ -1,0 +1,37 @@
+Follow-up 58 · headless Chromium + SwiftShader · editor build from this branch (:8097) vs F57 base 06b7d54 (:8096)
+
+Passing on this build
+  CheckEditorAssets       4   (new: outliner camera icons, camera model in the viewport, Camera body swaps, hide/show, six tab looks)
+  CheckBakedMaps          6   (unbaked bake tab → Bake; resolution/format/baked/axes facts; cursor readout; all F57 map values unchanged)
+  CheckInspectorOrder   113   (opens the tab holding each card; BAKING still last)
+  CheckViewport3D        11
+  CheckFirstCards         4
+  CheckEnvironmentGraphs  ok (Errors: [])
+  CheckBrowser            ok (Errors: [])
+  CheckWorkspaceCards     ok (Errors: [])
+  CheckWind               ok (Errors: [])
+  CheckFogCamera          ok (Errors: [])
+  CheckFogCards           6
+  CheckLightDesign       22
+  CheckEntityContext      6
+  CheckRenderSettings    10
+  CheckSharedCards       14
+  CheckObjectComponents  11
+  CheckCloudPlacement    14
+  CheckGeometryWorkspaces 6
+  CheckVolumeWorkspaces   4
+  CheckVehicleSockets     8
+  CheckColliders          ok
+
+Failing the same way on the F57 base (not caused by this change)
+  CheckQuickTools        :185 here = :183 on base (two lines added above)
+  CheckConstruction      :193 on both
+  CheckInspectorLayout   :118 here = :117 on base (Wind animation flake)
+  CheckInstrumentStyle   :118 on both
+  CheckAssets            Content origin "Engine" button missing on both
+  CheckMaterials         :62 on both
+  CheckReference         :21 on both
+  CheckLighting          missing Experimental/FractureEditor/FractureSpecification.js on both
+  CheckColourCodex       missing jsdom module (environment)
+
+Startup: viewport assets use a studio matcap; load + first screenshot 6.1 s vs 6.6 s on base (a PMREM environment cost +9 s and was dropped).

@@ -3,6 +3,7 @@ import fs from "node:fs";
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
+import { OpenTabOf } from "./TabReveal.mjs";
 
 const Folder = path.dirname(fileURLToPath(import.meta.url));
 const Require = createRequire(
@@ -90,6 +91,7 @@ try {
     const Tiles = await Page.locator(".inspector-scroll .quick-tile").all();
     assert.ok(Tiles.length, Name + " has quick actions");
     for (const Tile of Tiles) {
+      await OpenTabOf(Tile);
       const Label = await Tile.getAttribute("data-quick-action");
       const Icon = Tile.locator(".action-icon");
       const Symbol = await Icon.getAttribute("data-action-icon");

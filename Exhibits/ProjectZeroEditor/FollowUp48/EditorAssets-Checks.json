@@ -1,0 +1,9 @@
+{
+  "Checks": [
+    "Outliner: Editor Camera shows the mirrorless model, Cine Camera the film camera (2516 of 9216 icon pixels drawn)",
+    "Camera body: B · Digital swaps the viewport model (cine:digital) and the outliner icon (asset-camera-digital); A · Film swaps back",
+    "Hiding Cine Camera takes its model out of the viewport; showing it brings it back",
+    "Tabs: sun arc, atmosphere strata, stars constellation, moon phases, flare aperture, cine viewfinder — one page open, ← → move, the open tab is remembered"
+  ],
+  "Errors": []
+}

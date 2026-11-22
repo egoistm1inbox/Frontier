@@ -1,20 +1,28 @@
 //============================================================================================================================================
 //                                                              BAKEDMAPCARDS.JSX
 //============================================================================================================================================
-// 🧩 The BAKING sections' maps (BakedMaps.js): each shows the image the 3D viewport uses, what it is, its size and format, when it was
-// baked and how long that took, with Bake again and Save PNG. Maps bake again by themselves when their settings change. Also the Lens
+// 🧩 The BAKING sections' maps (BakedMaps.js): unbaked, the bake tab with the planned resolution and format; baked, the image the 3D
+// viewport uses on labelled axes with its resolution, format, bake time and a cursor readout, with Bake again and Save PNG. Baked maps
+// bake again by themselves when their settings change. Also the Lens
 // Flare's composite card preview, drawn by the viewport's own flare code (LensFlare.js) over a dusk sky.
 
 import React, { useEffect, useRef, useState } from "react";
-import { FlareAtlasMap } from "./BakedMaps.js";
+import { FlareAtlasMap, HeldBake, WatchBakes } from "./BakedMaps.js";
 import { PaintFlare } from "./LensFlare.js";
 import "./BakedMapCards.css";
 
-// One map. Make(Again) bakes it (or returns the held bake when nothing it reads changed); Signature is everything it reads, so the
-// card bakes again when that changes. Marker ({ At: 0–1 across, Label }) points at a column, e.g. the sun's elevation now.
-export function BakedMap({ Name, Make, Signature, Caption, Marker = null, Legend = null, Pixelated = false }) {
+// One map. Make(Again) bakes it (or returns the held bake when nothing it reads changed); Signature is everything it reads. A map nobody
+// has baked yet (here or in the viewport) shows the bake tab (Kit.Tile, Kit.Glyph from the inspector) with its planned resolution and
+// format; once baked it stays live, baking again when its settings change. Axes ({ X, Y }: { Name, At(0–1) → amount or label, Unit,
+// Ticks }) label the image and give the cursor readout. Marker ({ At: 0–1 across, Label }) points at a column.
+const Reading = (Axis, Fraction, Fine) => {
+  const Amount = Axis.At(Fraction);
+  return typeof Amount === "number" ? Amount.toFixed(Fine ? (Math.abs(Amount) < 10 ? 2 : 1) : 0) + (Axis.Unit || "") : Amount;
+};
+export function BakedMap({ Name, Make, Signature, Planned, Axes = null, Marker = null, Pixelated = false, Kit }) {
   const Shown = useRef(null);
-  const [Result, Keep] = useState(null);
+  const [Result, Keep] = useState(() => HeldBake(Name));
+  const [Cursor, Point] = useState(null);
   const Run = (Again) => {
     try {
       Keep(Make(Again));
@@ -23,9 +31,11 @@ export function BakedMap({ Name, Make, Signature, Caption, Marker = null, Legend
     }
   };
   useEffect(() => {
-    const Timer = setTimeout(() => Run(false), 40);
+    const Timer = setTimeout(() => (HeldBake(Name) ? Run(false) : Keep(null)), 40);
     return () => clearTimeout(Timer);
   }, [Signature]);
+  // The viewport may bake it first.
+  useEffect(() => WatchBakes((Baked) => Baked === Name && !Result && Run(false)), [Result]);
   useEffect(() => {
     const Target = Shown.current;
     if (!Target || !Result?.Canvas) return;
@@ -42,30 +52,113 @@ export function BakedMap({ Name, Make, Signature, Caption, Marker = null, Legend
       Link.click();
       setTimeout(() => URL.revokeObjectURL(Link.href), 2000);
     }, "image/png");
+  const Baked = !!Result?.Canvas;
+  if (!Baked && !Result?.Problem)
+    return (
+      <figure className="baked-map unbaked" data-baked-map={Name} data-baked-count={0} data-baked-size="" data-baked-state="unbaked">
+        <div className="bake-content">
+          <Kit.Tile Label="Use baked image" Disabled IconName="bake" />
+          <div>
+            <button type="button" onClick={() => Run(true)} aria-label={"Bake " + Name}>
+              <Kit.Glyph Name="bake" /> Bake
+            </button>
+            <button disabled>↥　Load image</button>
+            <p>Not baked</p>
+          </div>
+        </div>
+        <dl className="baked-map-facts">
+          <dt>Map</dt>
+          <dd>{Name}</dd>
+          <dt>Resolution</dt>
+          <dd>{Planned[0]}</dd>
+          <dt>Format</dt>
+          <dd>{Planned[1]}</dd>
+        </dl>
+      </figure>
+    );
+  const Ticks = (Axis) => (Axis.Ticks || [0, 0.25, 0.5, 0.75, 1]).map((Fraction) => [Fraction, Reading(Axis, Fraction, false)]);
+  const Track = (Event) => {
+    const Rect = Event.currentTarget.getBoundingClientRect();
+    const U = Math.max(0, Math.min(0.9999, (Event.clientX - Rect.left) / Rect.width)), V = Math.max(0, Math.min(0.9999, (Event.clientY - Rect.top) / Rect.height));
+    const Pixel = Result.Canvas.getContext("2d").getImageData(Math.floor(U * Result.Width), Math.floor(V * Result.Height), 1, 1).data;
+    Point({ U, V, Colour: [Pixel[0], Pixel[1], Pixel[2]] });
+  };
   return (
-    <figure className="baked-map" data-baked-map={Name} data-baked-count={Result?.Count || 0} data-baked-size={Result?.Canvas ? `${Result.Width}x${Result.Height}` : ""}>
-      <div className={"baked-map-image" + (Pixelated ? " pixelated" : "")} style={{ aspectRatio: Result?.Canvas ? `${Result.Width} / ${Result.Height}` : "2 / 1" }}>
-        <canvas ref={Shown} aria-label={Name} />
-        {!Result && <span className="baked-map-wait">Baking…</span>}
-        {Result?.Problem && <span className="baked-map-wait">Bake failed · {Result.Problem}</span>}
-        {Marker && (
-          <i className="baked-map-marker" style={{ left: `${Math.max(0, Math.min(1, Marker.At)) * 100}%` }}>
-            <span>{Marker.Label}</span>
-          </i>
+    <figure className="baked-map" data-baked-map={Name} data-baked-count={Result?.Count || 0} data-baked-size={Baked ? `${Result.Width}x${Result.Height}` : ""} data-baked-state="baked">
+      <div className={"baked-map-plot" + (Axes ? " with-axes" : "")}>
+        {Axes && (
+          <div className="baked-map-y" aria-hidden="true">
+            {Ticks(Axes.Y).map(([Fraction, Label]) => (
+              <span key={Fraction} style={{ top: Fraction * 100 + "%" }}>
+                {Label}
+              </span>
+            ))}
+          </div>
+        )}
+        <div
+          className={"baked-map-image" + (Pixelated ? " pixelated" : "")}
+          style={{ aspectRatio: Baked ? `${Result.Width} / ${Result.Height}` : "2 / 1" }}
+          onPointerMove={Baked ? Track : undefined}
+          onPointerLeave={() => Point(null)}
+        >
+          <canvas ref={Shown} aria-label={Name} />
+          {Result?.Problem && <span className="baked-map-wait">Bake failed · {Result.Problem}</span>}
+          {Marker && (
+            <i className="baked-map-marker" style={{ left: `${Math.max(0, Math.min(1, Marker.At)) * 100}%` }}>
+              <span>{Marker.Label}</span>
+            </i>
+          )}
+          {Cursor && <i className="baked-map-cursor" style={{ left: Cursor.U * 100 + "%", top: Cursor.V * 100 + "%" }} />}
+        </div>
+        {Axes && (
+          <div className="baked-map-x" aria-hidden="true">
+            {Ticks(Axes.X).map(([Fraction, Label]) => (
+              <span key={Fraction} style={{ left: Fraction * 100 + "%" }}>
+                {Label}
+              </span>
+            ))}
+          </div>
         )}
       </div>
-      {Legend && <div className="baked-map-legend">{Legend.map((Each) => <span key={Each}>{Each}</span>)}</div>}
-      <figcaption>
-        <strong>{Name}</strong>
-        <span>{Result?.Canvas ? `${Result.Width} × ${Result.Height} · ${Result.Format}` : "–"}</span>
-      </figcaption>
-      {Caption && <p className="baked-map-use">{Caption}</p>}
+      <dl className="baked-map-facts">
+        <dt>Map</dt>
+        <dd>{Name}</dd>
+        <dt>Resolution</dt>
+        <dd data-baked-resolution>{Baked ? `${Result.Width} × ${Result.Height}` : "–"}</dd>
+        <dt>Format</dt>
+        <dd>{Result?.Format || "–"}</dd>
+        <dt>Baked</dt>
+        <dd>{Baked ? `${new Date(Result.At).toLocaleTimeString()} · ${Result.Milliseconds.toFixed(0)} ms · #${Result.Count}` : "–"}</dd>
+        {Axes && (
+          <>
+            <dt>X</dt>
+            <dd>{`${Axes.X.Name} ${Reading(Axes.X, 0, false)} → ${Reading(Axes.X, 1, false)}`}</dd>
+            <dt>Y</dt>
+            <dd>{`${Axes.Y.Name} ${Reading(Axes.Y, 0, false)} → ${Reading(Axes.Y, 1, false)}`}</dd>
+          </>
+        )}
+        {Baked && (
+          <>
+            <dt>Cursor</dt>
+            <dd data-baked-cursor>
+              {Cursor ? (
+                <>
+                  {Axes ? `${Reading(Axes.X, Cursor.U, true)}, ${Reading(Axes.Y, Cursor.V, true)}` : `${Math.floor(Cursor.U * Result.Width)}, ${Math.floor(Cursor.V * Result.Height)} px`}
+                  <b style={{ background: `rgb(${Cursor.Colour.join(",")})` }} />
+                  {`rgb(${Cursor.Colour.join(", ")})`}
+                </>
+              ) : (
+                "–"
+              )}
+            </dd>
+          </>
+        )}
+      </dl>
       <div className="baked-map-status">
-        <span>{Result?.Canvas ? `Baked ${new Date(Result.At).toLocaleTimeString()} · ${Result.Milliseconds.toFixed(0)} ms` : "Not baked yet"}</span>
         <button type="button" onClick={() => Run(true)}>
           Bake again
         </button>
-        <button type="button" onClick={Save} disabled={!Result?.Canvas}>
+        <button type="button" onClick={Save} disabled={!Baked}>
           Save PNG
         </button>
       </div>
@@ -79,7 +172,8 @@ export function FlarePreview({ Settings, Tint, X, Y, Move }) {
   const Box = useRef(null), Shown = useRef(null);
   const [Size, Resize] = useState([320, 196]);
   useEffect(() => {
-    const Watch = new ResizeObserver(() => Box.current && Resize([Box.current.clientWidth, Box.current.clientHeight]));
+    // A shut tab measures 0 × 0; keep the last real size.
+    const Watch = new ResizeObserver(() => Box.current?.clientWidth && Resize([Box.current.clientWidth, Box.current.clientHeight]));
     Watch.observe(Box.current);
     return () => Watch.disconnect();
   }, []);

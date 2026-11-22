@@ -126,6 +126,11 @@ if (SourceAssets.every((Entry) => fs.existsSync(path.join(Frontier, Entry)))) {
       Assets.Icons[File.slice(0, -4)] = "data:image/svg+xml;base64," + fs.readFileSync(path.join(IconFolder, File)).toString("base64");
   for (const Name of RetiredIcons) delete Assets.Icons[Name];
 }
+// Editor asset icons (EditorAssets.js models captured by CaptureEditorAssetIcons.mjs) ship from Images/EditorAssets.
+const AssetIconFolder = path.join(Folder, "Images/EditorAssets");
+if (fs.existsSync(AssetIconFolder))
+  for (const File of fs.readdirSync(AssetIconFolder).filter((Name) => Name.endsWith(".png")))
+    Assets.Icons[File.slice(0, -4)] = "data:image/png;base64," + fs.readFileSync(path.join(AssetIconFolder, File)).toString("base64");
 
 // Preserve the reference's document-wide CSS and control behaviour without restyling the current editor.
 const ReferenceOutput = await build({

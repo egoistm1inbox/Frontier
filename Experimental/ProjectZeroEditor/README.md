@@ -93,9 +93,11 @@ starting point for the UI redesign.
   - The design switch, the three figure tiles and the swatches are gone. The picture fills the card.
   - A dashed outline marks the top of the air, and its handle sets **Atmosphere** height by dragging (10–120 km; arrows ±1 km, PgUp/PgDn ±10 km).
   - "Sun at the limb" moves the sun from −12° to 40°.
-- **BAKING sections show the viewport's maps** (`BakedMaps.js`, cards in `BakedMapCards.jsx`). Each map shows its size, format, bake
-  time and what uses it, bakes again by itself when its settings change, and has **Bake again** and **Save PNG**. The viewport and an
-  open inspector share one bake.
+- **BAKING sections show the viewport's maps** (`BakedMaps.js`, cards in `BakedMapCards.jsx`). The viewport and an open inspector share
+  one bake.
+  - **Not baked yet**: the original bake tab (Use baked image, **Bake**, Load image) with the planned resolution and format.
+  - **Baked**: the map on labelled axes, then Resolution, Format, Baked (time · ms · count), X and Y ranges and a Cursor readout (axis
+    coordinates and colour under the pointer), with **Bake again** and **Save PNG**. A baked map bakes again by itself when its settings change.
   - **Atmosphere bake**: the transmittance LUT (256 × 64, view elevation −12° to 90° by altitude, the horizon and low air widened) and
     the sky-view map (the viewport's 1024 × 512 background).
   - **Sun lighting bake**: the lighting LUT (256 × 64 across sun elevations: the sun beam over the sky fill, with a marker at the sun now).
@@ -104,12 +106,35 @@ starting point for the UI redesign.
   - **Lens flare image**: the 1024 × 512 flare atlas (glow, starburst, halo, streak, four ghost tints). The **Flare composite** card now
     draws with the viewport's flare code and this atlas.
   - Native bakes and the native dome image (Baked atmosphere card) still need the engine.
+- **Editor assets** (`EditorAssets.js`): low-poly, true-to-life camera models built with three.js. **A · Film** (twin-reel magazine,
+  matte box, follow focus), **B · Digital** (cinema box, top handle, monitor, V-mount) and **C · Mirrorless** (grip, viewfinder hump,
+  ribbed zoom), plus a tripod.
+  - **Viewport**: each scene camera stands on a tripod in front of the Showcase, aimed at it, with a frustum from its focal length and
+    sensor out to its subject distance. Studio reflections are on its materials only. The editor camera is the view itself and is not drawn.
+  - **Outliner**: camera rows show their model as the icon (96 px PNGs in `Images/EditorAssets`, made by `CaptureEditorAssetIcons.mjs`).
+  - **Camera inspector, Body page**: the **Camera body** card picks A, B or C (`Camera body` value). The editor camera defaults to
+    mirrorless, scene cameras to film.
+- **Lettered inspector tabs** (`InspectorTabs.jsx`), like the Showcase carousel, each in its own look:
+
+  | Inspector | Look | Tabs |
+  |---|---|---|
+  | Sun | Sun path arc | A Now · B Light · C Day cycle · D Baking |
+  | Atmosphere | Sky strata over the limb | A Look · B Scattering · C Controls · D Baking |
+  | Stars | Constellation | A Field · B Motion · C Renderer · D Baking |
+  | Moon | Moon phases | A Phase · B Light · C Sky |
+  | Lens Flare | Hexagonal ghosts on a streak | A Composite · B Optics · C Legacy · D Baking |
+  | Camera | Viewfinder | A Lens · B Focus · C Body · D Render |
+
+  Every page stays in the document, so BAKING remains last. ← and → move between tabs, and the open tab is remembered per inspector.
 - **`SkyShader.js`**: one WebGL2 sky renderer on a round planet, shared by both cards and the viewport. It does single scattering with
   ground light, a limb-darkened disc and stars, in perspective, panorama and equirectangular views.
 - **Checks.**
   - New: `CheckViewport3D.mjs` (11, including the star field and zooming in and out with the sky kept) and `CheckBakedMaps.mjs` (5: the
     six maps and the viewport's lens flare in view, behind a shape, disabled and after sunset).
   - Rewritten: `CheckFirstCards.mjs` (4).
+  - Follow-up 58: new `CheckEditorAssets.mjs` (4: outliner icons, the camera model in the viewport, Camera body swaps, hiding, and the
+    tabs). `CheckBakedMaps.mjs` (6) adds the unbaked tab, the facts and the cursor. `CheckInspectorOrder` opens the tab holding each card. `TabReveal.mjs` (`OpenTabOf`, `OpenTabWith`) opens the tab holding a
+    control for `CheckBrowser`, `CheckEnvironmentGraphs` and `CheckQuickTools`; `CheckInspectorLayout` expects the tab bar under the Sun heading.
   - Updated for the 3D main view: `CheckQuickTools` (split view is now 3D beside one marker pane), `CheckConstruction` and `CheckInspectorLayout`.
 - Evidence is in `Exhibits/ProjectZeroEditor/FollowUp48/`. Headless SwiftShader only. Names are unapproved.
 

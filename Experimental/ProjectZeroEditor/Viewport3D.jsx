@@ -12,6 +12,8 @@
 //     pole (StarField).
 //   • Atmosphere: the sky-view map (BakedMaps.js, SkyShader.js in equirectangular form) baked whenever the sky changes and drawn as the
 //     background (at infinity, so zooming can't clip it); the hemisphere light and the horizon haze take their colours from that map.
+//   • Cameras: every scene camera (not the editor camera, which is the view itself) as its editor asset (EditorAssets.js) on a tripod
+//     around the Showcase, aimed at it, with a frustum out to its subject distance from its focal length and sensor.
 //   • Lens Flare: the Lens Flare object put together from its baked atlas (LensFlare.js) on a 2D layer over the view, where the sun is on
 //     screen and not hidden behind a shape.
 // Click an object to select it (Ctrl or Shift adds it). Drag to orbit, right-drag or Shift-drag to pan, wheel to zoom; F frames the
@@ -25,6 +27,8 @@ import { Solar } from "./Solar.mjs";
 import { SkyMedium, Direction, KelvinTint, SunAngularRadius } from "./SkyShader.js";
 import { SkyViewMap, SunBeam, SkyFill, StarCatalogue, StarCount, StarSettings, FlareAtlasMap } from "./BakedMaps.js";
 import { FlareSettings, PaintFlare } from "./LensFlare.js";
+import { CameraAsset, CameraBodyOf, StudioLit } from "./EditorAssets.js";
+import { IsEditorCamera } from "./ScenePolicy.js";
 
 export const ShowcaseSpacing = 1.8;
 const Rad = Math.PI / 180;
@@ -57,23 +61,43 @@ export function ShapeGeometry(Shape, Read) {
 }
 
 // Where each geometry object stands: its slot on the Showcase line (if it is in the Showcase) plus its Position.
+// Whether a row or any row above it is hidden.
+export function HiddenUp(Rows, Hidden, Row) {
+  const Seen = new Set();
+  for (let At = Row; At && !Seen.has(At.Id); At = Rows.find((Each) => Each.Id === At.Parent)) {
+    if (Hidden[At.Id]) return true;
+    Seen.add(At.Id);
+  }
+  return false;
+}
 export function Placements(Rows, Values, Hidden) {
-  const HiddenUp = (Row) => {
-    const Seen = new Set();
-    for (let At = Row; At && !Seen.has(At.Id); At = Rows.find((Each) => Each.Id === At.Parent)) {
-      if (Hidden[At.Id]) return true;
-      Seen.add(At.Id);
-    }
-    return false;
-  };
   const Shapes = Rows.filter((Row) => Row.Panel === "geometry" && ShapeOf(Row));
   const Showcase = Shapes.filter((Row) => Row.Parent === "showcase");
-  return Shapes.filter((Row) => !HiddenUp(Row)).map((Row) => {
+  return Shapes.filter((Row) => !HiddenUp(Rows, Hidden, Row)).map((Row) => {
     const Slot = Showcase.indexOf(Row);
     const Along = Slot >= 0 ? (Slot - (Showcase.length - 1) / 2) * ShowcaseSpacing : 0;
     const Own = Values[Row.Id] || {};
     const Triple = (Key, Initial) => (Array.isArray(Own[Key]) && Own[Key].length === 3 ? Own[Key].map(Number) : Initial);
     return { Row, Shape: ShapeOf(Row), Along, Position: Triple("Position", [0, 0, 0]), Rotation: Triple("Rotation", [0, 0, 0]), Scale: Triple("Scale", [1, 1, 1]) };
+  });
+}
+
+// Scene cameras: their bodies and optics, and Turn, where each stands on an arc in front and left of the Showcase (the viewport places
+// them from the Showcase's bounds, aimed at its middle).
+const LensFront = { film: [0, 0.13, -0.33], digital: [0, 0.08, -0.3], mirrorless: [0, 0.043, -0.13] };
+export function CameraPlacements(Rows, Values, Hidden) {
+  return Rows.filter((Row) => Row.Panel === "camera" && !IsEditorCamera(Row) && !HiddenUp(Rows, Hidden, Row)).map((Row, Index) => {
+    const Own = Values[Row.Id] || {};
+    const Read = (Name, Fallback) => (Number.isFinite(+Own[Name]) && Own[Name] !== null && Own[Name] !== "" ? +Own[Name] : Fallback);
+    return {
+      Row,
+      Body: CameraBodyOf(Row.Id, Own["Camera body"]),
+      Turn: (-34 - Index * 22) * Rad,
+      Focal: Read("Focal Length", 35),
+      Sensor: Read("Sensor Width", 36),
+      Subject: Read("Subject Distance", 10),
+      Aspect: Row.Id === "cine" ? 1.5 : 16 / 9,
+    };
   });
 }
 
@@ -143,6 +167,7 @@ export default function Viewport3D({ Rows, Values, Hidden, Selected, Picked = []
   const Lens = FlareSettings(Flare);
   const Chosen = new Set([Selected, ...Picked]);
   const Placed = Placements(Rows, Values, Hidden);
+  const Posed = CameraPlacements(Rows, Values, Hidden);
 
   // One renderer for the viewport's life.
   useEffect(() => {
@@ -224,7 +249,7 @@ export default function Viewport3D({ Rows, Values, Hidden, Selected, Picked = []
             for (const [A, B] of [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]]) {
               const Ray = Toward.clone().addScaledVector(Side, A * Reach).addScaledVector(Lift, B * Reach).normalize();
               Caster.set(View.camera.position, Ray);
-              if (!Caster.intersectObjects(Targets, false).length) Clear += 0.2;
+              if (!Caster.intersectObjects(Targets, true).length) Clear += 0.2;
             }
           }
           Strength = Clear * Edge * Setting * (0.35 + 0.65 * Math.min(1, Now.SunStrength || 0));
@@ -281,6 +306,7 @@ export default function Viewport3D({ Rows, Values, Hidden, Selected, Picked = []
         // Where each object's centre lands on the canvas (fractions), for checks and tools that aim at objects.
         const Centres = {};
         for (const Each of View.content.children[0]?.children || []) {
+          if (Each.userData.asset) continue;
           const At = Each.position.clone().project(View.camera);
           Centres[Each.userData.componentId] = [+((At.x + 1) / 2).toFixed(4), +((1 - At.y) / 2).toFixed(4)];
         }
@@ -391,7 +417,7 @@ export default function Viewport3D({ Rows, Values, Hidden, Selected, Picked = []
       const Own = Values[Row.Id] || {};
       const Material = ResolveMaterial(Own).Channels;
       return [Row.Id, Along, Position, Rotation, Scale, Object.entries(Own).filter(([Key]) => Key.startsWith("Geometry ")), Material.colour?.Fill, Material.roughness?.Fill, Material.metallic?.Fill];
-    }),
+    }).concat(Posed.map(({ Row, ...Pose }) => [Row.Id, Pose])),
   );
   useEffect(() => {
     const Built = Scene.current;
@@ -420,6 +446,31 @@ export default function Viewport3D({ Rows, Values, Hidden, Selected, Picked = []
       Mesh.updateMatrixWorld(true);
       Bounds.expandByObject(Mesh);
     }
+    // Cameras on tripods, each aimed at the Showcase's middle, with a frustum to its subject distance.
+    const Aim = Bounds.isEmpty() ? new THREE.Vector3(0, 0.5, 0) : Bounds.getCenter(new THREE.Vector3());
+    const Radius = Bounds.isEmpty() ? 1 : Bounds.getSize(new THREE.Vector3()).length() / 2;
+    for (const { Row, Body, Turn, Focal, Sensor, Subject, Aspect } of Posed) {
+      const At = [Aim.x + Math.sin(Turn) * (Radius * 0.75 + 1.2), 0, Aim.z + Math.cos(Turn) * (Radius * 0.75 + 1.2)];
+      const Asset = CameraAsset(Body, { Stand: true, Height: Body === "mirrorless" ? 1.45 : 1.3 });
+      Asset.position.set(...At);
+      Asset.rotation.y = Math.atan2(At[0] - Aim.x, At[2] - Aim.z);
+      const Head = Asset.userData.body;
+      const Lens = new THREE.Vector3(...LensFront[Body]);
+      const Down = Math.atan2(Head.position.y + Lens.y - Aim.y, Math.hypot(At[0] - Aim.x, At[2] - Aim.z));
+      Head.rotation.x = -Down;
+      const Length = Math.min(Subject, 2.4), Wide = (Sensor / 2 / Focal) * Length, Tall = Wide / Aspect;
+      const Far = [[-Wide, -Tall], [Wide, -Tall], [Wide, Tall], [-Wide, Tall]].map(([X, Y]) => new THREE.Vector3(Lens.x + X, Lens.y + Y, Lens.z - Length));
+      const Lines = [];
+      for (let Corner = 0; Corner < 4; Corner++) Lines.push(Lens, Far[Corner], Far[Corner], Far[(Corner + 1) % 4]);
+      const Frustum = new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(Lines), new THREE.LineBasicMaterial({ color: "#ffd38a", transparent: true, opacity: 0.45, depthWrite: false }));
+      Frustum.raycast = () => {};
+      Head.add(Frustum);
+      // Studio-lit (a matcap) so its metal and glass read in any scene light.
+      StudioLit(Asset);
+      Asset.userData.componentId = Row.Id;
+      Asset.userData.asset = true;
+      Group.add(Asset);
+    }
     Built.View.setContent(Group);
     if (!Built.Framed && !Bounds.isEmpty()) {
       Built.Bounds = Bounds.clone().expandByScalar(0.45); // room for the workspace rail on the left
@@ -439,6 +490,7 @@ export default function Viewport3D({ Rows, Values, Hidden, Selected, Picked = []
     };
     Built.Touch();
     Built.Canvas.dataset.objects = String(Placed.length);
+    Built.Canvas.dataset.cameras = Posed.map(({ Row, Body }) => Row.Id + ":" + Body).join(" ");
   }, [ShapeKey, SkyKey]);
 
   // Selection outlines: only these change when the selection does, so picking doesn't rebuild the shapes.
@@ -454,7 +506,19 @@ export default function Viewport3D({ Rows, Values, Hidden, Selected, Picked = []
       }
       const Id = Mesh.userData.componentId;
       if (!Chosen.has(Id)) continue;
-      const Edges = new THREE.LineSegments(new THREE.EdgesGeometry(Mesh.geometry, 30), new THREE.LineBasicMaterial({ color: Id === Selected ? Accent : "#ffd98a", depthTest: false, transparent: true, opacity: 0.95 }));
+      // An asset (several parts) gets a box around it; a shape its own edges.
+      let Outline = Mesh.geometry;
+      if (Mesh.userData.asset) {
+        const Box = new THREE.Box3();
+        Mesh.updateMatrixWorld(true);
+        const Inverse = Mesh.matrixWorld.clone().invert();
+        Mesh.traverse((Part) => {
+          if (Part.isMesh) Box.union(new THREE.Box3().setFromObject(Part).applyMatrix4(Inverse));
+        });
+        Outline = new THREE.BoxGeometry(...Box.getSize(new THREE.Vector3()).toArray());
+        Outline.translate(...Box.getCenter(new THREE.Vector3()).toArray());
+      }
+      const Edges = new THREE.LineSegments(new THREE.EdgesGeometry(Outline, 30), new THREE.LineBasicMaterial({ color: Id === Selected ? Accent : "#ffd98a", depthTest: false, transparent: true, opacity: 0.95 }));
       Edges.renderOrder = 5;
       Edges.raycast = () => {};
       Edges.userData.outline = true;
