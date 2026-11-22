@@ -18,7 +18,7 @@ const Components = [
   ["vehicle-body", "Body", "StaticMesh", "editor-mesh", "Static Mesh · body shell"],
   ["vehicle-suspension", "Front Suspension", "Socket", "editor-pivot", "Spring socket · suspension strut", { Joint: "spring", Mount: 1.7 }],
   ["vehicle-steering", "Steering", "Socket", "editor-pivot", "Hinge socket · steering knuckle", { Joint: "hinge", Mount: 1.7 }],
-  ["vehicle-tow", "Tow Hitch", "Socket", "editor-pivot", "Dock socket · trailer coupling", { Joint: "dock", Mount: -2.6 }],
+  ["vehicle-tow", "Tow Hitch", "Socket", "editor-pivot", "Dock socket · trailer coupling", { Joint: "dock", Mount: -3.2 }],
   ["vehicle-collision", "Chassis Collision", "BoxCollision", "editor-box-collider", "Box collision · blocks all"],
   ["vehicle-headlights", "Headlights", "SpotLight", "editor-spotlight", "Spot light pair"],
   ["vehicle-brake", "Brake Lights", "PointLight", "editor-brake-light", "Point light pair · rear"],
@@ -48,8 +48,9 @@ export const VehicleRows = Components.map(([Id, Name, Component, Icon, Descripti
 const RetiredRows = new Set(["vehicle-bumper"]);
 
 // Added once per saved scene (VehicleRevision), so a later deletion is respected: revision 1 brought the Vehicle folder and its
-// components; revision 2 the Vehicles folder, with the old Vehicle folder turned into the Controlled Vehicle and two parked vehicles.
-export const VehicleRevision = 2;
+// components; revision 2 the Vehicles folder, with the old Vehicle folder turned into the Controlled Vehicle and two parked vehicles;
+// revision 3 moves the Tow Hitch from inside the body to the ControlVehicle's tail (−2.6 → −3.2 m), unless it was moved by hand.
+export const VehicleRevision = 3;
 export function EnsureVehicleFolder(Rows = [], Revision) {
   if (!Array.isArray(Rows)) return Rows;
   let Kept = Rows.filter((Row) => !RetiredRows.has(Row?.Id));
@@ -64,11 +65,12 @@ export function EnsureVehicleFolder(Rows = [], Revision) {
     Kept.splice(At < 0 ? Kept.length : At, 0, { ...VehiclesFolder });
     Kept.push(...ParkedVehicles.filter((Row) => !Kept.some((Each) => Each?.Id === Row.Id)).map((Row) => ({ ...Row })));
   }
+  if (!(Revision >= 3)) Kept = Kept.map((Row) => (Row?.Id === "vehicle-tow" && Row.Mount === -2.6 ? { ...Row, Mount: -3.2 } : Row));
   return Kept;
 }
 
 // Socket mounts for rows saved before rows carried one (metres ahead of the wheelbase centre).
-const DefaultMounts = { "vehicle-suspension": 1.7, "vehicle-steering": 1.7, "vehicle-tow": -2.6 };
+const DefaultMounts = { "vehicle-suspension": 1.7, "vehicle-steering": 1.7, "vehicle-tow": -3.2 };
 const MountOf = (Row) => Row.Mount ?? DefaultMounts[Row.Id] ?? 0;
 
 // Defaults straight from the Component Viewer's classes.
@@ -78,7 +80,7 @@ function Defaults(Row) {
   if (!DefaultCache.has(Key)) {
     const Props = createComponent(Row.Component, Row.Name).props;
     if (Row.Component === "Socket") Object.assign(Props, socketDefaults(Row.Joint || "fixed"), Row.Joint === "hinge" ? { angleMin: -35, angleMax: 35 } : {}, { mount: MountOf(Row) });
-    if (Row.Component === "BoxCollision") Props.extent = [2.3, 0.7, 1.0];
+    if (Row.Component === "BoxCollision") Props.extent = [3.12, 0.73, 1.26]; // wraps the ControlVehicle's body (6.22 × 1.46 × 2.50 m)
     if (Row.Component === "SphereCollision") Object.assign(Props, { radius: 0.6, trigger: !!Row.Trigger });
     if (Row.Component === "StaticMesh") Object.assign(Props, { mass: 0, slots: {} });
     DefaultCache.set(Key, Props);
@@ -86,6 +88,14 @@ function Defaults(Row) {
   return DefaultCache.get(Key);
 }
 const Reader = (Row, Values) => (Key) => (Values[Key] === undefined ? Defaults(Row)[Key] : Values[Key]);
+// For the Component Viewer (VehicleComponentViewer.jsx): one component's value (saved or its class default), and a socket's full
+// parameters with its mount.
+export const ComponentReader = Reader;
+export function SocketParameters(Row, Values = {}) {
+  const V = Reader(Row, Values);
+  const P = { ...socketDefaults(V("kind") || "fixed"), ...Object.fromEntries(Object.keys(SOCKET_PARAMS).concat("kind").map((Key) => [Key, V(Key)]).filter(([, Amount]) => Amount !== undefined)) };
+  return { ...P, Mount: Number.isFinite(+V("mount")) ? +V("mount") : 0 };
+}
 
 export function VehicleSummary(Row, Values = {}) {
   const V = Reader(Row, Values);
@@ -858,7 +868,7 @@ function SocketAttachment({ Kit, P, Mount, Write, Row, Scene, Values }) {
       {Candidates.length > 1 && (
         <Control Field={{ Label: "Attach to", Control: "Select", Options: Candidates.map((Each) => Each.Name) }} Value={Choice} Change={(Index) => Write("attach", Candidates[Index].Id)} />
       )}
-      <Slider Kit={Kit} V={() => Mount} Write={Write} Key="mount" Label="Offset along X" Minimum={-2.8} Maximum={2.8} Step={0.01} Unit="m" />
+      <Slider Kit={Kit} V={() => Mount} Write={Write} Key="mount" Label="Offset along X" Minimum={-3.4} Maximum={3.4} Step={0.01} Unit="m" />
       <Control Field={{ Label: "Joint axis", Control: "Select", Options: ["X", "Y", "Z"] }} Value={["X", "Y", "Z"].indexOf(P.axis)} Change={(Index) => Write("axis", ["X", "Y", "Z"][Index])} />
     </Card>
   );

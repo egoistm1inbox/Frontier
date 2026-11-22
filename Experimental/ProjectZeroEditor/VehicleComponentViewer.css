@@ -1,0 +1,284 @@
+/* Follow-up 61: the Component Viewer for the Controlled Vehicle (VehicleComponentViewer.jsx). The vehicle fills the viewport; the
+   component list floats on the left beside the rail, the tools along the bottom, a tag follows the selected component. */
+.vcv {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: #0c0d10;
+}
+.vcv-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  outline: none;
+  cursor: default;
+}
+.vcv-banner {
+  position: absolute;
+  top: 0;
+  left: 58px;
+  right: 0;
+  z-index: 3;
+}
+.vcv-tree {
+  position: absolute;
+  z-index: 3;
+  left: 66px;
+  top: 58px;
+  bottom: 64px;
+  width: 248px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 6px 10px;
+  overflow-y: auto;
+  border-radius: 16px;
+  background: #0f1013e6;
+  border: 1px solid #ffffff12;
+  box-shadow: 0 12px 30px #0008;
+  backdrop-filter: blur(8px);
+  scrollbar-width: thin;
+}
+.vcv-tree header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 2px 8px 8px;
+  font-size: 9px;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: #8a8d94;
+}
+.vcv-tree header small {
+  font-size: 10px;
+  color: #5d6067;
+}
+.vcv-section {
+  margin: 10px 8px 4px;
+  font-size: 8.5px;
+  letter-spacing: 1.1px;
+  text-transform: uppercase;
+  color: #5d6067;
+}
+.vcv-row {
+  --vcv-depth: 0;
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 4px 6px 4px calc(8px + var(--vcv-depth) * 14px);
+  border-radius: 11px;
+  border: 1px solid transparent;
+  color: #cfd1d6;
+  cursor: pointer;
+  outline: none;
+}
+.vcv-row::before {
+  content: "";
+  position: absolute;
+  left: calc(var(--vcv-depth) * 14px - 2px);
+  top: 8px;
+  bottom: 8px;
+  width: 1px;
+  background: #ffffff14;
+  display: none;
+}
+.vcv-row[data-depth="2"]::before {
+  display: block;
+}
+.vcv-row:hover {
+  background: #1b1d22;
+}
+.vcv-row:focus-visible {
+  border-color: #ffb23866;
+}
+.vcv-row.on {
+  background: #ffb2381a;
+  border-color: #ffb23855;
+}
+.vcv-row.off .vcv-row-text {
+  opacity: 0.45;
+}
+.vcv-row-text {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.vcv-row-text b {
+  font-size: 11.5px;
+  font-weight: 500;
+  color: #eceef2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.vcv-row.on .vcv-row-text b {
+  color: #ffd08a;
+}
+.vcv-row-text small {
+  font-size: 9.5px;
+  color: #80838b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.vcv-eye {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  border: 0;
+  background: transparent;
+  color: #6c6f76;
+  cursor: pointer;
+  opacity: 0;
+}
+.vcv-row:hover .vcv-eye,
+.vcv-row.off .vcv-eye,
+.vcv-eye:focus-visible {
+  opacity: 1;
+}
+.vcv-eye:hover {
+  background: #2a2d33;
+  color: #eceef2;
+}
+.vcv-tag {
+  position: absolute;
+  z-index: 2;
+  left: 0;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  max-width: 260px;
+  padding: 6px 10px 7px;
+  margin: -64px 0 0 14px;
+  border-radius: 10px 10px 10px 2px;
+  background: #121317ee;
+  border: 1px solid #ffb23866;
+  box-shadow: 0 8px 20px #0009;
+  pointer-events: none;
+  white-space: nowrap;
+}
+.vcv-tag[hidden] {
+  display: none;
+}
+.vcv-tag::after {
+  content: "";
+  position: absolute;
+  left: -14px;
+  bottom: -10px;
+  width: 14px;
+  height: 10px;
+  border-left: 1px solid #ffb23899;
+  border-bottom: 1px solid #ffb23899;
+  transform: skewX(-35deg);
+  transform-origin: bottom left;
+}
+.vcv-tag b {
+  font-size: 11px;
+  font-weight: 600;
+  color: #ffd08a;
+}
+.vcv-tag small {
+  font-size: 9px;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: #8a8d94;
+}
+.vcv-tag span {
+  font: 10px ui-monospace, Menlo, Consolas, monospace;
+  color: #d8dade;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.vcv-tools {
+  position: absolute;
+  z-index: 3;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(calc(-50% + 150px));
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px;
+  border-radius: 999px;
+  background: #0f1013ee;
+  border: 1px solid #ffffff12;
+  box-shadow: 0 12px 30px #0009;
+  backdrop-filter: blur(8px);
+  max-width: calc(100% - 340px);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.vcv-tools button {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 11px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: #b8bbc2;
+  font-size: 10.5px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.vcv-tools button:hover {
+  background: #22252b;
+  color: #f0f2f5;
+}
+.vcv-tools button[aria-pressed="true"] {
+  background: #2c2f36;
+  color: #f0f2f5;
+  border-color: #ffffff1c;
+}
+.vcv-tools kbd {
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: #ffffff10;
+  font: 9px sans-serif;
+  color: #8a8d94;
+}
+.vcv-tools .vcv-simulate {
+  background: #ffb238;
+  color: #17130b;
+  font-weight: 600;
+}
+.vcv-tools .vcv-simulate:hover {
+  background: #ffc35e;
+  color: #17130b;
+}
+.vcv-tools .vcv-simulate kbd {
+  background: #0000001f;
+  color: #3b2d12;
+}
+.vcv-tools .vcv-simulate.on {
+  background: #f04d3d;
+  color: #fff;
+}
+.vcv-split {
+  flex: none;
+  width: 1px;
+  height: 18px;
+  margin: 0 3px;
+  background: #ffffff18;
+}
+@media (max-width: 900px) {
+  .vcv-tree {
+    width: 200px;
+  }
+  .vcv-tools {
+    transform: translateX(calc(-50% + 120px));
+    max-width: calc(100% - 290px);
+  }
+}

@@ -1,28 +1,29 @@
 //============================================================================================================================================
 //                                                              VEHICLEASSETS.JS
 //============================================================================================================================================
-// 🚗 Level vehicles: low-poly but true-to-life models built in code with three.js (no files), parked in the 3D viewport, previewed in
-// their inspector and captured as the outliner's icons (CaptureEditorAssetIcons.mjs).
-//   • Controlled Vehicle: the vehicle the player drives, the Vehicle Movement component's car (Component Viewer's ControlVehicle; its
-//     sheet's 3.40 m wheelbase, 2.10 m track and big wheels make it a rally-raid desert racer): low wide body, narrow cockpit, roof
-//     scoop, light bar, spare wheel on the rear deck.
+// 🚗 Level vehicles, parked in the 3D viewport, previewed in their inspector and captured as the outliner's icons
+// (CaptureEditorAssetIcons.mjs).
+//   • Controlled Vehicle: the vehicle the player drives, the Component Viewer's ControlVehicle from its own facets (ControlVehicleModel.js;
+//     Follow-up 61 — it was a stand-in racer built here).
 //   • Off-road Vehicle: a boxy 4×4 station wagon: upright glass, snorkel, roof rack with cargo, bull bar, fender flares, spare wheel on
 //     the rear door, knobbly tyres.
 //   • Pickup Truck: a double-cab pickup: open load bed with tailgate, sports bar, chrome grille, tow bar.
-// How each is built: the body is a side profile (wheel arches cut in) extruded across the car's width with rounded edges; the cabin is
+// The other two are built in code with three.js (no files), low-poly but true to life. How each is built: the body is a side profile (wheel arches cut in) extruded across the car's width with rounded edges; the cabin is
 // a second profile in tinted glass, narrowing towards the roof, under a painted roof and pillars; wheels are turned (rounded tyre
 // shoulders, knobbly tread where needed) around their own rims. Every vehicle looks down −z with +y up, in metres at real size, with
 // its origin on the ground midway between the axles.
 
 import { THREE } from "../Shared/Studio/Render.js";
 import { ModelIcon } from "./EditorAssets.js";
+import { ControlVehicleParts, ControlVehicleSheet } from "./ControlVehicleModel.js";
 
 export const VehicleModels = [
-  { Id: "controlled", Name: "Controlled Vehicle", Icon: "asset-vehicle-controlled", Caption: "Rally-raid desert racer · the player's vehicle", Paint: "#ef7a1f" },
+  { Id: "controlled", Name: "Controlled Vehicle", Icon: "asset-vehicle-controlled", Caption: "ControlVehicle wedge coupé · the player's vehicle", Paint: "#c9d63a" },
   { Id: "offroad", Name: "Off-road Vehicle", Icon: "asset-vehicle-offroad", Caption: "Boxy 4×4 wagon · snorkel, roof rack, bull bar", Paint: "#bfa77a" },
   { Id: "pickup", Name: "Pickup Truck", Icon: "asset-vehicle-pickup", Caption: "Double-cab pickup · load bed, sports bar", Paint: "#e9eaec" },
 ];
 export const VehiclePaints = [
+  ["Acid lime", "#c9d63a"],
   ["Sunset orange", "#ef7a1f"],
   ["Sand", "#bfa77a"],
   ["Glacier white", "#e9eaec"],
@@ -202,52 +203,19 @@ function Mirrors(G, M, Along, Up, Half) {
 }
 
 // ── Vehicles ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-// Controlled Vehicle: the Vehicle Lab sheet's wheelbase (3.40 m) and track (2.10 m).
-function DesertRacer(M) {
+// Controlled Vehicle: the ControlVehicle from its own facets (ControlVehicleModel.js), turned to look down −z with its origin midway
+// between the axles like the others.
+function ControlVehicle(Paint) {
   const G = new THREE.Group();
-  const Spec = { Axles: [1.7, -1.7], Track: 2.1, WheelRadius: 0.47, TyreWidth: 0.32 };
-  const Sill = 0.68;
-  const Body = [[-2.15, Sill], [-2.22, 0.95], [-2.15, 1.18], [-1.25, 1.2], [1.0, 1.17], [1.85, 1.04], [2.22, 0.9], [2.28, 0.76], [2.25, Sill]];
-  Part(G, Profiled(Body, 2.26, 0.09, { Sill, Arches: [[1.7, 0.47, 0.62], [-1.7, 0.47, 0.62]] }), M.Paint);
-  // Wide black flares over the arches, a carbon belly pan and side skirts, a dark livery band and a race roundel on each door.
-  for (const Along of Spec.Axles)
-    for (const Side of [1, -1]) {
-      const Flare = new THREE.TorusGeometry(0.64, 0.075, 4, 18, Math.PI);
-      Flare.rotateY(Math.PI / 2);
-      Part(G, Flare, M.Trim, [Side * 1.08, 0.47, -Along]);
-    }
-  Part(G, Block(1.9, 0.08, 3.9, 0.03), M.Trim, [0, 0.66, 0]);
-  for (const Side of [1, -1]) {
-    Part(G, Block(0.06, 0.14, 1.95, 0.03), M.Trim, [Side * 1.11, 0.76, 0]);
-    Part(G, Block(0.04, 0.08, 2.0, 0.02), M.Trim, [Side * 1.135, 1.04, -0.05]);
-    Part(G, new THREE.CylinderGeometry(0.17, 0.17, 0.02, 24).rotateZ(Math.PI / 2), Finish("#f2f2f2", 0.5, 0), [Side * 1.14, 0.92, 0.25]);
-    Part(G, Block(0.02, 0.18, 0.05, 0.01), M.Trim, [Side * 1.152, 0.92, 0.25]);
-  }
-  Cabin(G, M, { Points: [[-1.2, 1.19], [-0.82, 1.74], [0.28, 1.77], [0.98, 1.17]], Width: 1.5, Narrow: 0.8, Belt: 1.17, Roof: 1.77, Pillars: [-0.5] });
-  // Roof scoop over the cockpit feeding the mid-mounted engine, a light bar ahead of it.
-  Part(G, Block(0.36, 0.2, 0.7, 0.07), M.Paint, [0, 1.9, 0.12]);
-  Part(G, Block(0.28, 0.13, 0.04, 0.03), M.Trim, [0, 1.9, -0.23]);
-  Part(G, Block(0.95, 0.07, 0.08, 0.02), M.Trim, [0, 1.86, -0.34]);
-  Part(G, Block(0.88, 0.035, 0.02, 0.01), M.Lamp, [0, 1.86, -0.39]);
-  // Spare wheel lying on the rear deck, strapped down.
-  const Spare = Wheel(M, 0.46, 0.3, { Knobbly: true, Spokes: 6, RimFinish: M.Steel });
-  Spare.rotation.z = Math.PI / 2;
-  Spare.position.set(0, 1.37, 1.62);
-  G.add(Spare);
-  Part(G, Block(0.06, 0.02, 1.0, 0.008), M.Trim, [0, 1.53, 1.62]);
-  // Nose: quad headlamps in a dark mask, a skid plate; tail lamps.
-  Part(G, Block(1.7, 0.18, 0.06, 0.04), M.Trim, [0, 0.9, -2.25]);
-  for (const Side of [1, -1]) for (const Offset of [0.48, 0.7]) Part(G, new THREE.CylinderGeometry(0.075, 0.075, 0.04, 16).rotateX(Math.PI / 2), M.Lamp, [Side * Offset, 0.9, -2.29]);
-  Part(G, Block(1.2, 0.05, 0.55, 0.02), M.Steel, [0, 0.62, -2.02], [-0.35, 0, 0]);
-  for (const Side of [1, -1]) {
-    Part(G, Block(0.16, 0.12, 0.05, 0.015), M.Tail, [Side * 0.95, 1.05, 2.21]);
-    Part(G, Block(0.07, 0.05, 0.06, 0.02), M.Tail, [Side * 0.3, 1.12, 2.19]);
-  }
-  Mirrors(G, M, 0.85, 1.24, 0.75);
-  Wheels(G, M, Spec, { Knobbly: true, Spokes: 6, Rim: 0.56, RimFinish: M.Plastic });
+  const { Root } = ControlVehicleParts(Paint);
+  Root.position.x = -ControlVehicleSheet.Middle;
+  const Turned = new THREE.Group();
+  Turned.rotation.y = Math.PI / 2;
+  Turned.add(Root);
+  G.add(Turned);
   return G;
 }
-// Off-road Vehicle: a 4×4 station wagon.
+
 function OffRoader(M) {
   const G = new THREE.Group();
   const Spec = { Axles: [1.36, -1.37], Track: 1.6, WheelRadius: 0.4, TyreWidth: 0.27 };
@@ -337,14 +305,14 @@ function Pickup(M) {
 // One vehicle as a group (looking down −z, resting on the ground) in its paint.
 export function VehicleAsset(Id, Paint = null) {
   const Model = VehicleModelOf(Id);
-  const M = Finishes(/^#[\da-f]{6}$/i.test(Paint || "") ? Paint : Model.Paint);
-  const G = Model.Id === "offroad" ? OffRoader(M) : Model.Id === "pickup" ? Pickup(M) : DesertRacer(M);
+  const Colour = /^#[\da-f]{6}$/i.test(Paint || "") ? Paint : Model.Paint;
+  const G = Model.Id === "offroad" ? OffRoader(Finishes(Colour)) : Model.Id === "pickup" ? Pickup(Finishes(Colour)) : ControlVehicle(Colour);
   G.name = Model.Name;
   return G;
 }
 // The headline numbers each inspector shows (metres, kilograms).
 export const VehicleFacts = {
-  controlled: { Length: 4.56, Width: 2.3, Height: 2.0, Wheelbase: 3.4, Track: 2.1, Clearance: 0.42, Mass: 1850, Seats: 2, Drive: "4×4 · 6-speed sequential" },
+  controlled: { Length: 6.22, Width: 2.5, Height: 1.77, Wheelbase: 3.4, Track: 2.1, Clearance: 0.31, Mass: 1300, Seats: 2, Drive: "6-speed · 520 N·m peak" },
   offroad: { Length: 4.8, Width: 1.96, Height: 2.3, Wheelbase: 2.73, Track: 1.6, Clearance: 0.27, Mass: 2400, Seats: 5, Drive: "4×4 · low range" },
   pickup: { Length: 5.68, Width: 1.86, Height: 1.85, Wheelbase: 3.08, Track: 1.56, Clearance: 0.29, Mass: 2100, Seats: 5, Drive: "4×4 · 6-speed auto" },
 };

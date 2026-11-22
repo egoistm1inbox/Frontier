@@ -53,6 +53,7 @@ import React, { useState, useEffect, useRef, useMemo } from "react";
 import { createRoot } from "react-dom/client";
 import { Inspector, Icon, Glyph, Panels } from "./Inspectors.jsx";
 import Viewport3D from "./Viewport3D.jsx";
+import { VehicleComponentView, ComponentViewerRail, InVehicle } from "./VehicleComponentViewer.jsx";
 import { CameraBodies, CameraBodyOf } from "./EditorAssets.js";
 // Cameras show their editor asset (EditorAssets.js) as their outliner icon; everything else its own.
 const OutlinerIcon = (Row, Values) =>
@@ -1014,6 +1015,7 @@ function App() {
       }
       if (Event.key === "Escape") {
         SetWorkspace(null);
+        SetVehicleView(false);
         SetDebug(0);
         ShowDiagnostics(false);
         ShowViewportSettings(false);
@@ -1092,6 +1094,13 @@ function App() {
   }, [Selected]);
   const PatchRow = (Id, Patch) => AssignRows((Previous) => Previous.map((Row) => (Row.Id === Id ? { ...Row, ...Patch } : Row)));
   const Workspace = WorkspaceState && WorkspaceState.Id === Selected ? WorkspaceState : null;
+  // Follow-up 61: the Controlled Vehicle's Component Viewer stays open while the vehicle or any of its components is selected (a click
+  // in it selects the component, so its inspector opens) and closes when the selection leaves the vehicle.
+  const [VehicleViewWanted, SetVehicleView] = useState(false);
+  const VehicleView = VehicleViewWanted && InVehicle(Subject) && !Workspace;
+  useEffect(() => {
+    if (VehicleViewWanted && !InVehicle(Subject)) SetVehicleView(false);
+  }, [Selected]);
   const OpenWorkspace = (Tool) => {
     SetRunMode("EDIT");
     SetWorkspace((Previous) => ({ ...(Previous?.Id === Selected ? Previous : {}), Id: Selected, Tool, Selection: [] }));
@@ -2050,7 +2059,19 @@ function App() {
         {Subject?.Panel === "geometry" && Subject?.Parent === "showcase" && (
           <WorkspaceRail Active={Workspace?.Tool || null} Open={OpenWorkspace} Leave={() => SetWorkspace(null)} />
         )}
-        {Workspace ? (
+        {InVehicle(Subject) && !Workspace && (
+          <ComponentViewerRail
+            Active={VehicleView}
+            Open={() => {
+              SetRunMode("EDIT");
+              SetVehicleView(true);
+            }}
+            Leave={() => SetVehicleView(false)}
+          />
+        )}
+        {VehicleView ? (
+          <VehicleComponentView Rows={Rows} Values={Values} Hidden={Hidden} Selected={Selected} Select={SelectRow} ToggleHidden={ToggleHidden} Leave={() => SetVehicleView(false)} Icon={Icon} />
+        ) : Workspace ? (
           <WorkspaceView
             Subject={Subject}
             Values={Values[Selected] || {}}
@@ -2082,7 +2103,7 @@ function App() {
             FlareOff={!!Hidden.flare || !Rows.some((Row) => Row.Id === "flare")}
           />
         )}
-        {SplitView && !Workspace && (
+        {SplitView && !Workspace && !VehicleView && (
           <MeasuredViewport
             Rows={Rows}
             Hidden={Hidden}

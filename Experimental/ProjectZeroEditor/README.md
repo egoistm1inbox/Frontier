@@ -182,6 +182,34 @@ starting point for the UI redesign.
     `CheckInspectorOrder`, `CheckObjectComponents` and `CheckVolumeWorkspaces`; `CheckConstruction` (52 entries) and
     `CheckEntityContext` (59 rows) count the new rows; `CheckInspectorOrder` lets the Orbit button follow the Baking cards.
   - Evidence is in `Exhibits/ProjectZeroEditor/FollowUp50/`. Names are unapproved.
+- **Follow-up 61.**
+  - **The Controlled Vehicle is the ControlVehicle.** `ControlVehicleModel.js` builds the player's car from its facets
+    (`Experimental/Shared/Models/ControlVehicle{Body,Tyre,Rim}.facet`, now shipped in `index.html` as `NativeAssets.Facets`): the lime
+    wedge coupé, 6.22 × 2.50 × 1.77 m, wheels on `VEHICLE_SHEET`'s axle mounts. It replaces the Follow-up 60 desert racer in the
+    viewport, the outliner icon and the vehicle inspector (paint "Acid lime"). The row and the components keep their ids.
+  - **Vehicle Component Viewer** (`VehicleComponentViewer.jsx` / `.css`). While the Controlled Vehicle or one of its components is
+    selected, the viewport's left rail has a **Vehicle Component Viewer** button. It shows the car alone with each native component
+    drawn where it sits and doing what its values say:
+
+    | Component | In the view |
+    |---|---|
+    | Body (Static Mesh) | the body; Cast shadow switches its shadow |
+    | Front Suspension (Spring socket) | spring at the front strut tops; its pose lifts the front wheels |
+    | Steering (Hinge socket) | hinge at the front wheel centres; its pose turns the front wheels |
+    | Tow Hitch (Dock socket) | dock behind the bumper; connects, releases, pull-tests |
+    | Chassis Collision (Box) | faint collision shell at its extents, amber when overlap-only |
+    | Headlights / Brake Lights | real lights at the lamps with beams and glows in their colour, angle, intensity and range |
+    | Vehicle Movement | centre of mass (height and front weight share), tyre load discs, wheels sized by the tyre radius |
+
+    A click on a component in the view or in the floating list selects it, so its native inspector opens to set its properties, and
+    the view follows every change. A tag over the selection gives a live readout. Simulate (Space) drives a speed cycle, so the wheels
+    roll, springs meet bumps and sweeps run. There are also X-ray, Selected only, Three-quarter / Side / Front / Top, Fit (F) and the
+    eye per component. Esc or a selection outside the vehicle leaves. User components are listed but not drawn. The socket looks and
+    motion are the Component Viewer's own (`SocketVisuals.js`, `Sockets.js`).
+  - Tow Hitch mount −2.6 → −3.2 m (it sat inside the longer body) and the box collision fits the body (`VehicleRevision` 3 migrates).
+  - Checks: `CheckVehicleComponentViewer` (7, new): rail, every component clicked in the view opens its inspector, inspector edits
+    reach the view, eye, Simulate, leaving.
+  - Evidence is in `Exhibits/ProjectZeroEditor/FollowUp51/`. Names are unapproved.
 
 ---
 
