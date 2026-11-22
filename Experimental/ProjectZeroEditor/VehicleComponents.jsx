@@ -23,7 +23,16 @@ const Components = [
   ["vehicle-headlights", "Headlights", "SpotLight", "editor-spotlight", "Spot light pair"],
   ["vehicle-brake", "Brake Lights", "PointLight", "editor-brake-light", "Point light pair · rear"],
 ];
-export const VehicleFolder = { Id: "vehicle", Name: "Vehicle", Panel: "group", Icon: "editor-prefab", Parent: null, Description: "Component class · Control Vehicle" };
+// Follow-up 60: the level's vehicles sit in a Vehicles folder. The Controlled Vehicle (the player's, which keeps Id "vehicle" and holds
+// the Component Viewer's ControlVehicle components) is a vehicle model like the others (VehicleAssets.js, VehicleAssetInspector.jsx).
+export const VehiclesFolder = { Id: "vehicles", Name: "Vehicles", Panel: "group", Icon: "folder-generic", Parent: null, Description: "Level vehicles" };
+export const VehicleFolder = { Id: "vehicle", Name: "Controlled Vehicle", Panel: "vehicle-asset", Icon: "asset-vehicle-controlled", Parent: "vehicles", Model: "controlled", Description: "The player's vehicle · Control Vehicle class" };
+export const ParkedVehicles = [
+  { Id: "offroad-vehicle", Name: "Off-road Vehicle", Panel: "vehicle-asset", Icon: "asset-vehicle-offroad", Parent: "vehicles", Model: "offroad", Description: "4×4 wagon · parked" },
+  { Id: "pickup-truck", Name: "Pickup Truck", Panel: "vehicle-asset", Icon: "asset-vehicle-pickup", Parent: "vehicles", Model: "pickup", Description: "Double-cab pickup · parked" },
+];
+// A fresh scene's vehicle rows: the folder, the Controlled Vehicle and its components, then the parked vehicles.
+export const InitialVehicleRows = () => [{ ...VehiclesFolder }, { ...VehicleFolder }, ...VehicleRows.map((Row) => ({ ...Row })), ...ParkedVehicles.map((Row) => ({ ...Row }))];
 export const VehicleRows = Components.map(([Id, Name, Component, Icon, Description, Extra = {}]) => ({
   Id,
   Name,
@@ -38,12 +47,24 @@ export const VehicleRows = Components.map(([Id, Name, Component, Icon, Descripti
 // Rows retired from the Vehicle folder; removed from saved scenes on load.
 const RetiredRows = new Set(["vehicle-bumper"]);
 
-// The folder is added once per saved scene (VehicleRevision), so a later deletion is respected.
+// Added once per saved scene (VehicleRevision), so a later deletion is respected: revision 1 brought the Vehicle folder and its
+// components; revision 2 the Vehicles folder, with the old Vehicle folder turned into the Controlled Vehicle and two parked vehicles.
+export const VehicleRevision = 2;
 export function EnsureVehicleFolder(Rows = [], Revision) {
   if (!Array.isArray(Rows)) return Rows;
-  const Kept = Rows.filter((Row) => !RetiredRows.has(Row?.Id));
-  if (Revision >= 1 || Kept.some((Row) => Row?.Id === "vehicle")) return Kept;
-  return [...Kept, { ...VehicleFolder }, ...VehicleRows.map((Row) => ({ ...Row }))];
+  let Kept = Rows.filter((Row) => !RetiredRows.has(Row?.Id));
+  if (!(Revision >= 1) && !Kept.some((Row) => Row?.Id === "vehicle")) Kept = [...Kept, { ...VehicleFolder }, ...VehicleRows.map((Row) => ({ ...Row }))];
+  if (!(Revision >= 2) && !Kept.some((Row) => Row?.Id === "vehicles")) {
+    const At = Kept.findIndex((Row) => Row?.Id === "vehicle");
+    Kept = Kept.map((Row) =>
+      Row?.Id === "vehicle" && Row.Panel === "group"
+        ? { ...Row, ...VehicleFolder, Name: Row.Name === "Vehicle" ? VehicleFolder.Name : Row.Name }
+        : Row,
+    );
+    Kept.splice(At < 0 ? Kept.length : At, 0, { ...VehiclesFolder });
+    Kept.push(...ParkedVehicles.filter((Row) => !Kept.some((Each) => Each?.Id === Row.Id)).map((Row) => ({ ...Row })));
+  }
+  return Kept;
 }
 
 // Socket mounts for rows saved before rows carried one (metres ahead of the wheelbase centre).

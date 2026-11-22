@@ -47,11 +47,11 @@ try {
 
   const Labels = await Page.locator(".row-identity small").allTextContents();
   // 71: Follow-up 48 adds the God Rays row (Project Zero specification §7). 56: Follow-up 46 moves the 15 Mass / Rigid Body / Collision
-  // rows of the five primitives into each object's Components stack.
-  assert.equal(Labels.length, 56);
+  // rows of the five primitives into each object's Components stack. 59: Follow-up 60 adds the Vehicles folder and two parked vehicles.
+  assert.equal(Labels.length, 59);
   assert(Labels.every((Label) => Label.trim().length));
   Checks.push(
-    "All 56 default outliner entities expose a non-empty contextual value line",
+    "All 59 default outliner entities expose a non-empty contextual value line",
   );
 
   assert.equal(await Metadata("Area Light"), "32 lx · Area · 0,0,0");

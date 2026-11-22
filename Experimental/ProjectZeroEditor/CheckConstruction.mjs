@@ -153,15 +153,15 @@ try {
     Buttons.map((Button) => Button.getAttribute("aria-label")),
   );
   // Cameras include Motion Blur, Lens Flare, Post Process and its 7 effects; Lighting includes the Environment Light;
-  // Vehicle holds the nine Vehicle folder components. Follow-up 48 adds God Rays to Environment (Project Zero specification §7).
-  assert.equal(Names.length, 49);
+  // Vehicle holds the Controlled Vehicle's components and (Follow-up 60) the three level vehicles. Follow-up 48 adds God Rays to Environment (Project Zero specification §7).
+  assert.equal(Names.length, 52);
   for (const [Group, Expected] of [
     ["Environment", 6],
     ["Weather", 7],
     ["Cameras", 12],
     ["Geometry", 5],
     ["Lighting", 11],
-    ["Vehicle", 8],
+    ["Vehicle", 11],
   ]) {
     await Page.getByRole("navigation", { name: "Construct categories" })
       .getByRole("button", { name: Group, exact: true })

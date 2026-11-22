@@ -58,6 +58,7 @@ import { SensorField } from "./OpticalGraphic.jsx";
 import SensorFormats, { Formats } from "./SensorFormats.jsx";
 import { WorkspacePanel } from "./Workspaces.jsx";
 import { VehicleInspector, VehiclePanel, VehicleSheet } from "./VehicleComponents.jsx";
+import { VehicleAssetInspector, VehicleAssetPanel, VehicleAssetSheet } from "./VehicleAssetInspector.jsx";
 
 // Native sheets with the Follow-up 48 Project Zero specification overlay (ProjectZeroSpecification.js).
 export const Panels = SpecifyPanels({
@@ -65,6 +66,7 @@ export const Panels = SpecifyPanels({
   ...EffectSheets,
   [EnvironmentPanel]: EnvironmentSheet,
   [VehiclePanel]: VehicleSheet,
+  [VehicleAssetPanel]: VehicleAssetSheet,
   [ComponentPanel]: ComponentSheet,
 });
 // 📝 marker beside a label: the field is in the editor but not in the Project Zero specification. Kept for the user to decide.
@@ -903,6 +905,13 @@ export function Inspector({
       </div>
     );
   }
+  if (Subject.Panel === VehicleAssetPanel)
+    return (
+      <div className="generic-inspector vehicle-asset-inspector" data-panel={Subject.Panel}>
+        {Header("Vehicles")}
+        <VehicleAssetInspector Subject={Subject} Values={Values} Change={Change} Kit={{ Card, Metric, Icon }} Scene={Scene} />
+      </div>
+    );
   if (Subject.Panel === VehiclePanel)
     return (
       <div className="generic-inspector vehicle-component-inspector" data-panel={Subject.Panel}>
@@ -1458,7 +1467,8 @@ export function Inspector({
         </>) },
           { Id: "render", Label: "Render", Content: (<>
         <ComponentsCard Owner={Subject} Values={Values} Scene={Scene} Kit={{ Icon }} Title="Render" />
-        </>) },
+          {SpecificationCard()}
+          </>) },
         ]} />
       </>
     );
@@ -1701,7 +1711,8 @@ export function Inspector({
             </button>
           </Card>
         </div>
-        </>) },
+          {SpecificationCard()}
+          </>) },
         ]} />
       </>
     );

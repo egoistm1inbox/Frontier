@@ -286,7 +286,10 @@ export function StudioReflections(Renderer) {
 
 let IconStudio = null;
 // A transparent PNG of one camera body (three-quarter view from the front left, studio lit), as a data URL.
-export function CameraIcon(Body, Size = 96) {
+export const CameraIcon = (Body, Size = 96) => ModelIcon(CameraAsset(Body), Size);
+// A transparent PNG of any model looking down −z (three-quarter view from the front left, studio lit), fitted to Width × Height, as a
+// data URL. The model is disposed afterwards.
+export function ModelIcon(Model, Size = 96, { Height = Size, Yaw = -140, Pitch = 18 } = {}) {
   if (!IconStudio) {
     const Canvas = document.createElement("canvas");
     const Renderer = new THREE.WebGLRenderer({ canvas: Canvas, antialias: true, alpha: true, preserveDrawingBuffer: true });
@@ -305,14 +308,15 @@ export function CameraIcon(Body, Size = 96) {
   }
   const { Canvas, Renderer, Scene, Camera } = IconStudio;
   Renderer.setPixelRatio(1);
-  Renderer.setSize(Size, Size, false);
+  Renderer.setSize(Size, Height, false);
   Renderer.setClearColor(0x000000, 0);
-  const Model = CameraAsset(Body);
+  Camera.aspect = Size / Height;
   Scene.add(Model);
   Model.updateMatrixWorld(true);
   const Sphere = new THREE.Box3().setFromObject(Model).getBoundingSphere(new THREE.Sphere());
   const Distance = (Sphere.radius / Math.sin(THREE.MathUtils.degToRad(Camera.fov / 2))) * 0.98;
-  const Yaw = THREE.MathUtils.degToRad(-140), Pitch = THREE.MathUtils.degToRad(18);
+  Yaw = THREE.MathUtils.degToRad(Yaw);
+  Pitch = THREE.MathUtils.degToRad(Pitch);
   Camera.position.copy(Sphere.center).add(new THREE.Vector3(Math.sin(Yaw) * Math.cos(Pitch), Math.sin(Pitch), Math.cos(Yaw) * Math.cos(Pitch)).multiplyScalar(Distance));
   Camera.near = Distance / 50;
   Camera.far = Distance * 4;
@@ -331,14 +335,19 @@ export function CameraIcon(Body, Size = 96) {
       High.max(Point);
     }
   });
-  const Span = (Math.max(High.x - Low.x, High.y - Low.y) / 2) * 1.06 * Size;
-  const Middle = [((Low.x + High.x) / 2 + 1) / 2 * Size, (1 - (Low.y + High.y) / 2) / 2 * Size];
-  Camera.setViewOffset(Size, Size, Middle[0] - Span / 2, Middle[1] - Span / 2, Span, Span);
+  // Projected extents in pixels of the full view; the window keeps the picture's aspect.
+  const Wide = ((High.x - Low.x) / 2) * Size * 1.06, Tall = ((High.y - Low.y) / 2) * Height * 1.06;
+  const Scale = Math.max(Wide / Size, Tall / Height);
+  const Middle = [((Low.x + High.x) / 2 + 1) / 2 * Size, (1 - (Low.y + High.y) / 2) / 2 * Height];
+  Camera.setViewOffset(Size, Height, Middle[0] - (Size * Scale) / 2, Middle[1] - (Height * Scale) / 2, Size * Scale, Height * Scale);
   Renderer.render(Scene, Camera);
   Camera.clearViewOffset();
   const Picture = Canvas.toDataURL("image/png");
   Scene.remove(Model);
-  Model.traverse((Each) => Each.geometry?.dispose());
+  Model.traverse((Each) => {
+    Each.geometry?.dispose();
+    Each.material?.dispose?.();
+  });
   return Picture;
 }
 
@@ -393,4 +402,4 @@ export function StudioLit(Asset) {
 }
 
 // For CaptureEditorAssetIcons.mjs, which saves the icons as PNG files for the build to ship.
-if (typeof window !== "undefined") window.FrontierEditorAssets = { CameraIcon, CameraBodies };
+if (typeof window !== "undefined") window.FrontierEditorAssets = { CameraIcon, CameraBodies, ModelIcon };

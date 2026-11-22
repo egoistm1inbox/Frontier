@@ -28,7 +28,8 @@ import ViewportRenderHeader from "./ViewportRenderHeader.jsx";
 import { StartThoughtLog, useThoughtScope, OpenThought } from "./ThoughtLog.js";
 import { ResolveRenderSettings, RenderSettingsKey } from "./RenderSettings.js";
 import { WorkspaceView, WorkspaceRail } from "./Workspaces.jsx";
-import { VehicleFolder, VehicleRows, VehiclePanel, VehicleSummary, EnsureVehicleFolder } from "./VehicleComponents.jsx";
+import { VehiclePanel, VehicleSummary, EnsureVehicleFolder, InitialVehicleRows, VehicleRevision } from "./VehicleComponents.jsx";
+import { VehicleAssetPanel, VehicleAssetSummary } from "./VehicleAssetInspector.jsx";
 import { ComponentPanel, ComponentSummary, WithObjectComponents, EnsureObjectComponents, ComponentRowsFor, OwnerKind, ComponentRevision, ComponentAddress } from "./ObjectComponents.jsx";
 import { BrowserFPS } from "./BrowserTiming.js";
 import {
@@ -220,7 +221,7 @@ InitialRows.splice(
   0,
   ...EffectRows.filter((Row) => Row.Parent === "post"),
 );
-InitialRows.push({ ...VehicleFolder }, ...VehicleRows.map((Row) => ({ ...Row })));
+InitialRows.push(...InitialVehicleRows());
 // Showcase objects carry Mass, Rigid Body and Collision; cameras carry their render components (all outliner children).
 InitialRows.splice(0, InitialRows.length, ...WithObjectComponents(InitialRows));
 const DefaultSettings = {
@@ -285,6 +286,7 @@ function OutlinerMetadata(Row, Record = {}, Rows = []) {
   if (IsEffectPanel(Row.Panel)) return EffectSummary(Row.Panel, V);
   if (Row.Panel === EnvironmentPanel) return EnvironmentSummary(V);
   if (Row.Panel === VehiclePanel) return VehicleSummary(Row, Record);
+  if (Row.Panel === VehicleAssetPanel) return VehicleAssetSummary(Row, Record);
   if (Row.Panel === "post")
     return (
       "EV " +
@@ -966,7 +968,7 @@ function App() {
           LightDesignRevision: 1,
           CameraEffectsRevision: 1,
           EnvironmentLightRevision: 1,
-          VehicleRevision: 1,
+          VehicleRevision,
           ComponentRevision,
           Assets: AssetRecords,
           Selected,
@@ -1157,7 +1159,7 @@ function App() {
             LightDesignRevision: 1,
             CameraEffectsRevision: 1,
             EnvironmentLightRevision: 1,
-            VehicleRevision: 1,
+            VehicleRevision,
             ComponentRevision,
             Collapsed,
             Assets: AssetRecords,

@@ -3,6 +3,7 @@ import path from "node:path";
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
+import { CategoryPill, OpenOrbit } from "./TabReveal.mjs";
 
 // Follow-up 40 / 46: object components (Mass, Rigid Body, Collision) in each showcase object's component stack, the per-workspace
 // carousel pages and the editable Vehicle Movement charts.
@@ -25,7 +26,9 @@ const Open = async (Id) => {
   await Page.waitForTimeout(300);
 };
 const Saved = () => Page.evaluate((Name) => JSON.parse(localStorage.getItem(Name)), Key);
-const Pill = (Name) => Page.locator(`.pi-pill[aria-label="${Name}"]`);
+// Showcase categories are picked from the Orbit menu (Follow-up 60): Pill(Name).click() opens its ring and picks; Shown() names the open one.
+const Pill = (Name) => ({ click: async () => (await CategoryPill(Page, Name)).click() });
+const Shown = () => Page.locator(".pi-page").getAttribute("aria-label");
 const Metrics = () => Page.locator(".vc-card .metric").allInnerTexts();
 async function DragHandle(Plot, Index, Dx, Dy) {
   const Handle = Page.locator(`[data-plot="${Plot}"] .vc-handle`).nth(Index);
@@ -52,31 +55,28 @@ try {
   assert.equal(Rows.filter((Row) => Row.Panel === "object-component" && ["camera", "cine"].includes(Row.Parent)).length, 2);
   assert.equal(await Page.locator(".outliner-row", { hasText: /^\s*Mass/ }).count(), 0);
   assert.deepEqual(await Page.locator(".pi-components-card .oc-link b").allInnerTexts(), ["Mass", "Rigid Body", "Collision"]);
+  await OpenOrbit(Page, "Category");
   assert.deepEqual(await Page.locator(".pi-pill").evaluateAll((Pills) => Pills.map((Each) => Each.getAttribute("aria-label"))), ["Overview", "Components", "Geometry", "Material", "UV", "Fracture", "SDF", "LOD"]);
   assert.equal(await Page.locator('.pi-pill[aria-label="Physics"]').count(), 0);
-  // Follow-up 59: the category navigation comes after the cards, never above them; five designs, one per showcase object, switchable A–E.
-  const Looks = { cube: "dock", sphere: "spine", cylinder: "index", torus: "orbit", cone: "peek" };
-  for (const [Id, Look] of Object.entries(Looks)) {
+  await Page.locator('[data-orbit="Category"] .orbit-button').click();
+  assert.equal(await Page.locator('[data-orbit="Category"] .orbit-ring').count(), 0);
+  // Follow-up 60: every showcase object picks its category from the Orbit menu, which follows the cards, never above them.
+  for (const Id of ["cube", "sphere", "cylinder", "torus", "cone"]) {
     await Open(Id);
-    assert.equal(await Page.locator(".pi-carousel").getAttribute("data-navigation"), Look, Id + " navigation");
+    assert.equal(await Page.locator(".pi-carousel").getAttribute("data-navigation"), "orbit", Id + " navigation");
+    assert.equal(await Page.locator('[data-orbit="Category"]').getAttribute("data-orbit-look"), "categories");
     const Cards = await Page.locator(".pi-page [data-card]").first().boundingBox();
     const Top = await Page.locator(".inspector-scroll > [data-panel] header").first().boundingBox();
     assert.ok(Cards.y < Top.y + Top.height + 140, Id + ": the first card sits right under the header " + JSON.stringify({ Cards, Top }));
   }
   await Open("cube");
-  await Page.locator('[data-navigation-choice="peek"]').click();
-  await Page.waitForTimeout(250);
-  assert.equal(await Page.locator(".pi-carousel").getAttribute("data-navigation"), "peek");
-  await Page.locator('[data-navigation-choice="dock"]').click();
-  await Page.waitForTimeout(250);
-  assert.equal(await Page.locator(".pi-carousel").getAttribute("data-navigation"), "dock");
-  Checks.push("Category navigation follows the cards: Dock (cube), Spine (sphere), Up next (cylinder), Orbit (torus), Peek (cone); the A–E switch changes it");
+  Checks.push("Category navigation is the Orbit menu on every showcase object, after the cards; its ring opens on press and closes again");
   Checks.push("No object component rows in the outliner (cameras keep their Render Engine row); the carousel is Overview, Components, Geometry, Material, UV, Fracture, SDF, LOD");
 
   // Opening Mass from the Overview turns to the Components page with the Mass entry open; edits are stored on the owning object.
   await Page.locator('.oc-link[data-component="Mass"]').click();
   await Page.locator('.oc-entry-page[data-entry="Mass"]').waitFor();
-  assert.equal(await Pill("Components").getAttribute("aria-selected"), "true");
+  assert.equal(await Shown(), "Components");
   assert.match(await Page.locator(".pi-component .metric").first().innerText(), /950\s*kg/);
   await Page.locator(".pi-component select").first().selectOption({ label: "Aluminium · 2700 kg/m³" });
   await Page.waitForTimeout(250);

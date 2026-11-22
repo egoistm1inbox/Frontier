@@ -3,6 +3,7 @@ import path from "node:path";
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
+import { PickTab } from "./TabReveal.mjs";
 
 // Follow-up 48: the BAKING sections show the maps the 3D viewport uses (BakedMaps.js): the Atmosphere's transmittance LUT and sky-view
 // map, the Sun's lighting LUT and disc map, the Stars' star map and the Lens Flare's atlas; and the viewport's lens flare (LensFlare.js)
@@ -29,7 +30,7 @@ const Map = (Name) => Page.locator(`[data-baked-map="${Name}"]`);
 // Opens the inspector tab (InspectorTabs.jsx) holding a selector.
 const Reveal = async (Selector) => {
   const Tab = await Page.locator(Selector).first().evaluate((Each) => Each.closest("[data-tab-page]")?.dataset.tabPage || null);
-  if (Tab && (await Page.locator(`[data-tab-page="${Tab}"]`).isHidden())) await Page.locator(`[data-tab-for="${Tab}"]`).click();
+  if (Tab) await PickTab(Page, Tab);
 };
 // A map nobody baked yet shows the bake tab with its planned resolution; Bake bakes it. Returns whether it had to be baked here.
 const Baked = async (Name, Size) => {

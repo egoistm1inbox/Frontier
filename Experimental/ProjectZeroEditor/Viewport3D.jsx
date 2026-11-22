@@ -15,6 +15,8 @@
 //   • Cameras: every scene camera (not the editor camera, which is the view itself) as its editor asset (EditorAssets.js) on a tripod
 //     (or, with Tripod off, the body alone at head height, for cameras that move)
 //     around the Showcase, aimed at it, with a frustum out to its subject distance from its focal length and sensor.
+//   • Vehicles: the Vehicles folder's models (VehicleAssets.js) in their paint, parked in a row behind the Showcase, nose out at an
+//     angle; lit by the sun and casting shadows like the shapes. They are not part of the opening framing (the Showcase is).
 //   • Lens Flare: the Lens Flare object put together from its baked atlas (LensFlare.js) on a 2D layer over the view, where the sun is on
 //     screen and not hidden behind a shape.
 // Click an object to select it (Ctrl or Shift adds it). Drag to orbit, right-drag or Shift-drag to pan, wheel to zoom; F frames the
@@ -29,6 +31,8 @@ import { SkyMedium, Direction, KelvinTint, SunAngularRadius } from "./SkyShader.
 import { SkyViewMap, SunBeam, SkyFill, StarCatalogue, StarCount, StarSettings, FlareAtlasMap } from "./BakedMaps.js";
 import { FlareSettings, PaintFlare } from "./LensFlare.js";
 import { CameraAsset, CameraBodyOf, StudioLit } from "./EditorAssets.js";
+import { VehicleAsset } from "./VehicleAssets.js";
+import { VehicleAssetPanel, PaintOf } from "./VehicleAssetInspector.jsx";
 import { IsEditorCamera } from "./ScenePolicy.js";
 
 export const ShowcaseSpacing = 1.8;
@@ -103,6 +107,16 @@ export function CameraPlacements(Rows, Values, Hidden) {
   });
 }
 
+// Level vehicles: where each parks, in a row 5 m apart and 9.5 m behind the Showcase line (shifted left, where the default view looks), turned to show its nose.
+export const VehicleSpacing = 5;
+export function VehiclePlacements(Rows, Values, Hidden) {
+  const Shown = Rows.filter((Row) => Row.Panel === VehicleAssetPanel);
+  return Shown.filter((Row) => !HiddenUp(Rows, Hidden, Row)).map((Row) => {
+    const Slot = Shown.indexOf(Row);
+    return { Row, Model: Row.Model, Paint: PaintOf(Row, Values[Row.Id] || {}), At: [(Slot - (Shown.length - 1) / 2) * VehicleSpacing - 3, 0, -9.5], Turn: Math.PI - 0.55 };
+  });
+}
+
 // The sun for the viewport: direction, colour and strength.
 export function SunLight(Sun, Medium) {
   const Manual = !!Sun("Manual direction");
@@ -170,6 +184,7 @@ export default function Viewport3D({ Rows, Values, Hidden, Selected, Picked = []
   const Chosen = new Set([Selected, ...Picked]);
   const Placed = Placements(Rows, Values, Hidden);
   const Posed = CameraPlacements(Rows, Values, Hidden);
+  const Parked = VehiclePlacements(Rows, Values, Hidden);
 
   // One renderer for the viewport's life.
   useEffect(() => {
@@ -419,7 +434,7 @@ export default function Viewport3D({ Rows, Values, Hidden, Selected, Picked = []
       const Own = Values[Row.Id] || {};
       const Material = ResolveMaterial(Own).Channels;
       return [Row.Id, Along, Position, Rotation, Scale, Object.entries(Own).filter(([Key]) => Key.startsWith("Geometry ")), Material.colour?.Fill, Material.roughness?.Fill, Material.metallic?.Fill];
-    }).concat(Posed.map(({ Row, ...Pose }) => [Row.Id, Pose])),
+    }).concat(Posed.map(({ Row, ...Pose }) => [Row.Id, Pose]), Parked.map(({ Row, ...Pose }) => [Row.Id, Pose])),
   );
   useEffect(() => {
     const Built = Scene.current;
@@ -473,14 +488,25 @@ export default function Viewport3D({ Rows, Values, Hidden, Selected, Picked = []
       Asset.userData.asset = true;
       Group.add(Asset);
     }
+    // Vehicles, parked behind the Showcase.
+    for (const { Row, Model, Paint, At, Turn } of Parked) {
+      const Asset = VehicleAsset(Model, Paint);
+      Asset.position.set(...At);
+      Asset.rotation.y = Turn;
+      Asset.userData.componentId = Row.Id;
+      Asset.userData.asset = true;
+      Group.add(Asset);
+    }
     Built.View.setContent(Group);
     if (!Built.Framed && !Bounds.isEmpty()) {
       Built.Bounds = Bounds.clone().expandByScalar(0.45); // room for the workspace rail on the left
       Built.View.frame(Built.Bounds, { yaw: 24, pitch: 9, animate: false });
       Built.Framed = true;
     }
-    // Shadows cover everything that's out.
-    const Sphere = Bounds.isEmpty() ? new THREE.Sphere(new THREE.Vector3(), 4) : Bounds.getBoundingSphere(new THREE.Sphere());
+    // Shadows cover everything that's out (the parked vehicles too).
+    const Lit = Bounds.clone();
+    for (const Each of Group.children) if (Each.userData.asset) Lit.expandByObject(Each);
+    const Sphere = Lit.isEmpty() ? new THREE.Sphere(new THREE.Vector3(), 4) : Lit.getBoundingSphere(new THREE.Sphere());
     Built.AimSun(Sphere);
     Built.Group = Group;
     Built.FrameChosen = () => {
@@ -492,6 +518,7 @@ export default function Viewport3D({ Rows, Values, Hidden, Selected, Picked = []
     };
     Built.Touch();
     Built.Canvas.dataset.objects = String(Placed.length);
+    Built.Canvas.dataset.vehicles = Parked.map(({ Row, Model }) => Row.Id + ":" + Model).join(" ");
     Built.Canvas.dataset.cameras = Posed.map(({ Row, Body, Tripod }) => Row.Id + ":" + Body + (Tripod ? "" : ":free")).join(" ");
   }, [ShapeKey, SkyKey]);
 

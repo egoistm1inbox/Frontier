@@ -145,6 +145,43 @@ starting point for the UI redesign.
   - Checks: `CheckObjectComponents` (12) adds the five designs, their place under the header and the A–E switch; `CheckEditorAssets`
     adds the Tripod switch; `CheckInspectorOrder` no longer expects the navigation first.
   - Evidence is in `Exhibits/ProjectZeroEditor/FollowUp49/`.
+- **Follow-up 60.**
+  - **Orbit menu everywhere.** `OrbitMenu.jsx` / `.css` is the one page picker: the Showcase categories and every lettered inspector
+    (`InspectorTabs.jsx`) use it instead of the tab bar and the five Follow-up 59 designs (the A–E switch is gone). The ring is shut
+    until pressed; picking a page closes it; Esc or a press outside closes it; ← → move. Each inspector has its own look:
+
+    | Look | Inspector | Treatment |
+    |---|---|---|
+    | arc | Sun | dusk glow; the open page is a sun |
+    | strata | Atmosphere | planet-limb backdrop |
+    | constellation | Stars | starry backdrop, diamond star buttons |
+    | phases | Moon | moon-phase buttons |
+    | aperture | Lens Flare | streak and hex ghosts |
+    | viewfinder | Cameras | rounded squares with corner marks |
+    | categories | Showcase objects | glyph pills around the summary |
+    | garage | Vehicles | tarmac ring with a dashed lane line |
+
+    Cards that used to follow the tabs (the camera and moon Specification cards) now sit on the last page, so the button stays pinned.
+  - **Vehicles.** `VehicleAssets.js` builds three low-poly vehicles (−z forward, origin on the ground), painted from seven paints:
+
+    | Row | Vehicle | Design | Size |
+    |---|---|---|---|
+    | `vehicle` | **Controlled Vehicle** | rally-raid desert racer: flared arches, roof scoop and light bar, spare wheel on the deck | 4.56 × 2.30 × 2.00 m, 1850 kg |
+    | `offroad-vehicle` | **Off-road Vehicle** | boxy 4×4 wagon: snorkel, roof rack with cargo, bull bar, rear spare | 4.80 × 1.96 × 2.30 m, 2400 kg |
+    | `pickup-truck` | **Pickup Truck** | double cab: load bed, sports bar, tow bar | 5.68 × 1.86 × 1.85 m, 2100 kg |
+
+    They park in a row behind the Showcase line in the 3D viewport (`VehiclePlacements`, `data-vehicles`). The outliner has a
+    **Vehicles** folder holding the three; the Controlled Vehicle (formerly the Vehicle group) keeps its components under it. Their
+    icons are pictures of the models (`Images/EditorAssets/asset-vehicle-*.png`, made by `CaptureEditorAssetIcons.mjs` with the
+    shared `ModelIcon` in `EditorAssets.js`). Saved scenes migrate (`VehicleRevision` 2). The vehicle inspector
+    (`VehicleAssetInspector.jsx`) has three pages: **Model** (the picture and the paints, which repaint the viewport and the outliner
+    line), **Size** (length, a plan with the wheelbase, width / height / track / clearance / mass / seats) and **Drive** (the
+    Controlled Vehicle's components, each a link to its row). Construct lists the three under Vehicle.
+  - Checks: `CheckEditorAssets` (8) adds the Orbit pages and the vehicles (folder, icons, nesting, paint, Drive, the migration);
+    `TabReveal.mjs` gains `OpenOrbit`, `PickTab`, `CategoryPill` and `PickCategory`, used by `CheckBakedMaps`, `CheckBrowser`,
+    `CheckInspectorOrder`, `CheckObjectComponents` and `CheckVolumeWorkspaces`; `CheckConstruction` (52 entries) and
+    `CheckEntityContext` (59 rows) count the new rows; `CheckInspectorOrder` lets the Orbit button follow the Baking cards.
+  - Evidence is in `Exhibits/ProjectZeroEditor/FollowUp50/`. Names are unapproved.
 
 ---
 
@@ -389,18 +426,11 @@ starting point for the UI redesign.
 ## 🧱 Showcase Primitive Inspector
 
 Cube, Sphere, Cylinder, Torus and Cone (Outliner folder **Showcase**) use `PrimitiveInspector.jsx` instead of the generic geometry layout.
-Other geometry and every other panel are unchanged. The cards come straight after the header; the category navigation (Follow-up 59)
-never sits above them. It opens on **Overview** each time an object is selected, and has arrow keys and horizontal swipe in every look.
-There are five navigation designs, one per Showcase object by default, and the **Navigation** switch (A–E) at the foot of the inspector
-changes it per object (`Navigation design` value):
-
-| | Design | Default | How it works |
-|---|---|---|---|
-| A | **Dock** | Cube | A frosted bar pinned to the bottom of the inspector: the summary line over the eight category icons; the open one widens with its name |
-| B | **Spine** | Sphere | A slim icon column to the right of the cards that stays in view; a tone bar marks the open category, names show on hover, the summary sits at its foot |
-| C | **Up next** | Cylinder | After the cards: a large "Up next" card for the next category, a 4 × 2 grid of every category ("Here" on the open one) and the summary chips |
-| D | **Orbit** | Torus | A round button bottom right, ringed in the category colours; it opens a circle of the categories around the summary |
-| E | **Peek** | Cone | The neighbouring categories' names run up the two edges of the cards (press or swipe); dots and the summary line follow the cards |
+Other geometry and every other panel are unchanged. The cards come straight after the header; the category navigation never sits
+above them. It opens on **Overview** each time an object is selected. Categories are picked from the **Orbit menu** (`OrbitMenu.jsx`,
+Follow-up 60; it was design D of Follow-up 59's five): a round button pinned bottom right, ringed in the category colours, which opens a
+circle of the eight categories around the summary (tris, verts, materials, motion, the open category). ← → on the button and a
+horizontal swipe on the cards also move between categories.
 
 Everything uses the same dark theme.
 

@@ -3,6 +3,7 @@ import path from "node:path";
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
+import { CategoryPill } from "./TabReveal.mjs";
 
 // Follow-up 37: UV and fracture preview cards in the primitive inspector, plus the SDF Bake and LOD Clusters workspaces.
 const Folder = path.dirname(fileURLToPath(import.meta.url));
@@ -28,7 +29,7 @@ const Open = async (Id) => {
 };
 const Saved = () => Page.evaluate(() => JSON.parse(localStorage.getItem("Frontier.ProjectZeroHtml.v1")));
 const Stored = async (Id, Key) => ((await Saved())?.Values?.[Id] || {})[Key];
-const Category = (Name) => Page.locator(`.pi-pill[aria-label="${Name}"]`).click();
+const Category = async (Name) => (await CategoryPill(Page, Name)).click();
 const Card = (Title) => Page.locator(`[data-card="${Title}"]`);
 const Metric = (Title) => Card(Title).locator(".metric").first().innerText();
 const Launch = (Tool) => Page.locator(`.ws-rail button[aria-label="${Tool}"]`).click();

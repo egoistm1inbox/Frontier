@@ -8,6 +8,7 @@ import path from "node:path";
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
+import { PickTab } from "./TabReveal.mjs";
 const Folder = path.dirname(fileURLToPath(import.meta.url));
 const Require = createRequire(
   process.env.FRONTIER_BROWSER_PACKAGE ||
@@ -65,11 +66,8 @@ async function Reveal(Entry) {
   if (typeof Entry !== "string") return -1;
   const Tab = await Node(Entry).evaluate((Each) => Each.closest("[data-tab-page]")?.dataset.tabPage || null);
   if (!Tab) return -1;
-  if (await Page.locator(`[data-tab-page="${Tab}"]`).isHidden()) {
-    await Page.locator(`[data-tab-for="${Tab}"]`).click();
-    await Page.locator(`[data-tab-page="${Tab}"]`).waitFor();
-  }
-  return Page.locator(`[data-tab-for="${Tab}"]`).evaluate((Each) => [...Each.parentElement.querySelectorAll("[data-tab-for]")].indexOf(Each));
+  await PickTab(Page, Tab);
+  return Page.locator(`[data-tab-page="${Tab}"]`).evaluate((Each) => [...Each.parentElement.querySelectorAll(":scope > [data-tab-page]")].indexOf(Each));
 }
 async function Sequence(Name, Entries) {
   let Bottom = -Infinity, Opened = -1;
@@ -187,6 +185,8 @@ const Sections = {
 };
 // Vehicle folder rows: every inspector opens with its headline figure, then its fields (Vehicle Movement is data only).
 Sections["vehicle-component"] = [".vc-card .metric", ".vc-card .field"];
+// Level vehicles (Follow-up 60): the model picture and its paints, then the dimensions with their plan and facts.
+Sections["vehicle-asset"] = [".va-hero", ".va-paints", ".va-plan", ".va-facts"];
 const BakeCards = {
   sun: ["Sun lighting bake", "Sun disk bake"],
   atmosphere: ["Atmosphere bake", "Baked atmosphere"],
@@ -262,8 +262,10 @@ try {
                 "input,select,textarea,button,[data-card]",
               ),
             ].every(
+              // The Orbit menu (Follow-up 60) that turns the pages is pinned after them on purpose.
               (Other) =>
                 Node.contains(Other) ||
+                Other.closest(".orbit-menu") ||
                 !(
                   Node.compareDocumentPosition(Other) &
                   Node.DOCUMENT_POSITION_FOLLOWING

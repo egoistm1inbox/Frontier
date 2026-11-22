@@ -1,7 +1,7 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
-import { OpenTabOf } from "./TabReveal.mjs";
+import { OpenTabOf, PickTab } from "./TabReveal.mjs";
 const Folder = path.dirname(fileURLToPath(import.meta.url)),
   Root = path.resolve(Folder, "../../..");
 const Require = createRequire(
@@ -126,7 +126,7 @@ try {
   // A real pointer drag, rather than synthetic value assignment.
   await Select("Editor Camera");
   // The camera inspector reopens on the tab last used; Focal Length is on A · Lens.
-  await Page.locator('[data-tab-for="camera:lens"]').click();
+  await PickTab(Page, "camera:lens");
   const Range = Page.getByRole("slider", { name: "Focal Length", exact: true });
   await Range.scrollIntoViewIfNeeded();
   const Rect = await Range.boundingBox(),
