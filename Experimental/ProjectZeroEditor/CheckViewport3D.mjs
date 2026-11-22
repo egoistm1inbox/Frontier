@@ -92,6 +92,15 @@ try {
   const Dusk = await SkyColour();
   assert(Dusk[0] > Dusk[2], "sunset sky is warm: " + Dusk);
   await Page.locator(".scene-image").screenshot({ path: path.join(Proof, "Viewport3D-Sunset.png") });
+  // Night: the star field is out, over a dark blue (never black) sky; by day it is off.
+  assert.equal((await Dataset()).stars, "0.00");
+  await Patch("sun", { "Local Hours": 21 });
+  await Open("cube");
+  assert.equal((await Dataset()).stars, "1.00");
+  const Night = await SkyColour();
+  assert(Night[2] > Night[0] && Night[2] < 90 && Night[2] > 15, "night sky is dark blue: " + Night);
+  await Page.locator(".scene-image").screenshot({ path: path.join(Proof, "Viewport3D-Night.png") });
+  Checks.push(`Star field: off by day, out at 21:00 over a dark blue sky rgb(${Night.join(", ")})`);
   await Patch("sun", { "Local Hours": 15.5 });
   await Open("cube");
   // The sky is the background at infinity: zooming all the way in and out keeps it (the camera rig moves its near and far planes).

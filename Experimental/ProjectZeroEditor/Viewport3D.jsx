@@ -8,6 +8,7 @@
 //     object from its place on that line. Objects rest on the ground.
 //   • Sun: direction from the Sun's date, time and place (or its manual direction); colour is its temperature times the sunlight left
 //     after the air (SkyShader.js `Transmittance`), so it reddens and fades at sunset; it casts shadows.
+//   • Stars: a point field above the horizon that comes out after sunset (StarField).
 //   • Atmosphere: SkyShader.js baked to an equirectangular image whenever the sky changes and drawn as the background (at infinity, so
 //     zooming can't clip it); the hemisphere light and the horizon haze take their colours from that image.
 // Click an object to select it (Ctrl or Shift adds it). Drag to orbit, right-drag or Shift-drag to pan, wheel to zoom; F frames the
@@ -85,6 +86,58 @@ export function SunLight(Sun, Medium) {
   return { Elevation, Azimuth, Direction: Direction(Elevation, Azimuth), Tint, Colour: Colour.map((C) => (Strength ? C / Strength : 1)), Strength };
 }
 
+// Star field: points on the sky above the horizon, drawn at a fixed size in pixels (so they stay sharp at any zoom, unlike stars baked
+// into the sky image) and kept around the camera at a fixed fraction of its far plane. Brightness follows a magnitude-like spread (a few
+// bright stars, many faint ones), colours run from orange to blue-white, and they fade towards the horizon where the air is thickest.
+// They come out as the sun goes down (none above −4°, all by −14°) and are drawn behind the shapes.
+export const StarCount = 4500;
+function StarField() {
+  let Seed = 20261116;
+  const Random = () => ((Seed = (Seed * 1664525 + 1013904223) >>> 0) / 4294967296);
+  const Positions = new Float32Array(StarCount * 3), Colours = new Float32Array(StarCount * 3), Sizes = new Float32Array(StarCount);
+  for (let Index = 0; Index < StarCount; Index++) {
+    const Y = Random() * 0.995 + 0.005, Around = Random() * Math.PI * 2, Flat = Math.sqrt(1 - Y * Y);
+    Positions.set([Flat * Math.cos(Around), Y, Flat * Math.sin(Around)], Index * 3);
+    const Bright = Math.pow(Random(), 9);
+    const Tint = KelvinTint(3200 + Math.pow(Random(), 0.7) * 9000);
+    const Peak = Math.max(...Tint);
+    Colours.set(Tint.map((C) => (C / Peak) * (0.3 + 0.7 * Bright)), Index * 3);
+    Sizes[Index] = 1.1 + Bright * 2.6;
+  }
+  const Geometry = new THREE.BufferGeometry();
+  Geometry.setAttribute("position", new THREE.BufferAttribute(Positions, 3));
+  Geometry.setAttribute("colour", new THREE.BufferAttribute(Colours, 3));
+  Geometry.setAttribute("size", new THREE.BufferAttribute(Sizes, 1));
+  const Material = new THREE.ShaderMaterial({
+    uniforms: { uRadius: { value: 100 }, uShown: { value: 0 }, uScale: { value: 1 } },
+    vertexShader: `
+      attribute vec3 colour; attribute float size;
+      uniform float uRadius, uScale; varying vec3 vColour; varying float vUp;
+      void main() {
+        vColour = colour; vUp = position.y;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position * uRadius, 1.0);
+        gl_PointSize = size * uScale;
+      }`,
+    fragmentShader: `
+      uniform float uShown; varying vec3 vColour; varying float vUp;
+      void main() {
+        float Fall = 1.0 - smoothstep(0.15, 0.5, length(gl_PointCoord - 0.5));
+        float Air = smoothstep(0.0, 0.18, vUp);
+        gl_FragColor = vec4(vColour * Fall * Air * uShown, 1.0);
+      }`,
+    blending: THREE.AdditiveBlending,
+    transparent: true,
+    depthWrite: false,
+    fog: false,
+    toneMapped: false,
+  });
+  const Stars = new THREE.Points(Geometry, Material);
+  Stars.frustumCulled = false;
+  Stars.renderOrder = -5;
+  Stars.raycast = () => {};
+  return Stars;
+}
+
 export default function Viewport3D({ Rows, Values, Hidden, Selected, Picked = [], Select, Air, Sun, FrameToken = 0 }) {
   const Host = useRef(null), Scene = useRef(null), Latest = useRef({});
   const [Failed, Fail] = useState("");
@@ -115,6 +168,8 @@ export default function Viewport3D({ Rows, Values, Hidden, Selected, Picked = []
       SkyTexture.colorSpace = THREE.SRGBColorSpace;
       SkyTexture.mapping = THREE.EquirectangularReflectionMapping;
       View.scene.background = SkyTexture;
+      const Stars = StarField();
+      View.scene.add(Stars);
       const Lights = View.scene.children.filter((Each) => Each.isLight);
       const Hemisphere = Lights.find((Each) => Each.isHemisphereLight);
       const Fill = Lights.find((Each) => Each.isDirectionalLight && Each !== View.sun);
@@ -149,12 +204,23 @@ export default function Viewport3D({ Rows, Values, Hidden, Selected, Picked = []
         View.lastTime = Now;
         // Zoom stays between 0.6 m (closer, the wheel's glide pushes the camera into a surface) and 150 m (farther, the scene is a dot).
         View.rig.goal.distance = Math.min(150, Math.max(0.6, View.rig.goal.distance));
+        // The camera stays above the ground (8 cm up at least): from below, the ground vanishes and the shapes turn to silhouettes.
+        const Goal = View.rig.goal;
+        Goal.target.y = Math.max(0, Goal.target.y);
+        Goal.pitch = Math.max(Goal.pitch, Math.asin(Math.max(-1, Math.min(1, (0.08 - Goal.target.y) / Goal.distance))));
         View.rig.update(Step);
+        if (View.camera.position.y < 0.08) {
+          View.rig.pitch = Math.max(View.rig.pitch, Math.asin(Math.max(-1, Math.min(1, (0.08 - View.rig.target.y) / View.rig.distance))));
+          View.rig.apply();
+        }
         const Seen = View.camera.matrixWorld.elements.map((Each) => Each.toFixed(5)).join(",") + View.camera.fov.toFixed(3) + View.canvas.width + "x" + View.canvas.height;
         if (!Dirty && Seen === Last) return;
         Last = Seen;
         Dirty = false;
         const Reach = View.camera.far * 0.92;
+        Stars.position.copy(View.camera.position);
+        Stars.material.uniforms.uRadius.value = View.camera.far * 0.6;
+        Stars.material.uniforms.uScale.value = View.renderer.getPixelRatio();
         Ground.position.set(View.camera.position.x, -0.002, View.camera.position.z);
         Ground.scale.setScalar(Reach);
         if (View.scene.fog) {
@@ -162,6 +228,8 @@ export default function Viewport3D({ Rows, Values, Hidden, Selected, Picked = []
           View.scene.fog.near = Math.min(Reach * 0.5, View.rig.distance * 4 + 40);
           View.scene.fog.far = Reach;
         }
+        // The dot grid only reads when looking down; edge-on its dots smear into streaks.
+        View.grid.visible = View.camera.position.y - View.rig.target.y > View.rig.distance * 0.2;
         const Floor = View.grid.material.uniforms;
         Floor.uFocus.value.copy(View.rig.target);
         Floor.uRadius.value = Math.max(6, View.rig.distance * 2.6);
@@ -186,14 +254,26 @@ export default function Viewport3D({ Rows, Values, Hidden, Selected, Picked = []
       Canvas.addEventListener("keydown", (Event) => {
         if (Event.key.toLowerCase() === "f") Scene.current?.FrameChosen?.();
       });
-      Built = { View, Canvas, SkyImage, SkyBake, SkyTexture, Hemisphere, Ground, AimSun, Touch: () => (Dirty = true), Framed: false };
+      Built = { View, Canvas, SkyImage, SkyBake, SkyTexture, Hemisphere, Ground, AimSun, Stars, Touch: () => (Dirty = true), Framed: false, Moved: false };
       Scene.current = Built;
+      // Until the camera is moved by hand, keep the shapes framed when the viewport changes shape (it opens before the panels settle).
+      for (const Name of ["pointerdown", "wheel"]) Canvas.addEventListener(Name, () => (Built.Moved = true), { passive: true });
+      const Refit = new ResizeObserver(() => {
+        if (Built.Moved || !Built.Bounds) return;
+        View.resize();
+        View.frame(Built.Bounds, { yaw: 24, pitch: 9, animate: false });
+        Built.AimSun();
+        Built.Touch();
+      });
+      Refit.observe(Host.current);
+      Built.Refit = Refit;
     } catch (Problem) {
       Fail(String(Problem?.message || Problem));
     }
     return () => {
       if (!Built) return;
       Built.View.resize = () => {}; // its ResizeObserver outlives the canvas
+      Built.Refit.disconnect();
       Built.View.renderer.setAnimationLoop(null);
       Built.View.setContent(null);
       Built.View.renderer.dispose();
@@ -214,7 +294,7 @@ export default function Viewport3D({ Rows, Values, Hidden, Selected, Picked = []
     const Built = Scene.current;
     if (!Built) return;
     // The disc is drawn larger than life (×4) so it reads at viewport sizes; the glow is the shader's own.
-    PaintSky(Built.SkyBake, Medium, { Sun: Light.Direction, Tint: Light.Tint }, { Mode: "equirect", Basis: ViewBasis([0, 0, 1]), Warp: true, Disc: SunAngularRadius * 4, Glow: 0.5, Stars: 1, Exposure: 1.1 });
+    PaintSky(Built.SkyBake, Medium, { Sun: Light.Direction, Tint: Light.Tint }, { Mode: "equirect", Basis: ViewBasis([0, 0, 1]), Warp: true, Disc: SunAngularRadius * 4, Glow: 0.5, Stars: 0, Exposure: 1.1 });
     // three.js reads equirectangular images the other way round (u = atan2(z, x) / 2π + ½), so mirror the bake left to right.
     const Brush = Built.SkyImage.getContext("2d", { willReadFrequently: true });
     const [Width, Height] = [Built.SkyImage.width, Built.SkyImage.height];
@@ -224,6 +304,18 @@ export default function Viewport3D({ Rows, Values, Hidden, Selected, Picked = []
     // Below the horizon the three.js ground takes over. The image there carries on with the colour just above the horizon (which is
     // also the haze colour), so the thin sliver between the ground's far edge and the true horizon doesn't show a seam.
     const Horizon = Math.round(Height / 2);
+    // Night: the sky never goes fully black (airglow and starlight); a faint blue that is brightest at the horizon keeps it readable.
+    const Night = Math.max(0, Math.min(1, (-Light.Elevation - 2) / 10));
+    if (Night > 0) {
+      const Glow = Brush.createLinearGradient(0, 0, 0, Horizon);
+      Glow.addColorStop(0, `rgba(6, 9, 20, ${Night})`);
+      Glow.addColorStop(0.8, `rgba(14, 20, 40, ${Night})`);
+      Glow.addColorStop(1, `rgba(26, 34, 60, ${Night})`);
+      Brush.globalCompositeOperation = "lighter";
+      Brush.fillStyle = Glow;
+      Brush.fillRect(0, 0, Width, Horizon);
+      Brush.globalCompositeOperation = "source-over";
+    }
     Brush.drawImage(Built.SkyImage, 0, Horizon - 3, Width, 1, 0, Horizon, Width, Height - Horizon);
     Built.SkyTexture.needsUpdate = true;
     // Average linear colour of the image rows between two elevations (degrees).
@@ -240,12 +332,22 @@ export default function Viewport3D({ Rows, Values, Hidden, Selected, Picked = []
     Built.Hemisphere.color.setRGB(...Mean.map((C) => C / Brightest));
     Built.Hemisphere.groundColor.setRGB(...Medium.Ground.map((C) => Math.min(1, C * 2.2 * (0.3 + Light.Strength))));
     Built.Hemisphere.intensity = 0.15 + 1.25 * Math.min(1, Brightest * 1.6);
+    // After dusk a moonlit blue fill takes over, so the shapes stay readable at night.
+    if (Night > 0) {
+      Built.Hemisphere.color.lerp(new THREE.Color("#7f95c8"), Night);
+      Built.Hemisphere.groundColor.lerp(new THREE.Color("#2a2f3c"), Night);
+      Built.Hemisphere.intensity = Math.max(Built.Hemisphere.intensity, 0.9 * Night);
+    }
     // Haze: the sky's colour at the horizon, so distant ground fades into it the way it does outdoors.
     Built.View.scene.fog = new THREE.Fog(new THREE.Color().setRGB(...Band(1.4, 0.4)), 40, 300);
     const Beam = Built.View.sun;
     Beam.color.setRGB(...Light.Colour);
     Beam.intensity = 2.6 * Light.Strength * Math.max(0, Math.min(1, (Light.Elevation + 1) / 3));
     Built.AimSun();
+    // Stars come out between −4° and −14° of sun.
+    Built.Stars.material.uniforms.uShown.value = Math.max(0, Math.min(1, (-Light.Elevation - 4) / 10));
+    Built.Stars.visible = Built.Stars.material.uniforms.uShown.value > 0;
+    Built.Canvas.dataset.stars = Built.Stars.material.uniforms.uShown.value.toFixed(2);
     Built.Ground.material.color.setRGB(...Medium.Ground);
     Built.Touch();
     Built.Canvas.dataset.sky = SkyKey;
@@ -288,7 +390,8 @@ export default function Viewport3D({ Rows, Values, Hidden, Selected, Picked = []
     }
     Built.View.setContent(Group);
     if (!Built.Framed && !Bounds.isEmpty()) {
-      Built.View.frame(Bounds.clone().expandByScalar(0.2), { yaw: 24, pitch: 9, animate: false });
+      Built.Bounds = Bounds.clone().expandByScalar(0.45); // room for the workspace rail on the left
+      Built.View.frame(Built.Bounds, { yaw: 24, pitch: 9, animate: false });
       Built.Framed = true;
     }
     // Shadows cover everything that's out.

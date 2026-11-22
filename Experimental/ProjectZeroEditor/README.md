@@ -61,6 +61,10 @@ starting point for the UI redesign.
   - **Atmosphere**: `SkyShader.js` baked to a 1024 × 512 equirectangular image (sun disc included), drawn as the scene background at
     infinity, so zooming can't clip it. Below the horizon the image continues the horizon colour, and the ground (which follows the
     camera out to just short of the far plane) fades into haze of that colour, so there is no edge or seam. Clouds are not drawn.
+  - **Stars**: a 4,500-point field above the horizon (`StarField`), sharp at any zoom, fading towards the horizon. It comes out as the
+    sun goes from −4° to −14°. At night the sky keeps a faint blue airglow and a moonlit fill light keeps the shapes readable.
+  - The camera stays above the ground. The dot grid shows only when looking down. Until you move the camera, the shapes are re-framed
+    when the viewport changes shape.
   - Zoom stays between 0.6 m and 150 m. (Earlier the sky was an 800 m sphere that the camera rig's moving far plane cut away when
     zooming in, and the ground disc and fixed fog showed when zooming out.)
   - **Controls**: click to select, Ctrl or Shift click to add, drag to orbit, right or Shift drag to pan, wheel to zoom, F to focus.
@@ -85,7 +89,7 @@ starting point for the UI redesign.
 - **`SkyShader.js`**: one WebGL2 sky renderer on a round planet, shared by both cards and the viewport. It does single scattering with
   ground light, a limb-darkened disc and stars, in perspective, panorama and equirectangular views.
 - **Checks.**
-  - New: `CheckViewport3D.mjs` (10, including zooming in and out with the sky kept).
+  - New: `CheckViewport3D.mjs` (11, including the star field and zooming in and out with the sky kept).
   - Rewritten: `CheckFirstCards.mjs` (4).
   - Updated for the 3D main view: `CheckQuickTools` (split view is now 3D beside one marker pane), `CheckConstruction` and `CheckInspectorLayout`.
 - Evidence is in `Exhibits/ProjectZeroEditor/FollowUp48/`. Headless SwiftShader only. Names are unapproved.
