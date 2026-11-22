@@ -11,15 +11,21 @@ import { fitCollision, collisionVolume, analyseTopology, surfaceArea, computeBou
 import { formatLength as FormatLength } from "../FractureEditor/FractureModel.js";
 import { PrimitiveSurface, OrbitView, PaintPolygons } from "./WorkspaceGeometry.js";
 import { ShapeOf, CollisionProxy } from "./PrimitiveInspector.jsx";
+import { convexHull, inflateHull } from "./ConvexHull.js";
+import { CustomKey, CustomModeKey, CustomModes, ColliderAccept, importCollider, customTriangles } from "./ColliderImport.js";
 import { Surface, useOrbit, Download, GeometryKeys } from "./WorkspaceSurface.jsx";
 
 // The fits MeshAnalysis can make, with the tone each is drawn in.
+// Box, sphere and capsule are MeshAnalysis fits; Convex hull is ConvexHull.js; Triangles is the surface itself; Custom is the import.
 export const FitShapes = [
   { Type: "box", Label: "Box", Tone: "#7ab8ff" },
   { Type: "sphere", Label: "Sphere", Tone: "#7be0ad" },
   { Type: "capsule", Label: "Capsule", Tone: "#edc181" },
+  { Type: "convex", Label: "Convex hull", Tone: "#c5a3ff" },
+  { Type: "triangles", Label: "Triangles", Tone: "#e59a8a", Exact: true },
+  { Type: "custom", Label: "Custom", Tone: "#8fd3d8" },
 ];
-const ProxyNames = { auto: "Automatic", box: "Box", sphere: "Sphere", capsule: "Capsule", convex: "Convex hull", sdf: "Distance field" };
+const ProxyNames = { auto: "Automatic", box: "Box", sphere: "Sphere", capsule: "Capsule", convex: "Convex hull", triangles: "Triangles", sdf: "Distance field", custom: "Custom" };
 
 // Enclosed volume by the divergence theorem (signed tetrahedra against the origin); exact for a closed surface.
 function EnclosedVolume(P, I) {
@@ -47,6 +53,8 @@ export function useCollisionFit(Subject, Values) {
   const Read = (Name, Initial) => (Values[Name] === undefined ? Initial : Values[Name]);
   const Scale = Array.isArray(Values.Scale) ? Values.Scale.map((Each) => Math.abs(+Each) || 1) : [1, 1, 1];
   const Margin = Math.max(0, +Read("Collision Margin", 0.01) || 0);
+  const Custom = Values[CustomKey] || null;
+  const CustomMode = Math.max(0, Math.min(1, +Read(CustomModeKey, 0) || 0));
   const BodyKey = JSON.stringify([Shape, Scale, GeometryKeys.map((Name) => Values[Name])]);
   const Body = useMemo(() => PrimitiveSurface(Shape, Read, Scale), [BodyKey]);
   const Report = useMemo(() => {
@@ -55,19 +63,56 @@ export function useCollisionFit(Subject, Values) {
     const Topology = analyseTopology(Welded.Indices, Welded.Count);
     const Volume = EnclosedVolume(P, I);
     const Fits = FitShapes.map((Each) => {
-      const Fit = fitCollision(P, Each.Type, Margin);
-      const Enclosing = collisionVolume(Fit);
-      return { ...Each, Fit, Volume: Enclosing, Tightness: Topology.closed && Enclosing > 0 ? Volume / Enclosing : null };
+      let Fit = null, Enclosing = 0;
+      if (Each.Type === "convex") {
+        const Hull = inflateHull(convexHull(P), Margin);
+        if (Hull) [Fit, Enclosing] = [{ type: "convex", Positions: Hull.Positions, Indices: Hull.Indices, Points: Hull.Points, Faces: Hull.Faces }, Hull.Volume];
+      } else if (Each.Type === "triangles") [Fit, Enclosing] = [{ type: "triangles", Positions: P, Indices: I }, Volume];
+      else if (Each.Type === "custom") {
+        const Own = customTriangles(Custom, CustomMode);
+        if (Own) [Fit, Enclosing] = [{ type: "custom", Positions: Own.Positions, Indices: Own.Indices }, Own.Volume];
+      } else {
+        Fit = fitCollision(P, Each.Type, Margin);
+        Enclosing = collisionVolume(Fit);
+      }
+      return { ...Each, Fit, Volume: Enclosing, Tightness: Fit && Topology.closed && Enclosing > 0 ? Volume / Enclosing : null };
     });
-    const Ranked = [...Fits].filter((Each) => Each.Tightness !== null).sort((A, B) => B.Tightness - A.Tightness);
+    // The exact surface and your own import aren't fits, so they never take the "tightest" mark. Fits are listed cheapest first; a
+    // costlier one has to beat the current best by half a percent, so a cube keeps its box when the hull ties with it.
+    const Ranked = [];
+    for (const Each of Fits) if (Each.Tightness !== null && !Each.Exact && Each.Type !== "custom" && (!Ranked[0] || Each.Tightness > Ranked[0].Tightness + 0.005)) Ranked.unshift(Each);
     return { Topology, Volume, Area: surfaceArea(P, I), Bounds: computeBounds(P), Fits, Best: Ranked[0]?.Type || "box", Triangles: I.length / 3, Vertices: Welded.Count };
-  }, [BodyKey, Margin]);
+  }, [BodyKey, Margin, Custom?.At, CustomMode]);
   const Chosen = CollisionProxy(Shape, Read);
-  return { Shape, Body, Report, Margin, Chosen, Stored: Read("Collision Shape", "auto") };
+  return { Shape, Body, Report, Margin, Chosen, Custom, CustomMode, Stored: Read("Collision Shape", "auto") };
+}
+
+// Feature edges of a triangle set: open edges and creases sharper than about 2°, so flat hull faces don't draw their diagonals.
+function FeatureEdges(P, I) {
+  const Corner = (V) => [P[V * 3], P[V * 3 + 1], P[V * 3 + 2]];
+  const Edges = new Map();
+  for (let T = 0; T < I.length; T += 3) {
+    const [A, B, C] = [Corner(I[T]), Corner(I[T + 1]), Corner(I[T + 2])];
+    const U = [B[0] - A[0], B[1] - A[1], B[2] - A[2]], V = [C[0] - A[0], C[1] - A[1], C[2] - A[2]];
+    const N = [U[1] * V[2] - U[2] * V[1], U[2] * V[0] - U[0] * V[2], U[0] * V[1] - U[1] * V[0]], Size = Math.hypot(...N) || 1;
+    for (let K = 0; K < 3; K++) {
+      const From = I[T + K], To = I[T + ((K + 1) % 3)], Key = From < To ? From + ":" + To : To + ":" + From;
+      if (!Edges.has(Key)) Edges.set(Key, { From, To, Normals: [] });
+      Edges.get(Key).Normals.push(N.map((Each) => Each / Size));
+    }
+  }
+  const Lines = [];
+  for (const { From, To, Normals } of Edges.values()) {
+    const Crease = Normals.length !== 2 || Normals[0][0] * Normals[1][0] + Normals[0][1] * Normals[1][1] + Normals[0][2] * Normals[1][2] < 0.9994;
+    if (Crease) Lines.push([Corner(From), Corner(To)]);
+  }
+  return Lines;
 }
 
 // Wire outline of a fitted shape as 3D polylines.
-function Outline(Fit) {
+export function Outline(Fit) {
+  if (!Fit) return [];
+  if (Fit.Positions) return FeatureEdges(Fit.Positions, Fit.Indices);
   const Ring = (Centre, U, V, Radius, From = 0, To = Math.PI * 2, Steps = 40) =>
     Array.from({ length: Steps + 1 }, (_, Index) => {
       const A = From + ((To - From) * Index) / Steps;
@@ -131,8 +176,10 @@ export function CollisionView({ Subject, Values, Workspace, SetWorkspace }) {
     PaintPolygons(Brush, View, Polygons);
     for (const Each of Fit.Report.Fits) {
       const Active = Each.Type === Showing;
+      // Only the three analytic fits ghost in the background; hull, triangles and custom are drawn when picked.
+      if (!Active && (Each.Fit?.Positions || !Each.Fit)) continue;
       Brush.strokeStyle = Each.Tone;
-      Brush.globalAlpha = Active ? 0.95 : 0.18;
+      Brush.globalAlpha = Active ? 0.95 : 0.14;
       Brush.lineWidth = Active ? 1.6 : 1;
       Brush.setLineDash(Active ? [] : [4, 4]);
       for (const Line of Outline(Each.Fit)) {
@@ -151,7 +198,7 @@ export function CollisionView({ Subject, Values, Workspace, SetWorkspace }) {
         <span className="ws-pane-label">
           {FitShapes.find((Each) => Each.Type === Showing)?.Label} fit · margin {FormatLength(Fit.Margin)} · drag to orbit
         </span>
-        <Surface Paint={Paint} Label={`${Subject.Name} collision fit`} Deps={[Showing, Fit.Margin]} Handlers={{ ...Orbit, onPointerUp: (Event) => Orbit.End(Event) }} />
+        <Surface Paint={Paint} Label={`${Subject.Name} collision fit`} Deps={[Showing, Fit.Margin, Fit.Custom?.At, Fit.CustomMode]} Handlers={{ ...Orbit, onPointerUp: (Event) => Orbit.End(Event) }} />
       </div>
       <div className="ws-pane ws-fit-compare">
         <span className="ws-pane-label">How much of each shape the object fills · higher is tighter</span>
@@ -164,11 +211,14 @@ export function CollisionView({ Subject, Values, Workspace, SetWorkspace }) {
               className={"ws-fit-bar" + (Each.Type === Showing ? " active" : "")}
               data-fit={Each.Type}
               style={{ "--tone": Each.Tone, "--fill": `${(100 * (Each.Tightness || 0)) / Tightest}%` }}
+              disabled={!Each.Fit}
               onClick={() => SetWorkspace((Previous) => ({ ...Previous, FitPreview: Each.Type }))}
             >
               <span className="ws-fit-name">
                 <b>{Each.Label}</b>
                 {Each.Type === Fit.Report.Best && <small>tightest</small>}
+                {Each.Exact && <small>exact · static only</small>}
+                {Each.Type === "custom" && !Each.Fit && <small>import in the panel</small>}
                 {Each.Type === Fit.Chosen && <small className="used">in use</small>}
               </span>
               <span className="ws-fit-track">
@@ -194,10 +244,26 @@ export function CollisionPanel({ Subject, Values, Change, Workspace, SetWorkspac
   const Readout = (Label, Text) => <Control key={Label} Field={{ Label, Control: "Readout" }} Value={Text} />;
   const Showing = Workspace.FitPreview || (FitShapes.some((Each) => Each.Type === Fit.Chosen) ? Fit.Chosen : Report.Best);
   const Name = String(Subject.Name || "geometry").replace(/[^a-z0-9]+/gi, "_");
+  const [Importing, SetImporting] = React.useState("");
+  const Picker = React.useRef(null);
+  const Load = async (File_) => {
+    if (!File_) return;
+    SetImporting(`Reading ${File_.name}…`);
+    try {
+      const Record = await importCollider(File_);
+      Change(CustomKey, Record);
+      SetWorkspace((Previous) => ({ ...Previous, FitPreview: "custom" }));
+      SetImporting(`Imported ${Record.Name}: ${Record.Triangles.toLocaleString("en-US")} triangles, ${Record.Closed ? "closed" : "open"}.`);
+    } catch (Problem) {
+      SetImporting(String(Problem?.message || Problem));
+    }
+  };
+  // Hull and analytic fits export in full; the surface and the import are referenced, not copied.
+  const Exported = (Each) => (!Each.Fit ? null : Each.Type === "triangles" || Each.Type === "custom" ? { type: Each.Type } : Each.Fit.Positions ? { type: Each.Type, positions: Array.from(Each.Fit.Positions, (V) => +V.toFixed(5)), indices: Array.from(Each.Fit.Indices) } : Each.Fit);
   const ExportFits = () =>
     Download(
       `${Name}_collision.json`,
-      JSON.stringify({ object: Subject.Name, margin: Fit.Margin, enclosedVolume: Report.Volume, closed: T.closed, fits: Report.Fits.map((Each) => ({ ...Each.Fit, volume: Each.Volume, tightness: Each.Tightness })) }, null, 2),
+      JSON.stringify({ object: Subject.Name, margin: Fit.Margin, enclosedVolume: Report.Volume, closed: T.closed, fits: Report.Fits.filter((Each) => Each.Fit).map((Each) => ({ ...Exported(Each), volume: Each.Volume, tightness: Each.Tightness })) }, null, 2),
       "application/json",
     );
   return (
@@ -227,14 +293,19 @@ export function CollisionPanel({ Subject, Values, Change, Workspace, SetWorkspac
               </button>
               <span>{Cubic(Each.Volume)}</span>
               <span>{Percent(Each.Tightness)}</span>
-              <button type="button" className="ws-fit-use" data-use={Each.Type} disabled={Fit.Stored === Each.Type} onClick={() => Change("Collision Shape", Each.Type)}>
+              <button type="button" className="ws-fit-use" data-use={Each.Type} disabled={Fit.Stored === Each.Type || !Each.Fit} onClick={() => Change("Collision Shape", Each.Type)}>
                 {Fit.Stored === Each.Type ? "In use" : "Use"}
               </button>
             </React.Fragment>
           ))}
         </div>
         <Control Field={{ Label: "Margin", Minimum: 0, Maximum: 0.1, Decimals: 3, Unit: "m", Default: 0.01 }} Value={Fit.Margin} Change={(Next) => Change("Collision Margin", Next)} />
+        <input ref={Picker} type="file" accept={ColliderAccept} hidden aria-label="Collider file" onChange={(Event) => Load(Event.target.files?.[0])} />
+        {Fit.Custom && <Control Field={{ Label: "Custom uses", Control: "Select", Options: CustomModes }} Value={Fit.CustomMode} Change={(Index) => Change(CustomModeKey, Index)} />}
         <div className="ws-actions">
+          <button type="button" data-import="collider" onClick={() => Picker.current?.click()}>
+            {Fit.Custom ? `Replace ${Fit.Custom.Name}…` : "Import custom collider…"}
+          </button>
           <button type="button" disabled={Fit.Stored === "auto"} onClick={() => Change("Collision Shape", "auto")}>
             Back to Automatic
           </button>
@@ -242,7 +313,8 @@ export function CollisionPanel({ Subject, Values, Change, Workspace, SetWorkspac
             Export fits as JSON
           </button>
         </div>
-        <p className="ws-note">Box is axis aligned, the sphere is Ritter's bound and the capsule runs along the longest side. Convex hull and the distance field stay on the Collision component's own page.</p>
+        {Importing && <p className="ws-note ws-notice" role="status">{Importing}</p>}
+        <p className="ws-note">Box is axis aligned, the sphere is Ritter's bound and the capsule runs along the longest side. The convex hull wraps every corner. Triangles is the surface itself: exact, but only for bodies that don't move. Custom is your own file (OBJ, STL, PLY, glTF / GLB, .facet) in the object's space.</p>
       </Card>
     </>
   );

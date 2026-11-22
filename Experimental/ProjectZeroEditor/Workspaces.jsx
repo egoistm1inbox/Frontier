@@ -22,6 +22,8 @@ import {
   MATERIAL,
   ENERGY_PRESETS,
   LIMITS,
+  MAX_POINTS,
+  PIECE_COLLISIONS,
   formatEnergy as FormatEnergy,
   formatLength as FormatLength,
 } from "../FractureEditor/FractureModel.js";
@@ -30,7 +32,8 @@ import { ShapeOf } from "./PrimitiveInspector.jsx";
 import { Surface, useOrbit, Download, Hue, Clamp, GeometryKeys } from "./WorkspaceSurface.jsx";
 import { SdfView, SdfPanel } from "./SdfWorkspace.jsx";
 import { ClusterView, ClusterPanel } from "./ClusterWorkspace.jsx";
-import { CollisionView, CollisionPanel } from "./CollisionWorkspace.jsx";
+import { CollisionView, CollisionPanel, Outline as ColliderOutline } from "./CollisionWorkspace.jsx";
+import { pieceColliders } from "./PieceCollision.js";
 import { CaptureView, CapturePanel } from "./CaptureWorkspace.jsx";
 import "./Workspaces.css";
 
@@ -333,6 +336,12 @@ const OwnerOf = (Subject, Values) => ({
     return Number.isFinite(Amount) ? Math.min(1000, Math.max(0.001, Amount)) : 1;
   }),
 });
+// Fracture points as a list. One point is the recipe's own X / Y / Z / Energy; two or more are Settings.Points.
+export const PointsOf = (Settings) => (Settings.Points?.length > 1 ? Settings.Points : [{ X: Settings.X, Y: Settings.Y, Z: Settings.Z, Energy: Settings.Energy }]);
+export const PointsPatch = (List) => (List.length > 1 ? { Points: List, ...List[0], Energy: List.reduce((Sum, Each) => Sum + Each.Energy, 0) } : { Points: null, ...List[0] });
+const PointTones = ["#ffb15a", "#7cc8ff", "#ff7aa8", "#9be38a", "#c9a2ff", "#ffe07a", "#6fe3d6", "#ff8f6b"];
+export const PointTone = (Index) => PointTones[Index % PointTones.length];
+
 export function useShatter(Subject, Values) {
   const Owner = OwnerOf(Subject, Values);
   const Settings = NormalizeRecipe(Values.Fracture);
@@ -341,11 +350,13 @@ export function useShatter(Subject, Values) {
 }
 
 // Exploded pieces with the impact rings; shared by the fracture workspace and the inspector's preview card.
-export function PaintFracture(Brush, Width, Height, { Owner, Settings, Result, Yaw = 0.7, Pitch = 0.45, Zoom = 1, Explode = 0.25 }) {
+// Points: [{ At, Energy }] markers (defaults to the result's impacts); Selected: highlighted point; Colliders: pieceColliders() output.
+export function PaintFracture(Brush, Width, Height, { Owner, Settings, Result, Yaw = 0.7, Pitch = 0.45, Zoom = 1, Explode = 0.25, Points = null, Selected = -1, Colliders = null }) {
   const Tone = MATERIAL[Settings.Material]?.tone || "#a29d94";
   const Radius = Math.hypot(...Owner.Scale) / 2;
   const Offset = (Cell) => {
-    const D = [Cell.centroid[0] - Result.impact[0] * 0.3, Cell.centroid[1] - Result.impact[1] * 0.3, Cell.centroid[2] - Result.impact[2] * 0.3];
+    const From = Result.impacts?.[Cell.nearest] || Result.impact;
+    const D = [Cell.centroid[0] - From[0] * 0.3, Cell.centroid[1] - From[1] * 0.3, Cell.centroid[2] - From[2] * 0.3];
     const Length = Math.hypot(...D) || 1;
     return D.map((Each) => (Each / Length) * Explode * Radius * (0.4 + Length / Radius));
   };
@@ -384,32 +395,72 @@ export function PaintFracture(Brush, Width, Height, { Owner, Settings, Result, Y
     }
   });
   const Drawn = PaintPolygons(Brush, View, Polygons);
-  // Impact marker.
-  if (Settings.Enabled) {
-    const [X, Y] = View.Project(Result.impact);
-    Brush.strokeStyle = "#ffb15a";
-    Brush.lineWidth = 1.5;
-    for (const Ring of [5, 10, 16]) {
-      Brush.globalAlpha = 1 - Ring / 20;
-      Brush.beginPath();
-      Brush.arc(X, Y, Ring, 0, Math.PI * 2);
-      Brush.stroke();
-    }
+  // Piece colliders, moved with their pieces.
+  if (Settings.Enabled && Colliders) {
+    Brush.strokeStyle = "#7cf0c8";
+    Brush.lineWidth = 1;
+    Brush.globalAlpha = 0.75;
+    Result.cells.forEach((Cell, Index) => {
+      const Fit = Colliders.Pieces[Index]?.Fit;
+      if (!Fit) return;
+      const Shift = Offset(Cell);
+      for (const Line of ColliderOutline(Fit)) {
+        Brush.beginPath();
+        Line.map((Point) => View.Project([Point[0] + Shift[0], Point[1] + Shift[1], Point[2] + Shift[2]])).forEach(([X, Y], Slot) => (Slot ? Brush.lineTo(X, Y) : Brush.moveTo(X, Y)));
+        Brush.stroke();
+      }
+    });
     Brush.globalAlpha = 1;
   }
-  return { Drawn, View };
+  // Fracture point markers: rings grow with each point's energy; the selected point gets a solid disc and its number.
+  const Markers = [];
+  if (Settings.Enabled) {
+    const List = Points || (Result.impacts || [Result.impact]).map((At, Index) => ({ At, Energy: PointsOf(Settings)[Index]?.Energy ?? Settings.Energy }));
+    List.forEach(({ At, Energy }, Index) => {
+      const [X, Y] = View.Project(At), Grow = 0.7 + 0.6 * Math.min(1, Math.sqrt(Energy / 20000)), Colour = PointTone(Index);
+      Brush.strokeStyle = Colour;
+      Brush.lineWidth = 1.5;
+      for (const Ring of [5, 10, 16]) {
+        Brush.globalAlpha = 1 - Ring / 20;
+        Brush.beginPath();
+        Brush.arc(X, Y, Ring * Grow, 0, Math.PI * 2);
+        Brush.stroke();
+      }
+      Brush.globalAlpha = 1;
+      if (List.length > 1 || Index === Selected) {
+        Brush.fillStyle = Index === Selected ? Colour : "#111111dd";
+        Brush.beginPath();
+        Brush.arc(X, Y, 7, 0, Math.PI * 2);
+        Brush.fill();
+        Brush.fillStyle = Index === Selected ? "#111" : Colour;
+        Brush.font = "600 9px Inter, system-ui, sans-serif";
+        Brush.textAlign = "center";
+        Brush.textBaseline = "middle";
+        Brush.fillText(String(Index + 1), X, Y + 0.5);
+      }
+      Markers.push({ Index, X, Y });
+    });
+  }
+  return { Drawn, View, Markers };
 }
 
 function FractureView({ Subject, Values, Change, Workspace, SetWorkspace }) {
   const { Owner, Settings, Result } = useShatter(Subject, Values);
   const Orbit = useOrbit(Workspace, SetWorkspace);
-  const Last = useRef({ Drawn: [], View: null });
+  const Last = useRef({ Drawn: [], View: null, Markers: [] });
+  const Grab = useRef(null);
+  const [Moving, SetMoving] = React.useState(null);
+  const List = PointsOf(Settings);
+  const Selected = Math.min(Workspace.FracturePoint ?? 0, List.length - 1);
+  const Colliders = useMemo(() => (Settings.Enabled && Workspace.ShowPieceColliders ? pieceColliders(Result.cells, Settings.PieceCollision) : null), [Result, Settings.PieceCollision, Workspace.ShowPieceColliders]);
+  const Shown = List.map((Each, Index) => ({ At: Moving && Moving.Index === Index ? Moving.At : Result.impacts?.[Index] || [Each.X, Each.Y, Each.Z], Energy: Each.Energy }));
   const Paint = (Brush, Width, Height) => {
-    Last.current = PaintFracture(Brush, Width, Height, { Owner, Settings, Result, Yaw: Workspace.Yaw ?? 0.7, Pitch: Workspace.Pitch ?? 0.45, Zoom: Workspace.Zoom ?? 1, Explode: Workspace.Explode ?? 0.25 });
+    Last.current = PaintFracture(Brush, Width, Height, { Owner, Settings, Result, Yaw: Workspace.Yaw ?? 0.7, Pitch: Workspace.Pitch ?? 0.45, Zoom: Workspace.Zoom ?? 1, Explode: Workspace.Explode ?? 0.25, Points: Shown, Selected, Colliders });
+    // Marker positions in CSS pixels, for keyboardless tools and checks.
+    Brush.canvas.dataset.markers = JSON.stringify(Last.current.Markers.map(({ X, Y }) => [Math.round(X), Math.round(Y)]));
   };
-  // Click: front-most face under the pointer, then the ray/plane hit in the object's unexploded space.
-  const Pick = (Event) => {
-    if (!Settings.Enabled) return;
+  // Front-most face under the pointer, then the ray/plane hit in the object's unexploded space.
+  const Hit = (Event) => {
     const Rect = Event.currentTarget.getBoundingClientRect(), Sx = Event.clientX - Rect.left, Sy = Event.clientY - Rect.top;
     const { Drawn, View } = Last.current;
     for (let Index = Drawn.length - 1; Index >= 0; Index--) {
@@ -420,20 +471,66 @@ function FractureView({ Subject, Values, Change, Workspace, SetWorkspace }) {
       if (!Inside) continue;
       const Ray = View.Unproject(Sx, Sy), N = Polygon.Normal, P0 = Polygon.Points[0];
       const Denominator = N[0] * Ray.Direction[0] + N[1] * Ray.Direction[1] + N[2] * Ray.Direction[2];
-      if (Math.abs(Denominator) < 1e-9) return;
+      if (Math.abs(Denominator) < 1e-9) return null;
       const T = (N[0] * (P0[0] - Ray.Origin[0]) + N[1] * (P0[1] - Ray.Origin[1]) + N[2] * (P0[2] - Ray.Origin[2])) / Denominator;
-      const Hit = [0, 1, 2].map((Axis) => Ray.Origin[Axis] + Ray.Direction[Axis] * T - Polygon.Shift[Axis]);
-      Change("Fracture", { ...Settings, X: +Hit[0].toFixed(3), Y: +Hit[1].toFixed(3), Z: +Hit[2].toFixed(3), EditedAt: Date.now() });
-      return;
+      return [0, 1, 2].map((Axis) => +(Ray.Origin[Axis] + Ray.Direction[Axis] * T - Polygon.Shift[Axis]).toFixed(3));
     }
+    return null;
   };
+  const Store = (Next) => Change("Fracture", { ...Settings, ...PointsPatch(Next), EditedAt: Date.now() });
+  const Place = (Index, At) => Store(List.map((Each, Slot) => (Slot === Index ? { ...Each, X: At[0], Y: At[1], Z: At[2] } : Each)));
+  // Click on the object: adds a point (up to MAX_POINTS) or, in move mode, moves the selected one.
+  const Pick = (Event) => {
+    if (!Settings.Enabled) return;
+    const At = Hit(Event);
+    if (!At) return;
+    if ((Workspace.FractureClick || "add") === "add" && List.length < MAX_POINTS) {
+      Store([...List, { X: At[0], Y: At[1], Z: At[2], Energy: List[Selected]?.Energy ?? 2500 }]);
+      SetWorkspace((Previous) => ({ ...Previous, FracturePoint: List.length }));
+    } else Place(Selected, At);
+  };
+  const Near = (Event) => {
+    const Rect = Event.currentTarget.getBoundingClientRect(), Sx = Event.clientX - Rect.left, Sy = Event.clientY - Rect.top;
+    let Best = null;
+    for (const Marker of Last.current.Markers) {
+      const Distance = Math.hypot(Marker.X - Sx, Marker.Y - Sy);
+      if (Distance < 12 && (!Best || Distance < Best.Distance)) Best = { ...Marker, Distance };
+    }
+    return Best;
+  };
+  const Handlers = {
+    onWheel: Orbit.onWheel,
+    onPointerDown: (Event) => {
+      const Marker = Settings.Enabled ? Near(Event) : null;
+      if (!Marker) return Orbit.onPointerDown(Event);
+      Grab.current = { Index: Marker.Index, X: Event.clientX, Y: Event.clientY, Moved: false };
+      Event.currentTarget.setPointerCapture(Event.pointerId);
+      SetWorkspace((Previous) => ({ ...Previous, FracturePoint: Marker.Index }));
+    },
+    onPointerMove: (Event) => {
+      const Held = Grab.current;
+      if (!Held) return Orbit.onPointerMove(Event);
+      if (Math.hypot(Event.clientX - Held.X, Event.clientY - Held.Y) > 3) Held.Moved = true;
+      if (!Held.Moved) return;
+      const At = Hit(Event);
+      if (At) SetMoving({ Index: Held.Index, At });
+    },
+    onPointerUp: (Event) => {
+      const Held = Grab.current;
+      Grab.current = null;
+      if (!Held) return Orbit.End(Event, Pick);
+      if (Held.Moved && Moving) Place(Held.Index, Moving.At);
+      SetMoving(null);
+    },
+  };
+  const Mode = (Workspace.FractureClick || "add") === "add" && List.length < MAX_POINTS ? "click to add a point" : `click to move point ${Selected + 1}`;
   return (
     <div className="ws-view ws-view-fracture">
       <div className="ws-pane">
         <span className="ws-pane-label">
-          {Settings.Enabled ? `${Result.cells.length} pieces · ${MATERIAL[Settings.Material].name} · click the object to move the impact` : "Fracture is off · enable it in the inspector"}
+          {Settings.Enabled ? `${Result.cells.length} pieces · ${MATERIAL[Settings.Material].name} · ${List.length} point${List.length === 1 ? "" : "s"} · ${Mode} · drag a point to move it` : "Fracture is off · enable it in the inspector"}
         </span>
-        <Surface Paint={Paint} Label={`${Subject.Name} fracture preview`} Handlers={{ ...Orbit, onPointerUp: (Event) => Orbit.End(Event, Pick) }} />
+        <Surface Paint={Paint} Label={`${Subject.Name} fracture preview`} Deps={[Moving, Selected, Colliders]} Handlers={Handlers} />
       </div>
     </div>
   );
@@ -446,6 +543,14 @@ function FracturePanelBody({ Subject, Values, Change, Workspace, SetWorkspace, K
   const Stats = PieceStats(Result.cells), Bars = Histogram(Result.cells, 14), Peak = Math.max(1, ...Bars.bins);
   const State = BakeState(Owner, Settings);
   const Material = MATERIAL[Settings.Material];
+  const List = PointsOf(Settings);
+  const Selected = Math.min(Workspace.FracturePoint ?? 0, List.length - 1);
+  const Choose = (Index) => SetWorkspace((Previous) => ({ ...Previous, FracturePoint: Index }));
+  const Store = (Next) => Assign(PointsPatch(Next));
+  const Edit = (Index, Patch) => Store(List.map((Each, Slot) => (Slot === Index ? { ...Each, ...Patch } : Each)));
+  const Total = List.reduce((Sum, Each) => Sum + Each.Energy, 0);
+  const Colliders = useMemo(() => (Settings.Enabled ? pieceColliders(Result.cells, Settings.PieceCollision) : null), [Result, Settings.PieceCollision, Settings.Enabled]);
+  const ClickMode = Workspace.FractureClick || "add";
   return (
     <>
       <Card Title="Shatter" Class="ws-card">
@@ -467,6 +572,73 @@ function FracturePanelBody({ Subject, Values, Change, Workspace, SetWorkspace, K
         <Control Field={{ Label: "Enable fracture", Control: "Switch" }} Value={Settings.Enabled} Change={(Next) => Assign({ Enabled: Next })} />
         <Control Field={{ Label: "Explode view", Minimum: 0, Maximum: 1, Decimals: 2, Unit: "", Default: 0.25 }} Value={Workspace.Explode ?? 0.25} Change={(Next) => SetWorkspace((Previous) => ({ ...Previous, Explode: Next }))} />
       </Card>
+      <Card Title="Fracture points" Class="ws-card">
+        <Metric Value={String(List.length)} Unit={List.length === 1 ? "point" : "points"} Caption={`${FormatEnergy(Total)} in total · each point pulls cracks toward itself by its share of the energy.`} />
+        <ol className="ws-points" aria-label="Fracture points">
+          {List.map((Each, Index) => (
+            <li key={Index} data-point={Index} aria-current={Index === Selected} style={{ "--tone": PointTone(Index) }}>
+              <button type="button" className="ws-point-pick" disabled={!Settings.Enabled} onClick={() => Choose(Index)}>
+                <i>{Index + 1}</i>
+                <span>{Each.X.toFixed(2)}, {Each.Y.toFixed(2)}, {Each.Z.toFixed(2)} m</span>
+                <b>{FormatEnergy(Each.Energy)}</b>
+              </button>
+              <button type="button" className="ws-point-remove" aria-label={`Remove point ${Index + 1}`} disabled={!Settings.Enabled || List.length === 1} onClick={() => { Store(List.filter((_, Slot) => Slot !== Index)); Choose(Math.max(0, Selected - (Index <= Selected ? 1 : 0))); }}>
+                ×
+              </button>
+            </li>
+          ))}
+        </ol>
+        <Control
+          Field={{ Label: `Energy · point ${Selected + 1}`, Minimum: LIMITS.Energy[0], Maximum: LIMITS.Energy[1], Decimals: 0, Unit: "J", Default: 2500, Curve: 3 }}
+          Value={List[Selected].Energy}
+          Disabled={!Settings.Enabled}
+          Change={(Next) => Edit(Selected, { Energy: Math.round(Next) })}
+        />
+        <div className="ws-actions">
+          {ENERGY_PRESETS.map((Preset) => (
+            <button key={Preset.id} type="button" disabled={!Settings.Enabled} aria-pressed={List[Selected].Energy === Preset.joules} onClick={() => Edit(Selected, { Energy: Preset.joules })}>
+              {Preset.label}
+            </button>
+          ))}
+        </div>
+        <div className="ws-actions" role="group" aria-label="Clicking the object">
+          <button type="button" disabled={!Settings.Enabled || List.length >= MAX_POINTS} aria-pressed={ClickMode === "add" && List.length < MAX_POINTS} onClick={() => SetWorkspace((Previous) => ({ ...Previous, FractureClick: "add" }))}>
+            Click adds a point
+          </button>
+          <button type="button" disabled={!Settings.Enabled} aria-pressed={ClickMode === "move" || List.length >= MAX_POINTS} onClick={() => SetWorkspace((Previous) => ({ ...Previous, FractureClick: "move" }))}>
+            Click moves point {Selected + 1}
+          </button>
+        </div>
+        <div className="ws-actions">
+          <button type="button" disabled={!Settings.Enabled || List.length >= MAX_POINTS} onClick={() => { Store([...List, { X: 0, Y: 0, Z: 0, Energy: List[Selected].Energy }]); Choose(List.length); }}>
+            Add at centre
+          </button>
+          <button type="button" disabled={!Settings.Enabled} onClick={() => Edit(Selected, { X: 0, Y: 0, Z: 0 })}>
+            Centre point {Selected + 1}
+          </button>
+          <button type="button" disabled={!Settings.Enabled || List.length === 1} onClick={() => { Store([List[Selected]]); Choose(0); }}>
+            Keep only point {Selected + 1}
+          </button>
+        </div>
+        <p className="ws-note">Up to {MAX_POINTS} points. Drag a marker in the viewport to move it; it snaps to the surface under the pointer.</p>
+      </Card>
+      <Card Title="Piece collision" Class="ws-card">
+        <Metric
+          Value={Colliders ? `${Math.round(Colliders.Fill * 100)}%` : "–"}
+          Unit={Colliders ? "filled" : ""}
+          Caption={Colliders ? `${Result.cells.length} colliders · ${Colliders.Cost.toLocaleString("en-US")} ${Colliders.Unit} in total · how much of its collider each piece fills, summed.` : "Turn fracture on to give the pieces colliders."}
+        />
+        <div className="ws-materials ws-piece-collision" role="radiogroup" aria-label="Piece collision">
+          {PIECE_COLLISIONS.map((Each) => (
+            <button key={Each.id} type="button" role="radio" data-piece-collision={Each.id} aria-checked={Settings.PieceCollision === Each.id} title={Each.note} disabled={!Settings.Enabled} onClick={() => Assign({ PieceCollision: Each.id })}>
+              {Each.name}
+            </button>
+          ))}
+        </div>
+        <p className="ws-note">{PIECE_COLLISIONS.find((Each) => Each.id === Settings.PieceCollision)?.note}</p>
+        {Settings.PieceCollision === "triangles" && Settings.Mode === "dynamic" && <p className="ws-note ws-notice">⚠️ Flying pieces can't collide as triangles; physics uses their hulls until they come to rest.</p>}
+        <Control Field={{ Label: "Show colliders", Control: "Switch" }} Value={!!Workspace.ShowPieceColliders} Disabled={!Settings.Enabled} Change={(Next) => SetWorkspace((Previous) => ({ ...Previous, ShowPieceColliders: Next }))} />
+      </Card>
       <Card Title="Recipe" Class="ws-card">
         <div className="ws-materials" role="group" aria-label="Fracture material">
           {MATERIALS.map((Each) => (
@@ -476,28 +648,13 @@ function FracturePanelBody({ Subject, Values, Change, Workspace, SetWorkspace, K
             </button>
           ))}
         </div>
-        <Control
-          Field={{ Label: "Impact energy", Minimum: LIMITS.Energy[0], Maximum: LIMITS.Energy[1], Decimals: 0, Unit: "J", Default: 2500, Curve: 3 }}
-          Value={Settings.Energy}
-          Disabled={!Settings.Enabled}
-          Change={(Next) => Assign({ Energy: Math.round(Next) })}
-        />
-        <div className="ws-actions">
-          {ENERGY_PRESETS.map((Preset) => (
-            <button key={Preset.id} type="button" disabled={!Settings.Enabled} aria-pressed={Settings.Energy === Preset.joules} onClick={() => Assign({ Energy: Preset.joules })}>
-              {Preset.label}
-            </button>
-          ))}
-        </div>
         <Control Field={{ Label: "Piece ceiling", Minimum: LIMITS.Ceiling[0], Maximum: LIMITS.Ceiling[1], Decimals: 0, Unit: "", Default: 48 }} Value={Settings.Ceiling} Disabled={!Settings.Enabled} Change={(Next) => Assign({ Ceiling: Math.round(Next) })} />
         <Control Field={{ Label: "Minimum size", Minimum: LIMITS.MinimumSize[0], Maximum: LIMITS.MinimumSize[1], Decimals: 3, Unit: "m", Default: 0.045 }} Value={Settings.MinimumSize} Disabled={!Settings.Enabled} Change={(Next) => Assign({ MinimumSize: Next })} />
         <Control Field={{ Label: "Seed", Minimum: 1, Maximum: 9999, Decimals: 0, Unit: "", Default: 42 }} Value={Math.min(9999, Settings.Seed)} Disabled={!Settings.Enabled} Change={(Next) => Assign({ Seed: Math.round(Next) })} />
         <div className="ws-readouts">
-          <Control Field={{ Label: "Impact point", Control: "Readout" }} Value={`${Settings.X.toFixed(2)}, ${Settings.Y.toFixed(2)}, ${Settings.Z.toFixed(2)} m`} />
           <Control Field={{ Label: "Largest / smallest", Control: "Readout" }} Value={Settings.Enabled ? `${FormatLength(Stats.largest)} / ${FormatLength(Stats.smallest)}` : "–"} />
         </div>
         <div className="ws-actions">
-          <button type="button" disabled={!Settings.Enabled} onClick={() => Assign({ X: 0, Y: 0, Z: 0 })}>Centre impact</button>
           <button type="button" disabled={!Settings.Enabled} onClick={() => Assign({ Seed: 1 + Math.floor(Math.random() * 9998) })}>New seed</button>
         </div>
       </Card>
@@ -551,42 +708,41 @@ export function WorkspacePanel(Props) {
   const { Subject, Workspace, SetWorkspace } = Props;
   return (
     <div className="ws-panel">
-      <section className="ws-switcher" aria-label="Workspaces">
+      <section className="ws-switcher" aria-label="Workspace">
         <header>
-          <span>Workspace · {Subject.Name}</span>
+          <span>
+            <WorkspaceGlyph Tool={Workspace.Tool} />
+            {WorkspaceTools.find((Each) => Each.Tool === Workspace.Tool)?.Name} · {Subject.Name}
+          </span>
           <button type="button" onClick={() => SetWorkspace(null)}>Done</button>
         </header>
-        <div className="ws-tabs" role="tablist">
-          {WorkspaceTools.map((Each) => (
-            <button key={Each.Tool} type="button" role="tab" aria-selected={Workspace.Tool === Each.Tool} onClick={() => SetWorkspace((Previous) => ({ ...Previous, Tool: Each.Tool, Selection: [] }))}>
-              <WorkspaceGlyph Tool={Each.Tool} />
-              {Each.Name}
-            </button>
-          ))}
-        </div>
       </section>
       {React.createElement(ToolPanels[Workspace.Tool] || FracturePanelBody, Props)}
     </div>
   );
 }
 
-// Entry point shown on primitives outside a workspace.
-export function WorkspaceLauncher({ Open }) {
+// The tool rail on the viewport's left edge: opens a workspace on the selected primitive, switches between them inside one, and the
+// lit tool leaves it again. Each button carries its name as a label that slides out on hover.
+export function WorkspaceRail({ Active = null, Open, Leave }) {
   return (
-    <section className="ws-launcher" aria-label="Edit workspaces">
-      <header>
-        <span>Edit in place</span>
-        <small>isolates the selection in the viewport</small>
-      </header>
-      <div className="ws-tabs">
-        {WorkspaceTools.map((Each) => (
-          <button key={Each.Tool} type="button" onClick={() => Open(Each.Tool)} title={Each.Caption}>
-            <WorkspaceGlyph Tool={Each.Tool} />
-            {Each.Name}
-          </button>
-        ))}
-      </div>
-    </section>
+    <nav className="ws-rail" aria-label="Workspaces" data-active={Active || ""}>
+      <span className="ws-rail-caption">EDIT</span>
+      {WorkspaceTools.map((Each) => (
+        <button
+          key={Each.Tool}
+          type="button"
+          aria-label={Each.Name}
+          aria-pressed={Active === Each.Tool}
+          data-tool={Each.Tool}
+          title={`${Each.Name} · ${Each.Caption}`}
+          onClick={() => (Active === Each.Tool ? Leave() : Open(Each.Tool))}
+        >
+          <WorkspaceGlyph Tool={Each.Tool} Size={18} />
+          <span className="ws-rail-name">{Each.Name}</span>
+        </button>
+      ))}
+    </nav>
   );
 }
 

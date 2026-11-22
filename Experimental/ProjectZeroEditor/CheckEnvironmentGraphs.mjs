@@ -115,7 +115,7 @@ try {
     "Solar daylight and seasonal plots update real time/date controls using the existing solver; relative intensity graph edits gain",
   );
   await Select("Atmosphere");
-  assert.equal(await Card("Sky colour").count(), 1);
+  assert.equal(await Card("Atmosphere overview").count(), 1);
   assert.equal(await Card("Sky presets").count(), 0);
   assert.equal(await Page.locator('[aria-label^="Atmosphere preset"]').count(), 0);
   assert.equal(await Card("Baked atmosphere").count(), 1);
@@ -208,9 +208,9 @@ try {
   assert.equal((await Saved()).Values.atmosphere["Space yaw"], PausedYaw);
   await Page.reload({ waitUntil: "networkidle" });
   await Select("Atmosphere");
-  assert.equal(await Card("Sky colour").count(), 1);
+  assert.equal(await Card("Atmosphere overview").count(), 1);
   Checks.push(
-    "Sky colour card without presets; responsive orbital single-scatter preview; changed pixels on orbit; animation, modal focus/inert and reload",
+    "Atmosphere overview card (F53) without presets; responsive orbital single-scatter preview; changed pixels on orbit; animation, modal focus/inert and reload",
   );
   // Stars, Moons, Lens Flare, Precipitation, Rainbow and Editor Camera only had the removed bar maps.
   for (const Name of [

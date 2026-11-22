@@ -49,6 +49,38 @@ starting point for the UI redesign.
 
 ---
 
+## Follow-up 47: workspace rail, more collision shapes, multi-point fracture, three designs for the Sun and Atmosphere first cards
+
+- **Workspace rail** (`WorkspaceRail`, `.ws-rail`). The workspace buttons are no longer at the top of the inspector. They sit in a vertical
+  icon rail on the viewport's left edge. While a workspace is open the rail also switches between workspaces; clicking the lit tool leaves.
+- **Collision shapes.** The Collision component and Collision Fit now offer eight shapes, including three new ones:
+  - **Convex hull** (`ConvexHull.js`: `convexHull`, quickhull with outside sets, and an exact `inflateHull` for the margin).
+  - **Triangles**: the object's own triangles, exact. Only for static bodies; a dynamic body shows a warning.
+  - **Custom**: import your own collider (`ColliderImport.js`) as OBJ, STL, PLY, glTF, GLB or .facet, using the Geometry Compiler readers.
+    It is stored in `Values["Collision Custom"]` (up to 4,000 triangles) and used as triangles or as its hull.
+  - Collision Fit draws six fits and ranks them cheapest-first. The tightest is marked, and a tie keeps the cheaper shape.
+- **Fracture workspace.**
+  - Up to 8 fracture points: click the object to add one, drag a marker to move it, and give each its own energy ("Blast").
+    One point keeps the old single-impact format.
+  - **Piece collision**: each piece gets a convex hull (the default), box, sphere, capsule or triangles collider. The card shows how
+    much of its collider each piece fills, and **Show colliders** draws them (`PieceCollision.js`).
+  - The rest of the Fracture workspace is unchanged. `Experimental/FractureEditor/FractureModel.js` gains the multi-point model.
+- **Sun first card** (`SunCards.jsx`): three new designs, chosen with the A / B / C switch on the card and stored as `Sun card design`.
+  - **A · Solar dial**: a 24-hour watch face with six light phases, sunrise and sunset marks, and a shadow hand.
+  - **B · Horizon**: a 360° skyline strip with the sun's path, a figure's shadow and a light-colour band across the day.
+  - **C · Sunlight sheet**: sun → air → ground, with lux, air mass, UV and shadow length as big numbers, plus a blackbody bar.
+  - Each design scrubs `Local Hours` by drag or arrow keys. `SunNow.jsx` is removed.
+- **Atmosphere first card** (`AtmosphereCards.jsx`, card "Atmosphere overview"): three new designs, stored as `Atmosphere card design`.
+  - **A · Cross-section**: 0–100 km layers, the ozone band, molecule and aerosol density curves, and a bending sunbeam.
+  - **B · Planet limb**: the glowing ring and sunset band seen from orbit.
+  - **C · Scattering**: a beam splitting into Rayleigh and Mie lobes.
+  - All three are drawn from the current settings and share the preview-sun slider with the sky. The Sky colour dome stays in the lab dialog.
+- **Checks.** New: `CheckColliders.mjs` (8) and `CheckFirstCards.mjs` (6). Updated for the rail and the new cards: `CheckEnvironmentGraphs`,
+  `CheckInspectorLayout`, `CheckVolumeWorkspaces` and `CheckGeometryWorkspaces`. The other checks give the same results as Follow-up 46.
+- Evidence is in `Exhibits/ProjectZeroEditor/FollowUp47/`. Headless SwiftShader only. Names are unapproved.
+
+---
+
 ## Follow-up 46: object Components stack, live preview cards, God Rays, AO per renderer, Geometry Compiler workspaces
 
 - **Components pill on objects.** Mass, Rigid Body and Collision are no longer outliner rows under objects. Each object has a

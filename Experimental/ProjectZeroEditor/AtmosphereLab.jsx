@@ -2,6 +2,8 @@ import React, { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { Plot, Clamp } from "./LiveGraph.jsx";
 import SkyDome from "./SkyDome.jsx";
+import AtmosphereCard from "./AtmosphereCards.jsx";
+import "./AtmosphereCards.css";
 const Defaults = {
   Ozone: 1.2,
   "Mie Anisotropy": 0.78,
@@ -407,7 +409,7 @@ export default function AtmosphereLab({ V, Change }) {
   return (
     <>
       <div className="card-grid atmosphere-lab-cards">
-        <SkyDome V={V} Change={Change} />
+        <AtmosphereCard V={V} Change={Change} />
         <Space
           Turn={Turn}
           Orbit={Orbit}

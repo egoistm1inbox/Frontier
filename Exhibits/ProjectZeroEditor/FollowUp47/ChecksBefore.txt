@@ -1,0 +1,30 @@
+CheckAssets.mjs | 29s | }  Node.js v22.22.3 
+CheckBrowser.mjs | 19s |     }   ] } 
+CheckCloudPlacement.mjs | 13s | Cloud and Light placement checks passed: 14 
+CheckColourCodex.mjs | 0s | }  Node.js v22.22.3 
+CheckConstruction.mjs | 14s |   - waiting for locator('.construct-properties [data-material-channel=roughness]')      at /home/user/Frontier/Experimental/ProjectZeroEditor/CheckConstruction.mjs:190:5 [] 
+CheckEntityContext.mjs | 1s | }  Node.js v22.22.3 
+CheckEnvironmentGraphs.mjs | 14s |   ],   "Errors": [] } 
+CheckFogCamera.mjs | 5s |   ],   "Errors": [] } 
+CheckFogCards.mjs | 6s | Height Fog correction checks passed: 6 
+CheckGeometryWorkspaces.mjs | 14s |   "Errors": [] } Geometry workspace checks passed: 6 
+CheckInspectorLayout.mjs | 11s | Inspector layout checks passed: 9 
+CheckInspectorOrder.mjs | 98s | Inspector order checks passed: 113 
+CheckInstrumentStyle.mjs | 6s |   operator: 'notStrictEqual',   diff: 'simple' } 
+CheckLightDesign.mjs | 30s | Light design checks passed: 22 
+CheckLighting.mjs | 0s | }  Node.js v22.22.3 
+CheckMaterials.mjs | 1s | }  Node.js v22.22.3 
+CheckObjectComponents.mjs | 48s | Object component checks passed: 11 
+CheckQuickTools.mjs | 6s | }  Node.js v22.22.3 
+CheckReference.mjs | 0s | }  Node.js v22.22.3 
+CheckRenderSettings.mjs | 8s | Render settings checks passed: 10 
+CheckSharedCards.mjs | 22s | Shared-card checks passed: 14 
+CheckVehicleSockets.mjs | 7s | Vehicle socket checks passed: 8 
+CheckVolumeWorkspaces.mjs | 8s | Volume workspace checks passed: 4 
+CheckWind.mjs | 11s |     }   ] } 
+CheckWorkspaceCards.mjs | 2s |   ],   "FontFailures": [] } 
+DONE
+# Re-run after updating the two expectations that Follow-up 46 changes on purpose:
+CheckEntityContext.mjs | 13s | Entity context checks passed: 6   (outliner 71 -> 56 rows: 15 object component rows now live in each object's Components stack)
+CheckWorkspaceCards.mjs | 26s | Errors: [], FontFailures: []      (World direct entries 11 -> 10: God Rays now sits under the Sun)
+# CheckInspectorOrder 143 -> 113: it opens every outliner row at two widths; 15 fewer rows x 2 = 30 fewer checks.

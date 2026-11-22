@@ -1,6 +1,9 @@
 import React, { useEffect, useRef, useState } from "react";
 import TransformPanel from "./TransformPanel.jsx";
 import PrimitiveGlyph from "./PrimitiveIcons.jsx";
+import { convexHull, inflateHull } from "./ConvexHull.js";
+import { PrimitiveSurface } from "./WorkspaceGeometry.js";
+import { CustomKey, CustomModeKey, CustomModes, ColliderAccept, importCollider } from "./ColliderImport.js";
 import "./PrimitiveInspector.css";
 
 // 🧩 Inspector for the Showcase primitives (Cube, Sphere, Cylinder, Torus, Cone): one category carousel —
@@ -843,13 +846,25 @@ function RigidBodyCards({ Shape, Read, Change, Values }) {
 
 // Collision proxy: what the physics world tests against. Automatic picks the cheapest proxy that hugs the shape;
 // SDF uses the object's distance-field bake.
-const CollisionShapes = [["auto", "Automatic"], ["box", "Box"], ["sphere", "Sphere"], ["capsule", "Capsule"], ["convex", "Convex hull"], ["sdf", "Distance field (SDF)"]];
+export const CollisionShapes = [
+  ["auto", "Automatic"],
+  ["box", "Box"],
+  ["sphere", "Sphere"],
+  ["capsule", "Capsule"],
+  ["convex", "Convex hull"],
+  ["triangles", "Triangles (exact surface)"],
+  ["sdf", "Distance field (SDF)"],
+  ["custom", "Custom (imported)"],
+];
+// Concave shapes the physics can only use on bodies that don't move; a dynamic body falls back to the convex hull.
+export const StaticOnlyProxies = ["triangles", "sdf"];
 const AutomaticProxy = { cube: "box", sphere: "sphere", cylinder: "convex", cone: "convex", torus: "sdf" };
 export function CollisionProxy(Shape, Read) {
   const Chosen = Read("Collision Shape", "auto");
   return Chosen === "auto" ? AutomaticProxy[Shape] || "convex" : Chosen;
 }
-function ProxyVolume(Proxy, Shape, Size, Read) {
+// Exact holds measured volumes where they exist: Convex (hull of the surface, grown by the margin) and Custom (the import).
+function ProxyVolume(Proxy, Shape, Size, Read, Exact = {}) {
   const [X, Y, Z] = Size.Bounds, Margin = +Read("Collision Margin", 0.01);
   const [Gx, Gy, Gz] = [X + 2 * Margin, Y + 2 * Margin, Z + 2 * Margin];
   if (Proxy === "box") return Gx * Gy * Gz;
@@ -858,10 +873,30 @@ function ProxyVolume(Proxy, Shape, Size, Read) {
     const R = Math.max(Gx, Gz) / 2, Straight = Math.max(0, Gy - 2 * R);
     return Math.PI * R * R * Straight + (4 / 3) * Math.PI * R ** 3;
   }
+  if (Proxy === "convex" && Exact.Convex) return Exact.Convex;
+  if (Proxy === "triangles") return Size.Volume;
+  if (Proxy === "custom") return Exact.Custom || Size.Volume;
   if (Proxy === "convex") return Shape === "torus" ? Math.PI * (Gx / 2) ** 2 * Gy : Size.Volume * (Gx * Gy * Gz) / Math.max(1e-9, X * Y * Z);
   return Size.Volume * (Gx * Gy * Gz) / Math.max(1e-9, X * Y * Z);
 }
-function ProxyStudy({ Shape, Proxy, Size }) {
+// Silhouette of a point set seen from the front (x right, y up): its 2D convex hull, for the custom collider drawing.
+function FrontOutline(Positions) {
+  const Points = [];
+  for (let Index = 0; Index < Positions.length; Index += 3) Points.push([Positions[Index], Positions[Index + 1]]);
+  Points.sort((A, B) => A[0] - B[0] || A[1] - B[1]);
+  const Turn = (O, A, B) => (A[0] - O[0]) * (B[1] - O[1]) - (A[1] - O[1]) * (B[0] - O[0]);
+  const Lower = [], Upper = [];
+  for (const Point of Points) {
+    while (Lower.length >= 2 && Turn(Lower[Lower.length - 2], Lower[Lower.length - 1], Point) <= 0) Lower.pop();
+    Lower.push(Point);
+  }
+  for (const Point of [...Points].reverse()) {
+    while (Upper.length >= 2 && Turn(Upper[Upper.length - 2], Upper[Upper.length - 1], Point) <= 0) Upper.pop();
+    Upper.push(Point);
+  }
+  return [...Lower.slice(0, -1), ...Upper.slice(0, -1)];
+}
+function ProxyStudy({ Shape, Proxy, Size, Custom = null }) {
   const [X, Y, Z] = Size.Bounds, Span = Math.max(X, Y, Z, 1e-6), Scale = 96 / Span;
   const W = Math.max(X, Z) * Scale, H = Y * Scale, Cx = 150, Base = 128;
   const Outline = { fill: "none", stroke: "#7cb7ff", strokeWidth: 1.6, strokeDasharray: "5 4" };
@@ -874,6 +909,10 @@ function ProxyStudy({ Shape, Proxy, Size }) {
       {Proxy === "sphere" && <circle cx={Cx} cy={Base - H / 2} r={R + 4} {...Outline} />}
       {Proxy === "capsule" && <rect x={Cx - W / 2 - 4} y={Base - H - 4} width={W + 8} height={H + 8} rx={W / 2 + 4} {...Outline} />}
       {Proxy === "convex" && (Shape === "cone" ? <path d={`M${Cx - W / 2 - 5} ${Base + 2}L${Cx} ${Base - H - 6}L${Cx + W / 2 + 5} ${Base + 2}Z`} {...Outline} /> : <rect x={Cx - W / 2 - 4} y={Base - H - 4} width={W + 8} height={H + 8} rx={Math.min(W, H) * 0.3} {...Outline} />)}
+      {Proxy === "triangles" && <ShapeMark Shape={Shape} X={Cx} Y={Base} Size={Math.max(W, H)} fill="none" stroke="#7cb7ff" strokeWidth={1.6} />}
+      {Proxy === "custom" && Custom?.Positions?.length > 8 && (
+        <polygon points={FrontOutline(Custom.Positions).map(([Px, Py]) => `${(Cx + Px * Scale).toFixed(1)},${(Base - H / 2 - Py * Scale).toFixed(1)}`).join(" ")} {...Outline} strokeDasharray="2 3" data-custom-outline="" />
+      )}
       {Proxy === "sdf" && [6, 12, 18].map((Grow, Index) => <ShapeMark key={Grow} Shape={Shape} X={Cx} Y={Base + Grow / 2} Size={Math.max(W, H) + Grow} fill="none" stroke="#7cb7ff" strokeOpacity={0.7 - Index * 0.22} strokeDasharray="3 3" />)}
       <text x="30" y="20">{CollisionShapes.find(([Id]) => Id === Proxy)?.[1]}</text>
     </svg>
@@ -883,7 +922,27 @@ function ProxyStudy({ Shape, Proxy, Size }) {
 function CollisionCards({ Shape, Read, Change, Values, Size, Kit }) {
   const { Control, Metric } = Kit;
   const Proxy = CollisionProxy(Shape, Read);
-  const Volume = ProxyVolume(Proxy, Shape, Size, Read);
+  const Margin = +Read("Collision Margin", 0.01);
+  const Scale = Array.isArray(Values.Scale) ? Values.Scale.map((Each) => Math.abs(+Each) || 1) : [1, 1, 1];
+  const SurfaceKey = JSON.stringify([Shape, Scale, Margin, ["Geometry Size X", "Geometry Size Y", "Geometry Size Z", "Geometry Radius", "Geometry Height", "Geometry Segments", "Geometry Rings", "Geometry Major Radius", "Geometry Minor Radius", "Geometry Sides"].map((Key) => Values[Key])]);
+  const Hull = React.useMemo(() => (Proxy === "convex" ? inflateHull(convexHull(PrimitiveSurface(Shape, Read, Scale).Positions), Margin) : null), [Proxy === "convex" && SurfaceKey]);
+  const Custom = Values[CustomKey] || null;
+  const CustomMode = Math.max(0, Math.min(1, +Read(CustomModeKey, 0) || 0));
+  const [Importing, SetImporting] = useState("");
+  const Picker = useRef(null);
+  const Volume = ProxyVolume(Proxy, Shape, Size, Read, { Convex: Hull?.Volume, Custom: Custom ? (CustomMode === 1 ? Custom.HullVolume : Custom.Volume) : 0 });
+  const Load = async (File_) => {
+    if (!File_) return;
+    SetImporting(`Reading ${File_.name}…`);
+    try {
+      const Record = await importCollider(File_);
+      Change(CustomKey, Record);
+      Change("Collision Shape", "custom");
+      SetImporting(`Imported ${Record.Name}: ${Record.Triangles.toLocaleString("en-US")} triangles${Record.Closed ? ", closed" : ", open (uses its hull volume)"}.`);
+    } catch (Problem) {
+      SetImporting(String(Problem?.message || Problem));
+    }
+  };
   const Fit = Size.Volume / Math.max(1e-9, Volume);
   const Sdf = Values["SDF Bake"]?.Baked;
   const Simulated = !!Values.PHYSICS;
@@ -893,7 +952,7 @@ function CollisionCards({ Shape, Read, Change, Values, Size, Kit }) {
       <Card Title="Collision shape" Glyph="physics" Tone="#7cb7ff" Aside={Read("Physics Collides", true) ? "Collides" : "Ignored"} className="pi-study-card pi-collision-card">
         <BigFigure Whole={Fixed(Fit * 100, 0)} Unit="% fit" Caption={`Object volume over proxy volume · ${Fixed(Volume, 3)} m³ proxy`} />
         <div className="pi-study">
-          <ProxyStudy Shape={Shape} Proxy={Proxy} Size={Size} />
+          <ProxyStudy Shape={Shape} Proxy={Proxy} Size={Size} Custom={Custom} />
         </div>
         <Control
           Field={{ Label: "Shape", Control: "Select", Options: CollisionShapes.map(([, Label]) => Label) }}
@@ -902,7 +961,32 @@ function CollisionCards({ Shape, Read, Change, Values, Size, Kit }) {
         />
         <Control Field={{ Label: "Margin", Minimum: 0, Maximum: 0.1, Decimals: 3, Unit: "m", Default: 0.01 }} Value={+Read("Collision Margin", 0.01)} Change={(Next) => Change("Collision Margin", Next)} />
         {Proxy === "sdf" && <p className="pi-footnote">{Sdf ? `Uses the SDF bake (${Sdf.Resolution}³, ${Sdf.Bricks} bricks).` : "Needs an SDF bake: open the object's SDF page and bake it."}</p>}
-        {Shape === "torus" && Proxy === "convex" && <p className="pi-footnote">A convex hull fills the torus hole; use the distance field to keep it open.</p>}
+        {Shape === "torus" && Proxy === "convex" && <p className="pi-footnote">A convex hull fills the torus hole; use triangles or the distance field to keep it open.</p>}
+        {Proxy === "convex" && Hull && <p className="pi-footnote" data-hull="">Hull of the surface: {Hull.Points} points, {Hull.Faces} faces.</p>}
+        {StaticOnlyProxies.includes(Proxy) && Simulated && Values.DYNAMIC && Read("Physics Body", "dynamic") === "dynamic" && (
+          <p className="pi-footnote pi-warning" data-static-only="">⚠️ Concave colliders only work on bodies that don't move. While the body is dynamic, physics uses its convex hull.</p>
+        )}
+        {Proxy === "custom" && (
+          <div className="pi-custom-collider" data-custom={Custom ? "loaded" : "empty"}>
+            <input ref={Picker} type="file" accept={ColliderAccept} hidden aria-label="Collider file" onChange={(Event) => Load(Event.target.files?.[0])} />
+            {Custom ? (
+              <div className="pi-custom-record">
+                <b>{Custom.Name}</b>
+                <small>
+                  {Custom.Format} · {Custom.Triangles.toLocaleString("en-US")} triangles · {Custom.Closed ? "closed" : "open"} · {Fixed(CustomMode === 1 ? Custom.HullVolume : Custom.Volume, 3)} m³
+                </small>
+              </div>
+            ) : (
+              <p className="pi-footnote">No collider imported yet. OBJ, STL, PLY, glTF / GLB or .facet, in the object's own space and units (metres).</p>
+            )}
+            {Custom && <Control Field={{ Label: "Use", Control: "Select", Options: CustomModes }} Value={CustomMode} Change={(Index) => Change(CustomModeKey, Index)} />}
+            <div className="pi-custom-actions">
+              <button type="button" onClick={() => Picker.current?.click()}>{Custom ? "Replace collider…" : "Import collider…"}</button>
+              {Custom && <button type="button" onClick={() => Change(CustomKey, null)}>Remove</button>}
+            </div>
+            {Importing && <p className="pi-footnote" role="status">{Importing}</p>}
+          </div>
+        )}
       </Card>
       <Card Title="Filtering" Glyph="lock" Tone="#c9c9c9" className="pi-filter-card">
         <Switch Label="Collides" Detail="Other bodies bump into it" On={Read("Physics Collides", true)} Assign={(Next) => Change("Physics Collides", Next)} />
@@ -1332,14 +1416,13 @@ function Carousel({ Pages, Focus = null }) {
 //                                                    INSPECTOR
 //------------------------------------------------------------------------------------------------------------------------
 
-export default function PrimitiveInspector({ Subject, Values, Change, Hidden, ToggleHidden, MaterialCards, FractureCards, UvCards = null, SdfCards = null, LodCards = null, Components = null, ComponentPage = null, Focus = null, Kit, Launcher = null }) {
+export default function PrimitiveInspector({ Subject, Values, Change, Hidden, ToggleHidden, MaterialCards, FractureCards, UvCards = null, SdfCards = null, LodCards = null, Components = null, ComponentPage = null, Focus = null, Kit }) {
   const Shape = ShapeOf(Subject);
   const Read = (Key, Initial) => (Values[Key] === undefined ? Initial : Values[Key]);
   const Size = Measure(Shape, Read, Array.isArray(Values.Scale) ? Values.Scale : [1, 1, 1]);
   const Shared = { Shape, Read, Change, Values, Hidden, ToggleHidden, Size, Kit };
   return (
     <div className="primitive-inspector">
-      {Launcher}
       <Carousel
         key={Subject.Id}
         Focus={Focus?.Owner === Subject.Id ? Focus : null}

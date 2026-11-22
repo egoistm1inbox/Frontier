@@ -35,7 +35,7 @@ const StoredBecomes = (Id, Key, Test) =>
   );
 const Card = (Title) => Page.locator(`[data-card="${Title}"]`);
 const Metric = (Title) => Card(Title).locator(".metric").first().innerText();
-const Launch = (Tool) => Page.locator(".ws-launcher button", { hasText: Tool }).click();
+const Launch = (Tool) => Page.locator(`.ws-rail button[aria-label="${Tool}"]`).click();
 const Banner = () => Page.locator(".ws-banner").innerText();
 const Number_ = (Text) => +Text.replace(/[^\d.]/g, "");
 const Switch = (Label) => Page.locator(`.ws-panel [role=switch][aria-label="${Label}"]`);
@@ -45,11 +45,14 @@ try {
   await Page.goto(Address);
   await Page.evaluate(() => localStorage.clear());
 
-  // Six tools in the launcher, two of them new.
+  // F53: the six tools sit in a vertical rail on the viewport's left edge, not at the top of the inspector.
   await Open("cube");
-  const Tools = await Page.locator(".ws-launcher button").allInnerTexts();
-  assert.deepEqual(Tools.map((Each) => Each.trim()), ["UV", "Fracture", "SDF Bake", "LOD Clusters", "Collision Fit", "Icon Capture"]);
-  Checks.push("Launcher lists UV, Fracture, SDF Bake, LOD Clusters, Collision Fit and Icon Capture");
+  const Tools = await Page.locator(".ws-rail button").evaluateAll((Each) => Each.map((Button) => Button.getAttribute("aria-label")));
+  assert.deepEqual(Tools, ["UV", "Fracture", "SDF Bake", "LOD Clusters", "Collision Fit", "Icon Capture"]);
+  assert.equal(await Page.locator(".inspector-scroll .ws-launcher, .inspector-scroll .ws-tabs").count(), 0);
+  const Rail = await Page.locator(".ws-rail").boundingBox(), View = await Page.locator(".scene-image").boundingBox();
+  assert(Rail.x - View.x < 20 && Rail.height > Rail.width * 4, JSON.stringify({ Rail, View }));
+  Checks.push(`Rail on the viewport's left edge (${Math.round(Rail.x - View.x)} px in, ${Math.round(Rail.width)}×${Math.round(Rail.height)}): UV, Fracture, SDF Bake, LOD Clusters, Collision Fit, Icon Capture; nothing at the inspector top`);
 
   // Collision Fit on the cube: closed, 12 triangles, box is tightest; Use writes the Collision component.
   await Launch("Collision Fit");
@@ -63,10 +66,10 @@ try {
   assert.match(Check, /Surface area\s*6\.000 m²/);
   assert.match(Check, /Enclosed volume\s*1\.000 m³/);
   const Bars = await Page.locator(".ws-fit-bar").evaluateAll((Each) => Each.map((Bar) => [Bar.dataset.fit, Bar.querySelector(".ws-fit-figure").textContent, Bar.textContent.includes("tightest")]));
-  assert.deepEqual(Bars.map(([Type]) => Type), ["box", "sphere", "capsule"]);
+  assert.deepEqual(Bars.map(([Type]) => Type), ["box", "sphere", "capsule", "convex", "triangles", "custom"]);
   // 1 m³ over the 1.02 m margin box: 94.2 %. The tightest marker sits on the box.
   assert.equal(Bars[0][1], "94.2 %");
-  assert.deepEqual(Bars.map(([, , Tightest]) => Tightest), [true, false, false]);
+  assert.deepEqual(Bars.map(([, , Tightest]) => Tightest), [true, false, false, false, false, false]);
   const BoxFill = Bars[0][1], SphereFill = Bars[1][1];
   assert.equal(await Card("Fitted shapes").locator(".metric").first().innerText().then((Text) => /Box/.test(Text)), true);
   await Page.screenshot({ path: path.join(Proof, "CollisionFit.png") });

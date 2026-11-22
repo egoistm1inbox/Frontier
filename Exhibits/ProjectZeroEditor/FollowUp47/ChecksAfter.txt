@@ -1,0 +1,28 @@
+CheckAssets.mjs | 35s | }  Node.js v22.22.3 
+CheckBrowser.mjs | 49s |     }   ] } 
+CheckCloudPlacement.mjs | 34s | Cloud and Light placement checks passed: 14 
+CheckColliders.mjs | 12s | 🟢 Fracture workspace: click adds point 2, dragging moves it, Blast gives it 32000 J (total 34500 J, 48 pieces); piece colliders box 32 % vs convex hull 100 %; Keep only point → single-point format 🟢 Rail: switching Fracture → Collision Fit lights the new tool; clicking the lit tool leaves 
+CheckColourCodex.mjs | 0s | }  Node.js v22.22.3 
+CheckConstruction.mjs | 18s |   - waiting for locator('.construct-properties [data-material-channel=roughness]')      at /home/user/Frontier/Experimental/ProjectZeroEditor/CheckConstruction.mjs:190:5 [] 
+CheckEntityContext.mjs | 20s | Entity context checks passed: 6 
+CheckEnvironmentGraphs.mjs | 32s |   ],   "Errors": [] } 
+CheckFirstCards.mjs | 21s | 🟢 Atmosphere B · Planet limb: glowing ring with thickness label, swatches day / sunset / overhead; sunset band is red-dominant rgb(81, 25, 7) 🟢 Atmosphere C · Scattering: Rayleigh and Mie lobes, leftover sunset beam; anisotropy 0.78 → 0.2 rounds the Mie lobe, height / width 0.46 → 0.89 6
+CheckFogCamera.mjs | 13s |   ],   "Errors": [] } 
+CheckFogCards.mjs | 11s | Height Fog correction checks passed: 6 
+CheckGeometryWorkspaces.mjs | 34s |   "Errors": [] } Geometry workspace checks passed: 6 
+CheckInspectorLayout.mjs | 7s |   operator: 'notStrictEqual',   diff: 'simple' } 
+CheckInspectorOrder.mjs | 219s | Inspector order checks passed: 113 
+CheckInstrumentStyle.mjs | 11s |   operator: 'notStrictEqual',   diff: 'simple' } 
+CheckLightDesign.mjs | 62s | Light design checks passed: 22 
+CheckLighting.mjs | 0s | }  Node.js v22.22.3 
+CheckMaterials.mjs | 3s | }  Node.js v22.22.3 
+CheckObjectComponents.mjs | 56s | Object component checks passed: 11 
+CheckQuickTools.mjs | 17s | }  Node.js v22.22.3 
+CheckReference.mjs | 1s | }  Node.js v22.22.3 
+CheckRenderSettings.mjs | 17s | Render settings checks passed: 10 
+CheckSharedCards.mjs | 43s | Shared-card checks passed: 14 
+CheckVehicleSockets.mjs | 11s | Vehicle socket checks passed: 8 
+CheckVolumeWorkspaces.mjs | 14s | Volume workspace checks passed: 4 
+CheckWind.mjs | 30s |     }   ] } 
+CheckWorkspaceCards.mjs | 40s |   "Errors": [],   "FontFailures": [] } 
+DONE

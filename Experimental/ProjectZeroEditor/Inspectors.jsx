@@ -45,10 +45,11 @@ import { LunarSphere } from "../FrontierEditor/moon-controls.jsx";
 import Native from "./NativePanels.json";
 import { SpecifyPanels, SpecificationNoteMark, MoonSlotCount, MoonPresets, MoonPresetSizes, SensorGates } from "./ProjectZeroSpecification.js";
 import { Solar } from "./Solar.mjs";
-import SunNow from "./SunNow.jsx";
+import SunCard from "./SunCards.jsx";
+import "./SunCards.css";
 import { SensorField } from "./OpticalGraphic.jsx";
 import SensorFormats, { Formats } from "./SensorFormats.jsx";
-import { WorkspacePanel, WorkspaceLauncher } from "./Workspaces.jsx";
+import { WorkspacePanel } from "./Workspaces.jsx";
 import { VehicleInspector, VehiclePanel, VehicleSheet } from "./VehicleComponents.jsx";
 
 // Native sheets with the Follow-up 48 Project Zero specification overlay (ProjectZeroSpecification.js).
@@ -706,7 +707,6 @@ export function Inspector({
         />
       ) : (
       <PrimitiveInspector
-        Launcher={OpenWorkspace && <WorkspaceLauncher Open={OpenWorkspace} />}
         Kit={{ Card, Control, Metric }}
         Subject={Subject}
         Values={Values}
@@ -1068,7 +1068,7 @@ export function Inspector({
       <>
         {Header("Environment")}
         <Card Title="Sun now" Class="sun-now" GraphHandled>
-          <SunNow V={V} Change={AssignProperty} />
+          <SunCard V={V} Change={AssignProperty} />
         </Card>
         <div className="section-caption">
           PROPERTIES <small>Light, direction & atmosphere</small>

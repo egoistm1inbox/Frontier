@@ -10,11 +10,11 @@ const Rad = Math.PI / 180;
 const Hex = (Text) =>
   /^#[\da-f]{6}$/i.test(Text || "") ? [1, 3, 5].map((At) => parseInt(Text.slice(At, At + 2), 16) / 255) : [1, 1, 1];
 // Kasten-Young (1989) relative air mass for an elevation in degrees; held near its horizon limit below 0°.
-const AirMass = (Elevation) => {
+export const AirMass = (Elevation) => {
   const Zenith = Math.min(90.5, 90 - Elevation);
   return 1 / (Math.cos(Zenith * Rad) + 0.50572 * Math.pow(96.07995 - Zenith, -1.6364));
 };
-const Direction = (Elevation, Azimuth) => [
+export const Direction = (Elevation, Azimuth) => [
   Math.sin(Azimuth * Rad) * Math.cos(Elevation * Rad),
   Math.sin(Elevation * Rad),
   Math.cos(Azimuth * Rad) * Math.cos(Elevation * Rad),

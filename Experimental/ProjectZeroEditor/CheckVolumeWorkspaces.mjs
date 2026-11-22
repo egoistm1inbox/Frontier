@@ -31,7 +31,7 @@ const Stored = async (Id, Key) => ((await Saved())?.Values?.[Id] || {})[Key];
 const Category = (Name) => Page.locator(`.pi-pill[aria-label="${Name}"]`).click();
 const Card = (Title) => Page.locator(`[data-card="${Title}"]`);
 const Metric = (Title) => Card(Title).locator(".metric").first().innerText();
-const Launch = (Tool) => Page.locator(".ws-launcher button", { hasText: Tool }).click();
+const Launch = (Tool) => Page.locator(`.ws-rail button[aria-label="${Tool}"]`).click();
 const Banner = () => Page.locator(".ws-banner").innerText();
 const Number_ = (Text) => +Text.replace(/[^\d.]/g, "");
 

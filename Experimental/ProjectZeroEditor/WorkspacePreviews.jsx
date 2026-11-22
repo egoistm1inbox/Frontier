@@ -143,7 +143,7 @@ export function FracturePreviewCard({ Subject, Values, Open, Kit }) {
       </div>
       {Readout("Material", Material.name)}
       {Readout("Impact energy", FormatEnergy(Settings.Energy))}
-      {Readout("Impact point", `${Settings.X.toFixed(2)}, ${Settings.Y.toFixed(2)}, ${Settings.Z.toFixed(2)} m`)}
+      {Settings.Points?.length > 1 ? Readout("Fracture points", `${Settings.Points.length} points`) : Readout("Impact point", `${Settings.X.toFixed(2)}, ${Settings.Y.toFixed(2)}, ${Settings.Z.toFixed(2)} m`)}
       {Readout("Median piece", Settings.Enabled ? FormatLength(Stats.median) : "–")}
       {Readout("Largest / smallest", Settings.Enabled ? `${FormatLength(Stats.largest)} / ${FormatLength(Stats.smallest)}` : "–")}
       {Readout("Ceiling · seed", `${Settings.Ceiling} pieces · ${Settings.Seed}`)}

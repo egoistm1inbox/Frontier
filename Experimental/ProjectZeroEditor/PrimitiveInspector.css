@@ -994,3 +994,45 @@
 .pi-mass-card .pi-balance text.pi-balance-strong {
   fill: #dfe8f3;
 }
+
+/* Collision: custom collider import */
+.primitive-inspector .pi-custom-collider {
+  margin-top: 10px;
+  padding: 12px;
+  border-radius: 14px;
+  background: #151515;
+  border: 1px solid #ffffff0b;
+}
+.primitive-inspector .pi-custom-record {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-bottom: 8px;
+}
+.primitive-inspector .pi-custom-record b {
+  font-size: 12px;
+  font-weight: 500;
+  color: #e8e8e8;
+}
+.primitive-inspector .pi-custom-record small {
+  font-size: 10px;
+  color: #8f8f8f;
+}
+.primitive-inspector .pi-custom-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+.primitive-inspector .pi-custom-actions button {
+  flex: 1;
+  min-height: 30px;
+  border-radius: 999px;
+  border: 1px solid #ffffff14;
+  background: #262626;
+  color: #dedede;
+  font-size: 10.5px;
+  cursor: pointer;
+}
+.primitive-inspector .pi-warning {
+  color: #e9c27c;
+}

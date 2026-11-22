@@ -17,6 +17,17 @@ export const LIMITS = Object.freeze({
   Energy: [0, 50000], Seed: [1, 999999], Ceiling: [2, 160], MinimumSize: [0.002, 0.3], X: [-1000, 1000], Y: [-1000, 1000], Z: [-1000, 1000],
 });
 const INTEGER = new Set(['Seed', 'Ceiling']);
+// Several fracture points: up to MAX_POINTS impacts, each with its own energy. One point is stored as X / Y / Z / Energy (the original
+// format, so older bakes stay valid); two or more live in Points and Energy holds their sum.
+export const MAX_POINTS = 8;
+// Collision each fractured piece gets in physics. Pieces are convex cells, so the hull is exact and is the default.
+export const PIECE_COLLISIONS = [
+  { id: 'convex', name: 'Convex hull', note: 'Exact for Voronoi pieces; the default.' },
+  { id: 'box', name: 'Box', note: 'Cheapest; loose on wedges and shards.' },
+  { id: 'sphere', name: 'Sphere', note: 'Rolls; loose on long pieces.' },
+  { id: 'capsule', name: 'Capsule', note: 'Along each piece\'s longest side.' },
+  { id: 'triangles', name: 'Triangles', note: 'Exact surface; only while the pieces rest.' },
+];
 export const SDF_RESOLUTIONS = [32, 64, 128];
 
 // yield: pieces per unit of (energy/2500)^½ · focus: share of cracks pulled toward the impact · pattern: site layout
@@ -44,6 +55,7 @@ export function normalize(raw = {}) {
     SdfResolution: SDF_RESOLUTIONS.includes(Number(e.SdfResolution)) ? Number(e.SdfResolution) : 64,
     Mode: e.Mode === 'baked' ? 'baked' : 'dynamic',
     Material: Object.hasOwn(MATERIAL, e.Material) ? e.Material : DEFAULTS.Material,
+    PieceCollision: PIECE_COLLISIONS.some((c) => c.id === e.PieceCollision) ? e.PieceCollision : 'convex',
   };
   for (const [k, [lo, hi]] of Object.entries(LIMITS)) {
     const n = Number(e[k] ?? DEFAULTS[k]);
@@ -51,6 +63,19 @@ export function normalize(raw = {}) {
     if (INTEGER.has(k)) t[k] = Math.round(t[k]);
   }
   if (e.Baked && typeof e.Baked.Signature === 'string') t.Baked = e.Baked;
+  const points = (Array.isArray(e.Points) ? e.Points : []).slice(0, MAX_POINTS).map((p) => {
+    const q = {};
+    for (const k of ['X', 'Y', 'Z', 'Energy']) {
+      const [lo, hi] = LIMITS[k], n = Number(p?.[k] ?? DEFAULTS[k]);
+      q[k] = Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : DEFAULTS[k];
+    }
+    return q;
+  });
+  if (points.length === 1) Object.assign(t, points[0]);
+  if (points.length > 1) {
+    t.Points = points;
+    Object.assign(t, { X: points[0].X, Y: points[0].Y, Z: points[0].Z, Energy: points.reduce((sum, p) => sum + p.Energy, 0) });
+  }
   return t;
 }
 
@@ -65,7 +90,8 @@ export function describe(subject, values = {}) {
 // The recipe is everything that changes geometry; storage mode, SDF options and bookkeeping are excluded.
 export function recipe(settings) {
   // eslint-disable-next-line no-unused-vars
-  const { Enabled, Mode, Baked, EditedAt, PieceSdf, SdfResolution, ...rest } = normalize(settings);
+  const { Enabled, Mode, Baked, EditedAt, PieceSdf, SdfResolution, PieceCollision, ...rest } = normalize(settings);
+  if (!rest.Points) delete rest.Points;
   return rest;
 }
 
@@ -99,8 +125,9 @@ export const STATE_TEXT = {
   ready: 'Baked pieces are up to date.',
 };
 
-const FIELD_LABEL = { Material: 'Material', Energy: 'Energy', Seed: 'Seed', Ceiling: 'Piece ceiling', MinimumSize: 'Minimum size', X: 'Impact X', Y: 'Impact Y', Z: 'Impact Z' };
+const FIELD_LABEL = { Material: 'Material', Energy: 'Energy', Seed: 'Seed', Ceiling: 'Piece ceiling', MinimumSize: 'Minimum size', X: 'Impact X', Y: 'Impact Y', Z: 'Impact Z', Points: 'Fracture points' };
 export function formatField(key, v) {
+  if (key === 'Points') return v === undefined ? '1 point' : `${v.length} points`;
   if (key === 'Material') return MATERIAL[v]?.name ?? String(v);
   if (key === 'Energy') return formatEnergy(v);
   if (key === 'MinimumSize') return formatLength(v);
@@ -117,7 +144,7 @@ export function recipeDiff(owner, settings) {
   const now = recipe(s), out = [];
   for (const key of Object.keys(FIELD_LABEL)) {
     const a = then.Recipe?.[key], b = now[key];
-    if (a !== b) out.push({ key, label: FIELD_LABEL[key], from: a === undefined ? '—' : formatField(key, a), to: formatField(key, b) });
+    if (key === 'Points' ? JSON.stringify(a) !== JSON.stringify(b) : a !== b) out.push({ key, label: FIELD_LABEL[key], from: a === undefined && key !== 'Points' ? '—' : formatField(key, a), to: formatField(key, b) });
   }
   if (then.Primitive !== owner.Primitive) out.push({ key: 'Primitive', label: 'Shape', from: String(then.Primitive), to: String(owner.Primitive) });
   if (JSON.stringify(then.Scale) !== JSON.stringify(owner.Scale)) out.push({ key: 'Scale', label: 'Scale', from: (then.Scale || []).join(' × '), to: owner.Scale.join(' × ') });
@@ -366,12 +393,23 @@ export function shatter(owner, settings) {
   const sol = cachedSolid(owner), budget = pieceBudget(owner, s);
   const [sx, sy, sz] = owner.Scale, hx = sx / 2, hy = sy / 2, hz = sz / 2;
   const clampv = (v, h) => Math.min(h, Math.max(-h, v));
-  const impact = [clampv(s.X, hx), clampv(s.Y, hy), clampv(s.Z, hz)];
   const R = Math.hypot(sx, sy, sz) / 2;
+  const spreadOf = (energy) => R * (0.25 + 0.6 * Math.min(1, Math.sqrt(energy / 20000)));
+  // Every fracture point pulls cracks toward itself in proportion to its energy. With one point no extra random numbers are drawn,
+  // so a single impact shatters exactly as it did before points existed.
+  const impacts = (s.Points || [s]).map((p) => ({ at: [clampv(p.X, hx), clampv(p.Y, hy), clampv(p.Z, hz)], energy: p.Energy, spread: spreadOf(p.Energy) }));
+  const impact = impacts[0].at;
   const rand = rng(s.Seed * 2654435761 + s.Material.length * 97);
+  const totalEnergy = impacts.reduce((sum, p) => sum + p.energy, 0) || 1;
+  let focusOn = impacts[0];
+  const choose = () => {
+    if (impacts.length === 1) return impacts[0];
+    let r = rand() * totalEnergy;
+    for (const p of impacts) if ((r -= p.energy) <= 0) return p;
+    return impacts[impacts.length - 1];
+  };
   const n = budget.pieces, sites = [];
   const tryPush = (p) => { if (insideSolid(sol, p)) { sites.push(p); return true; } return false; };
-  const spread = R * (0.25 + 0.6 * Math.min(1, Math.sqrt(s.Energy / 20000)));
   // Thin axis: glass spokes and grids lie in the plane of the two larger dimensions.
   const dims = [sx, sy, sz], thin = dims.indexOf(Math.min(...dims));
   const inPlane = (a, b, c) => { const p = [0, 0, 0], axes = [0, 1, 2].filter((i) => i !== thin); p[axes[0]] = a; p[axes[1]] = b; p[thin] = c; return p; };
@@ -393,15 +431,21 @@ export function shatter(owner, settings) {
   } else if (m.pattern === 'radial') {
     const spokes = Math.max(5, Math.round(Math.sqrt(n) * 2.2));
     while (sites.length < n && guard++ < n * 80) {
+      focusOn = choose();
+      const at = focusOn.at, spread = focusOn.spread;
       const k = Math.floor(rand() * spokes), a = ((k + 0.5 + (rand() - 0.5) * 0.35) / spokes) * Math.PI * 2;
       const r = rand() < 0.45 ? spread * 0.5 * rand() ** 1.4 : R * 1.6 * rand() ** 1.15;
-      const off = inPlane(Math.cos(a) * r, Math.sin(a) * r, 0), p = [impact[0] + off[0], impact[1] + off[1], impact[2] + off[2]];
+      const off = inPlane(Math.cos(a) * r, Math.sin(a) * r, 0), p = [at[0] + off[0], at[1] + off[1], at[2] + off[2]];
       p[thin] = (rand() - 0.5) * dims[thin] * 0.9;
       tryPush(p);
     }
   }
   while (sites.length < n && guard++ < n * 300) {
-    if (rand() < m.focus) { const d = randDir(), r = spread * rand() ** 1.5; tryPush([impact[0] + d[0] * r, impact[1] + d[1] * r * (m.pattern === 'grain' ? m.grain * 0.6 : 1), impact[2] + d[2] * r]); }
+    if (rand() < m.focus) {
+      focusOn = choose();
+      const at = focusOn.at, d = randDir(), r = focusOn.spread * rand() ** 1.5;
+      tryPush([at[0] + d[0] * r, at[1] + d[1] * r * (m.pattern === 'grain' ? m.grain * 0.6 : 1), at[2] + d[2] * r]);
+    }
     else tryPush(randomIn());
   }
   // Grain: solve in a space squashed along y so cells come out long and thin.
@@ -435,10 +479,12 @@ export function shatter(owner, settings) {
     const faces = pieceParts.flatMap((p) => p.faces.map((f) => ({ pts: f.pts, kind: f.kind === 'seam' ? 'inner' : f.kind })));
     let radius = 0;
     for (const f of faces) for (const q of f.pts) radius = Math.max(radius, Math.hypot(...sub(q, c)));
-    cells.push({ faces, volume, size: Math.cbrt(volume), centroid: c, dist: Math.hypot(...sub(c, impact)), shade: rand(), radius, parts: pieceParts.length });
+    let dist = Infinity, nearest = 0;
+    impacts.forEach((p, index) => { const d = Math.hypot(...sub(c, p.at)); if (d < dist) [dist, nearest] = [d, index]; });
+    cells.push({ faces, volume, size: Math.cbrt(volume), centroid: c, dist, nearest, shade: rand(), radius, parts: pieceParts.length });
   }
   cells.sort((a, b) => a.dist - b.dist);
-  return { owner, solid: sol, cells, budget, impact, proxy: sol.proxy };
+  return { owner, solid: sol, cells, budget, impact, impacts: impacts.map((p) => p.at), proxy: sol.proxy };
 }
 
 export function pieceStats(cells) {

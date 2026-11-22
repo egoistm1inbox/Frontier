@@ -27,7 +27,7 @@ import ProjectBrowser, { RestoreProjects, StoreProjects, BlankSceneRows, BlankSc
 import ViewportRenderHeader from "./ViewportRenderHeader.jsx";
 import { StartThoughtLog, useThoughtScope, OpenThought } from "./ThoughtLog.js";
 import { ResolveRenderSettings, RenderSettingsKey } from "./RenderSettings.js";
-import { WorkspaceView } from "./Workspaces.jsx";
+import { WorkspaceView, WorkspaceRail } from "./Workspaces.jsx";
 import { VehicleFolder, VehicleRows, VehiclePanel, VehicleSummary, EnsureVehicleFolder } from "./VehicleComponents.jsx";
 import { ComponentPanel, ComponentSummary, WithObjectComponents, EnsureObjectComponents, ComponentRowsFor, OwnerKind, ComponentRevision, ComponentAddress } from "./ObjectComponents.jsx";
 import { BrowserFPS } from "./BrowserTiming.js";
@@ -1899,6 +1899,9 @@ function App() {
         className={"scene-image " + (SplitView ? "split-view" : "")}
         title="Checkerboard authoring preview. Symbols represent constructed entities, not engine rendering."
       >
+        {Subject?.Panel === "geometry" && Subject?.Parent === "showcase" && (
+          <WorkspaceRail Active={Workspace?.Tool || null} Open={OpenWorkspace} Leave={() => SetWorkspace(null)} />
+        )}
         {Workspace ? (
           <WorkspaceView
             Subject={Subject}

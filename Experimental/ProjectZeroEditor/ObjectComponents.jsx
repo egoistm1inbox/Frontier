@@ -99,7 +99,7 @@ export function EnsureObjectComponents(Rows = [], Revision) {
 
 const Read = (Values) => (Key, Initial) => (Values?.[Key] === undefined ? Initial : Values[Key]);
 const SizeOf = (Owner, Values) => Measure(ShapeOf(Owner), Read(Values), Array.isArray(Values?.Scale) ? Values.Scale : [1, 1, 1]);
-const Proxies = { box: "Box", sphere: "Sphere", capsule: "Capsule", convex: "Convex hull", sdf: "SDF" };
+const Proxies = { box: "Box", sphere: "Sphere", capsule: "Capsule", convex: "Convex hull", sdf: "SDF", triangles: "Triangles", custom: "Custom" };
 
 // Outliner value line, read from the owner's values.
 export function ComponentSummary(Row, Owner, Values = {}) {

@@ -79,14 +79,16 @@ try {
     1,
   );
   assert.equal(await Page.locator('[data-panel="sun"] .reference-inspector-copy').count(), 0);
-  assert.equal(await Page.locator('[data-card="Sun now"] [data-sun-fact]').count(), 6);
+  // F53: the default design is the solar dial, with sunrise, daylight and sunset chips under it.
+  assert.equal(await Page.locator('[data-card="Sun now"] [data-sun-design="dial"]').count(), 1);
+  assert.equal(await Page.locator('[data-card="Sun now"] [data-sun-fact]').count(), 3);
   assert(
     await Page.locator('[data-card="Sun now"] [data-sun-fact]').evaluateAll((Nodes) =>
       Nodes.every((Node) => Node.scrollWidth <= Node.clientWidth + 1),
     ),
   );
   await Page.screenshot({ path: path.join(Proof, "sun-header.png") });
-  Checks.push("sun: header precedes the Sun now card; six unclipped lighting figures; no imported sky hero");
+  Checks.push("sun: header precedes the Sun now card; solar dial with three unclipped figures; no imported sky hero");
 
   await Open("height-fog");
   assert.equal(await Page.locator(".reference-inspector-copy").count(), 0);
