@@ -51,6 +51,7 @@ import ShaderPanel from "./ShaderPanel.jsx";
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { createRoot } from "react-dom/client";
 import { Inspector, Icon, Glyph, Panels } from "./Inspectors.jsx";
+import Viewport3D from "./Viewport3D.jsx";
 import Notch from "./Notch.jsx";
 import ActionIcon from "./ActionIcon.jsx";
 import ConstructPanel from "./ConstructPanel.jsx";
@@ -228,6 +229,8 @@ const DefaultSettings = {
   Patches: false,
   Raytracing: true,
   Scale: 100,
+  // The main view: "3d" is the three.js preview (Viewport3D.jsx); "markers" is the checkerboard authoring view.
+  Viewport: "3d",
 };
 // Debug views 00–16 and the earlier editor views: DebugViews.js.
 const StorageKey = "Frontier.ProjectZeroHtml.v1";
@@ -433,6 +436,8 @@ if (SkyAlias && new URLSearchParams(location.search).get("inspect") === "sky") {
   history.replaceState(null, "", Address);
 }
 // Viewport raster scope for the Thought Log: render plus commit of one checker viewport.
+// The Atmosphere object's values with their defaults, for the Sun card and the 3D viewport's sky.
+const AirOf = (Values) => (Name) => Values.atmosphere?.[Name] ?? Panels.atmosphere?.find((Field) => Field.Label === Name)?.Default;
 function MeasuredViewport(Props) {
   useThoughtScope("Editor.ViewportRaster");
   const Select = (...Arguments) => {
@@ -520,6 +525,11 @@ function App() {
     [Construct, OpenConstruct] = useState(false),
     [Projection, SetProjection] = useState("PERSP"),
     [SplitView, SetSplitView] = useState(false),
+    // Outliner multi-select: rows chosen alongside Selected (Ctrl or Shift click). Selected stays the one the Inspector shows.
+    [Picked, AssignPicked] = useState([]),
+    // The last outliner delete, so it can be undone once (Ctrl+Z or the row menu).
+    [LastDeleted, KeepDeleted] = useState(null),
+    [FrameToken, AskFrame] = useState(0),
     [RunMode, SetRunMode] = useState("EDIT"),
     [Message, Notify] = useState(""),
     [Console, ShowConsole] = useState(false),
@@ -1019,10 +1029,15 @@ function App() {
       }
       if (Event.key === "F2" && Selected !== "camera") RenameRow(Selected);
       if (Event.key === "`") ShowConsole((Previous) => !Previous);
+      const Typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName || "") || document.activeElement?.isContentEditable;
+      if (!Typing && (Event.ctrlKey || Event.metaKey) && !Event.shiftKey && Event.code === "KeyZ" && LastDeleted) {
+        Event.preventDefault();
+        UndoDelete();
+      }
     };
     window.addEventListener("keydown", Key);
     return () => window.removeEventListener("keydown", Key);
-  }, [Selected, Construct, Shade, AssetsOpen, WindSubject]);
+  }, [Selected, Construct, Shade, AssetsOpen, WindSubject, LastDeleted]);
   useEffect(() => {
     const Move = (Event) => {
       if (!Divider.current) return;
@@ -1051,6 +1066,7 @@ function App() {
     };
   }, [LeftWidth]);
   const SelectRow = (Id) => {
+    AssignPicked([]);
     const Address = ComponentAddress(Id, Rows);
     Select(Address ? Address.Owner : Id);
     FocusComponent(Address ? { ...Address, Stamp: Date.now() } : null);
@@ -1418,9 +1434,120 @@ function App() {
     Expand(false);
     ShowMenu(null);
   };
+  // ─── Outliner multi-select and the operations on the chosen rows ───
+  const Chosen = [Selected, ...Picked.filter((Id) => Id !== Selected && Rows.some((Row) => Row.Id === Id))];
+  const Descendants = (Ids) => {
+    const Found = new Set(Ids);
+    let Grew = true;
+    while (Grew) {
+      Grew = false;
+      for (const Row of Rows)
+        if (Found.has(Row.Parent) && !Found.has(Row.Id)) {
+          Found.add(Row.Id);
+          Grew = true;
+        }
+    }
+    return Found;
+  };
+  // Ctrl/Cmd click toggles a row in the selection (the clicked row becomes the one inspected); Shift click takes the visible rows
+  // between the inspected row and the clicked one.
+  const PickRow = (Id, Mode) => {
+    ShowMenu(null);
+    if (Mode === "range") {
+      const Shown = DisplayRows().map((Row) => Row.Id);
+      const [From, To] = [Shown.indexOf(Selected), Shown.indexOf(Id)];
+      if (From < 0 || To < 0) return SelectRow(Id);
+      AssignPicked(Shown.slice(Math.min(From, To), Math.max(From, To) + 1).filter((Each) => Each !== Selected));
+      return;
+    }
+    if (Id === Selected) {
+      if (!Picked.length) return;
+      const [Next, ...Rest] = Chosen.slice(1);
+      AssignPicked(Rest);
+      Select(Next);
+      return;
+    }
+    if (Chosen.includes(Id)) return AssignPicked(Picked.filter((Each) => Each !== Id));
+    AssignPicked([...Chosen]);
+    Select(Id);
+  };
+  const Deletable = (Row) => Row && !IsEditorCamera(Row) && (Row.Panel !== "group" || Row.Id.startsWith("group-"));
+  const DeleteRows = (Ids) => {
+    const Starting = Ids.map((Id) => Rows.find((Row) => Row.Id === Id)).filter(Deletable).map((Row) => Row.Id);
+    if (!Starting.length) return;
+    const Removed = Descendants(Starting);
+    KeepDeleted({ Rows, Values, Hidden, Selected, Count: Starting.length });
+    AssignRows((Previous) => Previous.filter((Row) => !Removed.has(Row.Id)));
+    AssignValues((Previous) => Object.fromEntries(Object.entries(Previous).filter(([Id]) => !Removed.has(Id))));
+    AssignPicked([]);
+    // Land on the first deleted row's collection when it survives, else the Showcase.
+    const Holder = Rows.find((Row) => Row.Id === Starting[0])?.Parent;
+    if (Removed.has(Selected)) Select(Holder && !Removed.has(Holder) ? Holder : "showcase");
+    ShowMenu(null);
+    Toast(Starting.length === 1 ? `Deleted ${Rows.find((Row) => Row.Id === Starting[0]).Name} · Ctrl+Z to undo` : `Deleted ${Starting.length} objects · Ctrl+Z to undo`);
+  };
+  const UndoDelete = () => {
+    if (!LastDeleted) return;
+    AssignRows(LastDeleted.Rows);
+    AssignValues(LastDeleted.Values);
+    AssignHidden(LastDeleted.Hidden);
+    Select(LastDeleted.Selected);
+    KeepDeleted(null);
+    ShowMenu(null);
+    Toast(LastDeleted.Count === 1 ? "Restored the deleted object" : `Restored ${LastDeleted.Count} objects`);
+  };
+  const SetChosenHidden = (Hide) => {
+    AssignHidden((Previous) => ({ ...Previous, ...Object.fromEntries(Chosen.filter((Id) => Id !== "camera").map((Id) => [Id, Hide])) }));
+    ShowMenu(null);
+  };
+  // Isolate: hide every other object, keeping the chosen rows' collections (and what's inside the chosen ones) visible.
+  const Isolate = () => {
+    const Keep = Descendants(Chosen);
+    for (const Id of Chosen) for (let Row = Rows.find((Each) => Each.Id === Id), Depth = 0; Row?.Parent && Depth < 64; Row = Rows.find((Each) => Each.Id === Row.Parent), Depth++) Keep.add(Row.Parent);
+    AssignHidden(Object.fromEntries(Rows.filter((Row) => !Keep.has(Row.Id) && Row.Id !== "camera" && Row.Panel !== "group").map((Row) => [Row.Id, true])));
+    ShowMenu(null);
+    Toast("Isolated · Show all in the outliner header brings everything back");
+  };
+  // Group: a new collection where the first chosen row was, holding all the chosen rows (collections that are already holding
+  // a chosen row keep it inside them).
+  const GroupChosen = () => {
+    const Moving = Chosen.map((Id) => Rows.find((Row) => Row.Id === Id)).filter((Row) => Row && !IsEditorCamera(Row) && Row.Panel !== ComponentPanel);
+    if (!Moving.length) return;
+    const Moved = new Set(Moving.map((Row) => Row.Id));
+    const Top = Moving.filter((Row) => !Moving.some((Other) => Other !== Row && Descendants([Other.Id]).has(Row.Id)));
+    const Names = new Set(Rows.map((Row) => Row.Name));
+    let Name = "Collection", Suffix = 2;
+    while (Names.has(Name)) Name = "Collection " + Suffix++;
+    const Folder = { Id: "group-" + crypto.randomUUID(), Name, Panel: "group", Icon: "folder-generic", Parent: Top[0].Parent ?? null, Description: "Collection" };
+    AssignRows((Previous) => {
+      const At = Previous.findIndex((Row) => Row.Id === Top[0].Id);
+      const Placed = Previous.map((Row) => (Top.some((Each) => Each.Id === Row.Id) ? { ...Row, Parent: Folder.Id } : Row));
+      return [...Placed.slice(0, At), Folder, ...Placed.slice(At)];
+    });
+    AssignPicked([]);
+    Select(Folder.Id);
+    ShowMenu(null);
+    Toast(`Grouped ${Moved.size} into ${Name}`);
+  };
+  const SelectChildren = () => {
+    const All = [...Descendants(Chosen)].filter((Id) => !Chosen.includes(Id));
+    AssignPicked([...Chosen.slice(1), ...All]);
+    Collapse((Previous) => ({ ...Previous, ...Object.fromEntries(Chosen.map((Id) => [Id, false])) }));
+    ShowMenu(null);
+  };
+  const CopyNames = () => {
+    const Text = Chosen.map((Id) => Rows.find((Row) => Row.Id === Id)?.Name).filter(Boolean).join("\n");
+    navigator.clipboard?.writeText(Text).catch(() => {});
+    ShowMenu(null);
+    Toast(Chosen.length === 1 ? "Copied the name" : `Copied ${Chosen.length} names`);
+  };
   const RowMenu = (Event, Row) => {
     Event.preventDefault();
-    Select(Row.Id);
+    // Right-clicking inside the multi-selection keeps it; anywhere else selects just that row.
+    if (!Chosen.includes(Row.Id)) {
+      AssignPicked([]);
+      Select(Row.Id);
+    }
     ShowMenu({
       Type: "Row",
       X: Math.min(innerWidth - 230, Event.clientX),
@@ -1502,16 +1629,16 @@ function App() {
           <div
             key={Row.Id}
             role="treeitem"
-            aria-selected={Selected === Row.Id}
+            aria-selected={Chosen.includes(Row.Id)}
             aria-expanded={HasChildren(Row.Id) ? !Collapsed[Row.Id] : undefined}
             tabIndex={0}
             className={
               "outliner-row " +
-              (Selected === Row.Id ? "selected " : "") +
+              (Selected === Row.Id ? "selected " : Chosen.includes(Row.Id) ? "picked " : "") +
               (Hidden[Row.Id] ? "hidden-row" : "")
             }
             style={{ "--depth": Math.min(3, Row.Depth) }}
-            onClick={() => SelectRow(Row.Id)}
+            onClick={(Event) => (Event.ctrlKey || Event.metaKey ? PickRow(Row.Id, "toggle") : Event.shiftKey ? PickRow(Row.Id, "range") : SelectRow(Row.Id))}
             onContextMenu={(Event) => RowMenu(Event, Row)}
             onDoubleClick={() => {
               if (HasChildren(Row.Id))
@@ -1527,6 +1654,7 @@ function App() {
             onKeyDown={(Event) => {
               if (Event.key === "Enter") SelectRow(Row.Id);
               if (Event.key === "F2" && !IsEditorCamera(Row)) RenameRow(Row.Id);
+              if (Event.key === "Delete" && Rename !== Row.Id) DeleteRows(Chosen.includes(Row.Id) ? Chosen : [Row.Id]);
               if (Event.key === "ArrowRight")
                 Collapse((Previous) => ({ ...Previous, [Row.Id]: false }));
               if (Event.key === "ArrowLeft")
@@ -1772,6 +1900,16 @@ function App() {
           </label>
           <div className="viewport-secondary-tools">
             <button
+              className="viewport-icon-button viewport-view-switch"
+              aria-label="3D view"
+              aria-pressed={Settings.Viewport !== "markers"}
+              data-viewport-switch={Settings.Viewport === "markers" ? "markers" : "3d"}
+              title={Settings.Viewport === "markers" ? "Show the 3D view" : "Show the marker view (checkerboard)"}
+              onClick={() => Assign("Viewport", Settings.Viewport === "markers" ? "3d" : "markers")}
+            >
+              3D
+            </button>
+            <button
               className="viewport-icon-button"
               aria-label="Split viewport"
               aria-pressed={SplitView}
@@ -1897,7 +2035,8 @@ function App() {
       )}
       <div
         className={"scene-image " + (SplitView ? "split-view" : "")}
-        title="Checkerboard authoring preview. Symbols represent constructed entities, not engine rendering."
+        data-viewport={Settings.Viewport === "markers" ? "markers" : "3d"}
+        title={Settings.Viewport === "markers" ? "Checkerboard authoring preview. Symbols represent constructed entities, not engine rendering." : undefined}
       >
         {Subject?.Panel === "geometry" && Subject?.Parent === "showcase" && (
           <WorkspaceRail Active={Workspace?.Tool || null} Open={OpenWorkspace} Leave={() => SetWorkspace(null)} />
@@ -1910,12 +2049,24 @@ function App() {
             Workspace={Workspace}
             SetWorkspace={SetWorkspace}
           />
-        ) : (
+        ) : Settings.Viewport === "markers" ? (
           <MeasuredViewport
             Rows={Rows}
             Hidden={Hidden}
             Selected={Selected}
             Select={SelectRow}
+          />
+        ) : (
+          <Viewport3D
+            Rows={Rows}
+            Values={Values}
+            Hidden={Hidden}
+            Selected={Selected}
+            Picked={Picked}
+            FrameToken={FrameToken}
+            Select={(Id, { Add } = {}) => (Add ? PickRow(Id, "toggle") : SelectRow(Id))}
+            Air={AirOf(Values)}
+            Sun={(Name) => Values.sun?.[Name] ?? Panels.sun?.find((Field) => Field.Label === Name)?.Default}
           />
         )}
         {SplitView && !Workspace && (
@@ -2064,7 +2215,7 @@ function App() {
               Workspace={Workspace}
               OpenWorkspace={OpenWorkspace}
               SetWorkspace={SetWorkspace}
-              Scene={{ Rows, SelectRow, AddRows: InsertUnder, PatchRow, OpenComponent, Focus: ComponentFocus }}
+              Scene={{ Rows, SelectRow, AddRows: InsertUnder, PatchRow, OpenComponent, Focus: ComponentFocus, Air: AirOf(Values) }}
               OpenWind={() => {
                 WindOpener.current = document.activeElement;
                 EditWind(Selected);
@@ -2354,6 +2505,13 @@ function App() {
               left: Math.max(4, Math.min(innerWidth - 235, Menu.X)),
               top: Menu.Y,
             }}
+            // A long menu near the bottom of the window moves up so all of it is on screen.
+            ref={(Shown) => {
+              if (!Shown) return;
+              Shown.style.top = Menu.Y + "px";
+              const Height = Shown.getBoundingClientRect().height;
+              if (Menu.Y + Height > innerHeight - 6) Shown.style.top = Math.max(6, innerHeight - Height - 6) + "px";
+            }}
             role="menu"
           >
             {Menu.Type === "Tabs" ? (
@@ -2494,35 +2652,43 @@ function App() {
               </>
             ) : (
               <>
-                <label>{Subject.Name}</label>
-                <button
-                  disabled={IsEditorCamera(Subject)}
-                  onClick={() => {
-                    if (IsEditorCamera(Subject)) return;
-                    RenameRow(Selected);
-                    ShowMenu(null);
-                  }}
-                >
-                  Rename <small>F2</small>
-                </button>
-                <button
-                  disabled={IsEditorCamera(Subject)}
-                  onClick={() => {
-                    ToggleHidden(Selected);
-                    ShowMenu(null);
-                  }}
-                >
-                  {Hidden[Selected] ? "Show" : "Hide"}
-                </button>
-                <button
-                  onClick={() => {
-                    Expand(true);
-                    ShowMenu(null);
-                  }}
-                >
-                  Inspect in workspace
-                </button>
-                {Subject.Panel === "geometry" && (
+                <label data-row-menu-count={Chosen.length}>{Chosen.length > 1 ? `${Chosen.length} selected` : Subject.Name}</label>
+                {Chosen.length === 1 && (
+                  <button
+                    disabled={IsEditorCamera(Subject)}
+                    onClick={() => {
+                      if (IsEditorCamera(Subject)) return;
+                      RenameRow(Selected);
+                      ShowMenu(null);
+                    }}
+                  >
+                    Rename <small>F2</small>
+                  </button>
+                )}
+                {Chosen.some((Id) => Hidden[Id]) && <button onClick={() => SetChosenHidden(false)}>Show</button>}
+                {Chosen.some((Id) => !Hidden[Id] && Id !== "camera") && <button onClick={() => SetChosenHidden(true)}>Hide</button>}
+                <button onClick={Isolate}>Isolate</button>
+                {Settings.Viewport !== "markers" && Chosen.some((Id) => Rows.find((Row) => Row.Id === Id)?.Panel === "geometry") && (
+                  <button
+                    onClick={() => {
+                      AskFrame(Date.now());
+                      ShowMenu(null);
+                    }}
+                  >
+                    Focus in viewport
+                  </button>
+                )}
+                {Chosen.length === 1 && (
+                  <button
+                    onClick={() => {
+                      Expand(true);
+                      ShowMenu(null);
+                    }}
+                  >
+                    Inspect in workspace
+                  </button>
+                )}
+                {Chosen.length === 1 && Subject.Panel === "geometry" && (
                   <button
                     onClick={() => {
                       Change("Fracture", {
@@ -2537,40 +2703,39 @@ function App() {
                       : "Enable fracture"}
                   </button>
                 )}
-                {Subject.Panel !== ComponentPanel && <button onClick={() => AddRow(Subject)}>Duplicate</button>}
-                {Subject.Panel !== "group" && (
+                <hr />
+                {Chosen.some((Id) => Rows.some((Row) => Row.Parent === Id)) && <button onClick={SelectChildren}>Select children</button>}
+                {Chosen.some((Id) => { const Row = Rows.find((Each) => Each.Id === Id); return Row && !IsEditorCamera(Row) && Row.Panel !== ComponentPanel; }) && (
+                  <button onClick={GroupChosen}>{Chosen.length > 1 ? "Group into collection" : "Move into new collection"}</button>
+                )}
+                {Chosen.some((Id) => Rows.find((Row) => Row.Id === Id)?.Panel !== ComponentPanel) && (
                   <button
-                    disabled={IsEditorCamera(Subject)}
-                    title={
-                      IsEditorCamera(Subject)
-                        ? "The editor camera cannot be deleted"
-                        : undefined
-                    }
                     onClick={() => {
-                      if (IsEditorCamera(Subject)) return;
-                      AssignRows((Previous) => {
-                        const Removed = new Set([Selected]);
-                        let Changed = true;
-                        while (Changed) {
-                          Changed = false;
-                          for (const Row of Previous)
-                            if (
-                              Removed.has(Row.Parent) &&
-                              !Removed.has(Row.Id)
-                            ) {
-                              Removed.add(Row.Id);
-                              Changed = true;
-                            }
-                        }
-                        return Previous.filter((Row) => !Removed.has(Row.Id));
-                      });
-                      Select("showcase");
-                      ShowMenu(null);
+                      for (const Id of Chosen) {
+                        const Row = Rows.find((Each) => Each.Id === Id);
+                        if (Row && Row.Panel !== ComponentPanel) AddRow(Row);
+                      }
                     }}
                   >
-                    Remove from HTML scene
+                    Duplicate{Chosen.length > 1 ? ` ${Chosen.length}` : ""}
                   </button>
                 )}
+                <button onClick={CopyNames}>Copy name{Chosen.length > 1 ? "s" : ""}</button>
+                {LastDeleted && (
+                  <button onClick={UndoDelete}>
+                    Undo delete <small>Ctrl+Z</small>
+                  </button>
+                )}
+                <hr />
+                {(() => {
+                  const Removable = Chosen.filter((Id) => Deletable(Rows.find((Row) => Row.Id === Id)));
+                  const Why = IsEditorCamera(Subject) ? "The editor camera cannot be deleted" : Subject.Panel === "group" ? "Built-in collections cannot be deleted" : undefined;
+                  return (
+                    <button className="danger" data-row-delete="" disabled={!Removable.length} title={!Removable.length ? Why : undefined} onClick={() => DeleteRows(Removable)}>
+                      Delete{Chosen.length > 1 ? ` ${Removable.length}` : ""} <small>Del</small>
+                    </button>
+                  );
+                })()}
               </>
             )}
           </div>

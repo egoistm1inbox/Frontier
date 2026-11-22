@@ -1,0 +1,29 @@
+CheckAssets.mjs | 39s | }  Node.js v22.22.3 
+CheckBrowser.mjs | 58s | 0 !== 1      at file:///home/user/Frontier/Experimental/ProjectZeroEditor/CheckBrowser.mjs:199:10 [] 
+CheckCloudPlacement.mjs | 56s | Cloud and Light placement checks passed: 14 
+CheckColliders.mjs | 29s | 🟢 Fracture workspace: click adds point 2, dragging moves it, Blast gives it 32000 J (total 34500 J, 48 pieces); piece colliders box 32 % vs convex hull 100 %; Keep only point → single-point format 🟢 Rail: switching Fracture → Collision Fit lights the new tool; clicking the lit tool leaves 
+CheckColourCodex.mjs | 0s | }  Node.js v22.22.3 
+CheckConstruction.mjs | 25s |   - waiting for locator('.construct-properties [data-material-channel=roughness]')      at /home/user/Frontier/Experimental/ProjectZeroEditor/CheckConstruction.mjs:190:5 [] 
+CheckEntityContext.mjs | 30s | Entity context checks passed: 6 
+CheckEnvironmentGraphs.mjs | 54s |   ],   "Errors": [] } 
+CheckFirstCards.mjs | 56s | 🟢 Sun C · Disc: afternoon disc rgb(255, 255, 255); at 17:57 it is 1.6° above the horizon and orange rgb(255, 207, 54); the design survives reload 🟢 Atmosphere · Limb: picture only (no tiles or swatches), 12 px under the title; day rgb(181, 193, 201) left of night rgb(104, 104, 110); handle 
+CheckFogCamera.mjs | 30s |     "locator.isDisabled: Timeout 10000ms exceeded.\nCall log:\n  - waiting for getByRole('menu').getByRole('button', { name: 'Remove from HTML scene', exact: true })\n\n    at /home/user/Frontier/Experimental/ProjectZeroEditor/CheckFogCamera.mjs:263:8"   ] } 
+CheckFogCards.mjs | 25s | Height Fog correction checks passed: 6 
+CheckGeometryWorkspaces.mjs | 51s |   "Errors": [] } Geometry workspace checks passed: 6 
+CheckInspectorLayout.mjs | 15s |   operator: 'notStrictEqual',   diff: 'simple' } 
+CheckInspectorOrder.mjs | 433s | Inspector order checks passed: 113 
+CheckInstrumentStyle.mjs | 15s |   operator: 'notStrictEqual',   diff: 'simple' } 
+CheckLightDesign.mjs | 105s | Light design checks passed: 22 
+CheckLighting.mjs | 0s | }  Node.js v22.22.3 
+CheckMaterials.mjs | 6s | }  Node.js v22.22.3 
+CheckObjectComponents.mjs | 87s | Object component checks passed: 11 
+CheckQuickTools.mjs | 18s | }  Node.js v22.22.3 
+CheckReference.mjs | 1s | }  Node.js v22.22.3 
+CheckRenderSettings.mjs | 33s | Render settings checks passed: 10 
+CheckSharedCards.mjs | 73s | Shared-card checks passed: 14 
+CheckVehicleSockets.mjs | 23s | Vehicle socket checks passed: 8 
+CheckViewport3D.mjs | 81s | 🟢 Group into collection puts the sphere and torus in a new Collection under the Showcase; Duplicate adds a sixth shape 🟢 The 3D switch shows the checkerboard marker view (kept after reload) and switches back 9 Viewport3D checks passed 
+CheckVolumeWorkspaces.mjs | 29s | Volume workspace checks passed: 4 
+CheckWind.mjs | 42s |     }   ] } 
+CheckWorkspaceCards.mjs | 68s |   "Errors": [],   "FontFailures": [] } 
+DONE

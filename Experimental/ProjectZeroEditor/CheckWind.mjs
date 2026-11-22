@@ -373,7 +373,7 @@ try {
   await Select("Valley wind");
   await Page.locator(".outliner-row.selected").click({ button: "right" });
   await Page.getByRole("menu")
-    .getByRole("button", { name: "Remove from HTML scene", exact: true })
+    .getByRole("button", { name: "Delete Del", exact: true })
     .click();
   assert.equal(await Page.locator(".outliner-row", { hasText: "Valley wind" }).count(), 0);
   Checks.push(

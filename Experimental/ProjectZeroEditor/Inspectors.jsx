@@ -1068,7 +1068,7 @@ export function Inspector({
       <>
         {Header("Environment")}
         <Card Title="Sun now" Class="sun-now" GraphHandled>
-          <SunCard V={V} Change={AssignProperty} />
+          <SunCard V={V} Change={AssignProperty} Air={Scene?.Air} />
         </Card>
         <div className="section-caption">
           PROPERTIES <small>Light, direction & atmosphere</small>

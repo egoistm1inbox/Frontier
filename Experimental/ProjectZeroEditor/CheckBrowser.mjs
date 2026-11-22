@@ -196,7 +196,10 @@ try {
     .getByRole("button", { name: "Rainbow", exact: true })
     .click();
   await Page.getByRole("button", { name: "Add to scene", exact: true }).click();
+  // Constructed markers live in the marker view (the 3D view is the default since Follow-up 48).
+  await Page.locator("[data-viewport-switch]").click();
   assert.equal(await Page.locator("[data-preview-id]").count(), 1);
+  await Page.locator("[data-viewport-switch]").click();
   assert.equal(await Page.locator('[data-panel="rainbow"]').count(), 1);
   // Notch and all five native control-centre pages.
   await Page.getByRole("button", {

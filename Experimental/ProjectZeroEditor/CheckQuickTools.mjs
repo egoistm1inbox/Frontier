@@ -158,12 +158,15 @@ try {
   });
   await Projection.selectOption("ORTHO");
   await Split.click();
-  assert.equal(await Page.locator(".checker-pane").count(), 2);
+  // Split view: the main 3D view beside a marker pane.
+  assert.equal(await Page.locator(".viewport-3d").count(), 1);
+  assert.equal(await Page.locator(".checker-pane").count(), 1);
   assert.equal(await Projection.inputValue(), "ORTHO");
   await Projection.selectOption("TOP");
   assert.equal(await Split.getAttribute("aria-pressed"), "true");
   await Split.click();
-  assert.equal(await Page.locator(".checker-pane").count(), 1);
+  assert.equal(await Page.locator(".checker-pane").count(), 0);
+  assert.equal(await Page.locator(".viewport-3d").count(), 1);
   assert.equal(await Projection.inputValue(), "TOP");
   await Projection.selectOption("PERSP");
   const Diagnostics = Page.getByRole("button", {

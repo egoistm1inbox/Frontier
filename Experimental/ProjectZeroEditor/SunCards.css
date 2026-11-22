@@ -1,266 +1,139 @@
-/* Sun panel first card: three designs (SunCards.jsx). */
+/* Sun panel first card: the rendered sky and sun (SunCards.jsx). */
 .sun-card {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  margin-top: -6px;
 }
-.sun-card svg {
-  display: block;
-  width: 100%;
-  height: auto;
-  touch-action: none;
-  user-select: none;
-}
-.sun-card svg:focus-visible {
-  outline: 1px solid #ffffff55;
-  outline-offset: 3px;
-  border-radius: 12px;
-}
-.sun-card-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-.sun-card-head > b {
-  font-size: 24px;
-  font-weight: 300;
-  color: #f2f2f2;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: -0.5px;
-}
-.sun-card-phase {
-  font-size: 10px;
-  padding: 3px 8px;
-  border-radius: 999px;
-  color: #ececec;
-  background: color-mix(in srgb, var(--tone) 32%, #161616);
-  border: 1px solid color-mix(in srgb, var(--tone) 55%, transparent);
-  white-space: nowrap;
+.sun-picture {
+  position: relative;
+  aspect-ratio: 1.25;
+  border-radius: 14px;
   overflow: hidden;
-  text-overflow: ellipsis;
-  min-width: 0;
+  background: #07080c;
+  cursor: ew-resize;
+  touch-action: none;
+  outline: none;
 }
-.sun-card-designs {
-  margin-left: auto;
+.sun-card[data-design="day"] .sun-picture {
+  aspect-ratio: 1.6;
+  cursor: pointer;
+}
+.sun-picture:focus-visible {
+  box-shadow: 0 0 0 2px #8ab4ff;
+}
+.sun-picture canvas,
+.sun-picture-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.sun-picture-overlay {
+  pointer-events: none;
+}
+.sun-picture-overlay polyline {
+  fill: none;
+  stroke: #ffffff;
+  stroke-opacity: 0.55;
+  stroke-width: 1.3;
+  stroke-dasharray: 1 5;
+  stroke-linecap: round;
+}
+.sun-picture-overlay line {
+  stroke: #ffffff;
+  stroke-opacity: 0.7;
+}
+.sun-picture-overlay text {
+  font-size: 10px;
+  fill: #ffffff;
+  fill-opacity: 0.85;
+  paint-order: stroke;
+  stroke: #00000080;
+  stroke-width: 3px;
+  font-variant-numeric: tabular-nums;
+}
+.sun-picture-text {
+  position: absolute;
+  left: 14px;
+  top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  pointer-events: none;
+  text-shadow: 0 1px 8px #00000080;
+}
+.sun-picture-text b {
+  font-size: 30px;
+  font-weight: 300;
+  line-height: 1.05;
+  color: #ffffff;
+  font-variant-numeric: tabular-nums;
+}
+.sun-picture-text span {
+  font-size: 11px;
+  color: #ffffffd0;
+}
+.sun-picture-fallback {
+  position: absolute;
+  inset: auto 12px 12px;
+  margin: 0;
+  font-size: 11px;
+  color: #a5a5a5;
+}
+.sun-picture-designs {
+  position: absolute;
+  right: 10px;
+  top: 10px;
   display: flex;
   gap: 2px;
   padding: 2px;
   border-radius: 999px;
-  background: #141414;
-  border: 1px solid #ffffff10;
-  flex: none;
+  background: #00000055;
+  backdrop-filter: blur(6px);
 }
-.sun-card-designs button {
+.sun-picture-designs button {
   width: 22px;
   height: 22px;
   border-radius: 50%;
   border: 0;
   background: transparent;
-  color: #8c8c8c;
+  color: #ffffffb0;
   font-size: 10px;
   font-weight: 600;
   cursor: pointer;
+  padding: 0;
 }
-.sun-card-designs button[aria-checked="true"] {
-  background: #ededed;
+.sun-picture-designs button[aria-checked="true"] {
+  background: #ffffff;
   color: #151515;
 }
-.sun-card-note {
-  margin: 0;
-  font-size: 10px;
-  line-height: 1.5;
-  color: #7a7a7a;
-}
-
-/* A · solar dial */
-.sun-card .sd-dial {
-  cursor: grab;
-}
-.sun-card .sd-dial text {
-  font-family: inherit;
-}
-.sun-card .sd-hour {
-  font-size: 8.5px;
-  fill: #8d8d8d;
-}
-.sun-card .sd-compass {
-  font-size: 7px;
-  fill: #7c7c85;
-}
-.sun-card .sd-compass.north {
-  fill: #ff8b7a;
-  font-weight: 600;
-}
-.sun-card-chips {
-  display: flex;
-  gap: 6px;
-  justify-content: space-between;
-}
-.sun-card-chips span {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 5px 9px;
-  border-radius: 999px;
-  background: #171717;
-  border: 1px solid #ffffff0d;
-  font-size: 10.5px;
-  color: #dcdcdc;
-  white-space: nowrap;
-  font-variant-numeric: tabular-nums;
-}
-.sun-card-chips i {
-  width: 0;
-  height: 0;
-  border-left: 4px solid transparent;
-  border-right: 4px solid transparent;
-}
-.sun-card-chips i.up {
-  border-bottom: 6px solid #ffb066;
-}
-.sun-card-chips i.down {
-  border-top: 6px solid #8f7fe0;
-}
-
-/* B · horizon */
-.sun-card .sh-strip {
-  cursor: ew-resize;
-}
-.sun-card .sh-grid {
-  font-size: 6px;
-  fill: #ffffff;
-  fill-opacity: 0.3;
-}
-.sun-card .sh-bead {
-  font-size: 6.5px;
-  fill: #fff3d6;
-  fill-opacity: 0.85;
-}
-.sun-card .sh-compass {
-  font-size: 7px;
-  fill: #e6e1d6;
-  stroke: #000000a0;
-  stroke-width: 2px;
-  paint-order: stroke;
-}
-.sun-card .sh-compass.north {
-  fill: #ff8b7a;
-}
-.sun-card .sh-hour {
-  font-size: 7px;
-  fill: #6f6f6f;
-}
-.sun-card .sh-band {
-  cursor: pointer;
-}
-.sun-card-row {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 6px;
-}
-.sun-card-row > div {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 8px 9px;
-  border-radius: 12px;
-  background: #161616;
-  min-width: 0;
-}
-.sun-card-row small,
-.ss-numbers small {
-  font-size: 8.5px;
-  letter-spacing: 0.6px;
-  text-transform: uppercase;
-  color: #7b7b7b;
-}
-.sun-card-row b {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 16px;
-  font-weight: 300;
-  color: #f0f0f0;
-  font-variant-numeric: tabular-nums;
-}
-.sun-card-row b i {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-}
-.sun-card-row span,
-.ss-numbers span {
-  font-size: 9px;
-  color: #6f6f6f;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* C · sunlight sheet */
-.ss-sheet {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.sun-card .ss-label {
-  font-size: 6.5px;
-  fill: #8c8c8c;
-  letter-spacing: 0.3px;
-}
-.sun-card .ss-big {
-  font-size: 14px;
-  font-weight: 300;
-  fill: #f4f4f4;
-}
-.sun-card .ss-dot {
-  font-size: 7px;
-  font-weight: 700;
-  fill: #111;
-}
-.sun-card .ss-kelvin-value {
-  font-size: 10px;
-  fill: #f0f0f0;
-}
-.ss-numbers {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 6px;
-}
-.ss-numbers > div {
+.sun-day-bar {
   position: relative;
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  padding: 9px 10px 8px 30px;
-  border-radius: 12px;
-  background: #161616;
-  min-width: 0;
+  height: 6px;
+  border-radius: 3px;
+  cursor: ew-resize;
+  touch-action: none;
 }
-.ss-numbers i {
+.sun-day-bar i {
   position: absolute;
-  left: 9px;
-  top: 10px;
-  width: 14px;
-  height: 14px;
+  top: 50%;
+  width: 12px;
+  height: 12px;
+  margin: -6px 0 0 -6px;
   border-radius: 50%;
-  background: #f4f4f4;
-  color: #111;
-  font-style: normal;
-  font-size: 8px;
-  font-weight: 700;
-  display: grid;
-  place-items: center;
+  background: #ffffff;
+  box-shadow: 0 0 0 2px #151515;
 }
-.ss-numbers b {
-  font-size: 20px;
-  font-weight: 300;
-  color: #f2f2f2;
+.sun-day-labels {
+  position: relative;
+  height: 12px;
+  margin-top: -4px;
+}
+.sun-day-labels span {
+  position: absolute;
+  transform: translateX(-50%);
+  font-size: 10px;
+  color: #9c9c9c;
   font-variant-numeric: tabular-nums;
-  line-height: 1.15;
-}
-.sun-card .ss-hours {
-  cursor: pointer;
 }

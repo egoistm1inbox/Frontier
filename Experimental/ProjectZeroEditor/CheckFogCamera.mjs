@@ -258,7 +258,7 @@ try {
   const Menu = Page.getByRole("menu");
   assert.ok(
     await Menu.getByRole("button", {
-      name: "Remove from HTML scene",
+      name: "Delete Del",
       exact: true,
     }).isDisabled(),
   );
@@ -278,13 +278,13 @@ try {
   await Page.locator(".outliner-row.selected").click({ button: "right" });
   assert.equal(
     await Menu.getByRole("button", {
-      name: "Remove from HTML scene",
+      name: "Delete Del",
       exact: true,
     }).isDisabled(),
     false,
   );
   await Menu.getByRole("button", {
-    name: "Remove from HTML scene",
+    name: "Delete Del",
     exact: true,
   }).click();
   assert.equal((await Saved()).Rows.filter(IsEditorCamera).length, 1);

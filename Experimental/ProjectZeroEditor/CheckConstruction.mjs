@@ -51,7 +51,7 @@ try {
   assert.equal(await Count(), 0);
   assert.equal(await Page.locator(".scene-image img").count(), 0);
   await Page.screenshot({ path: path.join(Proof, "Checkerboard.png") });
-  await Page.locator(".checker-pane").click({ position: { x: 25, y: 25 } });
+  await Page.locator(".viewport-3d-canvas").click({ position: { x: 140, y: 25 } });
   await Page.keyboard.down("Shift");
   for (const Key of ["w", "a", "s", "d"]) await Page.keyboard.press(Key);
   await Page.keyboard.up("Shift");
@@ -62,6 +62,9 @@ try {
     0,
     "Movement/modifier chords must not open Construct",
   );
+  // The rest counts constructed markers, which live in the marker view (the 3D view is the default since Follow-up 48).
+  await Page.locator("[data-viewport-switch]").click();
+  await Page.locator(".checker-pane").waitFor();
   const Consumed = await Page.evaluate(() => {
     const Movement = new KeyboardEvent("keydown", {
       key: "A",
@@ -294,7 +297,7 @@ try {
   assert.equal(await Count(), 26);
   await Page.locator(".outliner-row.selected").click({ button: "right" });
   await Page.getByRole("menu")
-    .getByRole("button", { name: "Remove from HTML scene", exact: true })
+    .getByRole("button", { name: "Delete Del", exact: true })
     .click();
   assert.equal(await Count(), 25);
   await Page.getByRole("textbox", {

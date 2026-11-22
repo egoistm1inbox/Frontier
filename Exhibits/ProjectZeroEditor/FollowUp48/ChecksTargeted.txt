@@ -1,0 +1,10 @@
+Follow-up 48 targeted reruns (after the fixes; headless SwiftShader). Failing-line numbers compared with the base copy.
+CheckViewport3D      9 passed (new)
+CheckFirstCards      4 passed (rewritten)
+CheckInspectorLayout 9 passed
+CheckInstrumentStyle 7 passed (failed on the base)
+CheckFogCamera       Errors [] (row menu entry is now "Delete"; the menu moves up when it would leave the window)
+CheckInspectorOrder  113 passed, 358 s (base 219 s; the 3D view renders on selection changes)
+CheckConstruction    fails at :193 = base :190 (+3 inserted lines), same place
+CheckQuickTools      fails at :183 = base :180 (+3 inserted lines), the known F3 diagnostics behaviour
+CheckBrowser, CheckWind  same output as the base (ERR_CONNECTION_CLOSED resource errors)

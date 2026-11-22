@@ -49,6 +49,46 @@ starting point for the UI redesign.
 
 ---
 
+## Follow-up 48: 3D viewport, outliner multi-select and row menu, a rendered Sun card, Atmosphere limb with a height handle
+
+- **3D viewport** (`Viewport3D.jsx`). It replaces the checkerboard as the main view. The **3D** button in the viewport toolbar switches
+  to the marker view and back (`Settings.Viewport`, `"3d"` or `"markers"`, kept with the scene). It uses the Component Viewer's three.js
+  renderer (`Shared/Studio/Render.js`), not SDF.
+  - **Shapes**: every geometry object, with its size settings, Transform, base colour, roughness and metallic. The five Showcase
+    shapes stand on a line 1.8 m apart, and Position moves an object from its place on that line.
+  - **Sun**: direction from the Sun's date, time and place (or its manual direction). The colour is its temperature times the sunlight
+    left after the air, so it reddens at sunset. It casts shadows.
+  - **Atmosphere**: the sky sphere is `SkyShader.js` baked to an equirectangular image. Haze in the horizon's colour hides where the
+    ground ends. Clouds are not drawn.
+  - **Controls**: click to select, Ctrl or Shift click to add, drag to orbit, right or Shift drag to pan, wheel to zoom, F to focus.
+  - It draws a frame only when the camera or the scene changed.
+- **Outliner multi-select and row menu.**
+  - Ctrl-click toggles a row; Shift-click takes the visible rows in between. The inspector shows the last row clicked.
+  - The right-click menu acts on every chosen row: Rename (one row), Show / Hide, Isolate, Focus in viewport, Inspect in workspace,
+    fracture on/off, Select children, Group into collection, Duplicate, Copy names, and **Delete** (also the Del key).
+  - One delete can be undone with Ctrl+Z or the menu. Built-in collections and the editor camera can't be deleted.
+- **Sun first card** (`SunCards.jsx`, replacing the F47 dial / horizon / sheet). It shows the real sky and sun for the current
+  time and place, rendered from the Atmosphere's settings. Each framing shows only the time and one line, with a day bar underneath:
+  - **A · Sky**: standing on the ground, facing the sun.
+  - **B · Day**: a wide sky with the sun's path, plus sunrise and sunset on the horizon.
+  - **C · Disc**: the sun itself at true size, white by day and orange when low.
+
+  Drag the picture or the bar, or use the arrow keys, to move through the day.
+- **Atmosphere first card** (`AtmosphereCards.jsx`). Design B (the planet's limb) is kept and redrawn per pixel by `SkyShader.js`:
+  - It uses Rayleigh, Mie and ozone, with true colours instead of the old gradient.
+  - The design switch, the three figure tiles and the swatches are gone. The picture fills the card.
+  - A dashed outline marks the top of the air, and its handle sets **Atmosphere** height by dragging (10–120 km; arrows ±1 km, PgUp/PgDn ±10 km).
+  - "Sun at the limb" moves the sun from −12° to 40°.
+- **`SkyShader.js`**: one WebGL2 sky renderer on a round planet, shared by both cards and the viewport. It does single scattering with
+  ground light, a limb-darkened disc and stars, in perspective, panorama and equirectangular views.
+- **Checks.**
+  - New: `CheckViewport3D.mjs` (9).
+  - Rewritten: `CheckFirstCards.mjs` (4).
+  - Updated for the 3D main view: `CheckQuickTools` (split view is now 3D beside one marker pane), `CheckConstruction` and `CheckInspectorLayout`.
+- Evidence is in `Exhibits/ProjectZeroEditor/FollowUp48/`. Headless SwiftShader only. Names are unapproved.
+
+---
+
 ## Follow-up 47: workspace rail, more collision shapes, multi-point fracture, three designs for the Sun and Atmosphere first cards
 
 - **Workspace rail** (`WorkspaceRail`, `.ws-rail`). The workspace buttons are no longer at the top of the inspector. They sit in a vertical
