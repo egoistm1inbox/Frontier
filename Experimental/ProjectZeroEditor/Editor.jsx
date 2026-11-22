@@ -21,6 +21,12 @@ import ReferencePanel, {
 import FolderInspector from "./FolderInspector.jsx";
 import { FolderInventory } from "./FolderInventory.mjs";
 import DiagnosticsCard from "./DiagnosticsCard.jsx";
+import { EnsureGodRays, GodRaysRow, MoonSlotCount, MaximumLocalClouds } from "./ProjectZeroSpecification.js";
+import { DebugViews, DebugViewLabel } from "./DebugViews.js";
+import ProjectBrowser, { RestoreProjects, StoreProjects, BlankSceneRows, BlankSceneValues, MaximumProjectVersions } from "./ProjectBrowser.jsx";
+import ViewportRenderHeader from "./ViewportRenderHeader.jsx";
+import { StartThoughtLog, useThoughtScope, OpenThought } from "./ThoughtLog.js";
+import { ResolveRenderSettings, RenderSettingsKey } from "./RenderSettings.js";
 import { WorkspaceView } from "./Workspaces.jsx";
 import { VehicleFolder, VehicleRows, VehiclePanel, VehicleSummary, EnsureVehicleFolder } from "./VehicleComponents.jsx";
 import { ComponentPanel, ComponentSummary, WithObjectComponents, EnsureObjectComponents, ComponentRowsFor, OwnerKind, ComponentRevision } from "./ObjectComponents.jsx";
@@ -62,6 +68,7 @@ import {
 } from "./EnvironmentLight.jsx";
 import CheckerViewport, { PreviewVisible } from "./CheckerViewport.jsx";
 import "./Editor.css";
+import "./ProjectZeroSpecification.css";
 const InitialRows = [
   ["showcase", "Showcase", "group", "folder-scene", null, "Scene collection"],
   ["cube", "Cube", "geometry", "editor-cube", "showcase", "Geometry"],
@@ -119,7 +126,7 @@ const InitialRows = [
     "Procedural sky",
   ],
   ["sun", "Sun", "sun", "sun", "world", "Directional light"],
-  ["moon", "Moons", "moon", "moon", "world", "Lunar bodies · four slots"],
+  ["moon", "Moons", "moon", "moon", "world", "Lunar bodies · six slots"],
   [
     "stars",
     "Stars",
@@ -160,6 +167,7 @@ const InitialRows = [
     "world",
     "Local volumetric fog · bounded medium",
   ],
+  [GodRaysRow.Id, GodRaysRow.Name, GodRaysRow.Panel, GodRaysRow.Icon, GodRaysRow.Parent, GodRaysRow.Description],
   ["clouds", "Clouds", "clouds", "clouds", "world", "Global cloud layer"],
   [
     "precipitation",
@@ -220,24 +228,7 @@ const DefaultSettings = {
   Raytracing: true,
   Scale: 100,
 };
-const DebugViews = [
-  "Off",
-  "Depth",
-  "Visibility ID",
-  "Motion Vectors",
-  "Cluster ID",
-  "HiZ (level 3)",
-  "Albedo",
-  "Normal",
-  "Roughness",
-  "Metalness",
-  "Shading Normal",
-  "Reservoir M",
-  "Reservoir W",
-  "Reservoir Age",
-  "Patch Tiles",
-  "Tiles + Wireframe",
-];
+// Debug views 00–16 and the earlier editor views: DebugViews.js.
 const StorageKey = "Frontier.ProjectZeroHtml.v1";
 function Restore() {
   try {
@@ -438,7 +429,18 @@ if (SkyAlias && new URLSearchParams(location.search).get("inspect") === "sky") {
   Address.searchParams.set("inspect", "atmosphere");
   history.replaceState(null, "", Address);
 }
+// Viewport raster scope for the Thought Log: render plus commit of one checker viewport.
+function MeasuredViewport(Props) {
+  useThoughtScope("Editor.ViewportRaster");
+  const Select = (...Arguments) => {
+    const Close = OpenThought("Editor.ViewportInteraction");
+    Props.Select(...Arguments);
+    Close();
+  };
+  return <CheckerViewport {...Props} Select={Select} />;
+}
 function App() {
+  useThoughtScope("Editor.Tick");
   // The open edit workspace ({ Id, Tool, …view }) or null. It belongs to one selection and closes when the selection changes.
   const [WorkspaceState, StoreWorkspace] = useState(null);
   const SetWorkspace = (Next) =>
@@ -446,12 +448,16 @@ function App() {
       const Value = typeof Next === "function" ? Next(Previous) : Next;
       return Value ? { ...Value } : null;
     });
+  // Debug is the viewport debug view (0 = 00 Lit); Diagnostics is the overlay card, toggled separately.
   const [Debug, SetDebug] = useState(0),
+    [Diagnostics, ShowDiagnostics] = useState(false),
+    [ProjectsOpen, OpenProjects] = useState(false),
+    [ProjectCatalogue, StoreProjectCatalogue] = useState(RestoreProjects),
     [HiZ, ToggleHiZ] = useState(true),
     [Alias, ToggleAlias] = useState(true),
     [PatchError, SetPatchError] = useState(1);
   const [Rows, StoreRows] = useState(() =>
-      EnsureObjectComponents(EnsureVehicleFolder(EnsureEnvironmentLight(
+      EnsureGodRays(EnsureObjectComponents(EnsureVehicleFolder(EnsureEnvironmentLight(
         ArrangeCameraEffects(
           EnsureEditorCamera(
             PrepareLightRows(
@@ -464,7 +470,7 @@ function App() {
           Saved.Rows ? Saved.CameraEffectsRevision : 1,
         ),
         Saved.Rows ? Saved.EnvironmentLightRevision : 0,
-      ), Saved.Rows ? Saved.VehicleRevision : 0), Saved.Rows ? Saved.ComponentRevision : 0),
+      ), Saved.Rows ? Saved.VehicleRevision : 0), Saved.Rows ? Saved.ComponentRevision : 0)),
     ),
     [Selected, Select] = useState(
       new URLSearchParams(location.search).get("inspect") ||
@@ -888,6 +894,44 @@ function App() {
     Notify(Text);
     setTimeout(() => Notify(""), 3200);
   };
+  // Project Browser (§14): switching projects keeps the scene being left as that project's newest version (three kept).
+  const OpenProject = (Project, VersionIndex = -1, Catalogue = ProjectCatalogue) => {
+    const Leaving = Catalogue.Active;
+    if (Project.Token === Leaving && VersionIndex < 0) {
+      OpenProjects(false);
+      return;
+    }
+    const Stamp = new Date();
+    const Kept = { Label: "Saved " + Stamp.toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }), Time: Stamp.getTime(), Rows, Values, Hidden };
+    const Next = {
+      ...Catalogue,
+      Active: Project.Token,
+      Projects: Catalogue.Projects.map((Each) => (Each.Token === Leaving ? { ...Each, Versions: [...(Each.Versions || []), Kept].slice(-MaximumProjectVersions) } : Each)),
+    };
+    const Target = Next.Projects.find((Each) => Each.Token === Project.Token) || Project;
+    const Version = VersionIndex >= 0 ? Target.Versions?.[VersionIndex] : Target.Versions?.at(-1);
+    const Blank = !Version && Project.Token !== "default";
+    AssignRows(
+      Version
+        ? Version.Rows
+        : Blank
+          ? BlankSceneRows.map((Row) => ({ ...Row }))
+          : EnsureGodRays(EnsureObjectComponents(EnsureVehicleFolder(EnsureEnvironmentLight(ArrangeCameraEffects(PrepareLightRows(EnsureReferenceLights(InitialRows)), 1), 0), 0), 0)),
+    );
+    AssignValues(Version ? Version.Values : Blank ? { ...BlankSceneValues } : {});
+    AssignHidden(Version ? { ...Version.Hidden, camera: false } : { camera: false });
+    Select("sun");
+    SetWorkspace(null);
+    StoreProjectCatalogue(Next);
+    if (!StoreProjects(Next)) Toast("Browser storage is full; older project versions were not kept");
+    OpenProjects(false);
+    Toast(`${Target.Name} opened in Frontier${Blank ? " · blank scene: ground plane and clear sky" : ""}`);
+  };
+  const CreateProject = (Name, Location) => {
+    const Token = "project-" + crypto.randomUUID();
+    const Project = { Token, Name, Location: Location.replace(/\/?$/, "/") + Name + "/" + Name + ".projectspace", Created: Date.now(), Versions: [] };
+    OpenProject(Project, -1, { ...ProjectCatalogue, Projects: [...ProjectCatalogue.Projects, Project] });
+  };
   useEffect(() => {
     try {
       localStorage.setItem(
@@ -926,7 +970,9 @@ function App() {
       if (Construct || Shade || AssetsOpen || WindSubject) return;
       if (Event.key === "F3") {
         Event.preventDefault();
-        SetDebug((Previous) => (Previous + (Event.shiftKey ? 15 : 1)) % 16);
+        SetDebug((Previous) => (Previous + (Event.shiftKey ? DebugViews.length - 1 : 1)) % DebugViews.length);
+        // F3 also opens the diagnostics overlay, as before; its Close button hides the overlay without resetting the view.
+        ShowDiagnostics(true);
       }
       if (Event.key === "F4") {
         Event.preventDefault();
@@ -943,6 +989,7 @@ function App() {
       if (Event.key === "Escape") {
         SetWorkspace(null);
         SetDebug(0);
+        ShowDiagnostics(false);
         ShowViewportSettings(false);
         ShowMenu(null);
         OpenConstruct(false);
@@ -1109,7 +1156,7 @@ function App() {
       )
         throw Error();
       AssignRows(
-        EnsureObjectComponents(EnsureVehicleFolder(EnsureEnvironmentLight(
+        EnsureGodRays(EnsureObjectComponents(EnsureVehicleFolder(EnsureEnvironmentLight(
           ArrangeCameraEffects(
             PrepareLightRows(
               Loaded.ReferenceDesignRevision === 1
@@ -1120,7 +1167,7 @@ function App() {
             Loaded.CameraEffectsRevision,
           ),
           Loaded.EnvironmentLightRevision,
-        ), Loaded.VehicleRevision), Loaded.ComponentRevision),
+        ), Loaded.VehicleRevision), Loaded.ComponentRevision)),
       );
       Collapse(ConsolidateAtmosphereFlags(Loaded.Collapsed, Loaded.Rows));
       const ImportedValues = NormalizeHeightFogValues(
@@ -1168,6 +1215,11 @@ function App() {
     Properties = Values[Template.Id] || {},
     Visible = true,
   ) => {
+    // §5: at most eight local cloud volumes per scene.
+    if (Template.Panel === "local-cloud" && Rows.filter((Row) => Row.Panel === "local-cloud").length >= MaximumLocalClouds) {
+      Toast(`A scene holds at most ${MaximumLocalClouds} local clouds`);
+      return;
+    }
     if (IsEditorCamera(Template))
       Template = {
         ...Template,
@@ -1358,7 +1410,7 @@ function App() {
     <>
       <div className="outliner-heading">
         <h1>Outliner</h1>
-        <small>Showcase · {Rows.length} nodes</small>
+        <small>{ProjectCatalogue.Projects.find((Each) => Each.Token === ProjectCatalogue.Active)?.Name || "Default Project"} · {Rows.length} nodes</small>
         <button
           aria-label="Outliner menu"
           onClick={(Event) => {
@@ -1557,7 +1609,7 @@ function App() {
         </span>
         <span>
           <small>MOONS</small>
-          <b>1/4</b>
+          <b>1/{MoonSlotCount}</b>
         </span>
         <span>
           <small>CAM</small>
@@ -1594,6 +1646,7 @@ function App() {
               ["EDIT", "edit", "Edit"],
               ["SIM", "simulate", "Sim"],
               ["PLAY", "play", "Play"],
+              ["PAUSE", "pause", "Pause"],
             ].map(([Mode, Symbol, Label]) => (
               <button
                 key={Mode}
@@ -1630,6 +1683,14 @@ function App() {
             <ActionIcon Name="construct" Size={18} />
             <span>Construct</span>
             <kbd>Ctrl+A</kbd>
+          </button>
+          <button
+            className="viewport-icon-button viewport-projects"
+            aria-label="Project Browser"
+            title={"Project Browser · " + (ProjectCatalogue.Projects.find((Each) => Each.Token === ProjectCatalogue.Active)?.Name || "Default Project")}
+            onClick={() => OpenProjects(true)}
+          >
+            <Icon Name="folder-scene" Size={18} />
           </button>
           <button
             className="viewport-icon-button"
@@ -1692,9 +1753,9 @@ function App() {
             <button
               className="viewport-icon-button"
               aria-label="Viewport diagnostics"
-              aria-pressed={Debug > 0}
-              title="Diagnostics · F3"
-              onClick={() => SetDebug((Previous) => (Previous ? 0 : 1))}
+              aria-pressed={Diagnostics}
+              title="Diagnostics overlay · Timing, Scene, Render, Profiler"
+              onClick={() => ShowDiagnostics((Previous) => !Previous)}
             >
               <ActionIcon Name="diagnostics" Size={16} />
             </button>
@@ -1731,6 +1792,26 @@ function App() {
               ×
             </button>
           </header>
+          <ViewportRenderHeader
+            Render={ResolveRenderSettings(Values.camera?.[RenderSettingsKey])}
+            AssignRender={(Patch) =>
+              AssignValues((Previous) => ({
+                ...Previous,
+                camera: {
+                  ...Previous.camera,
+                  [RenderSettingsKey]: { ...ResolveRenderSettings(Previous.camera?.[RenderSettingsKey]), ...Patch },
+                },
+              }))
+            }
+            Settings={Settings}
+            AssignSetting={Assign}
+            Hidden={Hidden}
+            SetVisible={(Id, On) => AssignHidden((Previous) => ({ ...Previous, [Id]: !On }))}
+            CloudShadows={Values.clouds?.["Shadow Enabled"] ?? true}
+            SetCloudShadows={(On) => AssignValues((Previous) => ({ ...Previous, clouds: { ...Previous.clouds, "Shadow Enabled": On } }))}
+            SplitView={SplitView}
+            SetSplitView={SetSplitView}
+          />
           <label>
             Debug view
             <select
@@ -1740,14 +1821,14 @@ function App() {
               onChange={(Event) => SetDebug(+Event.target.value)}
             >
               {DebugViews.map((View, Index) => (
-                <option key={View} value={Index}>
-                  {View}
+                <option key={View.Name} value={Index} title={View.Shows}>
+                  {DebugViewLabel(View)}
                 </option>
               ))}
             </select>
           </label>
-          <label className="viewport-setting-toggle">
-            HiZ overlay
+          <label className="viewport-setting-toggle" title="📝 Not in the Project Zero specification · kept for you to decide">
+            📝 HiZ overlay
             <input
               type="checkbox"
               aria-label="HiZ overlay"
@@ -1755,8 +1836,8 @@ function App() {
               onChange={(Event) => ToggleHiZ(Event.target.checked)}
             />
           </label>
-          <label className="viewport-setting-toggle">
-            Alias overlay
+          <label className="viewport-setting-toggle" title="📝 Not in the Project Zero specification · kept for you to decide">
+            📝 Alias overlay
             <input
               type="checkbox"
               aria-label="Alias overlay"
@@ -1764,8 +1845,8 @@ function App() {
               onChange={(Event) => ToggleAlias(Event.target.checked)}
             />
           </label>
-          <label>
-            Patch error budget
+          <label title="📝 Not in the Project Zero specification · kept for you to decide">
+            📝 Patch error budget
             <select
               aria-label="Patch error budget"
               value={PatchError}
@@ -1779,8 +1860,8 @@ function App() {
             </select>
           </label>
           <p>
-            F3 / Shift+F3 cycle debug views. These are HTML diagnostic
-            selections; no native render buffers are connected.
+            F3 / Shift+F3 cycle debug views (00–16, then the earlier 📝 views).
+            HTML selections only; no native render buffers are connected.
           </p>
         </section>
       )}
@@ -1797,7 +1878,7 @@ function App() {
             SetWorkspace={SetWorkspace}
           />
         ) : (
-          <CheckerViewport
+          <MeasuredViewport
             Rows={Rows}
             Hidden={Hidden}
             Selected={Selected}
@@ -1805,7 +1886,7 @@ function App() {
           />
         )}
         {SplitView && !Workspace && (
-          <CheckerViewport
+          <MeasuredViewport
             Rows={Rows}
             Hidden={Hidden}
             Selected={Selected}
@@ -1813,16 +1894,33 @@ function App() {
             View={2}
           />
         )}
-        {Debug > 0 && (
+        {ProjectsOpen && (
+          <ProjectBrowser
+            Catalogue={ProjectCatalogue}
+            Open={(Project, Version) => OpenProject(Project, Version)}
+            Create={CreateProject}
+            OpenFile={(File_) => {
+              if (/\.json$/i.test(File_.name) || File_.type === "application/json") {
+                RestoreFile({ target: { files: [File_] } });
+                OpenProjects(false);
+              } else Toast(`${File_.name}: the native .projectspace decoder is not connected in the HTML editor`);
+            }}
+            OpenPath={(Path) => Toast(`${Path} recorded for the native hand-off; the HTML editor cannot read disk paths`)}
+            Close={() => OpenProjects(false)}
+          />
+        )}
+        {Diagnostics && (
           <DiagnosticsCard
             Rows={Rows}
             VisibleCount={SceneInventory.Visible}
-            DebugName={DebugViews[Debug]}
+            DebugName={DebugViewLabel(DebugViews[Debug])}
+            DebugView={DebugViews[Debug]}
+            RunMode={RunMode}
             HiZ={HiZ}
             Alias={Alias}
             PatchError={PatchError}
             Close={() => {
-              SetDebug(0);
+              ShowDiagnostics(false);
               document
                 .querySelector('[aria-label="Viewport diagnostics"]')
                 ?.focus();
@@ -2508,6 +2606,7 @@ function App() {
     </>
   );
 }
+StartThoughtLog();
 createRoot(document.getElementById("Editor")).render(<App />);
 window.ProjectZeroHtml = {
   Panels: Object.keys(Panels),

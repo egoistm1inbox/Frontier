@@ -107,14 +107,15 @@ try {
     await Page.locator("[data-collection-total]").getAttribute(
       "data-collection-total",
     ),
-    "12",
+    // 13: Follow-up 48 adds God Rays under World (Project Zero specification §7).
+    "13",
   );
   // Lens Flare moved from World (under Sun) to Cameras.
-  assert.equal(await Page.locator(".collection-entry").count(), 12);
+  assert.equal(await Page.locator(".collection-entry").count(), 13);
   await Page.getByLabel("Collection scope", { exact: true }).selectOption(
     "direct",
   );
-  assert.equal(await Page.locator(".collection-entry").count(), 10);
+  assert.equal(await Page.locator(".collection-entry").count(), 11);
   await Page.getByLabel("Collection scope", { exact: true }).selectOption(
     "all",
   );

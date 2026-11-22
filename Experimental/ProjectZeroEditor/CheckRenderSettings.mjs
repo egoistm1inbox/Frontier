@@ -85,7 +85,7 @@ try {
   let Settings = await Stored("camera");
   assert.equal(Settings.RenderEngine, "openpbr_direct");
   assert.equal(await Page.locator('.rc-tabs [data-tab="pbr"] i.on').count(), 1);
-  assert.match(await Page.locator(".rc-lines").innerText(), /Contact \+ PCSS · 2048²/);
+  assert.match(await Page.locator(".rc-lines").innerText(), /Contact PCSS · 2048²/);
   await Page.locator(".rc-cards").screenshot({ path: path.join(Proof, "Engine.png") });
   Checks.push("Engine tab: picking PBR sets OpenPBR direct, moves the rendering dot and summarises its shadows in one line");
 
@@ -94,7 +94,7 @@ try {
   assert.equal(await InUse(), "true");
   assert.deepEqual(await Cards(), ["Shadow algorithm", "Penumbra", "Direct lighting"]);
   await Page.getByLabel("Shadow quality", { exact: true }).selectOption({ label: "Low" });
-  await Page.getByRole("radio", { name: /3 × 3 PCF/ }).click();
+  await Page.getByRole("radio", { name: /PCF Bilinear/ }).click();
   Settings = await Stored("camera");
   assert.deepEqual([Settings.PbrShadow, Settings.PbrMapRes, Settings.PbrPcssTaps], ["pcf", 1024, 8]);
   assert.match(await Page.locator('[data-study="kernel"]').textContent(), /1024² map · 9 taps/);
@@ -102,7 +102,7 @@ try {
   await Tab("sdf");
   assert.equal(await InUse(), "false");
   assert.deepEqual(await Cards(), ["Distance-field shadows", "Cone GI"]);
-  await Page.locator(".rc-rail button", { hasText: "Sobol spherical cap" }).click();
+  await Page.locator(".rc-rail button", { hasText: "Hybrid Sobol Cap" }).click();
   Settings = await Stored("camera");
   assert.deepEqual([Settings.SdfShadow, Settings.PbrShadow, Settings.RenderEngine], ["hybrid_sobol_cap", "pcf", "openpbr_direct"]);
   await Page.locator(".rc-cards").screenshot({ path: path.join(Proof, "Sdf.png") });
@@ -122,7 +122,7 @@ try {
   await Page.locator(".rc-use button").click();
   assert.equal((await Stored("camera")).RenderEngine, "highend_bvh4_gi");
   await Page.getByRole("radiogroup", { name: "Tracer" }).getByRole("radio", { name: "PT final", exact: true }).click();
-  await Page.getByRole("radio", { name: /Rectangular area/ }).click();
+  await Page.getByRole("radio", { name: /WideTree RayQuery · area/ }).click();
   await Page.getByRole("switch", { name: "Trace reflections", exact: true }).click();
   Settings = await Stored("camera");
   assert.deepEqual([Settings.RenderEngine, Settings.RayTracer, Settings.RayShadow, Settings.RayReflections], ["pt_final", "pt_final", "bvh_area", false]);
@@ -187,7 +187,7 @@ try {
   assert.equal(Restored.filter((Row) => Row.Parent === "cube" && Row.Panel === "object-component").length, 3);
   await Tab("pbr");
   assert.equal(await InUse(), "true");
-  assert.equal(await Page.getByRole("radio", { name: /3 × 3 PCF/ }).getAttribute("aria-checked"), "true");
+  assert.equal(await Page.getByRole("radio", { name: /PCF Bilinear/ }).getAttribute("aria-checked"), "true");
   Checks.push("Scenes saved at ComponentRevision 2 drop MatCap, Shadow Maps, SDF Tracing and Ray Tracing rows; their PCF setup reads in the PBR tab");
 } catch (Error) {
   Errors.push(Error.stack);

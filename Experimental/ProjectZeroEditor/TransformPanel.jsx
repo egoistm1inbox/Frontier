@@ -1,5 +1,6 @@
 import React, { useRef, useState, useLayoutEffect } from "react";
 import { Clamp } from "./MaterialSpecification.js";
+import GizmoPanel from "./GizmoPanel.jsx";
 
 function TransformValue(Props) {
   const [Draft, EditDraft] = useState(String(Props.value));
@@ -23,6 +24,7 @@ export default function TransformPanel({
   Rows: CustomRows,
   Compact = false,
   Space = "LOCAL SPACE",
+  Gizmo = false,
 }) {
   const Drag = useRef(null);
   const Locked = !!Values.LOCKED;
@@ -39,6 +41,7 @@ export default function TransformPanel({
     Change(Key, Result);
   };
   return (
+    <>
     <section className={"transform-card" + (Compact ? "" : " generic-card")}>
       <header>
         <h3>Transform</h3>
@@ -136,5 +139,8 @@ export default function TransformPanel({
         Browser transform draft; native scene unchanged.
       </p>
     </section>
+    {/* Geometry transforms carry the editor-wide gizmo preferences (§13) once; lights, fog and emitters do not. */}
+    {Gizmo && <GizmoPanel Disabled={Locked} />}
+    </>
   );
 }

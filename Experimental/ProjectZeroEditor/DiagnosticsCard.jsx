@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useBrowserTiming } from "./BrowserTiming.js";
+import { ThoughtReport, ThoughtStatistics, SaveThoughtLog, ThoughtLogPath } from "./ThoughtLog.js";
 import "./WorkspaceCards.css";
 // Header / footer glyphs drawn as SVG with round caps and joins (text glyphs rendered as boxes in some fonts).
 function RoundGlyph({ Name }) {
@@ -23,7 +24,18 @@ const Storage = "Frontier.DiagnosticsCard.v1",
     Y: 16,
     Width: 370,
     Height: 520,
+    Tab: "Timing",
   };
+// Overlay tabs (§15). Timing and Scene keep the browser-measured graph; Render and Profiler read the Thought Log.
+const Tabs = ["Timing", "Scene", "Render", "Profiler"];
+// Per-scope timing rows: label and the Thought Log scope that carries its CPU time.
+const TimingRows = [
+  ["Viewport raster", "Editor.ViewportRaster"],
+  ["Gizmo overlay", "Editor.GizmoOverlayRefresh"],
+  ["ImGui present", "Editor.ImGuiPresent"],
+  ["Host frame", "Host.Frame"],
+];
+const Milliseconds = (Number) => (Number ? Number.toFixed(2) : "—");
 function Restore() {
   try {
     const S = JSON.parse(localStorage.getItem(Storage)) || {};
@@ -39,16 +51,42 @@ function Restore() {
         : "FPS",
       View: ["both", "graph", "stats"].includes(S.View) ? S.View : "both",
       Seconds: [15, 30, 60].includes(S.Seconds) ? S.Seconds : 30,
+      Tab: Tabs.includes(S.Tab) ? S.Tab : "Timing",
     };
   } catch {
     return Defaults;
   }
 }
 const Clamp = (V, A, B) => Math.max(A, Math.min(B, V));
+// Live Thought Log rows, refreshed twice a second while the Render or Profiler tab is open.
+function useThoughtReport(Active) {
+  const [Report, Store] = useState(() => ThoughtReport());
+  useEffect(() => {
+    if (!Active) return;
+    Store(ThoughtReport());
+    const Timer = setInterval(() => Store(ThoughtReport()), 500);
+    return () => clearInterval(Timer);
+  }, [Active]);
+  return Report;
+}
+function FrameSparkline({ Samples }) {
+  const Recent = Samples.slice(-120).map((S) => S.Frame).filter(Number.isFinite);
+  if (Recent.length < 2) return <svg className="timing-spark" viewBox="0 0 240 44" aria-label="Frame time sparkline" />;
+  const Top = Math.max(33.4, ...Recent) * 1.05;
+  const Path = Recent.map((N, I) => `${I ? "L" : "M"}${(I / (Recent.length - 1)) * 240},${44 - (N / Top) * 40}`).join(" ");
+  return (
+    <svg className="timing-spark" viewBox="0 0 240 44" preserveAspectRatio="none" role="img" aria-label={`Frame time sparkline, latest ${Recent.at(-1).toFixed(1)} ms`}>
+      <path d={`M0 ${44 - (16.7 / Top) * 40}H240`} stroke="#a3ac9260" strokeDasharray="5 6" />
+      <path d={Path} stroke="#dbded6" strokeWidth="1.3" fill="none" vectorEffect="non-scaling-stroke" />
+    </svg>
+  );
+}
 export default function DiagnosticsCard({
   Rows,
   VisibleCount,
   DebugName,
+  DebugView = null,
+  RunMode = "EDIT",
   HiZ,
   Alias,
   PatchError,
@@ -61,6 +99,8 @@ export default function DiagnosticsCard({
     [Probe, Inspect] = useState(null),
     Root = useRef(null),
     Drag = useRef(null);
+  const Report = useThoughtReport(Prefs.Tab === "Render" || Prefs.Tab === "Profiler");
+  const Statistics = ThoughtStatistics();
   const Set = (Key, Value) => {
     SetPrefs((P) => ({ ...P, [Key]: Value }));
     Inspect(null);
@@ -281,6 +321,106 @@ export default function DiagnosticsCard({
         </button>
       </header>
       <div className="debug-card-body">
+        <div className="debug-tabs" role="tablist" aria-label="Diagnostics tabs">
+          {Tabs.map((Name) => (
+            <button
+              key={Name}
+              role="tab"
+              aria-selected={Prefs.Tab === Name}
+              onClick={() =>
+                SetPrefs((P) => ({
+                  ...P,
+                  Tab: Name,
+                  Metric: Name === "Scene" ? "Scene" : Name === "Timing" && P.Metric === "Scene" ? "FPS" : P.Metric,
+                }))
+              }
+            >
+              {Name}
+            </button>
+          ))}
+        </div>
+        {Prefs.Tab === "Render" ? (
+          <div className="debug-render-tab">
+            <h2>Frame time</h2>
+            <FrameSparkline Samples={Data.Samples} />
+            <table className="timing-table" aria-label="Per-scope timing">
+              <thead>
+                <tr>
+                  <th>Work</th>
+                  <th>CPU ms</th>
+                  <th>GPU ms</th>
+                  <th>P95</th>
+                </tr>
+              </thead>
+              <tbody>
+                {TimingRows.map(([Label, Scope]) => {
+                  const Row = Report.find((Each) => Each.Name === Scope);
+                  return (
+                    <tr key={Scope} className={Row?.Calls ? "" : "unmeasured"}>
+                      <td>{Label}</td>
+                      <td>{Milliseconds(Row?.Average)}</td>
+                      <td title="No GPU timer queries in the HTML preview">—</td>
+                      <td>{Milliseconds(Row?.P95)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            <dl className="debug-stats">
+              <div>
+                <dt>Debug view</dt>
+                <dd>{DebugName}</dd>
+              </div>
+              <div>
+                <dt>Shows</dt>
+                <dd>{DebugView?.Shows || "—"}</dd>
+              </div>
+              <div>
+                <dt>Execution</dt>
+                <dd>{{ EDIT: "Edit", SIM: "Simulate", PLAY: "Play", PAUSE: "Pause" }[RunMode] || RunMode}</dd>
+              </div>
+            </dl>
+            <p className="debug-source">CPU time from the Thought Log (browser work). GPU columns need native timer queries; none are shown.</p>
+          </div>
+        ) : Prefs.Tab === "Profiler" ? (
+          <div className="debug-profiler-tab">
+            <h2>Thought Log</h2>
+            <table className="thought-table" aria-label="Thought Log scopes">
+              <thead>
+                <tr>
+                  <th>Scope</th>
+                  <th>Calls</th>
+                  <th>Avg</th>
+                  <th>P50</th>
+                  <th>P95</th>
+                  <th>Max</th>
+                </tr>
+              </thead>
+              <tbody>
+                {Report.map((Row) => (
+                  <tr key={Row.Name} className={Row.Calls ? "" : "unmeasured"} title={Row.NativeOnly ? "Native editor only" : undefined}>
+                    <td>{Row.Name}</td>
+                    <td>{Row.Calls}</td>
+                    <td>{Milliseconds(Row.Average)}</td>
+                    <td>{Milliseconds(Row.P50)}</td>
+                    <td>{Milliseconds(Row.P95)}</td>
+                    <td>{Milliseconds(Row.Maximum)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <p className="debug-source">
+              RAM ring · {Statistics.Written} samples · {Statistics.Dropped} dropped. Written once at close to {ThoughtLogPath} (browser storage key); grey
+              scopes have no HTML equivalent yet.
+            </p>
+            <div className="thought-actions">
+              <button type="button" onClick={SaveThoughtLog}>
+                Save FrontierThoughtLog.txt
+              </button>
+            </div>
+          </div>
+        ) : (
+        <>
         <div className="debug-card-selectors">
           <select
             aria-label="Diagnostics metric"
@@ -491,6 +631,8 @@ export default function DiagnosticsCard({
           </p>
           <p>F3 next · Shift+F3 previous · F4 HiZ · F5 alias · F6 error</p>
         </details>
+        </>
+        )}
       </div>
       <div className="debug-controls">
         <button

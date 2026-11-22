@@ -46,10 +46,11 @@ try {
   await Page.waitForTimeout(500);
 
   const Labels = await Page.locator(".row-identity small").allTextContents();
-  assert.equal(Labels.length, 70);
+  // 71: Follow-up 48 adds the God Rays row (Project Zero specification §7).
+  assert.equal(Labels.length, 71);
   assert(Labels.every((Label) => Label.trim().length));
   Checks.push(
-    "All 70 default outliner entities expose a non-empty contextual value line",
+    "All 71 default outliner entities expose a non-empty contextual value line",
   );
 
   assert.equal(await Metadata("Area Light"), "32 lx · Area · 0,0,0");

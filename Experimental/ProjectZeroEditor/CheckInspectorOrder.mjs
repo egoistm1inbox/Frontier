@@ -99,6 +99,8 @@ const Sections = {
     ].map((Panel) => [Panel, [".effect-study", ".entity-capabilities"]]),
   ),
   camera: [Card("Lens + field of view"), Card("Aperture study")],
+  // Follow-up 48: God Rays (Project Zero specification §7), a generic inspector.
+  "god-rays": [".entity-capabilities", "details.generic-card"],
   atmosphere: [
     ".atmosphere-lab-cards",
     Card("Atmosphere settings"),

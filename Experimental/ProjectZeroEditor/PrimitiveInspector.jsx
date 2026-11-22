@@ -1180,7 +1180,7 @@ function GeometryPage({ Shape, Read, Change, Values, Size, Kit }) {
   const Modes = ["smooth", "auto", "flat"];
   return (
     <>
-      <TransformPanel Values={Values} Change={Change} />
+      <TransformPanel Values={Values} Change={Change} Gizmo />
       <PropertyCard Title="Shape" Class="pi-shape-card">
         <Metric
           Value={Fixed(+Read(Lead[1], Lead[2]))}

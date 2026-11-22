@@ -1,7 +1,8 @@
 import DrawerPanel from "./DrawerPanel.jsx";
 import React, { useState, useRef, useEffect } from "react";
 import { Glyph, Control, Card, Icon } from "./Inspectors.jsx";
-const Qualities = ["Minimal", "Economy", "Standard", "Ultra", "Reference"];
+// 📝 The specification lists render quality Low to Ultra; Minimal and Reference are editor levels kept for the user to decide.
+const Qualities = ["📝 Minimal", "Economy", "Standard", "Ultra", "📝 Reference"];
 const Channels = [
   "01 base colour",
   "02 metallic",
@@ -225,8 +226,9 @@ export default function Notch({
               <input
                 aria-label="Render scale"
                 type="range"
-                min="25"
-                max="100"
+                min="50"
+                max="200"
+                step="25"
                 value={Settings.Scale}
                 onChange={(Event) => Assign("Scale", +Event.target.value)}
               />

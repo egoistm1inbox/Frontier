@@ -43,6 +43,7 @@ import {
 } from "../FrontierEditor/celestial-controls.jsx";
 import { LunarSphere } from "../FrontierEditor/moon-controls.jsx";
 import Native from "./NativePanels.json";
+import { SpecifyPanels, SpecificationNoteMark, MoonSlotCount, MoonPresets, MoonPresetSizes, SensorGates } from "./ProjectZeroSpecification.js";
 import { Solar } from "./Solar.mjs";
 import SunNow from "./SunNow.jsx";
 import { SensorField } from "./OpticalGraphic.jsx";
@@ -50,13 +51,25 @@ import SensorFormats, { Formats } from "./SensorFormats.jsx";
 import { WorkspacePanel, WorkspaceLauncher } from "./Workspaces.jsx";
 import { VehicleInspector, VehiclePanel, VehicleSheet } from "./VehicleComponents.jsx";
 
-export const Panels = {
+// Native sheets with the Follow-up 48 Project Zero specification overlay (ProjectZeroSpecification.js).
+export const Panels = SpecifyPanels({
   ...Native.Panels,
   ...EffectSheets,
   [EnvironmentPanel]: EnvironmentSheet,
   [VehiclePanel]: VehicleSheet,
   [ComponentPanel]: ComponentSheet,
-};
+});
+// 📝 marker beside a label: the field is in the editor but not in the Project Zero specification. Kept for the user to decide.
+export function SpecificationNote({ Field }) {
+  const Note = Field?.SpecificationNote || Field?.Note;
+  if (!Note) return null;
+  return (
+    <span className="specification-note" title={"Not in the Project Zero specification · " + Note + " Kept until you decide."} aria-label={"Specification note: " + Note} data-specification-note={Field.Label}>
+      {SpecificationNoteMark}
+    </span>
+  );
+}
+const VerticalFov = (Focal, Sensor, Aspect) => ((2 * Math.atan(Sensor / Aspect / (2 * Focal)) * 180) / Math.PI).toFixed(1) + "°";
 export function Glyph({ Name, Size = 18 }) {
   if (Name === "celestial-orbit")
     return (
@@ -221,14 +234,14 @@ export function Control({
   if (Field.Control === "Readout")
     return (
       <div className="readout">
-        <span>{Label}</span>
+        <span>{Label}<SpecificationNote Field={Field} /></span>
         <output>{Value ?? Field.Default}</output>
       </div>
     );
   if (Field.Control === "Switch")
     return (
       <label className="switch-row">
-        <span>{Label}</span>
+        <span>{Label}<SpecificationNote Field={Field} /></span>
         <button
           className={"toggle " + (Value ? "on" : "")}
           role="switch"
@@ -244,7 +257,7 @@ export function Control({
   if (Field.Control === "Select")
     return (
       <label className="field">
-        <span>{Label}</span>
+        <span>{Label}<SpecificationNote Field={Field} /></span>
         <select
           value={Value ?? 0}
           disabled={ReadOnly}
@@ -270,7 +283,7 @@ export function Control({
             })
           : {})}
       >
-        <span>{Label}</span>
+        <span>{Label}<SpecificationNote Field={Field} /></span>
         <input
           aria-label={Label}
           type="color"
@@ -284,7 +297,7 @@ export function Control({
   if (Field.Control === "Axes")
     return (
       <div className="field">
-        <span>{Label}</span>
+        <span>{Label}<SpecificationNote Field={Field} /></span>
         <div className="axes">
           {["X", "Y", "Z"].map((Axis, Index) => (
             <label key={Axis}>
@@ -315,6 +328,8 @@ export function Control({
   const Curve = Field.Curve > 0 && Field.Curve !== 1 ? Field.Curve : 0;
   const Linear = Math.min(1, Math.max(0, (Safe - Minimum) / (Maximum - Minimum)));
   const Travel = Curve ? Linear ** (1 / Curve) : Linear;
+  // DisplayScale shows a stored fraction as a percentage (e.g. cloud cover 0–1 shown 0–100 %); storage is unchanged.
+  const Shown = Field.DisplayScale > 0 ? Field.DisplayScale : 1;
   const Write = (Input) => {
     const Numeric = +Input;
     if (Number.isFinite(Numeric))
@@ -325,18 +340,18 @@ export function Control({
       className={"field " + (Compact ? "compact" : "")}
       data-native-property={Label}
     >
-      <span>{Label}</span>
+      <span>{Label}<SpecificationNote Field={Field} /></span>
       <div className="slider-pill">
         <div className="split-value">
           <input
             aria-label={Label + " value"}
             type="number"
-            min={Minimum}
-            max={Maximum}
+            min={Minimum * Shown}
+            max={Maximum * Shown}
             step={10 ** -Decimals}
             disabled={ReadOnly}
-            value={Number(Safe.toFixed(Decimals))}
-            onChange={(Event) => Write(Event.target.value)}
+            value={Number((Safe * Shown).toFixed(Decimals))}
+            onChange={(Event) => Write(Event.target.value / Shown)}
           />
           <small>{Field.Unit}</small>
         </div>
@@ -345,7 +360,7 @@ export function Control({
           type="range"
           min={Curve ? 0 : Minimum}
           max={Curve ? 1 : Maximum}
-          step={Curve ? 0.001 : 10 ** -Decimals}
+          step={Curve ? 0.001 : 10 ** -Decimals / Shown}
           value={Curve ? Travel : Safe}
           disabled={ReadOnly}
           style={{
@@ -538,7 +553,7 @@ export function Inspector({
       : Subject.Panel === "moon" && Name === "Visible"
         ? MoonSlot === 0
         : Subject.Panel === "moon" && Name === "Size"
-          ? [0.52, 1.6, 1.2, 1.1][MoonSlot]
+          ? MoonPresetSizes[MoonSlot]
           : Sheet.find((Field) => Field.Label === Name)?.Default);
   const AssignProperty = (Name, Next) => {
     if (
@@ -553,7 +568,10 @@ export function Inspector({
     }
     Change(Prefix + Name, Next);
     if (Subject.Panel === "moon" && Name === "Preset")
-      Change(Prefix + "Size", [0.52, 1.6, 1.2, 1.1, 2.4, 0.6][Next]);
+      Change(Prefix + "Size", MoonPresetSizes[Next]);
+    if (Subject.Panel === "camera" && Name === "Sensor gate" && SensorGates[Next]?.[1])
+      Change("Sensor Width", SensorGates[Next][1]);
+    if (Subject.Panel === "camera" && Name === "Sensor Width") Change("Sensor gate", 0);
     if (Subject.Panel === "sun" && Name === "Speed" && Next < 4)
       Change("Day duration", 24 / [1, 8, 30, 100][Next]);
     if (Subject.Panel === "sun" && Name === "Day duration") Change("Speed", 4);
@@ -575,7 +593,10 @@ export function Inspector({
     }, 100);
     return () => clearInterval(Timer);
   }, [Subject.Id, Values.Animate]);
+  // Labels the panel drew through F; specification fields it did not draw are listed in a closing card.
+  const Drawn = new Set();
   const F = (Name, Disabled = false) => {
+    Drawn.add(Name);
     const Field = Sheet.find((Item) => Item.Label === Name);
     return Field ? (
       <Control
@@ -781,7 +802,7 @@ export function Inspector({
         </button>
       )}
       {Subject.Panel === "geometry" && (
-        <TransformPanel Values={Values} Change={Change} />
+        <TransformPanel Values={Values} Change={Change} Gizmo />
       )}
       {Capabilities()}
       {Subject.Panel === "light" && ReferenceDetailCards}
@@ -968,6 +989,52 @@ export function Inspector({
         </div>
       </GraphContext.Provider>
     );
+  // Specification controls card (Follow-up 48): fields the specification adds that no panel card draws. Called where it should appear:
+  // before a panel's BAKING cards (bakes stay last), otherwise at the end. Fields() calls after it would repeat here.
+  let SpecificationPlaced = false;
+  const SpecificationCard = () => {
+    SpecificationPlaced = true;
+    const Undrawn = Sheet.filter((Field) => Field.Added && !Drawn.has(Field.Label));
+    const UndrawnGroups = [...new Set(Undrawn.map((Field) => Field.Group))];
+    return (
+      Undrawn.length > 0 && (
+        <Card Title="Specification controls" Wide Class="specification-card">
+          <p className="specification-caption">
+            {Undrawn[0].Section} · controls added by the Project Zero specification. Authored values only; no renderer is driven.
+          </p>
+          {UndrawnGroups.map((Group) => (
+            <div className="specification-group" key={Group} data-specification-group={Group}>
+              <h4>{Group}</h4>
+              {Undrawn.filter((Field) => Field.Group === Group).map((Field) =>
+                Field.Label === "Vertical FOV" ? (
+                  <Control key={Field.Label} Field={Field} Value={VerticalFov(V("Focal Length"), V("Sensor Width"), Subject.Id === "cine" ? 1.5 : 16 / 9)} />
+                ) : (
+                  <Control
+                    key={Field.Label}
+                    Field={Field}
+                    Value={V(Field.Label)}
+                    Change={(Next) => AssignProperty(Field.Label, Next)}
+                    Disabled={
+                      (Field.Label.startsWith("Manual ") && Field.Label !== "Manual direction" && !V("Manual direction")) ||
+                      (Field.Label === "Prism sides" && V("Shape") !== 1) ||
+                      (Field.Label === "Ortho width" && V("Projection") !== 1) ||
+                      (Field.Label === "Zodiacal radiance" && !V("Zodiacal light")) ||
+                      (["Atmosphere intensity", "Thickness scale", "Atmosphere tint"].includes(Field.Label) && !V("Has atmosphere")) ||
+                      (Field.Label === "Location lag speed" && !V("Location lag")) ||
+                      (Field.Label === "Rotation lag speed" && !V("Rotation lag")) ||
+                      (Field.Label === "Maximum lag distance" && !V("Location lag")) ||
+                      (["Maximum blur radius", "Bokeh blades"].includes(Field.Label) && !V("Depth of field")) ||
+                      (Field.Label.startsWith("Vignette ") && !V("Vignette"))
+                    }
+                  />
+                ),
+              )}
+            </div>
+          ))}
+        </Card>
+      )
+    );
+  };
   let Content;
   if (Subject.Panel === "sun") {
     const Time = V("Local Hours");
@@ -978,7 +1045,10 @@ export function Inspector({
       Latitude: V("Latitude"),
       Longitude: V("Longitude"),
     });
-    const { Elevation, Azimuth } = Solved;
+    // Manual direction overrides the solved angles (date, time and location still drive the readouts below).
+    const Manual = !!V("Manual direction");
+    const Elevation = Manual ? V("Manual elevation") : Solved.Elevation,
+      Azimuth = Manual ? V("Manual azimuth") : Solved.Azimuth;
     Content = (
       <>
         {Header("Environment")}
@@ -1064,7 +1134,10 @@ export function Inspector({
                 />
               </div>
             </div>
-            <p>Shared time above · angles solved by date / location</p>
+            <p>{Manual ? "Manual direction on · the solved angles are overridden" : "Shared time above · angles solved by date / location"}</p>
+            {F("Manual direction")}
+            {F("Manual azimuth", !Manual)}
+            {F("Manual elevation", !Manual)}
           </Card>
           <Card Title="Sunlight intensity" Height={347} GraphHandled>
             <Metric
@@ -1078,6 +1151,7 @@ export function Inspector({
               <span>0 ×</span>
               <span>60 ×</span>
             </div>
+            {F("Cast shadows")}
           </Card>
           <Card Title="Temperature" Height={347} GraphHandled>
             <Metric
@@ -1112,6 +1186,8 @@ export function Inspector({
               }}
             />
             {F("Angular Diameter")}
+            {F("Appearance")}
+            {F("Flare / glare")}
           </Card>
         </div>
         <Card Title="Dynamic settings" Wide GraphHandled>
@@ -1125,6 +1201,8 @@ export function Inspector({
             "Longitude",
             "Day of Month",
             "Month",
+            "Year",
+            "UTC offset",
           )}
           <div className="readout">
             <span>Declination</span>
@@ -1139,6 +1217,7 @@ export function Inspector({
           Solar position uses the native NOAA calculation, translated to
           JavaScript. No GPU lighting is running.
         </p>
+        {SpecificationCard()}
         <div className="section-caption">
           BAKING <small>Native target bindings pending</small>
         </div>
@@ -1209,7 +1288,7 @@ export function Inspector({
               renderer exposure or blur is changed.
             </p>
             <div className="graphic iris">
-              <Iris opening={(16 / Aperture - 1) / (16 / 1.4 - 1)} />
+              <Iris opening={Math.min(1, Math.max(0, (16 / Aperture - 1) / (16 / 1.4 - 1)))} />
             </div>
             {F("Aperture")}
             <p>Pupil diameter {Optics.pupil.toFixed(1)} mm</p>
@@ -1337,6 +1416,7 @@ export function Inspector({
             a schematic.
           </p>
         </Card>
+        {SpecificationCard()}
         <div className="section-caption">BAKING</div>
         <Card Title="Star field bake">
           <div className="tiles">
@@ -1369,13 +1449,9 @@ export function Inspector({
             value={MoonSlot}
             onChange={(Event) => SelectMoon(+Event.target.value)}
           >
-            {[0, 1, 2, 3].map((Slot) => (
+            {Array.from({ length: MoonSlotCount }, (_, Slot) => (
               <option key={Slot} value={Slot}>
-                {
-                  ["Luna", "Ember", "Glacier", "Sulfur", "Shroud", "Shard"][
-                    Values["moon" + Slot + ":Preset"] ?? Slot
-                  ]
-                }
+                {`Moon ${Slot + 1} · ${MoonPresets[Values["moon" + Slot + ":Preset"] ?? Slot]}`}
               </option>
             ))}
           </select>
@@ -1528,6 +1604,7 @@ export function Inspector({
             "Tier Samples",
           )}
         </Card>
+        {SpecificationCard()}
         <div className="section-caption">BAKING</div>
         <Bake Title="Atmosphere bake" Sun />
         <Card Title="Baked atmosphere" Height={210}>
@@ -1625,6 +1702,7 @@ export function Inspector({
         <Card Title="Legacy preset settings">
           {Fields("Aperture Blades", "Preview X", "Preview Y")}
         </Card>
+        {SpecificationCard()}
         <div className="section-caption">BAKING</div>
         <Bake Title="Lens flare image" />
       </>
@@ -1753,6 +1831,7 @@ export function Inspector({
         <Card Title="Bow response" Height={458}>
           {Fields("Intensity", "Width", "Secondary", "Minimum Path")}
         </Card>
+        {SpecificationCard()}
         <Bake Title="Bake / image" />
       </>
     );
@@ -1945,6 +2024,7 @@ export function Inspector({
       </>
     );
   } else Content = Generic();
+  const Closing = SpecificationPlaced ? null : SpecificationCard();
   return (
     <GraphContext.Provider value={{ Panel: Subject.Panel }}>
       <div
@@ -1952,6 +2032,7 @@ export function Inspector({
         data-panel={Subject.Panel}
       >
         {Content}
+        {Closing}
       </div>
     </GraphContext.Provider>
   );

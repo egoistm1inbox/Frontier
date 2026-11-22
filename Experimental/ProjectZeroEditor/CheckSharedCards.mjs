@@ -71,7 +71,9 @@ try {
     );
     assert.equal(await Page.locator(".cloud-deck-visual").count(), 1);
     await Capture(Id + "Dock");
-    await Page.getByLabel("Coverage value", { exact: true }).fill("0.65");
+    // Follow-up 48: global cloud cover is shown 0–100 % (§4); local cloud keeps its 0–1 fraction (§5). Storage stays 0–1.
+    const Shown = Id === "clouds" ? 100 : 1;
+    await Page.getByLabel("Coverage value", { exact: true }).fill(String(0.65 * Shown));
     await Page.waitForFunction(
       (Id) =>
         JSON.parse(localStorage.getItem("Frontier.ProjectZeroHtml.v1")).Values[
@@ -102,16 +104,16 @@ try {
       Math.abs(
         Number(
           await Page.getByLabel("Coverage value", { exact: true }).inputValue(),
-        ) - 0.4,
-      ) < 0.01,
+        ) - 0.4 * Shown,
+      ) < 0.01 * Shown,
     );
     await Open(Id);
     assert(
       Math.abs(
         Number(
           await Page.getByLabel("Coverage value", { exact: true }).inputValue(),
-        ) - 0.4,
-      ) < 0.01,
+        ) - 0.4 * Shown,
+      ) < 0.01 * Shown,
     );
     await Wide();
     await Capture(Id + "Wide");

@@ -29,27 +29,27 @@ export const RendererOf = (Engine) => RENDERERS.find((Each) => Each.engines.incl
 
 // PBR raster shadows: the source's shadow-map algorithms (ShadowAlgorithmLab, without the BVH entry, which belongs to ray tracing).
 export const PBR_SHADOWS = [
-  { id: "contact_pcss", label: "Contact + PCSS (No SDF)", pick: "Contact + PCSS", desc: "Screen/tight contact rays plus Vogel-disk PCSS. No SDF." },
-  { id: "pcss", label: "Shadow Map · PCSS + Filter", pick: "PCSS + filter", desc: "Vogel blocker search, geometric penumbra and the plane filter." },
-  { id: "smrt", label: "SMRT · Depth Ray Trace", pick: "SMRT depth trace", desc: "EEVEE-Next style quadratic ray marching through the depth map." },
-  { id: "pcf", label: "Shadow Map · 3×3 PCF", pick: "3 × 3 PCF", desc: "Bilinear-weighted 3 × 3 percentage-closer filtering." },
+  { id: "contact_pcss", label: "Contact + PCSS (No SDF)", pick: "Contact PCSS", desc: "Screen/tight contact rays plus Vogel-disk PCSS. No SDF." },
+  { id: "pcss", label: "Shadow Map · PCSS + Filter", pick: "PCSS Plane-Aware", desc: "Vogel blocker search, geometric penumbra and the plane filter." },
+  { id: "smrt", label: "SMRT · Depth Ray Trace", pick: "Shadow Ray March", desc: "EEVEE-Next style quadratic ray marching through the depth map." },
+  { id: "pcf", label: "Shadow Map · 3×3 PCF", pick: "PCF Bilinear", desc: "Bilinear-weighted 3 × 3 percentage-closer filtering." },
 ];
 
 // SDF shadows: the source's distance-field penumbra modes.
 export const SDF_SHADOWS = [
-  { id: "point_sdf", ordinal: 0, label: "0. Point-Sample (No Penumbra)", pick: "Point sample", desc: "Crisp point-centroid occlusion with no penumbra spread." },
-  { id: "analytic_cone", ordinal: 1, label: "1. Analytic Cone Penumbra", pick: "Analytic cone", desc: "Closed-form solid-angle cone penumbra across area emitters." },
-  { id: "voxel_clipmap", ordinal: 2, label: "2. 3D Voxel Clipmap Penumbra", pick: "Voxel clipmap", desc: "Stratified 3D clipmap, cone-traced area penumbra." },
-  { id: "voxel_cone_gi", ordinal: 3, label: "3. 3D Voxel Penumbra + Cone GI", pick: "Voxel + cone GI", desc: "Clipmap penumbra coupled with multi-cone indirect bounce GI." },
-  { id: "hybrid_sobol_cap", ordinal: 4, label: "4. Hybrid + Sobol Spherical Cap", pick: "Sobol spherical cap", desc: "Owen-scrambled Sobol spherical-cap penumbra integration." },
-  { id: "sdf_mc_ref", ordinal: 5, label: "5. Monte Carlo PT Ref (96 SPP)", pick: "Monte Carlo 96 SPP", desc: "High-sample Monte Carlo reference penumbra." },
+  { id: "point_sdf", ordinal: 0, label: "0. Point-Sample (No Penumbra)", pick: "Point SDF", desc: "Crisp point-centroid occlusion with no penumbra spread." },
+  { id: "analytic_cone", ordinal: 1, label: "1. Analytic Cone Penumbra", pick: "Analytic Cone", desc: "Closed-form solid-angle cone penumbra across area emitters." },
+  { id: "voxel_clipmap", ordinal: 2, label: "2. 3D Voxel Clipmap Penumbra", pick: "Voxel Clipmap", desc: "Stratified 3D clipmap, cone-traced area penumbra." },
+  { id: "voxel_cone_gi", ordinal: 3, label: "3. 3D Voxel Penumbra + Cone GI", pick: "Voxel + Cone GI", desc: "Clipmap penumbra coupled with multi-cone indirect bounce GI." },
+  { id: "hybrid_sobol_cap", ordinal: 4, label: "4. Hybrid + Sobol Spherical Cap", pick: "Hybrid Sobol Cap", desc: "Owen-scrambled Sobol spherical-cap penumbra integration." },
+  { id: "sdf_mc_ref", ordinal: 5, label: "5. Monte Carlo PT Ref (96 SPP)", pick: "SDF MC Ref 96 spp", desc: "High-sample Monte Carlo reference penumbra." },
 ];
 
 // Ray-traced shadows: the source's BVH entry ("stochastic Vogel-disk and rectangular-area visibility") split into its two light
 // shapes, so each can be chosen.
 export const RAY_SHADOWS = [
-  { id: "bvh_disk", pick: "Vogel disk", desc: "Stochastic Vogel-disk visibility through the BVH; suits round and point lights." },
-  { id: "bvh_area", pick: "Rectangular area", desc: "Rectangular-area visibility through the BVH; suits panel and strip lights." },
+  { id: "bvh_disk", pick: "WideTree RayQuery · disk", desc: "Stochastic Vogel-disk visibility through the BVH; suits round and point lights." },
+  { id: "bvh_area", pick: "WideTree RayQuery · area", desc: "Rectangular-area visibility through the BVH; suits panel and strip lights." },
 ];
 
 // MatCap shadows: editor additions (the source MatCap engine draws no shadows).
@@ -71,10 +71,22 @@ export const QUALITY_PRESETS = [
   { id: 1, label: "Medium (GTX)", bvhRays: 2, smrtRays: 4, pcssTaps: 16, giSamples: 6, giCones: 6, reflRays: 2, sdfSteps: 24 },
   { id: 2, label: "High", bvhRays: 4, smrtRays: 6, pcssTaps: 24, giSamples: 10, giCones: 8, reflRays: 4, sdfSteps: 32 },
   { id: 3, label: "Ultra", bvhRays: 8, smrtRays: 8, pcssTaps: 32, giSamples: 14, giCones: 10, reflRays: 6, sdfSteps: 48 },
-  { id: 4, label: "Reference", bvhRays: 16, smrtRays: 12, pcssTaps: 48, giSamples: 20, giCones: 14, reflRays: 8, sdfSteps: 64 },
+  // 📝 Reference is an editor tier; the specification lists Low to Ultra. Kept for the user to decide.
+  { id: 4, label: "Reference", note: "Not in the Project Zero specification (Low to Ultra).", bvhRays: 16, smrtRays: 12, pcssTaps: 48, giSamples: 20, giCones: 14, reflRays: 8, sdfSteps: 64 },
 ];
 
-export const RENDER_SCALES = [50, 75, 100, 125];
+export const RENDER_SCALES = [50, 75, 100, 125, 150, 200];
+
+// Follow-up 48 specification additions (§10): reflection source, trace resolution and XeGTAO.
+export const REFLECTION_SOURCES = [
+  { id: "widetree", pick: "WideTree", desc: "Traced reflections through the WideTree BVH." },
+  { id: "sky", pick: "Sky", desc: "Sky and environment only; no traced reflections." },
+];
+export const TRACE_RESOLUTIONS = [
+  { id: 1, pick: "Full" },
+  { id: 0.5, pick: "½" },
+  { id: 0.25, pick: "¼" },
+];
 
 // CanonicalEditorCamera.ExposureGain in the source scene is 1.35; the counts are the source's Medium (GTX) tier.
 export const CanonicalRenderSettings = {
@@ -130,6 +142,11 @@ export const CanonicalRenderSettings = {
   MatcapCavity: 0.5,
   MatcapWire: false,
   MatcapTint: "#cfc6ba",
+
+  ReflectionSource: "widetree",
+  TraceResolution: 1,
+  XeGtao: true,
+  XeGtaoStrength: 1.0,
 };
 
 const Bounded = (Amount, Minimum, Maximum, Fallback, Whole = false) => {
@@ -219,6 +236,11 @@ export function ResolveRenderSettings(Stored) {
     MatcapCavity: Bounded(M.MatcapCavity, 0, 1, C.MatcapCavity),
     MatcapWire: Flag("MatcapWire"),
     MatcapTint: /^#[0-9a-f]{6}$/i.test(M.MatcapTint) ? M.MatcapTint : C.MatcapTint,
+
+    ReflectionSource: Known(REFLECTION_SOURCES, M.ReflectionSource, C.ReflectionSource),
+    TraceResolution: TRACE_RESOLUTIONS.some((Option) => Option.id === Number(M.TraceResolution)) ? Number(M.TraceResolution) : C.TraceResolution,
+    XeGtao: Flag("XeGtao"),
+    XeGtaoStrength: Bounded(M.XeGtaoStrength, 0, 2, C.XeGtaoStrength),
   };
 }
 

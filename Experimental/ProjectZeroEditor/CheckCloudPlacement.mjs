@@ -62,7 +62,8 @@ try {
     "Cloud summary is header-first; ported Coverage replaces old card; Cloud base contains the adapted ported deck; no copied identity or duplicate deck",
   );
   await Page.screenshot({ path: path.join(Proof, "CloudsTop.png") });
-  await Page.getByLabel("Coverage value", { exact: true }).fill("0.75");
+  // Follow-up 48: cloud cover is shown 0–100 % (§4); storage stays 0–1.
+  await Page.getByLabel("Coverage value", { exact: true }).fill("75");
   const CoverageFrame = await (
     await Page.locator("[data-reference-slice=coverage] iframe").elementHandle()
   ).contentFrame();
@@ -83,12 +84,12 @@ try {
   );
   assert.equal(
     await Page.getByLabel("Coverage value", { exact: true }).inputValue(),
-    "0.6",
+    "60",
   );
   await Open("clouds");
   assert.equal(
     await Page.getByLabel("Coverage value", { exact: true }).inputValue(),
-    "0.6",
+    "60",
   );
   Checks.push(
     "Coverage graph and retained slider synchronize in both directions and survive reload",
@@ -211,7 +212,7 @@ try {
   await Open("clouds");
   assert.equal(
     await Page.getByLabel("Coverage value", { exact: true }).inputValue(),
-    "0.42",
+    "42",
   );
   assert.equal(
     await Page.getByLabel("Base value", { exact: true }).inputValue(),
@@ -225,11 +226,11 @@ try {
     name: "Unlock editing",
     exact: true,
   }).click();
-  await Page.getByLabel("Coverage value", { exact: true }).fill("0.8");
+  await Page.getByLabel("Coverage value", { exact: true }).fill("80");
   await Open("clouds");
   assert.equal(
     await Page.getByLabel("Coverage value", { exact: true }).inputValue(),
-    "0.8",
+    "80",
   );
   Checks.push(
     "Legacy imported cloud values are preserved until overridden; previously locked Clouds can be unlocked",

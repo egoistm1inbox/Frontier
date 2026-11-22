@@ -23,6 +23,8 @@ import {
   MATCAP_CHANNELS,
   QUALITY_PRESETS,
   RENDER_SCALES,
+  REFLECTION_SOURCES,
+  TRACE_RESOLUTIONS,
   PbrShadowPatch,
   SdfShadowPatch,
   SdfGiPatch,
@@ -138,7 +140,7 @@ export function RenderComponentCards({ Component, Owner, Values, Change, Kit }) 
   const Settings = ResolveRenderSettings(Values[RenderSettingsKey]);
   const Assign = (Patch) => Change(RenderSettingsKey, { ...Settings, ...Patch });
   const Use = RenderUse(Settings);
-  const Tiers = QUALITY_PRESETS.map((Preset) => Preset.label.replace(" (GTX)", ""));
+  const Tiers = QUALITY_PRESETS.map((Preset) => Preset.label.replace(" (GTX)", "") + (Preset.note ? " 📝" : ""));
   const Slide = (Label, Key, Minimum, Maximum, Decimals = 0, Unit = "") => (
     <Control Field={{ Label, Minimum, Maximum, Decimals, Unit, Default: CanonicalRenderSettings[Key] }} Value={Settings[Key]} Change={(Next) => Assign({ [Key]: Decimals ? Next : Math.round(Next) })} />
   );
@@ -191,6 +193,12 @@ export function RenderComponentCards({ Component, Owner, Values, Change, Kit }) 
             {Slide("Exposure gain", "ExposureGain", 0.2, 3.5, 2, "×")}
             <Segments Label="Resolution scale" Options={RENDER_SCALES.map((Each) => [Each, Each + " %"])} Active={Settings.RenderScale} Choose={(Next) => Assign({ RenderScale: Next })} />
             {Switch("Edge anti-aliasing", "AntiAliasing")}
+            <small className="rc-caption">Reflection source</small>
+            <Segments Label="Reflection source" Options={REFLECTION_SOURCES.map((Each) => [Each.id, Each.pick])} Active={Settings.ReflectionSource} Choose={(Next) => Assign({ ReflectionSource: Next })} />
+            <small className="rc-caption">Trace resolution</small>
+            <Segments Label="Trace resolution" Options={TRACE_RESOLUTIONS.map((Each) => [Each.id, Each.pick])} Active={Settings.TraceResolution} Choose={(Next) => Assign({ TraceResolution: Next })} />
+            {Switch("XeGTAO", "XeGtao")}
+            {Settings.XeGtao && Slide("XeGTAO strength", "XeGtaoStrength", 0, 2, 2, "×")}
           </Card>
           <div className="rc-reset">
             <span>{Changed ? `${Changed} of ${Object.keys(CanonicalRenderSettings).length} settings differ from the defaults` : "Source defaults"} · this camera only</span>
