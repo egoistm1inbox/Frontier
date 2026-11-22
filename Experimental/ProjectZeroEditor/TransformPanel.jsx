@@ -119,6 +119,30 @@ export default function TransformPanel({
           ))}
         </tbody>
       </table>
+      {/* §13 Transform: Enabled and Cast shadows on geometry transforms. Cast shadows shares its key with the Quick controls tile. */}
+      {Gizmo && (
+        <div className="transform-flags">
+          {[
+            ["Enabled", "ENABLED"],
+            ["Cast shadows", "Cast shadows"],
+          ].map(([Label, Key]) => (
+            <label className="switch-row" key={Key}>
+              <span>{Label}</span>
+              <button
+                type="button"
+                className={"toggle " + ((Values[Key] ?? true) ? "on" : "")}
+                role="switch"
+                aria-checked={Values[Key] ?? true}
+                aria-label={"Transform " + Label}
+                disabled={Locked}
+                onClick={() => Change(Key, !(Values[Key] ?? true))}
+              >
+                <i />
+              </button>
+            </label>
+          ))}
+        </div>
+      )}
       <div className="transform-resets">
         {Rows.map(([Key, , Initial]) => (
           <button

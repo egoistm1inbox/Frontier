@@ -18,7 +18,7 @@
     </style>
   </defs>
   <rect width="1200" height="760" fill="#121417"/>
-  <text x="30" y="40" class="h">Layer stack · timeline · one specification for browser and C++  (proposal)</text>
+  <text x="30" y="40" class="h">Layer stack · timeline · one specification for browser and C++  (approved · Option A)</text>
 
   <!-- Specification -->
   <rect x="30" y="70" width="270" height="250" rx="10" class="panel"/>
@@ -43,7 +43,7 @@
     <rect x="348" y="218" width="364" height="30" rx="5" class="layer"/><text x="360" y="238" class="t">Combustion · Expansion</text><text x="600" y="238" class="s">Advance</text>
     <rect x="348" y="254" width="364" height="30" rx="5" class="layer"/><text x="360" y="274" class="t">Vorticity · Dissipation</text><text x="600" y="274" class="s">Advance</text>
     <rect x="348" y="290" width="364" height="30" rx="5" class="layer"/><text x="360" y="310" class="t">Smoke shading · Fire shading</text><text x="600" y="310" class="s">Shade</text>
-    <rect x="348" y="326" width="364" height="30" rx="5" class="layer fx"/><text x="360" y="346" class="t">Heat shimmer</text><text x="600" y="346" class="s">Composite</text>
+    <rect x="348" y="326" width="364" height="30" rx="5" class="layer fx"/><text x="360" y="346" class="t">Heat shimmer</text><text x="600" y="346" class="s">Overlay</text>
   </g>
   <text x="348" y="386" class="s">+ Add layer · drag to reorder · Weight / Blend / Solo per layer</text>
 
@@ -57,7 +57,7 @@
     <rect x="778" y="218" width="374" height="30" rx="5" class="layer"/><text x="790" y="238" class="t">Gas coupling</text><text x="1030" y="238" class="s">Advance</text>
     <rect x="778" y="254" width="374" height="30" rx="5" class="layer"/><text x="790" y="274" class="t">Colour rule · Size over life</text><text x="1030" y="274" class="s">Shade</text>
     <rect x="778" y="290" width="374" height="30" rx="5" class="layer"/><text x="790" y="310" class="t">Sprite · Trail</text><text x="1030" y="310" class="s">Shade</text>
-    <rect x="778" y="326" width="374" height="30" rx="5" class="layer fx"/><text x="790" y="346" class="t">Glitch · Distortion · Dissolve</text><text x="1030" y="346" class="s">Composite</text>
+    <rect x="778" y="326" width="374" height="30" rx="5" class="layer fx"/><text x="790" y="346" class="t">Glitch · Distortion · Dissolve</text><text x="1030" y="346" class="s">Overlay</text>
   </g>
   <text x="778" y="386" class="s">templates insert layer sets; nothing hardcoded</text>
 

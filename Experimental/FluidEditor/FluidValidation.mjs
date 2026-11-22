@@ -345,5 +345,112 @@ check(appGl.__calls.uniformErrors.length === 0, `Sparse programs: every uniform 
 app.loadPreset('preset-campfire');
 check(!app.solver.sparse && app.solver.layout.width === 29 || app.solver.layout.width > 0, 'Switching back to a fixed-box preset rebuilds the window solver');
 
+//------------------------------------------------------------------------------------------------------------------------
+//                                                  7. LAYER STACK (plan phases 1–2)
+//------------------------------------------------------------------------------------------------------------------------
+
+console.log('\n[7] Layer specifications + gas layer stack');
+{
+    const { parseToml } = await import('./Engine/TomlSubset.js');
+    const { validateLayerSpecifications, specificationHash } = await import('./Engine/LayerSpecificationValidation.js');
+    const { generateLayerSpecifications, SpecificationSource, SpecificationOutput } = await import('./GenerateLayerSpecifications.mjs');
+    const Stack = await import('./Engine/LayerStack.js');
+    const sourceText = fs.readFileSync(SpecificationSource, 'utf8');
+    const parsedSpecification = parseToml(sourceText);
+    const specificationProblems = validateLayerSpecifications(parsedSpecification);
+    check(specificationProblems.length === 0, `LayerSpecifications.toml follows the rules${specificationProblems.length ? ': ' + specificationProblems.join('; ') : ''}`);
+    check(fs.readFileSync(SpecificationOutput, 'utf8') === generateLayerSpecifications(sourceText), 'Engine/LayerSpecifications.js is up to date with the TOML (run node GenerateLayerSpecifications.mjs)');
+    check(Stack.SpecificationHash === specificationHash(parsedSpecification), `Specification hash ${Stack.SpecificationHash} matches the TOML`);
+    const broken = JSON.parse(JSON.stringify(parsedSpecification));
+    broken.Layer[0].Parameter[5].Options[1].Code = 0;
+    broken.Layer[2].Parameter[0].Default = 99;
+    check(validateLayerSpecifications(broken).length >= 2, 'Validator refuses duplicate choice codes and out-of-range defaults');
+
+    // Every preset: the converted stack evaluates back to the exact flat fields the solver used before (so the simulation is identical).
+    let exact = 0, roundTrips = 0;
+    for (const preset of ScenePresets)
+    {
+        app.loadPreset(preset.Id);
+        const scene = { Domain: createDomain({ ...preset.Domain, Boundary: preset.Boundary }), Emitters: app.scene.Emitters.map((emitter) => ({ ...emitter, Enabled: true })), Visualizers: createVisualizerSet() };
+        Object.assign(scene.Visualizers.Volume, preset.Look || {});
+        const owned = (block, target) => Object.keys(Stack.ParameterOwners[target]).map((name) => JSON.stringify(block[name])).join();
+        if (owned(app.scene.Domain, 'Domain') === owned(scene.Domain, 'Domain') && owned(app.scene.Visualizers.Volume, 'Volume') === owned(scene.Visualizers.Volume, 'Volume') && !app.gasEvaluation.Problems.length) exact += 1;
+        else console.log(`     ↳ ${preset.Id} differs after conversion`);
+        const tomlText = Stack.writeStackToml([app.scene.GasStack]);
+        if (Stack.writeStackToml(Stack.readStackToml(tomlText).Stacks) === tomlText) roundTrips += 1;
+    }
+    check(exact === ScenePresets.length, `${exact}/${ScenePresets.length} presets convert to stacks that evaluate to the identical solver and render fields`);
+    check(roundTrips === ScenePresets.length, `${roundTrips}/${ScenePresets.length} stacks round-trip through TOML byte for byte`);
+
+    // Unknown (newer) categories and parameters stay verbatim and inert.
+    app.loadPreset('preset-campfire');
+    const future = JSON.parse(JSON.stringify(app.scene.GasStack));
+    future.Layers.push({ Token: 'layer-future-1', Category: 199, Enabled: true, Solo: false, Weight: 1, Blend: 0, Parameters: { Mystery: 7, Curve: [1, 2, 3] } });
+    future.Layers[2].Parameters.FutureKnob = 0.5;
+    const futureText = Stack.writeStackToml([future]);
+    const reread = Stack.readStackToml(futureText);
+    check(Stack.writeStackToml(reread.Stacks) === futureText && reread.Stacks[0].Layers.at(-1).Parameters.Mystery === 7, 'Unknown layer category and unknown parameter are kept and written back unchanged');
+    const futureEvaluation = Stack.evaluateGasStack(reread.Stacks[0], app.scene.Emitters);
+    check(!futureEvaluation.Stopped && futureEvaluation.Problems.some((problem) => problem.Severity === 'Info'), 'Unknown layer is reported as inert and does not stop the volume');
+
+    // Behaviour: disabling, weighting, solo, capacity and the required Domain layer.
+    const buoyancy = app.scene.GasStack.Layers.find((layer) => layer.Category === 103);
+    const authored = buoyancy.Parameters.Buoyancy;
+    app.updateLayer(buoyancy.Token, 'Enabled', false);
+    check(app.scene.Domain.Buoyancy === 0 && app.scene.Domain.Cooling === 0, 'Disabling the Buoyancy layer returns buoyancy and cooling to neutral (0)');
+    app.updateLayer(buoyancy.Token, 'Enabled', true); app.updateLayer(buoyancy.Token, 'Weight', 0.5);
+    check(Math.abs(app.scene.Domain.Buoyancy - authored * 0.5) < 1e-12, `Weight 0.5 halves the contribution (${authored} → ${app.scene.Domain.Buoyancy})`);
+    app.updateLayer(buoyancy.Token, 'Weight', 1);
+    const fire = app.scene.GasStack.Layers.find((layer) => layer.Category === 108);
+    app.updateLayer(buoyancy.Token, 'Solo', true);
+    check(app.scene.Visualizers.Volume.FireIntensity === 0 && app.scene.Domain.Buoyancy === authored && !app.gasEvaluation.Stopped, 'Solo keeps only the soloed layer (and the required Domain) contributing');
+    app.updateLayer(buoyancy.Token, 'Solo', false);
+    check(app.scene.Visualizers.Volume.FireIntensity === fire.Parameters.FireIntensity, 'Un-solo restores every layer');
+    app.updateNode('domain', 'Vorticity', 0.9);
+    const vorticity = app.scene.GasStack.Layers.find((layer) => layer.Category === 105);
+    check(vorticity && vorticity.Parameters.Vorticity === 0.9 && app.scene.Domain.Vorticity === 0.9, 'Editing a stack-owned Domain field writes into its layer (existing controls keep working)');
+    app.updateNode('vis-volume', 'FireIntensity', 6);
+    check(fire.Parameters.FireIntensity === 6 && app.scene.Visualizers.Volume.FireIntensity === 6, 'Volume Render fire edits are written to the Fire shading layer');
+    const second = app.addLayer(103), third = app.addLayer(103), fourth = app.addLayer(103), fifth = app.addLayer(103);
+    check(second && third && fourth && fifth === null, 'Capacity is enforced when adding (Buoyancy ≤ 4)');
+    app.updateLayer(second.Token, 'Blend', 1); app.updateLayer(second.Token, 'Buoyancy', 0.5, true); // third and fourth keep Replace + default 1.2
+    check(app.scene.Domain.Buoyancy === 1.2, `Later Replace layers win over earlier ones (top to bottom): ${app.scene.Domain.Buoyancy}`);
+    app.removeLayer(third.Token); app.removeLayer(fourth.Token);
+    check(Math.abs(app.scene.Domain.Buoyancy - (authored + 0.5)) < 1e-12, `Add blend sums onto the layers above (${authored} + 0.5 = ${app.scene.Domain.Buoyancy})`);
+    const domainLayer = app.scene.GasStack.Layers[0];
+    check(app.removeLayer(domainLayer.Token) === false, 'The required Domain layer cannot be deleted');
+    app.moveLayer(second.Token, 0);
+    check(app.scene.GasStack.Layers[0].Category === 101, 'Nothing can be moved above the Domain layer');
+    const broken2 = { Token: 'gas-volume', Category: 1, Layers: app.scene.GasStack.Layers.slice(1) };
+    const stoppedEvaluation = Stack.evaluateGasStack(broken2, app.scene.Emitters);
+    check(Boolean(stoppedEvaluation.Stopped), `A stack without its Domain layer stops the volume with a reason ("${stoppedEvaluation.Stopped}")`);
+    const frameBefore = app.solver.frame;
+    app.scene.GasStack = broken2; app.evaluateStack(); app.frame(5000); app.frame(5016);
+    check(app.solver.frame === frameBefore && app.supported, 'Stopped volume holds the gas still while the app keeps running');
+
+    // Emitters and Source layers stay linked.
+    app.loadPreset('preset-campfire');
+    const sourcesBefore = app.scene.GasStack.Layers.filter((layer) => layer.Category === 102).length;
+    const extra = app.addEmitter('Disc');
+    check(app.scene.GasStack.Layers.filter((layer) => layer.Category === 102).length === sourcesBefore + 1, 'Adding an emitter adds its linked Source layer');
+    const link = app.scene.GasStack.Layers.find((layer) => layer.Parameters.Emitter === extra.Id);
+    app.updateLayer(link.Token, 'Enabled', false);
+    check(extra.Enabled === false, 'Disabling a Source layer disables its emitter');
+    app.updateNode(extra.Id, 'Enabled', true);
+    check(link.Enabled === true, 'Enabling the emitter from its inspector re-enables the Source layer');
+    app.removeNode(extra.Id);
+    check(!app.scene.GasStack.Layers.some((layer) => layer.Parameters.Emitter === extra.Id), 'Deleting the emitter removes its Source layer');
+
+    // Files: Version 3 keeps the stack; Version 2 files convert exactly.
+    app.updateNode('domain', 'Vorticity', 1.1);
+    const version3 = app.exportJson();
+    app.importJson(version3);
+    check(JSON.parse(version3).Version === 3 && app.scene.Domain.Vorticity === 1.1 && app.scene.GasStack.Layers.filter((layer) => layer.Category === 102).every((layer) => app.scene.Emitters.some((emitter) => emitter.Id === layer.Parameters.Emitter)), 'Version 3 export → import keeps the stack and relinks Source layers to the re-created emitters');
+    const version2 = JSON.parse(version3); delete version2.GasStack; version2.Version = 2;
+    app.importJson(JSON.stringify(version2));
+    check(app.scene.Domain.Vorticity === 1.1 && app.scene.GasStack.Layers[0].Category === 101, 'Version 2 files (no stack) convert to a stack with the same values');
+    app.loadPreset('preset-campfire');
+}
+
 console.log(Failures === 0 ? '\n🟢 Fluid Studio validation passed' : `\n🔴 Fluid Studio validation failed (${Failures})`);
 process.exit(Failures === 0 ? 0 : 1);

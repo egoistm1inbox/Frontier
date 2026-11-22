@@ -1,6 +1,7 @@
 # Fluid and Particle Layer Stack, Timeline and Keying — Plan
 
-**Status: 🚧 proposed, awaiting approval. Nothing below is implemented.** All names are proposals (naming approval pending).
+**Status: ✔️ approved 2026-11-16 (Option A on decisions 1–5; the fourth phase is named `Overlay`). Names in decision 6 still pending.**
+**Scope of this round: HTML/browser only.** Phases 1 and 2 are built in `Experimental/FluidEditor` (see §7); phase 6 (C++) waits.
 Scope: `Experimental/FluidEditor` (combined fluid editor) and its particle module; later C++ port. Force fields stay flat (no stack).
 Verified against: `ForceGeneratorCatalog.js`, `ParticleCatalog.js`, `PyroScenePresets.js`, `FluidStudioApp.js` at `4c8f7c0`.
 
@@ -72,7 +73,7 @@ sequenceDiagram
   participant GPU as Solver / particle shaders
   TL->>TR: time t
   TR->>ST: sampled amounts per path
-  loop phase = Inject, Advance, Shade, Composite
+  loop phase = Inject, Advance, Shade, Overlay
     ST->>PB: each enabled layer in order: Blend(block field, layer amount × Weight)
     ST->>GPU: layers that add GPU work in this phase (source splat, turbulence, shimmer …)
   end
@@ -84,7 +85,7 @@ sequenceDiagram
 | Inject    | Domain (required, first), Source, Debris spawn                  | Spawn (required, first), Cloner formation              |
 | Advance   | Buoyancy, Combustion, Expansion, Vorticity, Dissipation, Collision | Lifetime, Gravity, Drag, Noise, Field influence, Gas coupling, Bounce, Home spring |
 | Shade     | Smoke shading, Fire shading, Fire light, Self-shadow            | Size over life, Colour rule, Sprite, Trail             |
-| Composite | Heat shimmer                                                   | Glitch, Distortion, Dissolve (derez)                   |
+| Overlay | Heat shimmer                                                   | Glitch, Distortion, Dissolve (derez)                   |
 
 - **Blend** (contributing layers): `Replace · Add · Multiply · Maximum`. Two Source layers add GPU work; two Buoyancy layers blend.
 - **Weight** (0–1, keyable) scales the layer's contribution; Weight 0 = no GPU work issued.
@@ -279,7 +280,7 @@ flowchart LR
 
 - **Heat shimmer** is driven by the gas temperature: the volume march writes a screen-space offset buffer (temperature ×
   thickness), then a refraction step offsets the scene. Not a full-screen post effect: only hot gas distorts.
-- **Glitch and distortion** run per particle in the Composite phase, so they apply to one cloud only and can be keyed.
+- **Glitch and distortion** run per particle in the Overlay phase, so they apply to one cloud only and can be keyed.
 
 ---
 
@@ -287,8 +288,8 @@ flowchart LR
 
 | Phase | Deliverable                                                                  | Verification                                                     |
 |-------|------------------------------------------------------------------------------|------------------------------------------------------------------|
-| 1     | `LayerSpecifications.toml` + browser loader + inert-unknown round trip        | Round-trip unit tests; specification hash printed                 |
-| 2     | Gas stack evaluation; 36 presets converted; old preset objects removed        | `FluidMetrics` per preset before/after; `FluidValidation`         |
+| 1 ✔️  | `LayerSpecifications.toml` + browser loader + inert-unknown round trip        | Round-trip unit tests; specification hash printed                 |
+| 2 🚧  | Gas stack evaluation; 36 presets converted; old preset objects removed        | `FluidMetrics` per preset before/after; `FluidValidation`         |
 | 3     | Particle stack; 26 templates converted                                        | Template capture before/after; particle counts and colours        |
 | 4     | Timeline, keys, auto-key, curves, checkpoints, scrubbing                      | Envelope conversion test (≤ 1e-6); scrub determinism hash         |
 | 5     | Heat shimmer, glitch, distortion, dissolve layers                             | Captures + parameter sweeps in `Exhibits/FluidEditor/`            |
@@ -307,4 +308,13 @@ flowchart LR
 | 5 | Phase 1 + 2 first     | ⭐ Yes, gas first, then particles ✔️          | Particles first 🚩                     | Both at once 🔴              | A              |
 | 6 | Names                 | As proposed here                              | Your replacements                      | —                           | You decide     |
 
-**Approve the plan (and decisions 1–6), or mark the changes you want.**
+**Decisions 1–5: Option A, approved. Decision 6 (names): pending.**
+
+### 8.1 Progress (HTML only)
+
+| Phase | State | What exists |
+|-------|-------|-------------|
+| 1 | ✔️ done | `Engine/LayerSpecifications.toml` (8 gas categories, codes 101–108) → `GenerateLayerSpecifications.mjs` → `Engine/LayerSpecifications.js` + hash; `Engine/TomlSubset.js` reader/writer; `Engine/LayerSpecificationValidation.js` rules + FNV-1a 64 hash; unknown categories and parameters kept verbatim. |
+| 2 | 🚧 in progress | `Engine/LayerStack.js` evaluates the gas stack into `scene.Domain` / `Visualizers.Volume`, so the GPU code is unchanged. All 36 presets convert on load and evaluate to identical fields (checked in `FluidValidation.mjs` §7). Inspector shows the stack (add, enable, reorder, weight, blend, solo, delete). Scene JSON is Version 3 with `GasStack`; Version 2 files convert. **Left:** preset objects still live in the catalogue (converted at load, not stored as stack documents); the `FluidMetrics` before/after table. |
+| 3–5 | ⏳ | Particle stack, timeline + keys, effect layers. |
+| 6 | ⏸ | C++ — out of scope this round (HTML only). |

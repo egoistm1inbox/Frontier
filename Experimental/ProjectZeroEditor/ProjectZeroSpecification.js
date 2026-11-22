@@ -51,7 +51,12 @@ export const PanelSpecification = {
       Latitude: { Default: -26.19 },
       Longitude: { Default: 28.32 },
     },
-    Notes: {},
+    Notes: {
+      Elevation: "Solved-direction readout; the specification lists manual azimuth / elevation only.",
+      Azimuth: "Solved-direction readout; the specification lists manual azimuth / elevation only.",
+      Declination: "Solar declination readout not listed in the specification.",
+      "Equation of Time": "Equation-of-time readout not listed in the specification.",
+    },
     Added: [
       Slider("Flare / glare", 0, 2, 1, "×", 2, "Sun Disk"),
       Choice("Appearance", ["Muted disc", "Radiant glare veil"], 0, "Sun Disk"),

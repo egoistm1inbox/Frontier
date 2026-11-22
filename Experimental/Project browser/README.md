@@ -11,6 +11,9 @@ python3 -m http.server 8770 --bind 0.0.0.0 --directory 'Experimental/Project bro
 
 ## Implemented interactions
 
+- **Default Project only** (Project Zero specification §14). The six sample files were removed. **+ New Project** adds a blank scene for the
+  session; Open in Frontier targets Frontier only (no Drafting / Geometry workspace hand-off). 📝 *Open from disk* and the CAD / Geometry
+  filters are not in the specification and are marked for your keep-or-remove decision.
 - Responsive file catalogue with format filters, search, sorting and browser-local stars.
 - Three fixed shared columns for both catalogue and reader: 204 px left, flexible centre, 302 px right on desktop.
 - Each column owns an aligned 64 px header; the global Frontier/design-preview branding header is removed.
@@ -78,15 +81,15 @@ and `AlignedLibrary.png`. The rendering/version regression suite also passes aft
 
 HTML asset URLs include the first 12 characters of each stylesheet/script SHA-256. Update those query revisions when
 changing the corresponding asset, so embedded previews cannot combine new markup with an older cached script.
-`CatalogueLoadingValidation.cjs` checks those revisions, visible file cards at 890 × 800, all six open/back routes,
-filtering and reload. Evidence: `Results/CatalogueLoadingChecks.json` and `Images/CatalogueEmbedded.png`.
+`CatalogueLoadingValidation.cjs` checks those revisions, the single Default Project card at 890 × 800, Open in Frontier,
++ New Project (blank, Frontier only), filtering and reload. Evidence: `Results/CatalogueLoadingChecks.json` and `Images/CatalogueEmbedded.png`.
 A loading message remains visible if script startup fails instead of leaving an unexplained empty catalogue.
 
 
 ## Renderer validation moved out
 
 The Project Browser application reference no longer contains a renderer-validation catalogue entry, material editor,
-Vulkan controls or Vulkan scripts/styles. Its six original file samples and WebGL reference rendering remain.
+Vulkan controls or Vulkan scripts/styles. Its WebGL reference rendering remains; the catalogue holds the Default Project only.
 
 Native renderer validation now lives at `Exhibits/Renderer/index.html`, linked from the native/ImGui evidence pages
 `Exhibits/SpaceFormats/index.html` and `Exhibits/ProjectBrowser/index.html`. Run

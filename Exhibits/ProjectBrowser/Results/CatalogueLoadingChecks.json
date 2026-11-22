@@ -4,13 +4,14 @@
     "width": 890,
     "height": 800
   },
-  "visible_cards": 6,
-  "total_cards": 6,
+  "visible_cards": 1,
+  "total_cards": 1,
   "checks": [
     "Content-hashed asset URLs bypass old unversioned scripts",
-    "Six rendered file cards and visible entries at embedded preview size",
-    "All six files open and return to the catalogue",
-    "CAD filtering and reload preserve visible catalogue"
+    "Default Project is the only card; the six sample files are gone",
+    "Default Project and a new blank project both open in Frontier only",
+    "New Project adds a blank scene with no sample geometry",
+    "CAD filter is empty; reload returns to the Default Project only"
   ],
   "page_errors": []
 }

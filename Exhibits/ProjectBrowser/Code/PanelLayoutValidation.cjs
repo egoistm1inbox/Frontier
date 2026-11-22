@@ -22,7 +22,7 @@ async function Main()
         Page.setDefaultTimeout(5000);
         Page.on('pageerror',Failure=>Errors.push(Failure.message));
         await Page.goto(process.env.PROJECT_BROWSER_URL || 'http://127.0.0.1:8770',{waitUntil:'networkidle'});
-        await Page.waitForFunction(()=>document.querySelectorAll('#Cards img[src^="data:image/png"]').length===6);
+        await Page.waitForFunction(()=>document.querySelectorAll('#Cards img[src^="data:image/png"]').length===1);
         Assert.equal(await Page.locator('.titlebar').count(),0);
         Assert.equal(await Page.locator('.preview-caption-tag').count(),0);
         const Inspect = Selector => Page.locator(Selector).evaluate(Surface=>{
@@ -32,7 +32,7 @@ async function Main()
         const LibraryHeaders=await Page.locator('#Library .pane-header').evaluateAll(Headers=>Headers.map(Header=>{const Rectangle=Header.getBoundingClientRect();return {y:Rectangle.y,height:Rectangle.height};}));
         Assert.deepEqual(LibraryHeaders,[{y:0,height:64},{y:0,height:64},{y:0,height:64}]);
         await Page.screenshot({path:Path.join(Destination,'Images/AlignedLibrary.png')});
-        await Page.locator('[data-open="valley"]').first().click();
+        await Page.locator('[data-open="default"]').first().click();
         await Page.waitForFunction(()=>document.querySelector('.render-canvas')?.width>300);
         const ReaderColumns=await Promise.all(['.preview-rail','.preview-main','.inspector'].map(Inspect));
         Assert.deepEqual(ReaderColumns,LibraryColumns);
@@ -41,9 +41,9 @@ async function Main()
         Checks.push('Three identical library/reader column boundaries and three equal headers at y=0; branding header removed');
         const Pill=await Page.locator('#RevisionSelect').evaluate(Control=>({Radius:getComputedStyle(Control).borderRadius,Height:Control.getBoundingClientRect().height}));
         Assert(parseFloat(Pill.Radius)>=Pill.Height/2);
-        await Page.locator('#RevisionSelect').selectOption('2');
-        Assert.equal(await Page.locator('#RevisionSelect').inputValue(),'2');
-        Checks.push('Working selectable pill-shaped version control');
+        Assert.equal(await Page.locator('#RevisionSelect option').count(),1,'The Default Project has one version (no sample history)');
+        Assert.equal(await Page.locator('#RevisionSelect').inputValue(),'0');
+        Checks.push('Pill-shaped version control showing the single current version');
         await Page.locator('#Document').click();
         const Paper=await Page.locator('.document-page').evaluate(Paper=>{
             const Rectangle=Paper.getBoundingClientRect(),Canvas=Paper.parentElement.getBoundingClientRect();
@@ -76,7 +76,7 @@ async function Main()
         Checks.push('Independent collapse to 44px, expand and persistence between catalogue and reader; back remains accessible');
         await Page.setViewportSize({width:390,height:844});
         Assert(await Page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
-        await Page.locator('[data-open="mount"]').first().click();
+        await Page.locator('[data-open="default"]').first().click();
         await Page.locator('#Reader [data-collapse="left"]').click();
         await Page.locator('#Document').click();
         Assert(await Page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));

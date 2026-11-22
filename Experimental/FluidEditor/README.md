@@ -76,6 +76,19 @@ A self-contained GPU particle module that shares the force-generator gizmos with
 
 **Cloners** hold a formation (Fibonacci sphere, sunflower disc, cubic lattice, ring, line) with a spring and colour by displacement — the mograph effector workflow: your force gizmos are the effectors. Presets *Mograph Field* and *Celebration* hide the volume render entirely. Adding a shape/colour rule/template = one catalog entry + one shader branch; the C++ port mirrors the same numeric codes.
 
+### Gas layer stack (`Engine/LayerStack.js` · plan `Documentation/Plans/Ongoing/FluidLayerStack.md`, phases 1–2)
+
+- **Single source:** `Engine/LayerSpecifications.toml` (8 gas categories, codes 101–108: Domain, Source, Buoyancy, Combustion, Vorticity,
+  Dissipation, Smoke shading, Fire shading). After editing it run `node Experimental/FluidEditor/GenerateLayerSpecifications.mjs`, which
+  validates the rules and writes `Engine/LayerSpecifications.js` with its hash. `FluidValidation.mjs` fails if the generated file is stale.
+- **Evaluation:** layers fold top to bottom (Inject → Advance → Shade → Overlay) into `scene.Domain` and `Visualizers.Volume`, so the solver and
+  renderer are unchanged. A disabled or missing layer contributes its neutral amount (for example, no Smoke shading = smoke not drawn).
+  Weight 0–1, Blend (Replace / Add / Multiply / Maximum) and Solo per layer. Without the Domain layer the gas stops and particles keep running.
+- **Presets:** all 36 convert on load and evaluate to the identical fields (checked). Existing Domain and Volume Render sliders write into
+  the owning layer. Each emitter has a linked Source layer.
+- **Files:** scene JSON Version 3 adds `GasStack`; Version 2 files convert. Stack TOML (`frontier-effect-stack`) round-trips byte for byte;
+  unknown categories and parameters are kept verbatim and inert.
+
 ### Emitter motion paths
 
 Emitters can orbit their position on a `Circle`, `Line` or `Figure 8` path; exit velocity is expressed in the moving frame so smoke trails behind (see *Tyre Drift Smoke*).
@@ -115,7 +128,7 @@ Falloff envelopes: `Smooth · Linear · Inverse² · Infinite · Gaussian · Pla
 
 ```bash
 python3 Experimental/FluidEditor/Serve.py 8098        # http://0.0.0.0:8098/
-node Experimental/FluidEditor/FluidValidation.mjs     # catalog · GLSL (glslangValidator if present) · mock-WebGL2 pass/uniform audit · JSON · DOM · UI smoke
+node Experimental/FluidEditor/FluidValidation.mjs     # catalog · GLSL (glslangValidator if present) · mock-WebGL2 pass/uniform audit · JSON · DOM · UI smoke · layer stack
 ```
 
 Requires WebGL2 with `EXT_color_buffer_float`. Fonts: DM Sans (OFL, bundled in `Fonts/`). No CDN or hot-linked assets.

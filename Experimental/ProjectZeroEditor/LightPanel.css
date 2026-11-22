@@ -746,3 +746,6 @@
 #ReferenceMount .lighting-panel .field[hidden] {
   display: none;
 }
+
+/* §13 Transform: Enabled and Cast shadows switches on geometry transforms. */
+.transform-flags { display: grid; gap: 4px; margin: 8px 0 4px; }

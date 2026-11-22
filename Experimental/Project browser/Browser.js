@@ -19,14 +19,27 @@ function PersistPreference(Key, Content)
 {
     try { localStorage.setItem(Key, JSON.stringify(Content)); } catch { Notify('Browser storage is unavailable. Changes last for this session only.'); }
 }
+// 🧩 Default Project only (Project Zero specification §14, decision 3 Option A). The six sample files (Actuator studio, Precision mount,
+// Actuator housing, Studio exploration, Actuator sketches, Housing study) were removed. "+ New Project" adds a blank scene that opens in
+// Frontier only. 📝 The Default Project preview still uses the reference studio renderer, not the project's real contents (native decoding
+// is not connected).
+const DefaultProjectToken = 'default';
 const Catalogue = [
-    {Token:'valley',Title:'Actuator studio',Extension:'.project',Category:'project',Description:'A small studio scene around the reference actuator assembly.',Art:'Valley',Context:'3 levels · 1 document',Opened:'Today, 10:42',Path:'D:/Frontier/Projects/Actuator studio/Studio.project',Views:['Studio','Courtyard','Workshop'],Notes:[['Sam','S','Review the clearance around the central specimen.','2 hours ago'],['Alex','A','The alternate studio camera is ready for review.','Yesterday']],Revisions:['Copper winding and studio props','Shaft and fasteners','Housing blockout']},
-    {Token:'mount',Title:'Precision mount',Extension:'.assembly',Category:'cad',Description:'A compact mounting assembly, built around a machined central sleeve.',Art:'Assembly',Context:'2 assemblies · 2 sketches',Opened:'Today, 09:18',Path:'D:/Frontier/CAD/Precision mount/Mount.assembly',Views:['Main assembly','Sleeve assembly','Sketch 01','Sketch 02'],Notes:[['Sam','S','Check the clearance around the sleeve before the next revision.','45 minutes ago']],Revisions:['Copper winding rings','Shaft and fasteners','Initial housing']},
-    {Token:'stone',Title:'Actuator housing',Extension:'.geometry',Category:'geometry',Description:'Actuator housing geometry extracted from the reference specimen.',Art:'Geometry',Context:'Geometry · UV · Texture',Opened:'Yesterday',Path:'D:/Frontier/Geometry/Actuator housing/Housing.geometry',Views:['Geometry','UV layout','Texture','Metadata'],Notes:[['Alex','A','Keep the UV seams on the underside.','Yesterday']],Revisions:['Full housing proportions','Reduced housing study','Initial compact housing']},
-    {Token:'island',Title:'Studio exploration',Extension:'.project',Category:'project',Description:'Three camera views of the reference specimen in a compact studio.',Art:'Valley',Context:'3 levels · 1 document',Opened:'Yesterday',Path:'E:/Studies/Island/Island.project',Views:['Studio','Courtyard','Workshop'],Tint:'hue-rotate(24deg) saturate(.6)',Notes:[],Revisions:['Lookout composition','Crossing layout','Initial project']},
-    {Token:'bracket',Title:'Actuator sketches',Extension:'.sketch',Category:'cad',Description:'Orthographic contour views of the reference actuator specimen.',Art:'Assembly',Context:'3 sketches · 1 document',Opened:'Oct 14',Path:'E:/Design/Bracket/Bracket.sketch',Views:['Sketch 01','Sketch 02','Sketch 03'],Tint:'saturate(.3)',Notes:[],Revisions:['Mounting hole positions','Outer contour','Initial sketch']},
-    {Token:'faceted',Title:'Housing study',Extension:'.geometry',Category:'geometry',Description:'A second housing inspection fixture using the reference surface renderer.',Art:'Geometry',Context:'Geometry · UV · Texture',Opened:'Oct 12',Path:'D:/Studies/Faceted/Surface.geometry',Views:['Geometry','UV layout','Texture','Metadata'],Tint:'hue-rotate(40deg)',Notes:[],Revisions:['Surface colour study','UV unwrap','Initial geometry']}
+    {Token:DefaultProjectToken,Title:'Default Project',Extension:'.projectspace',Category:'project',Description:'The project Frontier opens with. Reference studio preview until native project decoding is connected.',Art:'Valley',Context:'1 scene · default',Opened:'Always available',Path:'Projects/Default Project/Default.projectspace',Views:['Default scene'],Notes:[],Revisions:['Current']}
 ];
+let NewProjectSequence = 0;
+function CreateProject()
+{
+    NewProjectSequence += 1;
+    const Title = NewProjectSequence === 1 ? 'New Project' : `New Project ${NewProjectSequence}`;
+    const Entry = {Token:`new-${Date.now()}-${NewProjectSequence}`,Title,Extension:'.projectspace',Category:'project',Blank:true,Imported:true,Description:'A blank scene. It opens in Frontier only; no other workspace is launched.',Art:'Valley',Context:'Blank scene · this session',Opened:'Just now',Path:`Projects/${Title}/${Title.replace(/ /g,'')}.projectspace`,Views:['Blank scene'],Notes:[],Revisions:[]};
+    Catalogue.push(Entry);
+    ActiveFilter = 'all'; Query('#Search').value = '';
+    document.querySelectorAll('[data-filter]').forEach(Button => Button.classList.toggle('active',Button.dataset.filter === 'all'));
+    ConstructCatalogue();
+    Notify(`${Title} created as a blank scene for this session. Saving .projectspace files needs the native editor.`);
+    return Entry;
+}
 let Selected = null;
 let ActiveFilter = 'all';
 let PreviewIndex = 0;
@@ -41,7 +54,7 @@ let DocumentEnabled = false;
 let Zoom = 100;
 let ActiveTab = 'details';
 let ToastTimeout;
-const Stars = new Set(RetrievePreference('frontier.prototype.browser.stars', ['valley','mount']));
+const Stars = new Set(RetrievePreference('frontier.prototype.browser.stars', [DefaultProjectToken]));
 const LocalNotes = RetrievePreference('frontier.prototype.browser.notes', {});
 const ObjectURLs = [];
 const Theme = RetrievePreference('frontier.appearance.theme', 'oled');
@@ -79,8 +92,8 @@ function ConstructCatalogue()
         (ActiveFilter === 'all' || ActiveFilter === 'recent' || (ActiveFilter === 'starred' && Stars.has(Entry.Token)) || ActiveFilter === Entry.Category));
     if (Query('#Sort').value === 'name') Entries.sort((First, Second) => First.Title.localeCompare(Second.Title));
     Query('#AllCount').textContent = Catalogue.length;
-    Query('#CollectionCount').textContent = `${Entries.length} ${Entries.every(Entry => !Entry.Imported) ? 'sample ' : ''}file${Entries.length === 1 ? '' : 's'}`;
-    Query('#CollectionTitle').textContent = ({all:'Your workspace',recent:'Recently opened',starred:'Starred files',project:'Projects',cad:'CAD',geometry:'Geometry'})[ActiveFilter];
+    Query('#CollectionCount').textContent = `${Entries.length} ${Entries.every(Entry => !Entry.Imported) ? 'project' : 'file'}${Entries.length === 1 ? '' : 's'}`;
+    Query('#CollectionTitle').textContent = ({all:'Projects',recent:'Recently opened',starred:'Starred files',project:'Projects',cad:'CAD',geometry:'Geometry'})[ActiveFilter];
     Query('#Empty').hidden = Entries.length !== 0;
     Query('#Cards').innerHTML = Entries.map(Entry => `<article class="file-card"><button class="card-preview" data-open="${Escape(Entry.Token)}" aria-label="Preview ${Escape(Entry.Title)}">${ConstructThumbnail(Entry, 0, 0)}${Entry.Imported ? '<span class="preview-caption-tag">LOCAL FILE</span>' : ''}</button><button class="star-button" data-star="${Escape(Entry.Token)}" aria-label="${Stars.has(Entry.Token) ? 'Unstar' : 'Star'} ${Escape(Entry.Title)}" aria-pressed="${Stars.has(Entry.Token)}">${Icon('star')}</button><div class="card-text"><div class="card-title"><button data-open="${Escape(Entry.Token)}">${Escape(Entry.Title)}</button><span class="extension">${Escape(Entry.Extension)}</span></div><div class="card-subtitle">${Escape(Entry.Context)}</div><div class="card-meta"><span class="category-label"><span class="format-dot ${Entry.Category}"></span>${({project:'Project',cad:'CAD',geometry:'Geometry',document:'Document'})[Entry.Category]}</span><time>${Escape(Entry.Opened)}</time></div></div></article>`).join('');
 }
@@ -145,6 +158,10 @@ function ConstructPreview()
     {
         const Text=Selected.Markdown || `# ${Selected.Title}\n\n${Selected.Description}\n\n## Preview sequence\n\n${Selected.Views.map((Name,Index)=>`${Index+1}. ${Name}`).join('\n')}\n\n## Revision ${Selected.Revisions.length-ActiveRevision}\n\n${Selected.Revisions[ActiveRevision] || 'Local document'}\n\n## Preview\n\nThe image below is captured from the same WebGL renderer as the live review. Sample revisions are browser fixtures, not an on-disk history archive.`;
         Canvas.innerHTML=`<article class="document-page">${ConstructMarkdown(Text)}${Selected.Imported ? '' : ConstructThumbnail(Selected,0,ActiveRevision)}</article>`;
+    }
+    else if (Selected.Blank)
+    {
+        Canvas.innerHTML=`<div class="metadata-view">${Icon('plus')}<h3>${Escape(Selected.Title)}</h3><p>Blank scene. Open in Frontier to start building; no sample content is added.</p></div>`;
     }
     else if (Selected.Imported)
     {
@@ -284,7 +301,8 @@ document.querySelectorAll('[data-tab]').forEach(Button => Button.onclick = () =>
 Query('#InspectorContent').addEventListener('click',Event=>{const Button=Event.target.closest('[data-revision]');if(Button) ConfigureRevision(Number(Button.dataset.revision));});
 Query('#RevisionSelect').onchange=Event=>ConfigureRevision(Number(Event.target.value));
 Query('#CommentForm').onsubmit = Event => { Event.preventDefault();const Text=Query('#CommentText').value.trim();if (!Text) return; if (!Array.isArray(LocalNotes[Selected.Token])) LocalNotes[Selected.Token]=[];LocalNotes[Selected.Token].push({Author:'You',Initial:'Y',Text:Text.slice(0,2000),Time:'Just now',Sample:false});PersistPreference('frontier.prototype.browser.notes',LocalNotes);Query('#CommentText').value='';ConstructInspector();Notify('Note saved in this browser. It has not been written to a project file.'); };
-Query('#OpenEditor').onclick = () => { Query('#LaunchDescription').textContent=Selected.Imported ? 'This is the selected local file for a future native hand-off.' : 'This is a sample file used to review the launch flow.';Query('#LaunchTarget').textContent=({project:'Frontier · Project workspace',cad:'Frontier · Drafting workspace',geometry:'Frontier · Geometry workspace',document:'Frontier · Document preview'})[Selected.Category];Query('#LaunchFile').textContent=Selected.Path;Query('#LaunchDialog').showModal(); };
+Query('#OpenEditor').onclick = () => { Query('#LaunchDescription').textContent=Selected.Blank ? 'A blank scene opens in Frontier. No other workspace is launched.' : Selected.Imported ? 'This is the selected local file for a future native hand-off.' : 'The Default Project opens in Frontier.';Query('#LaunchTarget').textContent=Selected.Category==='document' ? 'Frontier · Document preview' : 'Frontier';Query('#LaunchFile').textContent=Selected.Path;Query('#LaunchDialog').showModal(); };
+Query('#NewProject').onclick = () => ActivateFile(CreateProject().Token);
 Query('#CloseDialog').onclick = Query('#ReturnPreview').onclick = () => Query('#LaunchDialog').close();
 document.addEventListener('keydown', Event => { if (Event.target.tagName==='CANVAS' || ['INPUT','TEXTAREA','SELECT'].includes(Event.target.tagName) || Query('#LaunchDialog').open) return;if (Event.key==='/' && !Query('#Library').hidden) { Event.preventDefault();Query('#Search').focus(); } if (Event.key==='Escape' && !Query('#Reader').hidden) ReturnLibrary();if (Selected && Event.key==='ArrowRight') Query('#Next').click();if (Selected && Event.key==='ArrowLeft') Query('#Previous').click(); });
 window.addEventListener('beforeunload', () => ObjectURLs.forEach(URLToReclaim => URL.revokeObjectURL(URLToReclaim)));
@@ -302,6 +320,7 @@ function PreviewConfiguration(Entry,Index,Revision)
 function SnapshotKey(Entry,Index,Revision){return `${Entry.Token}:${Revision}:${Index}`;}
 function ConstructThumbnail(Entry,Index,Revision)
 {
+    if(Entry.Blank)return `<span class="thumb-art">${Icon('plus')}</span>`;
     if(Entry.Imported)return Entry.ImageURL ? `<img src="${Escape(Entry.ImageURL)}" alt="Local image preview">` : `<span class="thumb-art">${Icon('file')}</span>`;
     const Key=SnapshotKey(Entry,Index,Revision),URI=SnapshotCache.get(Key);
     if(!URI&&!SnapshotFailure){SnapshotJobs.set(Key,{Entry,Index,Revision});QueueSnapshots();}

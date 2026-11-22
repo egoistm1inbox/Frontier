@@ -12,6 +12,10 @@ import { OrbitCamera, Vec3 } from './OrbitCamera.js';
 import { ScenePresets, createDomain, createEmitter, createForceGenerator, createCollider, createVisualizerSet, ForceTypeById, resolveDomainGrid, emitterTransform, gridWindowCentre, gridTileOf } from './ForceGeneratorCatalog.js';
 import { ParticleSimulation } from './ParticleSimulation.js';
 import { createParticleSystem, ParticleTemplateById, MaximumParticleSystems } from './ParticleCatalog.js';
+import {
+    convertSceneToGasStack, evaluateGasStack, applyGasEvaluation, owningLayer, createLayer, createLinkedSource, readGasStack, coerceAmount,
+    LayerSpecificationByCode, SourceLayerCode, MaximumLayers, SpecificationHash,
+} from './LayerStack.js';
 
 //------------------------------------------------------------------------------------------------------------------------
 //                                                  FLIPBOOK LAYOUT
@@ -147,6 +151,8 @@ export class FluidStudioApp
     /** One simulation step of everything that moves: grid, tracers, debris and particle systems. */
     advanceSimulation(deltaTime)
     {
+        // A gas stack that cannot evaluate (missing Domain layer, over capacity) holds the gas still; particles keep moving.
+        if (this.gasEvaluation && this.gasEvaluation.Stopped) { this.particles.update(this.scene, deltaTime); return; }
         const domain = this.scene.Domain;
         if (domain.SceneLoop > 0 && this.solver.time >= domain.SceneLoop) { this.solver.reset(); this.particles.resetAll(); this.recentreGrid(); }
         this.followGrid();
@@ -295,6 +301,9 @@ export class FluidStudioApp
         Object.assign(this.scene.Visualizers.Volume, preset.Look || {});
         this.particles.resetAll();
         for (const [key, overrides] of Object.entries(preset.Visualizers || {})) Object.assign(this.scene.Visualizers[key], overrides);
+        this.scene.GasStack = convertSceneToGasStack(this.scene);
+        this.selectedLayer = null;
+        this.evaluateStack();
         this.applyDomainResolution();
         this.camera.frame(this.solver.domainHalfExtent, this.solver.domainCentre);
         this.selection = this.scene.Forces[0] ? this.scene.Forces[0].Id : 'domain';
@@ -375,7 +384,7 @@ export class FluidStudioApp
 
     snapshot()
     {
-        return { scene: this.scene, selection: this.selection, playing: this.playing, node: this.findNode(this.selection) };
+        return { scene: this.scene, selection: this.selection, playing: this.playing, node: this.findNode(this.selection), gas: this.gasEvaluation, selectedLayer: this.selectedLayer };
     }
 
     findNode(id)
@@ -416,6 +425,7 @@ export class FluidStudioApp
         const half = this.solver.domainHalfExtent, centre = this.solver.domainCentre;
         const emitter = createEmitter({ Name: `${shape} Emitter`, Shape: shape, Position: [centre[0], centre[1] - half[1] * 0.8, centre[2]] });
         this.scene.Emitters.push(emitter);
+        this.linkSource(emitter);
         this.select(emitter.Id);
         return emitter;
     }
@@ -451,6 +461,7 @@ export class FluidStudioApp
             if (index >= 0)
             {
                 this.scene[key].splice(index, 1);
+                if (key === 'Emitters') { this.scene.GasStack.Layers = this.scene.GasStack.Layers.filter((layer) => !(layer.Category === SourceLayerCode && layer.Parameters.Emitter === id)); this.evaluateStack(); }
                 if (this.selection === id) this.selection = 'domain';
                 this.notify();
                 return true;
@@ -465,7 +476,7 @@ export class FluidStudioApp
         if (!node || node.Kind === 'Domain' || node.Kind === 'Visualizer') return null;
         let copy;
         if (node.Kind === 'Force') { copy = createForceGenerator(node.Type, { ...node, Name: node.Name + ' Copy' }); this.scene.Forces.push(copy); }
-        else if (node.Kind === 'Emitter') { copy = createEmitter({ ...node, Name: node.Name + ' Copy' }); this.scene.Emitters.push(copy); }
+        else if (node.Kind === 'Emitter') { copy = createEmitter({ ...node, Name: node.Name + ' Copy' }); this.scene.Emitters.push(copy); this.linkSource(copy); }
         else if (node.Kind === 'Particles') { if (this.scene.Particles.length >= MaximumParticleSystems) return null; copy = createParticleSystem(node.Template, { ...node, Name: node.Name + ' Copy' }); this.scene.Particles.push(copy); }
         else { copy = createCollider({ ...node, Name: node.Name + ' Copy' }); this.scene.Colliders.push(copy); }
         copy.Position = [node.Position[0] + 0.4, node.Position[1], node.Position[2]];
@@ -477,6 +488,7 @@ export class FluidStudioApp
     {
         const node = this.findNode(id);
         if (!node) return;
+        if (this.routeToLayer(node, key, value)) { this.afterNodeUpdate(node, key); this.notify(); return; }
         node[key] = value;
         this.afterNodeUpdate(node, key);
         this.notify();
@@ -486,7 +498,154 @@ export class FluidStudioApp
     {
         const node = this.findNode(id);
         if (!node) return;
-        Object.assign(node, look);
+        for (const [key, value] of Object.entries(look)) if (!this.routeToLayer(node, key, value)) node[key] = value;
+        this.notify();
+    }
+
+    //------------------------------------------------------------------------------------------------------------------------
+    //                                                  GAS LAYER STACK
+    //------------------------------------------------------------------------------------------------------------------------
+
+    /** Re-folds the gas stack into scene.Domain / Visualizers.Volume. Called after every stack edit (phase 4 adds per-step keys). */
+    evaluateStack()
+    {
+        const previousAdvection = this.scene.Domain.Advection;
+        this.gasEvaluation = evaluateGasStack(this.scene.GasStack, this.scene.Emitters);
+        applyGasEvaluation(this.scene, this.gasEvaluation);
+        return previousAdvection !== this.scene.Domain.Advection;
+    }
+
+    /**
+     * Inspector edits of a flat field the stack owns (Domain dynamics, Volume Render shading, emitter Enabled) are written into the
+     * owning layer, so every existing control keeps working and the stack stays the single source. Returns true when routed.
+     */
+    routeToLayer(node, key, value)
+    {
+        const stack = this.scene && this.scene.GasStack;
+        if (!stack) return false;
+        if (node.Kind === 'Emitter' && key === 'Enabled')
+        {
+            const layer = stack.Layers.find((candidate) => candidate.Category === SourceLayerCode && candidate.Parameters.Emitter === node.Id);
+            if (!layer) return false;
+            layer.Enabled = Boolean(value);
+            this.evaluateStack();
+            return true;
+        }
+        const target = node.Kind === 'Domain' ? 'Domain' : node.Id === 'vis-volume' ? 'Volume' : null;
+        const found = target && owningLayer(stack, target, key);
+        if (!found) return false;
+        let layer = found.Layer;
+        if (!layer)
+        {
+            // No layer of this category yet: editing its field adds one, placed by phase order.
+            layer = this.insertLayer(found.Owner.Layer.Code);
+            if (!layer) return false;
+        }
+        layer.Parameters[key] = coerceAmount(found.Owner.Parameter, value);
+        if (!layer.Enabled) layer.Enabled = true;
+        this.evaluateStack();
+        return true;
+    }
+
+    linkSource(emitter)
+    {
+        const stack = this.scene.GasStack;
+        if (!stack) return;
+        const layer = createLinkedSource(emitter);
+        const lastSource = stack.Layers.map((candidate) => candidate.Category).lastIndexOf(SourceLayerCode);
+        stack.Layers.splice(lastSource >= 0 ? lastSource + 1 : Math.min(1, stack.Layers.length), 0, layer);
+        this.evaluateStack();
+    }
+
+    /** Inserts a new layer after the last layer of the same or an earlier phase; returns null at capacity. */
+    insertLayer(categoryCode)
+    {
+        const stack = this.scene.GasStack;
+        const specification = LayerSpecificationByCode[categoryCode];
+        if (!specification || stack.Layers.length >= MaximumLayers) return null;
+        if (stack.Layers.filter((layer) => layer.Category === categoryCode).length >= specification.Capacity) return null;
+        const phases = ['Inject', 'Advance', 'Shade', 'Overlay'];
+        const rank = phases.indexOf(specification.Phase);
+        let at = stack.Layers.length;
+        for (let index = stack.Layers.length - 1; index >= 0; index -= 1)
+        {
+            const other = LayerSpecificationByCode[stack.Layers[index].Category];
+            if (other && phases.indexOf(other.Phase) <= rank) { at = index + 1; break; }
+            at = index;
+        }
+        const layer = createLayer(categoryCode);
+        stack.Layers.splice(at, 0, layer);
+        return layer;
+    }
+
+    addLayer(categoryCode)
+    {
+        if (categoryCode === SourceLayerCode) { this.addEmitter('Sphere'); return null; }
+        const layer = this.insertLayer(categoryCode);
+        if (!layer) return null;
+        this.selectedLayer = layer.Token;
+        this.evaluateStack();
+        this.notify();
+        return layer;
+    }
+
+    removeLayer(token)
+    {
+        const stack = this.scene.GasStack;
+        const layer = stack.Layers.find((candidate) => candidate.Token === token);
+        if (!layer) return false;
+        const specification = LayerSpecificationByCode[layer.Category];
+        if (specification && specification.Required) return false;
+        if (specification && specification.Code === SourceLayerCode) return this.removeNode(layer.Parameters.Emitter);
+        stack.Layers.splice(stack.Layers.indexOf(layer), 1);
+        if (this.selectedLayer === token) this.selectedLayer = null;
+        this.evaluateStack();
+        this.notify();
+        return true;
+    }
+
+    /** Moves a layer to `index` (drag) — the required Domain layer stays first. */
+    moveLayer(token, index)
+    {
+        const layers = this.scene.GasStack.Layers;
+        const from = layers.findIndex((candidate) => candidate.Token === token);
+        if (from < 0) return;
+        const specification = LayerSpecificationByCode[layers[from].Category];
+        if (specification && specification.Required) return;
+        const [layer] = layers.splice(from, 1);
+        const firstFree = layers.findIndex((candidate) => !(LayerSpecificationByCode[candidate.Category] || {}).Required);
+        layers.splice(Math.max(firstFree < 0 ? layers.length : firstFree, Math.min(layers.length, index)), 0, layer);
+        this.evaluateStack();
+        this.notify();
+    }
+
+    selectLayer(token)
+    {
+        this.selectedLayer = token;
+        const layer = this.scene.GasStack.Layers.find((candidate) => candidate.Token === token);
+        if (layer && layer.Category === SourceLayerCode && this.findNode(layer.Parameters.Emitter)) { this.select(layer.Parameters.Emitter); return; }
+        this.notify();
+    }
+
+    /** Edits a layer's own settings (Enabled, Solo, Weight, Blend) or, with `parameter`, one of its parameters. */
+    updateLayer(token, key, value, parameter = false)
+    {
+        const layer = this.scene.GasStack.Layers.find((candidate) => candidate.Token === token);
+        if (!layer) return;
+        const specification = LayerSpecificationByCode[layer.Category];
+        if (parameter)
+        {
+            const entry = specification && specification.Parameter.find((candidate) => candidate.Name === key);
+            if (!entry) return;
+            layer.Parameters[key] = coerceAmount(entry, value);
+        }
+        else if (key === 'Weight') layer.Weight = Math.min(1, Math.max(0, Number(value) || 0));
+        else if (key === 'Enabled' || key === 'Solo') layer[key] = Boolean(value);
+        else if (key === 'Blend') layer.Blend = [0, 1, 2, 3].includes(value) ? value : 0;
+        else return;
+        if (specification && specification.Required && key === 'Enabled') layer.Enabled = true;
+        const advectionChanged = this.evaluateStack();
+        if (advectionChanged) this.afterNodeUpdate(this.scene.Domain, 'Advection');
         this.notify();
     }
 
@@ -546,8 +705,9 @@ export class FluidStudioApp
 
     exportJson()
     {
-        const { Domain, Emitters, Forces, Colliders, Particles, Visualizers, Name } = this.scene;
-        return JSON.stringify({ Format: 'FrontierFluidScene', Version: 2, Name, Domain, Emitters, Forces, Colliders, Particles, Visualizers }, null, 2);
+        const { Domain, Emitters, Forces, Colliders, Particles, Visualizers, Name, GasStack } = this.scene;
+        // Version 3 adds the gas layer stack; Domain / Volume still hold the evaluated amounts so Version 2 readers keep working.
+        return JSON.stringify({ Format: 'FrontierFluidScene', Version: 3, SpecificationHash, Name, Domain, Emitters, Forces, Colliders, Particles, Visualizers, GasStack }, null, 2);
     }
 
     importJson(text)
@@ -565,6 +725,18 @@ export class FluidStudioApp
             Particles: (data.Particles || []).map((node) => createParticleSystem(node.Template, node)),
             Visualizers: Object.fromEntries(Object.entries(createVisualizerSet()).map(([key, defaults]) => [key, { ...defaults, ...((data.Visualizers || {})[key] || {}) }])),
         };
+        // Version 2 files have no stack: convert their flat fields exactly. Stack links follow emitter ids only when they still exist.
+        this.scene.GasStack = data.GasStack ? readGasStack(data.GasStack) : convertSceneToGasStack(this.scene);
+        if (data.GasStack)
+        {
+            // Emitters get fresh ids on import; carry each Source link across by the emitter's position in the file.
+            const renamed = new Map((data.Emitters || []).map((emitter, index) => [emitter.Id, this.scene.Emitters[index] && this.scene.Emitters[index].Id]));
+            for (const layer of this.scene.GasStack.Layers) if (layer.Category === SourceLayerCode && renamed.get(layer.Parameters.Emitter)) layer.Parameters.Emitter = renamed.get(layer.Parameters.Emitter);
+            const linked = new Set(this.scene.GasStack.Layers.filter((layer) => layer.Category === SourceLayerCode).map((layer) => layer.Parameters.Emitter));
+            for (const emitter of this.scene.Emitters) if (!linked.has(emitter.Id)) this.scene.GasStack.Layers.splice(1, 0, createLinkedSource(emitter));
+        }
+        this.selectedLayer = null;
+        this.evaluateStack();
         this.applyDomainResolution();
         this.selection = 'domain';
         this.notify();

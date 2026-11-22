@@ -1,0 +1,476 @@
+#===========================================================================================================================================
+#                                                       LAYERSPECIFICATIONS.TOML
+#===========================================================================================================================================
+# 🧩 Single source of truth for every effect layer (Fluid layer stack plan, phase 1). GenerateLayerSpecifications.mjs turns this file into
+# Engine/LayerSpecifications.js for the browser; the C++ port is generated from the same file later. Edit this file, never the output.
+#
+# Rules (plan §3.1): one of 9 parameter types; Choice codes are explicit and never list positions; SI units; Neutral is the amount the
+# solver sees when no enabled layer of the category exists; Target names the evaluated block (Domain = solver, Volume = volume render).
+# Category codes: 1xx gas volume, 2xx particle cloud (phase 3). Layer and parameter codes are permanent once released.
+
+[Document]
+Format = "frontier-layer-specifications"
+Revision = 1
+MaximumLayers = 32
+
+[[Layer]]
+Code = 101
+Token = "domain"
+Name = "Domain"
+Stack = "GasVolume"
+Phase = "Inject"
+Required = true
+Capacity = 1
+Summary = "Solver settings for this gas volume. The grid itself (size, resolution, tiles) is set in the Grid cards."
+
+  [[Layer.Parameter]]
+  Code = 1
+  Name = "Gravity"
+  Label = "Smoke weight"
+  Type = "Float32"
+  Minimum = 0.0
+  Maximum = 2.0
+  Default = 0.25
+  Neutral = 0.0
+  Step = 0.05
+  Unit = ""
+  Keyable = true
+  Target = "Domain"
+
+  [[Layer.Parameter]]
+  Code = 2
+  Name = "ForceResponse"
+  Label = "Force response (0 = unlimited)"
+  Type = "Float32"
+  Minimum = 0.0
+  Maximum = 5.0
+  Default = 1.0
+  Neutral = 1.0
+  Step = 0.05
+  Unit = "s"
+  Keyable = true
+  Target = "Domain"
+
+  [[Layer.Parameter]]
+  Code = 3
+  Name = "PressureIterations"
+  Label = "Pressure iterations"
+  Type = "Int32"
+  Minimum = 4
+  Maximum = 80
+  Default = 36
+  Neutral = 36
+  Step = 1
+  Unit = ""
+  Keyable = false
+  Target = "Domain"
+
+  [[Layer.Parameter]]
+  Code = 4
+  Name = "TimeScale"
+  Label = "Time scale"
+  Type = "Float32"
+  Minimum = 0.1
+  Maximum = 3.0
+  Default = 1.0
+  Neutral = 1.0
+  Step = 0.05
+  Unit = "×"
+  Keyable = true
+  Target = "Domain"
+
+  [[Layer.Parameter]]
+  Code = 5
+  Name = "SceneLoop"
+  Label = "Scene loop (0 = off)"
+  Type = "Float32"
+  Minimum = 0.0
+  Maximum = 30.0
+  Default = 0.0
+  Neutral = 0.0
+  Step = 0.5
+  Unit = "s"
+  Keyable = false
+  Target = "Domain"
+
+  [[Layer.Parameter]]
+  Code = 6
+  Name = "Advection"
+  Label = "Advection"
+  Type = "Choice"
+  Default = 1
+  Neutral = 1
+  Keyable = false
+  Target = "Domain"
+  Options = [ { Code = 0, Token = "SemiLagrangian", Label = "Semi-Lagrangian" }, { Code = 1, Token = "MacCormack", Label = "MacCormack" } ]
+
+[[Layer]]
+Code = 102
+Token = "source"
+Name = "Source"
+Stack = "GasVolume"
+Phase = "Inject"
+Required = false
+Capacity = 6
+Linked = "Emitter"
+Summary = "Links an emitter node. Shape, placement and timing are edited on the emitter; the layer switches it on or off."
+
+  [[Layer.Parameter]]
+  Code = 1
+  Name = "Emitter"
+  Label = "Emitter"
+  Type = "Token"
+  Default = ""
+  Neutral = ""
+  Keyable = false
+  Target = "Link"
+
+[[Layer]]
+Code = 103
+Token = "buoyancy"
+Name = "Buoyancy"
+Stack = "GasVolume"
+Phase = "Advance"
+Required = false
+Capacity = 4
+Summary = "Hot gas rises against the ambient temperature and cools over time."
+
+  [[Layer.Parameter]]
+  Code = 1
+  Name = "Buoyancy"
+  Label = "Thermal buoyancy"
+  Type = "Float32"
+  Minimum = 0.0
+  Maximum = 4.0
+  Default = 1.2
+  Neutral = 0.0
+  Step = 0.05
+  Unit = ""
+  Keyable = true
+  Target = "Domain"
+
+  [[Layer.Parameter]]
+  Code = 2
+  Name = "AmbientTemperature"
+  Label = "Ambient temperature"
+  Type = "Float32"
+  Minimum = -1.0
+  Maximum = 2.0
+  Default = 0.0
+  Neutral = 0.0
+  Step = 0.05
+  Unit = ""
+  Keyable = true
+  Target = "Domain"
+
+  [[Layer.Parameter]]
+  Code = 3
+  Name = "Cooling"
+  Label = "Cooling rate"
+  Type = "Float32"
+  Minimum = 0.0
+  Maximum = 4.0
+  Default = 0.6
+  Neutral = 0.0
+  Step = 0.05
+  Unit = "1/s"
+  Keyable = true
+  Target = "Domain"
+
+[[Layer]]
+Code = 104
+Token = "combustion"
+Name = "Combustion"
+Stack = "GasVolume"
+Phase = "Advance"
+Required = false
+Capacity = 4
+Summary = "Fuel burns into heat and smoke; burning gas expands."
+
+  [[Layer.Parameter]]
+  Code = 1
+  Name = "Combustion"
+  Label = "Combustion rate"
+  Type = "Float32"
+  Minimum = 0.0
+  Maximum = 3.0
+  Default = 1.0
+  Neutral = 0.0
+  Step = 0.05
+  Unit = "1/s"
+  Keyable = true
+  Target = "Domain"
+
+  [[Layer.Parameter]]
+  Code = 2
+  Name = "Expansion"
+  Label = "Gas expansion"
+  Type = "Float32"
+  Minimum = 0.0
+  Maximum = 3.0
+  Default = 0.6
+  Neutral = 0.0
+  Step = 0.05
+  Unit = ""
+  Keyable = true
+  Target = "Domain"
+
+[[Layer]]
+Code = 105
+Token = "vorticity"
+Name = "Vorticity"
+Stack = "GasVolume"
+Phase = "Advance"
+Required = false
+Capacity = 4
+Summary = "Vorticity confinement restores small swirls the grid smooths away."
+
+  [[Layer.Parameter]]
+  Code = 1
+  Name = "Vorticity"
+  Label = "Vorticity confinement"
+  Type = "Float32"
+  Minimum = 0.0
+  Maximum = 2.0
+  Default = 0.35
+  Neutral = 0.0
+  Step = 0.01
+  Unit = ""
+  Keyable = true
+  Target = "Domain"
+
+[[Layer]]
+Code = 106
+Token = "dissipation"
+Name = "Dissipation"
+Stack = "GasVolume"
+Phase = "Advance"
+Required = false
+Capacity = 4
+Summary = "Fraction of density and velocity kept per step (1 = nothing lost)."
+
+  [[Layer.Parameter]]
+  Code = 1
+  Name = "Dissipation"
+  Label = "Density retention"
+  Type = "Float32"
+  Minimum = 0.95
+  Maximum = 1.0
+  Default = 0.996
+  Neutral = 1.0
+  Step = 0.001
+  Digits = 3
+  Unit = ""
+  Keyable = true
+  Target = "Domain"
+
+  [[Layer.Parameter]]
+  Code = 2
+  Name = "VelocityDissipation"
+  Label = "Velocity retention"
+  Type = "Float32"
+  Minimum = 0.95
+  Maximum = 1.0
+  Default = 0.999
+  Neutral = 1.0
+  Step = 0.001
+  Digits = 3
+  Unit = ""
+  Keyable = true
+  Target = "Domain"
+
+[[Layer]]
+Code = 107
+Token = "smoke-shading"
+Name = "Smoke shading"
+Stack = "GasVolume"
+Phase = "Shade"
+Required = false
+Capacity = 2
+Summary = "How the smoke scatters and absorbs light. Without this layer the smoke is not drawn."
+
+  [[Layer.Parameter]]
+  Code = 1
+  Name = "Density"
+  Label = "Density"
+  Type = "Float32"
+  Minimum = 0.0
+  Maximum = 4.0
+  Default = 1.0
+  Neutral = 0.0
+  Step = 0.05
+  Unit = "×"
+  Keyable = true
+  Target = "Volume"
+
+  [[Layer.Parameter]]
+  Code = 2
+  Name = "Albedo"
+  Label = "Albedo"
+  Type = "ColourLinear"
+  Default = "#8e8f94"
+  Neutral = "#8e8f94"
+  Keyable = true
+  Target = "Volume"
+
+  [[Layer.Parameter]]
+  Code = 3
+  Name = "Absorption"
+  Label = "Absorption"
+  Type = "Float32"
+  Minimum = 0.2
+  Maximum = 12.0
+  Default = 3.2
+  Neutral = 3.2
+  Step = 0.1
+  Unit = "1/m"
+  Keyable = true
+  Target = "Volume"
+
+  [[Layer.Parameter]]
+  Code = 4
+  Name = "Anisotropy"
+  Label = "Anisotropy"
+  Type = "Float32"
+  Minimum = 0.0
+  Maximum = 0.9
+  Default = 0.45
+  Neutral = 0.45
+  Step = 0.01
+  Unit = "g"
+  Keyable = true
+  Target = "Volume"
+
+  [[Layer.Parameter]]
+  Code = 5
+  Name = "Ambient"
+  Label = "Ambient light"
+  Type = "ColourLinear"
+  Default = "#3a414c"
+  Neutral = "#3a414c"
+  Keyable = true
+  Target = "Volume"
+
+  [[Layer.Parameter]]
+  Code = 6
+  Name = "LightIntensity"
+  Label = "Light intensity"
+  Type = "Float32"
+  Minimum = 0.0
+  Maximum = 4.0
+  Default = 1.4
+  Neutral = 1.4
+  Step = 0.05
+  Unit = "×"
+  Keyable = true
+  Target = "Volume"
+
+[[Layer]]
+Code = 108
+Token = "fire-shading"
+Name = "Fire shading"
+Stack = "GasVolume"
+Phase = "Shade"
+Required = false
+Capacity = 2
+Summary = "Blackbody-style flame colour from temperature. Without this layer hot gas does not glow."
+
+  [[Layer.Parameter]]
+  Code = 1
+  Name = "FireIntensity"
+  Label = "Fire intensity"
+  Type = "Float32"
+  Minimum = 0.0
+  Maximum = 12.0
+  Default = 4.0
+  Neutral = 0.0
+  Step = 0.1
+  Unit = "×"
+  Keyable = true
+  Target = "Volume"
+
+  [[Layer.Parameter]]
+  Code = 2
+  Name = "FireThreshold"
+  Label = "Ignition threshold"
+  Type = "Float32"
+  Minimum = 0.3
+  Maximum = 3.0
+  Default = 1.0
+  Neutral = 1.0
+  Step = 0.05
+  Unit = ""
+  Keyable = true
+  Target = "Volume"
+
+  [[Layer.Parameter]]
+  Code = 3
+  Name = "FireSoftness"
+  Label = "Flame softness"
+  Type = "Float32"
+  Minimum = 0.5
+  Maximum = 8.0
+  Default = 3.5
+  Neutral = 3.5
+  Step = 0.1
+  Unit = ""
+  Keyable = true
+  Target = "Volume"
+
+  [[Layer.Parameter]]
+  Code = 4
+  Name = "FireOpacity"
+  Label = "Flame opacity"
+  Type = "Float32"
+  Minimum = 0.0
+  Maximum = 4.0
+  Default = 1.4
+  Neutral = 1.4
+  Step = 0.05
+  Unit = "×"
+  Keyable = true
+  Target = "Volume"
+
+  [[Layer.Parameter]]
+  Code = 5
+  Name = "FireEmber"
+  Label = "Ember colour"
+  Type = "ColourLinear"
+  Default = "#ff2a05"
+  Neutral = "#ff2a05"
+  Keyable = true
+  Target = "Volume"
+
+  [[Layer.Parameter]]
+  Code = 6
+  Name = "FireFlame"
+  Label = "Flame colour"
+  Type = "ColourLinear"
+  Default = "#ff8a16"
+  Neutral = "#ff8a16"
+  Keyable = true
+  Target = "Volume"
+
+  [[Layer.Parameter]]
+  Code = 7
+  Name = "FireCore"
+  Label = "Core colour"
+  Type = "ColourLinear"
+  Default = "#fff3cf"
+  Neutral = "#fff3cf"
+  Keyable = true
+  Target = "Volume"
+
+  [[Layer.Parameter]]
+  Code = 8
+  Name = "FireLight"
+  Label = "Fire light"
+  Type = "Float32"
+  Minimum = 0.0
+  Maximum = 4.0
+  Default = 1.0
+  Neutral = 0.0
+  Step = 0.05
+  Unit = "×"
+  Keyable = true
+  Target = "Volume"

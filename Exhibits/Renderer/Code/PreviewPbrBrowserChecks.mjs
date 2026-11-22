@@ -39,21 +39,18 @@ Assert(await Page.locator('body').evaluate(Body=>Body.classList.contains('left-c
 await Page.setViewportSize({width:760,height:900});
 Assert(await Page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
 await Page.locator('#Back').click();
-await Page.waitForFunction(()=>document.querySelectorAll('.file-card').length===6);
-Assert.equal(await Page.locator('.file-card').count(),6);
+await Page.waitForFunction(()=>document.querySelectorAll('.file-card').length===1);
+Assert.equal(await Page.locator('.file-card').count(),1); // Default Project only (Project Zero §14)
 Assert.equal(await Page.locator('[data-open="renderer"]').count(),0);
 for(const Name of ['Styles.css','PanelLayout.css','ReferenceRenderer.js','Browser.js'])
 {
     const Digest=Crypto.createHash('sha256').update(Fs.readFileSync('Experimental/Project browser/'+Name)).digest('hex').slice(0,12);
     Assert.equal(await Page.locator(`[src="${Name}?v=${Digest}"],[href="${Name}?v=${Digest}"]`).count(),1);
 }
-for(const Token of ['valley','mount','stone','island','bracket','faceted'])
-{
-    await Page.locator(`[data-open="${Token}"]`).first().click();
-    await Page.locator('#Back').click();
-    Assert.equal(await Page.locator('.file-card').count(),6);
-}
-await Page.locator('[data-open="mount"]').first().click();
+await Page.locator('[data-open="default"]').first().click();
+await Page.locator('#Back').click();
+Assert.equal(await Page.locator('.file-card').count(),1);
+await Page.locator('[data-open="default"]').first().click();
 Assert.equal(await Page.locator('#OpenEditor').isEnabled(),true);
 const ImGuiReview=await Page.request.get('http://127.0.0.1:8775/Exhibits/SpaceFormats/index.html');
 Assert.equal(ImGuiReview.status(),200);

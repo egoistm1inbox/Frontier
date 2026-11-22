@@ -12,7 +12,7 @@
 - Creation snapshots the existing project defaults, issues a fresh identity and refuses overwrites.
 - Three columns retain shared dimensions, aligned 64 px headers, collapsible sides and narrow-screen collapse.
 - The host supplies the existing shared ControlKit palette and typography; no independent theme files are introduced.
-- The six HTML rendering fixtures remain design-reference material only. They are not native presets or projects.
+- The HTML reference now lists the Default Project only (six sample fixtures removed, decision 3 Option A, HTML-only round). The native `ProjectBrowserCatalogue.h` was not changed in that round.
 
 ## Validation
 

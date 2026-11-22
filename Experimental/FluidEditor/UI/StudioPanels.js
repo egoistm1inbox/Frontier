@@ -10,6 +10,7 @@ import {
     ForceGeneratorTypes, ForceTypeById, FalloffCurves, EmitterShapes, ColourRamps, SliceAxes, ScalarChannels, AdvectionSchemes, BoundaryModes,
     ScenePresets, RampStops, MaximumForceGenerators, SmokeLooks, FireLooks, ResolutionPresets, VolumeFilters, FalloffLabels, ForceCategories, VectorModes, timingEnvelope, isKeyed, DebrisKinds, EmitterPathKinds, GridFollowModes, MaximumGridTiles, GridModes, MaximumTilePool,
 } from '../Engine/ForceGeneratorCatalog.js';
+import { LayerSpecificationByCode, GasLayerSpecifications, BlendModes, PhaseOrder, MaximumLayers, SourceLayerCode } from '../Engine/LayerStack.js';
 import { ParticleTemplates, ParticleTemplateById, ParticleCategories, ParticleShapes, ParticleModes, ParticleColourModes, ParticleColourLabels, ParticleBlendModes, ParticleRenderStyles, ParticleRampSources, PalettePresets, MaximumPaletteStops, MaximumParticleSystems, ParticleSprites, ParticleSizeModes, ParticleTrailModes, ParticleTrailColours, MaximumTrailLength } from '../Engine/ParticleCatalog.js';
 const BoundaryLabels = { ClosedBox: 'Closed Box', OpenTop: 'Open Top', OpenAll: 'Open All' };
 
@@ -266,7 +267,7 @@ export function mountStudioUI({ app, refs })
     //                                                  INSPECTOR CONTROLS
     //------------------------------------------------------------------------------------------------------------------------
 
-    function slider(node, key, label, min, max, step, unit = '', digits = 2)
+    function slider(node, key, label, min, max, step, unit = '', digits = 2, write = (value) => app.updateNode(node.Id, key, value))
     {
         const control = element('div', 'control');
         const head = element('div', 'control-head', `<span>${label}<span class="unit">${unit}</span></span>`);
@@ -277,8 +278,8 @@ export function mountStudioUI({ app, refs })
         range.type = 'range'; range.min = String(min); range.max = String(max); range.step = String(step); range.value = String(node[key]);
         const paint = () => range.style.setProperty('--fill', `${((Number(range.value) - min) / (max - min)) * 100}%`);
         paint();
-        range.addEventListener('input', () => { number.value = formatNumber(range.value, digits); paint(); app.updateNode(node.Id, key, Number(range.value)); });
-        number.addEventListener('change', () => { const value = Number(number.value); if (Number.isFinite(value)) { range.value = String(Math.max(min, Math.min(max, value))); paint(); app.updateNode(node.Id, key, value); } });
+        range.addEventListener('input', () => { number.value = formatNumber(range.value, digits); paint(); write(Number(range.value)); });
+        number.addEventListener('change', () => { const value = Number(number.value); if (Number.isFinite(value)) { range.value = String(Math.max(min, Math.min(max, value))); paint(); write(value); } });
         control.appendChild(head);
         control.appendChild(range);
         return control;
@@ -309,7 +310,7 @@ export function mountStudioUI({ app, refs })
         return control;
     }
 
-    function choice(node, key, label, options, labels = {})
+    function choice(node, key, label, options, labels = {}, write = (value) => app.updateNode(node.Id, key, value))
     {
         const control = element('div', 'control');
         control.appendChild(element('div', 'control-head', `<span>${label}</span>`));
@@ -317,19 +318,19 @@ export function mountStudioUI({ app, refs })
         for (const option of options)
         {
             const button = element('button', node[key] === option ? 'active' : '', labels[option] || option);
-            button.addEventListener('click', () => app.updateNode(node.Id, key, option));
+            button.addEventListener('click', () => write(option));
             row.appendChild(button);
         }
         control.appendChild(row);
         return control;
     }
 
-    function colour(node, key, label)
+    function colour(node, key, label, write = (value) => app.updateNode(node.Id, key, value))
     {
         const row = element('div', 'colour-row', `<span>${label}</span>`);
         const input = document.createElement('input');
         input.type = 'color'; input.value = node[key];
-        input.addEventListener('input', () => app.updateNode(node.Id, key, input.value));
+        input.addEventListener('input', () => write(input.value));
         row.appendChild(input);
         return row;
     }
@@ -497,23 +498,7 @@ export function mountStudioUI({ app, refs })
             gridStatus,
             element('p', 'note', 'Following slides the window across the world grid by whole tiles whenever the target enters a neighbouring tile. The fields are moved by an exact cell offset, so smoke already laid down keeps simulating in place — nothing is clipped at the old box. Use 3 × 1 × 3 tiles with an Emitter on a Straight or Slalom path for an endless drift run.'),
         ]));
-        host.appendChild(card('Dynamics', 'Per second', [
-            slider(domain, 'Buoyancy', 'Thermal buoyancy', 0, 4, 0.05),
-            slider(domain, 'Gravity', 'Smoke weight', 0, 2, 0.05),
-            slider(domain, 'Vorticity', 'Vorticity confinement', 0, 2, 0.01),
-            slider(domain, 'ForceResponse', 'Force response (0 = unlimited)', 0, 5, 0.05, 's'),
-            slider(domain, 'Cooling', 'Cooling rate', 0, 3, 0.05),
-            slider(domain, 'Combustion', 'Combustion rate', 0, 3, 0.05),
-            slider(domain, 'Expansion', 'Gas expansion', 0, 3, 0.05),
-            slider(domain, 'AmbientTemperature', 'Ambient temperature', -1, 2, 0.05),
-        ]));
-        host.appendChild(card('Solver', 'Stability', [
-            slider(domain, 'PressureIterations', 'Pressure iterations', 4, 80, 1, '', 0),
-            slider(domain, 'Dissipation', 'Density retention', 0.95, 1, 0.001, '', 3),
-            slider(domain, 'VelocityDissipation', 'Velocity retention', 0.95, 1, 0.001, '', 3),
-            slider(domain, 'TimeScale', 'Time scale', 0.1, 3, 0.05, '×'),
-            slider(domain, 'SceneLoop', 'Scene loop (0 = off)', 0, 30, 0.5, 's', 1),
-        ]));
+        renderGasStack(host, snapshot);
         const actions = element('div', 'action-row');
         const reset = element('button', '', `${icon('reset', 12)} Reset fields`);
         reset.addEventListener('click', () => app.reset());
@@ -521,6 +506,144 @@ export function mountStudioUI({ app, refs })
         frame.addEventListener('click', () => app.frameDomain());
         actions.append(reset, frame);
         host.appendChild(actions);
+    }
+
+    //------------------------------------------------------------------------------------------------------------------------
+    //                                                  GAS LAYER STACK
+    //------------------------------------------------------------------------------------------------------------------------
+
+    /** One-line summary of a layer's main amounts, shown in its stack row. */
+    function layerSummary(layer, specification, scene)
+    {
+        if (!specification) return `Category ${layer.Category} · kept, not evaluated`;
+        if (specification.Code === SourceLayerCode)
+        {
+            const emitter = scene.Emitters.find((candidate) => candidate.Id === layer.Parameters.Emitter);
+            return emitter ? `${emitter.Name} · ${emitter.Shape.toLowerCase()} ${formatNumber(emitter.Radius, 2)} m` : 'emitter missing';
+        }
+        return specification.Parameter.filter((parameter) => parameter.Type === 'Float32' || parameter.Type === 'Int32').slice(0, 2)
+            .map((parameter) => `${parameter.Label.replace(/ \(.*\)$/, '').toLowerCase()} ${formatNumber(layer.Parameters[parameter.Name], parameter.Digits ?? 2)}`).join(' · ');
+    }
+
+    function renderGasStack(host, snapshot)
+    {
+        const stack = snapshot.scene.GasStack;
+        if (!stack) return;
+        const evaluation = snapshot.gas || { Problems: [], Contributing: new Set() };
+        const problemsFor = (token) => evaluation.Problems.filter((problem) => problem.Token === token);
+        const stackCard = element('div', 'property-card layer-stack', `<h3>Layers<span>${stack.Layers.length} of ${MaximumLayers} · top to bottom</span></h3>`);
+        stackCard.setAttribute('data-layer-stack', stack.Token);
+        if (evaluation.Stopped) stackCard.appendChild(element('p', 'layer-stopped', `⚠️ Gas stopped: ${evaluation.Stopped}. Particles keep running.`));
+
+        // + Add layer: every gas category with room left, grouped by phase.
+        const add = document.createElement('select');
+        add.className = 'layer-add';
+        add.setAttribute('aria-label', 'Add layer');
+        add.innerHTML = '<option value="">+ Add layer</option>';
+        for (const phase of PhaseOrder)
+        {
+            const group = document.createElement('optgroup');
+            group.label = phase;
+            for (const specification of GasLayerSpecifications.filter((candidate) => candidate.Phase === phase && !candidate.Required))
+            {
+                const used = stack.Layers.filter((layer) => layer.Category === specification.Code).length;
+                const option = document.createElement('option');
+                option.value = String(specification.Code);
+                option.textContent = `${specification.Name}${specification.Capacity > 1 ? `  (${used}/${specification.Capacity})` : ''}`;
+                option.disabled = used >= specification.Capacity || stack.Layers.length >= MaximumLayers;
+                group.appendChild(option);
+            }
+            if (group.children.length) add.appendChild(group);
+        }
+        add.addEventListener('change', () => { if (add.value) app.addLayer(Number(add.value)); });
+        stackCard.querySelector('h3').appendChild(add);
+
+        const list = element('ol', 'layer-list');
+        let dragged = null;
+        stack.Layers.forEach((layer, index) =>
+        {
+            const specification = LayerSpecificationByCode[layer.Category];
+            const required = Boolean(specification && specification.Required);
+            const issues = problemsFor(layer.Token);
+            const live = evaluation.Contributing.has(layer.Token);
+            const row = element('li', 'layer-row' + (snapshot.selectedLayer === layer.Token ? ' selected' : '') + (live ? '' : ' muted') + (issues.some((issue) => issue.Severity !== 'Info') ? ' problem' : '') + (specification ? '' : ' inert'));
+            row.setAttribute('data-layer', layer.Token);
+            row.draggable = !required;
+            const handle = element('span', 'layer-handle', required ? '' : '≡');
+            handle.title = required ? 'Required first layer' : 'Drag to reorder';
+            const toggle = element('button', 'layer-toggle' + (layer.Enabled ? ' on' : ''), layer.Enabled ? '◉' : '○');
+            toggle.title = required ? 'Required — always on' : layer.Enabled ? 'Disable layer' : 'Enable layer';
+            toggle.setAttribute('aria-label', `${layer.Enabled ? 'Disable' : 'Enable'} ${specification ? specification.Name : 'layer'}`);
+            toggle.disabled = required || !specification;
+            toggle.addEventListener('click', (event) => { event.stopPropagation(); app.updateLayer(layer.Token, 'Enabled', !layer.Enabled); });
+            const text = element('span', 'layer-text', `<b>${specification ? specification.Name : 'Unknown layer'}</b><small>${layerSummary(layer, specification, snapshot.scene)}</small>`);
+            const badges = element('span', 'layer-badges');
+            if (required) badges.appendChild(element('em', 'layer-badge', 'required'));
+            if (layer.Solo) badges.appendChild(element('em', 'layer-badge solo', 'solo'));
+            if (specification && !specification.Linked && layer.Weight < 1) badges.appendChild(element('em', 'layer-badge', `${Math.round(layer.Weight * 100)}%`));
+            for (const issue of issues) { const badge = element('em', 'layer-badge ' + (issue.Severity === 'Info' ? 'info' : 'warn'), issue.Severity === 'Info' ? 'inert' : '!'); badge.title = issue.Text; badges.appendChild(badge); }
+            row.append(handle, toggle, text, badges);
+            if (!required)
+            {
+                const move = (delta) => (event) => { event.stopPropagation(); app.moveLayer(layer.Token, index + delta); };
+                const up = element('button', 'layer-move', '↑'); up.title = 'Move up'; up.setAttribute('aria-label', 'Move layer up'); up.disabled = index <= 1; up.addEventListener('click', move(-1));
+                const down = element('button', 'layer-move', '↓'); down.title = 'Move down'; down.setAttribute('aria-label', 'Move layer down'); down.disabled = index >= stack.Layers.length - 1; down.addEventListener('click', move(1));
+                const remove = element('button', 'layer-remove', '×'); remove.title = specification && specification.Linked ? 'Delete layer and its emitter' : 'Delete layer'; remove.setAttribute('aria-label', 'Delete layer');
+                remove.addEventListener('click', (event) => { event.stopPropagation(); app.removeLayer(layer.Token); });
+                row.append(up, down, remove);
+            }
+            row.addEventListener('click', () => app.selectLayer(layer.Token));
+            row.addEventListener('dragstart', (event) => { dragged = layer.Token; event.dataTransfer.effectAllowed = 'move'; row.classList.add('dragging'); });
+            row.addEventListener('dragend', () => row.classList.remove('dragging'));
+            row.addEventListener('dragover', (event) => { if (dragged && dragged !== layer.Token) { event.preventDefault(); row.classList.add('drop-target'); } });
+            row.addEventListener('dragleave', () => row.classList.remove('drop-target'));
+            row.addEventListener('drop', (event) => { event.preventDefault(); row.classList.remove('drop-target'); if (dragged) app.moveLayer(dragged, index); dragged = null; });
+            list.appendChild(row);
+        });
+        stackCard.appendChild(list);
+        stackCard.appendChild(element('p', 'note', '≡ drag or ↑↓ to reorder · ◉/○ enable · layers evaluate top to bottom within each phase (Inject → Advance → Shade → Overlay). Without Smoke shading the smoke is not drawn; without Fire shading hot gas does not glow.'));
+        host.appendChild(stackCard);
+
+        const selected = stack.Layers.find((layer) => layer.Token === snapshot.selectedLayer) || stack.Layers[0];
+        if (!selected) return;
+        const specification = LayerSpecificationByCode[selected.Category];
+        if (!specification)
+        {
+            host.appendChild(card('Unknown layer', `category ${selected.Category}`, [element('p', 'note', 'Written by a newer editor. Kept verbatim and saved back unchanged; it does not affect the simulation here.')]));
+            return;
+        }
+        const controls = [element('p', 'note', specification.Summary)];
+        const writeSetting = (key) => (value) => app.updateLayer(selected.Token, key, value);
+        const writeParameter = (key) => (value) => app.updateLayer(selected.Token, key, value, true);
+        if (!specification.Required && !specification.Linked)
+        {
+            controls.push(slider(selected, 'Weight', 'Weight', 0, 1, 0.01, '', 2, writeSetting('Weight')));
+            const blendLabels = Object.fromEntries(BlendModes.map((mode) => [mode.Code, mode.Label]));
+            controls.push(choice(selected, 'Blend', 'Blend with layers above', BlendModes.map((mode) => mode.Code), blendLabels, writeSetting('Blend')));
+            controls.push(statusTile('Solo', selected.Solo ? 'SOLO' : 'OFF', 'eye', selected.Solo, () => app.updateLayer(selected.Token, 'Solo', !selected.Solo)));
+        }
+        for (const parameter of specification.Parameter)
+        {
+            const write = writeParameter(parameter.Name);
+            if (parameter.Type === 'Float32' || parameter.Type === 'Int32' || parameter.Type === 'UInt32')
+                controls.push(slider(selected.Parameters, parameter.Name, parameter.Label, parameter.Minimum, parameter.Maximum, parameter.Step ?? 0.01, parameter.Unit || '', parameter.Type === 'Float32' ? (parameter.Digits ?? 2) : 0, write));
+            else if (parameter.Type === 'Choice')
+                controls.push(choice(selected.Parameters, parameter.Name, parameter.Label, parameter.Options.map((option) => option.Code), Object.fromEntries(parameter.Options.map((option) => [option.Code, option.Label])), write));
+            else if (parameter.Type === 'ColourLinear') controls.push(colour(selected.Parameters, parameter.Name, parameter.Label, write));
+            else if (parameter.Type === 'Bool') controls.push(statusTile(parameter.Label, selected.Parameters[parameter.Name] ? 'ON' : 'OFF', 'power', selected.Parameters[parameter.Name], () => write(!selected.Parameters[parameter.Name])));
+            else if (parameter.Type === 'Token' && specification.Linked === 'Emitter')
+            {
+                const emitter = snapshot.scene.Emitters.find((candidate) => candidate.Id === selected.Parameters.Emitter);
+                const open = element('button', '', `${icon('flame', 12)} Edit ${emitter ? emitter.Name : 'emitter'}`);
+                open.disabled = !emitter;
+                open.addEventListener('click', () => emitter && app.select(emitter.Id));
+                const actions = element('div', 'action-row'); actions.appendChild(open);
+                controls.push(actions);
+            }
+        }
+        const panel = card(`${specification.Name}`, `${specification.Phase} · ${specification.Required ? 'required' : selected.Enabled ? 'enabled' : 'disabled'}`, controls);
+        panel.setAttribute('data-layer-inspector', selected.Token);
+        host.appendChild(panel);
     }
 
     function renderForceInspector(host, force, snapshot)
@@ -800,6 +923,11 @@ export function mountStudioUI({ app, refs })
         host.appendChild(element('div', 'section-head', '<span>Properties</span><span>Overlay settings</span>'));
         if (visualizer.Id === 'vis-volume')
         {
+            const owned = element('p', 'note layer-owned', 'Fire and smoke values belong to the Fire shading and Smoke shading layers of the Gas Domain; edits here are written to those layers (one is added if missing). ');
+            const openStack = element('button', 'link-button', 'Open layer stack');
+            openStack.addEventListener('click', () => app.select('domain'));
+            owned.appendChild(openStack);
+            host.appendChild(owned);
             host.appendChild(card('Fire', 'Incandescence', [
                 lookChips(visualizer, 'Fire preset', FireLooks, (look) => visualizer.FireEmber === look.FireEmber),
                 colour(visualizer, 'FireEmber', 'Ember (cool edge)'),
