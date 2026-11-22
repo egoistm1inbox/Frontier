@@ -3,8 +3,8 @@
 //============================================================================================================================================
 // 🧩 Scene presets as data (Fluid layer stack plan §4, phase 2). Each preset is a `frontier-fluid-preset` TOML document in Presets/,
 // bundled into Engine/PresetLibrary.js by GeneratePresetLibrary.mjs. Behaviour and shading live in the gas layer stack; grid, emitters,
-// force fields, colliders and particle systems are the document's flat entries (force fields stay flat by design; particle systems get
-// their own stack in phase 3).
+// force fields and colliders are the document's flat entries (force fields stay flat by design); each particle system entry carries its
+// own particle layer stack (phase 3).
 
 import { PresetDocuments, PresetLibraryHash } from './PresetLibrary.js';
 import { createDomain, createEmitter, createForceGenerator, createCollider, createVisualizerSet } from './ForceGeneratorCatalog.js';
@@ -48,7 +48,8 @@ export function buildSceneFromDocument(document)
         Emitters: [],
         Forces: (document.Force || []).map((force) => createForceGenerator(force.Type, force)),
         Colliders: (document.Collider || []).map((collider) => createCollider(collider)),
-        Particles: (document.Particle || []).map((node) => createParticleSystem(node.Template, strip(node, ['Template']))),
+        // Particle entries carry their own layer stack (phase 3); entries without one (older documents) are template + flat overrides.
+        Particles: (document.Particle || []).map((node) => createParticleSystem(node.Template, { ...strip(node, ['Template', 'Layer']), ...(node.Layer ? { Stack: { Layer: node.Layer } } : {}) })),
         Visualizers: createVisualizerSet(),
     };
     const relink = new Map();
@@ -69,7 +70,7 @@ export function buildSceneFromDocument(document)
 
 /**
  * Identity of a resolved scene for conversion checks: every simulated and rendered field, with runtime ids (`emitter-1f` …) replaced
- * by their order of appearance so two loads compare equal. The stack itself is excluded; what it evaluates to is included.
+ * by their order of appearance so two loads compare equal. The stacks themselves are excluded; what they evaluate to is included.
  */
 export function sceneFingerprint(scene)
 {
@@ -77,6 +78,7 @@ export function sceneFingerprint(scene)
     const ids = new Map();
     const text = JSON.stringify({ Name, Domain, Emitters, Forces, Colliders, Particles, Visualizers }, (key, value) =>
     {
+        if (key === 'Stack') return undefined;      // particle layer stacks: their evaluation (the node fields) is included
         if (typeof value === 'string' && /^(force|emitter|collider|particles)-[0-9a-z]+$/.test(value))
         {
             if (!ids.has(value)) ids.set(value, `node-${ids.size + 1}`);
@@ -89,6 +91,17 @@ export function sceneFingerprint(scene)
 
 /** Library hash over every document (canonical), so a changed preset is visible in the validation log. */
 export function presetLibraryHash(documents = PresetDocuments) { return specificationHash(documents.map((document) => JSON.parse(canonicalJson(document)))); }
+
+/** A particle system as a preset entry: identity and timing flat, everything the GPU reads in its layer stack. */
+export function particleEntry(node)
+{
+    const entry = { Template: node.Template, Name: node.Name };
+    if (!node.Enabled) entry.Enabled = false;
+    if (!node.Visible) entry.Visible = false;
+    for (const key of ['StartTime', 'Duration', 'Fade', 'Repeat']) entry[key] = node[key];
+    entry.Layer = node.Stack.Layers.map((layer, index) => ({ ...JSON.parse(JSON.stringify(layer)), Token: `layer-${index + 1}` }));
+    return entry;
+}
 
 /** Current scene → preset document (Save as preset). Inverse of buildSceneFromDocument for everything the scene owns. */
 export function sceneToDocument(scene, summary = {})
@@ -109,7 +122,7 @@ export function sceneToDocument(scene, summary = {})
         Emitter: scene.Emitters.map((emitter) => ({ Token: tokens.get(emitter.Id), ...strip(emitter, drop) })),
         Force: scene.Forces.map((force) => strip(force, drop)),
         Collider: scene.Colliders.map((collider) => strip(collider, drop)),
-        Particle: scene.Particles.map((node) => strip(node, drop)),
+        Particle: scene.Particles.map((node) => particleEntry(node)),
     };
     return document;
 }

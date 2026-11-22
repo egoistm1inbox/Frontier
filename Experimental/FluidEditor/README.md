@@ -90,6 +90,12 @@ A self-contained GPU particle module that shares the force-generator gizmos with
   stack, emitters, force fields, colliders, particle systems). After editing run `node Experimental/FluidEditor/GeneratePresetLibrary.mjs`
   (writes `Engine/PresetLibrary.js`). *Save as preset* in the top menu downloads the current scene as a document. The conversion from the
   old hardcoded objects is recorded in `Exhibits/FluidEditor/Results/PresetConversion.json` (36/36 identical scenes, identical FluidMetrics).
+- **Particle systems are layer stacks:** every particle system has its own stack (Spawn, Home spring, Gravity, Drag, Noise, Field
+  influence, Gas coupling, Bounce, Colour rule, Size over life, Sprite, Trail; categories 201–212 in `Engine/LayerSpecifications.toml`).
+  The Inspector shows the stack (+ Add layer, enable, weight, blend, solo, reorder, delete) and the selected layer's settings. Templates
+  are `ParticleTemplates/*.toml` (`frontier-particle-template`, 26 converted plus *Empty Cloud* = Spawn + Sprite), bundled by the same
+  `GeneratePresetLibrary.mjs` into `Engine/ParticleTemplateLibrary.js`. Each particle entry of a preset carries its stack
+  (`[[Particle.Layer]]`). Conversion record: `Exhibits/FluidEditor/Results/ParticleTemplateConversion.json`.
 - **Files:** scene JSON Version 3 adds `GasStack`; Version 2 files convert. Stack TOML (`frontier-effect-stack`) round-trips byte for byte;
   unknown categories and parameters are kept verbatim and inert.
 

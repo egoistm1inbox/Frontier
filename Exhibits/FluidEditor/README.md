@@ -67,8 +67,9 @@ that drift up between 7 and 13 s (the Fire Tornado and the new Camp Fire) were r
 (Fire Tornado mean speed 1.97 → 3.26 → 2.65; Camp Fire 2.08 → 2.51 → 1.95).
 
 ### The other editor's presets
-`Experimental/FluidEditor/Engine/PyroScenePresets.js` holds the other editor's 18 parameter blocks, copied unchanged. A translator turns
-each block into a Fluid Studio scene:
+`Experimental/FluidEditor/Engine/PyroScenePresets.js` holds the other editor's 18 parameter blocks, copied unchanged. A translator turned
+each block into a Fluid Studio scene (since the layer stack phase 2 the results are `Presets/*.toml` documents and `PyroScenePresets.js`
+is no longer loaded; it stays as a 📝 reference of the original values):
 - One emitter and/or a keyed blast (charge emitter plus radial burst, with ballistic debris for shrapnel).
 - Wind, a single gentle curl-noise force for turbulence, and swirl only for the tornado scenes.
 - Colliders: a sphere, or several spheres standing in for the cylinder, slab and tyre-ring obstacles.

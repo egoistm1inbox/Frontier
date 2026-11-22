@@ -451,14 +451,101 @@ console.log('\n[7] Layer specifications + gas layer stack');
     app.removeNode(extra.Id);
     check(!app.scene.GasStack.Layers.some((layer) => layer.Parameters.Emitter === extra.Id), 'Deleting the emitter removes its Source layer');
 
-    // Files: Version 3 keeps the stack; Version 2 files convert exactly.
+    // Files: Version 4 keeps the gas stack (and particle stacks, §8); Version 2 files convert exactly.
     app.updateNode('domain', 'Vorticity', 1.1);
     const version3 = app.exportJson();
     app.importJson(version3);
-    check(JSON.parse(version3).Version === 3 && app.scene.Domain.Vorticity === 1.1 && app.scene.GasStack.Layers.filter((layer) => layer.Category === 102).every((layer) => app.scene.Emitters.some((emitter) => emitter.Id === layer.Parameters.Emitter)), 'Version 3 export → import keeps the stack and relinks Source layers to the re-created emitters');
+    check(JSON.parse(version3).Version === 4 && app.scene.Domain.Vorticity === 1.1 && app.scene.GasStack.Layers.filter((layer) => layer.Category === 102).every((layer) => app.scene.Emitters.some((emitter) => emitter.Id === layer.Parameters.Emitter)), 'Version 4 export → import keeps the stack and relinks Source layers to the re-created emitters');
     const version2 = JSON.parse(version3); delete version2.GasStack; version2.Version = 2;
     app.importJson(JSON.stringify(version2));
     check(app.scene.Domain.Vorticity === 1.1 && app.scene.GasStack.Layers[0].Category === 101, 'Version 2 files (no stack) convert to a stack with the same values');
+    app.loadPreset('preset-campfire');
+}
+
+console.log('\n[8] Particle layer stacks + templates as documents');
+{
+    const Stack = await import('./Engine/LayerStack.js');
+    const Catalog = await import('./Engine/ParticleCatalog.js');
+    const Presets = await import('./Engine/PresetScenes.js');
+    const PresetGenerator = await import('./GeneratePresetLibrary.mjs');
+    const { parseToml, writeToml } = await import('./Engine/TomlSubset.js');
+    const { specificationHash } = await import('./Engine/LayerSpecificationValidation.js');
+    check(fs.readFileSync(PresetGenerator.ParticleTemplateLibraryOutput, 'utf8') === PresetGenerator.generateParticleTemplateLibrary(), `Engine/ParticleTemplateLibrary.js is up to date with ParticleTemplates/*.toml · library ${Catalog.ParticleTemplateLibraryHash}`);
+    check(Stack.ParticleLayerSpecifications.length === 12 && Stack.ParticleLayerSpecifications.every((layer) => layer.Parameter.every((parameter) => parameter.Target === 'Particles')), `${Stack.ParticleLayerSpecifications.length} particle layer categories (201–212), all writing the particle node`);
+    const owned = new Set(Stack.ParticleLayerSpecifications.flatMap((layer) => layer.Parameter.map((parameter) => parameter.Name)));
+    const flatOnly = Object.keys(createParticleSystem('sparks')).filter((key) => !owned.has(key));
+    check(flatOnly.join(',') === 'Id,Kind,Template,Name,Enabled,Visible,StartTime,Duration,Fade,Repeat,Stack', `Every GPU field of a particle node is owned by a layer; only identity and timing stay flat (${flatOnly.join(', ')})`);
+
+    // The 26 legacy templates: each document builds the identical node (fingerprints recorded at conversion).
+    const conversion = JSON.parse(fs.readFileSync(path.join(Folder, '../../Exhibits/FluidEditor/Results/ParticleTemplateConversion.json'), 'utf8'));
+    let exact = 0, clean = 0, roundTrips = 0;
+    for (const [id, recorded] of Object.entries(conversion.Templates))
+    {
+        const { Id, Stack: _stack, ...rest } = createParticleSystem(id);
+        if (Catalog.ParticleTemplateById[id] && specificationHash(JSON.parse(JSON.stringify(rest))) === recorded.Legacy) exact += 1;
+        else console.log(`     ↳ ${id}: node differs from the legacy template (fingerprint ${recorded.Legacy})`);
+    }
+    for (const template of ParticleTemplates)
+    {
+        if (!template.Stopped && template.Problems.length === 0) clean += 1;
+        const text = writeToml({ Layer: template.Stack.Layers }, Stack.FloatKeys);
+        if (writeToml({ Layer: Stack.readParticleStack(parseToml(text)).Layers }, Stack.FloatKeys) === text) roundTrips += 1;
+    }
+    check(exact === 26 && Object.keys(conversion.Templates).length === 26, `${exact}/26 legacy templates rebuild the identical particle node from their document`);
+    check(clean === ParticleTemplates.length && roundTrips === ParticleTemplates.length, `${clean}/${ParticleTemplates.length} template stacks evaluate without problems; ${roundTrips} round-trip through TOML byte for byte`);
+    const exactConversions = [...ParticleTemplates.map((template) => createParticleSystem(template.Id)), ...ScenePresets.flatMap((preset) => buildSceneFromDocument(preset.Document).Particles)]
+        .filter((node) => { const copy = JSON.parse(JSON.stringify(node)); Stack.applyParticleEvaluation(copy, Stack.evaluateParticleStack(Stack.convertParticleSystemToStack(node))); return JSON.stringify(copy) === JSON.stringify(node); }).length;
+    check(exactConversions === ParticleTemplates.length + ScenePresets.reduce((total, preset) => total + preset.Particles.length, 0), `evaluate(convert(node)) equals the node field for field for every template and preset particle system (${exactConversions})`);
+    const empty = Catalog.ParticleTemplateById['empty-cloud'];
+    check(empty && empty.Stack.Layers.map((layer) => layer.Category).join(',') === '201,211' && !empty.Stopped, 'Empty Cloud template = Spawn + Sprite (the "+ New particle cloud" starting point) and evaluates');
+
+    // Editing: layers own the fields; flat edits route to them; problems hold only that system.
+    app.loadPreset('preset-form');
+    const node = app.scene.Particles[0];
+    app.select(node.Id);
+    check(node.Stack.Layers[0].Category === Stack.SpawnLayerCode && node.Gravity === 0, `Form Sphere stack: ${node.Stack.Layers.map((layer) => Stack.LayerSpecificationByCode[layer.Category].Name).join(' → ')}`);
+    const gravity = app.addLayer(203);
+    check(gravity && node.Gravity === 9.8, `+ Add layer → Gravity adds 9.8 m/s² to the selected particle system (${node.Gravity})`);
+    app.updateLayer(gravity.Token, 'Weight', 0.5);
+    check(Math.abs(node.Gravity - 4.9) < 1e-12, `Weight 0.5 halves it (${node.Gravity})`);
+    app.updateLayer(gravity.Token, 'Enabled', false);
+    check(node.Gravity === 0, 'Disabling the layer returns gravity to neutral (0)');
+    app.removeLayer(gravity.Token);
+    app.updateNode(node.Id, 'Gravity', 2);
+    const inserted = node.Stack.Layers.find((layer) => layer.Category === 203);
+    check(inserted && node.Gravity === 2 && node.Stack.Layers.indexOf(inserted) < node.Stack.Layers.findIndex((layer) => layer.Category === 209), 'A flat edit with no owning layer inserts it in phase order (Advance before Shade)');
+    app.placeNode(node, [0.5, 0.25, -0.5]);
+    check(node.Stack.Layers[0].Parameters.Position.join(',') === '0.5,0.25,-0.5' && node.Position.join(',') === '0.5,0.25,-0.5', 'Moving the gizmo writes the Spawn layer position');
+    check(app.removeLayer(node.Stack.Layers[0].Token) === false, 'The required Spawn layer cannot be deleted');
+    check(node.Stack.Layers.some((layer) => layer.Category === 211) && app.addLayer(211) === null, 'Capacity holds: a second Sprite layer is refused');
+    app.updateLayer(node.Stack.Layers[0].Token, 'Count', 4096, true);
+    check(node.Count === 4096 && node.Stack.Layers[0].Parameters.Count === 4096, 'Editing a Spawn layer parameter evaluates into the node the GPU reads');
+    const tweaked = JSON.parse(JSON.stringify(ScenePresetById['preset-form'].Document));
+    tweaked.Particle[0].Layer[0].Parameters.Radius += 0.01;
+    check(Presets.sceneFingerprint(Presets.buildSceneFromDocument(tweaked)) !== Presets.sceneFingerprint(Presets.buildSceneFromDocument(ScenePresetById['preset-form'].Document)), 'Scene fingerprint detects a 0.01 change in one particle layer parameter');
+    const saved = parseToml(app.exportPresetToml({ Id: 'preset-saved', Family: 'Custom' }));
+    check(Presets.validatePresetDocument(saved).length === 0 && Presets.sceneFingerprint(Presets.buildSceneFromDocument(saved)) === Presets.sceneFingerprint(app.scene) && saved.Particle[0].Layer.length === node.Stack.Layers.length, 'Save as preset writes each particle system with its layer stack and rebuilds it exactly');
+    const weighted = node.Stack.Layers.find((layer) => layer.Category === 205);
+    app.updateLayer(weighted.Token, 'Weight', 0.25);
+    const exported = app.exportJson();
+    app.importJson(exported);
+    const back = app.scene.Particles[0];
+    check(back.Stack.Layers.length === node.Stack.Layers.length && back.Stack.Layers.find((layer) => layer.Category === 205).Weight === 0.25 && back.Gravity === 2, 'Version 4 export → import keeps every particle stack (layers, weights, amounts)');
+    const duplicate = app.duplicateNode(back.Id);
+    check(duplicate && duplicate.Stack.Layers.every((layer, index) => layer.Token !== back.Stack.Layers[index].Token) && duplicate.Position[0] === back.Position[0] + 0.4, 'Duplicating a particle system copies its stack with fresh layer tokens and offsets the Spawn position');
+    duplicate.Stack.Layers.push(Stack.createLayer(103));
+    const foreign = app.particleEvaluation(duplicate);
+    check(Boolean(foreign.Stopped) && foreign.Problems.some((problem) => /belongs to a GasVolume/.test(problem.Text)), `A gas layer inside a particle stack stops that system with a reason ("${foreign.Stopped}")`);
+    duplicate.Stack.Layers.pop();
+    duplicate.Stack.Layers.shift();
+    app.evaluateParticles(duplicate);
+    check(Catalog.HaltedParticleSystems.has(duplicate), 'A particle stack without Spawn holds that system (not simulated or drawn)');
+    const before = app.solver.frame;
+    app.playing = true; app.frame(6000); app.frame(6016);
+    check(app.supported && app.solver.frame > before && !Catalog.HaltedParticleSystems.has(back), 'The rest of the scene keeps running while one particle system is held');
+    const fresh = app.addParticles('empty-cloud');
+    if (!fresh) console.log(`     ↳ ${app.scene.Particles.length} particle systems in the scene`);
+    check(fresh && !Catalog.HaltedParticleSystems.has(fresh) && fresh.Stack.Layers.length === 2, 'A new particle system from Empty Cloud is created and runs without failures');
     app.loadPreset('preset-campfire');
 }
 

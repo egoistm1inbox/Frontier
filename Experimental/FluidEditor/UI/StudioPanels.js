@@ -11,8 +11,8 @@ import {
     RampStops, MaximumForceGenerators, SmokeLooks, FireLooks, ResolutionPresets, VolumeFilters, FalloffLabels, ForceCategories, VectorModes, timingEnvelope, isKeyed, DebrisKinds, EmitterPathKinds, GridFollowModes, MaximumGridTiles, GridModes, MaximumTilePool,
 } from '../Engine/ForceGeneratorCatalog.js';
 import { ScenePresets } from '../Engine/PresetScenes.js';
-import { LayerSpecificationByCode, GasLayerSpecifications, BlendModes, PhaseOrder, MaximumLayers, SourceLayerCode } from '../Engine/LayerStack.js';
-import { ParticleTemplates, ParticleTemplateById, ParticleCategories, ParticleShapes, ParticleModes, ParticleColourModes, ParticleColourLabels, ParticleBlendModes, ParticleRenderStyles, ParticleRampSources, PalettePresets, MaximumPaletteStops, MaximumParticleSystems, ParticleSprites, ParticleSizeModes, ParticleTrailModes, ParticleTrailColours, MaximumTrailLength } from '../Engine/ParticleCatalog.js';
+import { LayerSpecificationByCode, GasLayerSpecifications, ParticleLayerSpecifications, BlendModes, PhaseOrder, MaximumLayers, SourceLayerCode } from '../Engine/LayerStack.js';
+import { ParticleTemplates, ParticleTemplateById, ParticleCategories, PalettePresets, MaximumPaletteStops, MaximumParticleSystems } from '../Engine/ParticleCatalog.js';
 const BoundaryLabels = { ClosedBox: 'Closed Box', OpenTop: 'Open Top', OpenAll: 'Open All' };
 
 function element(tag, className, html)
@@ -286,7 +286,7 @@ export function mountStudioUI({ app, refs })
         return control;
     }
 
-    function vector(node, key, label, step = 0.05, integer = false)
+    function vector(node, key, label, step = 0.05, integer = false, write = (value) => app.updateNode(node.Id, key, value))
     {
         const control = element('div', 'control');
         control.appendChild(element('div', 'control-head', `<span>${label}</span>`));
@@ -302,7 +302,7 @@ export function mountStudioUI({ app, refs })
                 if (!Number.isFinite(value)) return;
                 const next = [...node[key]];
                 next[index] = integer ? Math.round(value) : value;
-                app.updateNode(node.Id, key, next);
+                write(next);
             });
             wrap.appendChild(input);
             row.appendChild(wrap);
@@ -522,21 +522,36 @@ export function mountStudioUI({ app, refs })
             const emitter = scene.Emitters.find((candidate) => candidate.Id === layer.Parameters.Emitter);
             return emitter ? `${emitter.Name} · ${emitter.Shape.toLowerCase()} ${formatNumber(emitter.Radius, 2)} m` : 'emitter missing';
         }
-        return specification.Parameter.filter((parameter) => parameter.Type === 'Float32' || parameter.Type === 'Int32').slice(0, 2)
-            .map((parameter) => `${parameter.Label.replace(/ \(.*\)$/, '').toLowerCase()} ${formatNumber(layer.Parameters[parameter.Name], parameter.Digits ?? 2)}`).join(' · ');
+        // A leading Choice (colour rule, mode, sprite, trail) says more than the first numbers.
+        const lead = specification.Parameter[0].Type === 'Choice' ? specification.Parameter[0] : null;
+        const option = lead && lead.Options.find((candidate) => candidate.Code === layer.Parameters[lead.Name]);
+        const numbers = specification.Parameter.filter((parameter) => parameter.Type === 'Float32' || parameter.Type === 'Int32').slice(0, lead ? 1 : 2)
+            .map((parameter) => `${parameter.Label.replace(/ \(.*\)$/, '').toLowerCase()} ${formatNumber(layer.Parameters[parameter.Name], parameter.Digits ?? 2)}`);
+        return [option ? option.Label.toLowerCase() : null, ...numbers].filter(Boolean).join(' · ');
     }
 
     function renderGasStack(host, snapshot)
     {
         const stack = snapshot.scene.GasStack;
         if (!stack) return;
-        const evaluation = snapshot.gas || { Problems: [], Contributing: new Set() };
+        renderLayerStack(host, snapshot, {
+            stack,
+            evaluation: snapshot.gas || { Problems: [], Contributing: new Set() },
+            specifications: GasLayerSpecifications,
+            stopped: (reason) => `⚠️ Gas stopped: ${reason}. Particles keep running.`,
+            note: 'Without Smoke shading the smoke is not drawn; without Fire shading hot gas does not glow.',
+        });
+    }
+
+    /** Layer list + selected-layer editor for any stack (gas volume or particle system). */
+    function renderLayerStack(host, snapshot, { stack, evaluation, specifications, stopped, note, owner = null })
+    {
         const problemsFor = (token) => evaluation.Problems.filter((problem) => problem.Token === token);
         const stackCard = element('div', 'property-card layer-stack', `<h3>Layers<span>${stack.Layers.length} of ${MaximumLayers} · top to bottom</span></h3>`);
         stackCard.setAttribute('data-layer-stack', stack.Token);
-        if (evaluation.Stopped) stackCard.appendChild(element('p', 'layer-stopped', `⚠️ Gas stopped: ${evaluation.Stopped}. Particles keep running.`));
+        if (evaluation.Stopped) stackCard.appendChild(element('p', 'layer-stopped', stopped(evaluation.Stopped)));
 
-        // + Add layer: every gas category with room left, grouped by phase.
+        // + Add layer: every category of this stack with room left, grouped by phase.
         const add = document.createElement('select');
         add.className = 'layer-add';
         add.setAttribute('aria-label', 'Add layer');
@@ -545,7 +560,7 @@ export function mountStudioUI({ app, refs })
         {
             const group = document.createElement('optgroup');
             group.label = phase;
-            for (const specification of GasLayerSpecifications.filter((candidate) => candidate.Phase === phase && !candidate.Required))
+            for (const specification of specifications.filter((candidate) => candidate.Phase === phase && !candidate.Required))
             {
                 const used = stack.Layers.filter((layer) => layer.Category === specification.Code).length;
                 const option = document.createElement('option');
@@ -602,7 +617,7 @@ export function mountStudioUI({ app, refs })
             list.appendChild(row);
         });
         stackCard.appendChild(list);
-        stackCard.appendChild(element('p', 'note', '≡ drag or ↑↓ to reorder · ◉/○ enable · layers evaluate top to bottom within each phase (Inject → Advance → Shade → Overlay). Without Smoke shading the smoke is not drawn; without Fire shading hot gas does not glow.'));
+        stackCard.appendChild(element('p', 'note', `≡ drag or ↑↓ to reorder · ◉/○ enable · layers evaluate top to bottom within each phase (Inject → Advance → Shade → Overlay). ${note}`));
         host.appendChild(stackCard);
 
         const selected = stack.Layers.find((layer) => layer.Token === snapshot.selectedLayer) || stack.Layers[0];
@@ -626,8 +641,12 @@ export function mountStudioUI({ app, refs })
         for (const parameter of specification.Parameter)
         {
             const write = writeParameter(parameter.Name);
+            if (owner && !particleParameterShown(parameter.Name, selected.Parameters, owner)) continue;
+            const range = owner ? particleParameterRange(parameter, owner) : parameter;
             if (parameter.Type === 'Float32' || parameter.Type === 'Int32' || parameter.Type === 'UInt32')
-                controls.push(slider(selected.Parameters, parameter.Name, parameter.Label, parameter.Minimum, parameter.Maximum, parameter.Step ?? 0.01, parameter.Unit || '', parameter.Type === 'Float32' ? (parameter.Digits ?? 2) : 0, write));
+                controls.push(slider(selected.Parameters, parameter.Name, parameter.Label, range.Minimum, range.Maximum, range.Step ?? 0.01, range.Unit || '', parameter.Type === 'Float32' ? (range.Digits ?? 2) : 0, write));
+            else if (parameter.Type === 'Vector3') controls.push(vector(selected.Parameters, parameter.Name, parameter.Unit ? `${parameter.Label} (${parameter.Unit})` : parameter.Label, parameter.Step ?? 0.05, false, write));
+            else if (parameter.Type === 'Ramp8') controls.push(paletteControl(selected.Parameters, write));
             else if (parameter.Type === 'Choice')
                 controls.push(choice(selected.Parameters, parameter.Name, parameter.Label, parameter.Options.map((option) => option.Code), Object.fromEntries(parameter.Options.map((option) => [option.Code, option.Label])), write));
             else if (parameter.Type === 'ColourLinear') controls.push(colour(selected.Parameters, parameter.Name, parameter.Label, write));
@@ -755,6 +774,7 @@ export function mountStudioUI({ app, refs })
     {
         const template = ParticleTemplateById[node.Template] || ParticleTemplates[0];
         const cloner = node.Mode === 'Cloner';
+        const evaluation = app.particleEvaluation(node);
         host.appendChild(hero(template.Tint, `${node.Mode} · ${node.Shape}`, cloner ? 'Spring-held formation displaced by the force field' : 'Born, accelerated by the field, aged out', `${node.Count} pts`, template.Icon));
         host.appendChild(element('div', 'metric-grid',
             metric(node.Count, '', 'Particles') +
@@ -765,116 +785,84 @@ export function mountStudioUI({ app, refs })
         status.appendChild(statusTile('Enabled', node.Enabled ? 'ON' : 'OFF', 'power', node.Enabled, () => app.updateNode(node.Id, 'Enabled', !node.Enabled)));
         status.appendChild(statusTile('Mode', cloner ? 'CLONER' : 'EMIT', cloner ? 'gridcloner' : 'sparks', cloner, () => app.updateNode(node.Id, 'Mode', cloner ? 'Emit' : 'Cloner')));
         host.appendChild(status);
-        host.appendChild(element('div', 'section-head', '<span>Properties</span><span>Shape, motion & look</span>'));
-        host.appendChild(card('Shape', 'Spawn region / formation', [
-            choice(node, 'Shape', 'Shape', ParticleShapes),
-            slider(node, 'Radius', 'Radius / half-size', 0.05, 4, 0.05, 'm'),
-            ['Sphere'].includes(node.Shape) && cloner ? slider(node, 'Fill', 'Fill (shell → solid)', 0, 1, 0.02) : null,
-            slider(node, 'Count', 'Particle count', 16, 16384, 16, '', 0),
-            vector(node, 'Position', 'Position (m)'),
-            vector(node, 'Direction', 'Axis / launch direction', 0.1),
-        ]));
-        host.appendChild(card(cloner ? 'Formation' : 'Emission', cloner ? 'Spring return' : 'Per second', cloner ? [
-            slider(node, 'Spring', 'Spring stiffness', 0, 30, 0.5),
-            slider(node, 'Damping', 'Damping', 0, 10, 0.1),
-            slider(node, 'Dissolve', 'Dissolve (homes drift on noise)', 0, 2, 0.02, 'm'),
-            element('p', 'note', 'Every clone is tethered to its lattice home. Drag any force gizmo through the formation to displace it; the spring pulls it back.'),
-        ] : [
-            slider(node, 'Rate', 'Spawn rate (burst ≥ 200)', 0, 500, 0.5, '/s', 1),
-            slider(node, 'Lifetime', 'Lifetime', 0.1, 40, 0.1, 's'),
-            slider(node, 'Linger', 'Fade-out after death', 0, 10, 0.1, 's'),
-            slider(node, 'Speed', 'Launch speed', 0, 15, 0.1, 'm/s'),
-            slider(node, 'Spread', 'Spread (0 = axis, 1 = omni)', 0, 1, 0.02),
-            slider(node, 'Radial', 'Radial launch (outward from origin)', 0, 1, 0.02),
-        ]));
-        host.appendChild(card('Dynamics', 'Forces acting on each particle', [
-            slider(node, 'FieldInfluence', 'Force field influence', -2, 3, 0.05, '×'),
-            slider(node, 'GasInfluence', 'Gas coupling', 0, 6, 0.1),
-            slider(node, 'Gravity', 'Gravity (negative = buoyant)', -10, 20, 0.1, 'm/s²'),
-            slider(node, 'Drag', 'Air drag', 0, 6, 0.05),
-            slider(node, 'Noise', 'Turbulence field strength', 0, 4, 0.05),
-            slider(node, 'NoiseScale', 'Turbulence scale (1/m)', 0.1, 4, 0.05),
-            slider(node, 'NoiseSpeed', 'Turbulence evolution', 0, 2, 0.02, '/s'),
-            slider(node, 'Bounce', 'Floor restitution (−0.05 = pass through)', -0.05, 0.95, 0.05),
-        ]));
-        const scalar = ['Speed', 'Displacement', 'Height'].includes(node.ColourMode);
-        const usesPalette = !scalar || node.RampSource !== 'Ramp';
-        host.appendChild(card('Colour', ParticleColourLabels[node.ColourMode], [
-            choice(node, 'ColourMode', 'Colour rule', ParticleColourModes, ParticleColourLabels),
-            scalar ? choice(node, 'RampSource', 'Gradient source', ParticleRampSources, { Palette: 'Palette gradient', Ramp: 'Analytic ramp' }) : null,
-            scalar && node.RampSource === 'Ramp' ? choice(node, 'Ramp', 'Colour ramp', ColourRamps) : null,
-            usesPalette && node.ColourMode !== 'Seed' ? paletteControl(node) : null,
-            node.ColourMode === 'Speed' ? slider(node, 'MaxSpeed', 'Gradient max speed', 0.5, 20, 0.1, 'm/s') : null,
-            node.ColourMode === 'Displacement' ? slider(node, 'DisplacementRange', 'Gradient max displacement', 0.05, 3, 0.05, 'm') : null,
-            node.ColourMode === 'Cycle' ? slider(node, 'CycleSpeed', 'Cycle speed', 0, 3, 0.05, 'Hz') : null,
-            slider(node, 'HueJitter', 'Per-particle hue randomness', 0, 1, 0.02),
-            slider(node, 'BrightnessJitter', 'Per-particle brightness randomness', 0, 1, 0.02),
-            slider(node, 'Brightness', 'Brightness', 0.1, 4, 0.05, '×'),
-        ]));
-        const world = node.SizeMode !== 'Pixels';
-        host.appendChild(card('Sprite', 'Footprint, size & depth of field', [
-            choice(node, 'Sprite', 'Sprite', ParticleSprites),
-            choice(node, 'SizeMode', 'Size units', ParticleSizeModes, { World: 'World (metres)', Pixels: 'Screen pixels' }),
-            slider(node, 'SizeStart', 'Size at birth', world ? 0.001 : 0.5, world ? 0.15 : 12, world ? 0.001 : 0.5, world ? 'm' : 'px', world ? 3 : 1),
-            slider(node, 'SizeEnd', 'Size at death', world ? 0.001 : 0.5, world ? 0.15 : 12, world ? 0.001 : 0.5, world ? 'm' : 'px', world ? 3 : 1),
-            slider(node, 'SizeRandom', 'Size randomness (dust ↔ bokeh)', 0, 1, 0.02),
-            slider(node, 'Glow', 'Glow halo', 0, 2, 0.05),
-            slider(node, 'FocusDistance', 'Focus distance (0 = no DOF)', 0, 20, 0.1, 'm'),
-            node.FocusDistance > 0 ? slider(node, 'Aperture', 'Aperture (blur amount)', 0, 2, 0.02) : null,
-            slider(node, 'Flicker', 'Flicker', 0, 1, 0.05),
-            choice(node, 'Blend', 'Blend', ParticleBlendModes),
-            choice(node, 'Style', 'Render style', ParticleRenderStyles),
-        ]));
-        const trails = node.Trail !== 'Off';
-        host.appendChild(card('Trails', 'Spline ribbons (X-Particles style)', [
-            choice(node, 'Trail', 'Trail', ParticleTrailModes, { Off: 'Off', Ribbon: 'Ribbon + head', Only: 'Ribbon only' }),
-            trails ? slider(node, 'TrailLength', 'History samples', 2, MaximumTrailLength, 1, '', 0) : null,
-            trails ? slider(node, 'TrailInterval', 'Sample interval', 0.01, 1.0, 0.01, 's') : null,
-            trails ? slider(node, 'TrailWidth', 'Width', world ? 0.001 : 0.5, world ? 0.1 : 12, world ? 0.001 : 0.5, world ? 'm' : 'px', world ? 3 : 1) : null,
-            trails ? slider(node, 'TrailTaper', 'Taper to tail', 0, 1, 0.02) : null,
-            trails ? slider(node, 'TrailFade', 'Fade to tail', 0.05, 3, 0.05) : null,
-            trails ? slider(node, 'TrailSubdivisions', 'Spline smoothness', 1, 4, 1, '', 0) : null,
-            trails ? choice(node, 'TrailColour', 'Trail colour', ParticleTrailColours, { Particle: 'Particle colour', Along: 'Palette along trail' }) : null,
-            trails ? slider(node, 'TrailRatio', 'Trailed particle fraction', 0.02, 1, 0.02) : null,
-            trails ? element('p', 'note', `Trail length in time ≈ ${formatNumber(node.TrailLength * node.TrailInterval, 1)} s. Catmull-Rom splines through the history, extruded to screen-space ribbons; the Glow slider adds a wide halo pass.`) : null,
-        ]));
+        host.appendChild(element('div', 'section-head', `<span>Layer stack</span><span>${template.Name} template</span>`));
+        renderLayerStack(host, snapshot, {
+            stack: node.Stack,
+            evaluation,
+            specifications: ParticleLayerSpecifications,
+            stopped: (reason) => `⚠️ ${node.Name} held: ${reason}. The rest of the scene keeps running.`,
+            note: 'Without Gravity, Drag or Field influence the particles ignore them; without Bounce they pass through the floor.',
+            owner: node,
+        });
         host.appendChild(timingCard(node));
         host.appendChild(nodeActions(node));
     }
 
-    function paletteControl(node)
+    /** Which particle layer parameters apply, given the layer's own amounts (Choice codes) and the evaluated node. */
+    function particleParameterShown(name, parameters, node)
     {
+        const emit = parameters.Mode === 0, scalar = [1, 2, 3].includes(parameters.ColourMode), trail = parameters.Trail !== 0;
+        switch (name)
+        {
+            case 'Fill': return parameters.Mode === 1 && parameters.Shape === 1;
+            case 'Rate': case 'Lifetime': case 'Linger': case 'Speed': case 'Spread': case 'Radial': return emit;
+            case 'RampSource': return scalar;
+            case 'Ramp': return scalar && parameters.RampSource === 1;
+            case 'Palette': return (!scalar || parameters.RampSource === 0) && parameters.ColourMode !== 4;
+            case 'MaxSpeed': return parameters.ColourMode === 1;
+            case 'DisplacementRange': return parameters.ColourMode === 2;
+            case 'CycleSpeed': return parameters.ColourMode === 6;
+            case 'Aperture': return parameters.FocusDistance > 0;
+            case 'Spring': case 'Damping': case 'Dissolve': return true;
+            default: return !(name.startsWith('Trail') && name !== 'Trail') || trail;
+        }
+    }
+
+    /** Sizes are metres in World units and pixels in Pixels units: the slider range follows. */
+    function particleParameterRange(parameter, node)
+    {
+        if (!['SizeStart', 'SizeEnd', 'TrailWidth'].includes(parameter.Name)) return parameter;
+        const world = node.SizeMode !== 'Pixels';
+        return world
+            ? { ...parameter, Minimum: 0.001, Maximum: parameter.Name === 'TrailWidth' ? 0.1 : 0.15, Step: 0.001, Unit: 'm', Digits: 3 }
+            : { ...parameter, Minimum: 0.5, Maximum: 12, Step: 0.5, Unit: 'px', Digits: 1 };
+    }
+
+    /** Palette (Ramp8) editor. `holder.Palette` is read; `write(next)` stores the new stop list. */
+    function paletteControl(holder, write)
+    {
+        const palette = holder.Palette;
         const control = element('div', 'control palette');
-        const head = element('div', 'control-head', `<span>Palette <span class="unit">${node.Palette.length} stops</span></span>`);
+        const head = element('div', 'control-head', `<span>Palette <span class="unit">${palette.length} stops</span></span>`);
         const tools = element('div', 'palette-tools');
         const add = element('button', 'mini', '+');
-        add.title = 'Add stop'; add.disabled = node.Palette.length >= MaximumPaletteStops;
-        add.addEventListener('click', () => app.updateNode(node.Id, 'Palette', [...node.Palette, node.Palette[node.Palette.length - 1]]));
+        add.title = 'Add stop'; add.disabled = palette.length >= MaximumPaletteStops;
+        add.addEventListener('click', () => write([...palette, palette[palette.length - 1]]));
         const shuffle = element('button', 'mini', icon('reset', 10));
         shuffle.title = 'Shuffle order';
-        shuffle.addEventListener('click', () => app.updateNode(node.Id, 'Palette', [...node.Palette].sort(() => Math.random() - 0.5)));
+        shuffle.addEventListener('click', () => write([...palette].sort(() => Math.random() - 0.5)));
         const reverse = element('button', 'mini', '⇄');
         reverse.title = 'Reverse';
-        reverse.addEventListener('click', () => app.updateNode(node.Id, 'Palette', [...node.Palette].reverse()));
+        reverse.addEventListener('click', () => write([...palette].reverse()));
         tools.append(add, shuffle, reverse);
         head.appendChild(tools);
         control.appendChild(head);
         const strip = element('div', 'palette-strip');
-        strip.style.background = `linear-gradient(90deg, ${node.Palette.length > 1 ? node.Palette.join(', ') : `${node.Palette[0]}, ${node.Palette[0]}`})`;
+        strip.style.background = `linear-gradient(90deg, ${palette.length > 1 ? palette.join(', ') : `${palette[0]}, ${palette[0]}`})`;
         control.appendChild(strip);
         const stops = element('div', 'palette-stops');
-        node.Palette.forEach((hex, index) =>
+        palette.forEach((hex, index) =>
         {
             const stop = element('div', 'palette-stop');
             const input = document.createElement('input');
             input.type = 'color'; input.value = hex; input.title = `Stop ${index + 1}`;
-            input.addEventListener('input', () => { const next = [...node.Palette]; next[index] = input.value; app.updateNode(node.Id, 'Palette', next); });
+            input.addEventListener('input', () => { const next = [...palette]; next[index] = input.value; write(next); });
             stop.appendChild(input);
-            if (node.Palette.length > 1)
+            if (palette.length > 1)
             {
                 const remove = element('button', 'mini', '×');
                 remove.title = 'Remove stop';
-                remove.addEventListener('click', () => app.updateNode(node.Id, 'Palette', node.Palette.filter((_, i) => i !== index)));
+                remove.addEventListener('click', () => write(palette.filter((_, i) => i !== index)));
                 stop.appendChild(remove);
             }
             stops.appendChild(stop);
@@ -884,7 +872,7 @@ export function mountStudioUI({ app, refs })
         for (const [name, swatches] of Object.entries(PalettePresets))
         {
             const button = element('button', '', `<span class="swatch-dots">${swatches.map((hex) => `<i style="background:${hex}"></i>`).join('')}</span>${name}`);
-            button.addEventListener('click', () => app.updateNode(node.Id, 'Palette', [...swatches]));
+            button.addEventListener('click', () => write([...swatches]));
             presets.appendChild(button);
         }
         control.appendChild(presets);

@@ -4,7 +4,7 @@
 [Document]
 Format = "frontier-fluid-preset"
 Revision = 1
-SpecificationHash = "6ffdeaf3bfb2fc84"
+SpecificationHash = "c0d4526879189117"
 
 [Scene]
 Order = 13
@@ -101,16 +101,145 @@ Visible = false
   Falloff = "Gaussian"
   Secondary = 0.3
 
+
 [[Particle]]
   Template = "stardust"
   Name = "Stardust"
-  Position = [0, 0, 0]
-  Radius = 3.6
+  StartTime = 0
+  Duration = 0
+  Fade = 0.15
+  Repeat = 0
+
+  [[Particle.Layer]]
+    Token = "layer-1"
+    Category = 201
+    Enabled = true
+    Solo = false
+    Weight = 1.0
+    Blend = 0
+    Parameters = { Mode = 0, Shape = 2, Position = [0, 0, 0], Direction = [0, 1, 0], Radius = 3.6, Fill = 0.0, Count = 16384, Rate = 3.0, Lifetime = 14.0, Linger = 0.6, Speed = 0.15, Spread = 1.0, Radial = 0.0 }
+
+  [[Particle.Layer]]
+    Token = "layer-2"
+    Category = 204
+    Enabled = true
+    Solo = false
+    Weight = 1.0
+    Blend = 0
+    Parameters = { Drag = 0.9 }
+
+  [[Particle.Layer]]
+    Token = "layer-3"
+    Category = 205
+    Enabled = true
+    Solo = false
+    Weight = 1.0
+    Blend = 0
+    Parameters = { Noise = 1.4, NoiseScale = 0.35, NoiseSpeed = 0.12 }
+
+  [[Particle.Layer]]
+    Token = "layer-4"
+    Category = 206
+    Enabled = true
+    Solo = false
+    Weight = 1.0
+    Blend = 0
+    Parameters = { FieldInfluence = 1.0 }
+
+  [[Particle.Layer]]
+    Token = "layer-5"
+    Category = 209
+    Enabled = true
+    Solo = false
+    Weight = 1.0
+    Blend = 0
+    Parameters = { ColourMode = 5, Palette = ["#fff1c9", "#ffd27a", "#bfe9ff", "#8ea8ff", "#ffffff"], RampSource = 0, Ramp = 0, MaxSpeed = 6.0, DisplacementRange = 1.0, CycleSpeed = 0.5, HueJitter = 0.0, BrightnessJitter = 0.6, Brightness = 1.4, Flicker = 0.5 }
+
+  [[Particle.Layer]]
+    Token = "layer-6"
+    Category = 210
+    Enabled = true
+    Solo = false
+    Weight = 1.0
+    Blend = 0
+    Parameters = { SizeMode = 0, SizeStart = 0.012, SizeEnd = 0.008, SizeRandom = 0.9 }
+
+  [[Particle.Layer]]
+    Token = "layer-7"
+    Category = 211
+    Enabled = true
+    Solo = false
+    Weight = 1.0
+    Blend = 0
+    Parameters = { Sprite = 0, Glow = 0.5, Blend = 1, Style = 0, FocusDistance = 6.0, Aperture = 0.4 }
 
 [[Particle]]
   Template = "nebula"
   Name = "Nebula Core"
-  Position = [0.6, 0.2, -0.4]
-  Radius = 0.4
-  Count = 8192
-  Rate = 1.5
+  StartTime = 0
+  Duration = 0
+  Fade = 0.15
+  Repeat = 0
+
+  [[Particle.Layer]]
+    Token = "layer-1"
+    Category = 201
+    Enabled = true
+    Solo = false
+    Weight = 1.0
+    Blend = 0
+    Parameters = { Mode = 0, Shape = 1, Position = [0.6, 0.2, -0.4], Direction = [0, 1, 0], Radius = 0.4, Fill = 0.0, Count = 8192, Rate = 1.5, Lifetime = 12.0, Linger = 0.6, Speed = 0.9, Spread = 1.0, Radial = 0.0 }
+
+  [[Particle.Layer]]
+    Token = "layer-2"
+    Category = 204
+    Enabled = true
+    Solo = false
+    Weight = 1.0
+    Blend = 0
+    Parameters = { Drag = 0.7 }
+
+  [[Particle.Layer]]
+    Token = "layer-3"
+    Category = 205
+    Enabled = true
+    Solo = false
+    Weight = 1.0
+    Blend = 0
+    Parameters = { Noise = 1.8, NoiseScale = 0.6, NoiseSpeed = 0.2 }
+
+  [[Particle.Layer]]
+    Token = "layer-4"
+    Category = 206
+    Enabled = true
+    Solo = false
+    Weight = 1.0
+    Blend = 0
+    Parameters = { FieldInfluence = 1.0 }
+
+  [[Particle.Layer]]
+    Token = "layer-5"
+    Category = 209
+    Enabled = true
+    Solo = false
+    Weight = 1.0
+    Blend = 0
+    Parameters = { ColourMode = 3, Palette = ["#7dd3fc", "#bfe9ff", "#ffd9a8", "#ff9f5a"], RampSource = 0, Ramp = 0, MaxSpeed = 6.0, DisplacementRange = 1.0, CycleSpeed = 0.5, HueJitter = 0.05, BrightnessJitter = 0.5, Brightness = 1.2, Flicker = 0.25 }
+
+  [[Particle.Layer]]
+    Token = "layer-6"
+    Category = 210
+    Enabled = true
+    Solo = false
+    Weight = 1.0
+    Blend = 0
+    Parameters = { SizeMode = 0, SizeStart = 0.008, SizeEnd = 0.005, SizeRandom = 0.8 }
+
+  [[Particle.Layer]]
+    Token = "layer-7"
+    Category = 211
+    Enabled = true
+    Solo = false
+    Weight = 1.0
+    Blend = 0
+    Parameters = { Sprite = 0, Glow = 0.5, Blend = 1, Style = 0, FocusDistance = 6.0, Aperture = 0.35 }

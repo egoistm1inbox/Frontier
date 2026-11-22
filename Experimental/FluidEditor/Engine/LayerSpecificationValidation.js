@@ -7,7 +7,9 @@
 export const ParameterTypes = Object.freeze(['Float32', 'Int32', 'UInt32', 'Bool', 'Vector3', 'ColourLinear', 'Choice', 'Ramp8', 'Token']);
 export const LayerPhases = Object.freeze(['Inject', 'Advance', 'Shade', 'Overlay']);
 export const LayerStacks = Object.freeze(['GasVolume', 'ParticleCloud']);
-export const ParameterTargets = Object.freeze(['Domain', 'Volume', 'Link']);
+export const ParameterTargets = Object.freeze(['Domain', 'Volume', 'Link', 'Particles']);
+// Which evaluated blocks each stack may write.
+export const StackTargets = Object.freeze({ GasVolume: ['Domain', 'Volume', 'Link'], ParticleCloud: ['Particles'] });
 
 const isHexColour = (value) => typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value);
 
@@ -65,6 +67,7 @@ export function validateLayerSpecifications(document)
             codes.add(parameter.Code); names.add(parameter.Name);
             if (!ParameterTypes.includes(parameter.Type)) { problems.push(`${where}: unknown Type ${parameter.Type}`); continue; }
             if (!ParameterTargets.includes(parameter.Target)) problems.push(`${where}: Target must be one of ${ParameterTargets.join(', ')}`);
+            else if (StackTargets[layer.Stack] && !StackTargets[layer.Stack].includes(parameter.Target)) problems.push(`${where}: a ${layer.Stack} layer cannot write ${parameter.Target}`);
             if (typeof parameter.Keyable !== 'boolean') problems.push(`${where}: Keyable must be true/false`);
             if (['Float32', 'Int32', 'UInt32'].includes(parameter.Type) && !(parameter.Minimum < parameter.Maximum)) problems.push(`${where}: Minimum must be below Maximum`);
             if (parameter.Type === 'Choice')

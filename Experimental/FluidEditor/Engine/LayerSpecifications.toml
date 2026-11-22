@@ -6,7 +6,7 @@
 #
 # Rules (plan §3.1): one of 9 parameter types; Choice codes are explicit and never list positions; SI units; Neutral is the amount the
 # solver sees when no enabled layer of the category exists; Target names the evaluated block (Domain = solver, Volume = volume render).
-# Category codes: 1xx gas volume, 2xx particle cloud (phase 3). Layer and parameter codes are permanent once released.
+# Category codes: 1xx gas volume (101–108), 2xx particle cloud (201–212). Layer and parameter codes are permanent once released.
 
 [Document]
 Format = "frontier-layer-specifications"
@@ -474,3 +474,859 @@ Summary = "Blackbody-style flame colour from temperature. Without this layer hot
   Unit = "×"
   Keyable = true
   Target = "Volume"
+
+#-------------------------------------------------------------------------------------------------------------------------------------------
+# Particle cloud layers (phase 3). Target Particles = the particle system node the GPU reads. Neutral = what the shaders see with no layer
+# of that category (no gravity, no drag, no force-field response, pass through the floor). Timing (start, duration, fade, repeat) stays on
+# the node until phase 4 turns it into a keyed Weight track. Sizes are metres when Size units = World, pixels when Pixels.
+#-------------------------------------------------------------------------------------------------------------------------------------------
+
+[[Layer]]
+Code = 201
+Token = "spawn"
+Name = "Spawn"
+Stack = "ParticleCloud"
+Phase = "Inject"
+Required = true
+Capacity = 1
+Summary = "Where and how particles are born: shape, count, rate, lifetime and launch. Cloner mode keeps a fixed formation instead (add Home spring)."
+
+  [[Layer.Parameter]]
+  Code = 1
+  Name = "Mode"
+  Label = "Mode"
+  Type = "Choice"
+  Default = 0
+  Neutral = 0
+  Unit = ""
+  Keyable = false
+  Target = "Particles"
+  Options = [ { Code = 0, Token = "Emit", Label = "Emit (born, age, die)" }, { Code = 1, Token = "Cloner", Label = "Cloner (fixed formation)" } ]
+
+  [[Layer.Parameter]]
+  Code = 2
+  Name = "Shape"
+  Label = "Shape"
+  Type = "Choice"
+  Default = 0
+  Neutral = 0
+  Unit = ""
+  Keyable = false
+  Target = "Particles"
+  Options = [ { Code = 0, Token = "Point", Label = "Point" }, { Code = 1, Token = "Sphere", Label = "Sphere" }, { Code = 2, Token = "Box", Label = "Box" }, { Code = 3, Token = "Disc", Label = "Disc" }, { Code = 4, Token = "Ring", Label = "Ring" }, { Code = 5, Token = "Line", Label = "Line" }, { Code = 6, Token = "Grid", Label = "Grid" } ]
+
+  [[Layer.Parameter]]
+  Code = 3
+  Name = "Position"
+  Label = "Position"
+  Type = "Vector3"
+  Default = [0.0, 0.0, 0.0]
+  Neutral = [0.0, 0.0, 0.0]
+  Step = 0.05
+  Unit = "m"
+  Keyable = true
+  Target = "Particles"
+
+  [[Layer.Parameter]]
+  Code = 4
+  Name = "Direction"
+  Label = "Axis / launch direction"
+  Type = "Vector3"
+  Default = [0.0, 1.0, 0.0]
+  Neutral = [0.0, 1.0, 0.0]
+  Step = 0.1
+  Unit = ""
+  Keyable = true
+  Target = "Particles"
+
+  [[Layer.Parameter]]
+  Code = 5
+  Name = "Radius"
+  Label = "Radius / half-size"
+  Type = "Float32"
+  Minimum = 0.05
+  Maximum = 4.0
+  Default = 0.5
+  Neutral = 0.5
+  Step = 0.05
+  Unit = "m"
+  Keyable = true
+  Target = "Particles"
+
+  [[Layer.Parameter]]
+  Code = 6
+  Name = "Fill"
+  Label = "Fill (shell to solid, cloner sphere)"
+  Type = "Float32"
+  Minimum = 0.0
+  Maximum = 1.0
+  Default = 0.0
+  Neutral = 0.0
+  Step = 0.02
+  Unit = ""
+  Keyable = true
+  Target = "Particles"
+
+  [[Layer.Parameter]]
+  Code = 7
+  Name = "Count"
+  Label = "Particle count"
+  Type = "Int32"
+  Minimum = 16
+  Maximum = 16384
+  Default = 2048
+  Neutral = 2048
+  Step = 16
+  Unit = ""
+  Keyable = false
+  Target = "Particles"
+
+  [[Layer.Parameter]]
+  Code = 8
+  Name = "Rate"
+  Label = "Spawn rate (burst at 200 or more)"
+  Type = "Float32"
+  Minimum = 0.0
+  Maximum = 500.0
+  Default = 8.0
+  Neutral = 8.0
+  Step = 0.5
+  Unit = "/s"
+  Keyable = true
+  Target = "Particles"
+
+  [[Layer.Parameter]]
+  Code = 9
+  Name = "Lifetime"
+  Label = "Lifetime"
+  Type = "Float32"
+  Minimum = 0.1
+  Maximum = 40.0
+  Default = 3.0
+  Neutral = 3.0
+  Step = 0.1
+  Unit = "s"
+  Keyable = true
+  Target = "Particles"
+
+  [[Layer.Parameter]]
+  Code = 10
+  Name = "Linger"
+  Label = "Fade-out after death"
+  Type = "Float32"
+  Minimum = 0.0
+  Maximum = 10.0
+  Default = 0.6
+  Neutral = 0.6
+  Step = 0.1
+  Unit = "s"
+  Keyable = true
+  Target = "Particles"
+
+  [[Layer.Parameter]]
+  Code = 11
+  Name = "Speed"
+  Label = "Launch speed"
+  Type = "Float32"
+  Minimum = 0.0
+  Maximum = 15.0
+  Default = 2.0
+  Neutral = 2.0
+  Step = 0.1
+  Unit = "m/s"
+  Keyable = true
+  Target = "Particles"
+
+  [[Layer.Parameter]]
+  Code = 12
+  Name = "Spread"
+  Label = "Spread (0 = axis, 1 = omni)"
+  Type = "Float32"
+  Minimum = 0.0
+  Maximum = 1.0
+  Default = 0.5
+  Neutral = 0.5
+  Step = 0.02
+  Unit = ""
+  Keyable = true
+  Target = "Particles"
+
+  [[Layer.Parameter]]
+  Code = 13
+  Name = "Radial"
+  Label = "Radial launch (outward from origin)"
+  Type = "Float32"
+  Minimum = 0.0
+  Maximum = 1.0
+  Default = 0.0
+  Neutral = 0.0
+  Step = 0.02
+  Unit = ""
+  Keyable = true
+  Target = "Particles"
+
+[[Layer]]
+Code = 202
+Token = "home-spring"
+Name = "Home spring"
+Stack = "ParticleCloud"
+Phase = "Advance"
+Required = false
+Capacity = 1
+Summary = "Cloner mode: a spring pulls each particle back to its home in the formation. Without this layer a cloner uses the standard spring (6, damping 3, no dissolve); Emit mode never reads it."
+
+  [[Layer.Parameter]]
+  Code = 1
+  Name = "Spring"
+  Label = "Spring stiffness"
+  Type = "Float32"
+  Minimum = 0.0
+  Maximum = 30.0
+  Default = 6.0
+  Neutral = 6.0
+  Step = 0.5
+  Unit = ""
+  Keyable = true
+  Target = "Particles"
+
+  [[Layer.Parameter]]
+  Code = 2
+  Name = "Damping"
+  Label = "Damping"
+  Type = "Float32"
+  Minimum = 0.0
+  Maximum = 10.0
+  Default = 3.0
+  Neutral = 3.0
+  Step = 0.1
+  Unit = ""
+  Keyable = true
+  Target = "Particles"
+
+  [[Layer.Parameter]]
+  Code = 3
+  Name = "Dissolve"
+  Label = "Dissolve (homes drift on noise)"
+  Type = "Float32"
+  Minimum = 0.0
+  Maximum = 2.0
+  Default = 0.0
+  Neutral = 0.0
+  Step = 0.02
+  Unit = "m"
+  Keyable = true
+  Target = "Particles"
+
+[[Layer]]
+Code = 203
+Token = "gravity"
+Name = "Gravity"
+Stack = "ParticleCloud"
+Phase = "Advance"
+Required = false
+Capacity = 4
+Summary = "Constant downward pull; negative values make particles buoyant."
+
+  [[Layer.Parameter]]
+  Code = 1
+  Name = "Gravity"
+  Label = "Gravity (negative = buoyant)"
+  Type = "Float32"
+  Minimum = -10.0
+  Maximum = 20.0
+  Default = 9.8
+  Neutral = 0.0
+  Step = 0.1
+  Unit = "m/s²"
+  Keyable = true
+  Target = "Particles"
+
+[[Layer]]
+Code = 204
+Token = "drag"
+Name = "Drag"
+Stack = "ParticleCloud"
+Phase = "Advance"
+Required = false
+Capacity = 4
+Summary = "Air drag slows particles towards the surrounding motion."
+
+  [[Layer.Parameter]]
+  Code = 1
+  Name = "Drag"
+  Label = "Air drag"
+  Type = "Float32"
+  Minimum = 0.0
+  Maximum = 6.0
+  Default = 0.5
+  Neutral = 0.0
+  Step = 0.05
+  Unit = ""
+  Keyable = true
+  Target = "Particles"
+
+[[Layer]]
+Code = 205
+Token = "noise"
+Name = "Noise"
+Stack = "ParticleCloud"
+Phase = "Advance"
+Required = false
+Capacity = 4
+Summary = "Curl-noise wander. Scale and evolution also drive the Home spring dissolve."
+
+  [[Layer.Parameter]]
+  Code = 1
+  Name = "Noise"
+  Label = "Turbulence strength"
+  Type = "Float32"
+  Minimum = 0.0
+  Maximum = 4.0
+  Default = 0.5
+  Neutral = 0.0
+  Step = 0.05
+  Unit = ""
+  Keyable = true
+  Target = "Particles"
+
+  [[Layer.Parameter]]
+  Code = 2
+  Name = "NoiseScale"
+  Label = "Turbulence scale"
+  Type = "Float32"
+  Minimum = 0.1
+  Maximum = 4.0
+  Default = 1.3
+  Neutral = 1.3
+  Step = 0.05
+  Unit = "1/m"
+  Keyable = true
+  Target = "Particles"
+
+  [[Layer.Parameter]]
+  Code = 3
+  Name = "NoiseSpeed"
+  Label = "Turbulence evolution"
+  Type = "Float32"
+  Minimum = 0.0
+  Maximum = 2.0
+  Default = 0.5
+  Neutral = 0.5
+  Step = 0.02
+  Unit = "/s"
+  Keyable = true
+  Target = "Particles"
+
+[[Layer]]
+Code = 206
+Token = "field-influence"
+Name = "Field influence"
+Stack = "ParticleCloud"
+Phase = "Advance"
+Required = false
+Capacity = 4
+Summary = "How strongly the scene force fields push these particles. Without this layer the force fields are ignored."
+
+  [[Layer.Parameter]]
+  Code = 1
+  Name = "FieldInfluence"
+  Label = "Force field influence"
+  Type = "Float32"
+  Minimum = -2.0
+  Maximum = 3.0
+  Default = 1.0
+  Neutral = 0.0
+  Step = 0.05
+  Unit = "×"
+  Keyable = true
+  Target = "Particles"
+
+[[Layer]]
+Code = 207
+Token = "gas-coupling"
+Name = "Gas coupling"
+Stack = "ParticleCloud"
+Phase = "Advance"
+Required = false
+Capacity = 4
+Summary = "Particles are carried by the gas velocity field."
+
+  [[Layer.Parameter]]
+  Code = 1
+  Name = "GasInfluence"
+  Label = "Gas coupling"
+  Type = "Float32"
+  Minimum = 0.0
+  Maximum = 6.0
+  Default = 1.0
+  Neutral = 0.0
+  Step = 0.1
+  Unit = ""
+  Keyable = true
+  Target = "Particles"
+
+[[Layer]]
+Code = 208
+Token = "bounce"
+Name = "Bounce"
+Stack = "ParticleCloud"
+Phase = "Advance"
+Required = false
+Capacity = 1
+Summary = "Floor collision. Without this layer particles pass through the floor."
+
+  [[Layer.Parameter]]
+  Code = 1
+  Name = "Bounce"
+  Label = "Floor restitution (-0.05 = pass through)"
+  Type = "Float32"
+  Minimum = -0.05
+  Maximum = 0.95
+  Default = 0.2
+  Neutral = -0.05
+  Step = 0.05
+  Unit = ""
+  Keyable = true
+  Target = "Particles"
+
+[[Layer]]
+Code = 209
+Token = "colour-rule"
+Name = "Colour rule"
+Stack = "ParticleCloud"
+Phase = "Shade"
+Required = false
+Capacity = 2
+Summary = "Particle colour from a palette or ramp by life, speed, distance from home, height, seed, swatch or time."
+
+  [[Layer.Parameter]]
+  Code = 1
+  Name = "ColourMode"
+  Label = "Colour rule"
+  Type = "Choice"
+  Default = 0
+  Neutral = 0
+  Unit = ""
+  Keyable = false
+  Target = "Particles"
+  Options = [ { Code = 0, Token = "Life", Label = "Gradient over life" }, { Code = 1, Token = "Speed", Label = "Speed" }, { Code = 2, Token = "Displacement", Label = "Distance from home" }, { Code = 3, Token = "Height", Label = "Height" }, { Code = 4, Token = "Seed", Label = "Random hue" }, { Code = 5, Token = "Swatch", Label = "Random palette swatch" }, { Code = 6, Token = "Cycle", Label = "Palette cycling in time" } ]
+
+  [[Layer.Parameter]]
+  Code = 2
+  Name = "Palette"
+  Label = "Palette"
+  Type = "Ramp8"
+  Default = ["#ffffff", "#808080"]
+  Neutral = ["#ffffff", "#808080"]
+  Unit = ""
+  Keyable = true
+  Target = "Particles"
+
+  [[Layer.Parameter]]
+  Code = 3
+  Name = "RampSource"
+  Label = "Gradient source"
+  Type = "Choice"
+  Default = 0
+  Neutral = 0
+  Unit = ""
+  Keyable = false
+  Target = "Particles"
+  Options = [ { Code = 0, Token = "Palette", Label = "Palette gradient" }, { Code = 1, Token = "Ramp", Label = "Analytic ramp" } ]
+
+  [[Layer.Parameter]]
+  Code = 4
+  Name = "Ramp"
+  Label = "Colour ramp"
+  Type = "Choice"
+  Default = 0
+  Neutral = 0
+  Unit = ""
+  Keyable = false
+  Target = "Particles"
+  Options = [ { Code = 0, Token = "Turbo", Label = "Turbo" }, { Code = 1, Token = "Engineering", Label = "Engineering" }, { Code = 2, Token = "Plasma", Label = "Plasma" }, { Code = 3, Token = "Diverging", Label = "Diverging" } ]
+
+  [[Layer.Parameter]]
+  Code = 5
+  Name = "MaxSpeed"
+  Label = "Gradient max speed"
+  Type = "Float32"
+  Minimum = 0.5
+  Maximum = 20.0
+  Default = 6.0
+  Neutral = 6.0
+  Step = 0.1
+  Unit = "m/s"
+  Keyable = true
+  Target = "Particles"
+
+  [[Layer.Parameter]]
+  Code = 6
+  Name = "DisplacementRange"
+  Label = "Gradient max displacement"
+  Type = "Float32"
+  Minimum = 0.05
+  Maximum = 3.0
+  Default = 1.0
+  Neutral = 1.0
+  Step = 0.05
+  Unit = "m"
+  Keyable = true
+  Target = "Particles"
+
+  [[Layer.Parameter]]
+  Code = 7
+  Name = "CycleSpeed"
+  Label = "Cycle speed"
+  Type = "Float32"
+  Minimum = 0.0
+  Maximum = 3.0
+  Default = 0.5
+  Neutral = 0.5
+  Step = 0.05
+  Unit = "Hz"
+  Keyable = true
+  Target = "Particles"
+
+  [[Layer.Parameter]]
+  Code = 8
+  Name = "HueJitter"
+  Label = "Per-particle hue randomness"
+  Type = "Float32"
+  Minimum = 0.0
+  Maximum = 1.0
+  Default = 0.0
+  Neutral = 0.0
+  Step = 0.02
+  Unit = ""
+  Keyable = true
+  Target = "Particles"
+
+  [[Layer.Parameter]]
+  Code = 9
+  Name = "BrightnessJitter"
+  Label = "Per-particle brightness randomness"
+  Type = "Float32"
+  Minimum = 0.0
+  Maximum = 1.0
+  Default = 0.0
+  Neutral = 0.0
+  Step = 0.02
+  Unit = ""
+  Keyable = true
+  Target = "Particles"
+
+  [[Layer.Parameter]]
+  Code = 10
+  Name = "Brightness"
+  Label = "Brightness"
+  Type = "Float32"
+  Minimum = 0.1
+  Maximum = 4.0
+  Default = 1.0
+  Neutral = 1.0
+  Step = 0.05
+  Unit = "×"
+  Keyable = true
+  Target = "Particles"
+
+  [[Layer.Parameter]]
+  Code = 11
+  Name = "Flicker"
+  Label = "Flicker"
+  Type = "Float32"
+  Minimum = 0.0
+  Maximum = 1.0
+  Default = 0.0
+  Neutral = 0.0
+  Step = 0.05
+  Unit = ""
+  Keyable = true
+  Target = "Particles"
+
+[[Layer]]
+Code = 210
+Token = "size-over-life"
+Name = "Size over life"
+Stack = "ParticleCloud"
+Phase = "Shade"
+Required = false
+Capacity = 2
+Summary = "Sprite size at birth and death, with per-particle randomness."
+
+  [[Layer.Parameter]]
+  Code = 1
+  Name = "SizeMode"
+  Label = "Size units"
+  Type = "Choice"
+  Default = 1
+  Neutral = 1
+  Unit = ""
+  Keyable = false
+  Target = "Particles"
+  Options = [ { Code = 0, Token = "World", Label = "World (metres)" }, { Code = 1, Token = "Pixels", Label = "Screen pixels" } ]
+
+  [[Layer.Parameter]]
+  Code = 2
+  Name = "SizeStart"
+  Label = "Size at birth"
+  Type = "Float32"
+  Minimum = 0.001
+  Maximum = 12.0
+  Default = 3.0
+  Neutral = 3.0
+  Step = 0.001
+  Digits = 3
+  Unit = ""
+  Keyable = true
+  Target = "Particles"
+
+  [[Layer.Parameter]]
+  Code = 3
+  Name = "SizeEnd"
+  Label = "Size at death"
+  Type = "Float32"
+  Minimum = 0.001
+  Maximum = 12.0
+  Default = 1.0
+  Neutral = 1.0
+  Step = 0.001
+  Digits = 3
+  Unit = ""
+  Keyable = true
+  Target = "Particles"
+
+  [[Layer.Parameter]]
+  Code = 4
+  Name = "SizeRandom"
+  Label = "Size randomness (dust to bokeh)"
+  Type = "Float32"
+  Minimum = 0.0
+  Maximum = 1.0
+  Default = 0.3
+  Neutral = 0.3
+  Step = 0.02
+  Unit = ""
+  Keyable = true
+  Target = "Particles"
+
+[[Layer]]
+Code = 211
+Token = "sprite"
+Name = "Sprite"
+Stack = "ParticleCloud"
+Phase = "Shade"
+Required = false
+Capacity = 1
+Summary = "Sprite footprint, glow halo, blending, streaks and depth of field."
+
+  [[Layer.Parameter]]
+  Code = 1
+  Name = "Sprite"
+  Label = "Sprite"
+  Type = "Choice"
+  Default = 1
+  Neutral = 1
+  Unit = ""
+  Keyable = false
+  Target = "Particles"
+  Options = [ { Code = 0, Token = "Glow", Label = "Glow" }, { Code = 1, Token = "Disc", Label = "Disc" }, { Code = 2, Token = "Bokeh", Label = "Bokeh" }, { Code = 3, Token = "Star", Label = "Star" }, { Code = 4, Token = "Square", Label = "Square" } ]
+
+  [[Layer.Parameter]]
+  Code = 2
+  Name = "Glow"
+  Label = "Glow halo"
+  Type = "Float32"
+  Minimum = 0.0
+  Maximum = 2.0
+  Default = 0.0
+  Neutral = 0.0
+  Step = 0.05
+  Unit = ""
+  Keyable = true
+  Target = "Particles"
+
+  [[Layer.Parameter]]
+  Code = 3
+  Name = "Blend"
+  Label = "Blend"
+  Type = "Choice"
+  Default = 0
+  Neutral = 0
+  Unit = ""
+  Keyable = false
+  Target = "Particles"
+  Options = [ { Code = 0, Token = "Alpha", Label = "Alpha" }, { Code = 1, Token = "Additive", Label = "Additive" } ]
+
+  [[Layer.Parameter]]
+  Code = 4
+  Name = "Style"
+  Label = "Render style"
+  Type = "Choice"
+  Default = 0
+  Neutral = 0
+  Unit = ""
+  Keyable = false
+  Target = "Particles"
+  Options = [ { Code = 0, Token = "Point", Label = "Point" }, { Code = 1, Token = "Streak", Label = "Streak" } ]
+
+  [[Layer.Parameter]]
+  Code = 5
+  Name = "FocusDistance"
+  Label = "Focus distance (0 = no depth of field)"
+  Type = "Float32"
+  Minimum = 0.0
+  Maximum = 20.0
+  Default = 0.0
+  Neutral = 0.0
+  Step = 0.1
+  Unit = "m"
+  Keyable = true
+  Target = "Particles"
+
+  [[Layer.Parameter]]
+  Code = 6
+  Name = "Aperture"
+  Label = "Aperture (blur amount)"
+  Type = "Float32"
+  Minimum = 0.0
+  Maximum = 2.0
+  Default = 0.5
+  Neutral = 0.5
+  Step = 0.02
+  Unit = ""
+  Keyable = true
+  Target = "Particles"
+
+[[Layer]]
+Code = 212
+Token = "trail"
+Name = "Trail"
+Stack = "ParticleCloud"
+Phase = "Shade"
+Required = false
+Capacity = 1
+Summary = "Spline ribbons behind each particle."
+
+  [[Layer.Parameter]]
+  Code = 1
+  Name = "Trail"
+  Label = "Trail"
+  Type = "Choice"
+  Default = 1
+  Neutral = 0
+  Unit = ""
+  Keyable = false
+  Target = "Particles"
+  Options = [ { Code = 0, Token = "Off", Label = "Off" }, { Code = 1, Token = "Ribbon", Label = "Ribbon + head" }, { Code = 2, Token = "Only", Label = "Ribbon only" } ]
+
+  [[Layer.Parameter]]
+  Code = 2
+  Name = "TrailLength"
+  Label = "History samples"
+  Type = "Int32"
+  Minimum = 2
+  Maximum = 96
+  Default = 24
+  Neutral = 24
+  Step = 1
+  Unit = ""
+  Keyable = false
+  Target = "Particles"
+
+  [[Layer.Parameter]]
+  Code = 3
+  Name = "TrailInterval"
+  Label = "Sample interval"
+  Type = "Float32"
+  Minimum = 0.01
+  Maximum = 1.0
+  Default = 0.08
+  Neutral = 0.08
+  Step = 0.01
+  Unit = "s"
+  Keyable = true
+  Target = "Particles"
+
+  [[Layer.Parameter]]
+  Code = 4
+  Name = "TrailWidth"
+  Label = "Width"
+  Type = "Float32"
+  Minimum = 0.001
+  Maximum = 12.0
+  Default = 0.01
+  Neutral = 0.01
+  Step = 0.001
+  Digits = 3
+  Unit = ""
+  Keyable = true
+  Target = "Particles"
+
+  [[Layer.Parameter]]
+  Code = 5
+  Name = "TrailTaper"
+  Label = "Taper to tail"
+  Type = "Float32"
+  Minimum = 0.0
+  Maximum = 1.0
+  Default = 0.6
+  Neutral = 0.6
+  Step = 0.02
+  Unit = ""
+  Keyable = true
+  Target = "Particles"
+
+  [[Layer.Parameter]]
+  Code = 6
+  Name = "TrailFade"
+  Label = "Fade to tail"
+  Type = "Float32"
+  Minimum = 0.05
+  Maximum = 3.0
+  Default = 0.7
+  Neutral = 0.7
+  Step = 0.05
+  Unit = ""
+  Keyable = true
+  Target = "Particles"
+
+  [[Layer.Parameter]]
+  Code = 7
+  Name = "TrailSubdivisions"
+  Label = "Spline smoothness"
+  Type = "Int32"
+  Minimum = 1
+  Maximum = 4
+  Default = 2
+  Neutral = 2
+  Step = 1
+  Unit = ""
+  Keyable = false
+  Target = "Particles"
+
+  [[Layer.Parameter]]
+  Code = 8
+  Name = "TrailColour"
+  Label = "Trail colour"
+  Type = "Choice"
+  Default = 0
+  Neutral = 0
+  Unit = ""
+  Keyable = false
+  Target = "Particles"
+  Options = [ { Code = 0, Token = "Particle", Label = "Particle colour" }, { Code = 1, Token = "Along", Label = "Palette along trail" } ]
+
+  [[Layer.Parameter]]
+  Code = 9
+  Name = "TrailRatio"
+  Label = "Trailed particle fraction"
+  Type = "Float32"
+  Minimum = 0.02
+  Maximum = 1.0
+  Default = 1.0
+  Neutral = 1.0
+  Step = 0.02
+  Unit = ""
+  Keyable = true
+  Target = "Particles"

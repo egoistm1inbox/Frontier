@@ -1,0 +1,111 @@
+{
+ "Format": "frontier-particle-template-conversion",
+ "Date": "2026-11-16",
+ "Method": "Each of the 26 legacy template objects in ParticleCatalog.js was built with createParticleSystem(id) before the change; its node (without Id) was hashed with specificationHash (FNV-1a 64 over canonical JSON). After the change, ParticleTemplates/<id>.toml must build a node with the same hash (FluidValidation.mjs §8). The GPU capture (ParticleMetrics) runs each template alone in Smoke Plume at 20 cells for 1 s and 2.5 s: live particles, mean position, mean speed, pixels the particles change and their mean colour.",
+ "Templates": {
+  "field-streamlines": {
+   "File": "ParticleTemplates/field-streamlines.toml",
+   "Legacy": "7187caaeeea32594"
+  },
+  "meteor-shower": {
+   "File": "ParticleTemplates/meteor-shower.toml",
+   "Legacy": "5a18cc1cdee1f3d7"
+  },
+  "light-strands": {
+   "File": "ParticleTemplates/light-strands.toml",
+   "Legacy": "35c7add29de7a772"
+  },
+  "silk-ribbons": {
+   "File": "ParticleTemplates/silk-ribbons.toml",
+   "Legacy": "331e9099f0f826cc"
+  },
+  "neon-filaments": {
+   "File": "ParticleTemplates/neon-filaments.toml",
+   "Legacy": "45b5673e5f193529"
+  },
+  "stardust": {
+   "File": "ParticleTemplates/stardust.toml",
+   "Legacy": "8e2abda2819fb860"
+  },
+  "nebula": {
+   "File": "ParticleTemplates/nebula.toml",
+   "Legacy": "6b78e1e881b4440f"
+  },
+  "dissolving-sphere": {
+   "File": "ParticleTemplates/dissolving-sphere.toml",
+   "Legacy": "158cac4cf1298cff"
+  },
+  "bioluminescent": {
+   "File": "ParticleTemplates/bioluminescent.toml",
+   "Legacy": "d411bc692d3f3f21"
+  },
+  "fireworks": {
+   "File": "ParticleTemplates/fireworks.toml",
+   "Legacy": "7bca35aa8bb0b622"
+  },
+  "pulse-ring": {
+   "File": "ParticleTemplates/pulse-ring.toml",
+   "Legacy": "6f69ffb5b9fa4405"
+  },
+  "electric-sparks": {
+   "File": "ParticleTemplates/electric-sparks.toml",
+   "Legacy": "ed752947d6072c04"
+  },
+  "sparks": {
+   "File": "ParticleTemplates/sparks.toml",
+   "Legacy": "b38f55657072946b"
+  },
+  "confetti": {
+   "File": "ParticleTemplates/confetti.toml",
+   "Legacy": "c98bf07655f47654"
+  },
+  "fireflies": {
+   "File": "ParticleTemplates/fireflies.toml",
+   "Legacy": "d95abed656f2ecb8"
+  },
+  "fountain": {
+   "File": "ParticleTemplates/fountain.toml",
+   "Legacy": "ae3c7fac304ac63b"
+  },
+  "galaxy-disc": {
+   "File": "ParticleTemplates/galaxy-disc.toml",
+   "Legacy": "56b290987d144b42"
+  },
+  "grid-cloner": {
+   "File": "ParticleTemplates/grid-cloner.toml",
+   "Legacy": "9a0b66fc57882e1f"
+  },
+  "ring-cloner": {
+   "File": "ParticleTemplates/ring-cloner.toml",
+   "Legacy": "d3414577267105ab"
+  },
+  "sphere-swarm": {
+   "File": "ParticleTemplates/sphere-swarm.toml",
+   "Legacy": "251184a03c642cd9"
+  },
+  "line-cloner": {
+   "File": "ParticleTemplates/line-cloner.toml",
+   "Legacy": "350bab56f2196735"
+  },
+  "bubbles": {
+   "File": "ParticleTemplates/bubbles.toml",
+   "Legacy": "bd1386713e7a1b47"
+  },
+  "mist-spray": {
+   "File": "ParticleTemplates/mist-spray.toml",
+   "Legacy": "0cad40ab923b5ac7"
+  },
+  "snowfall": {
+   "File": "ParticleTemplates/snowfall.toml",
+   "Legacy": "ebe2f1b3a40e3d5b"
+  },
+  "ground-dust": {
+   "File": "ParticleTemplates/ground-dust.toml",
+   "Legacy": "a59b59b4ea4748d5"
+  },
+  "rain": {
+   "File": "ParticleTemplates/rain.toml",
+   "Legacy": "1f49d207d039d75c"
+  }
+ }
+}

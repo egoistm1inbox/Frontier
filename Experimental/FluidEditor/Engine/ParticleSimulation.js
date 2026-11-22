@@ -10,7 +10,7 @@
 
 import * as ParticleShaders from './ParticleShaders.js';
 import { FullscreenVertex, sparse } from './FluidShaders.js';
-import { ParticleShapes, ParticleModes, ParticleColourModes, ParticleBlendModes, ParticleRenderStyles, ParticleRampSources, ParticleSprites, ParticleSizeModes, ParticleTrailModes, ParticleTrailColours, MaximumPaletteStops, particleTextureSide, effectiveTrailLength } from './ParticleCatalog.js';
+import { ParticleShapes, ParticleModes, ParticleColourModes, ParticleBlendModes, ParticleRenderStyles, ParticleRampSources, ParticleSprites, ParticleSizeModes, ParticleTrailModes, ParticleTrailColours, MaximumPaletteStops, particleTextureSide, effectiveTrailLength, HaltedParticleSystems } from './ParticleCatalog.js';
 import { ColourRamps, timingEnvelope } from './ForceGeneratorCatalog.js';
 
 function hexToRgb(hex)
@@ -182,7 +182,8 @@ export class ParticleSimulation
         this.statistics.particles = 0;
         for (const node of scene.Particles)
         {
-            if (!node.Enabled) continue;
+            // A stack that cannot evaluate (no Spawn layer, over capacity) holds this system; the rest of the scene keeps running.
+            if (!node.Enabled || HaltedParticleSystems.has(node)) continue;
             const record = this.record(node);
             if (deltaTime <= 0 && !record.needsReset) continue;
             this.statistics.systems += 1;
@@ -325,7 +326,7 @@ export class ParticleSimulation
         gl.enable(gl.BLEND);
         for (const node of scene.Particles)
         {
-            if (!node.Visible || !node.Enabled) continue;
+            if (!node.Visible || !node.Enabled || HaltedParticleSystems.has(node)) continue;
             const record = this.records.get(node.Id);
             if (!record) continue;
             const additive = ParticleBlendModes.indexOf(node.Blend) === 1;

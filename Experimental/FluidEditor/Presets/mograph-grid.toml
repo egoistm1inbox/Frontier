@@ -4,7 +4,7 @@
 [Document]
 Format = "frontier-fluid-preset"
 Revision = 1
-SpecificationHash = "6ffdeaf3bfb2fc84"
+SpecificationHash = "c0d4526879189117"
 
 [Scene]
 Order = 12
@@ -107,21 +107,127 @@ Visible = false
   Frequency = 0.9
   Secondary = 0.5
 
+
 [[Particle]]
   Template = "grid-cloner"
   Name = "Grid Cloner"
-  Position = [0, 0, 0]
-  Radius = 1.7
-  Count = 4096
-  Spring = 5
-  Damping = 2.5
-  SizeStart = 5
-  SizeEnd = 5
+  StartTime = 0
+  Duration = 0
+  Fade = 0.15
+  Repeat = 0
+
+  [[Particle.Layer]]
+    Token = "layer-1"
+    Category = 201
+    Enabled = true
+    Solo = false
+    Weight = 1.0
+    Blend = 0
+    Parameters = { Mode = 1, Shape = 6, Position = [0, 0, 0], Direction = [0, 1, 0], Radius = 1.7, Fill = 0.0, Count = 4096, Rate = 8.0, Lifetime = 3.0, Linger = 0.6, Speed = 2.0, Spread = 0.5, Radial = 0.0 }
+
+  [[Particle.Layer]]
+    Token = "layer-2"
+    Category = 202
+    Enabled = true
+    Solo = false
+    Weight = 1.0
+    Blend = 0
+    Parameters = { Spring = 5.0, Damping = 2.5, Dissolve = 0.0 }
+
+  [[Particle.Layer]]
+    Token = "layer-3"
+    Category = 206
+    Enabled = true
+    Solo = false
+    Weight = 1.0
+    Blend = 0
+    Parameters = { FieldInfluence = 1.0 }
+
+  [[Particle.Layer]]
+    Token = "layer-4"
+    Category = 208
+    Enabled = true
+    Solo = false
+    Weight = 1.0
+    Blend = 0
+    Parameters = { Bounce = 0.2 }
+
+  [[Particle.Layer]]
+    Token = "layer-5"
+    Category = 209
+    Enabled = true
+    Solo = false
+    Weight = 1.0
+    Blend = 0
+    Parameters = { ColourMode = 2, Palette = ["#8b7cf6", "#38bdf8", "#34c759", "#ffb454", "#f472b6"], RampSource = 0, Ramp = 0, MaxSpeed = 6.0, DisplacementRange = 0.8, CycleSpeed = 0.5, HueJitter = 0.0, BrightnessJitter = 0.0, Brightness = 1.0, Flicker = 0.0 }
+
+  [[Particle.Layer]]
+    Token = "layer-6"
+    Category = 210
+    Enabled = true
+    Solo = false
+    Weight = 1.0
+    Blend = 0
+    Parameters = { SizeMode = 1, SizeStart = 5.0, SizeEnd = 5.0, SizeRandom = 0.3 }
 
 [[Particle]]
   Template = "ring-cloner"
   Name = "Ring Cloner"
-  Position = [0, -2.2, 0]
-  Radius = 2.1
-  Count = 720
-  Direction = [0, 1, 0]
+  StartTime = 0
+  Duration = 0
+  Fade = 0.15
+  Repeat = 0
+
+  [[Particle.Layer]]
+    Token = "layer-1"
+    Category = 201
+    Enabled = true
+    Solo = false
+    Weight = 1.0
+    Blend = 0
+    Parameters = { Mode = 1, Shape = 4, Position = [0, -2.2, 0], Direction = [0, 1, 0], Radius = 2.1, Fill = 0.0, Count = 720, Rate = 8.0, Lifetime = 3.0, Linger = 0.6, Speed = 2.0, Spread = 0.5, Radial = 0.0 }
+
+  [[Particle.Layer]]
+    Token = "layer-2"
+    Category = 202
+    Enabled = true
+    Solo = false
+    Weight = 1.0
+    Blend = 0
+    Parameters = { Spring = 9.0, Damping = 4.0, Dissolve = 0.0 }
+
+  [[Particle.Layer]]
+    Token = "layer-3"
+    Category = 206
+    Enabled = true
+    Solo = false
+    Weight = 1.0
+    Blend = 0
+    Parameters = { FieldInfluence = 1.0 }
+
+  [[Particle.Layer]]
+    Token = "layer-4"
+    Category = 208
+    Enabled = true
+    Solo = false
+    Weight = 1.0
+    Blend = 0
+    Parameters = { Bounce = 0.2 }
+
+  [[Particle.Layer]]
+    Token = "layer-5"
+    Category = 209
+    Enabled = true
+    Solo = false
+    Weight = 1.0
+    Blend = 0
+    Parameters = { ColourMode = 2, Palette = ["#34c759", "#fef08a", "#ffb454", "#ff5f7e"], RampSource = 0, Ramp = 0, MaxSpeed = 6.0, DisplacementRange = 0.6, CycleSpeed = 0.5, HueJitter = 0.0, BrightnessJitter = 0.0, Brightness = 1.0, Flicker = 0.0 }
+
+  [[Particle.Layer]]
+    Token = "layer-6"
+    Category = 210
+    Enabled = true
+    Solo = false
+    Weight = 1.0
+    Blend = 0
+    Parameters = { SizeMode = 1, SizeStart = 6.0, SizeEnd = 6.0, SizeRandom = 0.3 }

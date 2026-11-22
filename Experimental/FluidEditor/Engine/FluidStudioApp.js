@@ -11,10 +11,10 @@ import { VolumeRenderer } from './VolumeRenderer.js';
 import { OrbitCamera, Vec3 } from './OrbitCamera.js';
 import { createDomain, createEmitter, createForceGenerator, createCollider, createVisualizerSet, ForceTypeById, resolveDomainGrid, emitterTransform, gridWindowCentre, gridTileOf } from './ForceGeneratorCatalog.js';
 import { ParticleSimulation } from './ParticleSimulation.js';
-import { createParticleSystem, ParticleTemplateById, MaximumParticleSystems } from './ParticleCatalog.js';
+import { createParticleSystem, evaluateParticleSystem, ParticleTemplateById, MaximumParticleSystems } from './ParticleCatalog.js';
 import {
     convertSceneToGasStack, evaluateGasStack, applyGasEvaluation, owningLayer, createLayer, createLinkedSource, readGasStack, coerceAmount,
-    LayerSpecificationByCode, SourceLayerCode, MaximumLayers, SpecificationHash, FloatKeys,
+    LayerSpecificationByCode, SourceLayerCode, MaximumLayers, SpecificationHash, FloatKeys, evaluateParticleStack, insertLayerInPhaseOrder,
 } from './LayerStack.js';
 import { ScenePresets, ScenePresetById, buildSceneFromDocument, sceneToDocument } from './PresetScenes.js';
 import { writeToml } from './TomlSubset.js';
@@ -469,7 +469,7 @@ export class FluidStudioApp
         else if (node.Kind === 'Emitter') { copy = createEmitter({ ...node, Name: node.Name + ' Copy' }); this.scene.Emitters.push(copy); this.linkSource(copy); }
         else if (node.Kind === 'Particles') { if (this.scene.Particles.length >= MaximumParticleSystems) return null; copy = createParticleSystem(node.Template, { ...node, Name: node.Name + ' Copy' }); this.scene.Particles.push(copy); }
         else { copy = createCollider({ ...node, Name: node.Name + ' Copy' }); this.scene.Colliders.push(copy); }
-        copy.Position = [node.Position[0] + 0.4, node.Position[1], node.Position[2]];
+        this.placeNode(copy, [node.Position[0] + 0.4, node.Position[1], node.Position[2]]);
         this.select(copy.Id);
         return copy;
     }
@@ -511,6 +511,7 @@ export class FluidStudioApp
      */
     routeToLayer(node, key, value)
     {
+        if (node.Kind === 'Particles') return this.routeToParticleLayer(node, key, value);
         const stack = this.scene && this.scene.GasStack;
         if (!stack) return false;
         if (node.Kind === 'Emitter' && key === 'Enabled')
@@ -537,6 +538,64 @@ export class FluidStudioApp
         return true;
     }
 
+    //------------------------------------------------------------------------------------------------------------------------
+    //                                                  PARTICLE LAYER STACKS
+    //------------------------------------------------------------------------------------------------------------------------
+
+    /** Folds a particle node's stack into its flat fields; rebuilds the GPU state when the formation (mode, shape, count) changed. */
+    evaluateParticles(node)
+    {
+        const before = `${node.Mode}|${node.Shape}|${node.Count}`;
+        const evaluation = evaluateParticleSystem(node);
+        if (`${node.Mode}|${node.Shape}|${node.Count}` !== before) this.particles.reset(node.Id);
+        return evaluation;
+    }
+
+    /** Evaluation of a particle node's stack for the Inspector (problems, contributing layers). Pure; nothing is applied. */
+    particleEvaluation(node) { return evaluateParticleStack(node.Stack); }
+
+    /** Flat particle edits (gizmo drag, status tiles) write into the owning layer; a missing layer is added in phase order. */
+    routeToParticleLayer(node, key, value)
+    {
+        if (!node.Stack) return false;
+        const found = owningLayer(node.Stack, 'Particles', key);
+        if (!found) return false;
+        let layer = found.Layer;
+        if (!layer)
+        {
+            // The new layer starts at the node's current (neutral) amounts, so only the edited field moves.
+            const current = Object.fromEntries(found.Owner.Layer.Parameter.map((parameter) => [parameter.Name, parameter.Type === 'Choice' ? (parameter.Options.find((option) => option.Token === node[parameter.Name]) || parameter.Options[0]).Code : node[parameter.Name]]));
+            layer = insertLayerInPhaseOrder(node.Stack, found.Owner.Layer.Code, { Parameters: current });
+            if (!layer) return false;
+        }
+        layer.Parameters[key] = coerceAmount(found.Owner.Parameter, value);
+        if (!layer.Enabled) layer.Enabled = true;
+        this.evaluateParticles(node);
+        return true;
+    }
+
+    /** Moves a node; a particle system's position lives in its Spawn layer. */
+    placeNode(node, position)
+    {
+        if (node.Kind === 'Particles' && this.routeToParticleLayer(node, 'Position', position)) return;
+        node.Position = position;
+    }
+
+    /** The stack holding a layer token, and the particle node that owns it (null for the gas stack). */
+    stackOfLayer(token)
+    {
+        if (this.scene.GasStack && this.scene.GasStack.Layers.some((layer) => layer.Token === token)) return { stack: this.scene.GasStack, node: null };
+        for (const node of this.scene.Particles || []) if (node.Stack && node.Stack.Layers.some((layer) => layer.Token === token)) return { stack: node.Stack, node };
+        return { stack: null, node: null };
+    }
+
+    /** Re-evaluates whichever stack a layer edit touched. Returns true when the gas advection scheme changed. */
+    evaluateOwner(node)
+    {
+        if (node) { this.evaluateParticles(node); return false; }
+        return this.evaluateStack();
+    }
+
     linkSource(emitter)
     {
         const stack = this.scene.GasStack;
@@ -548,48 +607,37 @@ export class FluidStudioApp
     }
 
     /** Inserts a new layer after the last layer of the same or an earlier phase; returns null at capacity. */
-    insertLayer(categoryCode)
+    insertLayer(categoryCode, stack = this.scene.GasStack)
     {
-        const stack = this.scene.GasStack;
-        const specification = LayerSpecificationByCode[categoryCode];
-        if (!specification || stack.Layers.length >= MaximumLayers) return null;
-        if (stack.Layers.filter((layer) => layer.Category === categoryCode).length >= specification.Capacity) return null;
-        const phases = ['Inject', 'Advance', 'Shade', 'Overlay'];
-        const rank = phases.indexOf(specification.Phase);
-        let at = stack.Layers.length;
-        for (let index = stack.Layers.length - 1; index >= 0; index -= 1)
-        {
-            const other = LayerSpecificationByCode[stack.Layers[index].Category];
-            if (other && phases.indexOf(other.Phase) <= rank) { at = index + 1; break; }
-            at = index;
-        }
-        const layer = createLayer(categoryCode);
-        stack.Layers.splice(at, 0, layer);
-        return layer;
+        return insertLayerInPhaseOrder(stack, categoryCode);
     }
 
     addLayer(categoryCode)
     {
         if (categoryCode === SourceLayerCode) { this.addEmitter('Sphere'); return null; }
-        const layer = this.insertLayer(categoryCode);
+        const specification = LayerSpecificationByCode[categoryCode];
+        // Particle layers go into the selected particle system's stack.
+        const node = specification && specification.Stack === 'ParticleCloud' ? this.findNode(this.selection) : null;
+        if (specification && specification.Stack === 'ParticleCloud' && (!node || node.Kind !== 'Particles')) return null;
+        const layer = this.insertLayer(categoryCode, node ? node.Stack : this.scene.GasStack);
         if (!layer) return null;
         this.selectedLayer = layer.Token;
-        this.evaluateStack();
+        this.evaluateOwner(node);
         this.notify();
         return layer;
     }
 
     removeLayer(token)
     {
-        const stack = this.scene.GasStack;
+        const { stack, node } = this.stackOfLayer(token);
+        if (!stack) return false;
         const layer = stack.Layers.find((candidate) => candidate.Token === token);
-        if (!layer) return false;
         const specification = LayerSpecificationByCode[layer.Category];
         if (specification && specification.Required) return false;
         if (specification && specification.Code === SourceLayerCode) return this.removeNode(layer.Parameters.Emitter);
         stack.Layers.splice(stack.Layers.indexOf(layer), 1);
         if (this.selectedLayer === token) this.selectedLayer = null;
-        this.evaluateStack();
+        this.evaluateOwner(node);
         this.notify();
         return true;
     }
@@ -597,22 +645,24 @@ export class FluidStudioApp
     /** Moves a layer to `index` (drag) — the required Domain layer stays first. */
     moveLayer(token, index)
     {
-        const layers = this.scene.GasStack.Layers;
+        const { stack, node } = this.stackOfLayer(token);
+        if (!stack) return;
+        const layers = stack.Layers;
         const from = layers.findIndex((candidate) => candidate.Token === token);
-        if (from < 0) return;
         const specification = LayerSpecificationByCode[layers[from].Category];
         if (specification && specification.Required) return;
         const [layer] = layers.splice(from, 1);
         const firstFree = layers.findIndex((candidate) => !(LayerSpecificationByCode[candidate.Category] || {}).Required);
         layers.splice(Math.max(firstFree < 0 ? layers.length : firstFree, Math.min(layers.length, index)), 0, layer);
-        this.evaluateStack();
+        this.evaluateOwner(node);
         this.notify();
     }
 
     selectLayer(token)
     {
         this.selectedLayer = token;
-        const layer = this.scene.GasStack.Layers.find((candidate) => candidate.Token === token);
+        const { stack } = this.stackOfLayer(token);
+        const layer = stack && stack.Layers.find((candidate) => candidate.Token === token);
         if (layer && layer.Category === SourceLayerCode && this.findNode(layer.Parameters.Emitter)) { this.select(layer.Parameters.Emitter); return; }
         this.notify();
     }
@@ -620,7 +670,8 @@ export class FluidStudioApp
     /** Edits a layer's own settings (Enabled, Solo, Weight, Blend) or, with `parameter`, one of its parameters. */
     updateLayer(token, key, value, parameter = false)
     {
-        const layer = this.scene.GasStack.Layers.find((candidate) => candidate.Token === token);
+        const { stack, node } = this.stackOfLayer(token);
+        const layer = stack && stack.Layers.find((candidate) => candidate.Token === token);
         if (!layer) return;
         const specification = LayerSpecificationByCode[layer.Category];
         if (parameter)
@@ -634,7 +685,7 @@ export class FluidStudioApp
         else if (key === 'Blend') layer.Blend = [0, 1, 2, 3].includes(value) ? value : 0;
         else return;
         if (specification && specification.Required && key === 'Enabled') layer.Enabled = true;
-        const advectionChanged = this.evaluateStack();
+        const advectionChanged = this.evaluateOwner(node);
         if (advectionChanged) this.afterNodeUpdate(this.scene.Domain, 'Advection');
         this.notify();
     }
@@ -647,7 +698,7 @@ export class FluidStudioApp
             // The fixed box floor sits at −Size.y/2; the infinite grid's ground is y = 0. Lift / lower every node so the scene
             // keeps standing on the floor when the mode flips.
             const lift = node.Size[1] * 0.5 * (node.Grid === 'Infinite' ? 1 : -1);
-            for (const list of [this.scene.Emitters, this.scene.Forces, this.scene.Colliders, this.scene.Particles || []]) for (const item of list) item.Position = [item.Position[0], item.Position[1] + lift, item.Position[2]];
+            for (const list of [this.scene.Emitters, this.scene.Forces, this.scene.Colliders, this.scene.Particles || []]) for (const item of list) this.placeNode(item, [item.Position[0], item.Position[1] + lift, item.Position[2]]);
             this.applyDomainResolution();
             this.solver.reset();
             this.particles.resetAll();
@@ -696,8 +747,9 @@ export class FluidStudioApp
     exportJson()
     {
         const { Domain, Emitters, Forces, Colliders, Particles, Visualizers, Name, GasStack } = this.scene;
-        // Version 3 adds the gas layer stack; Domain / Volume still hold the evaluated amounts so Version 2 readers keep working.
-        return JSON.stringify({ Format: 'FrontierFluidScene', Version: 3, SpecificationHash, Name, Domain, Emitters, Forces, Colliders, Particles, Visualizers, GasStack }, null, 2);
+        // Version 3 adds the gas layer stack, Version 4 a layer stack per particle system (Particles[n].Stack). Flat fields still hold the
+        // evaluated amounts so Version 2 / 3 readers keep working.
+        return JSON.stringify({ Format: 'FrontierFluidScene', Version: 4, SpecificationHash, Name, Domain, Emitters, Forces, Colliders, Particles, Visualizers, GasStack }, null, 2);
     }
 
     /** Current scene as a `frontier-fluid-preset` TOML document (Save as preset). Add it to Presets/ and run GeneratePresetLibrary.mjs. */
@@ -848,7 +900,7 @@ export class FluidStudioApp
                 const offset = Vec3.sub(current, start);
                 const half = this.solver.domainHalfExtent, centre = this.solver.domainCentre;
                 const position = Vec3.add(planePoint, event.shiftKey ? [offset[0], 0, offset[2]] : offset);
-                node.Position = position.map((value, axis) => Math.max(centre[axis] - half[axis] * 1.5, Math.min(centre[axis] + half[axis] * 1.5, Math.round(value * 100) / 100)));
+                this.placeNode(node, position.map((value, axis) => Math.max(centre[axis] - half[axis] * 1.5, Math.min(centre[axis] + half[axis] * 1.5, Math.round(value * 100) / 100))));
                 this.onStateChange(this.snapshot());
             }
             return;

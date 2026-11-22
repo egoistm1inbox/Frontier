@@ -3,7 +3,8 @@
 **Status: ✔️ approved 2026-11-16 (Option A on decisions 1–5; the fourth phase is named `Overlay`). Names in decision 6 still pending.**
 **Scope of this round: HTML/browser only.** Phases 1 and 2 are built in `Experimental/FluidEditor` (see §7); phase 6 (C++) waits.
 Scope: `Experimental/FluidEditor` (combined fluid editor) and its particle module; later C++ port. Force fields stay flat (no stack).
-Verified against: `ForceGeneratorCatalog.js`, `ParticleCatalog.js`, `PyroScenePresets.js`, `FluidStudioApp.js` at `4c8f7c0`.
+Verified against: `ForceGeneratorCatalog.js`, `ParticleCatalog.js`, `PyroScenePresets.js`, `FluidStudioApp.js` at `4c8f7c0` (the original
+survey; since phase 2 `PyroScenePresets.js` is no longer loaded and §1 "Today" describes the code before the stack).
 
 **TL;DR** — Every preset becomes data: an ordered **layer stack** per gas volume or particle cloud, each layer an instance of a
 typed **layer specification** shared by the browser and C++. Every numeric parameter can carry a **keyed track** on one timeline.
@@ -205,6 +206,34 @@ struct SourceLayerParameters
   sets, they are not code.
 - **Cannot fail silently**: a stack missing its required first layer, or over a capacity, shows a red badge on the layer and the
   volume stops simulating with the reason in the status bar. The rest of the scene keeps running.
+
+### 4.1 Particle layers as built (phase 3)
+
+The §2.1 particle list is built with two merges, so each of the 54 GPU fields of a particle node has exactly one owning layer:
+
+| Code | Layer           | Phase   | Owns                                                                  | Neutral (no layer)               |
+|------|-----------------|---------|-----------------------------------------------------------------------|----------------------------------|
+| 201  | Spawn (required)| Inject  | Mode, Shape, Position, Direction, Radius, Fill, Count, Rate, **Lifetime**, Linger, Speed, Spread, Radial | — (always present) |
+| 202  | Home spring     | Advance | Spring, Damping, Dissolve (the "Cloner formation" is Spawn Mode + Shape + Fill) | standard spring 6 / 3, no dissolve; Emit never reads it |
+| 203  | Gravity         | Advance | Gravity                                                               | 0                                |
+| 204  | Drag            | Advance | Drag                                                                  | 0                                |
+| 205  | Noise           | Advance | Noise, NoiseScale, NoiseSpeed                                         | 0 (scale 1.3, speed 0.5)          |
+| 206  | Field influence | Advance | FieldInfluence                                                        | 0 = force fields ignored          |
+| 207  | Gas coupling    | Advance | GasInfluence                                                          | 0                                |
+| 208  | Bounce          | Advance | Bounce                                                                | −0.05 = pass through the floor    |
+| 209  | Colour rule     | Shade   | ColourMode, Palette (Ramp8), RampSource, Ramp, MaxSpeed, DisplacementRange, CycleSpeed, HueJitter, BrightnessJitter, Brightness, Flicker | life gradient white → grey |
+| 210  | Size over life  | Shade   | SizeMode, SizeStart, SizeEnd, SizeRandom                              | 3 → 1 px                          |
+| 211  | Sprite          | Shade   | Sprite, Glow, Blend, Style, FocusDistance, Aperture                   | disc, alpha, no depth of field    |
+| 212  | Trail           | Shade   | Trail, TrailLength … TrailRatio (9)                                   | off                              |
+
+- **Merges:** *Lifetime* sits in Spawn (an emitter without a lifetime has no meaning); *Cloner formation* is Spawn's Mode/Shape/Fill
+  and *Home spring* holds the spring. Names stay pending with decision 6.
+- **Flat on the node:** only identity (Id, Template, Name, Enabled, Visible) and timing (StartTime, Duration, Fade, Repeat — phase 4
+  turns timing into a keyed Weight track).
+- **Templates:** `ParticleTemplates/<id>.toml` (`frontier-particle-template`): `[Template]`, optional `[Timing]`, `[[Layer]]`. A new
+  instance copies the template's layers; overrides go into their owning layers (a missing layer is inserted in phase order at the
+  node's current amounts). *Empty Cloud* is the `+ New particle cloud` starting point (Spawn + Sprite).
+- **Presets:** each `[[Particle]]` entry holds Template, Name, timing and its `[[Particle.Layer]]` list.
 
 ---
 

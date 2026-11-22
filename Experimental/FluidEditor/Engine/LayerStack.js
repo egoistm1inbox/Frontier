@@ -23,7 +23,10 @@ export const MaximumLayers = LayerSpecificationDocument.Document.MaximumLayers;
 export const LayerSpecifications = deepFreeze(JSON.parse(JSON.stringify(LayerSpecificationDocument.Layer)));
 export const LayerSpecificationByCode = Object.freeze(Object.fromEntries(LayerSpecifications.map((layer) => [layer.Code, layer])));
 export const GasLayerSpecifications = Object.freeze(LayerSpecifications.filter((layer) => layer.Stack === 'GasVolume'));
+export const ParticleLayerSpecifications = Object.freeze(LayerSpecifications.filter((layer) => layer.Stack === 'ParticleCloud'));
 export const GasVolumeCategory = 1;
+export const ParticleCloudCategory = 2;
+export const SpawnLayerCode = 201;
 export const PhaseOrder = Object.freeze(['Inject', 'Advance', 'Shade', 'Overlay']);
 export const BlendModes = Object.freeze([
     Object.freeze({ Code: 0, Token: 'Replace', Label: 'Replace' }),
@@ -35,9 +38,18 @@ export const DomainLayerCode = 101;
 export const SourceLayerCode = 102;
 
 // Every parameter that writes into an evaluated block, by block and field name → { Layer, Parameter }.
-export const ParameterOwners = Object.freeze(Object.fromEntries(['Domain', 'Volume'].map((target) => [target, Object.freeze(Object.fromEntries(
-    GasLayerSpecifications.flatMap((layer) => layer.Parameter.filter((parameter) => parameter.Target === target).map((parameter) => [parameter.Name, Object.freeze({ Layer: layer, Parameter: parameter })])),
+const ownersOf = (specifications, targets) => Object.freeze(Object.fromEntries(targets.map((target) => [target, Object.freeze(Object.fromEntries(
+    specifications.flatMap((layer) => layer.Parameter.filter((parameter) => parameter.Target === target).map((parameter) => [parameter.Name, Object.freeze({ Layer: layer, Parameter: parameter })])),
 ))])));
+export const ParameterOwners = ownersOf(GasLayerSpecifications, ['Domain', 'Volume']);
+export const ParticleParameterOwners = ownersOf(ParticleLayerSpecifications, ['Particles']);
+/** Per stack kind: its category code, layer specifications, owned blocks and default token. */
+export const StackKinds = Object.freeze({
+    GasVolume: Object.freeze({ Category: GasVolumeCategory, Specifications: GasLayerSpecifications, Owners: ParameterOwners, Token: 'gas-volume' }),
+    ParticleCloud: Object.freeze({ Category: ParticleCloudCategory, Specifications: ParticleLayerSpecifications, Owners: ParticleParameterOwners, Token: 'particle-cloud' }),
+});
+const kindOfCategory = (category) => Object.values(StackKinds).find((kind) => kind.Category === category) || StackKinds.GasVolume;
+const stackNameOf = (kind) => Object.keys(StackKinds).find((name) => StackKinds[name] === kind);
 
 let LayerSequence = 0;
 function allocateLayerToken(specification) { LayerSequence += 1; return `layer-${specification ? specification.Token : 'unknown'}-${LayerSequence}`; }
@@ -151,25 +163,34 @@ function blendAmount(parameter, current, amount, weight, blend)
         else next = weight >= 1 ? amount : current + (amount - current) * weight;
         return parameter.Type === 'Float32' ? next : Math.round(next);
     }
-    // Bool, Choice, Vector3, Token: a contributing layer (Weight > 0) replaces.
-    return amount;
+    // Vector3 Replace / Add blend per component (weight 1 Replace copies exactly).
+    if (parameter.Type === 'Vector3' && Array.isArray(current) && Array.isArray(amount))
+    {
+        if (blend === 1) return current.map((component, axis) => component + (amount[axis] - parameter.Neutral[axis]) * weight);
+        if (blend === 0 && weight < 1) return current.map((component, axis) => component + (amount[axis] - component) * weight);
+        return [...amount];
+    }
+    // Bool, Choice, Ramp8, Token: a contributing layer (Weight > 0) replaces.
+    return Array.isArray(amount) ? [...amount] : amount;
 }
 
 /**
  * Folds the stack into evaluated blocks. Returns { Domain, Volume, Links, Problems, Stopped, Contributing }. `Stopped` is a reason when the
  * volume must not simulate (missing or misplaced required layer, capacity exceeded); the rest of the scene keeps running.
  */
-export function evaluateGasStack(stack, emitters = [])
+export function evaluateLayerStack(stack, emitters = [])
 {
-    const blocks = { Domain: {}, Volume: {} };
+    const kind = kindOfCategory(stack && stack.Category);
+    const kindName = stackNameOf(kind);
+    const blocks = Object.fromEntries(Object.keys(kind.Owners).map((target) => [target, {}]));
     const neutral = {};
-    for (const [target, owners] of Object.entries(ParameterOwners))
+    for (const [target, owners] of Object.entries(kind.Owners))
         for (const [name, { Parameter }] of Object.entries(owners)) { blocks[target][name] = clone(Parameter.Neutral); neutral[name] = Parameter.Neutral; }
     const problems = [];
     let stopped = null;
     const layers = (stack && stack.Layers) || [];
     if (layers.length > MaximumLayers) { stopped = `More than ${MaximumLayers} layers`; problems.push({ Severity: 'Stop', Text: stopped }); }
-    const required = GasLayerSpecifications.filter((specification) => specification.Required);
+    const required = kind.Specifications.filter((specification) => specification.Required);
     for (const specification of required)
     {
         const index = layers.findIndex((layer) => layer.Category === specification.Code);
@@ -181,7 +202,7 @@ export function evaluateGasStack(stack, emitters = [])
     {
         const specification = LayerSpecificationByCode[layer.Category];
         if (!specification) { problems.push({ Severity: 'Info', Token: layer.Token, Text: `Unknown category ${layer.Category}: kept, not evaluated` }); continue; }
-        if (specification.Stack !== 'GasVolume') { problems.push({ Severity: 'Stop', Token: layer.Token, Text: `${specification.Name} belongs to a ${specification.Stack}` }); stopped = stopped || `${specification.Name} is not a gas layer`; continue; }
+        if (specification.Stack !== kindName) { problems.push({ Severity: 'Stop', Token: layer.Token, Text: `${specification.Name} belongs to a ${specification.Stack}` }); stopped = stopped || `${specification.Name} does not belong in this stack`; continue; }
         counts[layer.Category] = (counts[layer.Category] || 0) + 1;
         if (counts[layer.Category] > specification.Capacity) { problems.push({ Severity: 'Stop', Token: layer.Token, Text: `${specification.Name}: at most ${specification.Capacity}` }); stopped = stopped || `Too many ${specification.Name} layers`; }
     }
@@ -191,7 +212,7 @@ export function evaluateGasStack(stack, emitters = [])
     for (const layer of layers)
     {
         const specification = LayerSpecificationByCode[layer.Category];
-        if (!specification || specification.Stack !== 'GasVolume') continue;
+        if (!specification || specification.Stack !== kindName) continue;
         const live = layer.Enabled && (!soloing || layer.Solo || specification.Required) && (specification.Required || layer.Weight > 0);
         if (specification.Linked === 'Emitter')
         {
@@ -214,9 +235,18 @@ export function evaluateGasStack(stack, emitters = [])
         }
     }
     // Choice codes become the tokens the solver reads.
-    for (const [target, owners] of Object.entries(ParameterOwners))
+    for (const [target, owners] of Object.entries(kind.Owners))
         for (const [name, { Parameter }] of Object.entries(owners)) if (Parameter.Type === 'Choice') blocks[target][name] = choiceToken(Parameter, blocks[target][name]);
-    return { Domain: blocks.Domain, Volume: blocks.Volume, Links: links, Problems: problems, Stopped: stopped, Contributing: contributing };
+    return { ...blocks, Links: links, Problems: problems, Stopped: stopped, Contributing: contributing };
+}
+
+export function evaluateGasStack(stack, emitters = []) { return evaluateLayerStack(stack, emitters); }
+export function evaluateParticleStack(stack) { return evaluateLayerStack(stack, []); }
+
+/** Writes a particle evaluation into the node the GPU reads. */
+export function applyParticleEvaluation(node, evaluation)
+{
+    for (const [name, amount] of Object.entries(evaluation.Particles)) node[name] = Array.isArray(amount) ? [...amount] : amount;
 }
 
 /** Writes an evaluation into the scene blocks the solver and renderer read. */
@@ -230,7 +260,8 @@ export function applyGasEvaluation(scene, evaluation)
 /** Which layer an inspector edit of a flat field belongs to: the last live layer of the owning category (it wins), else null. */
 export function owningLayer(stack, target, name)
 {
-    const owner = ParameterOwners[target] && ParameterOwners[target][name];
+    const owners = kindOfCategory(stack.Category).Owners;
+    const owner = owners[target] && owners[target][name];
     if (!owner) return null;
     const candidates = stack.Layers.filter((layer) => layer.Category === owner.Layer.Code);
     const live = candidates.filter((layer) => layer.Enabled);
@@ -242,7 +273,8 @@ export function owningLayer(stack, target, name)
 //------------------------------------------------------------------------------------------------------------------------
 
 /** Reads one stack from a document (JSON object or parsed TOML). Unknown categories / parameters stay verbatim. */
-export function readGasStack(source)
+/** Reads a stack from a file or scene; `fresh` gives every layer a new token (duplicates, template instances). */
+export function readLayerStack(source, category = GasVolumeCategory, fresh = false)
 {
     const layers = [];
     for (const raw of (source && (source.Layers || source.Layer)) || [])
@@ -253,12 +285,84 @@ export function readGasStack(source)
             layers.push(clone(raw));
             continue;
         }
-        const layer = createLayer(raw.Category, raw);
+        const layer = createLayer(raw.Category, fresh ? { ...raw, Token: undefined } : raw);
         // Keep unknown parameter names (newer files) next to the known, coerced ones.
         for (const [name, value] of Object.entries(raw.Parameters || {})) if (!(name in layer.Parameters)) layer.Parameters[name] = clone(value);
         layers.push(layer);
     }
-    return { Token: (source && source.Token) || 'gas-volume', Category: GasVolumeCategory, Layers: layers };
+    const kind = kindOfCategory((source && source.Category) || category);
+    return { Token: (source && source.Token) || kind.Token, Category: kind.Category, Layers: layers };
+}
+
+export function readGasStack(source) { return readLayerStack(source, GasVolumeCategory); }
+export function readParticleStack(source, fresh = false) { return readLayerStack(source, ParticleCloudCategory, fresh); }
+
+/** Inserts a layer after the last layer of the same or an earlier phase; returns null at capacity or at the layer limit. */
+export function insertLayerInPhaseOrder(stack, categoryCode, overrides = {})
+{
+    const specification = LayerSpecificationByCode[categoryCode];
+    if (!specification || stack.Layers.length >= MaximumLayers) return null;
+    if (stack.Layers.filter((layer) => layer.Category === categoryCode).length >= specification.Capacity) return null;
+    const rank = PhaseOrder.indexOf(specification.Phase);
+    let at = stack.Layers.length;
+    for (let index = stack.Layers.length - 1; index >= 0; index -= 1)
+    {
+        const other = LayerSpecificationByCode[stack.Layers[index].Category];
+        if (other && PhaseOrder.indexOf(other.Phase) <= rank) { at = index + 1; break; }
+        at = index;
+    }
+    const layer = createLayer(categoryCode, overrides);
+    stack.Layers.splice(at, 0, layer);
+    return layer;
+}
+
+/**
+ * A template instance: the template's own layers (fresh tokens), with every field of `node` that differs from the template written
+ * into its owning layer. A missing layer is inserted in phase order holding the node's current amounts, so nothing else moves.
+ * Returns null when the result would not evaluate to `node` exactly (the caller then converts the node instead).
+ */
+export function instantiateParticleStack(templateStack, node)
+{
+    const stack = readParticleStack(templateStack, true);
+    const base = evaluateParticleStack(stack);
+    if (base.Stopped) return null;
+    for (const [name, { Layer: specification, Parameter }] of Object.entries(ParticleParameterOwners.Particles))
+    {
+        const wanted = blockAmount(node, Parameter);
+        if (JSON.stringify(wanted) === JSON.stringify(blockAmount(base.Particles, Parameter))) continue;
+        let { Layer: layer } = owningLayer(stack, 'Particles', name);
+        if (!layer)
+        {
+            const current = Object.fromEntries(specification.Parameter.map((parameter) => [parameter.Name, blockAmount(base.Particles, parameter)]));
+            layer = insertLayerInPhaseOrder(stack, specification.Code, { Parameters: current });
+            if (!layer) return null;
+        }
+        layer.Parameters[name] = clone(wanted);
+    }
+    const evaluation = evaluateParticleStack(stack);
+    const copy = clone(node);
+    if (evaluation.Stopped) return null;
+    applyParticleEvaluation(copy, evaluation);
+    return JSON.stringify(copy) === JSON.stringify(node) ? stack : null;
+}
+
+/**
+ * Builds the particle stack that reproduces a resolved particle node exactly: Spawn always, every other layer whenever any of its
+ * parameters differs from Neutral. Amounts are copied unrounded, so evaluate(convert(node)) equals the node field for field.
+ */
+export function convertParticleSystemToStack(node)
+{
+    const layers = [];
+    for (const specification of ParticleLayerSpecifications)
+    {
+        const amounts = Object.fromEntries(specification.Parameter.map((parameter) => [parameter.Name, blockAmount(node, parameter)]));
+        const differs = specification.Parameter.some((parameter) => JSON.stringify(amounts[parameter.Name]) !== JSON.stringify(parameter.Neutral));
+        if (!specification.Required && !differs) continue;
+        const layer = createLayer(specification.Code);
+        layer.Parameters = clone(amounts);
+        layers.push(layer);
+    }
+    return { Token: 'particle-cloud', Category: ParticleCloudCategory, Layers: layers };
 }
 
 export function writeStackDocument(stacks)

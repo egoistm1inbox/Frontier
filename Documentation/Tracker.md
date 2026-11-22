@@ -1341,7 +1341,8 @@ in `Exhibits/LightCompute/Results/FogFacetRegression.txt`; this was a fixture-se
     overshoots.
   - Fix: a Domain *Force response* limit, and MacCormack now falls back to semi-Lagrangian where it overshoots.
   - At 10 s, mean speed is down from 3.7–17.7 to 1.0–3.3 (`Exhibits/FluidEditor/StabilityResults.txt`, 28 runs).
-  - The other editor's 18 presets are translated in `Engine/PyroScenePresets.js`, shown as "Pyro scenes" (36 presets total).
+  - The other editor's 18 presets were translated in `Engine/PyroScenePresets.js`, shown as "Pyro scenes" (36 presets total). Since the
+    layer stack phase 2 they are `Presets/*.toml` documents; `PyroScenePresets.js` is kept unloaded as a 📝 reference of the original values.
   - Flipbook drawer: sprite-sheet PNG plus timing/UV JSON, with an optional transparent background.
   - FluidValidation: 496 checks pass. SwiftShader only. Names unapproved.
   Follow-up 40: Vehicle Movement charts are editable (suspension peak → damping/frequency, 18 torque points plus idle/redline,
