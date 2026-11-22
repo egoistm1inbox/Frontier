@@ -187,29 +187,50 @@ starting point for the UI redesign.
     (`Experimental/Shared/Models/ControlVehicle{Body,Tyre,Rim}.facet`, now shipped in `index.html` as `NativeAssets.Facets`): the lime
     wedge coupé, 6.22 × 2.50 × 1.77 m, wheels on `VEHICLE_SHEET`'s axle mounts. It replaces the Follow-up 60 desert racer in the
     viewport, the outliner icon and the vehicle inspector (paint "Acid lime"). The row and the components keep their ids.
-  - **Vehicle Component Viewer** (`VehicleComponentViewer.jsx` / `.css`). While the Controlled Vehicle or one of its components is
-    selected, the viewport's left rail has a **Vehicle Component Viewer** button. It shows the car alone with each native component
-    drawn where it sits and doing what its values say:
-
-    | Component | In the view |
-    |---|---|
-    | Body (Static Mesh) | the body; Cast shadow switches its shadow |
-    | Front Suspension (Spring socket) | spring at the front strut tops; its pose lifts the front wheels |
-    | Steering (Hinge socket) | hinge at the front wheel centres; its pose turns the front wheels |
-    | Tow Hitch (Dock socket) | dock behind the bumper; connects, releases, pull-tests |
-    | Chassis Collision (Box) | faint collision shell at its extents, amber when overlap-only |
-    | Headlights / Brake Lights | real lights at the lamps with beams and glows in their colour, angle, intensity and range |
-    | Vehicle Movement | centre of mass (height and front weight share), tyre load discs, wheels sized by the tyre radius |
-
-    A click on a component in the view or in the floating list selects it, so its native inspector opens to set its properties, and
-    the view follows every change. A tag over the selection gives a live readout. Simulate (Space) drives a speed cycle, so the wheels
-    roll, springs meet bumps and sweeps run. There are also X-ray, Selected only, Three-quarter / Side / Front / Top, Fit (F) and the
-    eye per component. Esc or a selection outside the vehicle leaves. User components are listed but not drawn. The socket looks and
-    motion are the Component Viewer's own (`SocketVisuals.js`, `Sockets.js`).
+  - **Vehicle Component Viewer:** a rail beside the viewport showing every native component on the car (replaced by the
+    Follow-up 62 panel).
   - Tow Hitch mount −2.6 → −3.2 m (it sat inside the longer body) and the box collision fits the body (`VehicleRevision` 3 migrates).
-  - Checks: `CheckVehicleComponentViewer` (7, new): rail, every component clicked in the view opens its inspector, inspector edits
-    reach the view, eye, Simulate, leaving.
+  - Checks: `CheckVehicleComponentViewer` (new).
   - Evidence is in `Exhibits/ProjectZeroEditor/FollowUp51/`. Names are unapproved.
+- **Follow-up 62.**
+  - **Component Viewer panel** (`VehicleComponentViewer.jsx` / `.css`). The Controlled Vehicle's inspector has **Open Component
+    Viewer** (its Drive links open it on that component). The panel is laid out like the Component Viewer
+    (`Experimental/ComponentViewer`) and has its own outliner and inspector:
+    - **Components outliner:** heading, Components and Triangles tiles, **Add** (native classes: spot and point lights, box and
+      sphere collision, the eight socket types) and search. The tree runs Origin (ROOT) → Body → the parts on it, then ACTOR
+      COMPONENTS (Vehicle Movement) and USER COMPONENTS (listed, not drawn). Eye per component, double-click or F fits, Delete
+      removes.
+    - **View:** the ControlVehicle with every native component drawn where it sits and doing what its values say. Views
+      (Three-quarter / Side / Front / Top), X-ray, Selected only, Fit, Simulate (Space), a live tag over the selection:
+
+      | Component | In the view |
+      |---|---|
+      | Body (Static Mesh) | the body; Cast shadow switches its shadow |
+      | Front Suspension (Spring socket) | spring at the front strut tops; its pose lifts the front wheels |
+      | Steering (Hinge socket) | hinge at the front wheel centres; its pose turns the front wheels |
+      | Tow Hitch (Dock socket) | dock behind the bumper; connects, releases, pull-tests |
+      | Chassis Collision (Box) | faint collision volume at its extents, amber when overlap-only |
+      | Headlights / Brake Lights | real lights at the lamps with beams and glows in their colour, angle, intensity and range |
+      | Vehicle Movement | centre of mass (height and front weight share), tyre load discs, wheels sized by the tyre radius |
+
+    - **Details:** the native inspector of the component chosen in the panel (view or outliner), editing it; the view follows every
+      change.
+
+    Components are inspected only there. Choosing one anywhere else (outliner, search, a link, `?inspect=`) selects the Controlled
+    Vehicle and opens the panel on it; the editor's inspector stays on the vehicle. Esc or × closes the panel.
+  - **Component icons** (`Images/VehicleComponentIcons/vehicle-component-*.svg`, 15): Origin, Vehicle Movement, Body, the eight
+    socket types, box and sphere collision, spot and point lights. `ComponentIcon(Row, Values)` picks one by class (a socket by its
+    current type) for the panel, the editor outliner and the Drive links.
+  - Checks: `CheckVehicleComponentViewer` (9, rewritten) covers:
+    - the inspector opening the panel, its outliner and icons;
+    - every component clicked in the view opening its inspector in the panel;
+    - Details edits reaching the view;
+    - the eye, Add / Delete, Simulate and Esc;
+    - a component chosen elsewhere opening the panel.
+
+    `CheckVehicleSockets`, `CheckEditorAssets`, `CheckEntityContext`, `CheckObjectComponents` and `CheckInspectorOrder` look for
+    component inspectors in the panel.
+  - Evidence is in `Exhibits/ProjectZeroEditor/FollowUp52/`. Names are unapproved.
 
 ---
 

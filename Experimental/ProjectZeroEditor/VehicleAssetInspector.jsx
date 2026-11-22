@@ -12,6 +12,7 @@ import React, { useMemo } from "react";
 import { InspectorTabs } from "./InspectorTabs.jsx";
 import { ModelIcon } from "./EditorAssets.js";
 import { VehicleAsset, VehicleModelOf, VehiclePaints, VehicleFacts } from "./VehicleAssets.js";
+import { ComponentIcon } from "./VehicleComponents.jsx";
 import "./VehicleAssetInspector.css";
 
 export const VehicleAssetPanel = "vehicle-asset";
@@ -80,6 +81,20 @@ export function VehicleAssetInspector({ Subject, Values, Change, Kit, Scene = nu
                 ))}
                 <span>{VehiclePaints.find(([, Colour]) => Colour === Paint)?.[0] || "Custom"}</span>
               </div>
+              {Parts.length > 0 && Scene?.OpenComponentViewer && (
+                <button type="button" className="va-viewer" data-open-component-viewer onClick={() => Scene.OpenComponentViewer()}>
+                  <span className="va-viewer-icons" aria-hidden="true">
+                    {Parts.slice(0, 4).map((Row) => (
+                      <Icon key={Row.Id} Name={ComponentIcon(Row, Scene.Values?.[Row.Id] || {})} Size={18} />
+                    ))}
+                  </span>
+                  <span className="va-viewer-text">
+                    <b>Open Component Viewer</b>
+                    <small>{Parts.length} components · outliner, view and inspector</small>
+                  </span>
+                  <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                </button>
+              )}
             </Card>
           ),
         },
@@ -128,8 +143,8 @@ export function VehicleAssetInspector({ Subject, Values, Change, Kit, Scene = nu
               {Parts.length > 0 && (
                 <div className="va-parts" aria-label="Components">
                   {Parts.map((Row) => (
-                    <button key={Row.Id} type="button" className="va-part" data-vehicle-part={Row.Id} onClick={() => Scene?.SelectRow?.(Row.Id)}>
-                      <Icon Name={Row.Icon} Size={18} />
+                    <button key={Row.Id} type="button" className="va-part" data-vehicle-part={Row.Id} onClick={() => (Scene?.OpenComponentViewer ? Scene.OpenComponentViewer(Row.Id) : Scene?.SelectRow?.(Row.Id))}>
+                      <Icon Name={ComponentIcon(Row, Scene?.Values?.[Row.Id] || {})} Size={18} />
                       <span>
                         <b>{Row.Name}</b>
                         <small>{Row.Description}</small>

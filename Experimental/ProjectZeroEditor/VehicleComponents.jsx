@@ -14,14 +14,14 @@ export const VehicleSheet = [];
 
 // Id, name, component class, baked icon, description, extra row fields.
 const Components = [
-  ["vehicle-movement", "Vehicle Movement", "VehicleMovement", "arcade-joystick", "Chassis, suspension, powertrain and aero"],
-  ["vehicle-body", "Body", "StaticMesh", "editor-mesh", "Static Mesh · body shell"],
-  ["vehicle-suspension", "Front Suspension", "Socket", "editor-pivot", "Spring socket · suspension strut", { Joint: "spring", Mount: 1.7 }],
-  ["vehicle-steering", "Steering", "Socket", "editor-pivot", "Hinge socket · steering knuckle", { Joint: "hinge", Mount: 1.7 }],
-  ["vehicle-tow", "Tow Hitch", "Socket", "editor-pivot", "Dock socket · trailer coupling", { Joint: "dock", Mount: -3.2 }],
-  ["vehicle-collision", "Chassis Collision", "BoxCollision", "editor-box-collider", "Box collision · blocks all"],
-  ["vehicle-headlights", "Headlights", "SpotLight", "editor-spotlight", "Spot light pair"],
-  ["vehicle-brake", "Brake Lights", "PointLight", "editor-brake-light", "Point light pair · rear"],
+  ["vehicle-movement", "Vehicle Movement", "VehicleMovement", "vehicle-component-movement", "Chassis, suspension, powertrain and aero"],
+  ["vehicle-body", "Body", "StaticMesh", "vehicle-component-body", "Static Mesh · body shell"],
+  ["vehicle-suspension", "Front Suspension", "Socket", "vehicle-component-spring", "Spring socket · suspension strut", { Joint: "spring", Mount: 1.7 }],
+  ["vehicle-steering", "Steering", "Socket", "vehicle-component-hinge", "Hinge socket · steering knuckle", { Joint: "hinge", Mount: 1.7 }],
+  ["vehicle-tow", "Tow Hitch", "Socket", "vehicle-component-dock", "Dock socket · trailer coupling", { Joint: "dock", Mount: -3.2 }],
+  ["vehicle-collision", "Chassis Collision", "BoxCollision", "vehicle-component-box-collision", "Box collision · blocks all"],
+  ["vehicle-headlights", "Headlights", "SpotLight", "vehicle-component-spot-light", "Spot light pair"],
+  ["vehicle-brake", "Brake Lights", "PointLight", "vehicle-component-point-light", "Point light pair · rear"],
 ];
 // Follow-up 60: the level's vehicles sit in a Vehicles folder. The Controlled Vehicle (the player's, which keeps Id "vehicle" and holds
 // the Component Viewer's ControlVehicle components) is a vehicle model like the others (VehicleAssets.js, VehicleAssetInspector.jsx).
@@ -95,6 +95,14 @@ export function SocketParameters(Row, Values = {}) {
   const V = Reader(Row, Values);
   const P = { ...socketDefaults(V("kind") || "fixed"), ...Object.fromEntries(Object.keys(SOCKET_PARAMS).concat("kind").map((Key) => [Key, V(Key)]).filter(([, Amount]) => Amount !== undefined)) };
   return { ...P, Mount: Number.isFinite(+V("mount")) ? +V("mount") : 0 };
+}
+
+// Follow-up 62: each component's icon (Images/VehicleComponentIcons), by class, and for a socket by its current type.
+const ClassIcons = { VehicleMovement: "movement", StaticMesh: "body", BoxCollision: "box-collision", SphereCollision: "sphere-collision", SpotLight: "spot-light", PointLight: "point-light" };
+export function ComponentIcon(Row, Values = {}) {
+  if (!Row || Row.Panel !== VehiclePanel) return Row?.Icon;
+  if (Row.Component === "Socket") return "vehicle-component-" + (Reader(Row, Values)("kind") || "fixed");
+  return ClassIcons[Row.Component] ? "vehicle-component-" + ClassIcons[Row.Component] : Row.Icon;
 }
 
 export function VehicleSummary(Row, Values = {}) {

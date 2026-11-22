@@ -171,8 +171,12 @@ try {
   await Page.locator(".inspector-scroll").screenshot({ path: path.join(Proof, "Vehicle-Size.png") });
   await PickTab(Page, "vehicle:drive");
   assert((await Page.locator("[data-vehicle-part]").count()) >= 6, "Drive lists the Controlled Vehicle's components");
+  // Follow-up 62: a Drive link opens the Component Viewer panel on that component; the editor stays on the vehicle.
   await Page.locator('[data-vehicle-part="vehicle-movement"]').click();
-  await Page.locator('[data-outliner-row="vehicle-movement"][aria-selected="true"]').waitFor();
+  await Page.locator('.vcp[data-vcp-selected="vehicle-movement"]').waitFor();
+  await Page.locator('[data-outliner-row="vehicle"][aria-selected="true"]').waitFor();
+  await Page.keyboard.press("Escape");
+  await Page.locator(".vcp").waitFor({ state: "detached" });
   for (const Id of ["offroad-vehicle", "pickup-truck"]) {
     await Open(Id);
     assert.equal(await Page.locator("[data-vehicle-shown]").getAttribute("data-vehicle-shown"), Id === "pickup-truck" ? "pickup" : "offroad");

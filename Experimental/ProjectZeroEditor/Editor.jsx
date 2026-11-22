@@ -28,7 +28,7 @@ import ViewportRenderHeader from "./ViewportRenderHeader.jsx";
 import { StartThoughtLog, useThoughtScope, OpenThought } from "./ThoughtLog.js";
 import { ResolveRenderSettings, RenderSettingsKey } from "./RenderSettings.js";
 import { WorkspaceView, WorkspaceRail } from "./Workspaces.jsx";
-import { VehiclePanel, VehicleSummary, EnsureVehicleFolder, InitialVehicleRows, VehicleRevision } from "./VehicleComponents.jsx";
+import { VehiclePanel, VehicleSummary, ComponentIcon, EnsureVehicleFolder, InitialVehicleRows, VehicleRevision } from "./VehicleComponents.jsx";
 import { VehicleAssetPanel, VehicleAssetSummary } from "./VehicleAssetInspector.jsx";
 import { ComponentPanel, ComponentSummary, WithObjectComponents, EnsureObjectComponents, ComponentRowsFor, OwnerKind, ComponentRevision, ComponentAddress } from "./ObjectComponents.jsx";
 import { BrowserFPS } from "./BrowserTiming.js";
@@ -53,11 +53,15 @@ import React, { useState, useEffect, useRef, useMemo } from "react";
 import { createRoot } from "react-dom/client";
 import { Inspector, Icon, Glyph, Panels } from "./Inspectors.jsx";
 import Viewport3D from "./Viewport3D.jsx";
-import { VehicleComponentView, ComponentViewerRail, InVehicle } from "./VehicleComponentViewer.jsx";
+import { VehicleComponentPanel, VehicleOwner } from "./VehicleComponentViewer.jsx";
 import { CameraBodies, CameraBodyOf } from "./EditorAssets.js";
 // Cameras show their editor asset (EditorAssets.js) as their outliner icon; everything else its own.
 const OutlinerIcon = (Row, Values) =>
-  Row.Panel === "camera" && window.NativeAssets?.Icons ? CameraBodies.find((Body) => Body.Id === CameraBodyOf(Row.Id, Values[Row.Id]?.["Camera body"]))?.Icon || Row.Icon : Row.Icon;
+  Row.Panel === "camera" && window.NativeAssets?.Icons
+    ? CameraBodies.find((Body) => Body.Id === CameraBodyOf(Row.Id, Values[Row.Id]?.["Camera body"]))?.Icon || Row.Icon
+    : Row.Panel === VehiclePanel
+      ? ComponentIcon(Row, Values[Row.Id] || {})
+      : Row.Icon;
 import Notch from "./Notch.jsx";
 import ActionIcon from "./ActionIcon.jsx";
 import ConstructPanel from "./ConstructPanel.jsx";
@@ -1015,7 +1019,6 @@ function App() {
       }
       if (Event.key === "Escape") {
         SetWorkspace(null);
-        SetVehicleView(false);
         SetDebug(0);
         ShowDiagnostics(false);
         ShowViewportSettings(false);
@@ -1094,13 +1097,37 @@ function App() {
   }, [Selected]);
   const PatchRow = (Id, Patch) => AssignRows((Previous) => Previous.map((Row) => (Row.Id === Id ? { ...Row, ...Patch } : Row)));
   const Workspace = WorkspaceState && WorkspaceState.Id === Selected ? WorkspaceState : null;
-  // Follow-up 61: the Controlled Vehicle's Component Viewer stays open while the vehicle or any of its components is selected (a click
-  // in it selects the component, so its inspector opens) and closes when the selection leaves the vehicle.
-  const [VehicleViewWanted, SetVehicleView] = useState(false);
-  const VehicleView = VehicleViewWanted && InVehicle(Subject) && !Workspace;
+  // Follow-up 62: the Controlled Vehicle's components are inspected in its Component Viewer panel, not here. Its inspector opens the
+  // panel; choosing one of its components anywhere (outliner, search, a link, ?inspect=) selects the vehicle and opens the panel on it.
+  const [VehiclePanelFocus, FocusVehiclePanel] = useState(null);
+  const OpenVehiclePanel = (Id = VehicleOwner) => FocusVehiclePanel({ Id, Stamp: Date.now() });
   useEffect(() => {
-    if (VehicleViewWanted && !InVehicle(Subject)) SetVehicleView(false);
+    if (Subject?.Panel !== VehiclePanel || Subject.Parent !== VehicleOwner) return;
+    OpenVehiclePanel(Subject.Id);
+    Select(VehicleOwner);
   }, [Selected]);
+  const AddVehicleComponent = (Row) => InsertUnder(VehicleOwner, [Row]);
+  const RemoveVehicleComponent = (Id) => {
+    AssignRows((Previous) => Previous.filter((Row) => Row.Id !== Id));
+    AssignValues((Previous) => {
+      const { [Id]: Gone, ...Kept } = Previous;
+      return Kept;
+    });
+  };
+  // The panel's Details: the native inspector of the component chosen in the panel, editing that component's own values.
+  const VehicleDetails = (Row, PanelSelect) => (
+    <Inspector
+      Subject={Row}
+      Values={Values[Row.Id] || {}}
+      Change={(Key, Amount) => AssignValues((Previous) => ({ ...Previous, [Row.Id]: { ...Previous[Row.Id], [Key]: Amount } }))}
+      Hidden={Hidden[Row.Id]}
+      ToggleHidden={() => ToggleHidden(Row.Id)}
+      OpenShader={() => {}}
+      OpenFracture={() => {}}
+      OpenWind={() => {}}
+      Scene={{ Rows, Values, SelectRow: PanelSelect, AddRows: InsertUnder, PatchRow, OpenComponent, Air: AirOf(Values), Sun: ReaderOf(Values, "sun") }}
+    />
+  );
   const OpenWorkspace = (Tool) => {
     SetRunMode("EDIT");
     SetWorkspace((Previous) => ({ ...(Previous?.Id === Selected ? Previous : {}), Id: Selected, Tool, Selection: [] }));
@@ -2059,19 +2086,7 @@ function App() {
         {Subject?.Panel === "geometry" && Subject?.Parent === "showcase" && (
           <WorkspaceRail Active={Workspace?.Tool || null} Open={OpenWorkspace} Leave={() => SetWorkspace(null)} />
         )}
-        {InVehicle(Subject) && !Workspace && (
-          <ComponentViewerRail
-            Active={VehicleView}
-            Open={() => {
-              SetRunMode("EDIT");
-              SetVehicleView(true);
-            }}
-            Leave={() => SetVehicleView(false)}
-          />
-        )}
-        {VehicleView ? (
-          <VehicleComponentView Rows={Rows} Values={Values} Hidden={Hidden} Selected={Selected} Select={SelectRow} ToggleHidden={ToggleHidden} Leave={() => SetVehicleView(false)} Icon={Icon} />
-        ) : Workspace ? (
+        {Workspace ? (
           <WorkspaceView
             Subject={Subject}
             Values={Values[Selected] || {}}
@@ -2103,7 +2118,7 @@ function App() {
             FlareOff={!!Hidden.flare || !Rows.some((Row) => Row.Id === "flare")}
           />
         )}
-        {SplitView && !Workspace && !VehicleView && (
+        {SplitView && !Workspace && (
           <MeasuredViewport
             Rows={Rows}
             Hidden={Hidden}
@@ -2249,7 +2264,7 @@ function App() {
               Workspace={Workspace}
               OpenWorkspace={OpenWorkspace}
               SetWorkspace={SetWorkspace}
-              Scene={{ Rows, SelectRow, AddRows: InsertUnder, PatchRow, OpenComponent, Focus: ComponentFocus, Air: AirOf(Values), Sun: ReaderOf(Values, "sun") }}
+              Scene={{ Rows, SelectRow, AddRows: InsertUnder, PatchRow, OpenComponent, Focus: ComponentFocus, Air: AirOf(Values), Sun: ReaderOf(Values, "sun"), OpenComponentViewer: OpenVehiclePanel, Values }}
               OpenWind={() => {
                 WindOpener.current = document.activeElement;
                 EditWind(Selected);
@@ -2478,6 +2493,21 @@ function App() {
           </section>
         ))}
       </main>
+      {/* The Controlled Vehicle's Component Viewer panel (Follow-up 62) sits above every layout. */}
+      {VehiclePanelFocus && (
+        <VehicleComponentPanel
+          Rows={Rows}
+          Values={Values}
+          Hidden={Hidden}
+          Focus={VehiclePanelFocus}
+          ToggleHidden={ToggleHidden}
+          Close={() => FocusVehiclePanel(null)}
+          Icon={Icon}
+          Details={VehicleDetails}
+          Add={AddVehicleComponent}
+          Remove={RemoveVehicleComponent}
+        />
+      )}
       {ShaderFloating && (
         <div inert={Shade || AssetsBlocking || WindSubject ? "" : undefined}>
           <ShaderPanel

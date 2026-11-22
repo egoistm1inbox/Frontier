@@ -22,7 +22,7 @@ const Key = "Frontier.ProjectZeroHtml.v1";
 Page.on("pageerror", (Error) => Errors.push(Error.stack));
 const Open = async (Id) => {
   await Page.goto(Address + "?inspect=" + Id);
-  await Page.locator(".inspector-scroll > [data-panel]").waitFor();
+  await Page.locator(".inspector-scroll > [data-panel]").first().waitFor();
   await Page.waitForTimeout(300);
 };
 const Saved = () => Page.evaluate((Name) => JSON.parse(localStorage.getItem(Name)), Key);

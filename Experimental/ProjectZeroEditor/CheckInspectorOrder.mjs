@@ -54,7 +54,8 @@ async function Open(Id, Wide = false) {
   await Page.goto(
     Address + "?inspect=" + Id + (Wide ? "&workspace=inspector" : ""),
   );
-  await Page.locator(".inspector-scroll > [data-panel]").waitFor();
+  // A Controlled Vehicle component opens in its Component Viewer panel (Follow-up 62), whose Details come first in the page.
+  await Page.locator(".inspector-scroll > [data-panel]").first().waitFor();
   for (const Iframe of await Page.locator(
     ".reference-inspector-copy iframe",
   ).all())
@@ -276,7 +277,7 @@ try {
         );
       }
       assert(
-        await Page.locator(".inspector-scroll").evaluate(
+        await Page.locator(".inspector-scroll").first().evaluate(
           (Node) => Node.scrollWidth <= Node.clientWidth + 1,
         ),
         Row.Id + " parent overflow",
@@ -313,7 +314,7 @@ try {
       }),
     );
     const Inputs = (Page) =>
-      Page.locator(".inspector-scroll").evaluate((Root) =>
+      Page.locator(".inspector-scroll").first().evaluate((Root) =>
         [
           ...Root.querySelectorAll(
             "input[aria-label]:not([readonly]),select[aria-label],textarea[aria-label]",

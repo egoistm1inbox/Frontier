@@ -1,22 +1,21 @@
 //============================================================================================================================================
 //                                                         VEHICLECOMPONENTVIEWER.JSX
 //============================================================================================================================================
-// 🧩 The Component Viewer for the Controlled Vehicle, inside the editor (Follow-up 61). The viewport shows the ControlVehicle alone
-// (ControlVehicleModel.js) with each of its native components drawn where it sits and doing what its values say; the component list
-// floats on the left. Click a component in the view or in the list and the inspector opens it, so its properties are set there and the
-// view follows at once. Built from the Component Viewer's own parts (Experimental/ComponentViewer, used as they are): the socket looks
-// and motion (SocketVisuals.js, Sockets.js), and its Stage, collision volumes, beams and glows (Shared/Studio).
+// 🧩 The Component Viewer panel for the Controlled Vehicle (Follow-up 62), opened from its inspector or by choosing one of its components
+// anywhere. Laid out like the Component Viewer (Experimental/ComponentViewer): its own Components outliner (Origin, Body, the parts on
+// it, actor components; Add for native classes, search, eye, Delete), the vehicle view, and its own Details, where the chosen
+// component's native inspector edits it; the editor's own selection and inspector stay on the vehicle. The view shows the ControlVehicle
+// (ControlVehicleModel.js) with each native component drawn where it sits and doing what its values say:
 //   • Body (Static Mesh): the body shell; Cast shadow switches its shadow.
-//   • Front Suspension (Spring socket) and Steering (Hinge socket): on both wheels of the axle they are mounted at; the spring lifts the
-//     wheels to its pose (and meets bumps in Simulate), the hinge turns them to its angle (or sweeps).
-//   • Tow Hitch (Dock socket): at its mount on the centre line, connecting, releasing and pull-testing as set.
-//   • Chassis Collision (Box Collision): the collision shell at its extents, amber when it only reports overlaps.
-//   • Headlights (Spot Light pair) and Brake Lights (Point Light pair): real lights at the lamps, with beams and glows in their colour,
-//     angle, intensity and range.
+//   • Spring and Hinge sockets: on both wheels of the axle they are mounted at; the spring lifts the wheels to its pose (and meets bumps
+//     in Simulate), the hinge turns them to its angle (or sweeps). Other sockets sit on the centre line at their mount.
+//   • Tow Hitch (Dock socket): at its mount, connecting, releasing and pull-testing as set.
+//   • Collision: the collision volume at its extents, amber when it only reports overlaps.
+//   • Spot and Point lights: real lights at the head and tail lamps, with beams and glows in their colour, angle, intensity and range.
 //   • Vehicle Movement: the centre of mass from its height and front weight share, the load on each tyre, wheels sized by the tyre
 //     radius; Simulate drives a speed cycle that rolls the wheels.
-// Other components (made by users, with their own controls) are listed but not drawn: only native components are. Browser authoring
-// only; the native renderer is not connected.
+// User components (with their own controls) are listed but not drawn. The socket looks and motion are the Component Viewer's own
+// (SocketVisuals.js, Sockets.js); the Stage, volumes, beams and glows are Shared/Studio's. Browser authoring only.
 
 import React, { useEffect, useRef, useState } from "react";
 import { THREE, Stage } from "../Shared/Studio/Render.js";
@@ -25,7 +24,7 @@ import { socketVisual } from "../ComponentViewer/SocketVisuals.js";
 import { createSocketState, stepSocket, socketPose, socketReadout, SOCKET_KIND } from "../ComponentViewer/Sockets.js";
 import { COMPONENT_CLASSES } from "../ComponentViewer/Blueprint.js";
 import { ControlVehicleParts, ControlVehicleSheet as Sheet, Family } from "./ControlVehicleModel.js";
-import { ComponentReader, SocketParameters, VehicleSummary } from "./VehicleComponents.jsx";
+import { ComponentReader, SocketParameters, VehicleSummary, ComponentIcon } from "./VehicleComponents.jsx";
 import { PaintOf } from "./VehicleAssetInspector.jsx";
 import "./VehicleComponentViewer.css";
 
@@ -35,7 +34,8 @@ const Accent = "#ffb238";
 const Gravity = 9.81;
 const SocketScale = 2.2; // the Component Viewer's socket looks are sized for a desk; at car scale they're drawn bigger
 const NativeClasses = new Set(["VehicleMovement", "StaticMesh", "Socket", "BoxCollision", "SphereCollision", "SpotLight", "PointLight"]);
-export const InVehicle = (Row) => !!Row && (Row.Id === Owner || Row.Parent === Owner);
+const InVehicle = (Row) => !!Row && (Row.Id === Owner || Row.Parent === Owner);
+export const VehicleOwner = Owner;
 
 // Where a socket sits: on both wheels of an axle when it is mounted there (within 0.4 m), otherwise on the centre line.
 function SocketAnchors(Mount) {
@@ -47,92 +47,197 @@ function SocketAnchors(Mount) {
 const ClassLabel = (Row, Values) =>
   Row.Component === "Socket" ? `${SOCKET_KIND[ComponentReader(Row, Values)("kind")]?.label || "Fixed"} socket` : COMPONENT_CLASSES[Row.Component]?.label || "User component";
 
-// The list on the left: the vehicle, its scene components under the Body, the actor components, then anything else.
-function ComponentTree({ Rows, Values, Hidden, Selected, Select, ToggleHidden, Icon }) {
+// Component classes the Add menu offers (native only; user components bring their own controls).
+const AddChoices = [
+  ["Lights", [["SpotLight", null, "Spot Light", "Spot light pair"], ["PointLight", null, "Point Light", "Point light pair"]]],
+  ["Collision", [["BoxCollision", null, "Box Collision", "Box collision · blocks all"], ["SphereCollision", null, "Sphere Collision", "Sphere collision"]]],
+  ["Sockets", ["fixed", "hinge", "slider", "spring", "ball", "spin", "tether", "dock"].map((Joint) => ["Socket", Joint, `${SOCKET_KIND[Joint]?.label || Joint} Socket`, `${SOCKET_KIND[Joint]?.label || Joint} socket`])],
+];
+// A new component row under the vehicle, with a free id and name.
+function NewComponent(Rows, [Component, Joint, Label, Description]) {
+  const Slug = (Joint ? Joint + "-socket" : Label.toLowerCase().replace(/\s+/g, "-"));
+  let Number_ = 1;
+  while (Rows.some((Row) => Row.Id === `vehicle-${Slug}-${Number_}` || Row.Name === `${Label} ${Number_}`)) Number_++;
+  return { Id: `vehicle-${Slug}-${Number_}`, Name: `${Label} ${Number_}`, Panel: "vehicle-component", Parent: Owner, Component, Description, Icon: "vehicle-component-" + (Joint || ""), ...(Joint ? { Joint, Mount: 0 } : {}) };
+}
+const Triangles = 2924 + 4 * (3968 + 1568); // the ControlVehicle's body, four tyres and four rims
+const Eye = ({ Off }) => (
+  <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
+    {Off ? (
+      <path d="M2 8s2.4-4 6-4 6 4 6 4-2.4 4-6 4-6-4-6-4zM3 13 13 3" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+    ) : (
+      <>
+        <path d="M2 8s2.4-4 6-4 6 4 6 4-2.4 4-6 4-6-4-6-4z" fill="none" stroke="currentColor" strokeWidth="1.3" />
+        <circle cx="8" cy="8" r="1.8" fill="currentColor" />
+      </>
+    )}
+  </svg>
+);
+
+// The Components outliner (the Component Viewer's own layout): heading, counts, Add and search, the tree from the Origin through the Body
+// to the parts on it, actor components below a divider, then user components; the eye hides a component in the view.
+function ComponentOutliner({ Rows, Values, Hidden, Selected, Select, ToggleHidden, Icon, Add, Fit }) {
+  const [Query, SetQuery] = useState("");
+  const [Adding, ShowAdd] = useState(false);
+  const [Collapsed, Collapse] = useState(false);
   const Mine = Rows.filter((Row) => Row.Parent === Owner);
+  const Vehicle = Rows.find((Row) => Row.Id === Owner);
   const Body = Mine.find((Row) => Row.Component === "StaticMesh");
   const Actor = Mine.filter((Row) => Row.Component === "VehicleMovement");
-  const Scene = Mine.filter((Row) => Row !== Body && NativeClasses.has(Row.Component) && Row.Component !== "VehicleMovement");
+  const Parts = Mine.filter((Row) => Row !== Body && NativeClasses.has(Row.Component) && Row.Component !== "VehicleMovement");
   const Other = Mine.filter((Row) => !NativeClasses.has(Row.Component));
-  const Vehicle = Rows.find((Row) => Row.Id === Owner);
-  const Line = (Row, Depth, Note = null) => (
-    <div
-      key={Row.Id}
-      role="treeitem"
-      aria-selected={Selected === Row.Id}
-      tabIndex={0}
-      className={"vcv-row" + (Selected === Row.Id ? " on" : "") + (Hidden[Row.Id] ? " off" : "")}
-      style={{ "--vcv-depth": Depth }}
-      data-vcv-row={Row.Id}
-      data-depth={Depth}
-      onClick={() => Select(Row.Id)}
-      onKeyDown={(Event) => Event.key === "Enter" && Select(Row.Id)}
-    >
-      {Icon && <Icon Name={Row.Icon} Size={20} />}
-      <span className="vcv-row-text">
-        <b>{Row.Name}</b>
-        <small>{Note ?? (Row.Id === Owner ? "Origin · ControlVehicle" : `${ClassLabel(Row, Values[Row.Id] || {})} · ${VehicleSummary(Row, Values[Row.Id] || {})}`)}</small>
-      </span>
-      {Row.Id !== Owner && (
-        <button
-          type="button"
-          className="vcv-eye"
-          aria-label={(Hidden[Row.Id] ? "Show " : "Hide ") + Row.Name}
-          aria-pressed={!Hidden[Row.Id]}
+  const Needle = Query.trim().toLowerCase();
+  const Matches = (Row) => !Needle || Row.Name.toLowerCase().includes(Needle) || ClassLabel(Row, Values[Row.Id] || {}).toLowerCase().includes(Needle);
+  const Line = (Row, Depth, { Root = false, Caret = false, User = false } = {}) =>
+    Matches(Row) && (
+      <div
+        key={Row.Id}
+        role="treeitem"
+        aria-selected={Selected === Row.Id}
+        aria-level={Depth + 1}
+        aria-expanded={Caret ? !Collapsed : undefined}
+        tabIndex={0}
+        className={"vcp-row" + (Selected === Row.Id ? " active" : "") + (Root ? " root" : "") + (Hidden[Row.Id] ? " off" : "")}
+        style={{ paddingLeft: 10 + (Needle ? 0 : Depth) * 16 }}
+        data-vcv-row={Row.Id}
+        onClick={() => Select(Row.Id)}
+        onDoubleClick={() => {
+          Select(Row.Id);
+          setTimeout(Fit, 40);
+        }}
+        onKeyDown={(Event) => Event.key === "Enter" && Select(Row.Id)}
+      >
+        <span
+          className="vcp-caret"
           onClick={(Event) => {
+            if (!Caret) return;
             Event.stopPropagation();
-            ToggleHidden(Row.Id);
+            Collapse(!Collapsed);
           }}
         >
-          <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
-            {Hidden[Row.Id] ? (
-              <path d="M2 8s2.4-4 6-4 6 4 6 4-2.4 4-6 4-6-4-6-4zM3 13 13 3" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
-            ) : (
-              <>
-                <path d="M2 8s2.4-4 6-4 6 4 6 4-2.4 4-6 4-6-4-6-4z" fill="none" stroke="currentColor" strokeWidth="1.3" />
-                <circle cx="8" cy="8" r="1.8" fill="currentColor" />
-              </>
-            )}
-          </svg>
+          {Caret ? (Collapsed ? "▸" : "▾") : ""}
+        </span>
+        <span className="vcp-row-icon">
+          <Icon Name={Root ? "vehicle-component-origin" : ComponentIcon(Row, Values[Row.Id] || {})} Size={18} />
+        </span>
+        <span className="vcp-row-text">
+          <b>
+            {Root ? "Origin" : Row.Name}
+            {Root && <em className="vcp-root-tag">ROOT</em>}
+          </b>
+          <small>{Root ? `${Vehicle?.Name || "Controlled Vehicle"} · ControlVehicle` : User ? "User component · its own controls" : Row.Component === "Socket" ? VehicleSummary(Row, Values[Row.Id] || {}) : `${ClassLabel(Row, Values[Row.Id] || {})} · ${VehicleSummary(Row, Values[Row.Id] || {})}`}</small>
+        </span>
+        {!Root && !User && Row.Component !== "VehicleMovement" ? (
+          <button
+            type="button"
+            className={"vcp-eye" + (Hidden[Row.Id] ? " off" : "")}
+            aria-label={(Hidden[Row.Id] ? "Show " : "Hide ") + Row.Name}
+            aria-pressed={!Hidden[Row.Id]}
+            onClick={(Event) => {
+              Event.stopPropagation();
+              ToggleHidden(Row.Id);
+            }}
+          >
+            <Eye Off={Hidden[Row.Id]} />
+          </button>
+        ) : (
+          <span />
+        )}
+      </div>
+    );
+  return (
+    <section className="vcp-dock vcp-left" aria-label="Components">
+      <div className="vcp-tabs">
+        <span className="vcp-tab on">Components</span>
+      </div>
+      <div className="vcp-outliner-heading">
+        <h1>Components</h1>
+        <small>{Vehicle?.Name || "Controlled Vehicle"}</small>
+      </div>
+      <div className="vcp-stats">
+        <div className="vcp-stat">
+          <span className="vcp-disc on" aria-hidden="true">
+            <svg viewBox="0 0 12 12" width="11" height="11"><path d="M6 1 10.5 3.5v5L6 11 1.5 8.5v-5Z" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" /></svg>
+          </span>
+          <small>Components</small>
+          <strong data-vcp-count>{Mine.length + 1}</strong>
+        </div>
+        <div className="vcp-stat">
+          <span className="vcp-disc" aria-hidden="true">
+            <svg viewBox="0 0 12 12" width="11" height="11"><path d="M1.5 9.5 6 2l4.5 7.5Z M3.75 5.75h4.5" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" /></svg>
+          </span>
+          <small>Triangles</small>
+          <strong>{(Triangles / 1000).toFixed(1)}k</strong>
+        </div>
+      </div>
+      <div className="vcp-add-row">
+        <button type="button" className="vcp-add" aria-expanded={Adding} onClick={() => ShowAdd(!Adding)}>
+          <svg viewBox="0 0 12 12" width="11" height="11" aria-hidden="true"><path d="M6 1.5v9M1.5 6h9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg>
+          Add
         </button>
+        <label className="vcp-search">
+          <svg viewBox="0 0 14 14" width="12" height="12" aria-hidden="true"><circle cx="6" cy="6" r="4.2" fill="none" stroke="currentColor" strokeWidth="1.4" /><path d="m9.2 9.2 3.3 3.3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" /></svg>
+          <input type="search" placeholder="Search components" aria-label="Search components" value={Query} onChange={(Event) => SetQuery(Event.target.value)} />
+        </label>
+      </div>
+      {Adding && (
+        <div className="vcp-add-menu" role="menu" aria-label="Add a native component">
+          {AddChoices.map(([Group, Choices]) => (
+            <React.Fragment key={Group}>
+              <p className="vcp-menu-group">{Group.toUpperCase()}</p>
+              {Choices.map((Choice) => (
+                <button
+                  key={Choice[2]}
+                  type="button"
+                  role="menuitem"
+                  className="vcp-menu-item"
+                  onClick={() => {
+                    const Row = NewComponent(Rows, Choice);
+                    Add(Row);
+                    ShowAdd(false);
+                    Select(Row.Id);
+                  }}
+                >
+                  <Icon Name={"vehicle-component-" + (Choice[1] || ClassIconName[Choice[0]])} Size={18} />
+                  <span>{Choice[2]}</span>
+                </button>
+              ))}
+            </React.Fragment>
+          ))}
+        </div>
       )}
-    </div>
-  );
-  return (
-    <aside className="vcv-tree" role="tree" aria-label="Vehicle components">
-      <header>
-        <span>Components</span>
-        <small>{Mine.length}</small>
-      </header>
-      {Vehicle && Line(Vehicle, 0)}
-      {Body && Line(Body, 1)}
-      {Scene.map((Row) => Line(Row, 2))}
-      {Actor.length > 0 && <p className="vcv-section">Actor components</p>}
-      {Actor.map((Row) => Line(Row, 1))}
-      {Other.length > 0 && <p className="vcv-section">Other components</p>}
-      {Other.map((Row) => Line(Row, 1, "User component · its own controls, not drawn here"))}
-    </aside>
-  );
-}
-
-// The Component Viewer's rail button on the viewport's left edge, while the Controlled Vehicle or one of its components is selected.
-export function ComponentViewerRail({ Active, Open, Leave }) {
-  return (
-    <nav className="ws-rail vcv-rail" aria-label="Vehicle tools" data-active={Active ? "components" : ""}>
-      <span className="ws-rail-caption">EDIT</span>
-      <button type="button" aria-label="Vehicle Component Viewer" aria-pressed={!!Active} data-tool="components" title="Component Viewer · the vehicle with its components; click one to edit it" onClick={() => (Active ? Leave() : Open())}>
-        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M3.5 14.5 6 10.5h9.5l3.5 4H20.5v2.5h-17z" />
-          <circle cx="7.5" cy="17" r="1.8" />
-          <circle cx="16.5" cy="17" r="1.8" />
-          <circle cx="12" cy="5" r="1.6" fill="currentColor" stroke="none" />
-          <path d="M12 6.6v3.4" strokeDasharray="1.4 1.4" />
-        </svg>
-        <span className="ws-rail-name">Vehicle Component Viewer</span>
-      </button>
-    </nav>
+      <div className="vcp-tree" role="tree" aria-label="Vehicle components">
+        {Vehicle && Line(Vehicle, 0, { Root: true })}
+        {Body && Line(Body, 1, { Caret: Parts.length > 0 })}
+        {!Collapsed && Parts.map((Row) => Line(Row, 2))}
+        <div className="vcp-divider">
+          <span>ACTOR COMPONENTS</span>
+          <span className="vcp-count">{Actor.length}</span>
+        </div>
+        {Actor.map((Row) => Line(Row, 0))}
+        {Other.length > 0 && (
+          <div className="vcp-divider">
+            <span>USER COMPONENTS</span>
+            <span className="vcp-count">{Other.length}</span>
+          </div>
+        )}
+        {Other.map((Row) => Line(Row, 0, { User: true }))}
+      </div>
+      <footer className="vcp-footer">
+        <div>
+          <i>CLICK</i>edit
+        </div>
+        <div>
+          <i>DBL-CLICK · F</i>fit
+        </div>
+        <div>
+          <i>DEL</i>remove
+        </div>
+      </footer>
+    </section>
   );
 }
+const ClassIconName = { SpotLight: "spot-light", PointLight: "point-light", BoxCollision: "box-collision", SphereCollision: "sphere-collision" };
 
 const Views = [
   ["Three-quarter", 38, 18],
@@ -141,7 +246,8 @@ const Views = [
   ["Top", 90, 88],
 ];
 
-export function VehicleComponentView({ Rows, Values, Hidden, Selected, Select, ToggleHidden, Leave, Icon }) {
+// The centre dock: the vehicle with its components drawn (the visual debugs), its heading and tools.
+function VehicleComponentView({ Rows, Values, Hidden, Selected, Select, Leave, Remove, Controls, Icon }) {
   const Host = useRef(null);
   const Tag = useRef(null);
   const Scene = useRef(null);
@@ -164,18 +270,6 @@ export function VehicleComponentView({ Rows, Values, Hidden, Selected, Select, T
     Host.current.prepend(Canvas);
     const View = new Stage(Canvas, { background: "#0c0d10", grid: true, shadows: true });
     View.sun.shadow.mapSize.set(1024, 1024);
-    // The component list covers the left of the view, so the picture centres in what is left of it: the projection is shifted right by
-    // half the list's width (a view offset, with the aspect widened to match so nothing stretches).
-    const Plain = View.resize.bind(View);
-    View.resize = () => {
-      Plain();
-      const Width = Math.max(1, Canvas.clientWidth), Height = Math.max(1, Canvas.clientHeight);
-      const List = Host.current?.querySelector(".vcv-tree");
-      const Covered = List ? Math.min(Width * 0.4, Math.max(0, List.getBoundingClientRect().right - Canvas.getBoundingClientRect().left)) : 0;
-      if (Covered < 8) return View.camera.clearViewOffset();
-      View.camera.aspect = (Width + Covered) / Height;
-      View.camera.setViewOffset(Width + Covered, Height, 0, 0, Width, Height);
-    };
     // A dark floor that takes the lamps' light (the stage's own ground only catches shadows).
     const Floor = new THREE.Mesh(new THREE.CircleGeometry(16, 64), new THREE.MeshStandardMaterial({ color: "#16171b", roughness: 0.92 }));
     Floor.rotation.x = -Math.PI / 2;
@@ -202,18 +296,13 @@ export function VehicleComponentView({ Rows, Values, Hidden, Selected, Select, T
     Content.add(Car, Gizmos, Colliders);
     View.setContent(Content);
     const Box = new THREE.Box3(new THREE.Vector3(-Sheet.Length / 2, 0, -Sheet.Width / 2), new THREE.Vector3(Sheet.Length / 2, Sheet.Height, Sheet.Width / 2)).expandByScalar(0.35);
-    // Frames the whole vehicle in the part of the view the list leaves (the aspect is widened by the offset, so the fit is eased back).
-    const FitView = (Yaw = 38, Pitch = 18, Animate = true) => {
-      const Widened = View.camera.aspect;
-      View.camera.aspect = Math.max(1, Canvas.clientWidth - (View.camera.view?.enabled ? View.camera.view.fullWidth - View.camera.view.width : 0)) / Math.max(1, Canvas.clientHeight);
-      View.frame(Box, { yaw: Yaw, pitch: Pitch, animate: Animate });
-      View.camera.aspect = Widened;
-    };
+    // Fits the whole vehicle in view.
+    const FitView = (Yaw = 38, Pitch = 18, Animate = true) => View.frame(Box, { yaw: Yaw, pitch: Pitch, animate: Animate });
     requestAnimationFrame(() => {
       View.resize();
       FitView(38, 18, false);
     });
-    // Until the view is moved by hand, keep the vehicle framed while the viewport settles.
+    // Until the view is moved by hand, keep the whole vehicle in view while the viewport settles.
     let Moved = false;
     for (const Name of ["pointerdown", "wheel"]) Canvas.addEventListener(Name, () => (Moved = true), { passive: true });
     const Refit = new ResizeObserver(() => {
@@ -234,7 +323,7 @@ export function VehicleComponentView({ Rows, Values, Hidden, Selected, Select, T
       const Hit = View.pick(Event.clientX, Event.clientY, [Gizmos]) || View.pick(Event.clientX, Event.clientY, [Car]) || View.pick(Event.clientX, Event.clientY, [Colliders]);
       Latest.current.Select(Hit ? Hit.componentId : Owner);
     });
-    // Every frame: the drive cycle (Simulate), each socket stepped and posed on the wheels it holds, lamps, the tag and the readout.
+    // Each tick: the drive cycle (Simulate), each socket stepped and posed on the wheels it holds, lamps, the tag and the readout.
     const Probe = new THREE.Vector3();
     let Last = "";
     View.frameCallbacks.add((Dt) => {
@@ -303,17 +392,26 @@ export function VehicleComponentView({ Rows, Values, Hidden, Selected, Select, T
       Canvas.dataset.lift = (Front.Lift.position.y * 1000).toFixed(0);
       Canvas.dataset.spin = Front.Spin.rotation.z.toFixed(2);
     });
-    // Esc leaves; Space runs Simulate; F frames the selection — unless typing.
+    // In the panel: Esc closes it (after an open page ring), Space runs Simulate, F fits the selection, Delete removes the selected
+    // component — unless typing, or Space on a button.
     const Keys = (Event) => {
       if (Event.target.closest?.("input, textarea, select, [contenteditable=true]")) return;
+      const Inside = Event.target === document.body || !!Event.target.closest?.(".vcp");
       if (Event.key === "Escape") {
+        if (document.querySelector('.vcp .orbit-button[aria-expanded="true"], .vcp-add[aria-expanded="true"]')) return;
         Event.stopPropagation();
         Latest.current.Leave?.();
-      } else if (Event.key === " " && (Event.target === document.body || Host.current?.contains(Event.target))) {
+      } else if (!Inside) return;
+      else if (Event.key === " " && !Event.target.closest?.("button, [role=radio], [role=switch], [role=slider]")) {
         Event.preventDefault();
         Event.stopPropagation();
         Simulate((Previous) => !Previous);
-      } else if (Event.key.toLowerCase() === "f" && Host.current?.contains(Event.target)) Built.FitSelection?.();
+      } else if (Event.key.toLowerCase() === "f" && !Event.ctrlKey && !Event.metaKey) Built.FitSelection?.();
+      else if ((Event.key === "Delete" || Event.key === "Backspace") && Latest.current.Selected !== Owner) {
+        Event.preventDefault();
+        Event.stopPropagation();
+        Latest.current.Remove?.(Latest.current.Selected);
+      }
     };
     window.addEventListener("keydown", Keys, true);
     return () => {
@@ -329,6 +427,8 @@ export function VehicleComponentView({ Rows, Values, Hidden, Selected, Select, T
     };
   }, []);
   Latest.current.Leave = Leave;
+  Latest.current.Remove = Remove;
+  if (Controls) Controls.current = { Fit: () => Scene.current?.FitSelection?.() };
 
   // Paint: the body coat follows the Controlled Vehicle's paint.
   useEffect(() => {
@@ -562,48 +662,105 @@ export function VehicleComponentView({ Rows, Values, Hidden, Selected, Select, T
 
   const Subject = Rows.find((Row) => Row.Id === Selected);
   const Native = !Subject || Subject.Id === Owner || NativeClasses.has(Subject.Component);
+  const Count = Mine.length + 1;
   return (
-    <div className="vcv" ref={Host} role="region" aria-label="Component Viewer · Controlled Vehicle" data-vcv-simulating={Simulating ? "on" : "off"}>
-      <div className="ws-banner vcv-banner">
-        <span className="ws-banner-mode">EDIT</span>
-        <span>
-          <b>{Vehicle?.Name || "Controlled Vehicle"}</b> · Component Viewer · click a component to edit it in the inspector
+    <section className="vcp-dock vcp-centre" aria-label="Vehicle view" data-vcv-simulating={Simulating ? "on" : "off"}>
+      <div className="vcp-heading">
+        <span className="vcp-heading-icon">
+          <Icon Name="vehicle-component-body" Size={22} />
         </span>
-        <button type="button" onClick={Leave} aria-label="Leave Component Viewer">
-          Leave <kbd>Esc</kbd>
-        </button>
-      </div>
-      <ComponentTree Rows={Rows} Values={Values} Hidden={Hidden} Selected={Selected} Select={Select} ToggleHidden={ToggleHidden} Icon={Icon} />
-      <div className="vcv-tag" ref={Tag} hidden aria-live="polite">
-        <b>{Subject?.Name}</b>
-        <small>{Subject ? (Subject.Id === Owner ? "Origin" : Native ? ClassLabel(Subject, Values[Subject.Id] || {}) : "User component") : ""}</small>
-        {Readout && <span>{Readout}</span>}
-      </div>
-      <div className="vcv-tools" role="toolbar" aria-label="Component Viewer tools">
-        <button type="button" className={"vcv-simulate" + (Simulating ? " on" : "")} aria-pressed={Simulating} onClick={() => Simulate(!Simulating)} title="Drive a speed cycle: wheels roll, springs meet bumps, sweeps and pull tests run (Space)">
-          <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
+        <span className="vcp-heading-title">
+          <b>{Vehicle?.Name || "Controlled Vehicle"}</b>
+          <small>ControlVehicle class · Pawn · {Count} components</small>
+        </span>
+        <span className="vcp-state">{Simulating ? "SIMULATING" : "EDITING"}</span>
+        <span className="vcp-spacer" />
+        <button type="button" className={"vcp-simulate" + (Simulating ? " on" : "")} aria-pressed={Simulating} onClick={() => Simulate(!Simulating)} title="Drive a speed cycle: wheels roll, springs meet bumps, sweeps and pull tests run (Space)">
+          <svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true">
             {Simulating ? <path d="M4 3h3v10H4zM9 3h3v10H9z" fill="currentColor" /> : <path d="M4 2.5v11L13 8z" fill="currentColor" />}
           </svg>
           {Simulating ? "Stop" : "Simulate"}
-          <kbd>Space</kbd>
-        </button>
-        <span className="vcv-split" />
-        <button type="button" aria-pressed={XRay} onClick={() => SetXRay(!XRay)} title="Show the body as glass, so the parts inside it show">
-          X-ray
-        </button>
-        <button type="button" aria-pressed={OnlySelected} onClick={() => SetOnlySelected(!OnlySelected)} title="Draw only the selected component">
-          {OnlySelected ? "Selected only" : "All components"}
-        </button>
-        <span className="vcv-split" />
-        {Views.map(([Name, Yaw, Pitch]) => (
-          <button key={Name} type="button" onClick={() => Scene.current?.FitView(Yaw, Pitch)} title={Name + " view"}>
-            {Name}
-          </button>
-        ))}
-        <button type="button" onClick={() => Scene.current?.FitSelection?.()} title="Fit the view to the selected component (F)">
-          Fit <kbd>F</kbd>
         </button>
       </div>
-    </div>
+      <div className="vcp-tools" role="toolbar" aria-label="Component Viewer tools">
+        <div className="vcp-segmented">
+          {Views.map(([Name, Yaw, Pitch]) => (
+            <button key={Name} type="button" onClick={() => Scene.current?.FitView(Yaw, Pitch)} title={Name + " view"}>
+              {Name}
+            </button>
+          ))}
+        </div>
+        <span className="vcp-split" />
+        <button type="button" className="vcp-tool" aria-pressed={XRay} onClick={() => SetXRay(!XRay)} title="Show the body as glass, so the parts inside it show">
+          X-ray
+        </button>
+        <button type="button" className="vcp-tool" aria-pressed={OnlySelected} onClick={() => SetOnlySelected(!OnlySelected)} title="Draw only the selected component">
+          {OnlySelected ? "Selected only" : "All components"}
+        </button>
+        <button type="button" className="vcp-tool round" onClick={() => Scene.current?.FitSelection?.()} aria-label="Fit selection" title="Fit the selected component in view (F)">
+          <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
+            <path d="M2 5.5V2h3.5M10.5 2H14v3.5M14 10.5V14h-3.5M5.5 14H2v-3.5" />
+          </svg>
+        </button>
+      </div>
+      <div className="vcp-well" ref={Host}>
+        <div className="vcp-readout" aria-hidden="true">
+          <span>tris</span>
+          <b>{(Triangles / 1000).toFixed(1)}k</b>
+          <span>parts</span>
+          <b>{Count} components</b>
+          <span>select</span>
+          <b>{Subject ? (Subject.Id === Owner ? "Origin" : Subject.Name) : "—"}</b>
+        </div>
+        <div className="vcv-tag" ref={Tag} hidden aria-live="polite">
+          <b>{Subject?.Id === Owner ? "Origin" : Subject?.Name}</b>
+          <small>{Subject ? (Subject.Id === Owner ? Vehicle?.Name : Native ? ClassLabel(Subject, Values[Subject.Id] || {}) : "User component") : ""}</small>
+          {Readout && <span>{Readout}</span>}
+        </div>
+      </div>
+      <div className="vcp-strip">COMPONENT VIEWER · {(Vehicle?.Name || "Controlled Vehicle").toUpperCase()} · {Simulating ? "SIMULATING" : "EDITING"}</div>
+    </section>
+  );
+}
+
+// The Component Viewer panel for the Controlled Vehicle, opened from its inspector (or by choosing one of its components anywhere): its
+// own Components outliner, the vehicle view and its own Details, where the selected component's native inspector edits it. Choosing a
+// component here never changes the editor's selection.
+export function VehicleComponentPanel({ Rows, Values, Hidden, Focus, ToggleHidden, Close, Icon, Details, Add, Remove }) {
+  const [Selected, Select] = useState(Focus?.Id || Owner);
+  const Controls = useRef(null);
+  useEffect(() => {
+    if (Focus?.Id) Select(Focus.Id);
+  }, [Focus?.Stamp]);
+  const Subject = Rows.find((Row) => Row.Id === Selected && InVehicle(Row)) || Rows.find((Row) => Row.Id === Owner);
+  useEffect(() => {
+    if (Subject && Subject.Id !== Selected) Select(Subject.Id);
+  }, [Subject?.Id]);
+  if (!Subject) return null;
+  return (
+    <section className="vcp" role="dialog" aria-label="Component Viewer · Controlled Vehicle" data-vcp-selected={Subject.Id}>
+      <header className="vcp-bar">
+        <span className="vcp-bar-title">
+          <Icon Name="component-viewer" Size={18} />
+          <b>Component Viewer</b>
+          <small>{Subject.Id === Owner ? "Origin" : Subject.Name} · click a component to edit it</small>
+        </span>
+        <button type="button" className="vcp-close" aria-label="Close Component Viewer" title="Close (Esc)" onClick={Close}>
+          ×
+        </button>
+      </header>
+      <div className="vcp-body">
+        <ComponentOutliner Rows={Rows} Values={Values} Hidden={Hidden} Selected={Subject.Id} Select={Select} ToggleHidden={ToggleHidden} Icon={Icon} Add={Add} Fit={() => Controls.current?.Fit()} />
+        <VehicleComponentView Rows={Rows} Values={Values} Hidden={Hidden} Selected={Subject.Id} Select={Select} Leave={Close} Remove={(Id) => (Remove(Id), Select(Owner))} Controls={Controls} Icon={Icon} />
+        <section className="vcp-dock vcp-right" aria-label="Details">
+          <div className="vcp-tabs">
+            <span className="vcp-tab on">Details</span>
+          </div>
+          <div className="inspector-scroll vcp-details" key={Subject.Id}>
+            {Details(Subject, Select)}
+          </div>
+        </section>
+      </div>
+    </section>
   );
 }

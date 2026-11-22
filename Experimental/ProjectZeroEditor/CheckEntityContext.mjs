@@ -86,6 +86,13 @@ try {
   for (const Entry of await Page.locator(".outliner-row").all()) {
     await Entry.scrollIntoViewIfNeeded();
     await Entry.click();
+    // Follow-up 62: a Controlled Vehicle component opens in its Component Viewer panel, whose Details carry the notes action.
+    if (await Page.locator(".vcp").count()) {
+      assert.equal(await Page.locator(".vcp-details .entity-notes-add").count(), 1);
+      await Page.keyboard.press("Escape");
+      await Page.locator(".vcp").waitFor({ state: "detached" });
+      continue;
+    }
     assert.equal(
       await Page.locator(".inspector-scroll .entity-notes-add").count(),
       1,

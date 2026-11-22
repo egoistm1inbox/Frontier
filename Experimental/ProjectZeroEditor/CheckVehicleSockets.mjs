@@ -30,7 +30,7 @@ Page.on("requestfailed", (Request) => {
 });
 const Open = async (Id) => {
   await Page.goto(Address + "?inspect=" + Id);
-  await Page.locator(".inspector-scroll > [data-panel]").waitFor();
+  await Page.locator(".vcp-details > [data-panel]").waitFor();
   await Page.waitForTimeout(250);
 };
 const Saved = () =>
@@ -39,8 +39,8 @@ const Saved = () =>
   );
 
 const Values = async (Id) => ((await Saved())?.Values || {})[Id] || {};
-const Scene = () => Page.locator(".vc-socket-scene");
-const Link = () => Page.locator('[data-card="Attached to"] .vc-asset-link');
+const Scene = () => Page.locator(".vcp-details .vc-socket-scene");
+const Link = () => Page.locator('.vcp-details [data-card="Attached to"] .vc-asset-link');
 
 try {
   // Each socket row: the joint at its pose, then type, range and the asset it is attached to.
@@ -50,13 +50,13 @@ try {
     ["vehicle-tow", "Dock", "Coupling"],
   ]) {
     await Open(Id);
-    const Titles = await Page.locator(".vehicle-inspector [data-card]").evaluateAll((Cards) => Cards.map((Card) => Card.dataset.card));
+    const Titles = await Page.locator(".vcp-details .vehicle-inspector [data-card]").evaluateAll((Cards) => Cards.map((Card) => Card.dataset.card));
     assert.deepEqual(Titles, [Kind + " socket", "Socket type", Range, "Attached to"]);
-    assert.equal(await Page.locator('.vc-socket-kinds [role="radio"][aria-checked="true"]').innerText(), Kind);
-    assert.equal(await Page.locator(".vc-socket-kinds svg").count(), 8);
+    assert.equal(await Page.locator('.vcp-details .vc-socket-kinds [role="radio"][aria-checked="true"]').innerText(), Kind);
+    assert.equal(await Page.locator(".vcp-details .vc-socket-kinds svg").count(), 8);
     // No test drive, trace or vehicle drawing any more.
     assert.equal(await Page.getByRole("button", { name: /test drive|Restart/ }).count(), 0);
-    assert.equal(await Page.locator(".vc-trace, [data-card='Attached to'] .side-view, [data-card='Attached to'] .vc-visual").count(), 0);
+    assert.equal(await Page.locator(".vcp-details .vc-trace, .vcp-details [data-card='Attached to'] .side-view, .vcp-details [data-card='Attached to'] .vc-visual").count(), 0);
     assert.equal((await Link().innerText()).split("\n")[0].trim(), "Body");
     Checks.push(`${Id}: pose → Socket type → ${Range} → Attached to (Body link); no animation or vehicle drawing`);
   }
@@ -83,24 +83,24 @@ try {
   Checks.push("Dragging the spring plate writes the preload pose; outliner summary names the attached asset");
 
   // Attachment: changing the target relinks; the link selects the asset in the outliner.
-  await Page.locator('[data-card="Attached to"] select').first().selectOption({ label: "Chassis Collision" });
+  await Page.locator('.vcp-details [data-card="Attached to"] select').first().selectOption({ label: "Chassis Collision" });
   await Page.waitForTimeout(200);
   assert.equal((await Values("vehicle-suspension")).attach, "vehicle-collision");
   assert.equal((await Link().innerText()).split("\n")[0].trim(), "Chassis Collision");
   await Link().scrollIntoViewIfNeeded();
   await Page.screenshot({ path: path.join(Proof, "AttachedTo.png") });
   await Link().click();
-  await Page.locator(".vehicle-inspector[data-component='BoxCollision']").waitFor();
-  assert.equal(await Page.locator(".inspector-heading h1").innerText(), "Chassis Collision");
+  await Page.locator(".vcp-details .vehicle-inspector[data-component='BoxCollision']").waitFor();
+  assert.equal(await Page.locator(".vcp-details .inspector-heading h1").innerText(), "Chassis Collision");
   Checks.push("Attach to relinks the socket; clicking the asset name selects that asset");
 
   // Switching type keeps the numbers and swaps the drawing, range card and figures.
   await Open("vehicle-suspension");
-  await Page.locator(".vc-socket-kinds button", { hasText: "Tether" }).click();
+  await Page.locator(".vcp-details .vc-socket-kinds button", { hasText: "Tether" }).click();
   assert.equal((await Values("vehicle-suspension")).kind, "tether");
-  await Page.locator('[data-card="Pendulum"]').waitFor();
+  await Page.locator('.vcp-details [data-card="Pendulum"]').waitFor();
   assert(await Page.getByText("Swing period").count());
-  await Page.locator(".vc-socket-kinds button", { hasText: "Spring" }).click();
+  await Page.locator(".vcp-details .vc-socket-kinds button", { hasText: "Spring" }).click();
   assert((await Values("vehicle-suspension")).pose > 0.5);
   Checks.push("Switching to Tether shows the Pendulum card; switching back keeps the spring numbers");
 
@@ -108,7 +108,7 @@ try {
   await Open("vehicle-tow");
   await Scene().click();
   assert.equal((await Values("vehicle-tow")).connected, false);
-  assert.match(await Page.locator(".vc-socket-pose .metric").innerText(), /Released/);
+  assert.match(await Page.locator(".vcp-details .vc-socket-pose .metric").innerText(), /Released/);
   await Scene().click();
   await Page.waitForTimeout(200);
   assert.equal((await Values("vehicle-tow")).connected, true);

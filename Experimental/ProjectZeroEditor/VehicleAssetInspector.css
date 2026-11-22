@@ -170,3 +170,46 @@
   font-size: 9.5px;
   color: #8d939b;
 }
+/* Follow-up 62: the Controlled Vehicle opens its Component Viewer panel from here. */
+.va-viewer {
+  all: unset;
+  box-sizing: border-box;
+  cursor: pointer;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+  padding: 10px 14px 10px 10px;
+  border-radius: 14px;
+  background: #ececec;
+  color: #141414;
+}
+.va-viewer:hover {
+  background: #ffffff;
+}
+.va-viewer:focus-visible {
+  outline: 2px solid #ffb238;
+  outline-offset: 2px;
+}
+.va-viewer-icons {
+  display: grid;
+  grid-template-columns: repeat(2, 18px);
+  gap: 3px;
+  padding: 6px;
+  border-radius: 10px;
+  background: #141416;
+}
+.va-viewer-text {
+  flex: 1;
+  min-width: 0;
+}
+.va-viewer-text b {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+}
+.va-viewer-text small {
+  font-size: 10px;
+  color: #55585e;
+}

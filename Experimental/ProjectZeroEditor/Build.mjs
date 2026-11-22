@@ -135,6 +135,11 @@ const AssetIconFolder = path.join(Folder, "Images/EditorAssets");
 if (fs.existsSync(AssetIconFolder))
   for (const File of fs.readdirSync(AssetIconFolder).filter((Name) => Name.endsWith(".png")))
     Assets.Icons[File.slice(0, -4)] = "data:image/png;base64," + fs.readFileSync(path.join(AssetIconFolder, File)).toString("base64");
+// Vehicle component icons (Follow-up 62): one per native component class and socket type, drawn for the Component Viewer.
+const ComponentIconFolder = path.join(Folder, "Images/VehicleComponentIcons");
+if (fs.existsSync(ComponentIconFolder))
+  for (const File of fs.readdirSync(ComponentIconFolder).filter((Name) => Name.endsWith(".svg")))
+    Assets.Icons[File.slice(0, -4)] = "data:image/svg+xml;base64," + fs.readFileSync(path.join(ComponentIconFolder, File)).toString("base64");
 
 // Preserve the reference's document-wide CSS and control behaviour without restyling the current editor.
 const ReferenceOutput = await build({
