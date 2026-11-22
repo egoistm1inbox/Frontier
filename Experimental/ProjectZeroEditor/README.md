@@ -58,8 +58,11 @@ starting point for the UI redesign.
     shapes stand on a line 1.8 m apart, and Position moves an object from its place on that line.
   - **Sun**: direction from the Sun's date, time and place (or its manual direction). The colour is its temperature times the sunlight
     left after the air, so it reddens at sunset. It casts shadows.
-  - **Atmosphere**: the sky sphere is `SkyShader.js` baked to an equirectangular image. Haze in the horizon's colour hides where the
-    ground ends. Clouds are not drawn.
+  - **Atmosphere**: `SkyShader.js` baked to a 1024 × 512 equirectangular image (sun disc included), drawn as the scene background at
+    infinity, so zooming can't clip it. Below the horizon the image continues the horizon colour, and the ground (which follows the
+    camera out to just short of the far plane) fades into haze of that colour, so there is no edge or seam. Clouds are not drawn.
+  - Zoom stays between 0.6 m and 150 m. (Earlier the sky was an 800 m sphere that the camera rig's moving far plane cut away when
+    zooming in, and the ground disc and fixed fog showed when zooming out.)
   - **Controls**: click to select, Ctrl or Shift click to add, drag to orbit, right or Shift drag to pan, wheel to zoom, F to focus.
   - It draws a frame only when the camera or the scene changed.
 - **Outliner multi-select and row menu.**
@@ -82,7 +85,7 @@ starting point for the UI redesign.
 - **`SkyShader.js`**: one WebGL2 sky renderer on a round planet, shared by both cards and the viewport. It does single scattering with
   ground light, a limb-darkened disc and stars, in perspective, panorama and equirectangular views.
 - **Checks.**
-  - New: `CheckViewport3D.mjs` (9).
+  - New: `CheckViewport3D.mjs` (10, including zooming in and out with the sky kept).
   - Rewritten: `CheckFirstCards.mjs` (4).
   - Updated for the 3D main view: `CheckQuickTools` (split view is now 3D beside one marker pane), `CheckConstruction` and `CheckInspectorLayout`.
 - Evidence is in `Exhibits/ProjectZeroEditor/FollowUp48/`. Headless SwiftShader only. Names are unapproved.

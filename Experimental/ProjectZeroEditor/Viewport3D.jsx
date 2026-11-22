@@ -8,8 +8,8 @@
 //     object from its place on that line. Objects rest on the ground.
 //   • Sun: direction from the Sun's date, time and place (or its manual direction); colour is its temperature times the sunlight left
 //     after the air (SkyShader.js `Transmittance`), so it reddens and fades at sunset; it casts shadows.
-//   • Atmosphere: the sky sphere is SkyShader.js baked to an equirectangular image whenever the sky changes; the hemisphere light takes
-//     its colour from that image.
+//   • Atmosphere: SkyShader.js baked to an equirectangular image whenever the sky changes and drawn as the background (at infinity, so
+//     zooming can't clip it); the hemisphere light and the horizon haze take their colours from that image.
 // Click an object to select it (Ctrl or Shift adds it). Drag to orbit, right-drag or Shift-drag to pan, wheel to zoom; F frames the
 // selection. Frames are drawn only when something changed, so an idle viewport costs nothing.
 
@@ -18,7 +18,7 @@ import { THREE, Stage } from "../Shared/Studio/Render.js";
 import { ShapeOf } from "./PrimitiveInspector.jsx";
 import { ResolveMaterial } from "./MaterialSpecification.js";
 import { Solar } from "./Solar.mjs";
-import { SkyMedium, PaintSky, ViewBasis, Direction, KelvinTint, Transmittance } from "./SkyShader.js";
+import { SkyMedium, PaintSky, ViewBasis, Direction, KelvinTint, Transmittance, SunAngularRadius } from "./SkyShader.js";
 
 export const ShowcaseSpacing = 1.8;
 const Rad = Math.PI / 180;
@@ -103,44 +103,27 @@ export default function Viewport3D({ Rows, Values, Hidden, Selected, Picked = []
       Canvas.setAttribute("aria-label", "3D viewport");
       Host.current.appendChild(Canvas);
       const View = new Stage(Canvas, { background: "#0b0b0d", grid: true, shadows: true });
-      View.camera.far = 900;
-      View.camera.updateProjectionMatrix();
-      View.scene.background = null;
-      // Sky sphere around the camera, painted from SkyShader.js.
+      // Sky: SkyShader.js baked to an equirectangular image (with the sun's disc in it) and used as the scene background, which three.js
+      // draws at infinity. It doesn't depend on the camera's position or its near and far planes, so zooming never cuts it.
       const SkyImage = document.createElement("canvas");
-      SkyImage.width = 512;
-      SkyImage.height = 256;
+      SkyImage.width = 1024;
+      SkyImage.height = 512;
+      const SkyBake = document.createElement("canvas");
+      SkyBake.width = SkyImage.width;
+      SkyBake.height = SkyImage.height;
       const SkyTexture = new THREE.CanvasTexture(SkyImage);
       SkyTexture.colorSpace = THREE.SRGBColorSpace;
-      const SkySphere = new THREE.Mesh(new THREE.SphereGeometry(800, 64, 32), new THREE.MeshBasicMaterial({ map: SkyTexture, side: THREE.BackSide, depthWrite: false, toneMapped: false, fog: false }));
-      SkySphere.renderOrder = -10;
-      SkySphere.raycast = () => {};
-      View.scene.add(SkySphere);
-      // The sun's disc: a soft additive sprite far along the sun direction.
-      const Glow = document.createElement("canvas");
-      Glow.width = Glow.height = 128;
-      const Brush = Glow.getContext("2d");
-      const Gradient = Brush.createRadialGradient(64, 64, 0, 64, 64, 64);
-      Gradient.addColorStop(0, "rgba(255,255,255,1)");
-      Gradient.addColorStop(0.12, "rgba(255,255,255,1)");
-      Gradient.addColorStop(0.18, "rgba(255,255,255,0.45)");
-      Gradient.addColorStop(0.45, "rgba(255,255,255,0.08)");
-      Gradient.addColorStop(1, "rgba(255,255,255,0)");
-      Brush.fillStyle = Gradient;
-      Brush.fillRect(0, 0, 128, 128);
-      const Disc = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(Glow), blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, fog: false }));
-      Disc.scale.setScalar(70);
-      Disc.renderOrder = -9;
-      Disc.raycast = () => {};
-      View.scene.add(Disc);
+      SkyTexture.mapping = THREE.EquirectangularReflectionMapping;
+      View.scene.background = SkyTexture;
       const Lights = View.scene.children.filter((Each) => Each.isLight);
       const Hemisphere = Lights.find((Each) => Each.isHemisphereLight);
       const Fill = Lights.find((Each) => Each.isDirectionalLight && Each !== View.sun);
       if (Fill) Fill.intensity = 0;
       View.sun.shadow.mapSize.set(1024, 1024);
-      // Ground: the Atmosphere's ground colour, out to where it meets the sky's own ground near the horizon.
+      // Ground: the Atmosphere's ground colour. It follows the camera across and reaches just short of the far plane (which the camera
+      // rig moves with the zoom), fading into haze the colour of the sky's own ground at the horizon, so it has no visible edge.
       View.ground.visible = false;
-      const Ground = new THREE.Mesh(new THREE.CircleGeometry(300, 96), new THREE.MeshStandardMaterial({ color: "#808080", roughness: 0.95 }));
+      const Ground = new THREE.Mesh(new THREE.CircleGeometry(1, 128), new THREE.MeshStandardMaterial({ color: "#808080", roughness: 0.95 }));
       Ground.rotation.x = -Math.PI / 2;
       Ground.position.y = -0.002;
       Ground.receiveShadow = true;
@@ -164,14 +147,21 @@ export default function Viewport3D({ Rows, Values, Hidden, Selected, Picked = []
         const Now = performance.now();
         const Step = Math.min(0.05, (Now - View.lastTime) / 1000);
         View.lastTime = Now;
+        // Zoom stays between 0.6 m (closer, the wheel's glide pushes the camera into a surface) and 150 m (farther, the scene is a dot).
+        View.rig.goal.distance = Math.min(150, Math.max(0.6, View.rig.goal.distance));
         View.rig.update(Step);
         const Seen = View.camera.matrixWorld.elements.map((Each) => Each.toFixed(5)).join(",") + View.camera.fov.toFixed(3) + View.canvas.width + "x" + View.canvas.height;
         if (!Dirty && Seen === Last) return;
         Last = Seen;
         Dirty = false;
-        SkySphere.position.copy(View.camera.position);
-        const Toward = Latest.current.SunDirection || [0, 1, 0];
-        Disc.position.copy(View.camera.position).add(new THREE.Vector3(...Toward).multiplyScalar(700));
+        const Reach = View.camera.far * 0.92;
+        Ground.position.set(View.camera.position.x, -0.002, View.camera.position.z);
+        Ground.scale.setScalar(Reach);
+        if (View.scene.fog) {
+          // Haze starts well past the shapes at any zoom and is complete where the ground ends.
+          View.scene.fog.near = Math.min(Reach * 0.5, View.rig.distance * 4 + 40);
+          View.scene.fog.far = Reach;
+        }
         const Floor = View.grid.material.uniforms;
         Floor.uFocus.value.copy(View.rig.target);
         Floor.uRadius.value = Math.max(6, View.rig.distance * 2.6);
@@ -196,7 +186,7 @@ export default function Viewport3D({ Rows, Values, Hidden, Selected, Picked = []
       Canvas.addEventListener("keydown", (Event) => {
         if (Event.key.toLowerCase() === "f") Scene.current?.FrameChosen?.();
       });
-      Built = { View, Canvas, SkyImage, SkyTexture, SkySphere, Disc, Hemisphere, Ground, AimSun, Touch: () => (Dirty = true), Framed: false };
+      Built = { View, Canvas, SkyImage, SkyBake, SkyTexture, Hemisphere, Ground, AimSun, Touch: () => (Dirty = true), Framed: false };
       Scene.current = Built;
     } catch (Problem) {
       Fail(String(Problem?.message || Problem));
@@ -223,28 +213,40 @@ export default function Viewport3D({ Rows, Values, Hidden, Selected, Picked = []
   useEffect(() => {
     const Built = Scene.current;
     if (!Built) return;
-    PaintSky(Built.SkyImage, Medium, { Sun: Light.Direction, Tint: Light.Tint }, { Mode: "equirect", Basis: ViewBasis([0, 0, 1]), Warp: true, Disc: 0, Glow: 0, Stars: 1, Exposure: 1.1 });
+    // The disc is drawn larger than life (×4) so it reads at viewport sizes; the glow is the shader's own.
+    PaintSky(Built.SkyBake, Medium, { Sun: Light.Direction, Tint: Light.Tint }, { Mode: "equirect", Basis: ViewBasis([0, 0, 1]), Warp: true, Disc: SunAngularRadius * 4, Glow: 0.5, Stars: 1, Exposure: 1.1 });
+    // three.js reads equirectangular images the other way round (u = atan2(z, x) / 2π + ½), so mirror the bake left to right.
+    const Brush = Built.SkyImage.getContext("2d", { willReadFrequently: true });
+    const [Width, Height] = [Built.SkyImage.width, Built.SkyImage.height];
+    Brush.setTransform(-1, 0, 0, 1, Width, 0);
+    Brush.drawImage(Built.SkyBake, 0, 0);
+    Brush.setTransform(1, 0, 0, 1, 0, 0);
+    // Below the horizon the three.js ground takes over. The image there carries on with the colour just above the horizon (which is
+    // also the haze colour), so the thin sliver between the ground's far edge and the true horizon doesn't show a seam.
+    const Horizon = Math.round(Height / 2);
+    Brush.drawImage(Built.SkyImage, 0, Horizon - 3, Width, 1, 0, Horizon, Width, Height - Horizon);
     Built.SkyTexture.needsUpdate = true;
-    // Hemisphere light: the sky's average colour a little above the horizon; the ground bounces the albedo.
-    const Row = Built.SkyImage.getContext("2d").getImageData(0, 72, 512, 1).data;
-    const Mean = [0, 0, 0];
-    for (let At = 0; At < Row.length; At += 4) for (let Channel = 0; Channel < 3; Channel++) Mean[Channel] += Linear(Row[At + Channel] / 255) / 512;
+    // Average linear colour of the image rows between two elevations (degrees).
+    const Band = (High, Low) => {
+      const Top = Math.round((0.5 - High / 180) * Height), Rows = Math.max(1, Math.round((High - Low) / 180 * Height));
+      const Pixels = Brush.getImageData(0, Top, Width, Rows).data;
+      const Mean = [0, 0, 0];
+      for (let At = 0; At < Pixels.length; At += 4) for (let Channel = 0; Channel < 3; Channel++) Mean[Channel] += Linear(Pixels[At + Channel] / 255) / (Pixels.length / 4);
+      return Mean;
+    };
+    // Hemisphere light: the sky's colour 30–50° up; the ground bounces the albedo.
+    const Mean = Band(50, 30);
     const Brightest = Math.max(...Mean, 1e-4);
     Built.Hemisphere.color.setRGB(...Mean.map((C) => C / Brightest));
     Built.Hemisphere.groundColor.setRGB(...Medium.Ground.map((C) => Math.min(1, C * 2.2 * (0.3 + Light.Strength))));
     Built.Hemisphere.intensity = 0.15 + 1.25 * Math.min(1, Brightest * 1.6);
-    // Haze: the ground fades into the sky's colour just above the horizon, hiding where the ground disc ends.
-    const Horizon = Built.SkyImage.getContext("2d").getImageData(0, 124, 512, 1).data;
-    const Haze = [0, 0, 0];
-    for (let At = 0; At < Horizon.length; At += 4) for (let Channel = 0; Channel < 3; Channel++) Haze[Channel] += Linear(Horizon[At + Channel] / 255) / 512;
-    Built.View.scene.fog = new THREE.Fog(new THREE.Color().setRGB(...Haze), 40, 290);
+    // Haze: the sky's colour at the horizon, so distant ground fades into it the way it does outdoors.
+    Built.View.scene.fog = new THREE.Fog(new THREE.Color().setRGB(...Band(1.4, 0.4)), 40, 300);
     const Beam = Built.View.sun;
     Beam.color.setRGB(...Light.Colour);
     Beam.intensity = 2.6 * Light.Strength * Math.max(0, Math.min(1, (Light.Elevation + 1) / 3));
     Built.AimSun();
     Built.Ground.material.color.setRGB(...Medium.Ground);
-    Built.Disc.material.color.setRGB(...Light.Colour.map((C) => C * Math.min(1, 0.2 + Light.Strength)));
-    Built.Disc.visible = Light.Elevation > -1.5;
     Built.Touch();
     Built.Canvas.dataset.sky = SkyKey;
   }, [SkyKey]);

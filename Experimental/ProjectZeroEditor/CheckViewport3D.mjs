@@ -93,6 +93,25 @@ try {
   assert(Dusk[0] > Dusk[2], "sunset sky is warm: " + Dusk);
   await Page.locator(".scene-image").screenshot({ path: path.join(Proof, "Viewport3D-Sunset.png") });
   await Patch("sun", { "Local Hours": 15.5 });
+  await Open("cube");
+  // The sky is the background at infinity: zooming all the way in and out keeps it (the camera rig moves its near and far planes).
+  const Zoom = async (Ticks) => {
+    const Box = await Canvas().boundingBox();
+    await Page.mouse.move(Box.x + Box.width / 2, Box.y + Box.height * 0.08);
+    for (let Tick = 0; Tick < Math.abs(Ticks); Tick++) {
+      await Page.mouse.wheel(0, Math.sign(Ticks) * 120);
+      await Page.waitForTimeout(25);
+    }
+    await Page.waitForTimeout(1500);
+  };
+  await Zoom(-24);
+  const Near = await SkyColour();
+  assert(Near[2] > Near[0] && Near[2] > 120, "sky kept zoomed in: " + Near);
+  await Zoom(60);
+  const Far = await SkyColour();
+  assert(Far[2] > Far[0] && Far[2] > 120, "sky kept zoomed out: " + Far);
+  await Page.locator(".scene-image").screenshot({ path: path.join(Proof, "Viewport3D-ZoomedOut.png") });
+  Checks.push(`Zoom: the sky stays at infinity, rgb(${Near.join(", ")}) zoomed in and rgb(${Far.join(", ")}) zoomed out to the 150 m limit`);
   Checks.push(`Sky from SkyShader.js: top of the view rgb(${Noon.join(", ")}) by day, rgb(${Dusk.join(", ")}) at 17:48`);
 
   // Moving and recolouring an object reaches the viewport.
