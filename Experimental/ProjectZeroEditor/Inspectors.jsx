@@ -641,7 +641,7 @@ export function Inspector({
   const Header = (Category, Title = Subject.Name) => (
     <header className="inspector-heading">
       <div className="breadcrumbs">Inspector / {Category}</div>
-      <h1>{Title}</h1>
+      <h1 title={Title}>{Title}</h1>
       <p className="eyebrow">{Subject.Description}</p>
       <EntityNotes
         Value={Values.Notes || ""}
@@ -1405,6 +1405,20 @@ export function Inspector({
                   <small>{Chosen.Caption}</small>
                 </div>
               </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={V("Tripod") !== false}
+                aria-label="Tripod"
+                className={"camera-tripod" + (V("Tripod") !== false ? " on" : "")}
+                onClick={() => AssignProperty("Tripod", V("Tripod") === false)}
+              >
+                <span>
+                  <b>Tripod</b>
+                  <small>{V("Tripod") !== false ? "Standing on its tripod" : "Free · for a camera that moves"}</small>
+                </span>
+                <i />
+              </button>
               <div className="camera-body-choices" role="radiogroup" aria-label="Camera body">
                 {CameraBodies.map((Body) => (
                   <button

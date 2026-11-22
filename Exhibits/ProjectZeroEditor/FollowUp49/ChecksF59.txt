@@ -1,0 +1,23 @@
+Follow-up 59 checks (headless SwiftShader, build of this commit)
+
+🟢 CheckObjectComponents 12 (adds: five navigation designs, cards right under the header, A–E switch; torus Overview read from .pi-page[data-page])
+🟢 CheckEditorAssets 5 (adds: Tripod switch, cine:film:free, Tripod false stored, tripod back)
+🟢 CheckInspectorOrder 113 (geometry no longer expects the navigation first)
+🟢 CheckVolumeWorkspaces 4
+
+Batch:
+CheckEditorAssets.mjs | noline | Editor asset checks passed: 4
+CheckViewport3D.mjs | noline | 11 Viewport3D checks passed
+CheckGeometryWorkspaces.mjs | noline |   "Errors": []
+CheckColliders.mjs | noline | 8 Colliders checks passed
+CheckBrowser.mjs | noline |   "Errors": [],
+CheckFirstCards.mjs | noline | 4 FirstCards checks passed
+CheckBakedMaps.mjs | noline | Baked map checks passed: 6
+CheckEntityContext.mjs | noline | Entity context checks passed: 6
+CheckSharedCards.mjs | noline | Shared-card checks passed: 14
+CheckVehicleSockets.mjs | noline | Vehicle socket checks passed: 8
+CheckRenderSettings.mjs | noline | Render settings checks passed: 10
+CheckEnvironmentGraphs.mjs | noline |   "Errors": []
+DONE
+
+CheckInspectorLayout stops at :118, the Wind comparison flake that fails the same way on the F57/F58 base.

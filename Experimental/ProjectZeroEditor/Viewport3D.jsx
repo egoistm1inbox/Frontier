@@ -13,6 +13,7 @@
 //   • Atmosphere: the sky-view map (BakedMaps.js, SkyShader.js in equirectangular form) baked whenever the sky changes and drawn as the
 //     background (at infinity, so zooming can't clip it); the hemisphere light and the horizon haze take their colours from that map.
 //   • Cameras: every scene camera (not the editor camera, which is the view itself) as its editor asset (EditorAssets.js) on a tripod
+//     (or, with Tripod off, the body alone at head height, for cameras that move)
 //     around the Showcase, aimed at it, with a frustum out to its subject distance from its focal length and sensor.
 //   • Lens Flare: the Lens Flare object put together from its baked atlas (LensFlare.js) on a 2D layer over the view, where the sun is on
 //     screen and not hidden behind a shape.
@@ -92,6 +93,7 @@ export function CameraPlacements(Rows, Values, Hidden) {
     return {
       Row,
       Body: CameraBodyOf(Row.Id, Own["Camera body"]),
+      Tripod: Own.Tripod !== false,
       Turn: (-34 - Index * 22) * Rad,
       Focal: Read("Focal Length", 35),
       Sensor: Read("Sensor Width", 36),
@@ -449,9 +451,9 @@ export default function Viewport3D({ Rows, Values, Hidden, Selected, Picked = []
     // Cameras on tripods, each aimed at the Showcase's middle, with a frustum to its subject distance.
     const Aim = Bounds.isEmpty() ? new THREE.Vector3(0, 0.5, 0) : Bounds.getCenter(new THREE.Vector3());
     const Radius = Bounds.isEmpty() ? 1 : Bounds.getSize(new THREE.Vector3()).length() / 2;
-    for (const { Row, Body, Turn, Focal, Sensor, Subject, Aspect } of Posed) {
+    for (const { Row, Body, Tripod, Turn, Focal, Sensor, Subject, Aspect } of Posed) {
       const At = [Aim.x + Math.sin(Turn) * (Radius * 0.75 + 1.2), 0, Aim.z + Math.cos(Turn) * (Radius * 0.75 + 1.2)];
-      const Asset = CameraAsset(Body, { Stand: true, Height: Body === "mirrorless" ? 1.45 : 1.3 });
+      const Asset = CameraAsset(Body, { Stand: Tripod, Raised: !Tripod, Height: Body === "mirrorless" ? 1.45 : 1.3 });
       Asset.position.set(...At);
       Asset.rotation.y = Math.atan2(At[0] - Aim.x, At[2] - Aim.z);
       const Head = Asset.userData.body;
@@ -490,7 +492,7 @@ export default function Viewport3D({ Rows, Values, Hidden, Selected, Picked = []
     };
     Built.Touch();
     Built.Canvas.dataset.objects = String(Placed.length);
-    Built.Canvas.dataset.cameras = Posed.map(({ Row, Body }) => Row.Id + ":" + Body).join(" ");
+    Built.Canvas.dataset.cameras = Posed.map(({ Row, Body, Tripod }) => Row.Id + ":" + Body + (Tripod ? "" : ":free")).join(" ");
   }, [ShapeKey, SkyKey]);
 
   // Selection outlines: only these change when the selection does, so picking doesn't rebuild the shapes.

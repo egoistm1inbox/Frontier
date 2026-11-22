@@ -1,0 +1,17 @@
+{
+  "Checks": [
+    "Category navigation follows the cards: Dock (cube), Spine (sphere), Up next (cylinder), Orbit (torus), Peek (cone); the A–E switch changes it",
+    "No object component rows in the outliner (cameras keep their Render Engine row); the carousel is Overview, Components, Geometry, Material, UV, Fracture, SDF, LOD",
+    "Overview → Mass opens the Components page at Mass; Aluminium writes Values.cube, reads 2,700 kg, and the stack line follows",
+    "?inspect=torus-collision selects the torus and opens Collision (starts on SDF, asks for a bake); Box is stored on the torus",
+    "A component focus belongs to its object: reselecting the torus opens on Overview",
+    "Sphere stack: Move up → Mass, Collision, Rigid Body; drag Mass onto Rigid Body → Collision, Rigid Body, Mass; Rigid Body switched off is stored as Enabled false; removed it stays removed across reload and is added back at the bottom",
+    "Revision 3 scene: cube's rows (Collision, Mass; Rigid Body deleted) fold into its stack in that order and leave the outliner",
+    "Older saved scenes: every object has Mass, Rigid Body, Collision in its stack and the 2 camera rows are added",
+    "God Rays sits under the Sun with the god-rays icon; a scene with it after Local Fog moves it under the Sun and keeps Intensity 2.5",
+    "Preview sliders (card only, nothing stored): Fracture: explode → 0.9 redraws the card; SDF: slice → 0.2 redraws the card; LOD: level → 2 redraws the card",
+    "UV, Fracture, SDF and LOD previews each sit on their own carousel page; Geometry no longer holds the UV card",
+    "Vehicle charts: peak drag sets ζ 0.27, torque point 7 → 600 N·m, redline 6600, CdA 1.15, ClA 0.69"
+  ],
+  "Errors": []
+}

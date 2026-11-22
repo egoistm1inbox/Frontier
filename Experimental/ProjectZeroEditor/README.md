@@ -110,7 +110,7 @@ starting point for the UI redesign.
   matte box, follow focus), **B · Digital** (cinema box, top handle, monitor, V-mount) and **C · Mirrorless** (grip, viewfinder hump,
   ribbed zoom), plus a tripod.
   - **Viewport**: each scene camera stands on a tripod in front of the Showcase, aimed at it, with a frustum from its focal length and
-    sensor out to its subject distance. Studio reflections are on its materials only. The editor camera is the view itself and is not drawn.
+    sensor out to its subject distance. A studio matcap lights its materials only. The editor camera is the view itself and is not drawn.
   - **Outliner**: camera rows show their model as the icon (96 px PNGs in `Images/EditorAssets`, made by `CaptureEditorAssetIcons.mjs`).
   - **Camera inspector, Body page**: the **Camera body** card picks A, B or C (`Camera body` value). The editor camera defaults to
     mirrorless, scene cameras to film.
@@ -137,6 +137,14 @@ starting point for the UI redesign.
     control for `CheckBrowser`, `CheckEnvironmentGraphs` and `CheckQuickTools`; `CheckInspectorLayout` expects the tab bar under the Sun heading.
   - Updated for the 3D main view: `CheckQuickTools` (split view is now 3D beside one marker pane), `CheckConstruction` and `CheckInspectorLayout`.
 - Evidence is in `Exhibits/ProjectZeroEditor/FollowUp48/`. Headless SwiftShader only. Names are unapproved.
+- **Follow-up 59.**
+  - **Showcase category navigation** moved below the cards, in five designs (see *Showcase Primitive Inspector*). The summary chips
+    left the Overview page for the navigation.
+  - **Tripod** switch on the Camera inspector's Body page (`Tripod` value, on by default). Off, the camera body is drawn alone at head
+    height with no tripod, for cameras that move (crane, rig, by hand); `CameraAsset(Body, { Raised })`.
+  - Checks: `CheckObjectComponents` (12) adds the five designs, their place under the header and the A–E switch; `CheckEditorAssets`
+    adds the Tripod switch; `CheckInspectorOrder` no longer expects the navigation first.
+  - Evidence is in `Exhibits/ProjectZeroEditor/FollowUp49/`.
 
 ---
 
@@ -381,11 +389,22 @@ starting point for the UI redesign.
 ## 🧱 Showcase Primitive Inspector
 
 Cube, Sphere, Cylinder, Torus and Cone (Outliner folder **Showcase**) use `PrimitiveInspector.jsx` instead of the generic geometry layout.
-Other geometry and every other panel are unchanged. Below the header there is one category carousel, which opens on **Overview** each
-time an object is selected. It has pill tabs (inactive pills show only an icon; the active one adds its label), ‹ › buttons, arrow keys,
-horizontal swipe and page dots. Everything uses the same dark theme.
+Other geometry and every other panel are unchanged. The cards come straight after the header; the category navigation (Follow-up 59)
+never sits above them. It opens on **Overview** each time an object is selected, and has arrow keys and horizontal swipe in every look.
+There are five navigation designs, one per Showcase object by default, and the **Navigation** switch (A–E) at the foot of the inspector
+changes it per object (`Navigation design` value):
 
-- **Overview**: summary chips, Checks passed / Warnings counters, Footprint (volume, world width / height / depth), a checks list,
+| | Design | Default | How it works |
+|---|---|---|---|
+| A | **Dock** | Cube | A frosted bar pinned to the bottom of the inspector: the summary line over the eight category icons; the open one widens with its name |
+| B | **Spine** | Sphere | A slim icon column to the right of the cards that stays in view; a tone bar marks the open category, names show on hover, the summary sits at its foot |
+| C | **Up next** | Cylinder | After the cards: a large "Up next" card for the next category, a 4 × 2 grid of every category ("Here" on the open one) and the summary chips |
+| D | **Orbit** | Torus | A round button bottom right, ringed in the category colours; it opens a circle of the categories around the summary |
+| E | **Peek** | Cone | The neighbouring categories' names run up the two edges of the cards (press or swipe); dots and the summary line follow the cards |
+
+Everything uses the same dark theme.
+
+- **Overview**: Checks passed / Warnings counters, Footprint (volume, world width / height / depth), a checks list,
   Tags, then **Quick controls**, then **Notes**. Quick controls are six dark square tiles (Visible, Dynamic, Shadows, GI, Physics,
   Locked). There is no On/Off text: the round icon badge is lit green when on and dimmed when off. Physics on also turns Dynamic on;
   Dynamic off also turns Physics off. The Notes card holds the **Purpose** block first ("What it does" / "Why it's here", with a

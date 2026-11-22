@@ -96,8 +96,8 @@ const Sections = {
     ".collection-browser",
     ".collection-notes",
   ],
-  // Showcase primitives: the category carousel opens on Overview; quick controls, then Notes holding the Purpose.
-  geometry: [".pi-carousel-bar", ".pi-quick", ".pi-purpose"],
+  // Showcase primitives: the cards come first (Follow-up 59: the category navigation no longer sits at the top); quick controls, then Notes holding the Purpose.
+  geometry: [".pi-quick", ".pi-purpose"],
   post: [".entity-capabilities"],
   // Components (object: Mass, Rigid Body, Collision; camera: Render Engine): the owner link, then the cards.
   "object-component": [".oc-owner", ".pi-component [data-card], .rc-cards [data-card]"],

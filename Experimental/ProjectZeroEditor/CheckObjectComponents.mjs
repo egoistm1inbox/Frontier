@@ -54,6 +54,23 @@ try {
   assert.deepEqual(await Page.locator(".pi-components-card .oc-link b").allInnerTexts(), ["Mass", "Rigid Body", "Collision"]);
   assert.deepEqual(await Page.locator(".pi-pill").evaluateAll((Pills) => Pills.map((Each) => Each.getAttribute("aria-label"))), ["Overview", "Components", "Geometry", "Material", "UV", "Fracture", "SDF", "LOD"]);
   assert.equal(await Page.locator('.pi-pill[aria-label="Physics"]').count(), 0);
+  // Follow-up 59: the category navigation comes after the cards, never above them; five designs, one per showcase object, switchable A–E.
+  const Looks = { cube: "dock", sphere: "spine", cylinder: "index", torus: "orbit", cone: "peek" };
+  for (const [Id, Look] of Object.entries(Looks)) {
+    await Open(Id);
+    assert.equal(await Page.locator(".pi-carousel").getAttribute("data-navigation"), Look, Id + " navigation");
+    const Cards = await Page.locator(".pi-page [data-card]").first().boundingBox();
+    const Top = await Page.locator(".inspector-scroll > [data-panel] header").first().boundingBox();
+    assert.ok(Cards.y < Top.y + Top.height + 140, Id + ": the first card sits right under the header " + JSON.stringify({ Cards, Top }));
+  }
+  await Open("cube");
+  await Page.locator('[data-navigation-choice="peek"]').click();
+  await Page.waitForTimeout(250);
+  assert.equal(await Page.locator(".pi-carousel").getAttribute("data-navigation"), "peek");
+  await Page.locator('[data-navigation-choice="dock"]').click();
+  await Page.waitForTimeout(250);
+  assert.equal(await Page.locator(".pi-carousel").getAttribute("data-navigation"), "dock");
+  Checks.push("Category navigation follows the cards: Dock (cube), Spine (sphere), Up next (cylinder), Orbit (torus), Peek (cone); the A–E switch changes it");
   Checks.push("No object component rows in the outliner (cameras keep their Render Engine row); the carousel is Overview, Components, Geometry, Material, UV, Fracture, SDF, LOD");
 
   // Opening Mass from the Overview turns to the Components page with the Mass entry open; edits are stored on the owning object.
@@ -88,7 +105,8 @@ try {
   await Page.waitForTimeout(250);
   await Page.locator(".outliner-row", { hasText: "Torus" }).first().click();
   await Page.waitForTimeout(250);
-  assert.equal(await Pill("Overview").getAttribute("aria-selected"), "true");
+  // Follow-up 59: the torus uses the Orbit navigation, whose category buttons appear only with the ring open; the open page tells it.
+  assert.equal(await Page.locator(".pi-page").getAttribute("data-page"), "overview");
   Checks.push("A component focus belongs to its object: reselecting the torus opens on Overview");
 
   // Stack editing on the sphere: reorder, switch off, remove, reload, add back.

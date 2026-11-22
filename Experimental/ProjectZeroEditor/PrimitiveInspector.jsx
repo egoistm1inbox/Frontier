@@ -375,13 +375,6 @@ function OverviewPage({ Shape, Read, Change, Values, Hidden, ToggleHidden, Size,
   const Passed = Rows.filter(([Verdict]) => Verdict === "check").length;
   return (
     <>
-      <div className="pi-chip-row" aria-label="Summary">
-        <span className="pi-chip"><b>{Size.Triangles.toLocaleString("en-US")}</b> tris</span>
-        <span className="pi-chip"><b>{Size.Vertices.toLocaleString("en-US")}</b> verts</span>
-        <span className="pi-chip"><b>1</b> material</span>
-        <span className="pi-chip"><b>{Values.DYNAMIC ? "Dynamic" : "Static"}</b></span>
-      </div>
-
       <div className="pi-status-pair">
         <div className="pi-status">
           <span className="pi-status-icon ok"><PrimitiveGlyph Name="check" Size={12} /></span>
@@ -1324,90 +1317,217 @@ function GeometryPage({ Shape, Read, Change, Values, Size, Kit }) {
 //                                                    CAROUSEL
 //------------------------------------------------------------------------------------------------------------------------
 
-function Carousel({ Pages, Focus = null }) {
+// The ways to move between categories. The cards always come first; while the five are compared each Showcase shape opens with its
+// own (Cube A, Sphere B, Cylinder C, Torus D, Cone E) and the Navigation switch at the foot of the inspector tries the others.
+//   A · Dock     a frosted bar pinned to the bottom of the inspector: the summary over the category icons.
+//   B · Spine    a slim column of category icons pinned beside the cards, the summary stacked at its foot.
+//   C · Up next  after the cards: a large card to the next category, every category as a tile, and the summary.
+//   D · Orbit    a round button pinned bottom right, ringed by the category colours; it opens the categories in a circle around the
+//                summary.
+//   E · Peek     the previous and next category's names stand up along the cards' edges (or swipe); a row of dots after the cards.
+export const NavigationLooks = [
+  { Id: "dock", Letter: "A", Name: "Dock" },
+  { Id: "spine", Letter: "B", Name: "Spine" },
+  { Id: "index", Letter: "C", Name: "Up next" },
+  { Id: "orbit", Letter: "D", Name: "Orbit" },
+  { Id: "peek", Letter: "E", Name: "Peek" },
+];
+const LookOfShape = { cube: "dock", sphere: "spine", cylinder: "index", torus: "orbit", cone: "peek" };
+export const NavigationOf = (Shape, Chosen) => (NavigationLooks.some((Look) => Look.Id === Chosen) ? Chosen : LookOfShape[Shape] || "dock");
+
+function Carousel({ Pages, Focus = null, Look = "dock", Summary, ChooseLook }) {
   const [Current, Choose] = useState(Focus ? "components" : "overview");
   const [Direction, Turn] = useState("none");
-  const Rail = useRef(null);
+  const [Ringed, Ring] = useState(false);
   const Index = Math.max(0, Categories.findIndex(([Key]) => Key === Current));
   const Go = (Next) => {
     const Target = (Next + Categories.length) % Categories.length;
     Turn(Target >= Index ? "next" : "previous");
     Choose(Categories[Target][0]);
+    Ring(false);
   };
   // Opening a component from elsewhere turns to the Components page.
   useEffect(() => {
     if (Focus && Current !== "components") { Turn("next"); Choose("components"); }
   }, [Focus?.Stamp]);
-  useEffect(() => {
-    const Pill = Rail.current?.querySelector('[aria-selected="true"]');
-    Pill?.scrollIntoView?.({ block: "nearest", inline: "center", behavior: "smooth" });
-  }, [Current]);
   const Swipe = useRef(null);
   const [Key, Label, , Tone] = Categories[Index];
+  const Before = Categories[(Index - 1 + Categories.length) % Categories.length];
+  const After = Categories[(Index + 1) % Categories.length];
+  const Keys = (Event) => {
+    if (Event.key === "ArrowRight") { Event.preventDefault(); Go(Index + 1); }
+    if (Event.key === "ArrowLeft") { Event.preventDefault(); Go(Index - 1); }
+    if (Event.key === "Escape") Ring(false);
+  };
+  // One category button; every look draws its categories with these (role tab, named by the category).
+  const Pill = ([Each, Caption, Glyph, EachTone], Slot, Inside = null, Extra = {}) => (
+    <button
+      key={Each}
+      type="button"
+      role="tab"
+      aria-selected={Each === Key}
+      aria-label={Caption}
+      title={Caption}
+      className={"pi-pill" + (Each === Key ? " active" : "")}
+      style={{ "--pi-tone": EachTone, ...(Extra.style || {}) }}
+      onClick={() => Go(Slot)}
+      onKeyDown={Keys}
+    >
+      {Inside || (
+        <>
+          <PrimitiveGlyph Name={Glyph} Size={15} />
+          <span className="pi-pill-caption">{Caption}</span>
+        </>
+      )}
+    </button>
+  );
+  const Line = `${Summary.Triangles} tris · ${Summary.Vertices} verts · ${Summary.Materials} material · ${Summary.Motion}`;
+  const PageBody = (
+    <div
+      key={Key}
+      className={"pi-page pi-enter-" + Direction}
+      role="tabpanel"
+      aria-label={Label}
+      data-page={Key}
+      onPointerDown={(Event) => {
+        // A press on a control (or a drag grip, whose pointerup never arrives) is not a swipe; drop any stale start too.
+        Swipe.current = Event.target.closest("input, textarea, button, select, [role=slider], label, [draggable=true]") ? null : { X: Event.clientX, Y: Event.clientY };
+      }}
+      onDragStart={() => (Swipe.current = null)}
+      onPointerUp={(Event) => {
+        const Start = Swipe.current;
+        Swipe.current = null;
+        if (!Start) return;
+        const Dx = Event.clientX - Start.X, Dy = Event.clientY - Start.Y;
+        if (Math.abs(Dx) > 60 && Math.abs(Dx) > Math.abs(Dy) * 1.5) Go(Index + (Dx < 0 ? 1 : -1));
+      }}
+    >
+      {Pages[Key]}
+    </div>
+  );
+  const Switch = (
+    <div className="pi-look-switch" role="radiogroup" aria-label="Navigation design">
+      <span>Navigation</span>
+      {NavigationLooks.map((Each) => (
+        <button key={Each.Id} type="button" role="radio" aria-checked={Each.Id === Look} title={Each.Name} data-navigation-choice={Each.Id} onClick={() => ChooseLook(Each.Id)}>
+          {Each.Letter}
+        </button>
+      ))}
+      <small>{NavigationLooks.find((Each) => Each.Id === Look)?.Name}</small>
+    </div>
+  );
   return (
-    <section className="pi-carousel" aria-label="Categories">
-      <div className="pi-carousel-bar">
-        <button type="button" className="pi-round" aria-label="Previous category" onClick={() => Go(Index - 1)}>
-          <span className="pi-flip"><PrimitiveGlyph Name="chevron" Size={14} /></span>
+    <section className={"pi-carousel pi-nav-" + Look} aria-label="Categories" data-navigation={Look} style={{ "--pi-current": Tone }}>
+      {Look === "spine" && (
+        <nav className="pi-spine pi-nav" role="tablist" aria-label="Category">
+          {Categories.map((Each, Slot) => Pill(Each, Slot, <PrimitiveGlyph Name={Each[2]} Size={15} />))}
+          <span className="pi-spine-summary" aria-label="Summary">
+            <b>{Summary.Triangles}</b>
+            <small>tris</small>
+            <b>{Summary.Vertices}</b>
+            <small>verts</small>
+            <b>{Summary.Materials}</b>
+            <small>mat</small>
+            <b>{Summary.Motion[0]}</b>
+            <small>{Summary.Motion === "Static" ? "static" : "dyn"}</small>
+          </span>
+        </nav>
+      )}
+      {Look === "peek" && (
+        <button type="button" className="pi-peek before" aria-label="Previous category" style={{ "--pi-tone": Before[3] }} onClick={() => Go(Index - 1)}>
+          <span>‹ {Before[1]}</span>
         </button>
-        <div className="pi-pill-rail" role="tablist" ref={Rail}>
-          {Categories.map(([Each, Caption, Glyph, EachTone], Slot) => (
-            <button
-              key={Each}
-              type="button"
-              role="tab"
-              aria-selected={Each === Key}
-              aria-label={Caption}
-              title={Caption}
-              className={"pi-pill" + (Each === Key ? " active" : "")}
-              style={{ "--pi-tone": EachTone }}
-              onClick={() => Go(Slot)}
-              onKeyDown={(Event) => {
-                if (Event.key === "ArrowRight") { Event.preventDefault(); Go(Index + 1); }
-                if (Event.key === "ArrowLeft") { Event.preventDefault(); Go(Index - 1); }
-              }}
-            >
-              <PrimitiveGlyph Name={Glyph} Size={15} />
-              <span className="pi-pill-caption">{Caption}</span>
-            </button>
-          ))}
-        </div>
-        <button type="button" className="pi-round" aria-label="Next category" onClick={() => Go(Index + 1)}>
-          <PrimitiveGlyph Name="chevron" Size={14} />
+      )}
+      {PageBody}
+      {Look === "peek" && (
+        <button type="button" className="pi-peek after" aria-label="Next category" style={{ "--pi-tone": After[3] }} onClick={() => Go(Index + 1)}>
+          <span>{After[1]} ›</span>
         </button>
-      </div>
-      <div className="pi-carousel-meta">
-        <span style={{ color: Tone }}>{Label}</span>
-        <span className="pi-dots" aria-hidden="true">
-          {Categories.map(([Each]) => (
-            <i key={Each} className={Each === Key ? "active" : ""} />
-          ))}
-        </span>
-        <span>
-          {Index + 1} / {Categories.length}
-        </span>
-      </div>
-      <div
-        key={Key}
-        className={"pi-page pi-enter-" + Direction}
-        role="tabpanel"
-        aria-label={Label}
-        data-page={Key}
-        onPointerDown={(Event) => {
-          // A press on a control (or a drag grip, whose pointerup never arrives) is not a swipe; drop any stale start too.
-          Swipe.current = Event.target.closest("input, textarea, button, select, [role=slider], label, [draggable=true]") ? null : { X: Event.clientX, Y: Event.clientY };
-        }}
-        onDragStart={() => (Swipe.current = null)}
-        onPointerUp={(Event) => {
-          const Start = Swipe.current;
-          Swipe.current = null;
-          if (!Start) return;
-          const Dx = Event.clientX - Start.X, Dy = Event.clientY - Start.Y;
-          if (Math.abs(Dx) > 60 && Math.abs(Dx) > Math.abs(Dy) * 1.5) Go(Index + (Dx < 0 ? 1 : -1));
-        }}
-      >
-        {Pages[Key]}
-      </div>
+      )}
+      {Look === "dock" && (
+        <nav className="pi-dock pi-nav" aria-label="Category">
+          <div className="pi-dock-summary" aria-label="Summary">
+            <span style={{ color: Tone }}>{Label}</span>
+            {Line}
+          </div>
+          <div className="pi-dock-rail" role="tablist">
+            {Categories.map((Each, Slot) => Pill(Each, Slot))}
+          </div>
+        </nav>
+      )}
+      {Look === "index" && (
+        <nav className="pi-index pi-nav" aria-label="Category">
+          <button type="button" className="pi-next-card" aria-label="Next category" style={{ "--pi-tone": After[3] }} onClick={() => Go(Index + 1)}>
+            <small>Up next · {Index + 2 > Categories.length ? 1 : Index + 2} of {Categories.length}</small>
+            <b>
+              <PrimitiveGlyph Name={After[2]} Size={18} /> {After[1]}
+            </b>
+            <span className="pi-next-arrow">
+              <PrimitiveGlyph Name="chevron" Size={16} />
+            </span>
+          </button>
+          <div className="pi-index-grid" role="tablist">
+            {Categories.map((Each, Slot) =>
+              Pill(Each, Slot, <>
+                <PrimitiveGlyph Name={Each[2]} Size={16} />
+                <span>{Each[1]}</span>
+                {Each[0] === Key && <em>Here</em>}
+              </>),
+            )}
+          </div>
+          <div className="pi-chip-row" aria-label="Summary">
+            <span className="pi-chip"><b>{Summary.Triangles}</b> tris</span>
+            <span className="pi-chip"><b>{Summary.Vertices}</b> verts</span>
+            <span className="pi-chip"><b>{Summary.Materials}</b> material</span>
+            <span className="pi-chip"><b>{Summary.Motion}</b></span>
+          </div>
+        </nav>
+      )}
+      {Look === "orbit" && (
+        <nav className={"pi-orbit pi-nav" + (Ringed ? " open" : "")} aria-label="Category">
+          {Ringed && (
+            <div className="pi-orbit-ring" role="tablist">
+              <div className="pi-orbit-middle" aria-label="Summary">
+                <b>{Summary.Triangles}</b>
+                <small>tris</small>
+                <span>
+                  {Summary.Vertices} verts · {Summary.Materials} mat
+                </span>
+                <span>{Summary.Motion}</span>
+              </div>
+              {Categories.map((Each, Slot) => {
+                const Turned = (Slot / Categories.length) * Math.PI * 2 - Math.PI / 2;
+                return Pill(Each, Slot, <PrimitiveGlyph Name={Each[2]} Size={16} />, { style: { left: `calc(50% + ${Math.cos(Turned) * 84}px)`, top: `calc(50% + ${Math.sin(Turned) * 84}px)` } });
+              })}
+            </div>
+          )}
+          <button
+            type="button"
+            className="pi-orbit-button"
+            aria-label={(Ringed ? "Close categories · " : "Categories · ") + Label}
+            aria-expanded={Ringed}
+            onClick={() => Ring(!Ringed)}
+            onKeyDown={Keys}
+            style={{
+              background: `conic-gradient(${Categories.map(([Each, , , EachTone], Slot) => `${Each === Key ? EachTone : EachTone + "40"} ${(Slot / Categories.length) * 360 + 3}deg ${((Slot + 1) / Categories.length) * 360 - 3}deg, transparent 0 ${((Slot + 1) / Categories.length) * 360}deg`).join(", ")})`,
+            }}
+          >
+            <span>
+              <PrimitiveGlyph Name={Ringed ? "close" : Categories[Index][2]} Size={18} />
+            </span>
+          </button>
+          <span className="pi-orbit-label">{Label}</span>
+        </nav>
+      )}
+      {Look === "peek" && (
+        <nav className="pi-peek-dots pi-nav" role="tablist" aria-label="Category">
+          {Categories.map((Each, Slot) => Pill(Each, Slot, <i />))}
+          <span className="pi-peek-line" aria-label="Summary">
+            {Label} · {Line}
+          </span>
+        </nav>
+      )}
+      {Switch}
     </section>
   );
 }
@@ -1426,6 +1546,14 @@ export default function PrimitiveInspector({ Subject, Values, Change, Hidden, To
       <Carousel
         key={Subject.Id}
         Focus={Focus?.Owner === Subject.Id ? Focus : null}
+        Look={NavigationOf(Shape, Values["Navigation design"])}
+        ChooseLook={(Next) => Change("Navigation design", Next)}
+        Summary={{
+          Triangles: Size.Triangles.toLocaleString("en-US"),
+          Vertices: Size.Vertices.toLocaleString("en-US"),
+          Materials: 1,
+          Motion: Values.DYNAMIC ? "Dynamic" : "Static",
+        }}
         Pages={{
           overview: <OverviewPage {...Shared} Components={Components} />,
           components: ComponentPage,

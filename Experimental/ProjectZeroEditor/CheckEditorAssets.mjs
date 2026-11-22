@@ -74,6 +74,20 @@ try {
   await Page.waitForFunction(() => document.querySelector(".viewport-3d-canvas").dataset.cameras === "cine:film");
   Checks.push("Camera body: B · Digital swaps the viewport model (cine:digital) and the outliner icon (asset-camera-digital); A · Film swaps back");
 
+  // Follow-up 59: Tripod off draws the body alone at head height (a camera that moves); on brings the tripod back. Stored per camera.
+  const Tripod = Page.getByRole("switch", { name: "Tripod" });
+  assert.equal(await Tripod.getAttribute("aria-checked"), "true");
+  await Tripod.click();
+  await Page.waitForFunction(() => document.querySelector(".viewport-3d-canvas").dataset.cameras === "cine:film:free");
+  assert.equal(await Tripod.getAttribute("aria-checked"), "false");
+  assert.equal(JSON.parse(await Page.evaluate(() => localStorage.getItem("Frontier.ProjectZeroHtml.v1"))).Values.cine.Tripod, false);
+  await Page.waitForTimeout(400);
+  await Page.locator(".scene-image").screenshot({ path: path.join(Proof, "Viewport3D-CameraNoTripod.png") });
+  await Page.locator('[data-card="Camera body"]').screenshot({ path: path.join(Proof, "CameraBodyNoTripod.png") });
+  await Tripod.click();
+  await Page.waitForFunction(() => document.querySelector(".viewport-3d-canvas").dataset.cameras === "cine:film");
+  Checks.push("Tripod switch: off draws the film camera alone at head height (cine:film:free, Tripod false stored); on brings the tripod back");
+
   // Hiding the camera takes it out of the viewport; showing it brings it back.
   await Page.getByRole("button", { name: "Toggle Cine Camera visibility" }).click();
   await Page.waitForFunction(() => document.querySelector(".viewport-3d-canvas").dataset.cameras === "");

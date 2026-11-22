@@ -249,14 +249,16 @@ function Tripod(M, Height) {
 }
 
 // One camera body as a group (looking down −z). With Stand, it sits on a tripod at Height metres.
-export function CameraAsset(Body, { Stand = false, Height = 1.35 } = {}) {
+// Stand: on a tripod at Height. Raised: no tripod, the body alone held at Height (a camera that moves, on a crane, rig or by hand).
+export function CameraAsset(Body, { Stand = false, Raised = false, Height = 1.35 } = {}) {
   const M = Finishes();
   const Camera = Body === "digital" ? DigitalCamera(M) : Body === "mirrorless" ? MirrorlessCamera(M) : FilmCamera(M);
   Camera.name = "Camera body";
-  if (!Stand) return Camera;
+  if (!Stand && !Raised) return Camera;
   const G = new THREE.Group();
   Camera.position.y = Height;
-  G.add(Tripod(M, Height), Camera);
+  G.add(Camera);
+  if (Stand) G.add(Tripod(M, Height));
   G.userData.body = Camera;
   return G;
 }

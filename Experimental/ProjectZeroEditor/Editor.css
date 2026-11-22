@@ -763,8 +763,12 @@ img {
 .inspector-heading h1 {
   position: absolute;
   top: 41px;
+  max-width: 100%;
+  overflow: hidden;
   font-size: 25px;
   font-weight: 400;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 .inspector-heading .eyebrow {
   position: absolute;

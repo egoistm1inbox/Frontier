@@ -143,64 +143,21 @@
   min-width: 0;
 }
 
-/* ── Carousel ───────────────────────────────────────────────────────────────────────────────────────────────────── */
+/* ── Category navigation (five designs; the cards always come first) ─────────────────────────────────────────── */
 .primitive-inspector .pi-carousel {
   overflow-x: clip;
   overflow-clip-margin: 4px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
   min-width: 0;
-}
-.primitive-inspector .pi-carousel-bar {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px;
-  border-radius: 99px;
-  background: var(--pi-card);
-  border: 1px solid var(--pi-line);
-}
-.primitive-inspector .pi-round {
-  flex: none;
-  width: 30px;
-  height: 30px;
-  min-height: 0;
-  padding: 0;
-  border-radius: 50%;
-  background: #262626;
-  border: 1px solid var(--pi-line);
-  color: #cfcfcf;
-}
-.primitive-inspector .pi-round:hover {
-  background: #303030;
-}
-.primitive-inspector .pi-flip {
-  display: grid;
-  transform: scaleX(-1);
-}
-.primitive-inspector .pi-pill-rail {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  gap: 2px;
-  overflow-x: auto;
-  scrollbar-width: none;
-  scroll-snap-type: x proximity;
-}
-.primitive-inspector .pi-pill-rail::-webkit-scrollbar {
-  display: none;
 }
 .primitive-inspector .pi-pill {
-  flex: none;
-  scroll-snap-align: center;
-  min-height: 30px;
-  min-width: 30px;
-  padding: 4px 8px;
+  min-height: 0;
+  padding: 0;
   gap: 0;
-  border-radius: 99px;
-  background: transparent;
   border: 1px solid transparent;
+  background: transparent;
   color: var(--pi-soft);
   font-size: 12px;
   white-space: nowrap;
@@ -208,74 +165,469 @@
 .primitive-inspector .pi-pill .primitive-glyph {
   color: color-mix(in srgb, var(--pi-tone) 60%, #777);
 }
-.primitive-inspector .pi-pill:hover {
-  background: #ffffff08;
-  color: #ddd;
-}
-.primitive-inspector .pi-pill-caption {
-  display: inline-block;
-  max-width: 0;
-  overflow: hidden;
-  opacity: 0;
-  transition:
-    max-width 220ms ease,
-    opacity 160ms ease,
-    margin 220ms ease;
-}
-.primitive-inspector .pi-pill.active .pi-pill-caption {
-  max-width: 90px;
-  opacity: 1;
-  margin-left: 6px;
-}
-@container (min-width: 620px) {
-  .primitive-inspector .pi-pill-caption {
-    max-width: 90px;
-    opacity: 1;
-    margin-left: 6px;
-  }
-}
-.primitive-inspector .pi-pill-rail {
-  justify-content: space-between;
-}
-.primitive-inspector .pi-pill.active {
-  padding: 4px 13px 4px 10px;
-  background: #2c2c2c;
-  border-color: #ffffff12;
-  color: var(--pi-ink);
-  box-shadow: 0 2px 8px #0006;
-}
 .primitive-inspector .pi-pill.active .primitive-glyph {
   color: var(--pi-tone);
 }
-.primitive-inspector .pi-carousel-meta {
+
+/* A · Dock: pinned to the bottom of the inspector. */
+.primitive-inspector .pi-dock {
+  position: sticky;
+  bottom: 10px;
+  z-index: 5;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 6px;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 8px 7px;
+  border-radius: 22px;
+  background: color-mix(in srgb, #1b1b1b 78%, transparent);
+  backdrop-filter: blur(16px) saturate(1.3);
+  border: 1px solid #ffffff14;
+  box-shadow: 0 14px 34px #000a, inset 0 1px 0 #ffffff0d;
+}
+.primitive-inspector .pi-dock-summary {
+  display: flex;
+  gap: 8px;
+  padding: 0 8px;
   font-size: 10px;
   color: var(--pi-faint);
-  letter-spacing: 0.4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.primitive-inspector .pi-carousel-meta > span:first-child {
+.primitive-inspector .pi-dock-summary span {
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+.primitive-inspector .pi-dock-rail {
+  display: flex;
+  justify-content: space-between;
+  gap: 2px;
+}
+.primitive-inspector .pi-dock .pi-pill {
+  flex: 1 1 0;
+  display: grid;
+  place-items: center;
+  height: 34px;
+  border-radius: 14px;
+}
+.primitive-inspector .pi-dock .pi-pill-caption {
+  display: none;
+}
+.primitive-inspector .pi-dock .pi-pill:hover {
+  background: #ffffff0a;
+}
+.primitive-inspector .pi-dock .pi-pill.active {
+  flex-grow: 2.6;
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  background: color-mix(in srgb, var(--pi-tone) 16%, #262626);
+  border-color: color-mix(in srgb, var(--pi-tone) 35%, transparent);
+  color: var(--pi-ink);
+}
+.primitive-inspector .pi-dock .pi-pill.active .pi-pill-caption {
+  display: inline;
+  font-size: 11px;
+}
+
+/* B · Spine: a slim column beside the cards. */
+.primitive-inspector .pi-nav-spine {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 38px;
+  column-gap: 8px;
+  align-items: start;
+}
+.primitive-inspector .pi-nav-spine > .pi-page,
+.primitive-inspector .pi-nav-spine > .pi-look-switch {
+  grid-column: 1;
+  grid-row: auto;
+}
+.primitive-inspector .pi-spine {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  position: sticky;
+  top: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 6px 0;
+  border-radius: 19px;
+  background: var(--pi-card);
+  border: 1px solid var(--pi-line);
+}
+.primitive-inspector .pi-spine .pi-pill {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+}
+.primitive-inspector .pi-spine .pi-pill:hover {
+  background: #ffffff0a;
+}
+.primitive-inspector .pi-spine .pi-pill.active {
+  background: color-mix(in srgb, var(--pi-tone) 18%, #262626);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--pi-tone) 45%, transparent);
+}
+.primitive-inspector .pi-spine .pi-pill.active::before {
+  content: "";
+  position: absolute;
+  right: -5px;
+  top: 7px;
+  bottom: 7px;
+  width: 3px;
+  border-radius: 3px;
+  background: var(--pi-tone);
+}
+.primitive-inspector .pi-spine .pi-pill:hover::after,
+.primitive-inspector .pi-spine .pi-pill:focus-visible::after {
+  content: attr(aria-label);
+  position: absolute;
+  right: 40px;
+  padding: 4px 9px;
+  border-radius: 8px;
+  background: #2c2c2c;
+  border: 1px solid #ffffff14;
+  color: var(--pi-ink);
+  font-size: 11px;
+  pointer-events: none;
+}
+.primitive-inspector .pi-spine-summary {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--pi-line);
+  line-height: 1.05;
+  text-align: center;
+}
+.primitive-inspector .pi-spine-summary b {
   font-size: 11px;
   font-weight: 500;
+  color: var(--pi-ink);
+}
+.primitive-inspector .pi-spine-summary small {
+  margin-bottom: 6px;
+  font-size: 8px;
+  color: var(--pi-faint);
+}
+
+/* C · Up next: after the cards. */
+.primitive-inspector .pi-index {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 6px;
+}
+.primitive-inspector .pi-next-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  min-height: 0;
+  padding: 16px 18px;
+  border-radius: 24px;
+  text-align: left;
+  background: radial-gradient(120% 140% at 0% 0%, color-mix(in srgb, var(--pi-tone) 22%, transparent), transparent 60%), var(--pi-card);
+  border: 1px solid color-mix(in srgb, var(--pi-tone) 30%, var(--pi-line));
+  color: var(--pi-ink);
+}
+.primitive-inspector .pi-next-card small {
+  font-size: 10px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--pi-faint);
+}
+.primitive-inspector .pi-next-card b {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 20px;
+  font-weight: 400;
+}
+.primitive-inspector .pi-next-card b .primitive-glyph {
+  color: var(--pi-tone);
+}
+.primitive-inspector .pi-next-arrow {
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  margin-top: -17px;
+  border-radius: 50%;
+  background: var(--pi-tone);
+  color: #111;
+}
+.primitive-inspector .pi-index-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+.primitive-inspector .pi-index-grid .pi-pill {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding: 10px 2px 8px;
+  border-radius: 14px;
+  background: var(--pi-card);
+  border-color: var(--pi-line);
+  font-size: 10px;
+}
+.primitive-inspector .pi-index-grid .pi-pill.active {
+  border-color: color-mix(in srgb, var(--pi-tone) 55%, transparent);
+  color: var(--pi-ink);
+}
+.primitive-inspector .pi-index-grid em {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  font-size: 7.5px;
+  font-style: normal;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--pi-tone);
+}
+
+/* D · Orbit: a round button pinned bottom right; the categories open in a circle. */
+.primitive-inspector .pi-orbit {
+  position: sticky;
+  bottom: 14px;
+  z-index: 6;
+  height: 0;
+  display: flex;
+  justify-content: flex-end;
+  pointer-events: none;
+}
+.primitive-inspector .pi-orbit > * {
+  pointer-events: auto;
+}
+.primitive-inspector .pi-orbit-button {
+  position: absolute;
+  right: 4px;
+  bottom: 0;
+  width: 58px;
+  height: 58px;
+  min-height: 0;
+  padding: 4px;
+  border-radius: 50%;
+  border: 0;
+  box-shadow: 0 10px 26px #000c;
+}
+.primitive-inspector .pi-orbit-button > span {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: #1d1d1d;
+  color: var(--pi-current);
+  box-shadow: inset 0 0 0 1px #ffffff14;
+}
+.primitive-inspector .pi-orbit-label {
+  position: absolute;
+  right: 70px;
+  bottom: 19px;
+  padding: 4px 10px;
+  border-radius: 99px;
+  background: color-mix(in srgb, #1b1b1b 80%, transparent);
+  backdrop-filter: blur(10px);
+  border: 1px solid #ffffff12;
+  font-size: 11px;
+  color: var(--pi-ink);
+  pointer-events: none;
+}
+.primitive-inspector .pi-orbit.open .pi-orbit-label {
+  display: none;
+}
+.primitive-inspector .pi-orbit-ring {
+  position: absolute;
+  right: 22px;
+  bottom: 46px;
+  width: 230px;
+  height: 230px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #1b1b1bf2 0 62%, #1b1b1bd0 63% 100%);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 18px 50px #000c, inset 0 0 0 1px #ffffff12;
+  transform-origin: 85% 90%;
+  animation: pi-orbit-open 200ms ease both;
+}
+.primitive-inspector .pi-orbit-ring .pi-pill {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  margin: -18px 0 0 -18px;
+  border-radius: 50%;
+  background: #262626;
+  border-color: #ffffff12;
+}
+.primitive-inspector .pi-orbit-ring .pi-pill.active {
+  background: color-mix(in srgb, var(--pi-tone) 25%, #262626);
+  border-color: var(--pi-tone);
+}
+.primitive-inspector .pi-orbit-middle {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  font-size: 9px;
+  color: var(--pi-faint);
+}
+.primitive-inspector .pi-orbit-middle b {
+  font-size: 22px;
+  font-weight: 300;
+  line-height: 1;
+  color: var(--pi-ink);
+}
+@keyframes pi-orbit-open {
+  from {
+    opacity: 0;
+    transform: scale(0.6) rotate(-30deg);
+  }
+}
+.primitive-inspector .pi-nav-orbit > .pi-page {
+  padding-bottom: 10px;
+}
+
+/* E · Peek: the neighbours' names stand along the cards' edges. */
+.primitive-inspector .pi-nav-peek {
+  display: grid;
+  /* The strips sit in the inspector's side padding, so the cards keep (almost) their full width. */
+  margin-inline: -12px;
+  grid-template-columns: 12px minmax(0, 1fr) 12px;
+  column-gap: 2px;
+  align-items: start;
+}
+.primitive-inspector .pi-nav-peek > .pi-page {
+  grid-column: 2;
+  grid-row: 1;
+}
+.primitive-inspector .pi-nav-peek > .pi-peek-dots,
+.primitive-inspector .pi-nav-peek > .pi-look-switch {
+  grid-column: 1 / -1;
+}
+.primitive-inspector .pi-peek {
+  grid-row: 1;
+  position: sticky;
+  top: 90px;
+  min-height: 0;
+  height: 200px;
+  width: 12px;
+  padding: 0;
+  border-radius: 8px;
+  background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--pi-tone) 22%, transparent), transparent);
+  border: 0;
+  color: color-mix(in srgb, var(--pi-tone) 70%, #bbb);
+  font-size: 10px;
   letter-spacing: 1.2px;
   text-transform: uppercase;
 }
-.primitive-inspector .pi-dots {
-  display: flex;
-  gap: 4px;
+.primitive-inspector .pi-peek span {
+  display: block;
+  writing-mode: vertical-rl;
+  white-space: nowrap;
+  margin: auto;
 }
-.primitive-inspector .pi-dots i {
-  width: 5px;
-  height: 5px;
+.primitive-inspector .pi-peek.before {
+  grid-column: 1;
+}
+.primitive-inspector .pi-peek.before span {
+  transform: rotate(180deg);
+}
+.primitive-inspector .pi-peek.after {
+  grid-column: 3;
+}
+.primitive-inspector .pi-peek:hover {
+  background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--pi-tone) 40%, transparent), transparent);
+  color: #fff;
+}
+.primitive-inspector .pi-peek-dots {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding-top: 4px;
+}
+.primitive-inspector .pi-peek-dots .pi-pill {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+}
+.primitive-inspector .pi-peek-dots .pi-pill i {
+  width: 6px;
+  height: 6px;
   border-radius: 99px;
-  background: #3a3a3a;
+  background: color-mix(in srgb, var(--pi-tone) 45%, #3a3a3a);
   transition: width 200ms ease;
 }
-.primitive-inspector .pi-dots i.active {
-  width: 16px;
-  background: #d9d9d9;
+.primitive-inspector .pi-peek-dots .pi-pill.active {
+  width: 30px;
+}
+.primitive-inspector .pi-peek-dots .pi-pill.active i {
+  width: 22px;
+  background: var(--pi-tone);
+}
+.primitive-inspector .pi-peek-line {
+  flex-basis: 100%;
+  text-align: center;
+  font-size: 10px;
+  color: var(--pi-faint);
+}
+
+/* While the designs are compared: the switch at the foot. */
+.primitive-inspector .pi-look-switch {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 6px 6px 12px;
+  border-radius: 99px;
+  border: 1px dashed #ffffff1c;
+  font-size: 10px;
+  color: var(--pi-faint);
+}
+.primitive-inspector .pi-look-switch > span {
+  margin-right: auto;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+.primitive-inspector .pi-look-switch button {
+  width: 24px;
+  height: 24px;
+  min-height: 0;
+  padding: 0;
+  border-radius: 50%;
+  background: transparent;
+  border: 1px solid #ffffff14;
+  color: var(--pi-soft);
+  font: 600 10px var(--mono, ui-monospace, monospace);
+}
+.primitive-inspector .pi-look-switch button[aria-checked="true"] {
+  background: var(--pi-ink);
+  color: #111;
+}
+.primitive-inspector .pi-look-switch small {
+  min-width: 52px;
+  margin-left: 4px;
+  font-size: 10px;
+  color: var(--pi-soft);
 }
 .primitive-inspector .pi-page {
   display: flex;
