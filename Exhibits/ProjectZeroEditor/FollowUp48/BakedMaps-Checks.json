@@ -1,0 +1,10 @@
+{
+  "Checks": [
+    "Atmosphere bake: transmittance LUT 256 × 64 (low near the horizon rgb(141, 65, 7), high looking up rgb(255, 255, 255)) and the viewport's 1024 × 512 sky-view map (zenith rgb(76, 103, 137)); Bake again bakes again",
+    "Sun bakes: lighting LUT (beam rgb(248, 239, 224) high, none below the horizon; fill moonlit rgb(100, 118, 161) at night) and the 192 × 192 disc map (centre rgb(255, 255, 255))",
+    "Star map 1024 × 512: 3059 lit pixels at limiting magnitude 5.5, 1071 at 3",
+    "Flare atlas 1024 × 512: eight sprites lit (15977, 2618, 23528, 3827, 39872, 39891, 39869, 39955 pixels); the composite card draws from it",
+    "Viewport lens flare: 0.57 with the sun at 0.500 0.217, 0.23 behind a tall cylinder, 0 when disabled and with the sun below the horizon"
+  ],
+  "Errors": []
+}

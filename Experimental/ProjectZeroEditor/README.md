@@ -58,11 +58,18 @@ starting point for the UI redesign.
     shapes stand on a line 1.8 m apart, and Position moves an object from its place on that line.
   - **Sun**: direction from the Sun's date, time and place (or its manual direction). The colour is its temperature times the sunlight
     left after the air, so it reddens at sunset. It casts shadows.
-  - **Atmosphere**: `SkyShader.js` baked to a 1024 × 512 equirectangular image (sun disc included), drawn as the scene background at
+  - **Atmosphere**: the sky-view map (`BakedMaps.js`, `SkyShader.js` in a 1024 × 512 equirectangular image, sun disc included), drawn as the scene background at
     infinity, so zooming can't clip it. Below the horizon the image continues the horizon colour, and the ground (which follows the
     camera out to just short of the far plane) fades into haze of that colour, so there is no edge or seam. Clouds are not drawn.
-  - **Stars**: a 4,500-point field above the horizon (`StarField`), sharp at any zoom, fading towards the horizon. It comes out as the
-    sun goes from −4° to −14°. At night the sky keeps a faint blue airglow and a moonlit fill light keeps the shapes readable.
+  - **Stars**: the Stars object's catalogue (`StarCatalogue`, 40,000 stars over the whole sphere with a real-sky magnitude spread) as a
+    point field (`StarField`), sharp at any zoom, fading towards the horizon. Brightness, Point Size, Limiting magnitude and Star field
+    apply; it turns about the celestial pole (at the Sun's latitude) by Celestial rotation plus 15° an hour, so stars rise in the east.
+    It comes out as the sun goes from −4° to −14°. Twinkle is not drawn. At night the sky keeps a faint blue airglow and a moonlit fill
+    light keeps the shapes readable.
+  - **Lens Flare** (`LensFlare.js`): the Lens Flare object drawn over the view from its baked atlas, where the sun is on screen: glow,
+    starburst (spikes from Aperture Blades), ray pairs, anamorphic streak, halo and ghosts on the line through the centre. Five rays
+    test how much of the sun the shapes hide; it fades at the frame's edge and as the sun sets, and follows Enabled, Type, the layer
+    switches and every slider. A screen-space illustration, not a lens simulation.
   - The camera stays above the ground. The dot grid shows only when looking down. Until you move the camera, the shapes are re-framed
     when the viewport changes shape.
   - Zoom stays between 0.6 m and 150 m. (Earlier the sky was an 800 m sphere that the camera rig's moving far plane cut away when
@@ -86,10 +93,22 @@ starting point for the UI redesign.
   - The design switch, the three figure tiles and the swatches are gone. The picture fills the card.
   - A dashed outline marks the top of the air, and its handle sets **Atmosphere** height by dragging (10–120 km; arrows ±1 km, PgUp/PgDn ±10 km).
   - "Sun at the limb" moves the sun from −12° to 40°.
+- **BAKING sections show the viewport's maps** (`BakedMaps.js`, cards in `BakedMapCards.jsx`). Each map shows its size, format, bake
+  time and what uses it, bakes again by itself when its settings change, and has **Bake again** and **Save PNG**. The viewport and an
+  open inspector share one bake.
+  - **Atmosphere bake**: the transmittance LUT (256 × 64, view elevation −12° to 90° by altitude, the horizon and low air widened) and
+    the sky-view map (the viewport's 1024 × 512 background).
+  - **Sun lighting bake**: the lighting LUT (256 × 64 across sun elevations: the sun beam over the sky fill, with a marker at the sun now).
+    **Sun disk bake**: the 192 × 192 disc map, the sun as the viewport draws it.
+  - **Star field bake**: the 1024 × 512 star map in celestial coordinates.
+  - **Lens flare image**: the 1024 × 512 flare atlas (glow, starburst, halo, streak, four ghost tints). The **Flare composite** card now
+    draws with the viewport's flare code and this atlas.
+  - Native bakes and the native dome image (Baked atmosphere card) still need the engine.
 - **`SkyShader.js`**: one WebGL2 sky renderer on a round planet, shared by both cards and the viewport. It does single scattering with
   ground light, a limb-darkened disc and stars, in perspective, panorama and equirectangular views.
 - **Checks.**
-  - New: `CheckViewport3D.mjs` (11, including the star field and zooming in and out with the sky kept).
+  - New: `CheckViewport3D.mjs` (11, including the star field and zooming in and out with the sky kept) and `CheckBakedMaps.mjs` (5: the
+    six maps and the viewport's lens flare in view, behind a shape, disabled and after sunset).
   - Rewritten: `CheckFirstCards.mjs` (4).
   - Updated for the 3D main view: `CheckQuickTools` (split view is now 3D beside one marker pane), `CheckConstruction` and `CheckInspectorLayout`.
 - Evidence is in `Exhibits/ProjectZeroEditor/FollowUp48/`. Headless SwiftShader only. Names are unapproved.

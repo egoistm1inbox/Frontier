@@ -438,6 +438,8 @@ if (SkyAlias && new URLSearchParams(location.search).get("inspect") === "sky") {
 // Viewport raster scope for the Thought Log: render plus commit of one checker viewport.
 // The Atmosphere object's values with their defaults, for the Sun card and the 3D viewport's sky.
 const AirOf = (Values) => (Name) => Values.atmosphere?.[Name] ?? Panels.atmosphere?.find((Field) => Field.Label === Name)?.Default;
+// Readers for the Sun, Stars and Lens Flare objects (their values, with the sheet's defaults behind them).
+const ReaderOf = (Values, Id) => (Name) => Values[Id]?.[Name] ?? Panels[Id]?.find((Field) => Field.Label === Name)?.Default;
 function MeasuredViewport(Props) {
   useThoughtScope("Editor.ViewportRaster");
   const Select = (...Arguments) => {
@@ -2066,7 +2068,11 @@ function App() {
             FrameToken={FrameToken}
             Select={(Id, { Add } = {}) => (Add ? PickRow(Id, "toggle") : SelectRow(Id))}
             Air={AirOf(Values)}
-            Sun={(Name) => Values.sun?.[Name] ?? Panels.sun?.find((Field) => Field.Label === Name)?.Default}
+            Sun={ReaderOf(Values, "sun")}
+            Stars={ReaderOf(Values, "stars")}
+            Flare={ReaderOf(Values, "flare")}
+            StarsOff={!!Hidden.stars || !Rows.some((Row) => Row.Id === "stars")}
+            FlareOff={!!Hidden.flare || !Rows.some((Row) => Row.Id === "flare")}
           />
         )}
         {SplitView && !Workspace && (
@@ -2215,7 +2221,7 @@ function App() {
               Workspace={Workspace}
               OpenWorkspace={OpenWorkspace}
               SetWorkspace={SetWorkspace}
-              Scene={{ Rows, SelectRow, AddRows: InsertUnder, PatchRow, OpenComponent, Focus: ComponentFocus, Air: AirOf(Values) }}
+              Scene={{ Rows, SelectRow, AddRows: InsertUnder, PatchRow, OpenComponent, Focus: ComponentFocus, Air: AirOf(Values), Sun: ReaderOf(Values, "sun") }}
               OpenWind={() => {
                 WindOpener.current = document.activeElement;
                 EditWind(Selected);

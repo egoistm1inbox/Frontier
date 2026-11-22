@@ -1,0 +1,103 @@
+/* BAKING sections: the maps the 3D viewport uses (BakedMapCards.jsx). */
+.baked-map {
+  margin: 12px 0 4px;
+}
+.baked-map + .baked-map {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid #ffffff0c;
+}
+.baked-map-image {
+  position: relative;
+  width: 100%;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #101012;
+  box-shadow: inset 0 0 0 1px #ffffff10;
+}
+.baked-map-image canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.baked-map-image.pixelated canvas {
+  image-rendering: pixelated;
+}
+.baked-map-wait {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 10px;
+  color: #8a8a8a;
+}
+.baked-map-marker {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  border-left: 1px solid #ffb238;
+  pointer-events: none;
+}
+.baked-map-marker span {
+  position: absolute;
+  top: 3px;
+  left: 4px;
+  font-size: 9px;
+  font-style: normal;
+  white-space: nowrap;
+  color: #ffd38a;
+  text-shadow: 0 1px 2px #000;
+}
+.baked-map-legend {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 4px;
+  font-size: 9px;
+  color: #8d8d8d;
+}
+.baked-map figcaption {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 8px;
+  font-size: 11px;
+}
+.baked-map figcaption strong {
+  color: #e6e6e6;
+  font-weight: 600;
+}
+.baked-map figcaption span {
+  font-size: 9px;
+  color: #9a9a9a;
+}
+.baked-map-use {
+  margin: 6px 0 0;
+  font-size: 10px;
+  line-height: 1.45;
+  color: #a5a5a5;
+}
+.baked-map-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  font-size: 9px;
+  color: #8d8d8d;
+}
+.baked-map-status span {
+  flex: 1;
+  min-width: 0;
+}
+.baked-map-status button {
+  font-size: 10px;
+  min-height: 26px;
+  padding: 0 10px;
+  border-radius: 7px;
+  white-space: nowrap;
+}
+.flare-preview canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}

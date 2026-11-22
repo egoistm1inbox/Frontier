@@ -46,6 +46,11 @@ import Native from "./NativePanels.json";
 import { SpecifyPanels, SpecificationNoteMark, MoonSlotCount, MoonPresets, MoonPresetSizes, SensorGates } from "./ProjectZeroSpecification.js";
 import { Solar } from "./Solar.mjs";
 import SunCard from "./SunCards.jsx";
+import { SkyMedium } from "./SkyShader.js";
+import { SunLight } from "./Viewport3D.jsx";
+import { TransmittanceMap, SkyViewMap, SunLightingMap, SunDiscMap, StarMap, StarSettings, FlareAtlasMap, LightingSpan, TransmittanceSpan } from "./BakedMaps.js";
+import { FlareSettings } from "./LensFlare.js";
+import { BakedMap, FlarePreview } from "./BakedMapCards.jsx";
 import "./SunCards.css";
 import { SensorField } from "./OpticalGraphic.jsx";
 import SensorFormats, { Formats } from "./SensorFormats.jsx";
@@ -579,6 +584,11 @@ export function Inspector({
   };
   const Latest = useRef(Values);
   Latest.current = Values;
+  // The scene's sky and sun for the BAKING sections' maps (the same readers as the 3D viewport, so both share one bake).
+  const Baking = () => {
+    const Medium = SkyMedium(Subject.Panel === "atmosphere" ? V : Scene?.Air || (() => undefined));
+    return { Medium, Light: SunLight(Subject.Panel === "sun" ? V : Scene?.Sun || (() => undefined), Medium) };
+  };
   useEffect(() => {
     if (Subject.Panel !== "sun" || !Values.Animate) return;
     let Before = performance.now();
@@ -1234,12 +1244,33 @@ export function Inspector({
         </p>
         {SpecificationCard()}
         <div className="section-caption">
-          BAKING <small>Native target bindings pending</small>
+          BAKING <small>Browser bakes · the 3D viewport uses these</small>
         </div>
-        <div className="card-grid">
-          <Bake Title="Sun lighting bake" Sun />
-          <Bake Title="Sun disk bake" Sun />
-        </div>
+        {(() => {
+          const { Medium, Light } = Baking();
+          return (
+            <>
+              <Card Title="Sun lighting bake">
+                <BakedMap
+                  Name="Sun lighting LUT"
+                  Make={(Again) => SunLightingMap(Medium, Light.Tint, Again)}
+                  Signature={JSON.stringify([Medium, Light.Tint])}
+                  Marker={{ At: (Light.Elevation - LightingSpan.Low) / (LightingSpan.High - LightingSpan.Low), Label: `Now ${Light.Elevation.toFixed(1)}°` }}
+                  Legend={[`${LightingSpan.Low}°`, "Sun elevation", `${LightingSpan.High}°`]}
+                  Caption="Top: the sun beam the viewport's sun light takes, its colour after the air, fading out across the horizon. Bottom: the sky fill its hemisphere light takes, moonlit blue after dusk."
+                />
+              </Card>
+              <Card Title="Sun disk bake">
+                <BakedMap
+                  Name="Sun disc map"
+                  Make={(Again) => SunDiscMap(Medium, Light, Again)}
+                  Signature={JSON.stringify([Medium, Light.Elevation, Light.Azimuth, Light.Tint])}
+                  Caption="The sun as the viewport's sky draws it, looked at straight on: the disc (drawn four times life size so it reads), its limb darkening and glow, coloured by the air at this elevation. Below the horizon the ground is in the way."
+                />
+              </Card>
+            </>
+          );
+        })()}
       </>
     );
   } else if (Subject.Panel === "camera") {
@@ -1432,13 +1463,19 @@ export function Inspector({
           </p>
         </Card>
         {SpecificationCard()}
-        <div className="section-caption">BAKING</div>
+        <div className="section-caption">
+          BAKING <small>Browser bake · the 3D viewport uses this</small>
+        </div>
         <Card Title="Star field bake">
-          <div className="tiles">
-            <Tile Label="Bake" Disabled IconName="bake" />
-            <Tile Label="Use baked" Disabled IconName="bake" />
-          </div>
-          <p>Baked-star playback is not implemented.</p>
+          <BakedMap
+            Name="Star map"
+            Make={(Again) => StarMap(StarSettings(V), Again)}
+            Signature={JSON.stringify(StarSettings(V))}
+            Caption={
+              (StarSettings(V).Shown ? "" : "Star field is off, so the viewport draws none of these. ") +
+              "The catalogue the viewport's star field draws, in sky coordinates: right ascension across, declination up, the celestial pole along the top. Brightness, Point Size and Limiting magnitude apply; the viewport turns it about the pole by Celestial rotation and the hour. Twinkle is not baked."
+            }
+          />
         </Card>
       </>
     );
@@ -1620,13 +1657,36 @@ export function Inspector({
           )}
         </Card>
         {SpecificationCard()}
-        <div className="section-caption">BAKING</div>
-        <Bake Title="Atmosphere bake" Sun />
+        <div className="section-caption">
+          BAKING <small>Browser bakes · the 3D viewport uses these</small>
+        </div>
+        {(() => {
+          const { Medium, Light } = Baking();
+          return (
+            <Card Title="Atmosphere bake">
+              <BakedMap
+                Name="Transmittance LUT"
+                Make={(Again) => TransmittanceMap(Medium, Again)}
+                Signature={JSON.stringify(Medium)}
+                Legend={[`${TransmittanceSpan.Low}°`, "View elevation · horizon widened", `${TransmittanceSpan.High}°`]}
+                Pixelated
+                Caption="Sunlight left after crossing the air to space, from the ground (bottom row) to the top of the atmosphere (top row). Black is below the planet's edge. The viewport's sun colour comes from the same march."
+              />
+              <BakedMap
+                Name="Sky-view map"
+                Make={(Again) => SkyViewMap(Medium, Light, Again)}
+                Signature={JSON.stringify([Medium, Light.Elevation, Light.Azimuth, Light.Tint])}
+                Legend={["360° around", "Horizon across the middle", "Sun included"]}
+                Caption="The whole sky the viewport draws as its background, sun included. Below the horizon it carries the horizon colour down, where the viewport's ground covers it. The viewport's sky light and haze take their colours from it."
+              />
+            </Card>
+          );
+        })()}
         <Card Title="Baked atmosphere" Height={210}>
-          <div className="empty-image">No resident atmosphere image</div>
+          <div className="empty-image">No native dome image loaded</div>
           <p>
-            Load / bake requires the native engine. No completed bake is
-            simulated.
+            Loading a dome image from disk needs the native engine. The browser
+            bakes above are what the 3D viewport draws.
           </p>
           {F("Fetch Baked Dome", true)}
           {Fields("Dome Path", "Sheet")}
@@ -1639,54 +1699,19 @@ export function Inspector({
         {Header("Camera / Optics", "Lens Flare")}
         <Card Title="Flare composite" Height={430}>
           <Metric Value={V("Intensity").toFixed(2)} Unit="×" />
-          <div
-            className="flare-preview"
-            onPointerDown={(Event) => {
-              Event.currentTarget.setPointerCapture(Event.pointerId);
+          <FlarePreview
+            Settings={FlareSettings(V)}
+            Tint={Baking().Light.Colour}
+            X={V("Preview X")}
+            Y={V("Preview Y")}
+            Move={(X, Y) => {
+              AssignProperty("Preview X", X);
+              AssignProperty("Preview Y", Y);
             }}
-            onPointerMove={(Event) => {
-              if (Event.buttons) {
-                const Rect = Event.currentTarget.getBoundingClientRect();
-                AssignProperty(
-                  "Preview X",
-                  Math.max(
-                    0.06,
-                    Math.min(0.94, (Event.clientX - Rect.left) / Rect.width),
-                  ),
-                );
-                AssignProperty(
-                  "Preview Y",
-                  Math.max(
-                    0.08,
-                    Math.min(0.92, (Event.clientY - Rect.top) / Rect.height),
-                  ),
-                );
-              }
-            }}
-          >
-            <div
-              className="flare-source"
-              style={{
-                left: V("Preview X") * 100 + "%",
-                top: V("Preview Y") * 100 + "%",
-                opacity: V("Enabled") ? Math.min(1, V("Intensity")) : 0,
-              }}
-            />
-            {Array.from({ length: Math.min(24, V("Ghosts")) }, (_, Index) => (
-              <i
-                key={Index}
-                style={{
-                  left: ((10 + Index * 12) % 95) + "%",
-                  top: ((20 + Index * 9) % 85) + "%",
-                  width: 12 + Index * 6,
-                  height: 12 + Index * 6,
-                }}
-              />
-            ))}
-          </div>
+          />
           <p>
-            Drag the source · HTML optical illustration, not the renderer
-            composite.
+            Drag the sun · drawn by the 3D viewport's flare code from the atlas
+            below, over a stand-in dusk sky. Only this preview moves.
           </p>
         </Card>
         <Card Title="Flare settings">
@@ -1718,8 +1743,18 @@ export function Inspector({
           {Fields("Aperture Blades", "Preview X", "Preview Y")}
         </Card>
         {SpecificationCard()}
-        <div className="section-caption">BAKING</div>
-        <Bake Title="Lens flare image" />
+        <div className="section-caption">
+          BAKING <small>Browser bake · the 3D viewport uses this</small>
+        </div>
+        <Card Title="Lens flare image">
+          <BakedMap
+            Name="Flare atlas"
+            Make={(Again) => FlareAtlasMap(FlareSettings(V), Baking().Light.Colour, Again)}
+            Signature={JSON.stringify([FlareSettings(V), Baking().Light.Colour.map((C) => +C.toFixed(2))])}
+            Legend={["Glow · Starburst · Halo · Streak", "Ghosts: amber · green · blue · violet"]}
+            Caption={`Eight 256 px sprites: the glow, the starburst (${FlareSettings(V).Blades % 2 ? FlareSettings(V).Blades * 2 : FlareSettings(V).Blades} spikes from ${FlareSettings(V).Blades} blades), the halo ring split by Chromatic, the streak, and the ${["round", "hexagonal", "octagonal"][FlareSettings(V).GhostShape]} ghost in four tints, all in the sun's colour after the air. The viewport's flare and the preview above are put together from it.`}
+          />
+        </Card>
       </>
     );
   } else if (Subject.Panel === "wind") {
