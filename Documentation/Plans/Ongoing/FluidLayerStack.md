@@ -296,6 +296,20 @@ flowchart LR
   in the browser (tested by hashing a read-back after scrubbing back and forth).
 - Flipbook bake (Follow-up 47) reuses the same clock, so a bake follows the keyed timeline.
 
+### 5.5 As built (phase 4)
+
+| Piece | File | What it does |
+|-------|------|--------------|
+| Tracks | `Engine/KeyTracks.js` (no imports) | Sampling (ease 0–3, Hold / Cycle / Ping-pong, colours in linear light, Int rounds, Bool / Choice / palette / token step), `setKey`, `removeKey`, `transformKeys` (move / scale about a pivot), `envelopeToTrack`, `nodeWeight`, `keyedNode`, `affectedFrom` |
+| Stack keys | `Engine/LayerStack.js` | `evaluateLayerStack(stack, emitters, time)`: a keyed amount replaces the static one before blending, layer Weight is keyable and multiplies after. No time = the static fold (what files and fingerprints use) |
+| Force / source / cloud keys | `Engine/ForceGeneratorCatalog.js`, `FluidSolver.js`, `ParticleSimulation.js` | Force and source fields are keyed on the node (`node.Tracks`, paths = field names); the solver packs `keyedNode(node, t)` and multiplies by `nodeWeight(node, t)` |
+| Timing → Weight | `KeyTracks.envelopeToTrack` | Start / Duration / Fade / Repeat generate the Weight track (§5.3). The timeline shows it as a *derived* track; dragging one of its keys, or ◆ on Weight, turns it into explicit keys and clears the timing fields. Setting timing again hands Weight back to the envelope |
+| Checkpoints | `Engine/SimulationCheckpoints.js` · `CheckpointRing` | Every 0.5 s: velocity, state, pressure, curl, tracers, debris, every particle record (positions, velocities, previous, trails) via GPU copies (`GpuContext.copyTarget`), plus clock, step index, sparse tile pool and grid origin. Budget 192 MB, at most 64; restores only into the same layout |
+| Scrubbing | `Engine/FluidStudioApp.js` | `seek(t)` restores the newest checkpoint ≤ t (or restarts at 0) and re-steps, 24 ms of steps per frame; `seekNow(t)` is the synchronous form. Static edits drop every checkpoint; a key edit drops those after `affectedFrom` (two keys back, since Smooth tangents reach that far) and **re-simulates** from the surviving checkpoint to the playhead, so the picture, later checkpoints and a scrub back agree. Loop wraps at the timeline End |
+| Timeline dock | `UI/TimelinePanel.js` under the viewport | Transport (⏮ step-back ▶ step ⏭), timecode, End, Loop, Auto-key, checkpoint bar; dope sheet grouped by gas volume / force / source / cloud (drag = move snapped to the 240 Hz step, Alt = free, Ctrl = scale about the playhead; ruler and lanes scrub); curves view (SVG) with key and Bezier tangent drag; ease, extrapolation, delete; Delete, Home, End, `,` `.`, Ctrl+A |
+| Inspector | `UI/StudioPanels.js` | ◆ beside every keyable control (outlined = not keyed, amber = keyed, filled = key at the playhead); keyed controls show the amount at the playhead; an edit of a keyed amount writes a key; Auto-key keys every edit |
+| Files | presets / scene JSON | `[[Force.Track]]`, `[[Emitter.Track]]`, `[[Volume.Track]]`, `[[Particle.Track]]` (+ `.Keys`), preset Revision 2, `[Timeline]` End / Loop; scene JSON Version 5. The 36 library presets have no explicit keys, so their documents are unchanged |
+
 ---
 
 ## 6. Visual effect layers (from earlier workspaces)
@@ -320,7 +334,7 @@ flowchart LR
 | 1 ✔️  | `LayerSpecifications.toml` + browser loader + inert-unknown round trip        | Round-trip unit tests; specification hash printed                 |
 | 2 ✔️  | Gas stack evaluation; 36 presets converted; old preset objects removed        | `FluidMetrics` per preset before/after; `FluidValidation`         |
 | 3 ✔️  | Particle stack; 26 templates converted                                        | Template capture before/after; particle counts and colours        |
-| 4     | Timeline, keys, auto-key, curves, checkpoints, scrubbing                      | Envelope conversion test (≤ 1e-6); scrub determinism hash         |
+| 4 ✔️  | Timeline, keys, auto-key, curves, checkpoints, scrubbing                      | Envelope conversion test (≤ 1e-6); scrub determinism hash         |
 | 5     | Heat shimmer, glitch, distortion, dissolve layers                             | Captures + parameter sweeps in `Exhibits/FluidEditor/`            |
 | 6     | C++: generated structs, toml++ codec, conformance corpus, metric parity       | Windows build; byte round trip; metric parity table               |
 
@@ -346,5 +360,6 @@ flowchart LR
 | 1 | ✔️ done | `Engine/LayerSpecifications.toml` (8 gas categories, codes 101–108) → `GenerateLayerSpecifications.mjs` → `Engine/LayerSpecifications.js` + hash; `Engine/TomlSubset.js` reader/writer; `Engine/LayerSpecificationValidation.js` rules + FNV-1a 64 hash; unknown categories and parameters kept verbatim. |
 | 2 | ✔️ done | `Engine/LayerStack.js` evaluates the gas stack into `scene.Domain` / `Visualizers.Volume` (GPU code unchanged). Inspector stack UI (add, enable, reorder, weight, blend, solo, delete). **Presets are documents:** `Presets/*.toml` (36, `frontier-fluid-preset`) → `GeneratePresetLibrary.mjs` → `Engine/PresetLibrary.js`; loaded by `Engine/PresetScenes.js`. Legacy objects removed from the runtime after all 36 rebuilt identical scenes (fingerprints in `Exhibits/FluidEditor/Results/PresetConversion.json`) and FluidMetrics matched exactly on Campfire, Smoke Plume, Tornado, Wind Tunnel. *Save as preset* writes a document. Scene JSON Version 3 carries `GasStack`. `PyroScenePresets.js` is kept as an unloaded 📝 reference of the original values. |
 | 3 | ✔️ done | Particle categories 201–212 (§4.1) in the same specification (hash `c0d4526879189117`). Every particle system carries `node.Stack`; the node's flat fields are its evaluation, so the GPU code only gained a "held" check. **Templates are documents:** `ParticleTemplates/*.toml` (26 converted + *Empty Cloud*) → `GeneratePresetLibrary.mjs` → `Engine/ParticleTemplateLibrary.js`. Preset `[[Particle]]` entries carry `[[Particle.Layer]]`. Inspector: particle stack (add, enable, weight, blend, solo, reorder, delete) + selected-layer settings (palette editor, World/Pixel size ranges, only the settings that apply); gizmo moves write the Spawn layer. Scene JSON Version 4. Checks: 26/26 templates rebuild the identical node, 36/36 presets the identical scene; GPU capture of all 26 templates (live count, mean position, speed, changed pixels, mean colour at 1 s and 2.5 s) identical before and after (`Exhibits/FluidEditor/Results/ParticleTemplateConversion.json`). |
-| 4–5 | ⏳ | Timeline + keys, effect layers. |
+| 4 | ✔️ done | §5.5. Checks: envelope → Weight track over every timed force, source and cloud in the 36 presets (27 nodes, 104 127 samples at 1 ms) max difference 1.1e-15, plus 300 synthetic timing cases 2.2e-13; 36/36 presets and 26/26 templates still rebuild identical scenes and nodes; FluidMetrics on Campfire, Smoke Plume, Tornado, Wind Tunnel identical to phase 2; **scrub determinism** (browser read-back hash of every checkpointed texture after straight run, forward-then-back, back-then-forward, 5 steps back, and a cold run): identical for Campfire, Campfire with keys and Form (two particle clouds) — `Exhibits/FluidEditor/Results/ScrubDeterminism.md`. ⚠️ Sparse (infinite) grids: restore + re-step is checked on the mock GPU only; the browser run did not finish within 25 min on SwiftShader. FluidValidation §9 (49 checks). |
+| 5 | ⏳ | Effect layers. |
 | 6 | ⏸ | C++ — out of scope this round (HTML only). |

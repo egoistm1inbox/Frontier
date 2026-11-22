@@ -304,7 +304,7 @@
   🟢 Sprite footprint Bokeh shaded by GLSL
   🟢 Sprite footprint Star shaded by GLSL
   🟢 Sprite footprint Square shaded by GLSL
-  🟢 26 particle templates · texture sizing
+  🟢 27 particle templates · texture sizing
   🟢 Palettes: every template carries 2–8 stops; legacy Start/End back-fill
   🟢 Mograph Field: particle template grid-cloner resolves
   🟢 Mograph Field: particle template ring-cloner resolves
@@ -376,10 +376,10 @@
   🟢 Emitter + collider packing
   🟢 MacCormack step issues 50 GPU passes (expected 50)
   🟢 Semi-Lagrangian step drops the 4 MacCormack correction passes
-  🟢 Every particle template allocates GPU state (26 systems)
+  🟢 Every particle template allocates GPU state (27 systems)
   🟢 Every uniform written exists in its shader (0 mismatches)
   🟢 Gizmos hidden by default: only the domain box (24 line vertices)
-  🟢 Gizmo batch produced 15894 line vertices for 21 forces
+  🟢 Gizmo batch produced 15910 line vertices for 21 forces
 
 [4] Serialisation
   🟢 Scene document round-trips through JSON
@@ -395,6 +395,7 @@
   🟢 #pz-notch-menu exists in markup
   🟢 #pz-drawer exists in markup
   🟢 #pz-drawer-tab exists in markup
+  🟢 #pz-timeline exists in markup
   🟢 #status-fps exists in markup
   🟢 #status-step exists in markup
   🟢 #status-grid exists in markup
@@ -505,5 +506,113 @@
   🟢 Sparse rewrite swaps the addressing chunk in every kernel
   🟢 Sparse programs: every uniform written exists (0 mismatches)
   🟢 Switching back to a fixed-box preset rebuilds the window solver
+
+[7] Layer specifications + gas layer stack
+  🟢 LayerSpecifications.toml follows the rules
+  🟢 Engine/LayerSpecifications.js is up to date with the TOML (run node GenerateLayerSpecifications.mjs)
+  🟢 Specification hash c0d4526879189117 matches the TOML
+  🟢 Validator refuses duplicate choice codes and out-of-range defaults
+  🟢 Engine/PresetLibrary.js is up to date with Presets/*.toml (run node GeneratePresetLibrary.mjs) · library 6e485233977cae91
+  🟢 36/36 preset documents build the identical scene the legacy preset objects built
+  🟢 36/36 preset stacks evaluate without problems and round-trip through TOML byte for byte
+  🟢 Fingerprint detects a 0.01 change in one layer parameter
+  🟢 Save as preset writes a valid document that rebuilds the current scene exactly
+  🟢 Unknown layer category and unknown parameter are kept and written back unchanged
+  🟢 Unknown layer is reported as inert and does not stop the volume
+  🟢 Disabling the Buoyancy layer returns buoyancy and cooling to neutral (0)
+  🟢 Weight 0.5 halves the contribution (1.3 → 0.65)
+  🟢 Solo keeps only the soloed layer (and the required Domain) contributing
+  🟢 Un-solo restores every layer
+  🟢 Editing a stack-owned Domain field writes into its layer (existing controls keep working)
+  🟢 Volume Render fire edits are written to the Fire shading layer
+  🟢 Capacity is enforced when adding (Buoyancy ≤ 4)
+  🟢 Later Replace layers win over earlier ones (top to bottom): 1.2
+  🟢 Add blend sums onto the layers above (1.3 + 0.5 = 1.8)
+  🟢 The required Domain layer cannot be deleted
+  🟢 Nothing can be moved above the Domain layer
+  🟢 A stack without its Domain layer stops the volume with a reason ("Domain layer missing")
+  🟢 Stopped volume holds the gas still while the app keeps running
+  🟢 Adding an emitter adds its linked Source layer
+  🟢 Disabling a Source layer disables its emitter
+  🟢 Enabling the emitter from its inspector re-enables the Source layer
+  🟢 Deleting the emitter removes its Source layer
+  🟢 Version 5 export → import keeps the stack and relinks Source layers to the re-created emitters
+  🟢 Version 2 files (no stack) convert to a stack with the same values
+
+[8] Particle layer stacks + templates as documents
+  🟢 Engine/ParticleTemplateLibrary.js is up to date with ParticleTemplates/*.toml · library 8fd27ab05a267717
+  🟢 12 particle layer categories (201–212), all writing the particle node
+  🟢 Every GPU field of a particle node is owned by a layer; only identity and timing stay flat (Id, Kind, Template, Name, Enabled, Visible, StartTime, Duration, Fade, Repeat, Tracks, Stack)
+  🟢 26/26 legacy templates rebuild the identical particle node from their document
+  🟢 27/27 template stacks evaluate without problems; 27 round-trip through TOML byte for byte
+  🟢 evaluate(convert(node)) equals the node field for field for every template and preset particle system (39)
+  🟢 Empty Cloud template = Spawn + Sprite (the "+ New particle cloud" starting point) and evaluates
+  🟢 Form Sphere stack: Spawn → Home spring → Noise → Field influence → Bounce → Colour rule → Size over life → Sprite
+  🟢 + Add layer → Gravity adds 9.8 m/s² to the selected particle system (9.8)
+  🟢 Weight 0.5 halves it (4.9)
+  🟢 Disabling the layer returns gravity to neutral (0)
+  🟢 A flat edit with no owning layer inserts it in phase order (Advance before Shade)
+  🟢 Moving the gizmo writes the Spawn layer position
+  🟢 The required Spawn layer cannot be deleted
+  🟢 Capacity holds: a second Sprite layer is refused
+  🟢 Editing a Spawn layer parameter evaluates into the node the GPU reads
+  🟢 Scene fingerprint detects a 0.01 change in one particle layer parameter
+  🟢 Save as preset writes each particle system with its layer stack and rebuilds it exactly
+  🟢 Version 4 export → import keeps every particle stack (layers, weights, amounts)
+  🟢 Duplicating a particle system copies its stack with fresh layer tokens and offsets the Spawn position
+  🟢 A gas layer inside a particle stack stops that system with a reason ("Buoyancy does not belong in this stack")
+  🟢 A particle stack without Spawn holds that system (not simulated or drawn)
+  🟢 The rest of the scene keeps running while one particle system is held
+  🟢 A new particle system from Empty Cloud is created and runs without failures
+
+[9] Timeline, keys and scrubbing (phase 4)
+  🟢 Envelope → Weight track: 27 timed forces, sources and particle clouds in the 36 presets, 104127 samples at 1 ms, max difference 1.11e-15 (≤ 1e-6)
+  🟢 Envelope → Weight track over 300 synthetic Start/Duration/Fade/Repeat cases (rise-and-hold, trapezoid, triangle, repeat shorter than duration): max difference 2.22e-13
+  🟢 Plan §5.3 shapes: trapezoid = 4 linear keys, Fade > Duration/2 = triangle peaking at Duration/(2·Fade), Duration 0 = rise then hold
+  🟢 Repeat → Cycle extrapolation with Period = Repeat; un-timed nodes have no Weight track (Weight 1)
+  🟢 Linear ease interpolates; the first amount holds before the first key and Hold keeps the last
+  🟢 Constant ease holds until the next key
+  🟢 Smooth ease (monotone cubic Hermite, auto tangents) passes through every key without overshoot
+  🟢 Bezier ease follows explicit Out / In tangents (amount per second)
+  🟢 Cycle wraps and Ping-pong reflects after the last key
+  🟢 Int32 rounds after easing; Choice and Bool step
+  🟢 ColourLinear eases in linear light (#000 → #fff at 0.5 = #bcbcbc); Vector3 eases per component
+  🟢 setKey keeps keys sorted and replaces a key within half a 240 Hz step
+  🟢 Moving keys keeps the order valid
+  🟢 Scaling keys about a pivot
+  🟢 Removing the last key removes the track
+  🟢 A key edit invalidates from two keys back (Smooth tangents); editing before the first key affects t = 0
+  🟢 A keyed parameter replaces the static amount at the playhead; layer Weight blends after it; no time = static
+  🟢 Layer Weight is keyable (0 = layer silent, 1 = full)
+  🟢 Tracks round-trip through TOML as [[Volume.Track]] / [[Volume.Track.Keys]] (Time, Amount, In, Out written as floats)
+  🟢 Fresh layer tokens (duplicates, template instances) carry their tracks along
+  🟢 Track rules: missing layer, keys out of order and timing fields are rejected
+  🟢 Domain inspector fields resolve to their owning layer for ◆
+  🟢 Auto-key off: an edit of an un-keyed parameter stays static
+  🟢 ◆ keys the current amount at the playhead
+  🟢 Editing a keyed parameter writes a key at the playhead; the static amount is untouched; the solver reads the keyed amount
+  🟢 Scrubbing re-folds keyed stacks at the new playhead
+  🟢 Auto-key on: any edit (here a layer Weight) writes a key
+  🟢 Removing a layer removes its tracks
+  🟢 Timed nodes show their generated Weight track in the timeline (4 in Demolition)
+  🟢 ◆ on a timed node turns its timing into explicit Weight keys (timing fields cleared) and adds a key
+  🟢 Setting timing fields again hands Weight back to the generated envelope
+  🟢 Force fields are keyable; the solver packs the keyed amount, the static one stays
+  🟢 Save as preset (Revision 2) writes [[Force.Track]] and rebuilds the keyed scene exactly
+  🟢 Version 5 scene files keep tracks and the timeline
+  🟢 Particle layer parameters are keyable; the cloud reads the keyed amount
+  🟢 Duplicating a cloud copies its tracks onto the fresh layer tokens
+  🟢 Particle tracks are saved as [[Particle.Track]] with document layer tokens and rebuild exactly
+  🟢 Checkpoint ring sized by budget: 26 × 7.3 MB
+  🟢 Scrubbing forward steps the simulation (96 steps) and stores a checkpoint every 0.5 s (0.50, 1.00, 1.50)
+  🟢 Scrubbing back restores the newest checkpoint ≤ t (1.0 s) and re-steps 12 steps; clock and step index restored
+  🟢 Scrubbing before the first checkpoint restarts from the empty grid at t = 0
+  🟢 A key at t = 0.2 s invalidates the checkpoints after it
+  🟢 Keys at 0.2 / 0.6 / 0.8 s, then a new key at 1.4 s: Smooth tangents reach back two keys (0.6 s), so only the 0.5 s checkpoint survives (0.50)
+  🟢 A key edit before the playhead re-simulates from the surviving checkpoint back to the playhead (the 1.0 s checkpoint is recaptured with the new keys)
+  🟢 A static edit invalidates every checkpoint
+  🟢 Loop wraps the playhead at the timeline End
+  🟢 Timeline dock renders dope sheet and curves with 1 track(s)
+  🟢 Infinite grid: scrubbing back restores the sparse checkpoint at 0.5 s and re-steps 3 steps
 
 🟢 Fluid Studio validation passed

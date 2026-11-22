@@ -348,3 +348,86 @@ button.mini { padding: 0 7px; height: 20px; min-width: 20px; border-radius: 8px;
 .layer-stopped { color: #fdba74; font-size: 11px; margin: 4px 0; }
 .layer-owned { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .link-button { border: 0; background: transparent; color: #8ab4ff; padding: 0; font-size: 11px; cursor: pointer; text-decoration: underline; }
+
+/* ============================================================ TIMELINE (phase 4) ============================================================ */
+.timeline-dock { position: relative; flex: 0 0 214px; display: flex; flex-direction: column; min-height: 0; background: var(--bg-panel); border-top: 1px solid #000; outline: none; }
+.timeline-dock.collapsed { flex-basis: 40px; }
+.tl-bar { display: flex; align-items: center; gap: 10px; padding: 5px 10px; border-bottom: 1px solid var(--border-soft); flex: 0 0 auto; overflow-x: auto; scrollbar-width: none; white-space: nowrap; }
+.tl-bar button { min-height: 24px; padding: 2px 10px; font-size: 11px; color: var(--text-secondary); }
+.tl-bar button.toggle.on { color: var(--text-primary); border-color: var(--border-strong); background: #2a2a2a; }
+.tl-bar button.autokey.on { color: #fff; background: rgba(240, 83, 90, 0.22); border-color: rgba(240, 83, 90, 0.6); }
+.tl-rec { width: 8px; height: 8px; border-radius: 50%; background: #555; display: inline-block; }
+.autokey.on .tl-rec { background: var(--accent-red); box-shadow: 0 0 6px var(--accent-red); }
+.tl-transport { display: flex; gap: 2px; padding: 2px; border-radius: 16px; background: #161616; border: 1px solid var(--border-soft); }
+.tl-transport button { width: 28px; height: 24px; min-height: 0; padding: 0; border: 0; background: transparent; font-size: 11px; }
+.tl-transport button.primary { background: #f0f0f0; color: #111; }
+.tl-readout { font-size: 10.5px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.tl-readout strong { font-size: 13px; font-weight: 400; color: var(--text-primary); }
+.tl-end { display: flex; align-items: center; gap: 5px; font-size: 10.5px; color: var(--text-muted); }
+.tl-end input { width: 48px; height: 22px; border-radius: 8px; padding: 0 6px; text-align: right; }
+.tl-checkpoints { display: flex; align-items: center; gap: 6px; cursor: help; font-size: 10.5px; color: var(--text-muted); }
+.tl-bars { color: var(--accent-blue); letter-spacing: -1px; }
+.tl-tools { display: flex; align-items: center; gap: 6px; margin-left: auto; }
+.tl-tools select { height: 24px; font-size: 11px; max-width: 104px; }
+.tl-transport button svg { margin: auto; }
+.tl-count { font-size: 10.5px; color: var(--accent-amber); }
+.tl-count:empty { display: none; }
+.tl-views { display: flex; gap: 2px; }
+.tl-views button { min-height: 0; height: 18px; padding: 0 8px; font-size: 10px; border-radius: 9px; color: var(--text-muted); }
+.tl-views button.active { background: #2a2a2a; color: var(--text-primary); }
+.tl-collapse { width: 26px; padding: 0 !important; }
+.tl-body { position: relative; flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+.tl-row { display: grid; grid-template-columns: var(--tl-label) 1fr; min-height: 20px; }
+.tl-label { display: flex; align-items: center; gap: 6px; padding: 0 10px; font-size: 10.5px; color: var(--text-secondary); border-right: 1px solid var(--border-soft); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; cursor: pointer; }
+.tl-label b { font-weight: 500; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; }
+.tl-label small { color: var(--text-muted); font-size: 9.5px; }
+.tl-label em { margin-left: auto; font-style: normal; font-size: 9px; color: var(--accent-blue); }
+.tl-ruler-row { flex: 0 0 24px; border-bottom: 1px solid var(--border-soft); background: #141414; }
+.tl-ruler-label { color: var(--text-muted); cursor: default; }
+.tl-ruler { position: relative; cursor: ew-resize; margin: 0 14px; }
+.tl-tick { position: absolute; top: 4px; transform: translateX(-50%); font-size: 9px; color: var(--text-muted); pointer-events: none; }
+.tl-tick::after { content: ''; position: absolute; left: 50%; top: 13px; width: 1px; height: 5px; background: #333; }
+.tl-checkpoint { position: absolute; bottom: 0; width: 4px; height: 4px; transform: translateX(-50%); background: var(--accent-blue); border-radius: 1px; pointer-events: none; }
+.tl-loop-end { position: absolute; right: 0; top: 0; bottom: 0; width: 2px; background: var(--accent-amber); }
+.tl-rows { flex: 1 1 auto; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #2a2a2a transparent; }
+.tl-group { background: #151515; border-bottom: 1px solid var(--border-soft); min-height: 22px; }
+.tl-chevron { color: var(--text-muted); width: 10px; }
+.tl-track .tl-label { padding-left: 26px; }
+.tl-track.focused .tl-label { color: var(--text-primary); box-shadow: inset 2px 0 0 var(--accent-amber); }
+.tl-track.derived .tl-label span { font-style: italic; color: var(--text-muted); }
+.tl-lane { position: relative; margin: 0 14px; cursor: ew-resize; }
+.tl-lane::before { content: ''; position: absolute; left: 0; right: 0; top: 50%; height: 1px; background: rgba(255, 255, 255, 0.04); }
+.tl-segment { position: absolute; top: calc(50% - 1px); height: 2px; background: rgba(245, 165, 36, 0.35); pointer-events: none; }
+.tl-segment.ease-0 { background: repeating-linear-gradient(90deg, rgba(245, 165, 36, 0.4) 0 4px, transparent 4px 7px); }
+.tl-segment.ease-2 { background: rgba(56, 189, 248, 0.4); }
+.tl-segment.ease-3 { background: rgba(167, 139, 250, 0.5); }
+.tl-key { position: absolute; top: 50%; width: 9px; height: 9px; transform: translate(-50%, -50%) rotate(45deg); background: var(--accent-amber); border: 1px solid #000; cursor: grab; z-index: 2; }
+.tl-key.ease-0 { border-radius: 0; background: #d4d4d4; }
+.tl-key.ease-2 { background: var(--accent-blue); }
+.tl-key.ease-3 { background: #a78bfa; }
+.tl-key.selected { outline: 2px solid #fff; outline-offset: 1px; }
+.tl-track.derived .tl-key { background: transparent; border: 1px solid var(--accent-amber); }
+.tl-summary { position: absolute; top: 50%; width: 6px; height: 6px; transform: translate(-50%, -50%) rotate(45deg); background: #6b6b6b; pointer-events: none; }
+.tl-playhead { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--accent-red); box-shadow: 0 0 4px var(--accent-red); pointer-events: none; z-index: 4; }
+.tl-playhead::before { content: ''; position: absolute; top: 0; left: -5px; border: 5px solid transparent; border-top: 7px solid var(--accent-red); }
+.tl-playhead.past-end { background: var(--accent-amber); }
+.tl-empty { margin: 14px; font-size: 11px; color: var(--text-muted); }
+.tl-curves { flex: 1 1 auto; display: grid; grid-template-columns: var(--tl-label) 1fr; min-height: 0; }
+.tl-curve-list { flex-direction: column; align-items: stretch; gap: 2px; padding: 6px; overflow-y: auto; cursor: default; }
+.tl-curve-list button { justify-content: flex-start; min-height: 22px; border-radius: 8px; font-size: 10.5px; overflow: hidden; text-overflow: ellipsis; }
+.tl-curve-list button.active { background: #2a2a2a; color: var(--text-primary); }
+.tl-plot { position: relative; margin: 6px 14px; min-height: 0; }
+.tl-svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.tl-grid { stroke: rgba(255, 255, 255, 0.05); }
+.tl-grid-text { fill: var(--text-muted); font-size: 9px; }
+.tl-curve { fill: none; stroke-width: 1.5; }
+.tl-curve-key { fill: #111; stroke-width: 2; cursor: move; }
+.tl-curve-key.selected { fill: #fff; }
+.tl-handle-line { stroke: #a78bfa; stroke-dasharray: 3 2; }
+.tl-handle { fill: #a78bfa; cursor: ns-resize; }
+.tl-curve-head { stroke: var(--accent-red); }
+.key-toggle { display: inline-grid; place-items: center; width: 16px; height: 16px; margin-right: 5px; font-size: 11px; line-height: 1; color: #555; cursor: pointer; border-radius: 4px; vertical-align: middle; user-select: none; }
+.key-toggle:hover { color: var(--text-primary); background: #262626; }
+.key-toggle.track, .key-toggle.timing { color: var(--accent-amber); }
+.key-toggle.key { color: var(--accent-amber); text-shadow: 0 0 6px rgba(245, 165, 36, 0.6); }
+.control.keyed input[type="number"] { color: var(--accent-amber); }

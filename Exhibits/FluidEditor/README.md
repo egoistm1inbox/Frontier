@@ -102,3 +102,16 @@ screenshots.
 Results: `FluidValidation.mjs` passes 496 checks, which includes loading all 36 presets (`ValidationResults.txt`). The browser runs had
 `errors []`. ⚠️ All of this ran on the software renderer (SwiftShader) only. The flames look over-bright at 32 cells (a white core
 running up the column), in both the old and new Campfire. That is a look and resolution issue that was not changed here.
+
+## Follow-up 51 — Layer stack phase 4: timeline, keys, scrubbing (2026-11-16)
+
+| File | Shows |
+|---|---|
+| `Images/TimelineDopeSheet` | Demolition Blast with keyed Thermal buoyancy (Smooth, one Bezier key) and a keyed Vorticity weight (Ping-pong); the timing of the charges shown as derived Weight tracks (hollow keys); one key selected |
+| `Images/TimelineCurves` | The curves view of the Buoyancy track: monotone Smooth segments, no overshoot past the keys |
+| `Images/TimelineInspectorKeys` | The Buoyancy layer card: ◆ beside each keyable control, the keyed one in amber showing its amount at the playhead |
+
+- `Code/ScrubDeterminism.cjs` hashes every checkpointed texture after five ways of reaching the same time; results in
+  `Results/ScrubDeterminism.md`. `Code/TimelineCapture.cjs` made the dope sheet and curves captures.
+- `FluidValidation.mjs` §9 holds the envelope conversion test and the key, file and checkpoint checks (`ValidationResults.txt`).
+- ⚠️ SwiftShader only, at 40 cells.

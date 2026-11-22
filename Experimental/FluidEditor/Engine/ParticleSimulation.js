@@ -11,7 +11,8 @@
 import * as ParticleShaders from './ParticleShaders.js';
 import { FullscreenVertex, sparse } from './FluidShaders.js';
 import { ParticleShapes, ParticleModes, ParticleColourModes, ParticleBlendModes, ParticleRenderStyles, ParticleRampSources, ParticleSprites, ParticleSizeModes, ParticleTrailModes, ParticleTrailColours, MaximumPaletteStops, particleTextureSide, effectiveTrailLength, HaltedParticleSystems } from './ParticleCatalog.js';
-import { ColourRamps, timingEnvelope } from './ForceGeneratorCatalog.js';
+import { ColourRamps } from './ForceGeneratorCatalog.js';
+import { nodeWeight } from './KeyTracks.js';
 
 function hexToRgb(hex)
 {
@@ -140,7 +141,8 @@ export class ParticleSimulation
 
     resetAll()
     {
-        for (const record of this.records.values()) record.needsReset = true;
+        // Trail history restarts too, so a run from t = 0 matches a fresh load bit for bit (timeline scrubbing relies on it).
+        for (const record of this.records.values()) { record.needsReset = true; record.trailHead = 0; record.trailClock = 0; }
     }
 
     reset(nodeId)
@@ -202,7 +204,7 @@ export class ParticleSimulation
             solver.applyForceUniforms(uniforms);
             this.applyShapeUniforms(uniforms, node, record);
             gl.uniform1f(uniforms.uDeltaTime, deltaTime);
-            gl.uniform1f(uniforms.uEnvelope, timingEnvelope(node, solver.time));
+            gl.uniform1f(uniforms.uEnvelope, nodeWeight(node, solver.time));
             gl.uniform1f(uniforms.uRate, node.Rate);
             gl.uniform1f(uniforms.uLifetime, Math.max(0.05, node.Lifetime));
             gl.uniform1f(uniforms.uSpeed, node.Speed);

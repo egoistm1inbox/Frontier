@@ -10,6 +10,7 @@
 
 import { allocateNodeId } from './ForceGeneratorCatalog.js';
 import { ParticleTemplateDocuments, ParticleTemplateLibraryHash } from './ParticleTemplateLibrary.js';
+import { readTracks } from './KeyTracks.js';
 import { readParticleStack, evaluateParticleStack, applyParticleEvaluation, convertParticleSystemToStack, instantiateParticleStack } from './LayerStack.js';
 
 export const MaximumParticleSystems = 4;
@@ -62,7 +63,7 @@ export const ParticleCategories = Object.freeze(['Cinematic', 'Trails', 'Emitter
  */
 export const ParticleTemplates = Object.freeze(ParticleTemplateDocuments.map((document) =>
 {
-    const stack = readParticleStack({ Layer: document.Layer });
+    const stack = readParticleStack({ Layer: document.Layer, Track: (document.Track || []).filter((track) => String(track.Path).includes('/')) });
     const evaluation = evaluateParticleStack(stack);
     return Object.freeze({
         ...document.Template,
@@ -102,10 +103,10 @@ export function createParticleSystem(templateId, overrides = {})
     return node;
 }
 
-/** Folds node.Stack into the node's flat fields; returns the evaluation (problems, contributing layers). */
-export function evaluateParticleSystem(node)
+/** Folds node.Stack into the node's flat fields (keyed amounts at `time` when given); returns the evaluation (problems, contributing layers). */
+export function evaluateParticleSystem(node, time = undefined)
 {
-    const evaluation = evaluateParticleStack(node.Stack);
+    const evaluation = evaluateParticleStack(node.Stack, time);
     if (evaluation.Stopped) HaltedParticleSystems.add(node);
     else
     {
@@ -184,6 +185,7 @@ function createFlatParticleSystem(templateId, overrides = {})
         Duration: base.Duration ?? 0,
         Fade: base.Fade ?? 0.15,
         Repeat: base.Repeat ?? 0,
+        Tracks: readTracks(overrides.Tracks || overrides.Track),   // node-level tracks: Weight (timing); layer tracks live in Stack.Tracks
     };
 }
 

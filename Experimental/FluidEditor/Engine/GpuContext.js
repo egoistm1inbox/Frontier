@@ -111,7 +111,18 @@ export class GpuContext
         const status = gl.checkFramebufferStatus(gl.FRAMEBUFFER);
         if (status !== gl.FRAMEBUFFER_COMPLETE) throw new Error('Framebuffer incomplete: 0x' + status.toString(16));
         gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-        return { texture, framebuffer, width, height };
+        return { texture, framebuffer, width, height, rgba32f: Boolean(options.rgba32f), nearest: Boolean(options.nearest) };
+    }
+
+    /** Exact texel copy between two targets of the same size and format (timeline checkpoints). */
+    copyTarget(source, destination)
+    {
+        const gl = this.gl;
+        gl.bindFramebuffer(gl.READ_FRAMEBUFFER, source.framebuffer);
+        gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, destination.framebuffer);
+        gl.blitFramebuffer(0, 0, source.width, source.height, 0, 0, destination.width, destination.height, gl.COLOR_BUFFER_BIT, gl.NEAREST);
+        gl.bindFramebuffer(gl.READ_FRAMEBUFFER, null);
+        gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, null);
     }
 
     /** Integer lookup texture (R16I or RGBA32I), nearest-filtered, uploaded with uploadIntegerTexture(). */

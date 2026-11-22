@@ -6,7 +6,8 @@
 
 import * as Shaders from './FluidShaders.js';
 import { Vec3 } from './OrbitCamera.js';
-import { ForceTypeById, ColourRamps, ScalarChannels, SliceAxes, VolumeFilters, VectorModes, timingEnvelope, emitterTransform } from './ForceGeneratorCatalog.js';
+import { ForceTypeById, ColourRamps, ScalarChannels, SliceAxes, VolumeFilters, VectorModes, emitterTransform } from './ForceGeneratorCatalog.js';
+import { nodeWeight, keyedNode } from './KeyTracks.js';
 
 function hexToRgb(hex)
 {
@@ -1011,9 +1012,9 @@ export class VolumeRenderer
         const show = (node) => gizmos.Visible ? node.Visible : node.Id === selection;
         if (true)
         {
-            for (const force of scene.Forces) if (show(force)) this.forceGizmo(force, force.Id === selection, gizmos.Opacity * (0.3 + 0.7 * timingEnvelope(force, solver.time)), solver.time);
-            for (const emitter of scene.Emitters) if (show(emitter)) this.emitterGizmo(emitter, emitter.Id === selection, gizmos.Opacity * (0.3 + 0.7 * timingEnvelope(emitter, solver.time)), solver.time);
-            for (const node of scene.Particles || []) if (show(node)) this.particleGizmo(node, node.Id === selection, gizmos.Opacity * (0.3 + 0.7 * timingEnvelope(node, solver.time)), solver.time);
+            for (const force of scene.Forces) if (show(force)) this.forceGizmo(keyedNode(force, solver.time), force.Id === selection, gizmos.Opacity * (0.3 + 0.7 * nodeWeight(force, solver.time)), solver.time);
+            for (const emitter of scene.Emitters) if (show(emitter)) this.emitterGizmo(keyedNode(emitter, solver.time), emitter.Id === selection, gizmos.Opacity * (0.3 + 0.7 * nodeWeight(emitter, solver.time)), solver.time);
+            for (const node of scene.Particles || []) if (show(node)) this.particleGizmo(node, node.Id === selection, gizmos.Opacity * (0.3 + 0.7 * nodeWeight(node, solver.time)), solver.time);
             for (const collider of scene.Colliders) if (collider.Visible && collider.Id === selection) this.sphereWire(collider.Position, collider.Radius * 1.04, [1, 1, 1, 0.8]);
         }
         if (this.lineVertexCount === 0) return;

@@ -7,7 +7,8 @@
 
 import { computeVolumeLayout } from './GpuContext.js';
 import * as Shaders from './FluidShaders.js';
-import { ForceTypeById, FalloffCurves, EmitterShapes, BoundaryModes, MaximumForceGenerators, MaximumEmitters, MaximumColliders, timingEnvelope, DebrisKinds, emitterTransform } from './ForceGeneratorCatalog.js';
+import { ForceTypeById, FalloffCurves, EmitterShapes, BoundaryModes, MaximumForceGenerators, MaximumEmitters, MaximumColliders, DebrisKinds, emitterTransform } from './ForceGeneratorCatalog.js';
+import { nodeWeight, keyedNode } from './KeyTracks.js';
 
 export class FluidSolver
 {
@@ -266,9 +267,11 @@ export class FluidSolver
         const gl = this.gl, context = this.context;
         for (const entry of pool.entries) if (entry) entry.pinned = false;
         const required = [];
-        for (const emitter of scene.Emitters)
+        for (const sourceEmitter of scene.Emitters)
         {
-            if (!emitter.Enabled || timingEnvelope(emitter, this.time) <= 0) continue;
+            // Keyed fields (phase 4) replace the static ones at the solver clock; Weight comes from the node's Weight track.
+            const emitter = keyedNode(sourceEmitter, this.time);
+            if (!emitter.Enabled || nodeWeight(sourceEmitter, this.time) <= 0) continue;
             const { Position: position } = emitterTransform(emitter, this.time);
             const reach = emitter.Radius + pool.size * 0.15;
             const lo = this.tileOfWorld([position[0] - reach, position[1] - reach, position[2] - reach]);
@@ -399,6 +402,7 @@ export class FluidSolver
             const pool = this.tilePool;
             pool.entries.fill(null);
             pool.map.clear();
+            pool.lookupOrigin = [-32, 0, -32];        // as configured: a reset run schedules tiles exactly like a fresh one
             pool.dirty = true;
             this.uploadTileTables();
         }
@@ -416,11 +420,12 @@ export class FluidSolver
     {
         const arrays = this.forceArrays;
         let count = 0;
-        for (const force of forces)
+        for (const sourceForce of forces)
         {
+            const force = keyedNode(sourceForce, this.time);
             if (!force.Enabled || count >= MaximumForceGenerators) continue;
             const type = ForceTypeById[force.Type];
-            const envelope = timingEnvelope(force, this.time);
+            const envelope = nodeWeight(sourceForce, this.time);
             const offset = count * 4;
             arrays.a.set([force.Position[0], force.Position[1], force.Position[2], force.Radius], offset);
             arrays.b.set([force.Direction[0], force.Direction[1], force.Direction[2], force.Strength * envelope], offset);
@@ -435,10 +440,11 @@ export class FluidSolver
     {
         const arrays = this.emitterArrays;
         let count = 0;
-        for (const emitter of emitters)
+        for (const sourceEmitter of emitters)
         {
+            const emitter = keyedNode(sourceEmitter, this.time);
             if (!emitter.Enabled || count >= MaximumEmitters) continue;
-            const envelope = timingEnvelope(emitter, this.time);
+            const envelope = nodeWeight(sourceEmitter, this.time);
             if (envelope <= 0 && !(emitter.Debris > 0)) continue;
             const offset = count * 4;
             const transform = emitterTransform(emitter, this.time);

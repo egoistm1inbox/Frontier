@@ -19,7 +19,7 @@ import { OrbitCamera } from './Engine/OrbitCamera.js';
 import { ScenePresets, ScenePresetById, buildSceneFromDocument } from './Engine/PresetScenes.js';
 import {
     ForceGeneratorTypes, ForceTypeById, FalloffCurves, EmitterShapes, BoundaryModes, createDomain, createEmitter, createForceGenerator,
-    createCollider, createVisualizerSet, MaximumForceGenerators, timingEnvelope,
+    createCollider, createVisualizerSet, MaximumForceGenerators, nodeWeight,
 } from './Engine/ForceGeneratorCatalog.js';
 
 const Folder = path.dirname(fileURLToPath(import.meta.url));
@@ -243,6 +243,10 @@ function shimElement(tag)
         _className: '', innerHTML: '', value: '', textContent: '', disabled: false, title: '',
         appendChild(child) { node.children.push(child); return child; },
         append(...nodes) { node.children.push(...nodes); },
+        prepend(...nodes) { node.children.unshift(...nodes); },
+        get firstElementChild() { return node.children[0] || null; },
+        getBoundingClientRect() { return { left: 0, top: 0, width: 800, height: 160 }; },
+        focus() {},
         addEventListener(type, handler) { (node.listeners[type] ||= []).push(handler); },
         querySelector(selector) { return selector === 'svg' ? shimElement('svg') : shimElement('div'); },
         querySelectorAll() { return []; },
@@ -258,6 +262,7 @@ function shimElement(tag)
 const registry = new Map();
 globalThis.document = {
     createElement: shimElement,
+    createElementNS: (namespace, tag) => shimElement(tag),
     getElementById: (id) => registry.get(id) || null,
     addEventListener() {},
     body: shimElement('body'),
@@ -268,7 +273,7 @@ globalThis.performance = globalThis.performance || { now: () => Date.now() };
 const { mountStudioUI } = await import('./UI/StudioPanels.js');
 const { FluidStudioApp } = await import('./Engine/FluidStudioApp.js');
 const refs = {};
-for (const key of ['outliner', 'inspector', 'toolbar', 'transport', 'legend', 'notch', 'notchMenu', 'drawer', 'drawerTab', 'statusFps', 'statusStep', 'statusGrid', 'statusForces', 'statusText']) refs[key] = shimElement('div');
+for (const key of ['outliner', 'inspector', 'toolbar', 'transport', 'legend', 'notch', 'notchMenu', 'drawer', 'drawerTab', 'statusFps', 'statusStep', 'statusGrid', 'statusForces', 'statusText', 'timeline']) refs[key] = shimElement('div');
 const canvas = { ...shimElement('canvas'), width: 1280, height: 720, getContext: () => createMockGl(), getBoundingClientRect: () => ({ left: 0, top: 0, width: 1280, height: 720 }), setPointerCapture() {}, releasePointerCapture() {} };
 let ui = null;
 const app = new FluidStudioApp({ canvas, onMetrics: (metrics) => ui && ui.updateMetrics(metrics), onStateChange: (snapshot) => ui && ui.renderAll(snapshot), onError: (error) => { throw error; } });
@@ -304,8 +309,8 @@ app.importJson(exported);
 check(app.scene.Domain.Resolution.join() === '32,48,32' && app.scene.Domain.MaxCells === 48, 'Export → import preserves the edited domain');
 app.loadPreset('preset-demolition');
 const charge = app.scene.Emitters[0];
-check(timingEnvelope(charge, 0.1) === 0 && timingEnvelope(charge, 0.3) === 1 && timingEnvelope(charge, 1.0) === 0, 'Timing keys gate the ground charge (waiting → live → done)');
-check(timingEnvelope({ StartTime: 1, Duration: 1, Fade: 0.5, Repeat: 3 }, 4.5) === 1 && timingEnvelope({}, 99) === 1, 'Repeat keys loop; un-keyed nodes stay on');
+check(nodeWeight(charge, 0.1) === 0 && nodeWeight(charge, 0.3) === 1 && nodeWeight(charge, 1.0) === 0, 'Timing keys gate the ground charge (waiting → live → done)');
+check(nodeWeight({ StartTime: 1, Duration: 1, Fade: 0.5, Repeat: 3 }, 4.5) === 1 && nodeWeight({}, 99) === 1, 'Repeat keys loop; un-keyed nodes stay on');
 app.scene.Visualizers.Debris.Visible = true; app.frame(80); app.frame(96); app.frame(112);
 check(app.supported && app.solver.debrisPositions && app.solver.debrisVelocities, 'Debris particle ping-pong integrates + renders through the app loop');
 app.scene.Domain.SceneLoop = 0.01; app.frame(130); check(app.solver.frame <= 1, 'Scene loop restarts the solver clock');
@@ -451,11 +456,11 @@ console.log('\n[7] Layer specifications + gas layer stack');
     app.removeNode(extra.Id);
     check(!app.scene.GasStack.Layers.some((layer) => layer.Parameters.Emitter === extra.Id), 'Deleting the emitter removes its Source layer');
 
-    // Files: Version 4 keeps the gas stack (and particle stacks, §8); Version 2 files convert exactly.
+    // Files: Version 5 keeps the gas stack (and tracks, §9) (and particle stacks, §8); Version 2 files convert exactly.
     app.updateNode('domain', 'Vorticity', 1.1);
     const version3 = app.exportJson();
     app.importJson(version3);
-    check(JSON.parse(version3).Version === 4 && app.scene.Domain.Vorticity === 1.1 && app.scene.GasStack.Layers.filter((layer) => layer.Category === 102).every((layer) => app.scene.Emitters.some((emitter) => emitter.Id === layer.Parameters.Emitter)), 'Version 4 export → import keeps the stack and relinks Source layers to the re-created emitters');
+    check(JSON.parse(version3).Version === 5 && app.scene.Domain.Vorticity === 1.1 && app.scene.GasStack.Layers.filter((layer) => layer.Category === 102).every((layer) => app.scene.Emitters.some((emitter) => emitter.Id === layer.Parameters.Emitter)), 'Version 5 export → import keeps the stack and relinks Source layers to the re-created emitters');
     const version2 = JSON.parse(version3); delete version2.GasStack; version2.Version = 2;
     app.importJson(JSON.stringify(version2));
     check(app.scene.Domain.Vorticity === 1.1 && app.scene.GasStack.Layers[0].Category === 101, 'Version 2 files (no stack) convert to a stack with the same values');
@@ -474,15 +479,16 @@ console.log('\n[8] Particle layer stacks + templates as documents');
     check(Stack.ParticleLayerSpecifications.length === 12 && Stack.ParticleLayerSpecifications.every((layer) => layer.Parameter.every((parameter) => parameter.Target === 'Particles')), `${Stack.ParticleLayerSpecifications.length} particle layer categories (201–212), all writing the particle node`);
     const owned = new Set(Stack.ParticleLayerSpecifications.flatMap((layer) => layer.Parameter.map((parameter) => parameter.Name)));
     const flatOnly = Object.keys(createParticleSystem('sparks')).filter((key) => !owned.has(key));
-    check(flatOnly.join(',') === 'Id,Kind,Template,Name,Enabled,Visible,StartTime,Duration,Fade,Repeat,Stack', `Every GPU field of a particle node is owned by a layer; only identity and timing stay flat (${flatOnly.join(', ')})`);
+    check(flatOnly.join(',') === 'Id,Kind,Template,Name,Enabled,Visible,StartTime,Duration,Fade,Repeat,Tracks,Stack', `Every GPU field of a particle node is owned by a layer; only identity and timing stay flat (${flatOnly.join(', ')})`);
 
     // The 26 legacy templates: each document builds the identical node (fingerprints recorded at conversion).
     const conversion = JSON.parse(fs.readFileSync(path.join(Folder, '../../Exhibits/FluidEditor/Results/ParticleTemplateConversion.json'), 'utf8'));
     let exact = 0, clean = 0, roundTrips = 0;
     for (const [id, recorded] of Object.entries(conversion.Templates))
     {
-        const { Id, Stack: _stack, ...rest } = createParticleSystem(id);
-        if (Catalog.ParticleTemplateById[id] && specificationHash(JSON.parse(JSON.stringify(rest))) === recorded.Legacy) exact += 1;
+        // An empty track list (phase 4) is no keys: the recorded legacy fingerprints still apply to the rest of the node.
+        const { Id, Stack: _stack, Tracks, ...rest } = createParticleSystem(id);
+        if (Catalog.ParticleTemplateById[id] && Tracks.length === 0 && specificationHash(JSON.parse(JSON.stringify(rest))) === recorded.Legacy) exact += 1;
         else console.log(`     ↳ ${id}: node differs from the legacy template (fingerprint ${recorded.Legacy})`);
     }
     for (const template of ParticleTemplates)
@@ -546,6 +552,233 @@ console.log('\n[8] Particle layer stacks + templates as documents');
     const fresh = app.addParticles('empty-cloud');
     if (!fresh) console.log(`     ↳ ${app.scene.Particles.length} particle systems in the scene`);
     check(fresh && !Catalog.HaltedParticleSystems.has(fresh) && fresh.Stack.Layers.length === 2, 'A new particle system from Empty Cloud is created and runs without failures');
+    app.loadPreset('preset-campfire');
+}
+
+console.log('\n[9] Timeline, keys and scrubbing (phase 4)');
+{
+    const Keys = await import('./Engine/KeyTracks.js');
+    const Stack = await import('./Engine/LayerStack.js');
+    const Presets = await import('./Engine/PresetScenes.js');
+    const { parseToml, writeToml } = await import('./Engine/TomlSubset.js');
+    const { CheckpointRing } = await import('./Engine/SimulationCheckpoints.js');
+    const near = (a, b, tolerance = 1e-9) => Math.abs(a - b) <= tolerance;
+
+    // §5.3 — the envelope the solver used before phase 4, verbatim, as the reference.
+    function legacyTimingEnvelope(node, time)
+    {
+        const start = node.StartTime || 0;
+        const duration = node.Duration || 0;
+        const fade = Math.max(0.001, node.Fade ?? 0.15);
+        const repeat = node.Repeat || 0;
+        if (start <= 0 && duration <= 0) return 1;
+        let local = time - start;
+        if (local < 0) return 0;
+        if (repeat > 0) local = local % repeat;
+        const rise = Math.min(1, local / fade);
+        if (duration <= 0) return rise;
+        if (local >= duration) return 0;
+        const fall = Math.min(1, (duration - local) / fade);
+        return Math.min(rise, fall);
+    }
+    let keyedNodes = 0, samples = 0, worst = 0;
+    for (const preset of Presets.ScenePresets)
+    {
+        const scene = Presets.buildSceneFromDocument(preset.Document);
+        for (const node of [...scene.Forces, ...scene.Emitters, ...scene.Particles])
+        {
+            if (!Keys.hasWeightTrack(node)) continue;
+            keyedNodes += 1;
+            const end = (node.StartTime || 0) + Math.max(node.Duration || 0, node.Repeat || 0) * 3 + 2;
+            for (let step = 0; step <= Math.ceil(end * 1000); step += 1) { const time = step / 1000; worst = Math.max(worst, Math.abs(legacyTimingEnvelope(node, time) - Keys.nodeWeight(node, time))); samples += 1; }
+        }
+    }
+    check(keyedNodes > 0 && worst <= 1e-6, `Envelope → Weight track: ${keyedNodes} timed forces, sources and particle clouds in the 36 presets, ${samples} samples at 1 ms, max difference ${worst.toExponential(2)} (≤ 1e-6)`);
+    let gridWorst = 0, gridCases = 0;
+    for (const StartTime of [0, 0.3, 1]) for (const Duration of [0, 0.06, 0.5, 2]) for (const Fade of [0, 0.02, 0.15, 0.4, 3]) for (const Repeat of [0, 0.05, 0.7, 1.5, 2.5])
+    {
+        const node = { StartTime, Duration, Fade, Repeat };
+        gridCases += 1;
+        for (let step = 0; step <= 8000; step += 1) gridWorst = Math.max(gridWorst, Math.abs(legacyTimingEnvelope(node, step / 1000) - Keys.nodeWeight(node, step / 1000)));
+    }
+    check(gridWorst <= 1e-6, `Envelope → Weight track over ${gridCases} synthetic Start/Duration/Fade/Repeat cases (rise-and-hold, trapezoid, triangle, repeat shorter than duration): max difference ${gridWorst.toExponential(2)}`);
+    const trapezoid = Keys.envelopeToTrack({ StartTime: 1, Duration: 2, Fade: 0.5 });
+    const triangle = Keys.envelopeToTrack({ StartTime: 1, Duration: 0.6, Fade: 0.5 });
+    const rise = Keys.envelopeToTrack({ StartTime: 1, Duration: 0, Fade: 0.5 });
+    const cycle = Keys.envelopeToTrack({ StartTime: 1, Duration: 1, Fade: 0.2, Repeat: 3 });
+    check(trapezoid.Keys.length === 4 && triangle.Keys.length === 3 && near(triangle.Keys[1].Amount, 0.6) && rise.Keys.length === 2 && trapezoid.Keys.every((key) => key.Ease === 1), 'Plan §5.3 shapes: trapezoid = 4 linear keys, Fade > Duration/2 = triangle peaking at Duration/(2·Fade), Duration 0 = rise then hold');
+    check(cycle.Extrapolation === 1 && cycle.Period === 3 && Keys.envelopeToTrack({}) === null, 'Repeat → Cycle extrapolation with Period = Repeat; un-timed nodes have no Weight track (Weight 1)');
+
+    // §5.2 — sampling.
+    const linear = { Path: 'Weight', Keys: [{ Time: 0, Amount: 0, Ease: 1 }, { Time: 1, Amount: 10, Ease: 1 }] };
+    check(near(Keys.sampleTrack(linear, 0.25), 2.5) && Keys.sampleTrack(linear, -1) === 0 && Keys.sampleTrack(linear, 5) === 10, 'Linear ease interpolates; the first amount holds before the first key and Hold keeps the last');
+    const constant = { Path: 'X', Keys: [{ Time: 0, Amount: 1, Ease: 0 }, { Time: 1, Amount: 5, Ease: 1 }] };
+    check(Keys.sampleTrack(constant, 0.99) === 1 && Keys.sampleTrack(constant, 1) === 5, 'Constant ease holds until the next key');
+    const smooth = { Path: 'X', Keys: [{ Time: 0, Amount: 0, Ease: 2 }, { Time: 1, Amount: 1, Ease: 2 }, { Time: 2, Amount: 1, Ease: 2 }, { Time: 3, Amount: 0, Ease: 2 }] };
+    let overshoot = 0;
+    for (let step = 0; step <= 300; step += 1) { const amount = Keys.sampleTrack(smooth, step / 100); overshoot = Math.max(overshoot, amount - 1, -amount); }
+    check(overshoot <= 1e-12 && near(Keys.sampleTrack(smooth, 0.5), 0.5) && Keys.sampleTrack(smooth, 1.5) === 1, 'Smooth ease (monotone cubic Hermite, auto tangents) passes through every key without overshoot');
+    const bezier = { Path: 'X', Keys: [{ Time: 0, Amount: 0, Ease: 3, Out: 3 }, { Time: 1, Amount: 1, Ease: 1, In: 0 }] };
+    check(Keys.sampleTrack(bezier, 0.1) > 0.25 && near(Keys.sampleTrack(bezier, 1), 1), 'Bezier ease follows explicit Out / In tangents (amount per second)');
+    const looping = { Path: 'X', Extrapolation: 1, Keys: [{ Time: 1, Amount: 0, Ease: 1 }, { Time: 2, Amount: 1, Ease: 1 }] };
+    const pingPong = { ...looping, Extrapolation: 2 };
+    check(near(Keys.sampleTrack(looping, 2.25), 0.25) && near(Keys.sampleTrack(pingPong, 2.25), 0.75) && near(Keys.sampleTrack(pingPong, 3.25), 0.25), 'Cycle wraps and Ping-pong reflects after the last key');
+    check(Keys.sampleTrackAs({ Path: 'Count', Keys: [{ Time: 0, Amount: 0, Ease: 1 }, { Time: 1, Amount: 3, Ease: 1 }] }, 0.5, { Type: 'Int32' }) === 2
+        && Keys.sampleTrackAs({ Path: 'Mode', Keys: [{ Time: 0, Amount: 0, Ease: 1 }, { Time: 1, Amount: 1, Ease: 1 }] }, 0.9, { Type: 'Choice' }) === 0
+        && Keys.sampleTrack({ Path: 'On', Keys: [{ Time: 0, Amount: false, Ease: 1 }, { Time: 1, Amount: true, Ease: 1 }] }, 0.9) === false, 'Int32 rounds after easing; Choice and Bool step');
+    const colour = Keys.sampleTrack({ Path: 'Albedo', Keys: [{ Time: 0, Amount: '#000000', Ease: 1 }, { Time: 1, Amount: '#ffffff', Ease: 1 }] }, 0.5);
+    const vector = Keys.sampleTrack({ Path: 'Position', Keys: [{ Time: 0, Amount: [0, 0, 0], Ease: 1 }, { Time: 2, Amount: [2, 4, -2], Ease: 1 }] }, 1);
+    check(colour === '#bcbcbc' && vector.join(',') === '1,2,-1', `ColourLinear eases in linear light (#000 → #fff at 0.5 = ${colour}); Vector3 eases per component`);
+
+    // Editing.
+    const tracks = [];
+    Keys.setKey(tracks, 'layer-1/Buoyancy', 1, 2);
+    Keys.setKey(tracks, 'layer-1/Buoyancy', 0, 1);
+    Keys.setKey(tracks, 'layer-1/Buoyancy', 1 + 1 / 1000, 3);
+    check(tracks.length === 1 && tracks[0].Keys.length === 2 && tracks[0].Keys[0].Time === 0 && tracks[0].Keys[1].Amount === 3, 'setKey keeps keys sorted and replaces a key within half a 240 Hz step');
+    Keys.transformKeys(tracks[0], [1], { offset: 0.5 });
+    check(tracks[0].Keys[1].Time === 1.5, 'Moving keys keeps the order valid');
+    Keys.transformKeys(tracks[0], [0, 1], { scale: 2, pivot: 0 });
+    check(tracks[0].Keys[1].Time === 3, 'Scaling keys about a pivot');
+    check(Keys.removeKey(tracks, 'layer-1/Buoyancy', 3) && Keys.removeKey(tracks, 'layer-1/Buoyancy', 0) && tracks.length === 0, 'Removing the last key removes the track');
+    check(Keys.affectedFrom({ Keys: [{ Time: 1 }, { Time: 2 }, { Time: 3 }, { Time: 4 }] }, 4) === 2 && Keys.affectedFrom({ Keys: [{ Time: 1 }, { Time: 2 }] }, 0.5) === 0, 'A key edit invalidates from two keys back (Smooth tangents); editing before the first key affects t = 0');
+
+    // Stack evaluation with keys: keyed amount replaces the static one; Weight multiplies after.
+    const stack = Stack.convertSceneToGasStack(Presets.buildSceneFromDocument(ScenePresetById['preset-campfire'].Document));
+    const buoyancy = stack.Layers.find((layer) => layer.Category === 103);
+    stack.Tracks = [{ Path: `${buoyancy.Token}/Buoyancy`, Extrapolation: 0, Keys: [{ Time: 0, Amount: 0, Ease: 1 }, { Time: 2, Amount: 4, Ease: 1 }] }];
+    const at1 = Stack.evaluateGasStack(stack, [], 1).Domain.Buoyancy;
+    buoyancy.Weight = 0.5;
+    const weighted = Stack.evaluateGasStack(stack, [], 1).Domain.Buoyancy;
+    const neutral = Stack.LayerSpecificationByCode[103].Parameter.find((parameter) => parameter.Name === 'Buoyancy').Neutral;
+    check(at1 === 2 && near(weighted, neutral + (2 - neutral) * 0.5) && Stack.evaluateGasStack(stack, []).Domain.Buoyancy === buoyancy.Parameters.Buoyancy * 0.5 + neutral * 0.5, 'A keyed parameter replaces the static amount at the playhead; layer Weight blends after it; no time = static');
+    stack.Tracks.push({ Path: `${buoyancy.Token}/Weight`, Extrapolation: 0, Keys: [{ Time: 0, Amount: 0, Ease: 1 }, { Time: 1, Amount: 1, Ease: 1 }] });
+    check(Stack.evaluateGasStack(stack, [], 1).Domain.Buoyancy === 2 && Stack.evaluateGasStack(stack, [], 0).Domain.Buoyancy === neutral, 'Layer Weight is keyable (0 = layer silent, 1 = full)');
+    const document = Stack.writeStackDocument([stack]);
+    const reread = Stack.readStackToml(Stack.writeStackToml([stack])).Stacks[0];
+    check(JSON.stringify(reread.Tracks) === JSON.stringify(stack.Tracks) && /\[\[Volume\.Track\]\]/.test(Stack.writeStackToml([stack])) && /\[\[Volume\.Track\.Keys\]\]/.test(Stack.writeStackToml([stack])) && document.Volume[0].Track.length === 2, 'Tracks round-trip through TOML as [[Volume.Track]] / [[Volume.Track.Keys]] (Time, Amount, In, Out written as floats)');
+    const fresh = Stack.readParticleStack({ Layer: [{ Token: 'layer-1', Category: 201 }, { Token: 'layer-2', Category: 205 }], Track: [{ Path: 'layer-2/Noise', Keys: [{ Time: 0, Amount: 1 }] }] }, true);
+    check(fresh.Tracks[0].Path === `${fresh.Layers[1].Token}/Noise`, 'Fresh layer tokens (duplicates, template instances) carry their tracks along');
+    const { validateTracks } = await import('./Engine/PresetDocumentValidation.js');
+    check(validateTracks('t', [{ Path: 'layer-9/Buoyancy', Keys: [{ Time: 0, Amount: 1 }] }], [{ Token: 'layer-1', Category: 103 }]).length === 1
+        && validateTracks('t', [{ Path: 'layer-1/Buoyancy', Keys: [{ Time: 1, Amount: 1 }, { Time: 0.5, Amount: 2 }] }], [{ Token: 'layer-1', Category: 103 }]).length === 1
+        && validateTracks('t', [{ Path: 'StartTime', Keys: [{ Time: 0, Amount: 1 }] }], null).length === 1
+        && validateTracks('t', [{ Path: 'Strength', Keys: [{ Time: 0, Amount: 1, Ease: 3, Out: 2 }] }], null).length === 0, 'Track rules: missing layer, keys out of order and timing fields are rejected');
+
+    // App: ◆, Auto-key, keyed edits, Weight materialisation, files. Re-simulations after key edits finish synchronously here
+    // (in the browser they run 24 ms of steps per frame), so the checks do not depend on the machine's speed.
+    const frameBudget = app.seekBudgetMilliseconds;
+    app.seekBudgetMilliseconds = Infinity;
+    app.loadPreset('preset-campfire');
+    const gas = app.scene.GasStack;
+    const buoyant = gas.Layers.find((layer) => layer.Category === 103);
+    const staticBuoyancy = buoyant.Parameters.Buoyancy;
+    const target = { Kind: 'Layer', Token: buoyant.Token, Name: 'Buoyancy' };
+    check(app.keyState(target) === 'none' && app.keyTargetForField(app.scene.Domain, 'Buoyancy').Token === buoyant.Token, 'Domain inspector fields resolve to their owning layer for ◆');
+    app.updateLayer(buoyant.Token, 'Buoyancy', 2.2, true);
+    check(buoyant.Parameters.Buoyancy === 2.2 && !gas.Tracks.length, 'Auto-key off: an edit of an un-keyed parameter stays static');
+    app.toggleKey(target);
+    check(gas.Tracks.length === 1 && app.keyState(target) === 'key', '◆ keys the current amount at the playhead');
+    app.seekNow(1);
+    app.updateLayer(buoyant.Token, 'Buoyancy', 0.4, true);
+    check(gas.Tracks[0].Keys.length === 2 && buoyant.Parameters.Buoyancy === 2.2 && near(app.scene.Domain.Buoyancy, 0.4), 'Editing a keyed parameter writes a key at the playhead; the static amount is untouched; the solver reads the keyed amount');
+    app.seekNow(0.5);
+    check(near(app.scene.Domain.Buoyancy, Keys.sampleTrack(gas.Tracks[0], 0.5)), 'Scrubbing re-folds keyed stacks at the new playhead');
+    const vorticity = gas.Layers.find((layer) => layer.Category === 105);
+    app.autoKey = true;
+    app.updateLayer(vorticity.Token, 'Weight', 0.5);
+    app.autoKey = false;
+    check(gas.Tracks.some((track) => track.Path === `${vorticity.Token}/Weight`) && vorticity.Weight === 1, 'Auto-key on: any edit (here a layer Weight) writes a key');
+    app.removeLayer(vorticity.Token);
+    check(!gas.Tracks.some((track) => track.Path.startsWith(vorticity.Token)), 'Removing a layer removes its tracks');
+    void staticBuoyancy;
+
+    app.loadPreset('preset-demolition');
+    const charge = app.scene.Emitters[0];
+    const derived = app.allTracks(true).filter((entry) => entry.Derived);
+    check(derived.length >= 4 && derived.every((entry) => entry.Track.Envelope), `Timed nodes show their generated Weight track in the timeline (${derived.length} in Demolition)`);
+    const generated = JSON.parse(JSON.stringify(Keys.weightTrackOf(charge)));
+    app.toggleKey({ Kind: 'Node', Id: charge.Id, Name: 'Weight' });
+    const explicit = Keys.findTrack(charge.Tracks, 'Weight');
+    check(explicit && charge.StartTime === 0 && charge.Duration === 0 && explicit.Keys.length === generated.Keys.length + 1, '◆ on a timed node turns its timing into explicit Weight keys (timing fields cleared) and adds a key');
+    app.updateNode(charge.Id, 'StartTime', 0.2);
+    app.updateNode(charge.Id, 'Duration', 0.3);
+    check(!Keys.findTrack(charge.Tracks, 'Weight') && near(Keys.nodeWeight(charge, 0.35), 1), 'Setting timing fields again hands Weight back to the generated envelope');
+    const force = app.scene.Forces[0];
+    app.seekNow(0);
+    app.toggleKey({ Kind: 'Node', Id: force.Id, Name: 'Strength' });
+    app.seekNow(0.25);
+    app.updateNode(force.Id, 'Strength', 5);
+    check(Keys.keyedNode(force, 0.25).Strength === 5 && force.Strength === 38 && near(Keys.keyedNode(force, 0.125).Strength, Keys.sampleTrack(Keys.findTrack(force.Tracks, 'Strength'), 0.125)), 'Force fields are keyable; the solver packs the keyed amount, the static one stays');
+    const saved = parseToml(app.exportPresetToml({ Id: 'preset-keyed', Family: 'Custom' }));
+    const rebuilt = Presets.buildSceneFromDocument(saved);
+    check(Presets.validatePresetDocument(saved).length === 0 && saved.Document.Revision === 2 && saved.Force[0].Track.length === 1 && Presets.sceneFingerprint(rebuilt) === Presets.sceneFingerprint(app.scene), 'Save as preset (Revision 2) writes [[Force.Track]] and rebuilds the keyed scene exactly');
+    const json = JSON.parse(app.exportJson());
+    app.importJson(JSON.stringify(json));
+    check(json.Version === 5 && json.Timeline.End > 0 && Keys.findTrack(app.scene.Forces[0].Tracks, 'Strength').Keys.length === 2, 'Version 5 scene files keep tracks and the timeline');
+
+    // Particle layer keys follow the stack through duplicate and save.
+    app.loadPreset('preset-form');
+    const cloud = app.scene.Particles[0];
+    const spawn = cloud.Stack.Layers[0];
+    app.seekNow(0);
+    app.toggleKey({ Kind: 'Layer', Token: spawn.Token, Name: 'Radius' });
+    app.seekNow(0.5);
+    app.updateLayer(spawn.Token, 'Radius', spawn.Parameters.Radius * 2, true);
+    check(near(cloud.Radius, spawn.Parameters.Radius * 2) && cloud.Stack.Tracks.length === 1, 'Particle layer parameters are keyable; the cloud reads the keyed amount');
+    const copy = app.duplicateNode(cloud.Id);
+    check(copy.Stack.Tracks.length === 1 && copy.Stack.Tracks[0].Path.startsWith(copy.Stack.Layers[0].Token + '/'), 'Duplicating a cloud copies its tracks onto the fresh layer tokens');
+    const formSaved = parseToml(app.exportPresetToml({ Id: 'preset-form-keyed', Family: 'Custom' }));
+    check(Presets.validatePresetDocument(formSaved).length === 0 && formSaved.Particle[0].Track[0].Path === 'layer-1/Radius' && Presets.sceneFingerprint(Presets.buildSceneFromDocument(formSaved)) === Presets.sceneFingerprint(app.scene), 'Particle tracks are saved as [[Particle.Track]] with document layer tokens and rebuild exactly');
+
+    // §5.4 — checkpoints and scrubbing (mock GPU: the bookkeeping; the browser capture checks the bits).
+    app.loadPreset('preset-campfire');
+    const ring = app.checkpoints;
+    check(ring instanceof CheckpointRing && ring.capacity(app.solver, app.particles) >= 1 && ring.bytesPerCheckpoint(app.solver, app.particles) > 0, `Checkpoint ring sized by budget: ${ring.capacity(app.solver, app.particles)} × ${(ring.bytesPerCheckpoint(app.solver, app.particles) / 1048576).toFixed(1)} MB`);
+    const steps = app.seekNow(1.6);
+    check(steps === Math.round(1.6 / app.stepDeltaTime()) && ring.entries.map((entry) => entry.Slot).join(',') === '1,2,3', `Scrubbing forward steps the simulation (${steps} steps) and stores a checkpoint every 0.5 s (${ring.entries.map((entry) => entry.Time.toFixed(2)).join(', ')})`);
+    const restores = app.statistics.seekRestores;
+    const backSteps = app.seekNow(1.2);
+    check(app.statistics.seekRestores === restores + 1 && backSteps === Math.round(0.2 / app.stepDeltaTime()) && near(app.solver.time, 1.2, 1e-6) && app.solver.frame === Math.round(1.2 / app.stepDeltaTime()), `Scrubbing back restores the newest checkpoint ≤ t (1.0 s) and re-steps ${backSteps} steps; clock and step index restored`);
+    app.seekNow(0.2);
+    check(near(app.solver.time, 0.2, 1e-6) && app.solver.frame === Math.round(0.2 / app.stepDeltaTime()), 'Scrubbing before the first checkpoint restarts from the empty grid at t = 0');
+    const kept = ring.entries.length;
+    app.toggleKey({ Kind: 'Layer', Token: app.scene.GasStack.Layers.find((layer) => layer.Category === 103).Token, Name: 'Buoyancy' });
+    check(kept === 3 && ring.entries.length === 0, 'A key at t = 0.2 s invalidates the checkpoints after it');
+    const keyBuoyancy = () => app.toggleKey({ Kind: 'Layer', Token: app.scene.GasStack.Layers.find((layer) => layer.Category === 103).Token, Name: 'Buoyancy' });
+    app.seekNow(0.6); keyBuoyancy();
+    app.seekNow(0.8); keyBuoyancy();
+    app.seekNow(1.6);
+    const beforeEdit = ring.entries.length;
+    app.seekNow(1.4);
+    const restoresBefore = app.statistics.seekRestores;
+    app.seekBudgetMilliseconds = -1;                             // inspect the ring before the re-simulation steps
+    keyBuoyancy();
+    app.seekBudgetMilliseconds = Infinity;
+    const survived = ring.entries.map((entry) => entry.Time.toFixed(2)).join(',');
+    app.continueSeek(Infinity);
+    check(beforeEdit === 3 && survived === '0.50', `Keys at 0.2 / 0.6 / 0.8 s, then a new key at 1.4 s: Smooth tangents reach back two keys (0.6 s), so only the 0.5 s checkpoint survives (${survived})`);
+    check(app.statistics.seekRestores === restoresBefore + 1 && near(app.solver.time, 1.4, 1e-6) && ring.entries.map((entry) => entry.Time.toFixed(2)).join(',') === '0.50,1.00', 'A key edit before the playhead re-simulates from the surviving checkpoint back to the playhead (the 1.0 s checkpoint is recaptured with the new keys)');
+    app.updateNode('domain', 'Gravity', 0.3);
+    check(ring.entries.length === 0, 'A static edit invalidates every checkpoint');
+    app.timeline().Loop = true; app.timeline().End = 0.1;
+    app.playing = true;
+    for (let frame = 0; frame < 12; frame += 1) app.frame(7000 + frame * 16);
+    check(app.solver.time < 0.1 + 1e-6, 'Loop wraps the playhead at the timeline End');
+    app.timeline().Loop = false;
+
+    // Timeline UI smoke (DOM shim): renders tracks, ◆ beside keyed controls.
+    let threw = null;
+    try { ui.renderAll(app.snapshot()); ui.timeline.state.view = 'curves'; ui.timeline.render(); ui.timeline.state.view = 'dope'; ui.timeline.render(); ui.timeline.update(); }
+    catch (error) { threw = error; }
+    app.seekBudgetMilliseconds = frameBudget;
+    check(!threw && ui.timeline.state.rows.length >= 1, `Timeline dock renders dope sheet and curves with ${ui.timeline.state.rows.length} track(s)${threw ? ` — ${threw.message}` : ''}`);
+    // Sparse (infinite) grids: the tile pool and grid origin are part of the checkpoint.
+    app.loadPreset('preset-infinite-plume');
+    const sparseSteps = app.seekNow(0.6);
+    const sparseBack = app.seekNow(0.55);
+    check(app.solver.sparse && near(app.solver.time, 0.55, 1e-6) && sparseBack === Math.round(0.05 / app.stepDeltaTime()), `Infinite grid: scrubbing back restores the sparse checkpoint at 0.5 s and re-steps ${sparseBack} steps`);
+
     app.loadPreset('preset-campfire');
 }
 

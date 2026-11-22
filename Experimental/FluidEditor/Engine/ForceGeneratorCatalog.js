@@ -4,6 +4,8 @@
 //                                 Emitter Shapes, Colour Ramps, and Scene Presets
 //============================================================================================================================================
 
+import { readTracks } from './KeyTracks.js';
+
 export const MaximumForceGenerators = 16;
 export const MaximumEmitters = 6;
 export const MaximumColliders = 4;
@@ -190,28 +192,9 @@ export const FireLooks = Object.freeze({
 //                                                  TIMING KEYS
 //------------------------------------------------------------------------------------------------------------------------
 
-/** Keyed activation envelope (0..1) for a force or emitter at simulation time `time`. Duration 0 = stays on after StartTime. */
-export function timingEnvelope(node, time)
-{
-    const start = node.StartTime || 0;
-    const duration = node.Duration || 0;
-    const fade = Math.max(0.001, node.Fade ?? 0.15);
-    const repeat = node.Repeat || 0;
-    if (start <= 0 && duration <= 0) return 1;
-    let local = time - start;
-    if (local < 0) return 0;
-    if (repeat > 0) local = local % repeat;
-    const rise = Math.min(1, local / fade);
-    if (duration <= 0) return rise;
-    if (local >= duration) return 0;
-    const fall = Math.min(1, (duration - local) / fade);
-    return Math.min(rise, fall);
-}
-
-export function isKeyed(node)
-{
-    return (node.StartTime || 0) > 0 || (node.Duration || 0) > 0;
-}
+// Phase 4 (Fluid layer stack plan §5.3): StartTime / Duration / Fade / Repeat generate a linear Weight track (KeyTracks.envelopeToTrack);
+// the solver, particles and gizmos sample it through nodeWeight(). An explicit Weight track keyed on the timeline replaces it.
+export { nodeWeight, hasWeightTrack as isKeyed } from './KeyTracks.js';
 
 //------------------------------------------------------------------------------------------------------------------------
 //                                                  FACTORY HELPERS
@@ -248,6 +231,7 @@ export function createForceGenerator(typeId, overrides = {})
         Duration: overrides.Duration ?? 0,
         Fade: overrides.Fade ?? 0.15,
         Repeat: overrides.Repeat ?? 0,
+        Tracks: readTracks(overrides.Tracks || overrides.Track),
     };
 }
 
@@ -340,6 +324,7 @@ export function createEmitter(overrides = {})
         PathKind: overrides.PathKind || 'None',
         PathRadius: overrides.PathRadius ?? 1.5,
         PathSpeed: overrides.PathSpeed ?? 1.0,
+        Tracks: readTracks(overrides.Tracks || overrides.Track),
     };
 }
 

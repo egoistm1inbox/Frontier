@@ -17,6 +17,7 @@ function deepFreeze(value)
 }
 
 export { SpecificationHash };
+import { readTracks, renameTrackLayers, sampleTrackAs, splitLayerPath } from './KeyTracks.js';
 export const LayerDocumentFormat = 'frontier-effect-stack';
 export const LayerDocumentRevision = 1;
 export const MaximumLayers = LayerSpecificationDocument.Document.MaximumLayers;
@@ -126,7 +127,7 @@ export function convertSceneToGasStack(scene)
         layer.Parameters = amounts;
         layers.push(layer);
     }
-    return { Token: 'gas-volume', Category: GasVolumeCategory, Layers: layers };
+    return { Token: 'gas-volume', Category: GasVolumeCategory, Layers: layers, Tracks: [] };
 }
 
 export function createLinkedSource(emitter)
@@ -178,8 +179,10 @@ function blendAmount(parameter, current, amount, weight, blend)
  * Folds the stack into evaluated blocks. Returns { Domain, Volume, Links, Problems, Stopped, Contributing }. `Stopped` is a reason when the
  * volume must not simulate (missing or misplaced required layer, capacity exceeded); the rest of the scene keeps running.
  */
-export function evaluateLayerStack(stack, emitters = [])
+export function evaluateLayerStack(stack, emitters = [], time = undefined)
 {
+    // Keyed amounts (phase 4): at `time`, every keyed parameter or Weight replaces the layer's static amount before blending.
+    const keyed = Number.isFinite(time) && stack && stack.Tracks && stack.Tracks.length ? keyedLayers(stack, time) : null;
     const kind = kindOfCategory(stack && stack.Category);
     const kindName = stackNameOf(kind);
     const blocks = Object.fromEntries(Object.keys(kind.Owners).map((target) => [target, {}]));
@@ -209,8 +212,9 @@ export function evaluateLayerStack(stack, emitters = [])
     const soloing = layers.some((layer) => layer.Solo && layer.Enabled);
     const contributing = new Set();
     const links = {};
-    for (const layer of layers)
+    for (const staticLayer of layers)
     {
+        const layer = (keyed && keyed.get(staticLayer.Token)) || staticLayer;
         const specification = LayerSpecificationByCode[layer.Category];
         if (!specification || specification.Stack !== kindName) continue;
         const live = layer.Enabled && (!soloing || layer.Solo || specification.Required) && (specification.Required || layer.Weight > 0);
@@ -240,8 +244,54 @@ export function evaluateLayerStack(stack, emitters = [])
     return { ...blocks, Links: links, Problems: problems, Stopped: stopped, Contributing: contributing };
 }
 
-export function evaluateGasStack(stack, emitters = []) { return evaluateLayerStack(stack, emitters); }
-export function evaluateParticleStack(stack) { return evaluateLayerStack(stack, []); }
+export function evaluateGasStack(stack, emitters = [], time = undefined) { return evaluateLayerStack(stack, emitters, time); }
+export function evaluateParticleStack(stack, time = undefined) { return evaluateLayerStack(stack, [], time); }
+
+/** The parameter a stack track path points at: { Layer, Specification, Parameter (null for Weight), Name }, or null. */
+export function resolveTrackPath(stack, path)
+{
+    const parts = splitLayerPath(path);
+    if (!parts) return null;
+    const layer = stack.Layers.find((candidate) => candidate.Token === parts.Token);
+    const specification = layer && LayerSpecificationByCode[layer.Category];
+    if (!specification) return null;
+    if (parts.Name === 'Weight') return specification.Required || specification.Linked ? null : { Layer: layer, Specification: specification, Parameter: null, Name: 'Weight' };
+    const parameter = specification.Parameter.find((candidate) => candidate.Name === parts.Name);
+    return parameter ? { Layer: layer, Specification: specification, Parameter: parameter, Name: parts.Name } : null;
+}
+
+/** Keyable layer parameters: numbers, vectors, colours, Bool and Choice (stepped). Ramps, tokens and links are not keyable. */
+export function isKeyableParameter(parameter) { return ['Float32', 'Int32', 'UInt32', 'Vector3', 'ColourLinear', 'Bool', 'Choice'].includes(parameter.Type); }
+
+/** WeightParameter: the Weight setting of a layer as a keyable amount. */
+export const WeightParameter = Object.freeze({ Name: 'Weight', Type: 'Float32', Minimum: 0, Maximum: 1, Default: 1, Neutral: 1 });
+
+/** Layer copies holding their keyed amounts at `time` (only layers with tracks), keyed by token. */
+export function keyedLayers(stack, time)
+{
+    const result = new Map();
+    for (const track of stack.Tracks)
+    {
+        const target = resolveTrackPath(stack, track.Path);
+        if (!target) continue;
+        let layer = result.get(target.Layer.Token);
+        if (!layer) { layer = { ...target.Layer, Parameters: { ...target.Layer.Parameters } }; result.set(target.Layer.Token, layer); }
+        const parameter = target.Parameter || WeightParameter;
+        const amount = coerceAmount(parameter, sampleTrackAs(track, time, parameter));
+        if (target.Parameter) layer.Parameters[target.Name] = amount; else layer.Weight = amount;
+    }
+    return result;
+}
+
+/** The amount a layer setting or parameter holds at `time`: keyed when a track exists, else static. */
+export function layerAmountAt(stack, layer, name, time)
+{
+    const track = (stack.Tracks || []).find((candidate) => candidate.Path === `${layer.Token}/${name}`);
+    const specification = LayerSpecificationByCode[layer.Category];
+    const parameter = name === 'Weight' ? WeightParameter : specification && specification.Parameter.find((candidate) => candidate.Name === name);
+    if (!track || !parameter || !Number.isFinite(time)) return name === 'Weight' ? layer.Weight : layer.Parameters[name];
+    return coerceAmount(parameter, sampleTrackAs(track, time, parameter));
+}
 
 /** Writes a particle evaluation into the node the GPU reads. */
 export function applyParticleEvaluation(node, evaluation)
@@ -277,6 +327,7 @@ export function owningLayer(stack, target, name)
 export function readLayerStack(source, category = GasVolumeCategory, fresh = false)
 {
     const layers = [];
+    const renamed = new Map();
     for (const raw of (source && (source.Layers || source.Layer)) || [])
     {
         const specification = LayerSpecificationByCode[raw.Category];
@@ -286,12 +337,15 @@ export function readLayerStack(source, category = GasVolumeCategory, fresh = fal
             continue;
         }
         const layer = createLayer(raw.Category, fresh ? { ...raw, Token: undefined } : raw);
+        if (fresh && raw.Token) renamed.set(raw.Token, layer.Token);
         // Keep unknown parameter names (newer files) next to the known, coerced ones.
         for (const [name, value] of Object.entries(raw.Parameters || {})) if (!(name in layer.Parameters)) layer.Parameters[name] = clone(value);
         layers.push(layer);
     }
     const kind = kindOfCategory((source && source.Category) || category);
-    return { Token: (source && source.Token) || kind.Token, Category: kind.Category, Layers: layers };
+    // Tracks (phase 4) follow their layers to fresh tokens; a file holds them as `Track`, a live stack as `Tracks`.
+    const tracks = renameTrackLayers(readTracks(source && (source.Tracks || source.Track)), renamed);
+    return { Token: (source && source.Token) || kind.Token, Category: kind.Category, Layers: layers, Tracks: tracks };
 }
 
 export function readGasStack(source) { return readLayerStack(source, GasVolumeCategory); }
@@ -362,19 +416,20 @@ export function convertParticleSystemToStack(node)
         layer.Parameters = clone(amounts);
         layers.push(layer);
     }
-    return { Token: 'particle-cloud', Category: ParticleCloudCategory, Layers: layers };
+    return { Token: 'particle-cloud', Category: ParticleCloudCategory, Layers: layers, Tracks: [] };
 }
 
 export function writeStackDocument(stacks)
 {
     return {
         Document: { Format: LayerDocumentFormat, Revision: LayerDocumentRevision, SpecificationHash },
-        Volume: stacks.map((stack) => ({ Token: stack.Token, Category: stack.Category, Layer: stack.Layers.map((layer) => clone(layer)) })),
+        Volume: stacks.map((stack) => ({ Token: stack.Token, Category: stack.Category, Layer: stack.Layers.map((layer) => clone(layer)), ...(stack.Tracks && stack.Tracks.length ? { Track: clone(stack.Tracks) } : {}) })),
     };
 }
 
 // Keys always written with a decimal point: layer Weight and every Float32 parameter (toml++ then reads them as floating point).
-export const FloatKeys = Object.freeze(new Set(['Weight', ...LayerSpecifications.flatMap((layer) => layer.Parameter.filter((parameter) => parameter.Type === 'Float32').map((parameter) => parameter.Name))]));
+// Track keys (phase 4): Time, Amount, In, Out and Period are floating point too.
+export const FloatKeys = Object.freeze(new Set(['Weight', 'Time', 'Amount', 'In', 'Out', 'Period', ...LayerSpecifications.flatMap((layer) => layer.Parameter.filter((parameter) => parameter.Type === 'Float32').map((parameter) => parameter.Name))]));
 export function writeStackToml(stacks) { return writeToml(writeStackDocument(stacks), FloatKeys); }
 
 export function readStackToml(text)

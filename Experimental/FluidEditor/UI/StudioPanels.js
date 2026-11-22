@@ -8,10 +8,13 @@ import { icon } from './StudioIcons.js';
 import { FlipbookChoices } from '../Engine/FluidStudioApp.js';
 import {
     ForceGeneratorTypes, ForceTypeById, FalloffCurves, EmitterShapes, ColourRamps, SliceAxes, ScalarChannels, AdvectionSchemes, BoundaryModes,
-    RampStops, MaximumForceGenerators, SmokeLooks, FireLooks, ResolutionPresets, VolumeFilters, FalloffLabels, ForceCategories, VectorModes, timingEnvelope, isKeyed, DebrisKinds, EmitterPathKinds, GridFollowModes, MaximumGridTiles, GridModes, MaximumTilePool,
+    RampStops, MaximumForceGenerators, SmokeLooks, FireLooks, ResolutionPresets, VolumeFilters, FalloffLabels, ForceCategories, VectorModes, nodeWeight, isKeyed, DebrisKinds, EmitterPathKinds, GridFollowModes, MaximumGridTiles, GridModes, MaximumTilePool,
 } from '../Engine/ForceGeneratorCatalog.js';
 import { ScenePresets } from '../Engine/PresetScenes.js';
 import { LayerSpecificationByCode, GasLayerSpecifications, ParticleLayerSpecifications, BlendModes, PhaseOrder, MaximumLayers, SourceLayerCode } from '../Engine/LayerStack.js';
+import { keyedNode, findTrack } from '../Engine/KeyTracks.js';
+import { mountTimeline } from './TimelinePanel.js';
+import { layerAmountAt } from '../Engine/LayerStack.js';
 import { ParticleTemplates, ParticleTemplateById, ParticleCategories, PalettePresets, MaximumPaletteStops, MaximumParticleSystems } from '../Engine/ParticleCatalog.js';
 const BoundaryLabels = { ClosedBox: 'Closed Box', OpenTop: 'Open Top', OpenAll: 'Open All' };
 
@@ -169,6 +172,8 @@ export function mountStudioUI({ app, refs })
 
     function keyedSuffix(node)
     {
+        const keys = (node.Tracks || []).reduce((sum, track) => sum + track.Keys.length, 0) + ((node.Stack && node.Stack.Tracks) || []).reduce((sum, track) => sum + track.Keys.length, 0);
+        if (keys) return ` · ◆ ${keys} key${keys === 1 ? '' : 's'}`;
         if (!isKeyed(node)) return '';
         return ` · ⏱ ${formatNumber(node.StartTime || 0, 1)}${node.Duration > 0 ? `–${formatNumber((node.StartTime || 0) + node.Duration, 1)}` : '+'} s`;
     }
@@ -176,7 +181,8 @@ export function mountStudioUI({ app, refs })
     function timingCard(node)
     {
         const time = app.solver ? app.solver.time : 0;
-        const envelope = timingEnvelope(node, time);
+        const envelope = nodeWeight(node, time);
+        const explicit = findTrack(node.Tracks, 'Weight');
         const stateText = !isKeyed(node) ? 'ALWAYS' : envelope > 0 ? `LIVE ${Math.round(envelope * 100)}%` : time < (node.StartTime || 0) ? 'WAITING' : 'DONE';
         const track = element('div', 'key-track');
         const loop = app.scene.Domain.SceneLoop > 0 ? app.scene.Domain.SceneLoop : Math.max(6, (node.StartTime || 0) + (node.Duration || 2) + 1);
@@ -184,14 +190,23 @@ export function mountStudioUI({ app, refs })
         const width = node.Duration > 0 ? Math.min(100 - left, (node.Duration / loop) * 100) : 100 - left;
         track.innerHTML = `<span class="key-span" style="left:${left}%;width:${width}%"></span><span class="key-head" style="left:${Math.min(100, (time % loop) / loop * 100)}%"></span>`;
         const tile = statusTile('Keyed', stateText, 'clock', isKeyed(node), () => app.updateNode(node.Id, 'Duration', isKeyed(node) ? 0 : 1.0));
+        const weight = attachKey(element('div', 'control', `<div class="control-head"><span>Weight</span><b>${Math.round(envelope * 100)}%</b></div>`), { Kind: 'Node', Id: node.Id, Name: 'Weight' });
+        if (explicit) return card('Timing Keys', `${formatNumber(time, 1)} s · Weight keyed`, [
+            tile,
+            weight,
+            element('p', 'note', `Weight is keyed on the timeline (${explicit.Keys.length} key${explicit.Keys.length === 1 ? '' : 's'}${explicit.Extrapolation ? `, ${['hold', 'cycle', 'ping-pong'][explicit.Extrapolation]} after the last` : ''}). Edit the keys in the timeline below the viewport; setting a start time or duration here replaces them with a timing envelope.`),
+            slider(node, 'StartTime', 'Start time', 0, 20, 0.05, 's'),
+            slider(node, 'Duration', 'Duration (0 = stays on)', 0, 20, 0.05, 's'),
+        ]);
         return card('Timing Keys', `${formatNumber(time, 1)} s / ${formatNumber(loop, 1)} s`, [
             tile,
+            weight,
             track,
             slider(node, 'StartTime', 'Start time', 0, 20, 0.05, 's'),
             slider(node, 'Duration', 'Duration (0 = stays on)', 0, 20, 0.05, 's'),
             slider(node, 'Fade', 'Fade in / out', 0.01, 2, 0.01, 's'),
             slider(node, 'Repeat', 'Repeat every (0 = once)', 0, 20, 0.1, 's'),
-            element('p', 'note', 'Keys scale the strength (or emission) by a trapezoid envelope on the solver clock. Set a Scene Loop on the domain to replay the sequence automatically.'),
+            element('p', 'note', 'The timing fields generate a linear Weight track (shown in the timeline) that scales the strength or emission on the solver clock. Drag one of its keys in the timeline, or press ◆, to edit the keys by hand. Set a Scene Loop on the domain to replay the sequence automatically.'),
         ]);
     }
 
@@ -283,6 +298,31 @@ export function mountStudioUI({ app, refs })
         number.addEventListener('change', () => { const value = Number(number.value); if (Number.isFinite(value)) { range.value = String(Math.max(min, Math.min(max, value))); paint(); write(value); } });
         control.appendChild(head);
         control.appendChild(range);
+        return attachKey(control, node.Kind ? app.keyTargetForField(node, key) : null);
+    }
+
+    /**
+     * ◆ beside a keyable control (plan §5.2): filled = a key at the playhead (click removes it), outlined amber = keyed between keys,
+     * outlined grey = not keyed (click adds a key holding the current amount). Edits of a keyed amount always write a key.
+     */
+    function attachKey(control, target)
+    {
+        if (!target || !control) return control;
+        const keyState = app.keyState(target);
+        if (keyState === null) return control;
+        // A span with the button role: the ◆ also sits inside status tiles, which are buttons themselves.
+        const button = element('span', `key-toggle ${keyState}`, keyState === 'key' ? '◆' : '◇');
+        button.setAttribute('role', 'button');
+        button.tabIndex = 0;
+        button.addEventListener('keydown', (event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); event.stopPropagation(); app.toggleKey(target); } });
+        button.title = { key: 'Key at the playhead — click to remove it', track: 'Keyed — click to add a key at the playhead', timing: 'Weight follows the timing fields — click to turn it into keys', none: 'Not keyed — click to key the current amount at the playhead' }[keyState];
+        button.setAttribute('aria-label', `${keyState === 'key' ? 'Remove key' : 'Add key'} for ${target.Name}`);
+        button.setAttribute('data-key-target', `${target.Kind}:${target.Token || target.Id}:${target.Name}`);
+        button.addEventListener('click', (event) => { event.stopPropagation(); event.preventDefault(); app.toggleKey(target); });
+        const head = control.querySelector('.control-head > span') || control.querySelector('.tile-label') || control.firstElementChild || control;
+        head.prepend(button);
+        control.classList.add('keyable');
+        if (keyState === 'key' || keyState === 'track') control.classList.add('keyed');
         return control;
     }
 
@@ -308,7 +348,7 @@ export function mountStudioUI({ app, refs })
             row.appendChild(wrap);
         });
         control.appendChild(row);
-        return control;
+        return attachKey(control, node.Kind ? app.keyTargetForField(node, key) : null);
     }
 
     function choice(node, key, label, options, labels = {}, write = (value) => app.updateNode(node.Id, key, value))
@@ -323,7 +363,7 @@ export function mountStudioUI({ app, refs })
             row.appendChild(button);
         }
         control.appendChild(row);
-        return control;
+        return attachKey(control, node.Kind ? app.keyTargetForField(node, key) : null);
     }
 
     function colour(node, key, label, write = (value) => app.updateNode(node.Id, key, value))
@@ -333,7 +373,7 @@ export function mountStudioUI({ app, refs })
         input.type = 'color'; input.value = node[key];
         input.addEventListener('input', () => write(input.value));
         row.appendChild(input);
-        return row;
+        return attachKey(row, node.Kind ? app.keyTargetForField(node, key) : null);
     }
 
     function lookChips(node, label, looks, isActive)
@@ -631,9 +671,13 @@ export function mountStudioUI({ app, refs })
         const controls = [element('p', 'note', specification.Summary)];
         const writeSetting = (key) => (value) => app.updateLayer(selected.Token, key, value);
         const writeParameter = (key) => (value) => app.updateLayer(selected.Token, key, value, true);
+        // Keyed amounts (phase 4) show their value at the playhead; ◆ beside each keyable control adds or removes a key.
+        const time = app.solver ? app.solver.time : 0;
+        const view = { ...selected, Weight: layerAmountAt(stack, selected, 'Weight', time), Parameters: Object.fromEntries(Object.keys(selected.Parameters).map((name) => [name, layerAmountAt(stack, selected, name, time)])) };
+        const keyed = (control, name) => attachKey(control, { Kind: 'Layer', Token: selected.Token, Name: name });
         if (!specification.Required && !specification.Linked)
         {
-            controls.push(slider(selected, 'Weight', 'Weight', 0, 1, 0.01, '', 2, writeSetting('Weight')));
+            controls.push(keyed(slider(view, 'Weight', 'Weight', 0, 1, 0.01, '', 2, writeSetting('Weight')), 'Weight'));
             const blendLabels = Object.fromEntries(BlendModes.map((mode) => [mode.Code, mode.Label]));
             controls.push(choice(selected, 'Blend', 'Blend with layers above', BlendModes.map((mode) => mode.Code), blendLabels, writeSetting('Blend')));
             controls.push(statusTile('Solo', selected.Solo ? 'SOLO' : 'OFF', 'eye', selected.Solo, () => app.updateLayer(selected.Token, 'Solo', !selected.Solo)));
@@ -641,16 +685,17 @@ export function mountStudioUI({ app, refs })
         for (const parameter of specification.Parameter)
         {
             const write = writeParameter(parameter.Name);
-            if (owner && !particleParameterShown(parameter.Name, selected.Parameters, owner)) continue;
+            const amounts = view.Parameters;
+            if (owner && !particleParameterShown(parameter.Name, amounts, owner)) continue;
             const range = owner ? particleParameterRange(parameter, owner) : parameter;
             if (parameter.Type === 'Float32' || parameter.Type === 'Int32' || parameter.Type === 'UInt32')
-                controls.push(slider(selected.Parameters, parameter.Name, parameter.Label, range.Minimum, range.Maximum, range.Step ?? 0.01, range.Unit || '', parameter.Type === 'Float32' ? (range.Digits ?? 2) : 0, write));
-            else if (parameter.Type === 'Vector3') controls.push(vector(selected.Parameters, parameter.Name, parameter.Unit ? `${parameter.Label} (${parameter.Unit})` : parameter.Label, parameter.Step ?? 0.05, false, write));
+                controls.push(keyed(slider(amounts, parameter.Name, parameter.Label, range.Minimum, range.Maximum, range.Step ?? 0.01, range.Unit || '', parameter.Type === 'Float32' ? (range.Digits ?? 2) : 0, write), parameter.Name));
+            else if (parameter.Type === 'Vector3') controls.push(keyed(vector(amounts, parameter.Name, parameter.Unit ? `${parameter.Label} (${parameter.Unit})` : parameter.Label, parameter.Step ?? 0.05, false, write), parameter.Name));
             else if (parameter.Type === 'Ramp8') controls.push(paletteControl(selected.Parameters, write));
             else if (parameter.Type === 'Choice')
-                controls.push(choice(selected.Parameters, parameter.Name, parameter.Label, parameter.Options.map((option) => option.Code), Object.fromEntries(parameter.Options.map((option) => [option.Code, option.Label])), write));
-            else if (parameter.Type === 'ColourLinear') controls.push(colour(selected.Parameters, parameter.Name, parameter.Label, write));
-            else if (parameter.Type === 'Bool') controls.push(statusTile(parameter.Label, selected.Parameters[parameter.Name] ? 'ON' : 'OFF', 'power', selected.Parameters[parameter.Name], () => write(!selected.Parameters[parameter.Name])));
+                controls.push(keyed(choice(amounts, parameter.Name, parameter.Label, parameter.Options.map((option) => option.Code), Object.fromEntries(parameter.Options.map((option) => [option.Code, option.Label])), write), parameter.Name));
+            else if (parameter.Type === 'ColourLinear') controls.push(keyed(colour(amounts, parameter.Name, parameter.Label, write), parameter.Name));
+            else if (parameter.Type === 'Bool') controls.push(keyed(statusTile(parameter.Label, amounts[parameter.Name] ? 'ON' : 'OFF', 'power', amounts[parameter.Name], () => write(!amounts[parameter.Name])), parameter.Name));
             else if (parameter.Type === 'Token' && specification.Linked === 'Emitter')
             {
                 const emitter = snapshot.scene.Emitters.find((candidate) => candidate.Id === selected.Parameters.Emitter);
@@ -669,6 +714,7 @@ export function mountStudioUI({ app, refs })
     function renderForceInspector(host, force, snapshot)
     {
         const type = ForceTypeById[force.Type];
+        const live = keyedNode(force, app.solver ? app.solver.time : 0);     // keyed fields show their amount at the playhead
         const slotIndex = snapshot.scene.Forces.filter((candidate) => candidate.Enabled).indexOf(force);
         host.appendChild(hero(type.Tint, type.Name, `${FalloffLabels[force.Falloff]} falloff${slotIndex >= 0 ? ` · slot ${slotIndex + 1}` : ' · not evaluated'}`, `${formatNumber(force.Strength, 1)} m/s²`, type.Icon));
         host.appendChild(element('div', 'metric-grid',
@@ -707,19 +753,19 @@ export function mountStudioUI({ app, refs })
 
         host.appendChild(card('Force', type.Category, [
             typeControl,
-            slider(force, 'Strength', 'Strength', -60, 60, 0.5, 'm/s²', 1),
-            slider(force, 'Radius', 'Reach radius', 0.1, 4, 0.05, 'm'),
-            choice(force, 'Falloff', 'Falloff envelope', FalloffCurves, FalloffLabels),
+            slider(live, 'Strength', 'Strength', -60, 60, 0.5, 'm/s²', 1),
+            slider(live, 'Radius', 'Reach radius', 0.1, 4, 0.05, 'm'),
+            choice(live, 'Falloff', 'Falloff envelope', FalloffCurves, FalloffLabels),
         ]));
         const extras = [];
-        if (type.Labels.Frequency) extras.push(slider(force, 'Frequency', type.Labels.Frequency, 0, type.Category === 'Burst' ? 6 : (type.Id === 'BrownianJitter' ? 20 : (type.Id === 'FlowStream' ? 10 : 4)), 0.05));
-        if (type.Labels.Secondary) extras.push(slider(force, 'Secondary', type.Labels.Secondary, 0, type.Id === 'VortexColumn' ? 8 : (type.Id === 'BrownianJitter' ? 30 : 2), 0.05));
-        if (type.Labels.Tertiary) extras.push(slider(force, 'Tertiary', type.Labels.Tertiary, 0, 10, 0.1, 's'));
+        if (type.Labels.Frequency) extras.push(slider(live, 'Frequency', type.Labels.Frequency, 0, type.Category === 'Burst' ? 6 : (type.Id === 'BrownianJitter' ? 20 : (type.Id === 'FlowStream' ? 10 : 4)), 0.05));
+        if (type.Labels.Secondary) extras.push(slider(live, 'Secondary', type.Labels.Secondary, 0, type.Id === 'VortexColumn' ? 8 : (type.Id === 'BrownianJitter' ? 30 : 2), 0.05));
+        if (type.Labels.Tertiary) extras.push(slider(live, 'Tertiary', type.Labels.Tertiary, 0, 10, 0.1, 's'));
         if (extras.length) host.appendChild(card('Modulation', 'Type-specific', extras));
         if (type.Category === 'Burst') host.appendChild(element('p', 'note', 'Bursts repeat every period after the start delay. Tip: stack an Implosion with a Shockwave Shell, delaying the shell by half a period, for a suck-then-blast fireball.'));
         host.appendChild(card('Placement', 'Drag gizmo in viewport', [
-            vector(force, 'Position', 'Position (m)'),
-            vector(force, 'Direction', 'Direction / axis', 0.1),
+            vector(live, 'Position', 'Position (m)'),
+            vector(live, 'Direction', 'Direction / axis', 0.1),
         ]));
         host.appendChild(timingCard(force));
         host.appendChild(nodeActions(force));
@@ -727,6 +773,7 @@ export function mountStudioUI({ app, refs })
 
     function renderEmitterInspector(host, emitter)
     {
+        const live = keyedNode(emitter, app.solver ? app.solver.time : 0);
         const burning = emitter.Fuel > 0;
         host.appendChild(hero(burning ? '#f97316' : '#cbd5e1', emitter.Shape + ' source', burning ? 'Combusting fuel · soot + heat' : 'Smoke + heat injection', `ρ ${formatNumber(emitter.Density, 1)} · T ${formatNumber(emitter.Temperature, 1)}`, burning ? 'flame' : 'smoke'));
         host.appendChild(element('div', 'metric-grid',
@@ -740,30 +787,30 @@ export function mountStudioUI({ app, refs })
         host.appendChild(status);
         host.appendChild(element('div', 'section-head', '<span>Properties</span><span>Shape, injection & motion</span>'));
         host.appendChild(card('Shape', '', [
-            choice(emitter, 'Shape', 'Emitter shape', EmitterShapes),
-            slider(emitter, 'Radius', 'Radius', 0.05, 2, 0.01, 'm'),
-            vector(emitter, 'Position', 'Position (m)'),
-            emitter.Shape === 'Disc' ? vector(emitter, 'Orientation', 'Disc normal', 0.1) : null,
+            choice(live, 'Shape', 'Emitter shape', EmitterShapes),
+            slider(live, 'Radius', 'Radius', 0.05, 2, 0.01, 'm'),
+            vector(live, 'Position', 'Position (m)'),
+            emitter.Shape === 'Disc' ? vector(live, 'Orientation', 'Disc normal', 0.1) : null,
         ]));
         host.appendChild(card('Injection', 'Per second', [
-            slider(emitter, 'Density', 'Smoke density', 0, 3, 0.05),
-            slider(emitter, 'Temperature', 'Temperature', 0, 8, 0.1),
-            slider(emitter, 'Fuel', 'Fuel', 0, 2, 0.05),
-            slider(emitter, 'Jitter', 'Noise jitter', 0, 1, 0.02),
-            slider(emitter, 'Pulse', 'Pulse period', 0, 5, 0.1, 's'),
+            slider(live, 'Density', 'Smoke density', 0, 3, 0.05),
+            slider(live, 'Temperature', 'Temperature', 0, 8, 0.1),
+            slider(live, 'Fuel', 'Fuel', 0, 2, 0.05),
+            slider(live, 'Jitter', 'Noise jitter', 0, 1, 0.02),
+            slider(live, 'Pulse', 'Pulse period', 0, 5, 0.1, 's'),
         ]));
-        host.appendChild(card('Exit Velocity', 'm/s', [vector(emitter, 'Velocity', 'Velocity', 0.1)]));
+        host.appendChild(card('Exit Velocity', 'm/s', [vector(live, 'Velocity', 'Velocity', 0.1)]));
         host.appendChild(card('Motion Path', 'Animated source', [
-            choice(emitter, 'PathKind', 'Path', EmitterPathKinds, { None: 'Static', Figure8: 'Figure 8' }),
-            emitter.PathKind !== 'None' && emitter.PathKind !== 'Straight' ? slider(emitter, 'PathRadius', emitter.PathKind === 'Slalom' ? 'Weave half-width' : 'Path radius', 0.1, 4, 0.05, 'm') : null,
-            emitter.PathKind === 'Straight' || emitter.PathKind === 'Slalom' ? slider(emitter, 'PathSpeed', 'Drive speed', 0, 12, 0.1, 'm/s') : emitter.PathKind !== 'None' ? slider(emitter, 'PathSpeed', 'Angular speed', 0, 4, 0.05, 'rad/s') : null,
+            choice(live, 'PathKind', 'Path', EmitterPathKinds, { None: 'Static', Figure8: 'Figure 8' }),
+            emitter.PathKind !== 'None' && emitter.PathKind !== 'Straight' ? slider(live, 'PathRadius', emitter.PathKind === 'Slalom' ? 'Weave half-width' : 'Path radius', 0.1, 4, 0.05, 'm') : null,
+            emitter.PathKind === 'Straight' || emitter.PathKind === 'Slalom' ? slider(live, 'PathSpeed', 'Drive speed', 0, 12, 0.1, 'm/s') : emitter.PathKind !== 'None' ? slider(live, 'PathSpeed', 'Angular speed', 0, 4, 0.05, 'rad/s') : null,
             emitter.PathKind === 'Straight' || emitter.PathKind === 'Slalom' ? element('p', 'note', 'Unbounded drive along +X — set the Domain\'s World Grid to follow this emitter so the smoke trail is never clipped.') : null,
             element('p', 'note', 'The emitter orbits its Position along the path; exit velocity is expressed in the moving frame (X = forward, Z = right), so a negative X trails smoke behind it like a drifting tyre.'),
         ]));
         host.appendChild(card('Debris', 'Ballistic ejecta', [
-            choice(emitter, 'DebrisKind', 'Kind', DebrisKinds),
-            slider(emitter, 'Debris', 'Debris amount', 0, 1, 0.02),
-            slider(emitter, 'DebrisSpeed', 'Ejection speed', 0, 20, 0.5, 'm/s', 1),
+            choice(live, 'DebrisKind', 'Kind', DebrisKinds),
+            slider(live, 'Debris', 'Debris amount', 0, 1, 0.02),
+            slider(live, 'DebrisSpeed', 'Ejection speed', 0, 20, 0.5, 'm/s', 1),
             element('p', 'note', 'Rubble: heavy, bounces, cools from ember to ash. Ember: near-weightless glowing sparks that drift up with the heat and die on the floor. Paper: light sheets that flutter and get carried by the gas. Shown by the Debris visualizer.'),
         ]));
         host.appendChild(timingCard(emitter));
@@ -1287,6 +1334,7 @@ export function mountStudioUI({ app, refs })
     function updateMetrics(metrics)
     {
         state.metrics = metrics;
+        if (timeline) timeline.update();
         const time = document.getElementById('transport-time');
         const frame = document.getElementById('transport-frame');
         if (time) time.textContent = `${metrics.simulationTime.toFixed(2)} s`;
@@ -1467,9 +1515,13 @@ export function mountStudioUI({ app, refs })
         renderToolbar(snapshot);
         renderTransport(snapshot);
         renderLegend(snapshot);
+        if (timeline) timeline.render();
         if (state.drawerOpen) renderDrawer();
         if (state.metrics) updateMetrics(state.metrics);
     }
+
+    // Timeline dock (phase 4): transport, keys, dope sheet and curves under the viewport.
+    const timeline = refs.timeline ? mountTimeline({ app, host: refs.timeline }) : null;
 
     renderNotch();
     refs.drawerTab.innerHTML = `${icon('folder', 12)} Asset Browser`;
@@ -1485,5 +1537,5 @@ export function mountStudioUI({ app, refs })
         }
     });
 
-    return { renderAll, updateMetrics, toggleDrawer };
+    return { renderAll, updateMetrics, toggleDrawer, timeline };
 }
