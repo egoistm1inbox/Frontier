@@ -12,11 +12,35 @@ import { StudioReflections } from "./EditorAssets.js";
 const Size = 128;
 export const PreviewShapes = ["Shader ball", "Sphere", "Rounded cube", "Draped cloth"];
 export const PreviewStudios = {
-  "Studio softbox": { Key: "#ffffff", Rim: "#cfe0ff", Ambient: 0.55, Background: ["#3a3c41", "#1b1c1f"] },
-  "Warm interior": { Key: "#ffd9ae", Rim: "#ffb27a", Ambient: 0.45, Background: ["#40362e", "#1d1916"] },
-  "Overcast": { Key: "#e4ecf5", Rim: "#e4ecf5", Ambient: 0.9, Background: ["#4a4f56", "#24272b"] },
-  "Night street": { Key: "#a9c4ff", Rim: "#ff8a5c", Ambient: 0.25, Background: ["#1f2533", "#0b0d12"] },
+  "Studio softbox": { Key: "#ffffff", Rim: "#cfe0ff", Ambient: 0.55, Background: ["#3a3c41", "#1b1c1f"], Note: "Large white key, cool rim" },
+  "Warm interior": { Key: "#ffd9ae", Rim: "#ffb27a", Ambient: 0.45, Background: ["#40362e", "#1d1916"], Note: "Tungsten key, amber bounce" },
+  "Overcast": { Key: "#e4ecf5", Rim: "#e4ecf5", Ambient: 0.9, Background: ["#4a4f56", "#24272b"], Note: "Soft even sky, low contrast" },
+  "Night street": { Key: "#a9c4ff", Rim: "#ff8a5c", Ambient: 0.25, Background: ["#1f2533", "#0b0d12"], Note: "Cold moonlight, sodium rim" },
 };
+// Follow-up 70: a studio's light drawn as a lit ball on its backdrop (key from the upper left, rim from the right, the ambient as the
+// fill), brightened by the exposure, for the lighting menu's previews.
+export function StudioLook(Name, Exposure = 1) {
+  const Look = PreviewStudios[Name];
+  const Fill = Math.round(18 + Look.Ambient * 50);
+  return {
+    background:
+      `radial-gradient(circle at 34% 28%, ${Look.Key} 0, ${Look.Key}cc 9%, transparent 34%),` +
+      `radial-gradient(circle at 82% 62%, ${Look.Rim}aa 0, transparent 28%),` +
+      `radial-gradient(circle at 45% 45%, hsl(0 0% ${Fill}%) 0, hsl(0 0% ${Math.round(Fill * 0.35)}%) 70%)`,
+    filter: `brightness(${Math.pow(Exposure, 0.7).toFixed(3)})`,
+  };
+}
+const ShapeGlyphs = {
+  "Shader ball": "M12 3.5a7 7 0 1 0 0 14 7 7 0 0 0 0-14ZM9.5 7.5a3 3 0 0 1 5 0M5 20h14",
+  Sphere: "M12 4a8 8 0 1 0 0 16 8 8 0 0 0 0-16ZM4 12c3 2.5 13 2.5 16 0",
+  "Rounded cube": "M7 4h10a3 3 0 0 1 3 3v10a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3V7a3 3 0 0 1 3-3Z",
+  "Draped cloth": "M12 4c-3 0-5 2.5-5 5.5 0 2-1.5 5-3 8.5h16c-1.5-3.5-3-6.5-3-8.5C17 6.5 15 4 12 4ZM9 18l1-4M15 18l-1-4",
+};
+const Glyph = ({ Name }) => (
+  <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+    <path d={ShapeGlyphs[Name]} />
+  </svg>
+);
 
 // ── Channel images ────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 const Pictures = new Map(); // data URL → Promise<Uint8ClampedArray>
@@ -275,7 +299,28 @@ export default function ShaderViewport({ Material, Eyebrow, Title, Note }) {
     [Exposure, Expose] = useState(1),
     [Zoom, ReportZoom] = useState(100),
     [Full, ShowFull] = useState(false),
-    [Status, Report] = useState("Preparing");
+    [Status, Report] = useState("Preparing"),
+    [Menu, OpenMenu] = useState(null), // "shape", "light" or null
+    Dock = useRef(null);
+  // A press anywhere outside the dock closes its menu.
+  useEffect(() => {
+    if (!Menu) return;
+    const Away = (Event) => {
+      if (!Dock.current?.contains(Event.target)) OpenMenu(null);
+    };
+    const Key = (Event) => {
+      if (Event.key === "Escape") {
+        Event.stopPropagation();
+        OpenMenu(null);
+      }
+    };
+    document.addEventListener("pointerdown", Away, true);
+    window.addEventListener("keydown", Key, true);
+    return () => {
+      document.removeEventListener("pointerdown", Away, true);
+      window.removeEventListener("keydown", Key, true);
+    };
+  }, [Menu]);
   // One renderer for the viewport's life.
   useEffect(() => {
     let View;
@@ -428,55 +473,99 @@ export default function ShaderViewport({ Material, Eyebrow, Title, Note }) {
         <h2>{Title}</h2>
         <p>{Note}</p>
       </div>
-      <div className="sv-zoom">
-        <button aria-label="Zoom out" onClick={() => ZoomBy(1.15)}>
-          −
-        </button>
-        <output aria-label="Zoom">{Zoom}%</output>
-        <button aria-label="Zoom in" onClick={() => ZoomBy(1 / 1.15)}>
-          +
-        </button>
-        <button
-          className="sv-reset"
-          onClick={() => {
-            Built.current?.Fit(true);
-          }}
-        >
-          Reset view
-        </button>
-      </div>
-      <div className="sv-controls">
-        <div className="sv-selects">
-          <label className="sv-select">
-            <select aria-label="Preview shape" value={Shown} onChange={(Event) => ShowShape(Event.target.value)}>
-              {PreviewShapes.map((Name) => (
-                <option key={Name}>{Name}</option>
-              ))}
-            </select>
-          </label>
-          <label className="sv-select">
-            <select aria-label="Preview studio" value={Studio} onChange={(Event) => ChooseStudio(Event.target.value)}>
+      {/* Follow-up 70: one dock along the bottom: the preview shape, the lighting (its menu previews each studio and holds the
+          exposure), the zoom and Reset view. */}
+      <div className="sv-dock" ref={Dock} role="toolbar" aria-label="Preview controls">
+        {Menu === "shape" && (
+          <div className="sv-menu sv-shape-menu" role="menu" aria-label="Preview shapes">
+            {PreviewShapes.map((Name) => (
+              <button
+                key={Name}
+                role="menuitemradio"
+                aria-checked={Shown === Name}
+                className={Shown === Name ? "on" : ""}
+                onClick={() => {
+                  ShowShape(Name);
+                  OpenMenu(null);
+                }}
+              >
+                <Glyph Name={Name} />
+                {Name}
+              </button>
+            ))}
+          </div>
+        )}
+        {Menu === "light" && (
+          <div className="sv-menu sv-light-menu" role="dialog" aria-label="Lighting">
+            <header>
+              <b>Lighting</b>
+              <small>{PreviewStudios[Studio].Note}</small>
+            </header>
+            <div className="sv-light-hero" style={{ background: `radial-gradient(120% 100% at 50% 30%, ${Background[0]}, ${Background[1]} 80%)` }}>
+              <span className="sv-light-ball big" style={StudioLook(Studio, Exposure)} />
+              <span className="sv-light-floor" />
+              <span className="sv-light-name">{Studio}</span>
+            </div>
+            <div className="sv-light-grid" role="radiogroup" aria-label="Preview studio">
               {Object.keys(PreviewStudios).map((Name) => (
-                <option key={Name}>{Name}</option>
+                <button key={Name} role="radio" aria-checked={Studio === Name} className={Studio === Name ? "on" : ""} onClick={() => ChooseStudio(Name)} title={PreviewStudios[Name].Note}>
+                  <span className="sv-light-tile" style={{ background: `radial-gradient(120% 100% at 50% 30%, ${PreviewStudios[Name].Background[0]}, ${PreviewStudios[Name].Background[1]} 80%)` }}>
+                    <span className="sv-light-ball" style={StudioLook(Name, Exposure)} />
+                  </span>
+                  <span>{Name}</span>
+                </button>
               ))}
-            </select>
-          </label>
+            </div>
+            <div className="sv-exposure">
+              <span>
+                Exposure <output>{Exposure.toFixed(2)} ×</output>
+              </span>
+              <input
+                aria-label="Preview exposure"
+                type="range"
+                min="0.25"
+                max="2.5"
+                step="0.05"
+                value={Exposure}
+                style={{ "--fill": ((Exposure - 0.25) / 2.25) * 100 + "%" }}
+                onChange={(Event) => Expose(+Event.target.value)}
+              />
+              <div className="sv-exposure-marks">
+                <button onClick={() => Expose(0.5)}>0.5×</button>
+                <button onClick={() => Expose(1)}>1×</button>
+                <button onClick={() => Expose(1.5)}>1.5×</button>
+                <button onClick={() => Expose(2)}>2×</button>
+              </div>
+            </div>
+          </div>
+        )}
+        <button className={"sv-dock-button" + (Menu === "shape" ? " open" : "")} aria-label="Preview shape" aria-haspopup="menu" aria-expanded={Menu === "shape"} onClick={() => OpenMenu(Menu === "shape" ? null : "shape")}>
+          <Glyph Name={Shown} />
+          <span>{Shown}</span>
+          <i className="sv-caret" />
+        </button>
+        <button className={"sv-dock-button" + (Menu === "light" ? " open" : "")} aria-label="Lighting" aria-haspopup="dialog" aria-expanded={Menu === "light"} onClick={() => OpenMenu(Menu === "light" ? null : "light")}>
+          <span className="sv-light-dot" style={StudioLook(Studio, Exposure)} />
+          <span>{Studio}</span>
+          <small>{Exposure.toFixed(2)}×</small>
+          <i className="sv-caret" />
+        </button>
+        <span className="sv-dock-split" />
+        <div className="sv-zoom">
+          <button aria-label="Zoom out" onClick={() => ZoomBy(1.15)}>
+            −
+          </button>
+          <output aria-label="Zoom">{Zoom}%</output>
+          <button aria-label="Zoom in" onClick={() => ZoomBy(1 / 1.15)}>
+            +
+          </button>
         </div>
-        <div className="sv-exposure">
-          <span>
-            Exposure <output>{Exposure.toFixed(2)} ×</output>
-          </span>
-          <input
-            aria-label="Preview exposure"
-            type="range"
-            min="0.25"
-            max="2.5"
-            step="0.05"
-            value={Exposure}
-            style={{ "--fill": ((Exposure - 0.25) / 2.25) * 100 + "%" }}
-            onChange={(Event) => Expose(+Event.target.value)}
-          />
-        </div>
+        <button className="sv-dock-button sv-reset" aria-label="Reset view" onClick={() => Built.current?.Fit(true)}>
+          <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
+            <path d="M3 8a5 5 0 1 0 1.5-3.5M3 2.5v2.5h2.5" />
+          </svg>
+          Reset
+        </button>
       </div>
       <div className="sv-foot">
         <span>Drag orbit / Shift-drag pan / Wheel zoom</span>

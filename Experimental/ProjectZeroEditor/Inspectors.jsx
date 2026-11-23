@@ -1138,7 +1138,7 @@ export function Inspector({
     return (
       <div className="generic-inspector vehicle-component-inspector" data-panel={Subject.Panel}>
         {Header("Vehicle")}
-        <VehicleInspector Subject={Subject} Values={Values} Change={Change} Kit={{ Card, Control, Metric, Icon }} Scene={Scene} />
+        <VehicleInspector Subject={Subject} Values={Values} Change={Change} Kit={{ Card, Control, Metric, Icon }} Scene={Scene} Hidden={Hidden} ToggleHidden={ToggleHidden} OpenShader={OpenShader} />
       </div>
     );
   const Environment = Subject.Panel === EnvironmentPanel;

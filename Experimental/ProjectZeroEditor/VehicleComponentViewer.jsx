@@ -26,7 +26,8 @@ import { createSocketState, stepSocket, socketPose, socketReadout, SOCKET_KIND }
 import { COMPONENT_CLASSES } from "../ComponentViewer/Blueprint.js";
 import { ControlVehicleParts, ControlVehicleSheet as Sheet, ControlVehicleCentres, Family } from "./ControlVehicleModel.js";
 import { VEHICLE_SHEET } from "../ComponentViewer/Blueprint.js";
-import { ComponentReader, SocketParameters, VehicleSummary, ComponentIcon, InVehicleTree, VehicleDescendants, VehicleOwner as Owner, MeshAssets, MeshMass, MeshCentre } from "./VehicleComponents.jsx";
+import { ComponentReader, SocketParameters, VehicleSummary, ComponentIcon, InVehicleTree, VehicleDescendants, VehicleOwner as Owner, MeshAssets, MeshMass, MeshCentre, RestingCentre } from "./VehicleComponents.jsx";
+import { ResolveSlots } from "./MaterialSpecification.js";
 import { PaintOf } from "./VehicleAssetInspector.jsx";
 import "./VehicleComponentViewer.css";
 
@@ -523,8 +524,27 @@ function VehicleComponentView({ Rows, Values, Hidden, Selected, Select, Leave, R
       if (!Part) continue;
       const V = ComponentReader(Row, Values[Row.Id] || {});
       const Mass = MeshMass(Row, Values[Row.Id] || {});
-      const Centre = MeshCentre(Row);
+      const Centre = MeshCentre(Row, Values[Row.Id] || {});
       const Wheel = Row.Asset === "Tyre" || Row.Asset === "Rim" ? Parts.Wheels[Row.Corner ?? 0] : null;
+      // Follow-up 70: its material (slot 0, once one is authored) repaints its main family: the body's paint, the tyre's rubber, the
+      // rim's alloy. Each mesh gets its own copies first, so one tyre's material never reaches another.
+      if (!Part.userData.ownLook) {
+        Part.userData.ownLook = true;
+        Part.material = (Array.isArray(Part.material) ? Part.material : [Part.material]).map((Each) => Each.clone());
+        Part.userData.resting = Part.material.map((Each) => [Each.color.clone(), Each.roughness, Each.metalness]);
+      }
+      {
+        const Main = Row.Asset === "Tyre" ? Family.Tyre : Row.Asset === "Rim" ? Family.Cap : Family.BodyCoat;
+        const Authored = (Values[Row.Id] || {}).Material ? ResolveSlots(Values[Row.Id])[0]?.Channels : null;
+        Part.material.forEach((Each, Slot) => {
+          if (Part.userData.families?.[Slot] !== Main) return;
+          const [Colour, Rough, Metal] = Part.userData.resting[Slot];
+          const Fill = (Id, Initial) => Authored?.[Id]?.Fill ?? Initial;
+          Each.color.set(Authored ? Fill("colour", "#" + Colour.getHexString()) : Colour);
+          Each.roughness = Authored ? +Fill("roughness", Rough) : Rough;
+          Each.metalness = Authored ? +Fill("metallic", Metal) : Metal;
+        });
+      }
       Weight += Mass;
       Centre.forEach((Each, Axis) => (Balance[Axis] += Each * Mass));
       Part.visible = !Hidden[Row.Id];
@@ -546,7 +566,9 @@ function VehicleComponentView({ Rows, Values, Hidden, Selected, Select, Leave, R
       OnTop(Mark);
       View.xray = true;
       if (Wheel) {
-        Mark.position.fromArray(Centres[Row.Asset]);
+        // A moved centre is carried into the wheel's own space (right-hand wheels face outward, turned half a revolution).
+        const Rest = RestingCentre(Row), Flip = (VEHICLE_SHEET.axleMount[Row.Corner ?? 0]?.[1] ?? 1) < 0 ? -1 : 1;
+        Mark.position.fromArray(Centres[Row.Asset]).add(new THREE.Vector3((Centre[0] - Rest[0]) * Flip, Centre[1] - Rest[1], (Centre[2] - Rest[2]) * Flip));
         Wheel.Face.add(Mark);
         Built.WheelMarks.push(Mark);
       } else {

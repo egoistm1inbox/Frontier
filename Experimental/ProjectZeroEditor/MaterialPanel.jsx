@@ -754,7 +754,7 @@ export default function MaterialPanel({
     [SlotShown, ShowSlot] = useState(0),
     Slot = Math.min(SlotShown, Slots.length - 1),
     Material = Slots[Slot],
-    Shape = ShapeOf(Subject),
+    Shape = Subject.Component === "StaticMesh" ? "mesh" : ShapeOf(Subject), // a vehicle mesh is one whole surface
     Sections = MaterialSections(Shape),
     Covered = SectionSlots(Values, Shape),
     Latest = useRef(Material),

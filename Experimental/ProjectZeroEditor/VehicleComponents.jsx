@@ -9,7 +9,10 @@
 
 import React, { useRef } from "react";
 import { COMPONENT_CLASSES, VEHICLE_SHEET, createComponent } from "../ComponentViewer/Blueprint.js";
-import { ControlVehicleCentres, PartCentre } from "./ControlVehicleModel.js";
+import { ControlVehicleCentres, ControlVehicleMeasures, PartCentre } from "./ControlVehicleModel.js";
+import { Carousel, OverviewPage, Card as PageCard, BigFigure } from "./PrimitiveInspector.jsx";
+import TransformPanel from "./TransformPanel.jsx";
+import MaterialPanel from "./MaterialPanel.jsx";
 import { SOCKET_KINDS, SOCKET_KIND, SOCKET_FIELDS, SOCKET_PARAMS, DRIVES, DOCK_COLORS, socketDefaults, poseLabel, createSocketState, socketReadout } from "../ComponentViewer/Sockets.js";
 
 export const VehiclePanel = "vehicle-component";
@@ -155,7 +158,12 @@ export const MeshAssets = { Body: "ControlVehicle Body", Tyre: "ControlVehicle T
 export function MeshMass(Row, Values = {}) {
   return Math.max(0, +Reader(Row, Values)("mass") || 0);
 }
-export const MeshCentre = (Row) => PartCentre(Row.Asset || "Body", Row.Corner ?? 0);
+// Follow-up 70: a mesh's centre of mass is measured from its volume unless its inspector moves it ("Centre of mass", vehicle space, m).
+export const RestingCentre = (Row) => PartCentre(Row.Asset || "Body", Row.Corner ?? 0);
+export function MeshCentre(Row, Values = {}) {
+  const Moved = Values["Centre of mass"];
+  return Array.isArray(Moved) && Moved.length === 3 && Moved.every((Each) => Number.isFinite(+Each)) ? Moved.map(Number) : RestingCentre(Row);
+}
 
 export function VehicleSummary(Row, Values = {}) {
   const V = Reader(Row, Values);
@@ -769,21 +777,105 @@ function LightInspector({ Kit, V, Write, Row }) {
   );
 }
 
-// A mesh component (the body, a tyre or a rim): its level of detail and collision preset, then its mass and centre of mass.
-function MeshInspector({ Kit, V, Write, Row }) {
+// Follow-up 70: a mesh component (the body, a tyre or a rim) is inspected like an object in the scene: the same carousel and pages
+// (Overview with its checks, tags, quick controls and notes; Geometry; Material with its slots; Physics, where the mass and a transform
+// for the centre of mass live; LOD), with the facts measured from its own mesh.
+const PartSections = [
+  ["overview", "Overview", "overview", "#7cb7ff"],
+  ["geometry", "Geometry", "geometry", "#5fe0a0"],
+  ["material", "Material", "material", "#ff7eb6"],
+  ["physics", "Physics", "physics", "#ffb238"],
+  ["lod", "LOD", "lod", "#edc181"],
+];
+const PartProfiles = {
+  Body: { Purpose: "The Controlled Vehicle's bodywork: paint, glass, trim and lights in one mesh.", Reason: "It carries most of the vehicle's mass and sets its silhouette, its collision box and its centre of mass.", Normals: "Angle-weighted (34°)", Collision: "Box" },
+  Tyre: { Purpose: "One wheel's tyre: the rubber that meets the road.", Reason: "Its radius sets the rolling speed and its mass the wheel's spin inertia.", Normals: "Smooth", Collision: "Box" },
+  Rim: { Purpose: "One wheel's rim: the alloy spokes and hub inside the tyre.", Reason: "It turns with the tyre and adds to the wheel's spin inertia.", Normals: "Angle-weighted (40°)", Collision: "None" },
+};
+const PartKeys = { "Cast shadows": "castShadow", PHYSICS: "simulatePhysics" };
+function MeshInspector({ Kit, V, Write, Row, Values, Hidden = false, ToggleHidden = () => undefined, OpenShader = null }) {
   const { Card, Control, Metric } = Kit;
+  const Asset = Row.Asset || "Body";
+  const Size = ControlVehicleMeasures()[Asset] || ControlVehicleMeasures().Body;
+  const Info = PartProfiles[Asset] || PartProfiles.Body;
   const Lod = Math.round(+V("lod"));
   const Presets = ClassField("StaticMesh", "collisionPreset").options;
-  const Asset = Row.Asset || "Body";
-  const Base = ControlVehicleCentres().Triangles[Asset] || 2924;
-  const Centre = MeshCentre(Row);
+  const Triangles = ControlVehicleCentres().Triangles[Asset] || Size.Triangles;
+  const Resting = RestingCentre(Row);
+  const Centre = MeshCentre(Row, Values);
+  const Moved = Centre.some((Each, Axis) => Math.abs(Each - Resting[Axis]) > 1e-4);
   const Mass = MeshMass(Row, {});
   const MassValue = Math.max(0, +V("mass") || 0);
-  const Side = Asset === "Body" ? [-3.4, 3.4] : [Centre[0] - 0.7, Centre[0] + 0.7];
+  const Side = Asset === "Body" ? [-3.4, 3.4] : [Resting[0] - 0.7, Resting[0] + 0.7];
   const Across = (X) => 20 + ((X - Side[0]) / (Side[1] - Side[0])) * 280;
   const Up = (Y) => 104 - (Y / (Asset === "Body" ? 1.9 : 1.1)) * 88;
-  return (
-    <>
+  // The object pages read their usual keys; the mesh's own (castShadow, simulatePhysics) stand behind them.
+  const Shown = { ...Values, "Cast shadows": !!V("castShadow"), PHYSICS: !!V("simulatePhysics"), Tags: Array.isArray(Values.Tags) ? Values.Tags : ["vehicle", Asset.toLowerCase()] };
+  const Change = (Key, Next) => Write(PartKeys[Key] || Key, Next);
+  const Read = (Key, Initial) => (Shown[Key] === undefined ? Initial : Shown[Key]);
+  const Profile = { Name: MeshAssets[Asset], Tags: Shown.Tags, Purpose: Info.Purpose, Reason: Info.Reason };
+  const Fixed2 = (Amount) => Fixed(Amount, 2);
+  const Pages = {
+    overview: <OverviewPage Shape="cube" Read={Read} Change={Change} Values={Shown} Hidden={Hidden} ToggleHidden={ToggleHidden} Size={Size} Profile={Profile} />,
+    geometry: (
+      <>
+        <PageCard Title="Mesh" Glyph="ruler" Tone="#5fe0a0" Aside={MeshAssets[Asset]}>
+          <BigFigure Whole={Fixed(Triangles)} Unit="tris" Caption="Triangles at full detail" />
+          <div className="pi-stat-grid">
+            <div><span>Vertices</span><b>{Fixed(Size.Vertices)}</b></div>
+            <div><span>Surface</span><b>{Size.Closed ? "Closed" : "Open"}</b></div>
+            <div><span>Materials</span><b>{1 + (Array.isArray(Values.MaterialSlots) ? Values.MaterialSlots.length : 0)}</b></div>
+          </div>
+          <p className="pi-footnote">Facet mesh · {Info.Normals} normals · {Info.Collision.toLowerCase()} collision in the source asset.</p>
+        </PageCard>
+        <PageCard Title="Footprint" Glyph="ruler" Tone="#5fe0a0" Aside="Mesh bounds">
+          <BigFigure Whole={Fixed(Size.Volume, 3)} Unit="m³" Caption={Size.Closed ? "Volume" : "Volume (open surface, an estimate)"} />
+          <div className="pi-stat-grid">
+            <div><span>Length</span><b>{Fixed2(Size.Bounds[0])}<small> m</small></b></div>
+            <div><span>Height</span><b>{Fixed2(Size.Bounds[1])}<small> m</small></b></div>
+            <div><span>Width</span><b>{Fixed2(Size.Bounds[2])}<small> m</small></b></div>
+          </div>
+          <p className="pi-footnote">Surface ≈ {Fixed2(Size.Area)} m².</p>
+        </PageCard>
+      </>
+    ),
+    material: <MaterialPanel Subject={Row} Values={Values} Change={Write} Expand={OpenShader || undefined} Compact />,
+    physics: (
+      <>
+        <Card Title="Mass and centre of mass" Class="vc-card vc-mass-card">
+          <svg className="vc-visual" viewBox="0 0 320 120" role="img" aria-label="Centre of mass from the side">
+            <line x1="12" y1="104" x2="308" y2="104" stroke="#ffffff30" />
+            {Moved && <circle cx={Across(Resting[0])} cy={Up(Resting[1])} r="6" fill="none" stroke="#ffffff50" strokeDasharray="2 2" />}
+            <line x1={Across(Centre[0])} y1={Up(Centre[1])} x2={Across(Centre[0])} y2="104" stroke="#7fd1ff" strokeDasharray="3 3" />
+            <g transform={`translate(${Across(Centre[0])} ${Up(Centre[1])})`}>
+              <circle r="9" fill="#f2f2f2" />
+              <path d="M0 0V-9A9 9 0 0 1 9 0ZM0 0V9A9 9 0 0 1 -9 0Z" fill="#16171b" />
+              <circle r="9" fill="none" stroke="#7fd1ff" strokeWidth="1.2" />
+            </g>
+            <text x={Across(Centre[0]) + 14} y={Up(Centre[1]) - 10}>{Centre[1].toFixed(2)} m up</text>
+          </svg>
+          <Metric Value={Fixed(MassValue)} Unit="kg" Caption={`Centre of mass ${Centre.map((Each) => Each.toFixed(2)).join(", ")} m · ${Moved ? "moved by hand" : "from the mesh volume"}`} />
+          <Slider Kit={Kit} V={V} Write={Write} Key="mass" Label="Mass" Minimum={0} Maximum={Asset === "Body" ? 3000 : 80} Step={1} Unit="kg" />
+          <Readouts Kit={Kit} Rows={[["Ahead of the body centre", `${Centre[0].toFixed(3)} m`], ["Above the ground", `${Centre[1].toFixed(3)} m`], ["Across (right +)", `${Centre[2].toFixed(3)} m`], ["Default mass", `${Fixed(Mass)} kg`]]} />
+        </Card>
+        <div className="vc-centre-transform" data-centre-transform>
+          <TransformPanel
+            Values={{ ...Values, "Centre of mass": Centre.map((Each) => +Each.toFixed(3)) }}
+            Change={Write}
+            Title="Centre of mass"
+            Space="VEHICLE SPACE"
+            Rows={[["Centre of mass", "m", Resting.map((Each) => +Each.toFixed(3)), -6, 6, 0.005]]}
+            Note={Moved ? `Moved ${Centre.map((Each, Axis) => (Each - Resting[Axis] >= 0 ? "+" : "") + (Each - Resting[Axis]).toFixed(3)).join(", ")} m from the mesh volume's centre. The marker in the view follows it.` : "Measured from the mesh volume. Type or drag to move it; the marker in the view follows."}
+          />
+        </div>
+        <Card Title="Collision and simulation" Class="vc-card">
+          <Control Field={{ Label: "Collision preset", Control: "Select", Options: Presets }} Value={Math.max(0, Presets.indexOf(V("collisionPreset")))} Change={(Index) => Write("collisionPreset", Presets[Index])} />
+          <Control Field={{ Label: "Simulate physics", Control: "Switch" }} Value={!!V("simulatePhysics")} Change={(Next) => Write("simulatePhysics", Next)} />
+          <Control Field={{ Label: "Cast shadow", Control: "Switch" }} Value={!!V("castShadow")} Change={(Next) => Write("castShadow", Next)} />
+        </Card>
+      </>
+    ),
+    lod: (
       <Card Title="Static mesh" Class="vc-card">
         <svg className="vc-visual" viewBox="0 0 320 120" role="img" aria-label="Level of detail chain">
           {Array.from({ length: 6 }, (_, Index) => {
@@ -792,39 +884,27 @@ function MeshInspector({ Kit, V, Write, Row }) {
               <g key={Index} opacity={Active ? 1 : 0.45}>
                 <rect x={X} y={60 - Width / 2} width={Width} height={Width} rx="10" fill={Active ? "#3a3a3a" : "#222"} stroke={Active ? "#f0f0f0" : "#777"} />
                 <text x={X + Width / 2} y="104" textAnchor="middle">LOD{Index}</text>
-                <text x={X + Width / 2} y="116" textAnchor="middle">{Fixed(Base / 2 ** Index / 1000, 1)}k</text>
+                <text x={X + Width / 2} y="116" textAnchor="middle">{Fixed(Triangles / 2 ** Index / 1000, 1)}k</text>
               </g>
             );
           })}
         </svg>
-        <Metric Value={Lod < 0 ? "Auto" : "LOD " + Lod} Unit="" Caption={`${MeshAssets[Asset]} · ${Lod < 0 ? "detail follows screen size" : `forced · about ${Fixed(Base / 2 ** Math.min(Lod, 5))} triangles`}`} />
+        <Metric Value={Lod < 0 ? "Auto" : "LOD " + Lod} Unit="" Caption={`${MeshAssets[Asset]} · ${Lod < 0 ? "detail follows screen size" : `forced · about ${Fixed(Triangles / 2 ** Math.min(Lod, 5))} triangles`}`} />
         <ClassSlider Kit={Kit} V={V} Write={Write} Type="StaticMesh" Key="lod" />
-        <Control Field={{ Label: "Collision preset", Control: "Select", Options: Presets }} Value={Math.max(0, Presets.indexOf(V("collisionPreset")))} Change={(Index) => Write("collisionPreset", Presets[Index])} />
-        <Control Field={{ Label: "Cast shadow", Control: "Switch" }} Value={!!V("castShadow")} Change={(Next) => Write("castShadow", Next)} />
       </Card>
-      <Card Title="Mass and centre of mass" Class="vc-card vc-mass-card">
-        <svg className="vc-visual" viewBox="0 0 320 120" role="img" aria-label="Centre of mass from the side">
-          <line x1="12" y1="104" x2="308" y2="104" stroke="#ffffff30" />
-          <line x1={Across(Centre[0])} y1={Up(Centre[1])} x2={Across(Centre[0])} y2="104" stroke="#7fd1ff" strokeDasharray="3 3" />
-          <g transform={`translate(${Across(Centre[0])} ${Up(Centre[1])})`}>
-            <circle r="9" fill="#f2f2f2" />
-            <path d="M0 0V-9A9 9 0 0 1 9 0ZM0 0V9A9 9 0 0 1 -9 0Z" fill="#16171b" />
-            <circle r="9" fill="none" stroke="#7fd1ff" strokeWidth="1.2" />
-          </g>
-          <text x={Across(Centre[0]) + 14} y={Up(Centre[1]) - 10}>{Centre[1].toFixed(2)} m up</text>
-        </svg>
-        <Metric Value={Fixed(MassValue)} Unit="kg" Caption={`Centre of mass ${Centre.map((Each) => Each.toFixed(2)).join(", ")} m · from the mesh volume`} />
-        <Slider Kit={Kit} V={V} Write={Write} Key="mass" Label="Mass" Minimum={0} Maximum={Asset === "Body" ? 3000 : 80} Step={1} Unit="kg" />
-        <Readouts Kit={Kit} Rows={[["Ahead of the body centre", `${Centre[0].toFixed(3)} m`], ["Above the ground", `${Centre[1].toFixed(3)} m`], ["Across (right +)", `${Centre[2].toFixed(3)} m`], ["Default mass", `${Fixed(Mass)} kg`]]} />
-      </Card>
-    </>
+    ),
+  };
+  return (
+    <div className="primitive-inspector part-component-inspector">
+      <Carousel key={Row.Id} Sections={PartSections} Pages={Pages} Summary={{ Triangles: Fixed(Triangles), Vertices: Fixed(Size.Vertices), Motion: V("simulatePhysics") ? "Dynamic" : "Static" }} />
+    </div>
   );
 }
 
-export function VehicleInspector({ Subject, Values, Change, Kit, Scene = null }) {
+export function VehicleInspector({ Subject, Values, Change, Kit, Scene = null, Hidden = false, ToggleHidden, OpenShader = null }) {
   const V = Reader(Subject, Values);
   const Write = (Key, Next) => Change(Key, Next);
-  const Wiring = { Kit, V, Write, Row: Subject, Scene, Values };
+  const Wiring = { Kit, V, Write, Row: Subject, Scene, Values, Hidden, ToggleHidden, OpenShader };
   const Body =
     Subject.Component === "Socket" ? <SocketInspector {...Wiring} />
       : /Light/.test(Subject.Component) ? <LightInspector {...Wiring} />

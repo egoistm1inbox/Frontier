@@ -711,7 +711,7 @@ function App() {
   );
   const ShaderSubject =
     ShaderAsset ||
-    Rows.find((Row) => Row.Id === ShaderTarget && Row.Panel === "geometry");
+    Rows.find((Row) => Row.Id === ShaderTarget && (Row.Panel === "geometry" || (Row.Panel === VehiclePanel && Row.Component === "StaticMesh")));
   const RemoveShaderTabs = () => {
     AssignTabs((Previous) =>
       Object.fromEntries(
@@ -770,6 +770,12 @@ function App() {
             {Rows.filter((Row) => Row.Panel === "geometry").map((Row) => (
               <option key={Row.Id} value={Row.Id}>
                 {Row.Name} · surface
+              </option>
+            ))}
+            {/* Follow-up 70: the Controlled Vehicle's meshes (the body, tyres and rims) carry materials too. */}
+            {Rows.filter((Row) => Row.Panel === VehiclePanel && Row.Component === "StaticMesh").map((Row) => (
+              <option key={Row.Id} value={Row.Id}>
+                {Row.Name} · vehicle mesh
               </option>
             ))}
           </select>
@@ -1187,7 +1193,7 @@ function App() {
       Change={(Key, Amount) => AssignValues((Previous) => ({ ...Previous, [Row.Id]: { ...Previous[Row.Id], [Key]: Amount } }))}
       Hidden={Hidden[Row.Id]}
       ToggleHidden={() => ToggleHidden(Row.Id)}
-      OpenShader={() => {}}
+      OpenShader={() => (Row.Component === "StaticMesh" ? OpenShader(Row.Id) : undefined)}
       OpenFracture={() => {}}
       OpenWind={() => {}}
       Scene={{ Rows, Values, SelectRow: PanelSelect, AddRows: InsertUnder, PatchRow, OpenComponent, Air: AirOf(Values), Sun: ReaderOf(Values, "sun") }}
@@ -2144,7 +2150,7 @@ function App() {
             />
           </label>
           {/* Follow-up 69: the weather-station anemometer in the 3D view, reading the wind field where it stands (drag it to move it). */}
-          <label className="viewport-setting-toggle" title="A weather-station anemometer in the 3D view: its cups, vane and readout show the wind field at the spot it stands on, 2 m up. Drag it to measure somewhere else.">
+          <label className="viewport-setting-toggle" title="A weather-station anemometer in the 3D view: its cups and vane follow the wind field at the spot it stands on, 2 m up. Click it to see its readout; drag it to measure somewhere else.">
             Anemometer
             <input
               type="checkbox"

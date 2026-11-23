@@ -255,7 +255,7 @@ function Segmented({ Label, Choices, Current, Assign, Disabled }) {
   );
 }
 
-function Card({ Title, Glyph, Tone, Aside, children, className = "" }) {
+export function Card({ Title, Glyph, Tone, Aside, children, className = "" }) {
   return (
     <section className={"pi-card " + className} data-card={Title}>
       {(Title || Aside) && (
@@ -274,7 +274,7 @@ function Card({ Title, Glyph, Tone, Aside, children, className = "" }) {
   );
 }
 
-function BigFigure({ Whole, Unit, Caption }) {
+export function BigFigure({ Whole, Unit, Caption }) {
   const [Integer, Fraction] = String(Whole).split(".");
   return (
     <div className="pi-figure">
@@ -368,8 +368,8 @@ function Checks({ Values, Hidden, Size }) {
   return Rows;
 }
 
-function OverviewPage({ Shape, Read, Change, Values, Hidden, ToggleHidden, Size, Components = null }) {
-  const Profile = Shapes[Shape];
+export function OverviewPage({ Shape, Read, Change, Values, Hidden, ToggleHidden, Size, Components = null, Profile: Given = null }) {
+  const Profile = Given || Shapes[Shape];
   const Tags = Array.isArray(Values.Tags) ? Values.Tags : Profile.Tags;
   const [Draft, EditDraft] = useState("");
   const Rows = Checks({ Values, Hidden, Size });
@@ -1320,29 +1320,30 @@ function GeometryPage({ Shape, Read, Change, Values, Size, Kit }) {
 
 // The categories are turned with the page carousel (PageCarousel.jsx, Follow-up 64): the numbered strip above the cards, the pages
 // sliding across. ← and → (or a sideways swipe on the cards) move between categories.
-function Carousel({ Pages, Focus = null, Summary }) {
+// Follow-up 70: Sections swaps the page list (the Component Viewer's mesh components use the same carousel with their own pages).
+export function Carousel({ Pages, Focus = null, Summary, Sections = Categories }) {
   const [Current, Choose] = useState(Focus ? "components" : "overview");
-  const Index = Math.max(0, Categories.findIndex(([Key]) => Key === Current));
+  const Index = Math.max(0, Sections.findIndex(([Key]) => Key === Current));
   const Motion = PageTurn(Index);
   const Go = (Next) => {
-    const Target = (Next + Categories.length) % Categories.length;
+    const Target = (Next + Sections.length) % Sections.length;
     Motion.Turn(Target);
-    Choose(Categories[Target][0]);
+    Choose(Sections[Target][0]);
   };
   // Opening a component from elsewhere turns to the Components page.
   useEffect(() => {
-    if (Focus && Current !== "components") Go(Categories.findIndex(([Key]) => Key === "components"));
+    if (Focus && Current !== "components") Go(Sections.findIndex(([Key]) => Key === "components"));
   }, [Focus?.Stamp]);
   const Swipe = useRef(null);
-  const [Key, , , Tone] = Categories[Index];
+  const [Key, , , Tone] = Sections[Index];
   // The page being left stays mounted (same key) while it slides out, then goes.
-  const Drawn = [Motion.Leaving, Index].filter((At) => At !== null && Categories[At]);
+  const Drawn = [Motion.Leaving, Index].filter((At) => At !== null && Sections[At]);
   return (
     <section className="pi-carousel" aria-label="Categories" data-navigation="carousel" data-summary={`${Summary.Triangles} tris · ${Summary.Vertices} verts · ${Summary.Motion}`} style={{ "--pi-current": Tone }}>
-      <PageStrip Owner="Category" Label="Categories" Index={Index} Pick={Go} Pages={Categories.map(([Each, Caption]) => ({ Id: Each, Label: Caption, ClassName: "pi-pill" }))} />
+      <PageStrip Owner="Category" Label="Categories" Index={Index} Pick={Go} Pages={Sections.map(([Each, Caption]) => ({ Id: Each, Label: Caption, ClassName: "pi-pill" }))} />
       <div className={"pc-pages" + (Motion.Leaving !== null ? " pc-turning" : "")}>
         {Drawn.map((At) => {
-          const [Each, Caption] = Categories[At];
+          const [Each, Caption] = Sections[At];
           const { className, hidden, ...Shown } = PageLook(At, Index, Motion);
           return (
             <div

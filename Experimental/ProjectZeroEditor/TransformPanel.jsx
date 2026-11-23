@@ -24,6 +24,8 @@ export default function TransformPanel({
   Compact = false,
   Space = "LOCAL SPACE",
   Gizmo = false,
+  Title = "Transform",
+  Note = "Browser transform draft; native scene unchanged.",
 }) {
   const Drag = useRef(null);
   const Locked = !!Values.LOCKED;
@@ -43,7 +45,7 @@ export default function TransformPanel({
     <>
     <section className={"transform-card" + (Compact ? "" : " generic-card")}>
       <header>
-        <h3>Transform</h3>
+        <h3>{Title}</h3>
         <span>{Space}</span>
       </header>
       <table className="transform-table">
@@ -159,7 +161,7 @@ export default function TransformPanel({
           ? "Object locked. Unlock in Instance to edit."
           : "Type or drag values · Shift for precision."}
         <br />
-        Browser transform draft; native scene unchanged.
+        {Note}
       </p>
     </section>
     {/* Follow-up 67: the gizmo preferences panel is no longer shown under object transforms. */}

@@ -371,6 +371,20 @@ export default function Viewport3D({ Rows, Values, Hidden, Selected, Picked = []
       const Station = AnemometerAsset();
       View.scene.add(Station);
       const Gauge = Station.userData.instrument;
+      // Follow-up 70: it is chosen by clicking it (a click elsewhere lets it go); only then does its readout card show, and a ring
+      // marks it on the ground.
+      const Halo = new THREE.Mesh(new THREE.RingGeometry(0.72, 0.78, 64), new THREE.MeshBasicMaterial({ color: Accent, transparent: true, opacity: 0.9, depthWrite: false }));
+      Halo.rotation.x = -Math.PI / 2;
+      Halo.position.y = 0.012;
+      Halo.visible = false;
+      Halo.raycast = () => {};
+      Station.add(Halo);
+      const ChooseStation = (On) => {
+        if (Halo.visible === On) return;
+        Halo.visible = On;
+        Canvas.dataset.anemometerChosen = On ? "1" : "0";
+        Dirty = true;
+      };
       const Reading = { Trace: new Array(120).fill(null), Since: 0, Painted: 0, Spin: 0, Turn: null, Sample: null, Clock: 0 };
       const MoveStation = () => {
         const Wind = Latest.current.Wind || [];
@@ -423,7 +437,8 @@ export default function Viewport3D({ Rows, Values, Hidden, Selected, Picked = []
         }
         // The card rides above the instrument; behind the camera it hides.
         const Card = Readout.current;
-        if (Card) {
+        if (Card && !Halo.visible) Card.hidden = true;
+        else if (Card) {
           const Over = new THREE.Vector3(At.x, 2.45, At.z).project(View.camera);
           const Box = Host.current?.getBoundingClientRect();
           Card.hidden = Over.z > 1 || !Box;
@@ -492,6 +507,8 @@ export default function Viewport3D({ Rows, Values, Hidden, Selected, Picked = []
         if (!Carry) return;
         Event.stopPropagation();
         if (Carry.Moved) Latest.current.MoveAnemometer?.([+Station.position.x.toFixed(2), +Station.position.z.toFixed(2)]);
+        // A press that lands on it chooses it, moved or not.
+        ChooseStation(true);
         Carry = null;
         delete Canvas.dataset.anemometerDrag;
       };
@@ -575,6 +592,7 @@ export default function Viewport3D({ Rows, Values, Hidden, Selected, Picked = []
       Canvas.addEventListener("pointerdown", (Event) => (Down = { X: Event.clientX, Y: Event.clientY, Button: Event.button }));
       Canvas.addEventListener("pointerup", (Event) => {
         if (!Down || Down.Button !== 0 || Math.hypot(Event.clientX - Down.X, Event.clientY - Down.Y) > 4) return;
+        ChooseStation(false);
         // A light's head (its invisible grab sphere, LightProps.js) wins over whatever else is under the cursor.
         const Heads = [];
         View.content.traverse((Each) => Each.userData.grab && Each.visible && Heads.push(Each));

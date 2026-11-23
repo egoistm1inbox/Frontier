@@ -127,6 +127,36 @@ export function ControlVehicleCentres() {
   Centres = { Body: Lifted, Tyre: MassCentre(Tyre.Shape), Rim: MassCentre(Rim.Shape), Triangles: { Body: Count(Body), Tyre: Count(Tyre), Rim: Count(Rim) } };
   return Centres;
 }
+// Follow-up 70: each part's size for its inspector (bounds in metres, volume, surface area, triangles, distinct vertices, and whether
+// the surface closes), measured once from the facets; before they are in, rough stand-ins.
+let Measures = null;
+export function ControlVehicleMeasures() {
+  if (Measures) return Measures;
+  if (!ControlVehicleReady())
+    return {
+      Body: { Bounds: [4.4, 1.4, 1.9], Volume: 6.2, Area: 26, Triangles: 2924, Vertices: 1464, Closed: true },
+      Tyre: { Bounds: [0.7, 0.7, 0.25], Volume: 0.05, Area: 1.4, Triangles: 3968, Vertices: 1986, Closed: true },
+      Rim: { Bounds: [0.45, 0.45, 0.2], Volume: 0.01, Area: 0.9, Triangles: 1568, Vertices: 786, Closed: false },
+    };
+  const Measure = ({ Shape }) => {
+    const P = Shape.attributes.position.array;
+    let Volume = 0, Area = 0;
+    const Seen = new Set();
+    for (let At = 0; At < P.length; At += 9) {
+      const [Ax, Ay, Az, Bx, By, Bz, Cx, Cy, Cz] = P.subarray(At, At + 9);
+      Volume += (Ax * (By * Cz - Bz * Cy) - Ay * (Bx * Cz - Bz * Cx) + Az * (Bx * Cy - By * Cx)) / 6;
+      const Ux = Bx - Ax, Uy = By - Ay, Uz = Bz - Az, Vx = Cx - Ax, Vy = Cy - Ay, Vz = Cz - Az;
+      Area += Math.hypot(Uy * Vz - Uz * Vy, Uz * Vx - Ux * Vz, Ux * Vy - Uy * Vx) / 2;
+    }
+    for (let At = 0; At < P.length; At += 3) Seen.add(P[At].toFixed(4) + "," + P[At + 1].toFixed(4) + "," + P[At + 2].toFixed(4));
+    const Box = Shape.boundingBox.getSize(new THREE.Vector3());
+    const Closed = Math.abs(Volume) > Box.x * Box.y * Box.z * 0.02;
+    return { Bounds: [Box.x, Box.y, Box.z], Volume: Math.abs(Volume), Area, Triangles: P.length / 9, Vertices: Seen.size, Closed };
+  };
+  const { Body, Tyre, Rim } = Decoded();
+  Measures = { Body: Measure(Body), Tyre: Measure(Tyre), Rim: Measure(Rim) };
+  return Measures;
+}
 export function PartCentre(Asset, Corner = 0) {
   const All = ControlVehicleCentres();
   if (Asset === "Body" || !All[Asset]) return All.Body.slice();
@@ -155,6 +185,7 @@ export function ControlVehicleFinish(Paint = "#c9d63a") {
 
 const Finished = ({ Shape, Families }, Finish) => {
   const Part = new THREE.Mesh(Shape, Families.map((Id) => Finish[Id] || Finish[Family.Default]));
+  Part.userData.families = Families; // which family each material slot draws (Follow-up 70: a component's material repaints its own)
   Part.castShadow = true;
   Part.receiveShadow = true;
   return Part;
