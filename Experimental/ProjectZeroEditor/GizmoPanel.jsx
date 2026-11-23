@@ -47,6 +47,7 @@ if (typeof window !== "undefined")
   window.addEventListener("keydown", (Event) => {
     if (Event.ctrlKey || Event.metaKey || Event.altKey || Event.repeat) return;
     if (Event.target?.closest?.('input, textarea, select, [contenteditable]:not([contenteditable="false"])')) return;
+    if (Event.target?.closest?.(".surface-workspace")) return; // Follow-up 71: R / S / G belong to the Stamp and Pattern tools there
     const Mode = GizmoModes.find(([, , Key]) => Event.code === "Key" + Key);
     if (Mode) Publish({ ...Current, Mode: Mode[0] });
   });

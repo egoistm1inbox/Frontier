@@ -360,8 +360,55 @@ export function FractureGlyph() {
   },
 };
 
+// Follow-up 71: the ShaderEditor's Pattern and Stamp workspaces render from the Texture Studio's own models (../TextureStudio/src), so
+// the two apps share one implementation. Its React, Three.js and libraries resolve to this editor's copies (one React, one Three.js);
+// its fonts arrive as data URLs; and its style sheets are scoped under .alloy-scope, so they style only those workspaces. Rules the
+// Texture Studio already scopes itself (.studio-themed, which its floating menus also carry) keep their own selectors.
+const Prefixer = Require("postcss")([
+  Require("postcss-prefix-selector")({
+    prefix: ".alloy-scope",
+    transform: (Prefix, Selector, Prefixed) => {
+      if (/^(:root|html|body)\b/.test(Selector)) return Selector.replace(/^(:root|html|body)/, Prefix);
+      if (/\.studio-themed|\.layer-addition-menu/.test(Selector)) return Selector;
+      return Prefixed;
+    },
+  }),
+]);
+const Shared = (Name) => path.join(Folder, "node_modules", Name);
+const TextureStudioBridge = {
+  name: "texture-studio-bridge",
+  setup(Build) {
+    // One Three.js: the editor's vendored r187. The Texture Studio's addon imports come from the matching npm release's examples.
+    Build.onResolve({ filter: /^three(\/addons\/.*)?$/ }, (Args) => ({
+      path: Args.path === "three" ? path.resolve(Folder, "../Shared/Studio/Vendor/three.esm.min.js") : Shared("three/examples/jsm/" + Args.path.slice("three/addons/".length)),
+    }));
+    Build.onResolve({ filter: /\?url$/ }, (Args) => ({
+      path: Require.resolve(Args.path.replace(/\?url$/, "")),
+      namespace: "font-url",
+    }));
+    Build.onLoad({ filter: /.*/, namespace: "font-url" }, (Args) => ({
+      loader: "js",
+      contents: `export default ${JSON.stringify("data:font/woff;base64," + fs.readFileSync(Args.path).toString("base64"))};`,
+    }));
+    Build.onLoad({ filter: /TextureStudio[\\/]src[\\/].*\.css$/ }, async (Args) => ({
+      loader: "css",
+      contents: (await Prefixer.process(fs.readFileSync(Args.path, "utf8"), { from: Args.path })).css,
+      resolveDir: path.dirname(Args.path),
+    }));
+  },
+};
+
 const Output = await build({
-  plugins: [FractureBridgePlugin],
+  plugins: [FractureBridgePlugin, TextureStudioBridge],
+  alias: {
+    react: Shared("react"),
+    "react-dom": Shared("react-dom"),
+    "lucide-react": Shared("lucide-react"),
+    paper: Shared("paper"),
+    "opentype.js": Shared("opentype.js"),
+    fflate: Shared("fflate"),
+  },
+  loader: { ".woff": "dataurl", ".woff2": "dataurl" },
   entryPoints: [path.join(Folder, "Editor.jsx")],
   bundle: true,
   write: false,

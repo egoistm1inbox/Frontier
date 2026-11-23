@@ -32,6 +32,9 @@ import ShaderViewport from "./ShaderViewport.jsx";
 import { BakeShaderChannel, ShaderChannelPicture } from "./ShaderChannel.js";
 import { EngineAssets } from "./AssetDepot.js";
 import { ShapeOf } from "./PrimitiveInspector.jsx";
+import PatternWorkspace from "./PatternWorkspace.jsx";
+import StampWorkspace from "./StampWorkspace.jsx";
+import { PatternMaterial, StampMaterial } from "./SurfaceTextures.js";
 
 // Follow-up 68: Content Browser drops. A dropped image is shrunk to the embedded preview size; a dropped material lends
 // one channel (its fill, gradient or texture is copied so the preview can draw it).
@@ -747,6 +750,8 @@ export default function MaterialPanel({
   Slots: ShowSlots = true,
   Library = null,
   SavePreset = null,
+  Studio = null,
+  ChooseStudio = null,
 }) {
   // Follow-up 68: material slots. Slot 0 is Values.Material; slots 1+ are Values.MaterialSlots. Each section of the shape (box face,
   // cylinder cap, …) is drawn by one slot (Values.MaterialSections).
@@ -962,10 +967,12 @@ export default function MaterialPanel({
             );
   if (!Compact)
     return (
-      <ShaderWorkspace
-        {...{ Subject, Material, Slot, Slots, ShowSlots, SlotCard, ChannelAdder, Apply, Assign, Select, Current, Library, SavePreset, ReplaceSlot }}
-        Expand={Expand}
-      />
+      <ShaderStudios {...{ Studio, ChooseStudio, Subject, Material, Latest, Apply, Slot, ShowSlots }}>
+        <ShaderWorkspace
+          {...{ Subject, Material, Slot, Slots, ShowSlots, SlotCard, ChannelAdder, Apply, Assign, Select, Current, Library, SavePreset, ReplaceSlot }}
+          Expand={Expand}
+        />
+      </ShaderStudios>
     );
   return (
     <div
@@ -1389,6 +1396,62 @@ function MaterialLibrary({ Library, Apply, Close, Current }) {
       </div>
       <footer>Click to apply to the slot · drag onto a channel to link it</footer>
     </aside>
+  );
+}
+// Follow-up 71: the ShaderEditor's workspaces, as tabs along its top: Material (the channel inspector and viewport), Pattern (vector
+// tiles, from the Texture Studio's Pattern studio) and Stamp (surface marks, from its Stamp studio). Pattern and Stamp write into the
+// material shown in Material — the open slot of the bound object — through SurfaceTextures.js.
+const StudioTabs = [
+  { Id: "material", Label: "Material", Glyph: "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zm-6 9a6 6 0 0 1 6-6" },
+  { Id: "pattern", Label: "Pattern", Glyph: "M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z" },
+  { Id: "stamp", Label: "Stamp", Glyph: "M9 3h6l-1 7h4l1 5H5l1-5h4zM5 18h14v3H5z" },
+];
+function ShaderStudios({ Studio, ChooseStudio, Subject, Material, Latest, Apply, Slot, ShowSlots, children }) {
+  const [OwnStudio, ChooseOwnStudio] = useState("material");
+  const Shown = (ChooseStudio ? Studio : OwnStudio) || "material",
+    Choose = ChooseStudio || ChooseOwnStudio;
+  const Where = Subject.Name + (ShowSlots ? " · slot " + String(Slot).padStart(2, "0") : "");
+  return (
+    <div className="shader-studios" data-studio={Shown}>
+      <nav className="shader-studio-tabs" role="tablist" aria-label="ShaderEditor workspaces">
+        {StudioTabs.map((Tab) => (
+          <button key={Tab.Id} role="tab" aria-selected={Shown === Tab.Id} className="shader-studio-tab" onClick={() => Choose(Tab.Id)}>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d={Tab.Glyph} />
+            </svg>
+            {Tab.Label}
+          </button>
+        ))}
+        {Shown !== "material" && (
+          <span className="shader-studio-owner" title="Pattern and Stamp write into this material">
+            Writes into <b>{Material.Name}</b> · {Where}
+          </span>
+        )}
+      </nav>
+      <div className="shader-studio-body" role="tabpanel" aria-label={StudioTabs.find((Tab) => Tab.Id === Shown).Label + " workspace"}>
+        {Shown === "pattern" ? (
+          <PatternWorkspace
+            Owner={Material.Name}
+            Apply={async (Pattern, Layers) => {
+              Apply(await PatternMaterial(Latest.current, Layers, Pattern.repeats, Pattern.name));
+              return "Applied to " + Latest.current.Name + " · colour, roughness, metallic";
+            }}
+          />
+        ) : Shown === "stamp" ? (
+          <StampWorkspace
+            Material={Material}
+            Owner={Material.Name}
+            Press={async (Stamp, Svg, Placement) => {
+              const Outcome = await StampMaterial(Latest.current, Stamp, Svg, Placement);
+              if (Outcome.Targets.length) Apply(Outcome.Material);
+              return Outcome.Targets;
+            }}
+          />
+        ) : (
+          children
+        )}
+      </div>
+    </div>
   );
 }
 function ShaderWorkspace({ Subject, Material, Slot, Slots, ShowSlots, SlotCard, ChannelAdder, Apply, Assign, Select, Current, Library, SavePreset, ReplaceSlot }) {

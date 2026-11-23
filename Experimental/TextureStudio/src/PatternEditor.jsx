@@ -144,14 +144,17 @@ function patternDownload(text, name, type) {
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
-export default function PatternEditor({
+// The PatternEditor model: every piece of document, selection, tool and history logic, with no layout. The PatternEditor
+// view below and the Project Zero ShaderEditor workspace both render from it, so the two never drift apart.
+export function usePatternEditorModel(Properties = {}) {
+  const {
   initial,
   currentMaterial,
   currentShape,
   onClose,
   onWorkspace,
   onApply,
-}) {
+} = Properties;
   const [error, setError] = useState("");
   const history = usePatternHistory(
     () =>
@@ -975,6 +978,8 @@ export default function PatternEditor({
   useEffect(() => {
     const root = document.querySelector(".pe-overlay"),
       previous = document.activeElement;
+    // The focus trap belongs to the studio's own overlay; views without one (the ShaderEditor's Pattern tab) skip it.
+    if (!root) return;
     root.querySelector("[data-editor-autofocus]")?.focus();
     const trap = (e) => {
       if (e.key !== "Tab") return;
@@ -1168,6 +1173,11 @@ export default function PatternEditor({
       />
     </label>
   );
+  return { initial, currentMaterial, currentShape, onClose, onWorkspace, onApply, error, setError, history, doc, docRef, selected, setSelected, previewDocument, cancelDocument, canUndo, canRedo, canvasRef, clipboard, rangeAnchor, layerDrag, MaskIdentity, ConfigureMaskIdentity, LibraryCollapsed, ConfigureLibraryCollapsed, EnclosureScope, ConfigureEnclosureScope, LayerQuery, SetLayerQuery, LayerFilter, SetLayerFilter, LayerAddOpen, SetLayerAddOpen, LayerAddPanel, LayerAddChoices, LayerAddPosition, SetLayerAddPosition, LayerMatches, SelectionRevision, selection, setSelection, l, MaskActive, editIds, tool, setTool, pathState, setPathState, pathPanelTarget, setPathPanelTarget, showGrid, setShowGrid, smartGuides, setSmartGuides, showHelp, setShowHelp, recoverable, setRecoverable, draftStatus, setDraftStatus, exportSize, setExportSize, drawingStyle, setDrawingStyle, snapping, setSnapping, fontsReady, setFontsReady, textDefaults, setTextDefaults, textFocus, setTextFocus, textError, setTextError, svgSource, setSVGSource, changeText, createText, editText, openSVGSource, embedSVG, sampleAppearance, multiBounds, bulkGeometry, commit, update, layer, ChangeDrawingSource, undo, redo, saveDocument, closeStudio, changeTool, persistWorkingDraft, selectLayer, action, keyDown, exportPNG, mode, setMode, grid, setGrid, aspect, setAspect, ring, setRing, collectionFilter, setCollectionFilter, librarySearch, setLibrarySearch, libraryPalette, setLibraryPalette, libraryPage, setLibraryPage, libraryMatches, libraryPages, pageIndex, generator, setGenerator, busy, setBusy, base, setBase, previewTarget, input, svgInput, jsonInput, add, repeatDocument, setRepeatDocument, preview, importFile, shift, field };
+}
+
+export default function PatternEditor(Properties) {
+  const { initial, currentMaterial, currentShape, onClose, onWorkspace, onApply, error, setError, history, doc, docRef, selected, setSelected, previewDocument, cancelDocument, canUndo, canRedo, canvasRef, clipboard, rangeAnchor, layerDrag, MaskIdentity, ConfigureMaskIdentity, LibraryCollapsed, ConfigureLibraryCollapsed, EnclosureScope, ConfigureEnclosureScope, LayerQuery, SetLayerQuery, LayerFilter, SetLayerFilter, LayerAddOpen, SetLayerAddOpen, LayerAddPanel, LayerAddChoices, LayerAddPosition, SetLayerAddPosition, LayerMatches, SelectionRevision, selection, setSelection, l, MaskActive, editIds, tool, setTool, pathState, setPathState, pathPanelTarget, setPathPanelTarget, showGrid, setShowGrid, smartGuides, setSmartGuides, showHelp, setShowHelp, recoverable, setRecoverable, draftStatus, setDraftStatus, exportSize, setExportSize, drawingStyle, setDrawingStyle, snapping, setSnapping, fontsReady, setFontsReady, textDefaults, setTextDefaults, textFocus, setTextFocus, textError, setTextError, svgSource, setSVGSource, changeText, createText, editText, openSVGSource, embedSVG, sampleAppearance, multiBounds, bulkGeometry, commit, update, layer, ChangeDrawingSource, undo, redo, saveDocument, closeStudio, changeTool, persistWorkingDraft, selectLayer, action, keyDown, exportPNG, mode, setMode, grid, setGrid, aspect, setAspect, ring, setRing, collectionFilter, setCollectionFilter, librarySearch, setLibrarySearch, libraryPalette, setLibraryPalette, libraryPage, setLibraryPage, libraryMatches, libraryPages, pageIndex, generator, setGenerator, busy, setBusy, base, setBase, previewTarget, input, svgInput, jsonInput, add, repeatDocument, setRepeatDocument, preview, importFile, shift, field } = usePatternEditorModel(Properties);
   return (
     <div
       className="pe-overlay studio-themed studio-pattern"
@@ -2739,3 +2749,4 @@ export default function PatternEditor({
     </div>
   );
 }
+

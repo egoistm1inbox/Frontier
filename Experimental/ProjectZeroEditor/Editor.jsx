@@ -705,7 +705,8 @@ function App() {
   );
   const WindFields = Rows.filter((Row) => Row.Panel === "wind");
   const [ShaderTarget, SelectShaderTarget] = useState(null),
-    [ShaderFloating, FloatShader] = useState(false);
+    [ShaderFloating, FloatShader] = useState(false),
+    [ShaderStudio, ChooseShaderStudio] = useState("material"); // Follow-up 71: Material | Pattern | Stamp
   const ShaderAsset = AssetRecords.find(
     (Asset) => Asset.Id === ShaderTarget && Asset.Kind === "Materials",
   );
@@ -798,6 +799,8 @@ function App() {
           Subject={ShaderSubject}
           Slots={!ShaderAsset}
           Library={AssetRecords}
+          Studio={ShaderStudio}
+          ChooseStudio={ChooseShaderStudio}
           SavePreset={(Material) => {
             // Follow-up 69: "Save as preset" adds a copy of the material to the project library (the Content Browser's Materials).
             const Names = new Set(AssetRecords.map((Asset) => Asset.Name));
@@ -1037,6 +1040,8 @@ function App() {
         )
       )
         return;
+      // Follow-up 71: the Pattern and Stamp workspaces keep their own shortcuts (Ctrl/⌘ A, Z, Escape, …).
+      if (Event.target.closest?.(".surface-workspace")) return;
       if (Construct || Shade || AssetsOpen || WindSubject) return;
       if (Event.key === "F3") {
         Event.preventDefault();

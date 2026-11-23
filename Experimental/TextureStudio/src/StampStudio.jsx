@@ -161,7 +161,10 @@ export function StampChannelControls({
     </section>
   );
 }
-export default function StampStudio({ initial, onWorkspace, onClose, onUse }) {
+// The StampStudio model: every piece of document, selection, tool and history logic, with no layout. The StampStudio
+// view below and the Project Zero ShaderEditor workspace both render from it, so the two never drift apart.
+export function useStampStudioModel(Properties = {}) {
+  const { initial, onWorkspace, onClose, onUse } = Properties;
   const [doc, setDoc] = useState(() => restore(initial));
   const [VectorMode, ConfigureVectorMode] = useState(false);
   const [ComponentQuery, ConfigureComponentQuery] = useState("");
@@ -511,6 +514,11 @@ export default function StampStudio({ initial, onWorkspace, onClose, onUse }) {
       setError(e.message);
     }
   }
+  return { initial, onWorkspace, onClose, onUse, doc, setDoc, VectorMode, ConfigureVectorMode, ComponentQuery, ConfigureComponentQuery, ComponentFilter, ConfigureComponentFilter, CanvasAppearance, ConfigureCanvasAppearance, ComponentMatches, VectorSelection, ConfigureVectorSelection, VectorSelectionRef, VectorCanvas, DrawingPaint, ConfigureDrawingPaint, current, selectedId, setSelectedId, MaskIdentity, ConfigureMaskIdentity, selectionRef, undo, redo, coalesce, revision, setRevision, error, setError, status, setStatus, presets, setPresets, preview, setPreview, fontWarning, setFontWarning, transform, board, draft, input, previewURLs, previewWanted, importKind, importJob, busy, setBusy, job, mounted, mobilePanel, setMobilePanel, selected, MaskActive, InspectorTarget, ConfigureInspectorTarget, ArrayProjection, previewDoc, shown, commit, patchLayer, ApplyVectorPaint, choose, travel, add, pickFile, importFile, savePreset, exportArtwork };
+}
+
+export default function StampStudio(Properties) {
+  const { initial, onWorkspace, onClose, onUse, doc, setDoc, VectorMode, ConfigureVectorMode, ComponentQuery, ConfigureComponentQuery, ComponentFilter, ConfigureComponentFilter, CanvasAppearance, ConfigureCanvasAppearance, ComponentMatches, VectorSelection, ConfigureVectorSelection, VectorSelectionRef, VectorCanvas, DrawingPaint, ConfigureDrawingPaint, current, selectedId, setSelectedId, MaskIdentity, ConfigureMaskIdentity, selectionRef, undo, redo, coalesce, revision, setRevision, error, setError, status, setStatus, presets, setPresets, preview, setPreview, fontWarning, setFontWarning, transform, board, draft, input, previewURLs, previewWanted, importKind, importJob, busy, setBusy, job, mounted, mobilePanel, setMobilePanel, selected, MaskActive, InspectorTarget, ConfigureInspectorTarget, ArrayProjection, previewDoc, shown, commit, patchLayer, ApplyVectorPaint, choose, travel, add, pickFile, importFile, savePreset, exportArtwork } = useStampStudioModel(Properties);
   return (
     <section
       className={`stamp-studio studio-workspace stamp-mobile-${mobilePanel}`}
@@ -1215,7 +1223,8 @@ export default function StampStudio({ initial, onWorkspace, onClose, onUse }) {
     </section>
   );
 }
-function SVGMarkupEditor({ layer, onChange, onImport }) {
+
+export function SVGMarkupEditor({ layer, onChange, onImport }) {
   const [draft, setDraft] = useState(layer.svg),
     [error, setError] = useState("");
   useEffect(() => setDraft(layer.svg), [layer.svg]);
