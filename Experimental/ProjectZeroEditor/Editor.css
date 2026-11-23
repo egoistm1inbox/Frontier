@@ -1228,7 +1228,7 @@ img {
 .flare-preview {
   height: 196px;
   position: relative;
-  background: #080808;
+  background: #000;
   overflow: hidden;
   border-radius: 12px;
   touch-action: none;

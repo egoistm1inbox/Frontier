@@ -39,8 +39,13 @@ const Baked = async (Name, Size) => {
   await Page.waitForTimeout(200);
   const Unbaked = (await Map(Name).getAttribute("data-baked-state")) === "unbaked";
   if (Unbaked) {
-    assert.match(await Map(Name).innerText(), new RegExp("Not baked[\\s\\S]*" + Size.replace("x", " × ")));
-    await Map(Name).getByRole("button", { name: "Bake " + Name }).click();
+    // The default card names the size it will bake at (the last one chosen); the bake settings choose it.
+    assert.match(await Map(Name).innerText(), /Not baked · \d+ × \d+/);
+    // Follow-up 76: Bake opens the bake settings (resolution choices); Bake there bakes.
+    await Map(Name).getByRole("button", { name: "Bake " + Name, exact: true }).click();
+    await Page.waitForSelector(`[data-baked-map="${Name}"][data-baked-state="settings"]`);
+    await Map(Name).locator(`[data-bake-size="${Size}"]`).click();
+    await Map(Name).getByRole("button", { name: "Bake " + Name + " now" }).click();
   }
   await Page.waitForSelector(`[data-baked-map="${Name}"][data-baked-size="${Size}"]`);
   await Page.waitForTimeout(150);
@@ -79,7 +84,12 @@ try {
   assert(await Baked("Transmittance LUT", "256x64"), "the transmittance LUT waits for Bake");
   // The viewport bakes its sky-view map, so its card is baked already.
   assert(!(await Baked("Sky-view map", "1024x512")), "the sky-view map comes baked from the viewport");
-  const Facts = await Map("Transmittance LUT").locator(".baked-map-facts").innerText();
+  // The baked details are the Baked badge's tooltip.
+  await Map("Transmittance LUT").locator(".baked-map-badge").scrollIntoViewIfNeeded();
+  await Map("Transmittance LUT").locator(".baked-map-badge").hover();
+  await Page.waitForSelector(".baked-map-tip.shown", { state: "visible" });
+  await Page.waitForTimeout(250);
+  const Facts = await Page.locator(".baked-map-tip.shown .baked-map-facts").innerText();
   assert.match(Facts, /Resolution\s+256 × 64/i);
   assert.match(Facts, /Format\s+RGBA8 sRGB/i);
   assert.match(Facts, /Baked\s+.*\d+ ms/i);
@@ -99,11 +109,14 @@ try {
   assert(Luma(BelowEdge) < 8, "below the planet's edge it is black: " + BelowEdge);
   const [Zenith] = await Pixels("Sky-view map", [[512, 60]]);
   assert(Zenith[2] > Zenith[0], "the sky-view map is blue by day: " + Zenith);
-  const Count = +(await Map("Transmittance LUT").getAttribute("data-baked-count"));
-  await Map("Transmittance LUT").getByRole("button", { name: "Bake again" }).click();
-  await Page.waitForFunction((Count) => +document.querySelector('[data-baked-map="Transmittance LUT"]').dataset.bakedCount > Count, Count);
+  // Rebake forgets the bake and shows the default card; baking again at another resolution bakes that size.
+  await Map("Transmittance LUT").getByRole("button", { name: "Rebake Transmittance LUT" }).click();
+  await Page.waitForSelector('[data-baked-map="Transmittance LUT"][data-baked-state="unbaked"]');
+  assert(await Baked("Transmittance LUT", "128x32"), "after Rebake the transmittance LUT waits for Bake again");
+  await Map("Transmittance LUT").getByRole("button", { name: "Rebake Transmittance LUT" }).click();
+  assert(await Baked("Transmittance LUT", "256x64"), "and bakes at 256 × 64 again");
   await Shot("Atmosphere bake", "BakedMaps-Atmosphere.png");
-  Checks.push(`Atmosphere bake: transmittance LUT 256 × 64 (low near the horizon rgb(${LowFlat.join(", ")}), high looking up rgb(${HighUp.join(", ")})) and the viewport's 1024 × 512 sky-view map (zenith rgb(${Zenith.join(", ")})); Bake again bakes again`);
+  Checks.push(`Atmosphere bake: transmittance LUT 256 × 64 (low near the horizon rgb(${LowFlat.join(", ")}), high looking up rgb(${HighUp.join(", ")})) and the viewport's 1024 × 512 sky-view map (zenith rgb(${Zenith.join(", ")})); Rebake forgets it and Bake at 128 × 32 bakes that size`);
 
   // Sun: lighting LUT (no beam below the horizon, warm-white beam high up, moonlit fill at night) and the disc map.
   await Open("sun");

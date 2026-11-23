@@ -35,7 +35,7 @@ import { LightGlyphSource } from "./LightGlyphs.js";
 import { ColourSlotDropProps } from "./ColourCodex.js";
 import ActionIcon, { QuickSymbol } from "./ActionIcon.jsx";
 import React, { useState, useEffect, useRef } from "react";
-import { SunDirection } from "./SunDial.jsx";
+import { SunGizmo } from "../FrontierEditor/environment-graphics.jsx";
 import { DepthOfField } from "../FrontierEditor/camera-graphics.jsx";
 import { Iris, CloudCoverage } from "../FrontierEditor/property-graphics.jsx";
 import {
@@ -1263,12 +1263,6 @@ export function Inspector({
     const Manual = !!V("Manual direction");
     const Elevation = Manual ? V("Manual elevation") : Solved.Elevation,
       Azimuth = Manual ? V("Manual azimuth") : Solved.Azimuth;
-    // Today's track across the sky, every half hour, for the direction chart.
-    const SunPath = Array.from({ length: 49 }, (_, At) => {
-      const Hour = At / 2;
-      const Point = Solar({ LocalHours: Hour, Month: V("Month"), Day: V("Day of Month"), Latitude: V("Latitude"), Longitude: V("Longitude") });
-      return { Hour, Azimuth: Point.Azimuth, Elevation: Point.Elevation };
-    });
     // Follow-up 65: Overview (the old Now and Light pages in one), then Temperature, Sun disc and Dynamic each on their own page, then
     // Baking. Each value shows once: the time in Sun now (and the Daylight cycle), the solved angles in Sun direction.
     for (const Name of ["Manual direction", "Manual azimuth", "Manual elevation", "Cast shadows", "Animate", "Real time"]) Drawn.add(Name);
@@ -1321,25 +1315,40 @@ export function Inspector({
             },
           },
         ])}
+        {/* Follow-up 76: the original Sun direction card (follow-up 65) is back: the two angles over the orbit gizmo. With Manual direction on,
+            dragging the gizmo's sun steers it like the Manual azimuth / elevation sliders below. */}
         <Card Title="Sun direction" Class="direction-card">
-          <SunDirection
-            Azimuth={Azimuth}
-            Elevation={Elevation}
-            Manual={Manual}
-            Path={Manual ? [] : SunPath}
-            Clock={!!V("Real time")}
-            Change={(NextAzimuth, NextElevation) => {
-              // Steering the sun by hand takes over from the date and time (the Manual direction switch hands it back).
-              if (!Manual) {
-                AssignProperty("Manual direction", true);
-                AssignProperty("Real time", false);
-                AssignProperty("Animate", false);
-              }
-              AssignProperty("Manual azimuth", NextAzimuth);
-              AssignProperty("Manual elevation", NextElevation);
-            }}
-            Solve={() => AssignProperty("Manual direction", false)}
-          />
+          <div className="solved-directions">
+            <div>
+              <small>Azimuth</small>
+              <Metric Value={Azimuth.toFixed(1) + "°"} />
+            </div>
+            <div>
+              <small>Elevation</small>
+              <Metric Value={Elevation.toFixed(1) + "°"} />
+            </div>
+          </div>
+          <div className="graphic tall solved-gizmo" title={Manual ? "Manual direction" : "Solved direction. Change the time or date on the Dynamic page."}>
+            <SunGizmo
+              azimuth={Azimuth}
+              elevation={Elevation}
+              onChange={(NextAzimuth, NextElevation) => {
+                if (!Manual) return;
+                AssignProperty("Manual azimuth", Math.round(NextAzimuth * 10) / 10);
+                AssignProperty("Manual elevation", Math.round(NextElevation * 10) / 10);
+              }}
+            />
+          </div>
+          <p>
+            {Elevation < 0 ? "Below the horizon" : "Above the horizon"} ·{" "}
+            {Manual ? "manual direction, the solved angles are overridden" : "solved from the date, time and place"}
+          </p>
+          {Manual && (
+            <>
+              {F("Manual azimuth")}
+              {F("Manual elevation")}
+            </>
+          )}
         </Card>
         <Card Title="Sunlight intensity" GraphHandled>
           <Metric Value={Number(V("Intensity")).toFixed(1)} Unit="×" Caption="Sunlight intensity multiplier" />
@@ -2006,7 +2015,7 @@ export function Inspector({
           />
           <p>
             Drag the sun · drawn by the 3D viewport's flare code from the atlas
-            below, over a stand-in dusk sky. Only this preview moves.
+            below, over black. Only this preview moves.
           </p>
         </Card>
         {Quick([Switch("Enabled", "starburst"), Switch("Anamorphic", "anamorphic"), Switch("Streaks", "streaks"), Switch("Starburst", "starburst")])}

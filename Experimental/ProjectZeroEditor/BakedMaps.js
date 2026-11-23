@@ -29,6 +29,20 @@ export function WatchBakes(Callback) {
 }
 // The bake held under a name (from any settings), or null when it was never baked.
 export const HeldBake = (Name) => Held.get(Name) || null;
+// Follow-up 76: the resolutions a card offers before it bakes ([Width, Height], the middle-ish entry is the map's own default) and the
+// one chosen; a bake's key carries its size, so choosing another size bakes again. Rebake on a card forgets the held bake.
+export const BakeSizes = {
+  "Transmittance LUT": { Options: [[64, 16], [128, 32], [256, 64], [512, 128]], Default: [256, 64] },
+  "Sun lighting LUT": { Options: [[64, 16], [128, 32], [256, 64], [512, 128]], Default: [256, 64] },
+  "Sky-view map": { Options: [[256, 128], [512, 256], [1024, 512], [2048, 1024]], Default: [1024, 512] },
+  "Sun disc map": { Options: [[96, 96], [192, 192], [384, 384]], Default: [192, 192] },
+  "Star map": { Options: [[512, 256], [1024, 512], [2048, 1024], [4096, 2048]], Default: [1024, 512] },
+  "Flare atlas": { Options: [[1024, 512]], Default: [1024, 512] },
+};
+const Chosen = new Map();
+export const BakeSizeOf = (Name) => Chosen.get(Name) || BakeSizes[Name]?.Default || [256, 256];
+export const ChooseBakeSize = (Name, Size) => Chosen.set(Name, Size);
+export const ForgetBake = (Name) => Held.delete(Name);
 function Bake(Name, Key, Make, Again = false) {
   const Before = Held.get(Name);
   if (!Again && Before && Before.Key === Key) return Before;
@@ -108,24 +122,25 @@ function Band(Canvas, High, Low) {
 }
 const LightKey = (Light) => [Light.Elevation, Light.Azimuth, Light.Tint];
 
-// Sky-view map, 1024 × 512: the viewport's background. `Band(High, Low)` gives the colours its lights and haze take.
+// Sky-view map, 1024 × 512 unless the card chose another size: the viewport's background. `Band(High, Low)` gives the colours its lights and haze take.
 export function SkyViewMap(Medium, Light, Again = false) {
-  return Bake("Sky-view map", JSON.stringify([Medium, LightKey(Light)]), (Canvas) => {
-    Canvas.width = 1024;
-    Canvas.height = 512;
+  const [Width, Height] = BakeSizeOf("Sky-view map");
+  return Bake("Sky-view map", JSON.stringify([Medium, LightKey(Light), Width, Height]), (Canvas) => {
+    Canvas.width = Width;
+    Canvas.height = Height;
     SkyPicture(Canvas, Medium, Light);
     return { Format: "RGBA8 sRGB · equirectangular", Band: (High, Low) => Band(Canvas, High, Low) };
   }, Again);
 }
 
-// Transmittance LUT, 256 × 64: the sunlight left after crossing the air to space, from a point at an altitude (rows: the ground at the
+// Transmittance LUT, 256 × 64 by default (the card offers 64 × 16 to 512 × 128): the sunlight left after crossing the air to space, from a point at an altitude (rows: the ground at the
 // bottom, the top of the atmosphere at the top, squared so the dense low air gets more rows) looking up at an elevation (columns: −12°
 // to 90°, squared so the horizon gets more columns). Below the planet's edge it is black. The same march as the viewport's sun colour.
 export const TransmittanceSpan = { Low: -12, High: 90 };
 export const TransmittanceElevation = (U) => TransmittanceSpan.Low + (TransmittanceSpan.High - TransmittanceSpan.Low) * U * U;
 export function TransmittanceMap(Medium, Again = false) {
-  return Bake("Transmittance LUT", JSON.stringify(Medium), (Canvas) => {
-    const [Width, Height] = [256, 64];
+  const [Width, Height] = BakeSizeOf("Transmittance LUT");
+  return Bake("Transmittance LUT", JSON.stringify([Medium, Width, Height]), (Canvas) => {
     Canvas.width = Width;
     Canvas.height = Height;
     const Brush = Canvas.getContext("2d");
@@ -145,13 +160,13 @@ export function TransmittanceMap(Medium, Again = false) {
 }
 
 // ── Sun ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-// Lighting LUT, 256 × 64, across sun elevations −12° to 90° (left to right): the top half is the sun beam the viewport's directional
+// Lighting LUT, 256 × 64 by default (the card offers 64 × 16 to 512 × 128), across sun elevations −12° to 90° (left to right): the top half is the sun beam the viewport's directional
 // light takes (colour times strength), the bottom half the sky fill its hemisphere light takes (from a small sky bake every 3°, with the
 // moonlit fill after dusk).
 export const LightingSpan = { Low: -12, High: 90 };
 export function SunLightingMap(Medium, Tint, Again = false) {
-  return Bake("Sun lighting LUT", JSON.stringify([Medium, Tint]), (Canvas) => {
-    const [Width, Height] = [256, 64];
+  const [Width, Height] = BakeSizeOf("Sun lighting LUT");
+  return Bake("Sun lighting LUT", JSON.stringify([Medium, Tint, Width, Height]), (Canvas) => {
     const Samples = [];
     const Small = document.createElement("canvas");
     Small.width = 64;
@@ -171,7 +186,8 @@ export function SunLightingMap(Medium, Tint, Again = false) {
       const Fill = Samples[Lower].Sky.map((C, Channel) => (C * Samples[Lower].Intensity * (1 - T) + Samples[Upper].Sky[Channel] * Samples[Upper].Intensity * T) / 1.4);
       const Sun = Beam.Colour.map((C) => (C * Beam.Intensity) / 2.6);
       for (let Row = 0; Row < Height; Row++) {
-        const Colour = Row < Height / 2 - 1 ? Sun : Row < Height / 2 + 1 ? [0, 0, 0] : Fill;
+        const Gap = Math.max(1, Height / 64);
+        const Colour = Row < Height / 2 - Gap ? Sun : Row < Height / 2 + Gap ? [0, 0, 0] : Fill;
         const At = (Row * Width + Column) * 4;
         for (let Channel = 0; Channel < 3; Channel++) Picture.data[At + Channel] = Encode(Colour[Channel]);
         Picture.data[At + 3] = 255;
@@ -182,11 +198,12 @@ export function SunLightingMap(Medium, Tint, Again = false) {
   }, Again);
 }
 
-// Disc map, 192 × 192: the sun as the viewport's sky draws it (same disc ×4, glow and exposure), looked at straight on, about 24 sun
+// Disc map, 192 × 192 by default: the sun as the viewport's sky draws it (same disc ×4, glow and exposure), looked at straight on, about 24 sun
 // radii across. Below the horizon it shows the ground in the way.
 export function SunDiscMap(Medium, Light, Again = false) {
-  return Bake("Sun disc map", JSON.stringify([Medium, LightKey(Light)]), (Canvas) => {
-    Canvas.width = Canvas.height = 192;
+  const [Side] = BakeSizeOf("Sun disc map");
+  return Bake("Sun disc map", JSON.stringify([Medium, LightKey(Light), Side]), (Canvas) => {
+    Canvas.width = Canvas.height = Side;
     const Aim = Light.Direction;
     const Basis = ViewBasis(Aim, Math.abs(Aim[1]) > 0.98 ? [0, 0, 1] : [0, 1, 0]);
     PaintSky(Canvas, Medium, { Sun: Aim, Tint: Light.Tint }, { Mode: "perspective", Basis, TanHalf: Math.tan(SunAngularRadius * 12), Warp: true, Disc: SunAngularRadius * 4, Glow: 0.5, Stars: 0, Exposure: 1.1 });
@@ -234,9 +251,11 @@ export function StarLook(Magnitude, Limit) {
 }
 // Star map, 1024 × 512: the catalogue in celestial coordinates (right ascension across, declination up), as the field draws it.
 export function StarMap(Settings, Again = false) {
-  return Bake("Star map", JSON.stringify(Settings), (Canvas) => {
-    Canvas.width = 1024;
-    Canvas.height = 512;
+  const [Width, Height] = BakeSizeOf("Star map");
+  return Bake("Star map", JSON.stringify([Settings, Width, Height]), (Canvas) => {
+    Canvas.width = Width;
+    Canvas.height = Height;
+    const Scale = Width / 1024;
     const Brush = Canvas.getContext("2d");
     Brush.fillStyle = "#04050a";
     Brush.fillRect(0, 0, Canvas.width, Canvas.height);
@@ -251,7 +270,7 @@ export function StarMap(Settings, Again = false) {
       const U = (Math.atan2(Z, X) / (Math.PI * 2) + 1) % 1, V = 0.5 - Math.asin(Y) / Math.PI;
       const Gain = Math.min(1, (0.3 + 0.7 * Bright) * Settings.Brightness * Seen);
       const Colour = [0, 1, 2].map((Channel) => Math.round(Colours[Index * 3 + Channel] * 255));
-      const Radius = ((1.1 + Bright * 2.6) * Settings.Size) / 2.4;
+      const Radius = (((1.1 + Bright * 2.6) * Settings.Size) / 2.4) * Scale;
       Brush.fillStyle = `rgba(${Colour.join(",")},${Gain})`;
       if (Radius < 0.8) Brush.fillRect(U * Canvas.width, V * Canvas.height, 1, 1);
       else {
