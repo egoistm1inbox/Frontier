@@ -1,0 +1,16 @@
+{
+  "result": "passed",
+  "browser": "131.0.6778.0",
+  "checks": [
+    "Library cards launch Frontier or SolidArc directly; projects prefer Frontier",
+    "Format defaults persist and drive the card preference",
+    "Reader switch, inspector Open with card and header button agree on Frontier / SolidArc",
+    "Lit render draws the sky / sand backdrop; CAD contour view stays black"
+  ],
+  "studio_top_row": [
+    208,
+    206,
+    202
+  ],
+  "page_errors": []
+}

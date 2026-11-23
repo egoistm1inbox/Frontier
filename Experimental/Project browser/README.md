@@ -12,7 +12,14 @@ python3 -m http.server 8770 --bind 0.0.0.0 --directory 'Experimental/Project bro
 ## Implemented interactions
 
 - **Default Project only** (Project Zero specification §14). The six sample files were removed. **+ New Project** adds a blank scene for the
-  session; Open in Frontier targets Frontier only (no Drafting / Geometry workspace hand-off). 📝 *Open from disk* and the CAD / Geometry
+  session.
+- **Open with Frontier or SolidArc.** Every card has Frontier / SolidArc buttons; the reader header has a Frontier | SolidArc switch beside
+  **Open in …**; the Details inspector has an *Open with* card (hero + A/B tiles). The library inspector sets one default per format
+  (Projects → Frontier, CAD and Geometry → SolidArc), kept under browser-local `frontier.browser.openWith`. Launch is still a hand-off preview.
+- **Project Zero editor look** (`ProjectZeroLook.css`, loaded last, same three-column layout): DM Sans, Outliner-style rows and
+  Projects/Starred tallies, Inspector cards, numbered page pills, pill controls.
+- **Studio render**: sky-to-horizon backdrop, sand floor with haze, a warm key light with 2048² soft shadows (5×5 compared taps), sky / sand
+  reflections and hemisphere fill. Surface channels and CAD contours keep their plain black ground. 📝 *Open from disk* and the CAD / Geometry
   filters are not in the specification and are marked for your keep-or-remove decision.
 - Responsive file catalogue with format filters, search, sorting and browser-local stars.
 - Three fixed shared columns for both catalogue and reader: 204 px left, flexible centre, 302 px right on desktop.
@@ -46,7 +53,7 @@ python3 -m http.server 8770 --bind 0.0.0.0 --directory 'Experimental/Project bro
 - UV inspection uses generated cylindrical coordinates from actual vertices; it is not an authored UV archive.
 - No-WebGL cases show an explicit unavailable message; no fake image replaces the renderer.
 - Native project/CAD/geometry codecs are not decoded here. Imported native files show an explicit placeholder.
-- Native editor launch is a hand-off preview dialog, not a simulated successful launch.
+- Native editor launch (Frontier or SolidArc) is a hand-off preview dialog, not a simulated successful launch.
 - Browsers hide absolute file paths. Native startup integration must provide OS file/folder dialogs.
 - `.project` replaces `.scene` in the proposed browser vocabulary only; no existing files/codecs are renamed.
 - `.geometry` is a prototype suffix pending final format decisions. Existing `.projectspace` is accepted separately.

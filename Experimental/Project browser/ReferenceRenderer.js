@@ -15,6 +15,52 @@ const SceneSurfaceDefaults = [
     { Title: "Mounting plate", Albedo: "#747f82", Specular: .5, Metallic: .85, Roughness: .4, Description: "Mounting plate and structural support brackets." }
 ];
 
+// 🧩 Project Zero viewport look: open sky over a sand floor, one warm key light with soft shadows. Linear values; one display transform.
+const StudioBackdropSource = `
+const vec3 KeyDirection = vec3(0.3482, 0.8704, 0.3482);
+vec3 StudioBackdrop(vec3 Direction)
+{
+    vec3 Zenith = vec3(.135,.215,.315), Horizon = vec3(.60,.56,.49), Sand = vec3(.27,.215,.155);
+    float Height = Direction.y;
+    vec3 Sky = mix(Horizon, Zenith, pow(clamp(Height,0.0,1.0),.5));
+    vec3 Ground = mix(Horizon*.86, Sand, clamp(-Height*4.0,0.0,1.0));
+    vec3 Tone = Height > 0.0 ? Sky : Ground;
+    Tone += vec3(1.0,.82,.58)*pow(max(dot(Direction,KeyDirection),0.0),48.0)*.55;
+    return Tone;
+}
+vec3 DisplayTransform(vec3 Radiance)
+{
+    vec3 Mapped = clamp((Radiance*(2.51*Radiance+.03))/(Radiance*(2.43*Radiance+.59)+.14),0.0,1.0);
+    return mix(12.92*Mapped,1.055*pow(max(Mapped,vec3(0.0)),vec3(1.0/2.4))-.055,step(vec3(.0031308),Mapped));
+}`;
+
+const BackdropVertexSource = `#version 300 es
+precision highp float;
+out vec2 Screen;
+void main()
+{
+    Screen = vec2(gl_VertexID == 1 ? 3.0 : -1.0, gl_VertexID == 2 ? 3.0 : -1.0);
+    gl_Position = vec4(Screen, .9999, 1.0);
+}`;
+
+const BackdropFragmentSource = `#version 300 es
+precision highp float;
+in vec2 Screen;
+uniform mat4 InverseViewProjection;
+uniform vec3 Eye;
+out vec4 RadianceOutput;
+${StudioBackdropSource}
+void main()
+{
+    vec4 Far = InverseViewProjection*vec4(Screen,1.0,1.0);
+    vec3 Direction = normalize(Far.xyz/Far.w-Eye);
+    RadianceOutput = vec4(DisplayTransform(StudioBackdrop(Direction)),1.0);
+}`;
+
+const ShadowFragmentSource = `#version 300 es
+precision highp float;
+void main() {}`;
+
 const SceneVertexSource = `#version 300 es
 precision highp float;
 precision highp int;
@@ -47,8 +93,31 @@ uniform vec3 Eye;
 uniform sampler2D EonLookup;
 uniform int Channel;
 uniform bool GridEnabled;
+uniform highp sampler2DShadow ShadowMap;
+uniform mat4 LightViewProjection;
 out vec4 RadianceOutput;
 const float Pi = 3.14159265359;
+${StudioBackdropSource}
+float KeyVisibility(vec3 Position, vec3 Normal)
+{
+    vec4 Clip = LightViewProjection*vec4(Position+Normal*.025,1.0);
+    vec3 Coordinate = Clip.xyz/Clip.w*.5+.5;
+    if (any(lessThan(Coordinate,vec3(0.0))) || any(greaterThan(Coordinate,vec3(1.0)))) return 1.0;
+    float Sum = 0.0;
+    for (int X = -2; X <= 2; ++X) for (int Y = -2; Y <= 2; ++Y)
+        Sum += texture(ShadowMap, vec3(Coordinate.xy+vec2(X,Y)*(1.6/2048.0), Coordinate.z-.0012));
+    return Sum/25.0;
+}
+vec3 SandFloor(vec3 Position, bool Line)
+{
+    vec3 View = Eye-Position;
+    float Distance = length(View);
+    vec3 Albedo = vec3(.27,.22,.165)*(Line ? .8 : 1.0);
+    float Visibility = KeyVisibility(Position, vec3(0,1,0));
+    vec3 Lit = Albedo/Pi*vec3(3.4,3.15,2.8)*KeyDirection.y*Visibility + Albedo*vec3(.2,.24,.3);
+    float Haze = 1.0-exp(-max(Distance-11.0,0.0)*.05);
+    return mix(Lit, StudioBackdrop(-normalize(View)), Haze);
+}
 float Fifth(float X) { float X2=X*X; return X2*X2*X; }
 vec3 Fresnel(vec3 F0, float Cosine) { return F0+(1.0-F0)*Fifth(1.0-Cosine); }
 vec2 EnvironmentIntegral(float NoV, float Roughness)
@@ -101,6 +170,12 @@ void main()
         return;
     }
     if (SurfaceIndex == 5 && !GridEnabled) discard;
+    if (SurfaceIndex >= 5 && Channel == 0)
+    {
+        if (SurfaceIndex == 5 && length(WorldPosition.xz) > 8.5) discard;
+        RadianceOutput = vec4(DisplayTransform(SandFloor(WorldPosition, SurfaceIndex == 5)),1.0);
+        return;
+    }
     if (SurfaceIndex >= 5)
     {
         float Fade = 1.0-smoothstep(4.0,9.0,length(WorldPosition.xz));
@@ -123,17 +198,18 @@ void main()
     float NoV = max(dot(Normal,View),.0001);
     vec2 Dfg = EnvironmentIntegral(NoV,Roughness);
     vec3 Compensation = 1.0+F0*(1.0/max(Dfg.x+Dfg.y,.001)-1.0);
-    vec3 Radiance = EvaluateLight(Normal,View,normalize(vec3(2,5,3)),vec3(3.6,3.9,4.2),Albedo,F0,Metallic,Roughness,Compensation);
-    Radiance += EvaluateLight(Normal,View,normalize(vec3(-3,2,-4)),vec3(2.5,1.9,1.3),Albedo,F0,Metallic,Roughness,Compensation);
-    // Analytic studio fill, not image-based lighting or a physical environment convolution.
+    float Visibility = KeyVisibility(WorldPosition, Normal);
+    vec3 Radiance = EvaluateLight(Normal,View,KeyDirection,vec3(3.9,3.6,3.15),Albedo,F0,Metallic,Roughness,Compensation)*Visibility;
+    Radiance += EvaluateLight(Normal,View,normalize(vec3(-3,2,-4)),vec3(.9,1.05,1.3),Albedo,F0,Metallic,Roughness,Compensation);
+    // Analytic sky / sand environment, not image-based lighting or a physical environment convolution.
     vec3 Reflection = reflect(-View,Normal);
-    float Softbox = pow(max(dot(Reflection,normalize(vec3(-.5,1.0,1.0))),0.0),mix(100.0,2.0,Roughness));
-    vec3 Studio = mix(vec3(.06,.07,.08),vec3(.65,.72,.78),smoothstep(-.2,.9,Reflection.y)) + vec3(1.8)*Softbox;
-    Radiance += Studio*(F0*Dfg.x+Dfg.y)*Compensation;
-    Radiance += Albedo*(1.0-Metallic)*(1.0-Fresnel(F0,NoV))*(.08+.2*max(Normal.y,0.0));
+    vec3 Environment = mix(StudioBackdrop(Reflection), StudioBackdrop(normalize(Reflection*vec3(.2,1.0,.2)+vec3(0,.35,0))), Roughness);
+    Environment *= mix(.55, 1.0, Visibility*.6+.4*max(Reflection.y,0.0));
+    Radiance += Environment*(F0*Dfg.x+Dfg.y)*Compensation;
+    vec3 Hemisphere = mix(vec3(.2,.16,.12), vec3(.32,.38,.48), Normal.y*.5+.5);
+    Radiance += Albedo*(1.0-Metallic)*(1.0-Fresnel(F0,NoV))*Hemisphere*(.55+.45*Visibility);
     // A single display transform. This standalone canvas is not the engine HDR radiance target.
-    vec3 Mapped = clamp((Radiance*(2.51*Radiance+.03))/(Radiance*(2.43*Radiance+.59)+.14),0.0,1.0);
-    RadianceOutput = vec4(ToSrgb(Mapped),1.0);
+    RadianceOutput = vec4(DisplayTransform(Radiance),1.0);
 }`;
 
 const DraftingVertexSource = `#version 300 es
@@ -242,7 +318,7 @@ function GenerateActuatorTriangles()
             }
         }
     }
-    Box([0,-.06,0], [16,.08,16], 6);
+    Box([0,-.06,0], [170,.08,170], 6);
     for (let Line = -8; Line <= 8; Line++)
     {
         Box([Line,0,0],[.012,.004,16],5);
@@ -451,6 +527,42 @@ function GeneratePreviewTriangles(Category, Revision)
     return new Float32Array(Sequence);
 }
 
+function ConstructKeyLightProjection()
+{
+    // Orthographic key light along KeyDirection (normalize(2,5,2)) framing the studio specimen.
+    const Z = SceneUnitVector([2,5,2]), X = SceneUnitVector(SceneCrossProduct([0,1,0],Z)), Y = SceneCrossProduct(Z,X);
+    const Eye = Z.map(Coordinate => Coordinate*20);
+    const View = [X[0],Y[0],Z[0],0,X[1],Y[1],Z[1],0,X[2],Y[2],Z[2],0,-SceneDotProduct(X,Eye),-SceneDotProduct(Y,Eye),-SceneDotProduct(Z,Eye),1];
+    const Span = 8.5, Near = 1, Far = 45;
+    const Projection = [1/Span,0,0,0,0,1/Span,0,0,0,0,-2/(Far-Near),0,0,0,-(Far+Near)/(Far-Near),1];
+    const Product = new Float32Array(16);
+    for (let Column=0;Column<4;++Column) for (let Row=0;Row<4;++Row) for (let Axis=0;Axis<4;++Axis)
+        Product[Column*4+Row] += Projection[Axis*4+Row]*View[Column*4+Axis];
+    return Product;
+}
+function InvertMatrix(M)
+{
+    const I = new Float32Array(16);
+    I[0]=M[5]*M[10]*M[15]-M[5]*M[11]*M[14]-M[9]*M[6]*M[15]+M[9]*M[7]*M[14]+M[13]*M[6]*M[11]-M[13]*M[7]*M[10];
+    I[4]=-M[4]*M[10]*M[15]+M[4]*M[11]*M[14]+M[8]*M[6]*M[15]-M[8]*M[7]*M[14]-M[12]*M[6]*M[11]+M[12]*M[7]*M[10];
+    I[8]=M[4]*M[9]*M[15]-M[4]*M[11]*M[13]-M[8]*M[5]*M[15]+M[8]*M[7]*M[13]+M[12]*M[5]*M[11]-M[12]*M[7]*M[9];
+    I[12]=-M[4]*M[9]*M[14]+M[4]*M[10]*M[13]+M[8]*M[5]*M[14]-M[8]*M[6]*M[13]-M[12]*M[5]*M[10]+M[12]*M[6]*M[9];
+    I[1]=-M[1]*M[10]*M[15]+M[1]*M[11]*M[14]+M[9]*M[2]*M[15]-M[9]*M[3]*M[14]-M[13]*M[2]*M[11]+M[13]*M[3]*M[10];
+    I[5]=M[0]*M[10]*M[15]-M[0]*M[11]*M[14]-M[8]*M[2]*M[15]+M[8]*M[3]*M[14]+M[12]*M[2]*M[11]-M[12]*M[3]*M[10];
+    I[9]=-M[0]*M[9]*M[15]+M[0]*M[11]*M[13]+M[8]*M[1]*M[15]-M[8]*M[3]*M[13]-M[12]*M[1]*M[11]+M[12]*M[3]*M[9];
+    I[13]=M[0]*M[9]*M[14]-M[0]*M[10]*M[13]-M[8]*M[1]*M[14]+M[8]*M[2]*M[13]+M[12]*M[1]*M[10]-M[12]*M[2]*M[9];
+    I[2]=M[1]*M[6]*M[15]-M[1]*M[7]*M[14]-M[5]*M[2]*M[15]+M[5]*M[3]*M[14]+M[13]*M[2]*M[7]-M[13]*M[3]*M[6];
+    I[6]=-M[0]*M[6]*M[15]+M[0]*M[7]*M[14]+M[4]*M[2]*M[15]-M[4]*M[3]*M[14]-M[12]*M[2]*M[7]+M[12]*M[3]*M[6];
+    I[10]=M[0]*M[5]*M[15]-M[0]*M[7]*M[13]-M[4]*M[1]*M[15]+M[4]*M[3]*M[13]+M[12]*M[1]*M[7]-M[12]*M[3]*M[5];
+    I[14]=-M[0]*M[5]*M[14]+M[0]*M[6]*M[13]+M[4]*M[1]*M[14]-M[4]*M[2]*M[13]-M[12]*M[1]*M[6]+M[12]*M[2]*M[5];
+    I[3]=-M[1]*M[6]*M[11]+M[1]*M[7]*M[10]+M[5]*M[2]*M[11]-M[5]*M[3]*M[10]-M[9]*M[2]*M[7]+M[9]*M[3]*M[6];
+    I[7]=M[0]*M[6]*M[11]-M[0]*M[7]*M[10]-M[4]*M[2]*M[11]+M[4]*M[3]*M[10]+M[8]*M[2]*M[7]-M[8]*M[3]*M[6];
+    I[11]=-M[0]*M[5]*M[11]+M[0]*M[7]*M[9]+M[4]*M[1]*M[11]-M[4]*M[3]*M[9]-M[8]*M[1]*M[7]+M[8]*M[3]*M[5];
+    I[15]=M[0]*M[5]*M[10]-M[0]*M[6]*M[9]-M[4]*M[1]*M[10]+M[4]*M[2]*M[9]+M[8]*M[1]*M[6]-M[8]*M[2]*M[5];
+    const Determinant = M[0]*I[0]+M[1]*I[4]+M[2]*I[8]+M[3]*I[12];
+    return I.map(Entry => Entry/(Determinant || 1));
+}
+
 class ReferencePreview
 {
     constructor(Canvas)
@@ -474,10 +586,25 @@ class ReferencePreview
         Gl.texImage2D(Gl.TEXTURE_2D,0,Gl.RGBA,64,32,0,Gl.RGBA,Gl.UNSIGNED_BYTE,GenerateEonLookup());
         Gl.texParameteri(Gl.TEXTURE_2D,Gl.TEXTURE_MIN_FILTER,Gl.LINEAR); Gl.texParameteri(Gl.TEXTURE_2D,Gl.TEXTURE_MAG_FILTER,Gl.LINEAR);
         Gl.texParameteri(Gl.TEXTURE_2D,Gl.TEXTURE_WRAP_S,Gl.CLAMP_TO_EDGE); Gl.texParameteri(Gl.TEXTURE_2D,Gl.TEXTURE_WRAP_T,Gl.CLAMP_TO_EDGE);
+        this.ShadowProgram = CompileSceneProgram(Gl, SceneVertexSource, ShadowFragmentSource);
+        this.ShadowUniforms = {ViewProjection:Gl.getUniformLocation(this.ShadowProgram,'ViewProjection'),Explode:Gl.getUniformLocation(this.ShadowProgram,'Explode')};
+        this.BackdropProgram = CompileSceneProgram(Gl, BackdropVertexSource, BackdropFragmentSource);
+        this.BackdropUniforms = {InverseViewProjection:Gl.getUniformLocation(this.BackdropProgram,'InverseViewProjection'),Eye:Gl.getUniformLocation(this.BackdropProgram,'Eye')};
+        this.BackdropLayout = Gl.createVertexArray();
+        this.ShadowTexture = Gl.createTexture(); Gl.activeTexture(Gl.TEXTURE1); Gl.bindTexture(Gl.TEXTURE_2D,this.ShadowTexture);
+        Gl.texStorage2D(Gl.TEXTURE_2D,1,Gl.DEPTH_COMPONENT24,2048,2048);
+        for (const [Key,Setting] of [[Gl.TEXTURE_MIN_FILTER,Gl.LINEAR],[Gl.TEXTURE_MAG_FILTER,Gl.LINEAR],[Gl.TEXTURE_WRAP_S,Gl.CLAMP_TO_EDGE],[Gl.TEXTURE_WRAP_T,Gl.CLAMP_TO_EDGE],[Gl.TEXTURE_COMPARE_MODE,Gl.COMPARE_REF_TO_TEXTURE],[Gl.TEXTURE_COMPARE_FUNC,Gl.LEQUAL]])
+            Gl.texParameteri(Gl.TEXTURE_2D,Key,Setting);
+        this.ShadowTarget = Gl.createFramebuffer(); Gl.bindFramebuffer(Gl.FRAMEBUFFER,this.ShadowTarget);
+        Gl.framebufferTexture2D(Gl.FRAMEBUFFER,Gl.DEPTH_ATTACHMENT,Gl.TEXTURE_2D,this.ShadowTexture,0);
+        Gl.drawBuffers([Gl.NONE]); Gl.readBuffer(Gl.NONE);
+        Gl.bindFramebuffer(Gl.FRAMEBUFFER,null); Gl.activeTexture(Gl.TEXTURE0);
+        this.LightViewProjection = ConstructKeyLightProjection();
         this.Uniforms = {};
-        for (const Name of ['ViewProjection','Explode','Eye','EonLookup','Channel','GridEnabled','AlbedoMetallic','SpecularRoughness'])
+        for (const Name of ['ViewProjection','Explode','Eye','EonLookup','Channel','GridEnabled','AlbedoMetallic','SpecularRoughness','ShadowMap','LightViewProjection'])
             this.Uniforms[Name] = Gl.getUniformLocation(this.Program,['AlbedoMetallic','SpecularRoughness'].includes(Name) ? Name+'[0]' : Name);
-        Gl.useProgram(this.Program); Gl.uniform1i(this.Uniforms.EonLookup,0);
+        Gl.useProgram(this.Program); Gl.uniform1i(this.Uniforms.EonLookup,0); Gl.uniform1i(this.Uniforms.ShadowMap,1);
+        Gl.uniformMatrix4fv(this.Uniforms.LightViewProjection,false,this.LightViewProjection);
         Canvas.addEventListener('webglcontextlost', Event => { Event.preventDefault();this.Lost=true;this.OnFailure?.('Graphics context lost. Reload the preview to recreate its renderer.'); });
     }
 
@@ -499,7 +626,7 @@ class ReferencePreview
             this.Contours = null;
         }
         const View = Configuration.View || 0;
-        this.Camera = {Azimuth:[.85,-.65,1.6][View%3],Elevation:Configuration.Category==='project' ? .55 : .43,
+        this.Camera = {Azimuth:[.85,-.65,1.6][View%3],Elevation:Configuration.Category==='project' ? .36 : .3,
                        Distance:Configuration.Category==='project' ? 17 : 10.5,Target:[0,1.3,0]};
         if (Configuration.Sketch) this.Camera = {Azimuth:View%2 ? Math.PI/2 : 0,Elevation:0,Distance:10.5,Target:[0,1.65,0]};
     }
@@ -547,9 +674,27 @@ class ReferencePreview
         const Channel = this.Configuration.Channel ?? (this.Configuration.Category==='cad' ? 5 : 0);
         const Drafting = Channel===5;
         Gl.enable(Gl.DEPTH_TEST);Gl.depthMask(true);Gl.depthFunc(Gl.LESS);Gl.clearColor(0,0,0,1);
+        const Lit = Channel===0;
+        if (Lit)
+        {
+            // Key-light depth for soft shadows (5×5 hardware-compared taps in the scene shader).
+            Gl.bindFramebuffer(Gl.FRAMEBUFFER,this.ShadowTarget);Gl.viewport(0,0,2048,2048);Gl.clear(Gl.DEPTH_BUFFER_BIT);
+            Gl.useProgram(this.ShadowProgram);Gl.bindVertexArray(this.TriangleLayout);
+            Gl.uniformMatrix4fv(this.ShadowUniforms.ViewProjection,false,this.LightViewProjection);Gl.uniform1f(this.ShadowUniforms.Explode,this.Configuration.Explode || 0);
+            Gl.enable(Gl.POLYGON_OFFSET_FILL);Gl.polygonOffset(2,4);
+            Gl.drawArrays(Gl.TRIANGLES,0,this.Vertices.length/10);
+            Gl.disable(Gl.POLYGON_OFFSET_FILL);Gl.bindFramebuffer(Gl.FRAMEBUFFER,null);
+        }
         Gl.viewport(0,0,Width,Height);Gl.clear(Gl.COLOR_BUFFER_BIT|Gl.DEPTH_BUFFER_BIT);
-        Gl.useProgram(this.Program);Gl.bindVertexArray(this.TriangleLayout);
         const {Eye,Product}=this.ConstructProjection(Width/Height,Drafting);
+        if (Lit)
+        {
+            Gl.useProgram(this.BackdropProgram);Gl.bindVertexArray(this.BackdropLayout);Gl.depthMask(false);
+            Gl.uniformMatrix4fv(this.BackdropUniforms.InverseViewProjection,false,InvertMatrix(Product));Gl.uniform3fv(this.BackdropUniforms.Eye,Eye);
+            Gl.drawArrays(Gl.TRIANGLES,0,3);Gl.depthMask(true);
+        }
+        Gl.useProgram(this.Program);Gl.bindVertexArray(this.TriangleLayout);
+        Gl.activeTexture(Gl.TEXTURE1);Gl.bindTexture(Gl.TEXTURE_2D,this.ShadowTexture);Gl.activeTexture(Gl.TEXTURE0);Gl.bindTexture(Gl.TEXTURE_2D,this.Lookup);
         Gl.uniformMatrix4fv(Uniforms.ViewProjection,false,Product);Gl.uniform3fv(Uniforms.Eye,Eye);
         Gl.uniform1f(Uniforms.Explode,this.Configuration.Explode || 0);Gl.uniform1i(Uniforms.Channel,Channel);Gl.uniform1i(Uniforms.GridEnabled,!Drafting);
         const Colours=[],Scalars=[];

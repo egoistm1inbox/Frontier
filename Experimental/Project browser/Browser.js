@@ -40,6 +40,64 @@ function CreateProject()
     Notify(`${Title} created as a blank scene for this session. Saving .projectspace files needs the native editor.`);
     return Entry;
 }
+// 🧩 Two native editors can open a file: Frontier (scenes, levels, play) and SolidArc (CAD modelling). One choice per format.
+const Applications = {
+    frontier:{Title:'Frontier',Letter:'A',Mark:'frontier-mark',Caption:'Game editor',Opens:'Scenes, levels, lighting and play',Workspace:'Project workspace'},
+    solidarc:{Title:'SolidArc',Letter:'B',Mark:'solidarc-mark',Caption:'CAD modelling',Opens:'Parts, sketches and assemblies',Workspace:'Modelling workspace'}
+};
+const FormatTitles = {project:'Projects',cad:'CAD',geometry:'Geometry',document:'Documents'};
+const OpenWith = {project:'frontier',cad:'solidarc',geometry:'solidarc',document:'frontier',...RetrievePreference('frontier.browser.openWith',{})};
+for (const Format of Object.keys(OpenWith)) if (!Applications[OpenWith[Format]]) delete OpenWith[Format];
+function QueryApplication(Entry){return OpenWith[Entry.Category] || 'frontier';}
+function ConfigureApplication(Category, Application)
+{
+    if (!Applications[Application]) return;
+    OpenWith[Category] = Application;
+    PersistPreference('frontier.browser.openWith', OpenWith);
+    ConstructCatalogue();
+    ConstructLibraryOpenWith();
+    if (Selected) { ConstructOpenControls(); ConstructInspector(); }
+}
+function ConstructApplicationChoices(Category, Current, Compact)
+{
+    return `<div class="ow-choices${Compact ? ' compact' : ''}" role="radiogroup" aria-label="Open ${Escape(FormatTitles[Category] || 'files')} with">${Object.entries(Applications).map(([Token,Application]) =>
+        `<button type="button" role="radio" class="${Token===Current ? 'on' : ''}" aria-checked="${Token===Current}" data-category="${Category}" data-application="${Token}"><b>${Application.Letter}</b>${Icon(Application.Mark)}<span>${Application.Title}</span>${Compact ? '' : `<small>${Application.Caption}</small>`}</button>`).join('')}</div>`;
+}
+function ConstructOpenWithCard(Entry)
+{
+    const Token = QueryApplication(Entry), Application = Applications[Token];
+    return `<section class="pz-card open-with-card" data-card="Open with"><h3>${Icon('arrow')}Open with<span class="pz-card-note">${Escape(FormatTitles[Entry.Category] || 'Files')}</span></h3>
+        <div class="ow-hero" data-application-shown="${Token}">${Icon(Application.Mark)}<b>${Application.Title}</b><small>${Application.Caption} · ${Application.Opens}</small></div>
+        ${ConstructApplicationChoices(Entry.Category, Token, false)}
+        <button type="button" class="primary ow-launch" data-launch-selected>Open in ${Application.Title} ${Icon('arrow')}</button></section>`;
+}
+function ConstructOpenControls()
+{
+    const Token = QueryApplication(Selected);
+    Query('#OpenAppSwitch').innerHTML = Object.entries(Applications).map(([Key,Application]) =>
+        `<button type="button" role="radio" aria-checked="${Key===Token}" data-category="${Selected.Category}" data-application="${Key}" title="Open with ${Application.Title} · ${Application.Caption}">${Icon(Application.Mark)}${Application.Title}</button>`).join('');
+    Query('#OpenEditorLabel').textContent = `Open in ${Applications[Token].Title}`;
+}
+function ConstructLibraryOpenWith()
+{
+    Query('#LibraryOpenWith').innerHTML = `<div class="pz-heading"><span class="pz-breadcrumbs">Inspector / Library</span><h2>Open with</h2><p>Choose the editor each format opens in. Cards and the reader follow this choice.</p></div>
+        <section class="pz-card" data-card="Editors"><h3>${Icon('cube')}Editors</h3><div class="ow-app-list">${Object.values(Applications).map(Application =>
+            `<div class="ow-app"><span class="ow-app-seat">${Icon(Application.Mark)}</span><div><strong>${Application.Title}</strong><small>${Application.Caption} · ${Application.Opens}</small></div></div>`).join('')}</div></section>
+        <section class="pz-card" data-card="Format defaults"><h3>${Icon('grid')}Format defaults</h3>${['project','cad','geometry'].map(Category =>
+            `<div class="ow-format"><span class="ow-format-name"><span class="format-dot ${Category}"></span>${FormatTitles[Category]}</span>${ConstructApplicationChoices(Category, OpenWith[Category], true)}</div>`).join('')}</section>`;
+}
+function LaunchApplication(Entry, Token)
+{
+    const Application = Applications[Token] || Applications.frontier;
+    Query('#LaunchDescription').textContent = Token === 'solidarc'
+        ? (Entry.Blank ? 'A blank project opens in SolidArc for modelling. Scenes and levels stay in Frontier.' : `${Entry.Title} opens in SolidArc. Its parts, sketches and assemblies load for modelling; scenes and levels stay in Frontier.`)
+        : Entry.Blank ? 'A blank scene opens in Frontier. No other workspace is launched.' : Entry.Imported ? 'This is the selected local file for a future native hand-off.' : 'The Default Project opens in Frontier.';
+    Query('#LaunchTarget').textContent = Token === 'frontier' && Entry.Category === 'document' ? 'Frontier · Document preview' : Application.Title;
+    Query('#LaunchMark').innerHTML = `${Icon(Application.Mark)}<span>${Application.Title}</span>`;
+    Query('#LaunchMark').dataset.application = Token;
+    Query('#LaunchFile').textContent = Entry.Path;
+    Query('#LaunchDialog').showModal();
+}
 let Selected = null;
 let ActiveFilter = 'all';
 let PreviewIndex = 0;
@@ -92,10 +150,13 @@ function ConstructCatalogue()
         (ActiveFilter === 'all' || ActiveFilter === 'recent' || (ActiveFilter === 'starred' && Stars.has(Entry.Token)) || ActiveFilter === Entry.Category));
     if (Query('#Sort').value === 'name') Entries.sort((First, Second) => First.Title.localeCompare(Second.Title));
     Query('#AllCount').textContent = Catalogue.length;
+    Query('#TallyProjects').textContent = Catalogue.filter(Entry => Entry.Category === 'project').length;
+    Query('#TallyStarred').textContent = Catalogue.filter(Entry => Stars.has(Entry.Token)).length;
     Query('#CollectionCount').textContent = `${Entries.length} ${Entries.every(Entry => !Entry.Imported) ? 'project' : 'file'}${Entries.length === 1 ? '' : 's'}`;
     Query('#CollectionTitle').textContent = ({all:'Projects',recent:'Recently opened',starred:'Starred files',project:'Projects',cad:'CAD',geometry:'Geometry'})[ActiveFilter];
     Query('#Empty').hidden = Entries.length !== 0;
-    Query('#Cards').innerHTML = Entries.map(Entry => `<article class="file-card"><button class="card-preview" data-open="${Escape(Entry.Token)}" aria-label="Preview ${Escape(Entry.Title)}">${ConstructThumbnail(Entry, 0, 0)}${Entry.Imported ? '<span class="preview-caption-tag">LOCAL FILE</span>' : ''}</button><button class="star-button" data-star="${Escape(Entry.Token)}" aria-label="${Stars.has(Entry.Token) ? 'Unstar' : 'Star'} ${Escape(Entry.Title)}" aria-pressed="${Stars.has(Entry.Token)}">${Icon('star')}</button><div class="card-text"><div class="card-title"><button data-open="${Escape(Entry.Token)}">${Escape(Entry.Title)}</button><span class="extension">${Escape(Entry.Extension)}</span></div><div class="card-subtitle">${Escape(Entry.Context)}</div><div class="card-meta"><span class="category-label"><span class="format-dot ${Entry.Category}"></span>${({project:'Project',cad:'CAD',geometry:'Geometry',document:'Document'})[Entry.Category]}</span><time>${Escape(Entry.Opened)}</time></div></div></article>`).join('');
+    Query('#Cards').innerHTML = Entries.map(Entry => `<article class="file-card"><button class="card-preview" data-open="${Escape(Entry.Token)}" aria-label="Preview ${Escape(Entry.Title)}">${ConstructThumbnail(Entry, 0, 0)}${Entry.Imported ? '<span class="preview-caption-tag">LOCAL FILE</span>' : ''}</button><button class="star-button" data-star="${Escape(Entry.Token)}" aria-label="${Stars.has(Entry.Token) ? 'Unstar' : 'Star'} ${Escape(Entry.Title)}" aria-pressed="${Stars.has(Entry.Token)}">${Icon('star')}</button><div class="card-text"><div class="card-title"><button data-open="${Escape(Entry.Token)}">${Escape(Entry.Title)}</button><span class="extension">${Escape(Entry.Extension)}</span></div><div class="card-subtitle">${Escape(Entry.Context)}</div><div class="card-meta"><span class="category-label"><span class="format-dot ${Entry.Category}"></span>${({project:'Project',cad:'CAD',geometry:'Geometry',document:'Document'})[Entry.Category]}</span><time>${Escape(Entry.Opened)}</time></div><div class="card-open" role="group" aria-label="Open ${Escape(Entry.Title)} with">${Object.entries(Applications).map(([Token,Application]) =>
+        `<button type="button" class="${Token===QueryApplication(Entry) ? 'preferred' : ''}" data-launch="${Token}" data-token="${Escape(Entry.Token)}" title="Open in ${Application.Title} · ${Application.Caption}">${Icon(Application.Mark)}${Application.Title}</button>`).join('')}</div></div></article>`).join('');
 }
 
 //------------------------------------------------------------------------------------------------------------------------
@@ -124,6 +185,7 @@ function ActivateFile(Token)
     Query('#Document').hidden = Selected.Category === 'document';
     Query('#Document small').textContent = Selected.Imported ? 'Browser-generated summary' : 'Sample document';
     ConfigureStarButton();
+    ConstructOpenControls();
     ConstructSequence();
     ConstructPreview();
     ConstructInspector();
@@ -236,7 +298,7 @@ function ConstructInspector()
     const Surface = Query('#InspectorContent');
     if (ActiveTab === 'details')
     {
-        Surface.innerHTML = `<div class="detail-hero">${ConstructThumbnail(Selected,PreviewIndex,ActiveRevision)}</div><h3>${Escape(Selected.Title+Selected.Extension)}</h3><p>${Selected.Imported ? 'Selected from your device' : 'Sample file · local workspace'}</p><div class="label">Description</div><p>${Escape(Selected.Description)}</p><div class="crossline"></div><div class="detail-list"><span>Workspace</span><strong>${({project:'Game project',cad:'Drafting / CAD',geometry:'Geometry',document:'Document'})[Selected.Category]}</strong><span>${Selected.Category === 'project' ? 'Levels' : Selected.Category === 'cad' ? 'Assemblies / sketches' : 'Preview views'}</span><strong>${Selected.Views.length}</strong><span>Last opened</span><strong>${Escape(Selected.Opened)}</strong><span>Storage</span><strong>${Selected.Imported ? 'Local file selection' : 'Sample location'}</strong></div><div class="label">Location</div><div class="source-path">${Escape(Selected.Path)}</div><span class="local-chip">${Selected.Imported ? 'Read-only · native decoder pending' : 'Sample file · read-only'}</span>`;
+        Surface.innerHTML = `<div class="pz-heading"><span class="pz-breadcrumbs">Inspector / ${Escape(FormatTitles[Selected.Category] || 'Files')}</span><h2>${Escape(Selected.Title)}</h2><p>${Escape(Selected.Extension)} · ${Selected.Imported ? 'Selected from your device' : 'Sample file · local workspace'}</p></div><div class="detail-hero pz-card">${ConstructThumbnail(Selected,PreviewIndex,ActiveRevision)}</div>${ConstructOpenWithCard(Selected)}<section class="pz-card" data-card="Details"><h3>${Icon('file')}Details</h3><p class="pz-card-text">${Escape(Selected.Description)}</p><div class="detail-list"><span>Workspace</span><strong>${({project:'Game project',cad:'Drafting / CAD',geometry:'Geometry',document:'Document'})[Selected.Category]}</strong><span>${Selected.Category === 'project' ? 'Levels' : Selected.Category === 'cad' ? 'Assemblies / sketches' : 'Preview views'}</span><strong>${Selected.Views.length}</strong><span>Last opened</span><strong>${Escape(Selected.Opened)}</strong><span>Storage</span><strong>${Selected.Imported ? 'Local file selection' : 'Sample location'}</strong></div></section><section class="pz-card" data-card="Location"><h3>${Icon('folder')}Location</h3><div class="source-path">${Escape(Selected.Path)}</div><span class="local-chip">${Selected.Imported ? 'Read-only · native decoder pending' : 'Sample file · read-only'}</span></section>`;
     }
     else if (ActiveTab === 'comments')
     {
@@ -288,7 +350,13 @@ Query('#Back').onclick = ReturnLibrary;
 Query('#Search').oninput = Query('#Sort').onchange = ConstructCatalogue;
 Query('#ClearSearch').onclick = () => { Query('#Search').value=''; ConstructCatalogue(); };
 document.querySelectorAll('[data-filter]').forEach(Button => Button.onclick = () => { ActiveFilter=Button.dataset.filter; document.querySelectorAll('[data-filter]').forEach(Other => Other.classList.toggle('active',Other===Button)); ConstructCatalogue(); });
-Query('#Cards').onclick = Event => { const Star = Event.target.closest('[data-star]'); const Open = Event.target.closest('[data-open]'); if (Star) ToggleStar(Star.dataset.star); else if (Open) ActivateFile(Open.dataset.open); };
+Query('#Cards').onclick = Event => { const Star = Event.target.closest('[data-star]'); const Launch = Event.target.closest('[data-launch]'); const Open = Event.target.closest('[data-open]'); if (Star) ToggleStar(Star.dataset.star); else if (Launch) LaunchApplication(Catalogue.find(Entry => Entry.Token === Launch.dataset.token), Launch.dataset.launch); else if (Open) ActivateFile(Open.dataset.open); };
+for (const Surface of ['#LibraryOpenWith','#OpenAppSwitch','#InspectorContent'])
+    Query(Surface).addEventListener('click', Event => {
+        const Choice = Event.target.closest('[data-application]');
+        if (Choice) { ConfigureApplication(Choice.dataset.category, Choice.dataset.application); return; }
+        if (Event.target.closest('[data-launch-selected]') && Selected) LaunchApplication(Selected, QueryApplication(Selected));
+    });
 Query('#PreviewSequence').onclick = Event => { const Button=Event.target.closest('[data-preview]'); if (Button) { PreviewIndex=Number(Button.dataset.preview);DocumentEnabled=false;ConstructPreview(); } };
 Query('#Document').onclick = () => { DocumentEnabled=true;ConstructPreview(); };
 Query('#Previous').onclick = () => { PreviewIndex=(PreviewIndex+Selected.Views.length-1)%Selected.Views.length;DocumentEnabled=false;ConstructPreview(); };
@@ -301,7 +369,7 @@ document.querySelectorAll('[data-tab]').forEach(Button => Button.onclick = () =>
 Query('#InspectorContent').addEventListener('click',Event=>{const Button=Event.target.closest('[data-revision]');if(Button) ConfigureRevision(Number(Button.dataset.revision));});
 Query('#RevisionSelect').onchange=Event=>ConfigureRevision(Number(Event.target.value));
 Query('#CommentForm').onsubmit = Event => { Event.preventDefault();const Text=Query('#CommentText').value.trim();if (!Text) return; if (!Array.isArray(LocalNotes[Selected.Token])) LocalNotes[Selected.Token]=[];LocalNotes[Selected.Token].push({Author:'You',Initial:'Y',Text:Text.slice(0,2000),Time:'Just now',Sample:false});PersistPreference('frontier.prototype.browser.notes',LocalNotes);Query('#CommentText').value='';ConstructInspector();Notify('Note saved in this browser. It has not been written to a project file.'); };
-Query('#OpenEditor').onclick = () => { Query('#LaunchDescription').textContent=Selected.Blank ? 'A blank scene opens in Frontier. No other workspace is launched.' : Selected.Imported ? 'This is the selected local file for a future native hand-off.' : 'The Default Project opens in Frontier.';Query('#LaunchTarget').textContent=Selected.Category==='document' ? 'Frontier · Document preview' : 'Frontier';Query('#LaunchFile').textContent=Selected.Path;Query('#LaunchDialog').showModal(); };
+Query('#OpenEditor').onclick = () => LaunchApplication(Selected, QueryApplication(Selected));
 Query('#NewProject').onclick = () => ActivateFile(CreateProject().Token);
 Query('#CloseDialog').onclick = Query('#ReturnPreview').onclick = () => Query('#LaunchDialog').close();
 document.addEventListener('keydown', Event => { if (Event.target.tagName==='CANVAS' || ['INPUT','TEXTAREA','SELECT'].includes(Event.target.tagName) || Query('#LaunchDialog').open) return;if (Event.key==='/' && !Query('#Library').hidden) { Event.preventDefault();Query('#Search').focus(); } if (Event.key==='Escape' && !Query('#Reader').hidden) ReturnLibrary();if (Selected && Event.key==='ArrowRight') Query('#Next').click();if (Selected && Event.key==='ArrowLeft') Query('#Previous').click(); });
@@ -369,6 +437,7 @@ function ConfigureRevision(Index)
 }
 ConfigureTheme(Theme);
 ConstructCatalogue();
+ConstructLibraryOpenWith();
 
 
 //------------------------------------------------------------------------------------------------------------------------
