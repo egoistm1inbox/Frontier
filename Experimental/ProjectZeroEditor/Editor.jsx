@@ -28,7 +28,7 @@ import ViewportRenderHeader from "./ViewportRenderHeader.jsx";
 import { StartThoughtLog, useThoughtScope, OpenThought } from "./ThoughtLog.js";
 import { ResolveRenderSettings, RenderSettingsKey } from "./RenderSettings.js";
 import { WorkspaceView, WorkspaceRail } from "./Workspaces.jsx";
-import { VehiclePanel, VehicleSummary, ComponentIcon, EnsureVehicleFolder, InitialVehicleRows, VehicleRevision } from "./VehicleComponents.jsx";
+import { VehiclePanel, VehicleSummary, ComponentIcon, EnsureVehicleFolder, InitialVehicleRows, VehicleRevision, InVehicleTree, VehicleDescendants } from "./VehicleComponents.jsx";
 import { VehicleAssetPanel, VehicleAssetSummary } from "./VehicleAssetInspector.jsx";
 import { ComponentPanel, ComponentSummary, WithObjectComponents, EnsureObjectComponents, ComponentRowsFor, OwnerKind, ComponentRevision, ComponentAddress } from "./ObjectComponents.jsx";
 import { BrowserFPS } from "./BrowserTiming.js";
@@ -1102,13 +1102,24 @@ function App() {
   const [VehiclePanelFocus, FocusVehiclePanel] = useState(null);
   const OpenVehiclePanel = (Id = VehicleOwner) => FocusVehiclePanel({ Id, Stamp: Date.now() });
   useEffect(() => {
-    if (Subject?.Panel !== VehiclePanel || Subject.Parent !== VehicleOwner) return;
+    if (Subject?.Panel !== VehiclePanel || !InVehicleTree(Rows, Subject)) return;
     OpenVehiclePanel(Subject.Id);
     Select(VehicleOwner);
   }, [Selected]);
-  const AddVehicleComponent = (Row) => InsertUnder(VehicleOwner, [Row]);
+  // Follow-up 63: components hang in a tree. A new one goes in after everything already under its holder; a removed one's own
+  // components move up to its holder, as in the Component Viewer.
+  const AddVehicleComponent = (Row) =>
+    AssignRows((Previous) => {
+      if (Previous.some((Each) => Each.Id === Row.Id)) return Previous;
+      const Under = new Set([Row.Parent, ...VehicleDescendants(Previous, Row.Parent).map((Each) => Each.Row.Id)]);
+      const At = Previous.reduce((Last, Each, Index) => (Under.has(Each.Id) ? Index : Last), -1);
+      return At < 0 ? [...Previous, Row] : [...Previous.slice(0, At + 1), Row, ...Previous.slice(At + 1)];
+    });
   const RemoveVehicleComponent = (Id) => {
-    AssignRows((Previous) => Previous.filter((Row) => Row.Id !== Id));
+    AssignRows((Previous) => {
+      const Gone = Previous.find((Row) => Row.Id === Id);
+      return Previous.filter((Row) => Row.Id !== Id).map((Row) => (Gone && Row.Parent === Id ? { ...Row, Parent: Gone.Parent } : Row));
+    });
     AssignValues((Previous) => {
       const { [Id]: Gone, ...Kept } = Previous;
       return Kept;

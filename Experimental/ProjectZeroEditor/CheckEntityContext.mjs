@@ -48,10 +48,12 @@ try {
   const Labels = await Page.locator(".row-identity small").allTextContents();
   // 71: Follow-up 48 adds the God Rays row (Project Zero specification §7). 56: Follow-up 46 moves the 15 Mass / Rigid Body / Collision
   // rows of the five primitives into each object's Components stack. 59: Follow-up 60 adds the Vehicles folder and two parked vehicles.
-  assert.equal(Labels.length, 59);
+  // 69: Follow-up 63's component tree (18 vehicle components, was 8: no collision or movement, a suspension, wheel and rim per corner,
+  // steering per front corner).
+  assert.equal(Labels.length, 69);
   assert(Labels.every((Label) => Label.trim().length));
   Checks.push(
-    "All 59 default outliner entities expose a non-empty contextual value line",
+    "All 69 default outliner entities expose a non-empty contextual value line",
   );
 
   assert.equal(await Metadata("Area Light"), "32 lx · Area · 0,0,0");
@@ -59,7 +61,7 @@ try {
   assert.equal(await Metadata("Key Spot"), "90 cd · Spot · -6,8.5,5");
   assert.equal(await Metadata("Fill Point"), "10 cd · Point · -3.5,1.6,4.6");
   assert.equal(await Metadata("Environment Light"), "Sky atmosphere · 12k lx");
-  assert.equal(await Metadata("LED Strip"), "2,400 lm · Strip · 0,2,0");
+  assert.equal(await Metadata("LED Strip"), "2,400 lm · Strip · -1.8,2.8,-3.2");
   assert.equal(await Metadata("Moons"), "Lunar phase 223° · 62%");
   assert.equal(await Metadata("Wind"), "7 m/s · 250°");
   assert.equal(await Metadata("Cube"), "Position 0,0,0 m");

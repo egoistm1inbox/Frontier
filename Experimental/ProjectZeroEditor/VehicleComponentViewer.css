@@ -606,3 +606,27 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* Follow-up 63: the tree's guide lines, one per level above the row, under each ancestor's caret. */
+.vcp-row {
+  position: relative;
+}
+.vcp-row::before {
+  content: "";
+  position: absolute;
+  top: -1px;
+  bottom: -1px;
+  left: 16px;
+  width: calc(var(--vcp-depth, 0) * 16px);
+  background: linear-gradient(90deg, #ffffff14 0 1px, transparent 1px) 0 0 / 16px 100% repeat-x;
+  pointer-events: none;
+}
+.vcp-row.active::before {
+  opacity: 0.6;
+}
+.vcp-caret.on {
+  cursor: pointer;
+  color: #9a9a9a;
+}
+.vcp-caret.on:hover {
+  color: #eeeeee;
+}

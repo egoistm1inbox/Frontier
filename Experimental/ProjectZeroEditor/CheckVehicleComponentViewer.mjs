@@ -51,43 +51,68 @@ try {
   await Page.goto(Address + "?inspect=vehicle");
   await Page.locator(".inspector-scroll > [data-panel]").waitFor();
 
-  // The vehicle's inspector opens the panel: outliner, view and Details; the ControlVehicle with its 8 native components drawn.
+  // The vehicle's inspector opens the panel: outliner, view and Details; the ControlVehicle with its native components drawn.
+  // Follow-up 63: no chassis collision (the object owns collision) and no movement component; the tree nests each wheel the way the
+  // reference Component Viewer does: Body → Suspension → Steer (front) → Wheel → Rim.
   assert.equal(await Page.locator(".vcp").count(), 0);
   await Page.locator("[data-open-component-viewer]").click();
   await Page.waitForFunction(() => document.querySelector(".vcv-canvas")?.dataset.picks);
   await Page.waitForTimeout(1200);
-  assert.deepEqual((await Readings()).components.split(" ").sort(), ["vehicle-body", "vehicle-brake", "vehicle-collision", "vehicle-headlights", "vehicle-movement", "vehicle-steering", "vehicle-suspension", "vehicle-tow"]);
-  assert.equal(await Page.locator(".vcp-row").count(), 9);
+  const Corners = ["fl", "fr", "rl", "rr"];
+  const Parts = ["vehicle-body", ...Corners.flatMap((Corner) => [`vehicle-suspension-${Corner}`, ...(Corner[0] === "f" ? [`vehicle-steer-${Corner}`] : []), `vehicle-wheel-${Corner}`, `vehicle-rim-${Corner}`]), "vehicle-tow", "vehicle-headlights", "vehicle-brake"];
+  assert.deepEqual((await Readings()).components.split(" ").sort(), [...Parts].sort());
+  assert(!/collision|movement/.test((await Readings()).components));
+  assert.equal(await Page.locator(".vcp-row").count(), 19);
   assert.equal(await Page.locator(".vcp-outliner-heading h1").innerText(), "Components");
-  assert.equal(await Page.locator("[data-vcp-count]").innerText(), "9");
+  assert.equal(await Page.locator("[data-vcp-count]").innerText(), "19");
   assert.match(await Page.locator(".vcp-row.root").innerText(), /Origin\s*ROOT/);
-  assert.match(await Page.locator(".vcp-divider").first().innerText(), /ACTOR COMPONENTS\s*1/);
   assert.equal(await Details(), "Controlled Vehicle");
   assert.equal(await MainHeading(), "Controlled Vehicle");
-  // Each component shows its own icon (sockets by type).
+  // The tree: each row's depth, in order.
+  const Tree = await Page.locator(".vcp-row").evaluateAll((Rows) => Rows.map((Row) => Row.dataset.vcvRow + ":" + Row.dataset.depth));
+  assert.deepEqual(Tree, [
+    "vehicle:0", "vehicle-body:1",
+    "vehicle-suspension-fl:2", "vehicle-steer-fl:3", "vehicle-wheel-fl:4", "vehicle-rim-fl:5",
+    "vehicle-suspension-fr:2", "vehicle-steer-fr:3", "vehicle-wheel-fr:4", "vehicle-rim-fr:5",
+    "vehicle-suspension-rl:2", "vehicle-wheel-rl:3", "vehicle-rim-rl:4",
+    "vehicle-suspension-rr:2", "vehicle-wheel-rr:3", "vehicle-rim-rr:4",
+    "vehicle-tow:2", "vehicle-headlights:2", "vehicle-brake:2",
+  ]);
+  assert.equal(await Page.locator(".vcp-row[data-vcv-row='vehicle-wheel-fl']").getAttribute("aria-level"), "5");
+  // Each component shows its own icon (sockets by type, the tyre and rim their own).
   const Icons = await Page.evaluate(() => Object.fromEntries([...document.querySelectorAll(".vcp-row")].map((Row) => [Row.dataset.vcvRow, Object.entries(window.NativeAssets.Icons).find(([, Source]) => Source === Row.querySelector("img")?.getAttribute("src"))?.[0]])));
-  assert.deepEqual(Icons, {
-    vehicle: "vehicle-component-origin",
-    "vehicle-body": "vehicle-component-body",
-    "vehicle-suspension": "vehicle-component-spring",
-    "vehicle-steering": "vehicle-component-hinge",
-    "vehicle-tow": "vehicle-component-dock",
-    "vehicle-collision": "vehicle-component-box-collision",
-    "vehicle-headlights": "vehicle-component-spot-light",
-    "vehicle-brake": "vehicle-component-point-light",
-    "vehicle-movement": "vehicle-component-movement",
-  });
+  const Expected = { vehicle: "vehicle-component-origin", "vehicle-body": "vehicle-component-body", "vehicle-tow": "vehicle-component-dock", "vehicle-headlights": "vehicle-component-spot-light", "vehicle-brake": "vehicle-component-point-light" };
+  for (const Corner of Corners) {
+    Expected[`vehicle-suspension-${Corner}`] = "vehicle-component-spring";
+    if (Corner[0] === "f") Expected[`vehicle-steer-${Corner}`] = "vehicle-component-hinge";
+    Expected[`vehicle-wheel-${Corner}`] = "vehicle-component-tyre";
+    Expected[`vehicle-rim-${Corner}`] = "vehicle-component-rim";
+  }
+  assert.deepEqual(Icons, Expected);
   await Page.screenshot({ path: path.join(Proof, "Panel.png") });
-  Checks.push("The vehicle inspector opens the Component Viewer panel: Components outliner (Origin root, actor divider, 9 icons), view, Details");
+  Checks.push("The vehicle inspector opens the Component Viewer panel: Components tree Origin → Body → Suspension → Steer → Wheel → Rim for each corner, 19 rows with their icons, no collision or movement component");
 
-  // A click on each component in the view opens its native inspector in the panel's Details; the editor stays on the vehicle.
+  // Every mesh shows its centre of mass, and the whole vehicle's (1,336 kg) is marked with a plumb line.
+  const Massed = (await Readings()).massMarks.split(" ").sort();
+  assert.deepEqual(Massed, Parts.filter((Id) => /body|wheel|rim/.test(Id)).sort());
+  assert.match((await Readings()).wholeMass, /^1336 /);
+  await Page.waitForFunction(() => /1,336 kg · centre of mass/.test(document.querySelector(".vcv-tag span")?.textContent || ""));
+  await Page.locator("[data-vcp-centres]").click();
+  await Page.waitForFunction(() => document.querySelector(".vcv-canvas").dataset.massMarks === "");
+  await Page.locator("[data-vcp-centres]").click();
+  await Page.waitForFunction(() => document.querySelector(".vcv-canvas").dataset.massMarks !== "");
+  Checks.push(`Centre of mass: marks on all ${Massed.length} meshes and the whole vehicle (${(await Readings()).wholeMass}); the tool hides and shows them`);
+
+  // A click on each component in the view opens its native inspector in the panel's Details; the editor stays on the vehicle. (The
+  // near side's wheels: the far side's are behind the body from this view.)
   for (const [Id, Name, Class] of [
     ["vehicle-headlights", "Headlights", "SpotLight"],
-    ["vehicle-steering", "Steering", "Socket"],
-    ["vehicle-suspension", "Front Suspension", "Socket"],
+    ["vehicle-wheel-fr", "WheelFR", "StaticMesh"],
+    ["vehicle-rim-fr", "WheelFRRim", "StaticMesh"],
+    ["vehicle-steer-fr", "SteerFR", "Socket"],
+    ["vehicle-suspension-rr", "SuspensionRR", "Socket"],
     ["vehicle-tow", "Tow Hitch", "Socket"],
     ["vehicle-brake", "Brake Lights", "PointLight"],
-    ["vehicle-movement", "Vehicle Movement", "VehicleMovement"],
   ]) {
     await ClickComponent(Id);
     await Page.locator(`.vcp-details .vehicle-inspector[data-component='${Class}']`).waitFor();
@@ -95,8 +120,12 @@ try {
     assert.equal(await Page.locator(`.vcp-row[data-vcv-row='${Id}']`).getAttribute("aria-selected"), "true");
     assert.equal(await MainHeading(), "Controlled Vehicle");
   }
-  await Page.screenshot({ path: path.join(Proof, "Movement.png") });
-  Checks.push("Clicking each component in the view opens its inspector in the panel's Details; the editor's inspector stays on the vehicle");
+  // A wheel's Details: its mass and centre of mass.
+  await ClickComponent("vehicle-wheel-fr");
+  await Page.locator(".vcp-details [data-card='Mass and centre of mass']").waitFor();
+  assert.match(await Page.locator(".vcp-details [data-card='Mass and centre of mass']").innerText(), /20 kg/);
+  await Page.screenshot({ path: path.join(Proof, "Wheel.png") });
+  Checks.push("Clicking each component in the view (tyre, rim, steering, suspension, tow, lights) opens its inspector in the panel's Details, a mesh's with its mass and centre of mass; the editor's inspector stays on the vehicle");
 
   // The outliner selects too.
   await Page.locator(".vcp-row[data-vcv-row='vehicle-body']").click();
@@ -104,19 +133,22 @@ try {
   await PanelOn("vehicle-body");
   Checks.push("The panel's outliner selects the Body and opens the Static Mesh inspector in Details");
 
-  // Editing in Details changes the view: the tow hitch releases (dock), the collision turns overlap-only.
+  // Editing in Details changes the view: the tow hitch releases (dock).
   await ClickComponent("vehicle-tow");
   assert.match(await Tag(), /connected/);
   await Page.locator(".vcp-details .vc-socket-scene").click();
   assert.equal((await Saved("vehicle-tow")).connected, false);
   await Page.waitForFunction(() => /released|seeking/i.test(document.querySelector(".vcv-tag span")?.textContent || ""));
   await Page.screenshot({ path: path.join(Proof, "TowReleased.png") });
-  await Page.locator(".vcp-row[data-vcv-row='vehicle-collision']").click();
-  await Page.locator(".vcp-details .vehicle-inspector[data-component='BoxCollision']").waitFor();
-  assert.match(await Tag(), /blocks all/);
-  await Page.locator(".vcp-details").getByRole("switch", { name: "Generate overlap events" }).click();
-  await Page.waitForFunction(() => /overlap only/.test(document.querySelector(".vcv-tag span")?.textContent || ""));
-  Checks.push("Edits in the panel's Details reach the view: releasing the tow dock, overlap-only collision");
+  Checks.push("Edits in the panel's Details reach the view: releasing the tow dock");
+
+  // The caret folds a branch: folding the front-left suspension hides its steering, wheel and rim.
+  await Page.locator(".vcp-row[data-vcv-row='vehicle-suspension-fl'] [data-vcp-caret]").click();
+  assert.equal(await Page.locator(".vcp-row[data-vcv-row='vehicle-rim-fl']").count(), 0);
+  assert.equal(await Page.locator(".vcp-row[data-vcv-row='vehicle-suspension-fl']").getAttribute("aria-expanded"), "false");
+  await Page.locator(".vcp-row[data-vcv-row='vehicle-suspension-fl'] [data-vcp-caret]").click();
+  assert.equal(await Page.locator(".vcp-row[data-vcv-row='vehicle-rim-fl']").count(), 1);
+  Checks.push("The tree folds and unfolds a corner");
 
   // The eye hides a component in the view.
   await Page.locator(".vcp-row[data-vcv-row='vehicle-headlights'] .vcp-eye").click();
@@ -131,7 +163,7 @@ try {
   await PanelOn("vehicle-point-light-1");
   assert.equal(await Details(), "Point Light 1");
   assert((await Readings()).components.includes("vehicle-point-light-1"));
-  assert.equal(await Page.locator("[data-vcp-count]").innerText(), "10");
+  assert.equal(await Page.locator("[data-vcp-count]").innerText(), "20");
   await Page.screenshot({ path: path.join(Proof, "Added.png") });
   await Canvas().focus();
   await Page.keyboard.press("Delete");
@@ -156,10 +188,10 @@ try {
   Checks.push("Esc closes the panel");
 
   // Choosing a component elsewhere (here ?inspect=) selects the vehicle and opens the panel on that component.
-  await Page.goto(Address + "?inspect=vehicle-steering");
+  await Page.goto(Address + "?inspect=vehicle-wheel-rl");
   await Page.locator(".vcp").waitFor();
-  await PanelOn("vehicle-steering");
-  assert.equal(await Details(), "Steering");
+  await PanelOn("vehicle-wheel-rl");
+  assert.equal(await Details(), "WheelRL");
   assert.equal(await MainHeading(), "Controlled Vehicle");
   Checks.push("Choosing a component outside the panel opens the panel on it; the editor selects the vehicle");
 } catch (Error) {

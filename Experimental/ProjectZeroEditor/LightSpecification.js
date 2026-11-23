@@ -61,12 +61,18 @@ export const LightContextDefaults = {
   "ECE Low Beam": { pos: [-1.1, 0.72, 4.2], lumens: 0 },
   Softbox: { pos: [3.5, 4.5, 2], lumens: 0 },
   "Studio Tube": { pos: [-3, 3.2, -2], lumens: 0 },
-  "LED Emitter": { pos: [0, 2, 0], watts: 10, efficacy: 110, dimmer: 1 },
-  "LED Strip": { pos: [0, 2, 0], lumensPerMetre: 1000, length: 2.4, dimmer: 1 },
-  "IES Downlight": { pos: [0, 2, 0], lumens: 1600 },
+  "LED Emitter": { pos: [2.6, 2.4, 3.4], watts: 10, efficacy: 110, dimmer: 1 },
+  "LED Strip": { pos: [-1.8, 2.8, -3.2], lumensPerMetre: 1000, length: 2.4, dimmer: 1 },
+  "IES Downlight": { pos: [1.4, 3.6, -2.8], lumens: 1600 },
 };
+// Each reference light stands in its own place in the viewport (Follow-up 63: the LED, the strip and the downlight had all shared
+// [0, 2, 0]); the downlight aims straight down.
 export const LightPresetDefaults = {
+  "LED Emitter": { pos: [2.6, 2.4, 3.4] },
+  "LED Strip": { pos: [-1.8, 2.8, -3.2] },
   "IES Downlight": {
+    pos: [1.4, 3.6, -2.8],
+    target: [1.4, 0, -2.8],
     profile: "Downlight",
     lumens: 1600,
     multiplier: 1,

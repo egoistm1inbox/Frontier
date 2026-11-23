@@ -154,14 +154,15 @@ try {
   );
   // Cameras include Motion Blur, Lens Flare, Post Process and its 7 effects; Lighting includes the Environment Light;
   // Vehicle holds the Controlled Vehicle's components and (Follow-up 60) the three level vehicles. Follow-up 48 adds God Rays to Environment (Project Zero specification §7).
-  assert.equal(Names.length, 52);
+  // Follow-up 63: the Controlled Vehicle's 18 components (its tree of suspensions, steering, wheels and rims) replace the 8 before.
+  assert.equal(Names.length, 62);
   for (const [Group, Expected] of [
     ["Environment", 6],
     ["Weather", 7],
     ["Cameras", 12],
     ["Geometry", 5],
     ["Lighting", 11],
-    ["Vehicle", 11],
+    ["Vehicle", 21],
   ]) {
     await Page.getByRole("navigation", { name: "Construct categories" })
       .getByRole("button", { name: Group, exact: true })

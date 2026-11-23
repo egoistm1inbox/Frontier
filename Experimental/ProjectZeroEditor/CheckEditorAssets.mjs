@@ -150,7 +150,7 @@ try {
   );
   const Depth = (Id) => Page.locator(`[data-outliner-row="${Id}"]`).evaluate((Row) => Number(getComputedStyle(Row).getPropertyValue("--depth")));
   assert.equal(await Depth("vehicle"), (await Depth("vehicles")) + 1, "the vehicles nest in the folder");
-  assert.equal(await Depth("vehicle-movement"), (await Depth("vehicle")) + 1, "the Controlled Vehicle's components nest under it");
+  assert.equal(await Depth("vehicle-body"), (await Depth("vehicle")) + 1, "the Controlled Vehicle's components nest under it");
   for (const [Id, Model] of [["vehicle", "controlled"], ["offroad-vehicle", "offroad"], ["pickup-truck", "pickup"]]) {
     assert.equal(await RowIcon(Id).getAttribute("data-native-icon"), "asset-vehicle-" + Model);
     const [Drawn, Area] = await Opaque(Id);
@@ -172,8 +172,8 @@ try {
   await PickTab(Page, "vehicle:drive");
   assert((await Page.locator("[data-vehicle-part]").count()) >= 6, "Drive lists the Controlled Vehicle's components");
   // Follow-up 62: a Drive link opens the Component Viewer panel on that component; the editor stays on the vehicle.
-  await Page.locator('[data-vehicle-part="vehicle-movement"]').click();
-  await Page.locator('.vcp[data-vcp-selected="vehicle-movement"]').waitFor();
+  await Page.locator('[data-vehicle-part="vehicle-suspension-fr"]').click();
+  await Page.locator('.vcp[data-vcp-selected="vehicle-suspension-fr"]').waitFor();
   await Page.locator('[data-outliner-row="vehicle"][aria-selected="true"]').waitFor();
   await Page.keyboard.press("Escape");
   await Page.locator(".vcp").waitFor({ state: "detached" });

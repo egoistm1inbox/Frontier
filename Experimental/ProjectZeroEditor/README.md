@@ -231,6 +231,55 @@ starting point for the UI redesign.
     `CheckVehicleSockets`, `CheckEditorAssets`, `CheckEntityContext`, `CheckObjectComponents` and `CheckInspectorOrder` look for
     component inspectors in the panel.
   - Evidence is in `Exhibits/ProjectZeroEditor/FollowUp52/`. Names are unapproved.
+- **Follow-up 63.**
+  - **No chassis collision, no movement component.** The object owns collision (`ObjectComponents.jsx`), and the vehicle has no
+    Vehicle Movement component. Both are retired from saved scenes, along with their icons and the Add menu's collision classes.
+  - **The component tree matches the reference Component Viewer** (`Experimental/ComponentViewer`, `VEHICLE_SHEET`). Rows carry their
+    real holder in `Parent`, giving Origin → Body → for each corner SuspensionXX (spring) → SteerXX (hinge, front only) → WheelXX
+    (tyre) → WheelXXRim, then Tow Hitch, Headlights and Brake Lights on the Body (19 rows).
+    - The tree has carets and guide lines; `aria-level` and `aria-expanded` are set.
+    - Each corner's sockets move only their own wheel.
+    - Add puts a new component after its holder's branch. Delete hands the removed row's children to its holder.
+    - `VehicleRevision` 4 migrates saved scenes.
+    - Helpers: `InVehicleTree` and `VehicleDescendants`.
+  - **Every mesh shows its centre of mass.**
+    - Body, tyres and rims are Static Meshes. Each one's COM comes from its facet (`ControlVehicleCentres`, `MassCentre`) and is
+      marked in the view; the wheel marks turn and lift with their wheel.
+    - The whole vehicle's COM (1,336 kg) is a white mark with a plumb line, and the Origin readout gives it.
+    - The **Centre of mass** tool shows or hides the marks.
+    - A mesh's Details shows the LOD strip, Collision preset, Cast shadow, and a **Mass and centre of mass** card.
+    - New tyre (tread) and five-spoke rim icons.
+  - **Lighting props** (`LightProps.js`). Every light in the Lighting folder stands in the 3D viewport as a fixture and lights the
+    scene with a real three.js light, using its inspector's position, aim, colour (times its colour temperature), strength, cone and
+    reach:
+
+    | Light | Fixture |
+    |---|---|
+    | Key Spot | spot can with barn doors on a yoke, truss mast (above 5.5 m) |
+    | Rim Point, Fill Point | bare bulb in a socket on a C-stand |
+    | ECE Low Beam | projector headlamp unit (lens and light bar) |
+    | IES Downlight | downlight can on a boom arm, aimed down |
+    | Area Light, Softbox | softbox of its width and height (cloth sides, glowing face) |
+    | Studio Tube | glowing tube of its length and radius in clamps |
+    | LED Emitter | star board on a heat sink, on a boom |
+    | LED Strip | lit aluminium channel of its length, on a boom |
+
+    - Lights that shine straight down hang from a boom so the stand stays clear.
+    - Spot and IES lights draw their beam.
+    - Candela lights use their candela. Lumen lights are converted over their beam and drawn at `LumenScale` (0.05).
+    - Spot and IES lights cast shadows when set to.
+    - Click a fixture to select its light.
+    - Fixtures are editor props, so they don't hide the sun from the lens flare.
+    - The Environment Light is the sky and has no prop.
+    - The LED Emitter, LED Strip and IES Downlight had all shared [0, 2, 0]. They now have their own places
+      (`LightPresetDefaults`), and the downlight aims straight down.
+  - Checks:
+    - `CheckVehicleComponentViewer`, rewritten, covers the tree, icons, COM marks, picks on tyre, rim, steering and suspension,
+      folding, and the wheel's mass card.
+    - `CheckVehicleSockets` uses the per-corner sockets and relinks to Headlights.
+    - `CheckEditorAssets` and `CheckObjectComponents` drop Vehicle Movement.
+    - `CheckEntityContext` has the strip's new place.
+  - Evidence is in `Exhibits/ProjectZeroEditor/FollowUp53/`. Names are unapproved.
 
 ---
 

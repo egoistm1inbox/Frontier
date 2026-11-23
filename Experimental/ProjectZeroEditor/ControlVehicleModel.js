@@ -71,6 +71,31 @@ function Surface(Facet, Mode, Angle) {
   return { Shape, Families };
 }
 
+// Centre of mass of a closed surface (y-up, metres): the signed-tetrahedron volume centroid; a surface that does not close (too little
+// volume for its size) falls back to its area centroid.
+function MassCentre(Shape) {
+  const P = Shape.attributes.position.array;
+  let Volume = 0, Area = 0;
+  const ByVolume = [0, 0, 0], ByArea = [0, 0, 0];
+  for (let At = 0; At < P.length; At += 9) {
+    const [Ax, Ay, Az, Bx, By, Bz, Cx, Cy, Cz] = P.subarray(At, At + 9);
+    const Signed = (Ax * (By * Cz - Bz * Cy) - Ay * (Bx * Cz - Bz * Cx) + Az * (Bx * Cy - By * Cx)) / 6;
+    Volume += Signed;
+    ByVolume[0] += (Signed * (Ax + Bx + Cx)) / 4;
+    ByVolume[1] += (Signed * (Ay + By + Cy)) / 4;
+    ByVolume[2] += (Signed * (Az + Bz + Cz)) / 4;
+    const Ux = Bx - Ax, Uy = By - Ay, Uz = Bz - Az, Vx = Cx - Ax, Vy = Cy - Ay, Vz = Cz - Az;
+    const Piece = Math.hypot(Uy * Vz - Uz * Vy, Uz * Vx - Ux * Vz, Ux * Vy - Uy * Vx) / 2;
+    Area += Piece;
+    ByArea[0] += (Piece * (Ax + Bx + Cx)) / 3;
+    ByArea[1] += (Piece * (Ay + By + Cy)) / 3;
+    ByArea[2] += (Piece * (Az + Bz + Cz)) / 3;
+  }
+  const Box = Shape.boundingBox.getSize(new THREE.Vector3());
+  const Closed = Math.abs(Volume) > Box.x * Box.y * Box.z * 0.02;
+  return Closed ? ByVolume.map((Each) => Each / Volume) : ByArea.map((Each) => Each / (Area || 1));
+}
+
 // Decoded once; three.js uploads a geometry again after a dispose, so sharing these between models is safe.
 let Surfaces = null;
 export function ControlVehicleReady() {
@@ -85,6 +110,30 @@ function Decoded() {
     Rim: Surface(readFacet(Bytes("Rim")), "angle", 40),
   };
   return Surfaces;
+}
+
+// Each part's triangle count and centre of mass: the body's in vehicle space (on its ground lift), a tyre's or rim's in its wheel's own
+// space (its Face group, so a marker parented there turns and lifts with the wheel). PartCentre gives any part's centre in vehicle space
+// at rest (for a wheel part, at axle mount Corner, 0–3 front left, front right, rear left, rear right).
+let Centres = null;
+export function ControlVehicleCentres() {
+  if (Centres) return Centres;
+  // Before the facets are in (they ship inside the editor, so only outside it), measured values stand in.
+  if (!ControlVehicleReady()) return { Body: [0.03, 0.66, 0], Tyre: [0, 0, 0], Rim: [0, 0, 0], Triangles: { Body: 2924, Tyre: 3968, Rim: 1568 } };
+  const { Body, Tyre, Rim } = Decoded();
+  const Lifted = MassCentre(Body.Shape);
+  Lifted[1] += GroundLift;
+  const Count = (Each) => Each.Shape.attributes.position.count / 3;
+  Centres = { Body: Lifted, Tyre: MassCentre(Tyre.Shape), Rim: MassCentre(Rim.Shape), Triangles: { Body: Count(Body), Tyre: Count(Tyre), Rim: Count(Rim) } };
+  return Centres;
+}
+export function PartCentre(Asset, Corner = 0) {
+  const All = ControlVehicleCentres();
+  if (Asset === "Body" || !All[Asset]) return All.Body.slice();
+  const [X, Y, Z] = VEHICLE_SHEET.axleMount[Corner] || VEHICLE_SHEET.axleMount[0];
+  const [Cx, Cy, Cz] = All[Asset];
+  const Turned = Y < 0 ? [-Cx, Cy, -Cz] : [Cx, Cy, Cz]; // right-hand wheels face outward (turned half a revolution about y)
+  return [X + Turned[0], Z + GroundLift + Turned[1], -Y + Turned[2]];
 }
 
 // One material per family (fresh per model, so a paint or a highlight on one never reaches another).
@@ -111,7 +160,8 @@ const Finished = ({ Shape, Families }, Finish) => {
   return Part;
 };
 
-// The ControlVehicle in its paint: { Root, Body, Wheels: [{ Steer, Lift, Spin, Size, Front, Left, Mount }], Finish }. Each wheel hangs
+// The ControlVehicle in its paint: { Root, Body, Wheels: [{ Steer, Lift, Spin, Size, Face, Tyre, Rim, Front, Left, Mount }], Finish }, the
+// wheels in the order of VEHICLE_SHEET's axle mounts (front left, front right, rear left, rear right). Each wheel hangs
 // Steer (turns about y) → Lift (rides up and down) → Size (scales with the tyre radius) → Spin (rolls about z) so the Component Viewer
 // can move them; the level leaves them as built.
 export function ControlVehicleParts(Paint) {
@@ -126,13 +176,14 @@ export function ControlVehicleParts(Paint) {
     Steer.position.set(X, Z + GroundLift, -Y);
     const Lift = new THREE.Group(), Size = new THREE.Group(), Spin = new THREE.Group(), Face = new THREE.Group();
     Face.rotation.y = Y < 0 ? Math.PI : 0; // right-hand wheels face outward (BP_ControlVehicle)
-    Face.add(Finished(Tyre, Finish), Finished(Rim, Finish));
+    const TyreMesh = Finished(Tyre, Finish), RimMesh = Finished(Rim, Finish);
+    Face.add(TyreMesh, RimMesh);
     Spin.add(Face);
     Size.add(Spin);
     Lift.add(Size);
     Steer.add(Lift);
     Root.add(Steer);
-    return { Steer, Lift, Size, Spin, Front: X > 0, Left: Y > 0, Mount: Steer.position.clone() };
+    return { Steer, Lift, Size, Spin, Face, Tyre: TyreMesh, Rim: RimMesh, Front: X > 0, Left: Y > 0, Mount: Steer.position.clone() };
   });
   return { Root, Body, Wheels, Finish };
 }

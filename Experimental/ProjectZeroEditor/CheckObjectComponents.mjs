@@ -241,28 +241,8 @@ try {
   assert.equal(await Page.locator('[data-card="UV preview"]').count(), 0);
   Checks.push("UV, Fracture, SDF and LOD previews each sit on their own carousel page; Geometry no longer holds the UV card");
 
-  // Vehicle Movement charts are editable.
-  await Open("vehicle-movement");
-  const Before = await Metrics();
-  await DragHandle("suspension", 0, 0, -30);
-  let Stored = (await Saved()).Values["vehicle-movement"];
-  assert(Stored.dampingRatio < 0.6, String(Stored.dampingRatio));
-  await DragHandle("torque", 8, 0, -40);
-  Stored = (await Saved()).Values["vehicle-movement"];
-  assert.equal(Stored.torqueCurve.length, 18);
-  assert(Stored.torqueCurve[6][1] > 486, JSON.stringify(Stored.torqueCurve[6]));
-  await DragHandle("torque", 0, -30, 0);
-  assert((await Saved()).Values["vehicle-movement"].redlineRpm < 7200);
-  await DragHandle("aero", 0, 0, -30);
-  await DragHandle("aero", 1, 0, 30);
-  Stored = (await Saved()).Values["vehicle-movement"];
-  assert(Stored.dragArea > 0.74 && Stored.dragArea <= 1.2, String(Stored.dragArea));
-  assert(Stored.liftArea < 1.1 && Stored.liftArea >= 0, String(Stored.liftArea));
-  const After = await Metrics();
-  assert.notEqual(After[2], Before[2]);
-  assert.notEqual(After[4], Before[4]);
-  await Page.locator('[data-plot="torque"]').screenshot({ path: path.join(Proof, "TorqueCurve.png") });
-  Checks.push(`Vehicle charts: peak drag sets ζ ${Stored.dampingRatio}, torque point 7 → ${Stored.torqueCurve[6][1]} N·m, redline ${Stored.redlineRpm}, CdA ${Stored.dragArea}, ClA ${Stored.liftArea}`);
+  // (Follow-up 63: the Vehicle Movement component and its charts are gone; the vehicle has no movement component.)
+
 } catch (Error) {
   Errors.push(Error.stack);
 } finally {

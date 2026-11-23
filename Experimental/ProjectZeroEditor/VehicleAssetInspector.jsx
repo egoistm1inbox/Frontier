@@ -12,7 +12,7 @@ import React, { useMemo } from "react";
 import { InspectorTabs } from "./InspectorTabs.jsx";
 import { ModelIcon } from "./EditorAssets.js";
 import { VehicleAsset, VehicleModelOf, VehiclePaints, VehicleFacts } from "./VehicleAssets.js";
-import { ComponentIcon } from "./VehicleComponents.jsx";
+import { ComponentIcon, VehicleDescendants } from "./VehicleComponents.jsx";
 import "./VehicleAssetInspector.css";
 
 export const VehicleAssetPanel = "vehicle-asset";
@@ -37,7 +37,10 @@ export function VehicleAssetInspector({ Subject, Values, Change, Kit, Scene = nu
       return null;
     }
   }, [Model.Id, Paint]);
-  const Parts = (Scene?.Rows || []).filter((Row) => Row.Parent === Subject.Id);
+  // Its components, depth first (the whole tree, for the count); the Drive page links the Body and what hangs straight from it.
+  const Tree = VehicleDescendants(Scene?.Rows || [], Subject.Id);
+  const Parts = Tree.map((Each) => Each.Row);
+  const Mounted = Tree.filter((Each) => Each.Depth <= 2).map((Each) => Each.Row);
   const Figure = (Label, Amount, Unit) => (
     <div className="va-fact" key={Label}>
       <small>{Label}</small>
@@ -140,9 +143,9 @@ export function VehicleAssetInspector({ Subject, Values, Change, Kit, Scene = nu
                   <small>{Facts.Drive}</small>
                 </span>
               </div>
-              {Parts.length > 0 && (
+              {Mounted.length > 0 && (
                 <div className="va-parts" aria-label="Components">
-                  {Parts.map((Row) => (
+                  {Mounted.map((Row) => (
                     <button key={Row.Id} type="button" className="va-part" data-vehicle-part={Row.Id} onClick={() => (Scene?.OpenComponentViewer ? Scene.OpenComponentViewer(Row.Id) : Scene?.SelectRow?.(Row.Id))}>
                       <Icon Name={ComponentIcon(Row, Scene?.Values?.[Row.Id] || {})} Size={18} />
                       <span>

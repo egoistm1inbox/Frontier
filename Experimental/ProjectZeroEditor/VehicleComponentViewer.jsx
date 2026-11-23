@@ -2,65 +2,109 @@
 //                                                         VEHICLECOMPONENTVIEWER.JSX
 //============================================================================================================================================
 // 🧩 The Component Viewer panel for the Controlled Vehicle (Follow-up 62), opened from its inspector or by choosing one of its components
-// anywhere. Laid out like the Component Viewer (Experimental/ComponentViewer): its own Components outliner (Origin, Body, the parts on
-// it, actor components; Add for native classes, search, eye, Delete), the vehicle view, and its own Details, where the chosen
-// component's native inspector edits it; the editor's own selection and inspector stay on the vehicle. The view shows the ControlVehicle
-// (ControlVehicleModel.js) with each native component drawn where it sits and doing what its values say:
-//   • Body (Static Mesh): the body shell; Cast shadow switches its shadow.
-//   • Spring and Hinge sockets: on both wheels of the axle they are mounted at; the spring lifts the wheels to its pose (and meets bumps
-//     in Simulate), the hinge turns them to its angle (or sweeps). Other sockets sit on the centre line at their mount.
+// anywhere. Laid out like the Component Viewer (Experimental/ComponentViewer): its own Components outliner (the tree from the Origin
+// through the Body to each wheel's suspension, steering, tyre and rim, as in BP_ControlVehicle; Add for native classes, search, eye,
+// Delete), the vehicle view, and its own Details, where the chosen component's native inspector edits it; the editor's own selection and
+// inspector stay on the vehicle. The view shows the ControlVehicle (ControlVehicleModel.js) with each native component drawn where it
+// sits and doing what its values say:
+//   • Static Mesh (the Body, each Wheel's tyre and its Rim): the mesh itself, picked and hidden on its own; Cast shadow switches its
+//     shadow. Each shows its centre of mass (Follow-up 63), and the Origin the whole vehicle's, weighed by each mesh's mass.
+//   • Sockets: at their wheel (or on the centre line at their mount); a socket moves the wheels hung below it in the tree, so each
+//     Suspension's spring lifts its own wheel to its pose (and meets bumps in Simulate) and each Steer hinge turns its own wheel.
 //   • Tow Hitch (Dock socket): at its mount, connecting, releasing and pull-testing as set.
-//   • Collision: the collision volume at its extents, amber when it only reports overlaps.
 //   • Spot and Point lights: real lights at the head and tail lamps, with beams and glows in their colour, angle, intensity and range.
-//   • Vehicle Movement: the centre of mass from its height and front weight share, the load on each tyre, wheels sized by the tyre
-//     radius; Simulate drives a speed cycle that rolls the wheels.
-// User components (with their own controls) are listed but not drawn. The socket looks and motion are the Component Viewer's own
-// (SocketVisuals.js, Sockets.js); the Stage, volumes, beams and glows are Shared/Studio's. Browser authoring only.
+// Simulate drives a speed cycle that rolls the wheels. User components (with their own controls) are listed but not drawn. The socket
+// looks and motion are the Component Viewer's own (SocketVisuals.js, Sockets.js); the Stage, beams and glows are Shared/Studio's.
+// Browser authoring only.
 
 import React, { useEffect, useRef, useState } from "react";
 import { THREE, Stage } from "../Shared/Studio/Render.js";
-import { beam, glowSprite, addHalo, anchorMark, markDebug, fieldShell } from "../Shared/Studio/Visuals.js";
+import { beam, glowSprite, addHalo, anchorMark, markDebug } from "../Shared/Studio/Visuals.js";
 import { socketVisual } from "../ComponentViewer/SocketVisuals.js";
 import { createSocketState, stepSocket, socketPose, socketReadout, SOCKET_KIND } from "../ComponentViewer/Sockets.js";
 import { COMPONENT_CLASSES } from "../ComponentViewer/Blueprint.js";
-import { ControlVehicleParts, ControlVehicleSheet as Sheet, Family } from "./ControlVehicleModel.js";
-import { ComponentReader, SocketParameters, VehicleSummary, ComponentIcon } from "./VehicleComponents.jsx";
+import { ControlVehicleParts, ControlVehicleSheet as Sheet, ControlVehicleCentres, Family } from "./ControlVehicleModel.js";
+import { VEHICLE_SHEET } from "../ComponentViewer/Blueprint.js";
+import { ComponentReader, SocketParameters, VehicleSummary, ComponentIcon, InVehicleTree, VehicleDescendants, VehicleOwner as Owner, MeshAssets, MeshMass, MeshCentre } from "./VehicleComponents.jsx";
 import { PaintOf } from "./VehicleAssetInspector.jsx";
 import "./VehicleComponentViewer.css";
 
-const Owner = "vehicle";
 const Rad = Math.PI / 180;
 const Accent = "#ffb238";
-const Gravity = 9.81;
+const ComColour = "#7fd1ff";
 const SocketScale = 2.2; // the Component Viewer's socket looks are sized for a desk; at car scale they're drawn bigger
-const NativeClasses = new Set(["VehicleMovement", "StaticMesh", "Socket", "BoxCollision", "SphereCollision", "SpotLight", "PointLight"]);
-const InVehicle = (Row) => !!Row && (Row.Id === Owner || Row.Parent === Owner);
-export const VehicleOwner = Owner;
+const NativeClasses = new Set(["StaticMesh", "Socket", "SpotLight", "PointLight"]);
+export { Owner as VehicleOwner };
 
-// Where a socket sits: on both wheels of an axle when it is mounted there (within 0.4 m), otherwise on the centre line.
-function SocketAnchors(Mount) {
+// Where a socket sits: at its wheel when it belongs to one (Corner, 0–3 in VEHICLE_SHEET's axle mount order: front left, front right,
+// rear left, rear right), along the car by its mount; otherwise on the centre line at its mount.
+function SocketPoint(Mount, Corner) {
   const X = Sheet.Middle + Mount;
-  const Axle = [Sheet.FrontAxle, Sheet.RearAxle].find((Each) => Math.abs(Each - X) < 0.4);
-  if (Axle !== undefined) return { Axle: Axle === Sheet.FrontAxle ? "front" : "rear", Points: [-1, 1].map((Side) => [Axle, Sheet.AxleHeight, (Side * Sheet.Track) / 2]) };
-  return { Axle: null, Points: [[X, 0.42, 0]] };
+  const Wheel = VEHICLE_SHEET.axleMount[Corner];
+  return Wheel ? [X, Sheet.AxleHeight, -Wheel[1]] : [X, 0.42, 0];
 }
+// The checkered centre-of-mass ball (the usual quartered mark).
+let Checker = null;
+function ComMark(Radius, Colour, Glow) {
+  if (!Checker) {
+    const Paper = document.createElement("canvas");
+    Paper.width = Paper.height = 64;
+    const Brush = Paper.getContext("2d");
+    Brush.fillStyle = "#f2f2f2";
+    Brush.fillRect(0, 0, 64, 64);
+    Brush.fillStyle = "#16171b";
+    Brush.fillRect(0, 0, 16, 32);
+    Brush.fillRect(32, 0, 16, 32);
+    Brush.fillRect(16, 32, 16, 32);
+    Brush.fillRect(48, 32, 16, 32);
+    Checker = new THREE.CanvasTexture(Paper);
+    Checker.colorSpace = THREE.SRGBColorSpace;
+  }
+  const Mark = new THREE.Group();
+  Mark.add(new THREE.Mesh(new THREE.SphereGeometry(Radius, 24, 16), new THREE.MeshBasicMaterial({ map: Checker })));
+  const Ring = new THREE.Mesh(new THREE.TorusGeometry(Radius * 1.25, Radius * 0.12, 8, 40), new THREE.MeshBasicMaterial({ color: Colour }));
+  Ring.rotation.x = Math.PI / 2;
+  Mark.add(Ring);
+  if (Glow) Mark.add(glowSprite(Colour, Radius * 7, 0.55));
+  return markDebug(Mark);
+}
+const Plumb = (Height, Colour) => {
+  const Line = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, Height, 6), new THREE.MeshBasicMaterial({ color: Colour, transparent: true, opacity: 0.7 }));
+  Line.position.y = -Height / 2;
+  return markDebug(Line);
+};
 const ClassLabel = (Row, Values) =>
   Row.Component === "Socket" ? `${SOCKET_KIND[ComponentReader(Row, Values)("kind")]?.label || "Fixed"} socket` : COMPONENT_CLASSES[Row.Component]?.label || "User component";
 
 // Component classes the Add menu offers (native only; user components bring their own controls).
 const AddChoices = [
   ["Lights", [["SpotLight", null, "Spot Light", "Spot light pair"], ["PointLight", null, "Point Light", "Point light pair"]]],
-  ["Collision", [["BoxCollision", null, "Box Collision", "Box collision · blocks all"], ["SphereCollision", null, "Sphere Collision", "Sphere collision"]]],
   ["Sockets", ["fixed", "hinge", "slider", "spring", "ball", "spin", "tether", "dock"].map((Joint) => ["Socket", Joint, `${SOCKET_KIND[Joint]?.label || Joint} Socket`, `${SOCKET_KIND[Joint]?.label || Joint} socket`])],
 ];
-// A new component row under the vehicle, with a free id and name.
-function NewComponent(Rows, [Component, Joint, Label, Description]) {
+// A new component row with a free id and name, hung from the selected component (or the Body), like the Component Viewer's Add; on a
+// wheel's branch it belongs to that wheel.
+function NewComponent(Rows, [Component, Joint, Label, Description], Under) {
   const Slug = (Joint ? Joint + "-socket" : Label.toLowerCase().replace(/\s+/g, "-"));
   let Number_ = 1;
   while (Rows.some((Row) => Row.Id === `vehicle-${Slug}-${Number_}` || Row.Name === `${Label} ${Number_}`)) Number_++;
-  return { Id: `vehicle-${Slug}-${Number_}`, Name: `${Label} ${Number_}`, Panel: "vehicle-component", Parent: Owner, Component, Description, Icon: "vehicle-component-" + (Joint || ""), ...(Joint ? { Joint, Mount: 0 } : {}) };
+  const Holder = Rows.find((Row) => Row.Id === Under && Row.Id !== Owner && NativeClasses.has(Row.Component)) || Rows.find((Row) => Row.Id === "vehicle-body");
+  const Corner = Holder?.Corner;
+  return {
+    Id: `vehicle-${Slug}-${Number_}`,
+    Name: `${Label} ${Number_}`,
+    Panel: "vehicle-component",
+    Parent: Holder?.Id || Owner,
+    Component,
+    Description,
+    Icon: "vehicle-component-" + (Joint || ClassIconName[Component]),
+    ...(Joint ? { Joint, Mount: Corner === undefined ? 0 : +(VEHICLE_SHEET.axleMount[Corner][0] - Sheet.Middle).toFixed(3) } : {}),
+    ...(Corner === undefined ? {} : { Corner }),
+  };
 }
-const Triangles = 2924 + 4 * (3968 + 1568); // the ControlVehicle's body, four tyres and four rims
+const TriangleCount = () => {
+  const Count = ControlVehicleCentres().Triangles;
+  return Count.Body + 4 * (Count.Tyre + Count.Rim); // the ControlVehicle's body, four tyres and four rims
+};
 const Eye = ({ Off }) => (
   <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
     {Off ? (
@@ -74,20 +118,26 @@ const Eye = ({ Off }) => (
   </svg>
 );
 
-// The Components outliner (the Component Viewer's own layout): heading, counts, Add and search, the tree from the Origin through the Body
-// to the parts on it, actor components below a divider, then user components; the eye hides a component in the view.
+// The Components outliner (the Component Viewer's own layout): heading, counts, Add and search, then the tree from the Origin through the
+// Body to each wheel's suspension, steering, tyre and rim, each branch folding at its caret; user components follow; the eye hides a
+// component in the view.
 function ComponentOutliner({ Rows, Values, Hidden, Selected, Select, ToggleHidden, Icon, Add, Fit }) {
   const [Query, SetQuery] = useState("");
   const [Adding, ShowAdd] = useState(false);
-  const [Collapsed, Collapse] = useState(false);
-  const Mine = Rows.filter((Row) => Row.Parent === Owner);
+  const [Folded, Fold] = useState(() => new Set());
   const Vehicle = Rows.find((Row) => Row.Id === Owner);
-  const Body = Mine.find((Row) => Row.Component === "StaticMesh");
-  const Actor = Mine.filter((Row) => Row.Component === "VehicleMovement");
-  const Parts = Mine.filter((Row) => Row !== Body && NativeClasses.has(Row.Component) && Row.Component !== "VehicleMovement");
+  const Tree = VehicleDescendants(Rows);
+  const Mine = Tree.map((Each) => Each.Row);
   const Other = Mine.filter((Row) => !NativeClasses.has(Row.Component));
+  const HasBranch = (Row) => Mine.some((Each) => Each.Parent === Row.Id && NativeClasses.has(Each.Component));
   const Needle = Query.trim().toLowerCase();
   const Matches = (Row) => !Needle || Row.Name.toLowerCase().includes(Needle) || ClassLabel(Row, Values[Row.Id] || {}).toLowerCase().includes(Needle);
+  const Toggle = (Id) =>
+    Fold((Previous) => {
+      const Next = new Set(Previous);
+      Next.has(Id) ? Next.delete(Id) : Next.add(Id);
+      return Next;
+    });
   const Line = (Row, Depth, { Root = false, Caret = false, User = false } = {}) =>
     Matches(Row) && (
       <div
@@ -95,27 +145,32 @@ function ComponentOutliner({ Rows, Values, Hidden, Selected, Select, ToggleHidde
         role="treeitem"
         aria-selected={Selected === Row.Id}
         aria-level={Depth + 1}
-        aria-expanded={Caret ? !Collapsed : undefined}
+        aria-expanded={Caret ? !Folded.has(Row.Id) : undefined}
         tabIndex={0}
         className={"vcp-row" + (Selected === Row.Id ? " active" : "") + (Root ? " root" : "") + (Hidden[Row.Id] ? " off" : "")}
-        style={{ paddingLeft: 10 + (Needle ? 0 : Depth) * 16 }}
+        style={{ paddingLeft: 10 + (Needle ? 0 : Depth) * 16, "--vcp-depth": Needle ? 0 : Depth }}
         data-vcv-row={Row.Id}
+        data-depth={Depth}
         onClick={() => Select(Row.Id)}
         onDoubleClick={() => {
           Select(Row.Id);
           setTimeout(Fit, 40);
         }}
-        onKeyDown={(Event) => Event.key === "Enter" && Select(Row.Id)}
+        onKeyDown={(Event) => {
+          if (Event.key === "Enter") Select(Row.Id);
+          if (Caret && (Event.key === "ArrowLeft" || Event.key === "ArrowRight") && Folded.has(Row.Id) === (Event.key === "ArrowRight")) Toggle(Row.Id);
+        }}
       >
         <span
-          className="vcp-caret"
+          className={"vcp-caret" + (Caret ? " on" : "")}
+          data-vcp-caret={Caret ? Row.Id : undefined}
           onClick={(Event) => {
             if (!Caret) return;
             Event.stopPropagation();
-            Collapse(!Collapsed);
+            Toggle(Row.Id);
           }}
         >
-          {Caret ? (Collapsed ? "▸" : "▾") : ""}
+          {Caret ? (Folded.has(Row.Id) ? "▸" : "▾") : ""}
         </span>
         <span className="vcp-row-icon">
           <Icon Name={Root ? "vehicle-component-origin" : ComponentIcon(Row, Values[Row.Id] || {})} Size={18} />
@@ -125,9 +180,9 @@ function ComponentOutliner({ Rows, Values, Hidden, Selected, Select, ToggleHidde
             {Root ? "Origin" : Row.Name}
             {Root && <em className="vcp-root-tag">ROOT</em>}
           </b>
-          <small>{Root ? `${Vehicle?.Name || "Controlled Vehicle"} · ControlVehicle` : User ? "User component · its own controls" : Row.Component === "Socket" ? VehicleSummary(Row, Values[Row.Id] || {}) : `${ClassLabel(Row, Values[Row.Id] || {})} · ${VehicleSummary(Row, Values[Row.Id] || {})}`}</small>
+          <small>{Root ? `${Vehicle?.Name || "Controlled Vehicle"} · ControlVehicle` : User ? "User component · its own controls" : Row.Component === "Socket" ? VehicleSummary(Row, Values[Row.Id] || {}) : Row.Component === "StaticMesh" ? VehicleSummary(Row, Values[Row.Id] || {}) : `${ClassLabel(Row, Values[Row.Id] || {})} · ${VehicleSummary(Row, Values[Row.Id] || {})}`}</small>
         </span>
-        {!Root && !User && Row.Component !== "VehicleMovement" ? (
+        {!Root && !User ? (
           <button
             type="button"
             className={"vcp-eye" + (Hidden[Row.Id] ? " off" : "")}
@@ -145,6 +200,12 @@ function ComponentOutliner({ Rows, Values, Hidden, Selected, Select, ToggleHidde
         )}
       </div>
     );
+  // One branch: each native component under Id, then (unless folded) its own branch.
+  const Branch = (Id, Depth) =>
+    Mine.filter((Row) => Row.Parent === Id && NativeClasses.has(Row.Component)).flatMap((Row) => {
+      const Caret = HasBranch(Row);
+      return [Line(Row, Depth, { Caret }), ...(Caret && (Needle || !Folded.has(Row.Id)) ? Branch(Row.Id, Depth + 1) : [])];
+    });
   return (
     <section className="vcp-dock vcp-left" aria-label="Components">
       <div className="vcp-tabs">
@@ -167,7 +228,7 @@ function ComponentOutliner({ Rows, Values, Hidden, Selected, Select, ToggleHidde
             <svg viewBox="0 0 12 12" width="11" height="11"><path d="M1.5 9.5 6 2l4.5 7.5Z M3.75 5.75h4.5" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" /></svg>
           </span>
           <small>Triangles</small>
-          <strong>{(Triangles / 1000).toFixed(1)}k</strong>
+          <strong>{(TriangleCount() / 1000).toFixed(1)}k</strong>
         </div>
       </div>
       <div className="vcp-add-row">
@@ -192,7 +253,7 @@ function ComponentOutliner({ Rows, Values, Hidden, Selected, Select, ToggleHidde
                   role="menuitem"
                   className="vcp-menu-item"
                   onClick={() => {
-                    const Row = NewComponent(Rows, Choice);
+                    const Row = NewComponent(Rows, Choice, Selected);
                     Add(Row);
                     ShowAdd(false);
                     Select(Row.Id);
@@ -208,13 +269,7 @@ function ComponentOutliner({ Rows, Values, Hidden, Selected, Select, ToggleHidde
       )}
       <div className="vcp-tree" role="tree" aria-label="Vehicle components">
         {Vehicle && Line(Vehicle, 0, { Root: true })}
-        {Body && Line(Body, 1, { Caret: Parts.length > 0 })}
-        {!Collapsed && Parts.map((Row) => Line(Row, 2))}
-        <div className="vcp-divider">
-          <span>ACTOR COMPONENTS</span>
-          <span className="vcp-count">{Actor.length}</span>
-        </div>
-        {Actor.map((Row) => Line(Row, 0))}
+        {Branch(Owner, 1)}
         {Other.length > 0 && (
           <div className="vcp-divider">
             <span>USER COMPONENTS</span>
@@ -237,7 +292,7 @@ function ComponentOutliner({ Rows, Values, Hidden, Selected, Select, ToggleHidde
     </section>
   );
 }
-const ClassIconName = { SpotLight: "spot-light", PointLight: "point-light", BoxCollision: "box-collision", SphereCollision: "sphere-collision" };
+const ClassIconName = { SpotLight: "spot-light", PointLight: "point-light" };
 
 const Views = [
   ["Three-quarter", 38, 18],
@@ -255,9 +310,10 @@ function VehicleComponentView({ Rows, Values, Hidden, Selected, Select, Leave, R
   const [Simulating, Simulate] = useState(false);
   const [XRay, SetXRay] = useState(false);
   const [OnlySelected, SetOnlySelected] = useState(false);
+  const [ShowCentres, SetShowCentres] = useState(true);
   const [Readout, SetReadout] = useState("");
   const Vehicle = Rows.find((Row) => Row.Id === Owner);
-  const Mine = Rows.filter((Row) => Row.Parent === Owner);
+  const Mine = VehicleDescendants(Rows).map((Each) => Each.Row);
   const Paint = Vehicle ? PaintOf(Vehicle, Values[Owner] || {}) : "#c9d63a";
   Latest.current = { Rows, Values, Hidden, Selected, Select, Simulating, Mine };
 
@@ -288,12 +344,9 @@ function VehicleComponentView({ Rows, Values, Hidden, Selected, Select, Leave, R
     });
     const Car = new THREE.Group();
     Car.add(Parts.Root);
-    Parts.Body.userData.componentId = "vehicle-body";
-    for (const Wheel of Parts.Wheels) Wheel.Steer.userData.componentId = "vehicle-movement";
     const Gizmos = new THREE.Group();
-    const Colliders = new THREE.Group(); // collision volumes: picked only when nothing else is under the cursor
     const Content = new THREE.Group();
-    Content.add(Car, Gizmos, Colliders);
+    Content.add(Car, Gizmos);
     View.setContent(Content);
     const Box = new THREE.Box3(new THREE.Vector3(-Sheet.Length / 2, 0, -Sheet.Width / 2), new THREE.Vector3(Sheet.Length / 2, Sheet.Height, Sheet.Width / 2)).expandByScalar(0.35);
     // Fits the whole vehicle in view.
@@ -311,16 +364,16 @@ function VehicleComponentView({ Rows, Values, Hidden, Selected, Select, Leave, R
       FitView(38, 18, false);
     });
     Refit.observe(Host.current);
-    const Built = { View, Canvas, Parts, Car, Gizmos, Colliders, Box, Sockets: new Map(), Motions: new Map(), Anchors: new Map(), Drive: { T: 0, Speed: 0, Accel: 0, Distance: 0 }, Halo: null, Coats, FitView };
+    const Built = { View, Canvas, Parts, Car, Gizmos, Box, Sockets: new Map(), Motions: new Map(), Anchors: new Map(), WheelMarks: [], Drive: { T: 0, Speed: 0, Accel: 0, Distance: 0 }, Halo: null, Coats, FitView };
     Scene.current = Built;
     Canvas.FrontierView = View; // for the checks
-    // Click (no drag) picks a component; the collision shell only when nothing else is under the cursor.
+    // Click (no drag) picks a component.
     let Down = null;
     Canvas.addEventListener("pointerdown", (Event) => (Down = { X: Event.clientX, Y: Event.clientY, Button: Event.button }));
     Canvas.addEventListener("pointerup", (Event) => {
       if (!Down || Down.Button !== 0 || Math.hypot(Event.clientX - Down.X, Event.clientY - Down.Y) > 4) return;
-      // Gizmos first (they sit inside the body and wheels), then the body and wheels, then the collision shell.
-      const Hit = View.pick(Event.clientX, Event.clientY, [Gizmos]) || View.pick(Event.clientX, Event.clientY, [Car]) || View.pick(Event.clientX, Event.clientY, [Colliders]);
+      // Gizmos first (they sit inside the body and wheels), then the body, tyres and rims.
+      const Hit = View.pick(Event.clientX, Event.clientY, [Gizmos]) || View.pick(Event.clientX, Event.clientY, [Car]);
       Latest.current.Select(Hit ? Hit.componentId : Owner);
     });
     // Each tick: the drive cycle (Simulate), each socket stepped and posed on the wheels it holds, lamps, the tag and the readout.
@@ -340,7 +393,7 @@ function VehicleComponentView({ Rows, Values, Hidden, Selected, Select, Leave, R
       for (const Wheel of Wheels) {
         Wheel.Steer.quaternion.identity();
         Wheel.Lift.position.set(0, 0, 0);
-        if (Now.Simulating) Wheel.Spin.rotation.z = -Drive.Distance / (Built.TyreRadius || Sheet.TyreRadius);
+        if (Now.Simulating) Wheel.Spin.rotation.z = -Drive.Distance / Sheet.TyreRadius;
       }
       for (const [Id, Socket] of Built.Sockets) {
         let Motion = Built.Motions.get(Id);
@@ -349,9 +402,8 @@ function VehicleComponentView({ Rows, Values, Hidden, Selected, Select, Leave, R
         const Pose = socketPose(Socket.P, Motion);
         for (const Look of Socket.Looks) Look.update(Motion, Pose);
         Socket.Motion = Motion;
-        if (!Socket.Axle) continue;
-        // A wheel socket moves the wheels of its axle: a hinge (or ball) turns them, a spring (or slider) lifts them.
-        for (const Wheel of Wheels.filter((Each) => Each.Front === (Socket.Axle === "front"))) {
+        // A socket moves the wheels hung below it in the tree: a hinge (or ball) turns them, a spring (or slider) lifts them.
+        for (const Wheel of Socket.Corners.map((Corner) => Wheels[Corner])) {
           if (Socket.P.kind === "hinge" || Socket.P.kind === "ball") Wheel.Steer.quaternion.multiply(new THREE.Quaternion().fromArray(Pose.rotation));
           else if (Socket.P.kind === "spring" || Socket.P.kind === "slider") Wheel.Lift.position.add(new THREE.Vector3().fromArray(Pose.offset));
         }
@@ -436,19 +488,22 @@ function VehicleComponentView({ Rows, Values, Hidden, Selected, Select, Leave, R
   }, [Paint]);
 
   // The components: rebuilt whenever one of them, the selection or the display options change.
-  const Signature = JSON.stringify([Mine.map((Row) => [Row.Id, Row.Component, Row.Mount, Values[Row.Id], Hidden[Row.Id]]), Selected, OnlySelected, XRay]);
+  const Signature = JSON.stringify([Mine.map((Row) => [Row.Id, Row.Parent, Row.Component, Row.Mount, Row.Corner, Row.Asset, Values[Row.Id], Hidden[Row.Id]]), Selected, OnlySelected, XRay, ShowCentres]);
   useEffect(() => {
     const Built = Scene.current;
     if (!Built) return;
-    const { View, Parts, Gizmos, Colliders } = Built;
-    for (const Group of [Gizmos, Colliders])
-      for (const Piece of [...Group.children]) {
-        Group.remove(Piece);
-        Piece.traverse((Each) => {
-          Each.geometry?.dispose?.();
-          if (Each.material && !Each.material.isShaderMaterial) (Array.isArray(Each.material) ? Each.material : [Each.material]).forEach((Material) => Material.dispose());
-        });
-      }
+    const { View, Parts, Gizmos } = Built;
+    const Clear = (Piece) => {
+      Piece.parent?.remove(Piece);
+      Piece.traverse((Each) => {
+        Each.geometry?.dispose?.();
+        if (Each.material && !Each.material.isShaderMaterial) (Array.isArray(Each.material) ? Each.material : [Each.material]).forEach((Material) => Material.dispose());
+      });
+    };
+    [...Gizmos.children].forEach(Clear);
+    Built.WheelMarks.forEach(Clear);
+    Built.WheelMarks = [];
+    Built.Massed = [];
     Built.Halo?.();
     Built.Halo = null;
     Built.Sockets.clear();
@@ -469,15 +524,57 @@ function VehicleComponentView({ Rows, Values, Hidden, Selected, Select, Leave, R
     };
     const OnTop = (Part) => Part.traverse((Each) => Each.layers.set(1));
 
-    // Body.
-    const BodyRow = Mine.find((Row) => Row.Component === "StaticMesh");
-    Parts.Body.visible = !BodyRow || !Hidden[BodyRow.Id];
-    if (BodyRow) {
-      const V = ComponentReader(BodyRow, Values[BodyRow.Id] || {});
-      Parts.Body.castShadow = !!V("castShadow");
-      Built.Anchors.set(BodyRow.Id, [0, Sheet.Height + 0.15, 0]);
-      Built.Readouts[BodyRow.Id] = `${V("lod") < 0 ? "automatic LOD" : "LOD " + V("lod")} · ${V("collisionPreset")}${V("castShadow") ? " · casts shadow" : ""}`;
-      if (Parts.Body.visible) Drawn.push(BodyRow.Id);
+    // Static meshes: the Body, each Wheel's tyre and its Rim, each its own component (a mesh with no component is not drawn).
+    const Meshes = Mine.filter((Row) => Row.Component === "StaticMesh");
+    const MeshOf = (Row) => (Row.Asset === "Tyre" || Row.Asset === "Rim" ? Parts.Wheels[Row.Corner ?? 0]?.[Row.Asset] : Parts.Body);
+    const Centres = ControlVehicleCentres();
+    for (const Part of [Parts.Body, ...Parts.Wheels.flatMap((Wheel) => [Wheel.Tyre, Wheel.Rim])]) {
+      Part.visible = false;
+      Part.userData.componentId = undefined;
+    }
+    let Weight = 0;
+    const Balance = [0, 0, 0];
+    for (const Row of Meshes) {
+      const Part = MeshOf(Row);
+      if (!Part) continue;
+      const V = ComponentReader(Row, Values[Row.Id] || {});
+      const Mass = MeshMass(Row, Values[Row.Id] || {});
+      const Centre = MeshCentre(Row);
+      const Wheel = Row.Asset === "Tyre" || Row.Asset === "Rim" ? Parts.Wheels[Row.Corner ?? 0] : null;
+      Weight += Mass;
+      Centre.forEach((Each, Axis) => (Balance[Axis] += Each * Mass));
+      Part.visible = !Hidden[Row.Id];
+      Part.castShadow = !!V("castShadow");
+      Part.userData.componentId = Row.Id;
+      Built.Anchors.set(Row.Id, Wheel ? [Centre[0], Sheet.TyreRadius * 2 + 0.2, Centre[2]] : [0, Sheet.Height + 0.15, 0]);
+      Built.Readouts[Row.Id] = `${Math.round(Mass)} kg · centre of mass ${Centre.map((Each) => Each.toFixed(2)).join(", ")} m`;
+      // For the checks: where a click lands on this mesh (a tyre's sidewall low and ahead, a rim's spokes, the body's roof).
+      const Outward = Math.sign(Centre[2]) || 1;
+      if (!Built.Picks.has(Row.Id)) Built.Picks.set(Row.Id, Row.Asset === "Tyre" ? [Centre[0] + 0.3, Centre[1] - 0.3, Centre[2] + Outward * 0.12] : Row.Asset === "Rim" ? [Centre[0] - 0.16, Centre[1] + 0.16, Centre[2] + Outward * 0.1] : [-0.4, Sheet.Height - 0.04, 0]);
+      if (!Part.visible) continue;
+      Drawn.push(Row.Id);
+      // Its centre of mass: a wheel part's rides in the wheel (it turns and lifts with it), the body's is fixed; the selected one gets a
+      // plumb line to the ground.
+      if (!ShowCentres || (OnlySelected && Selected !== Row.Id && Selected !== Owner)) continue;
+      const Chosen = Selected === Row.Id;
+      Built.Massed.push(Row.Id);
+      const Mark = ComMark(Wheel ? (Row.Asset === "Tyre" ? 0.055 : 0.042) : 0.085, Chosen ? Accent : ComColour, Chosen);
+      OnTop(Mark);
+      View.xray = true;
+      if (Wheel) {
+        Mark.position.fromArray(Centres[Row.Asset]);
+        Wheel.Face.add(Mark);
+        Built.WheelMarks.push(Mark);
+      } else {
+        Mark.position.fromArray(Centre);
+        Gizmos.add(Mark);
+      }
+      if (Chosen) {
+        const Line = Plumb(Centre[1], Accent);
+        Line.position.set(Centre[0], Centre[1] / 2, Centre[2]);
+        OnTop(Line);
+        Gizmos.add(Line);
+      }
     }
     // X-ray: the body as glass, so what is inside it shows.
     const Bodywork = Array.isArray(Parts.Body.material) ? Parts.Body.material : [Parts.Body.material];
@@ -487,78 +584,33 @@ function VehicleComponentView({ Rows, Values, Hidden, Selected, Select, Leave, R
       Material.depthWrite = !XRay;
       Material.needsUpdate = true;
     }
-
-    // Vehicle Movement: tyre radius, centre of mass, load per tyre.
-    const MovementRow = Mine.find((Row) => Row.Component === "VehicleMovement");
-    Built.TyreRadius = Sheet.TyreRadius;
-    for (const Wheel of Parts.Wheels) {
-      Wheel.Size.scale.setScalar(1);
-      Wheel.Size.position.y = 0;
-    }
-    if (MovementRow) {
-      const V = ComponentReader(MovementRow, Values[MovementRow.Id] || {});
-      const Radius = +V("tyreRadius") || Sheet.TyreRadius;
-      Built.TyreRadius = Radius;
-      for (const Wheel of Parts.Wheels) {
-        Wheel.Size.scale.setScalar(Radius / Sheet.TyreRadius);
-        Wheel.Size.position.y = Radius - Sheet.TyreRadius;
-      }
-      const Mass = +V("mass"), Share = +V("frontWeight") / 100, Height = +V("comHeight");
-      const Wheelbase = Sheet.FrontAxle - Sheet.RearAxle;
-      const Centre = [Sheet.RearAxle + Wheelbase * Share, Height, 0];
-      const Loads = Parts.Wheels.map((Wheel) => ((Wheel.Front ? Share : 1 - Share) * Mass * Gravity) / 2);
-      Built.Anchors.set(MovementRow.Id, Centre);
-      Built.Readouts[MovementRow.Id] = `${Math.round(Mass)} kg · ${(Share * 100).toFixed(1)} % front · CoM ${Height.toFixed(2)} m · ${(Loads[0] / 1000).toFixed(2)} / ${(Loads[2] / 1000).toFixed(2)} kN per tyre`;
-      if (Shown(MovementRow)) {
-        Drawn.push(MovementRow.Id);
-        const Mark = new THREE.Group();
-        const Checker = document.createElement("canvas");
-        Checker.width = Checker.height = 64;
-        const Brush = Checker.getContext("2d");
-        Brush.fillStyle = "#f2f2f2";
-        Brush.fillRect(0, 0, 64, 64);
-        Brush.fillStyle = "#16171b";
-        Brush.fillRect(0, 0, 16, 32);
-        Brush.fillRect(32, 0, 16, 32);
-        Brush.fillRect(16, 32, 16, 32);
-        Brush.fillRect(48, 32, 16, 32);
-        const Texture = new THREE.CanvasTexture(Checker);
-        Texture.colorSpace = THREE.SRGBColorSpace;
-        const Ball = new THREE.Mesh(new THREE.SphereGeometry(0.13, 24, 16), new THREE.MeshBasicMaterial({ map: Texture }));
-        Mark.add(Ball, glowSprite(Selected === MovementRow.Id ? Accent : "#7fd1ff", 0.7, 0.5));
-        // The plumb line to the ground and the wheelbase share.
-        const Plumb = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, Height, 6), new THREE.MeshBasicMaterial({ color: "#7fd1ff", transparent: true, opacity: 0.7 }));
-        Plumb.position.y = -Height / 2;
-        Mark.add(Plumb);
-        Mark.position.set(...Centre);
-        markDebug(Mark);
-        // Inside the body, so it always draws on top.
-        OnTop(Mark);
-        View.xray = true;
-        Gizmos.add(Mark);
-        Pick(MovementRow.Id, Centre, 0.25);
-        // Tyre loads: a disc on the ground under each wheel, sized by its load.
-        Parts.Wheels.forEach((Wheel, Index) => {
-          const Disc = new THREE.Mesh(
-            new THREE.CircleGeometry(0.18 + (Loads[Index] / 4000) * 0.32, 40),
-            new THREE.MeshBasicMaterial({ color: Selected === MovementRow.Id ? Accent : "#7fd1ff", transparent: true, opacity: 0.32, depthWrite: false }),
-          );
-          Disc.rotation.x = -Math.PI / 2;
-          Disc.position.set(Wheel.Mount.x, 0.006, Wheel.Mount.z);
-          markDebug(Disc);
-          Gizmos.add(Disc);
-        });
-      }
+    // The whole vehicle's centre of mass (every mesh weighed by its mass), at the Origin's selection or with every mark showing.
+    const Whole = Weight > 0 ? Balance.map((Each) => Each / Weight) : [0, 0, 0];
+    Built.Whole = { Weight, Centre: Whole };
+    Built.Canvas.dataset.massMarks = Built.Massed.join(" ");
+    Built.Canvas.dataset.wholeMass = Weight.toFixed(0) + " " + Whole.map((Each) => Each.toFixed(2)).join(",");
+    if (ShowCentres && Weight > 0 && (!OnlySelected || Selected === Owner)) {
+      const Chosen = Selected === Owner;
+      const Mark = ComMark(0.12, Chosen ? Accent : "#ffffff", true);
+      Mark.position.fromArray(Whole);
+      Mark.add(Plumb(Whole[1], Chosen ? Accent : "#ffffff"));
+      OnTop(Mark);
+      View.xray = true;
+      Gizmos.add(Mark);
+      Pick(Owner, Whole, 0.16);
     }
 
     // Sockets.
     for (const Row of Mine.filter((Each) => Each.Component === "Socket")) {
       const P = SocketParameters(Row, Values[Row.Id] || {});
-      const Found = SocketAnchors(P.Mount);
-      const Axle = Found.Axle;
+      const OnWheel = Row.Corner !== undefined && !!VEHICLE_SHEET.axleMount[Row.Corner];
       // On a wheel, the spring sits at the strut top above the wheel centre (the hinge at the wheel centre), so both can be clicked.
-      const Points = Found.Points.map(([X, Y, Z]) => [X, Y + (Axle && P.kind === "spring" ? 0.42 : 0), Z]);
-      const Socket = { P, Axle, Points, Looks: [] };
+      const At = SocketPoint(P.Mount, OnWheel ? Row.Corner : undefined);
+      const Points = [[At[0], At[1] + (OnWheel && P.kind === "spring" ? 0.42 : 0), At[2]]];
+      // The wheels it moves: those whose tyre or rim hangs below it.
+      const Corners = [...new Set(VehicleDescendants(Rows, Row.Id).map((Each) => Each.Row).filter((Each) => Each.Component === "StaticMesh" && Each.Corner !== undefined).map((Each) => Each.Corner))];
+      const Axle = OnWheel;
+      const Socket = { P, Axle, Points, Corners, Looks: [] };
       Built.Sockets.set(Row.Id, Socket);
       Built.Anchors.set(Row.Id, [Points[Points.length - 1][0], Points[Points.length - 1][1] + 0.45, Points[Points.length - 1][2]]);
       if (!Shown(Row)) continue;
@@ -575,33 +627,9 @@ function VehicleComponentView({ Rows, Values, Hidden, Selected, Select, Leave, R
         }
         Gizmos.add(Look.group);
         Socket.Looks.push(Look);
-        Pick(Row.Id, At, Axle ? 0.36 : 0.3);
+        // On a wheel the pick stays small, so the tyre and rim around it can be clicked too.
+        Pick(Row.Id, At, Axle ? (P.kind === "spring" ? 0.2 : 0.15) : 0.3);
       }
-    }
-
-    // Collision.
-    for (const Row of Mine.filter((Each) => /Collision$/.test(Each.Component))) {
-      const V = ComponentReader(Row, Values[Row.Id] || {});
-      const Trigger = !!V("trigger");
-      const Centre = [0, (Sheet.Clearance + Sheet.Height) / 2, 0];
-      const Shape = Row.Component === "BoxCollision" ? { type: "box", centre: [0, 0, 0], half: (V("extent") || [0.5, 0.5, 0.5]).map(Number) } : { type: "sphere", centre: [0, 0, 0], radius: +V("radius") || 0.5 };
-      Built.Anchors.set(Row.Id, Shape.type === "box" ? [Shape.half[0] * 0.6, Centre[1] + Shape.half[1] + 0.1, -Shape.half[2]] : [0, Centre[1] + Shape.radius, 0]);
-      Built.Readouts[Row.Id] = (Shape.type === "box" ? Shape.half.map((Each) => (Each * 2).toFixed(2)).join(" × ") + " m" : `r ${Shape.radius.toFixed(2)} m`) + (Trigger ? " · overlap only" : " · blocks all");
-      if (!Shown(Row)) continue;
-      Drawn.push(Row.Id);
-      const Colour = Selected === Row.Id ? Accent : Trigger ? "#ffb15a" : "#46d267";
-      // Faint unless selected, so it does not cover the vehicle.
-      const Volume = fieldShell(Shape, Colour, Selected === Row.Id ? {} : { base: 0.004, rim: 0.11, scan: 0.04, border: 0.2 });
-      Volume.position.set(...Centre);
-      Gizmos.add(Volume);
-      // A click on the shell (where nothing else is) selects it.
-      const Target = new THREE.Mesh(
-        Shape.type === "box" ? new THREE.BoxGeometry(Shape.half[0] * 2, Shape.half[1] * 2, Shape.half[2] * 2) : new THREE.SphereGeometry(Shape.radius, 16, 12),
-        new THREE.MeshBasicMaterial({ visible: false, side: THREE.DoubleSide }),
-      );
-      Target.position.set(...Centre);
-      Target.userData.componentId = Row.Id;
-      Colliders.add(Target);
     }
 
     // Lights: real lights at the lamps, a beam (spots) or a glow (points) in their colour.
@@ -642,14 +670,12 @@ function VehicleComponentView({ Rows, Values, Hidden, Selected, Select, Leave, R
     const Origin = anchorMark(0.3, Selected === Owner ? Accent : "#e8e8e8");
     Gizmos.add(Origin);
     Built.Anchors.set(Owner, [0, Sheet.Height + 0.4, 0]);
-    Built.Readouts[Owner] = `${Sheet.Length.toFixed(2)} × ${Sheet.Width.toFixed(2)} × ${Sheet.Height.toFixed(2)} m · ${Mine.length} components`;
+    Built.Readouts[Owner] = `${Sheet.Length.toFixed(2)} × ${Sheet.Width.toFixed(2)} × ${Sheet.Height.toFixed(2)} m · ${Math.round(Weight).toLocaleString("en-US")} kg · centre of mass ${Whole.map((Each) => Each.toFixed(2)).join(", ")} m`;
 
-    // The selected body or wheels glow amber toward their silhouette.
-    if (Selected === BodyRow?.Id && Parts.Body.visible) Built.Halo = addHalo(Parts.Body);
-    if (Selected === MovementRow?.Id) {
-      const Undo = Parts.Wheels.map((Wheel) => addHalo(Wheel.Steer));
-      Built.Halo = () => Undo.forEach((Each) => Each());
-    }
+    // The selected mesh glows amber toward its silhouette.
+    const SelectedMesh = Meshes.find((Row) => Row.Id === Selected);
+    const Glowing = SelectedMesh && MeshOf(SelectedMesh);
+    if (Glowing?.visible) Built.Halo = addHalo(Glowing);
     Built.FitSelection = () => {
       const At = Built.Anchors.get(Latest.current.Selected);
       if (!At || Latest.current.Selected === Owner) return Built.FitView(View.rig.yaw / Rad, View.rig.pitch / Rad);
@@ -697,6 +723,9 @@ function VehicleComponentView({ Rows, Values, Hidden, Selected, Select, Leave, R
         <button type="button" className="vcp-tool" aria-pressed={OnlySelected} onClick={() => SetOnlySelected(!OnlySelected)} title="Draw only the selected component">
           {OnlySelected ? "Selected only" : "All components"}
         </button>
+        <button type="button" className="vcp-tool" aria-pressed={ShowCentres} onClick={() => SetShowCentres(!ShowCentres)} title="Show each mesh's centre of mass and the whole vehicle's" data-vcp-centres>
+          Centre of mass
+        </button>
         <button type="button" className="vcp-tool round" onClick={() => Scene.current?.FitSelection?.()} aria-label="Fit selection" title="Fit the selected component in view (F)">
           <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
             <path d="M2 5.5V2h3.5M10.5 2H14v3.5M14 10.5V14h-3.5M5.5 14H2v-3.5" />
@@ -706,7 +735,7 @@ function VehicleComponentView({ Rows, Values, Hidden, Selected, Select, Leave, R
       <div className="vcp-well" ref={Host}>
         <div className="vcp-readout" aria-hidden="true">
           <span>tris</span>
-          <b>{(Triangles / 1000).toFixed(1)}k</b>
+          <b>{(TriangleCount() / 1000).toFixed(1)}k</b>
           <span>parts</span>
           <b>{Count} components</b>
           <span>select</span>
@@ -732,7 +761,7 @@ export function VehicleComponentPanel({ Rows, Values, Hidden, Focus, ToggleHidde
   useEffect(() => {
     if (Focus?.Id) Select(Focus.Id);
   }, [Focus?.Stamp]);
-  const Subject = Rows.find((Row) => Row.Id === Selected && InVehicle(Row)) || Rows.find((Row) => Row.Id === Owner);
+  const Subject = Rows.find((Row) => Row.Id === Selected && InVehicleTree(Rows, Row)) || Rows.find((Row) => Row.Id === Owner);
   useEffect(() => {
     if (Subject && Subject.Id !== Selected) Select(Subject.Id);
   }, [Subject?.Id]);

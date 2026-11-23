@@ -17,6 +17,8 @@
 //     around the Showcase, aimed at it, with a frustum out to its subject distance from its focal length and sensor.
 //   • Vehicles: the Vehicles folder's models (VehicleAssets.js) in their paint, parked in a row behind the Showcase, nose out at an
 //     angle; lit by the sun and casting shadows like the shapes. They are not part of the opening framing (the Showcase is).
+//   • Lights: the Lighting folder's lights (not the Environment Light, which is the sky) as fixtures on stands, booms or truss masts,
+//     each lighting the scene with its own colour, strength and cone where its inspector puts and aims it (LightProps.js).
 //   • Lens Flare: the Lens Flare object put together from its baked atlas (LensFlare.js) on a 2D layer over the view, where the sun is on
 //     screen and not hidden behind a shape.
 // Click an object to select it (Ctrl or Shift adds it). Drag to orbit, right-drag or Shift-drag to pan, wheel to zoom; F frames the
@@ -34,6 +36,7 @@ import { CameraAsset, CameraBodyOf, StudioLit } from "./EditorAssets.js";
 import { VehicleAsset } from "./VehicleAssets.js";
 import { VehicleAssetPanel, PaintOf } from "./VehicleAssetInspector.jsx";
 import { IsEditorCamera } from "./ScenePolicy.js";
+import { LightPlacements, LightProp } from "./LightProps.js";
 
 export const ShowcaseSpacing = 1.8;
 const Rad = Math.PI / 180;
@@ -185,6 +188,7 @@ export default function Viewport3D({ Rows, Values, Hidden, Selected, Picked = []
   const Placed = Placements(Rows, Values, Hidden);
   const Posed = CameraPlacements(Rows, Values, Hidden);
   const Parked = VehiclePlacements(Rows, Values, Hidden);
+  const Lamps = LightPlacements(Rows, Values, (Row) => HiddenUp(Rows, Hidden, Row));
 
   // One renderer for the viewport's life.
   useEffect(() => {
@@ -262,7 +266,8 @@ export default function Viewport3D({ Rows, Values, Hidden, Selected, Picked = []
             const Side = new THREE.Vector3().crossVectors(Toward, Math.abs(Toward.y) > 0.98 ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 1, 0)).normalize();
             const Lift = new THREE.Vector3().crossVectors(Side, Toward);
             const Reach = Math.tan(SunAngularRadius * 4);
-            const Targets = Built?.Group ? Built.Group.children : [];
+            // Light fixtures are editor props (where the lights are), not scene geometry, so they don't hide the sun.
+            const Targets = Built?.Group ? Built.Group.children.filter((Each) => !Each.userData.light) : [];
             for (const [A, B] of [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]]) {
               const Ray = Toward.clone().addScaledVector(Side, A * Reach).addScaledVector(Lift, B * Reach).normalize();
               Caster.set(View.camera.position, Ray);
@@ -328,6 +333,14 @@ export default function Viewport3D({ Rows, Values, Hidden, Selected, Picked = []
           Centres[Each.userData.componentId] = [+((At.x + 1) / 2).toFixed(4), +((1 - At.y) / 2).toFixed(4)];
         }
         Canvas.dataset.centres = JSON.stringify(Centres);
+        // Where each light prop's head lands (fractions), the same way.
+        const Heads = {};
+        for (const Each of View.content.children[0]?.children || []) {
+          if (!Each.userData.light) continue;
+          const At = Each.position.clone().setY(Each.userData.light.Height).project(View.camera);
+          Heads[Each.userData.componentId] = [+((At.x + 1) / 2).toFixed(4), +((1 - At.y) / 2).toFixed(4)];
+        }
+        Canvas.dataset.lightHeads = JSON.stringify(Heads);
       });
       // Click (no drag) picks.
       let Down = null;
@@ -434,7 +447,7 @@ export default function Viewport3D({ Rows, Values, Hidden, Selected, Picked = []
       const Own = Values[Row.Id] || {};
       const Material = ResolveMaterial(Own).Channels;
       return [Row.Id, Along, Position, Rotation, Scale, Object.entries(Own).filter(([Key]) => Key.startsWith("Geometry ")), Material.colour?.Fill, Material.roughness?.Fill, Material.metallic?.Fill];
-    }).concat(Posed.map(({ Row, ...Pose }) => [Row.Id, Pose]), Parked.map(({ Row, ...Pose }) => [Row.Id, Pose])),
+    }).concat(Posed.map(({ Row, ...Pose }) => [Row.Id, Pose]), Parked.map(({ Row, ...Pose }) => [Row.Id, Pose]), Lamps.map(({ Row, Type, Props }) => [Row.Id, Type, Props])),
   );
   useEffect(() => {
     const Built = Scene.current;
@@ -497,6 +510,13 @@ export default function Viewport3D({ Rows, Values, Hidden, Selected, Picked = []
       Asset.userData.asset = true;
       Group.add(Asset);
     }
+    // The Lighting folder's lights, each a fixture on its stand with its own light (LightProps.js).
+    for (const { Row, Type, Props } of Lamps) {
+      const { Group: Prop } = LightProp(Type, Props);
+      Prop.userData.componentId = Row.Id;
+      Prop.userData.asset = true;
+      Group.add(Prop);
+    }
     Built.View.setContent(Group);
     if (!Built.Framed && !Bounds.isEmpty()) {
       Built.Bounds = Bounds.clone().expandByScalar(0.45); // room for the workspace rail on the left
@@ -519,6 +539,7 @@ export default function Viewport3D({ Rows, Values, Hidden, Selected, Picked = []
     Built.Touch();
     Built.Canvas.dataset.objects = String(Placed.length);
     Built.Canvas.dataset.vehicles = Parked.map(({ Row, Model }) => Row.Id + ":" + Model).join(" ");
+    Built.Canvas.dataset.lights = Group.children.filter((Each) => Each.userData.light).map((Each) => Each.userData.componentId + ":" + Each.userData.light.Type + ":" + Each.userData.light.Candela).join(" ");
     Built.Canvas.dataset.cameras = Posed.map(({ Row, Body, Tripod }) => Row.Id + ":" + Body + (Tripod ? "" : ":free")).join(" ");
   }, [ShapeKey, SkyKey]);
 
@@ -542,7 +563,8 @@ export default function Viewport3D({ Rows, Values, Hidden, Selected, Picked = []
         Mesh.updateMatrixWorld(true);
         const Inverse = Mesh.matrixWorld.clone().invert();
         Mesh.traverse((Part) => {
-          if (Part.isMesh) Box.union(new THREE.Box3().setFromObject(Part).applyMatrix4(Inverse));
+          // Its solid parts only (not a light's beam, glow or invisible click target).
+          if (Part.isMesh && !Part.userData.debug && Part.material?.visible !== false) Box.union(new THREE.Box3().setFromObject(Part).applyMatrix4(Inverse));
         });
         Outline = new THREE.BoxGeometry(...Box.getSize(new THREE.Vector3()).toArray());
         Outline.translate(...Box.getCenter(new THREE.Vector3()).toArray());

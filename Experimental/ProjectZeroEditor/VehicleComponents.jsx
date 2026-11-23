@@ -1,27 +1,42 @@
 //============================================================================================================================================
 //                                                          VEHICLECOMPONENTS.JSX
 //============================================================================================================================================
-// 🚗 The Vehicle folder: the Component Viewer's ControlVehicle class (Vehicle Movement, Static Mesh body, Sockets, Collision, Lights) as
-// outliner rows with their own inspectors. Component data, defaults and socket parameters come straight from
+// 🚗 The Vehicle folder: the Component Viewer's ControlVehicle class as outliner rows with their own inspectors, in the Component Viewer's
+// own tree (Follow-up 63): the Body, and on it each wheel's Suspension (Spring socket), the front wheels' Steer (Hinge socket), the Wheel
+// (the tyre mesh) and its Rim; the Tow Hitch and the lights. Collision belongs to the object and movement to the game, so neither is a
+// component here. Component data, defaults and socket parameters come straight from
 // Experimental/ComponentViewer (Blueprint.js, Sockets.js); the icons are the baked EngineContent set. Browser authoring only.
 
 import React, { useRef } from "react";
 import { COMPONENT_CLASSES, VEHICLE_SHEET, createComponent } from "../ComponentViewer/Blueprint.js";
+import { ControlVehicleCentres, PartCentre } from "./ControlVehicleModel.js";
 import { SOCKET_KINDS, SOCKET_KIND, SOCKET_FIELDS, SOCKET_PARAMS, DRIVES, DOCK_COLORS, socketDefaults, poseLabel, createSocketState, socketReadout } from "../ComponentViewer/Sockets.js";
 
 export const VehiclePanel = "vehicle-component";
 export const VehicleSheet = [];
 
-// Id, name, component class, baked icon, description, extra row fields.
+// Id, name, component class, baked icon, description, extra row fields (Parent is the component it hangs from). Each wheel hangs from a
+// Spring socket at its axle mount, the front ones turn on a Hinge socket between the spring and the wheel, and the rim sits in the tyre,
+// as in BP_ControlVehicle (Experimental/ComponentViewer/Main.js). Masses: the body 1,220 kg, each tyre 20 kg, each rim 9 kg.
+export const VehicleOwner = "vehicle";
+export const Corners = ["FL", "FR", "RL", "RR"]; // VEHICLE_SHEET.axleMount order
+const Middle = (VEHICLE_SHEET.axleMount[0][0] + VEHICLE_SHEET.axleMount[2][0]) / 2;
+const CornerMount = (Corner) => +(VEHICLE_SHEET.axleMount[Corner][0] - Middle).toFixed(3);
 const Components = [
-  ["vehicle-movement", "Vehicle Movement", "VehicleMovement", "vehicle-component-movement", "Chassis, suspension, powertrain and aero"],
-  ["vehicle-body", "Body", "StaticMesh", "vehicle-component-body", "Static Mesh · body shell"],
-  ["vehicle-suspension", "Front Suspension", "Socket", "vehicle-component-spring", "Spring socket · suspension strut", { Joint: "spring", Mount: 1.7 }],
-  ["vehicle-steering", "Steering", "Socket", "vehicle-component-hinge", "Hinge socket · steering knuckle", { Joint: "hinge", Mount: 1.7 }],
-  ["vehicle-tow", "Tow Hitch", "Socket", "vehicle-component-dock", "Dock socket · trailer coupling", { Joint: "dock", Mount: -3.2 }],
-  ["vehicle-collision", "Chassis Collision", "BoxCollision", "vehicle-component-box-collision", "Box collision · blocks all"],
-  ["vehicle-headlights", "Headlights", "SpotLight", "vehicle-component-spot-light", "Spot light pair"],
-  ["vehicle-brake", "Brake Lights", "PointLight", "vehicle-component-point-light", "Point light pair · rear"],
+  ["vehicle-body", "Body", "StaticMesh", "vehicle-component-body", "Static Mesh · ControlVehicle Body", { Parent: VehicleOwner, Asset: "Body", Mass: 1220 }],
+  ...Corners.flatMap((Name, Corner) => {
+    const Slug = Name.toLowerCase(), Front = Corner < 2, Mount = CornerMount(Corner);
+    const Holder = Front ? `vehicle-steer-${Slug}` : `vehicle-suspension-${Slug}`;
+    return [
+      [`vehicle-suspension-${Slug}`, `Suspension${Name}`, "Socket", "vehicle-component-spring", "Spring socket · suspension strut", { Parent: "vehicle-body", Joint: "spring", Mount, Corner }],
+      ...(Front ? [[`vehicle-steer-${Slug}`, `Steer${Name}`, "Socket", "vehicle-component-hinge", "Hinge socket · steering knuckle", { Parent: `vehicle-suspension-${Slug}`, Joint: "hinge", Mount, Corner }]] : []),
+      [`vehicle-wheel-${Slug}`, `Wheel${Name}`, "StaticMesh", "vehicle-component-tyre", "Static Mesh · ControlVehicle Tyre", { Parent: Holder, Asset: "Tyre", Mass: 20, Corner }],
+      [`vehicle-rim-${Slug}`, `Wheel${Name}Rim`, "StaticMesh", "vehicle-component-rim", "Static Mesh · ControlVehicle Rim", { Parent: `vehicle-wheel-${Slug}`, Asset: "Rim", Mass: 9, Corner }],
+    ];
+  }),
+  ["vehicle-tow", "Tow Hitch", "Socket", "vehicle-component-dock", "Dock socket · trailer coupling", { Parent: "vehicle-body", Joint: "dock", Mount: -3.2 }],
+  ["vehicle-headlights", "Headlights", "SpotLight", "vehicle-component-spot-light", "Spot light pair", { Parent: "vehicle-body" }],
+  ["vehicle-brake", "Brake Lights", "PointLight", "vehicle-component-point-light", "Point light pair · rear", { Parent: "vehicle-body" }],
 ];
 // Follow-up 60: the level's vehicles sit in a Vehicles folder. The Controlled Vehicle (the player's, which keeps Id "vehicle" and holds
 // the Component Viewer's ControlVehicle components) is a vehicle model like the others (VehicleAssets.js, VehicleAssetInspector.jsx).
@@ -38,22 +53,42 @@ export const VehicleRows = Components.map(([Id, Name, Component, Icon, Descripti
   Name,
   Panel: VehiclePanel,
   Icon,
-  Parent: "vehicle",
   Description,
   Component,
   ...Extra,
 }));
 
-// Rows retired from the Vehicle folder; removed from saved scenes on load.
-const RetiredRows = new Set(["vehicle-bumper"]);
+// Whether a row is the Controlled Vehicle or one of its components (at any depth), and the components under a row, depth first, each
+// with its depth below the vehicle.
+export function InVehicleTree(Rows, Row) {
+  const Seen = new Set();
+  for (let At = Row; At && !Seen.has(At.Id); At = Rows.find((Each) => Each.Id === At.Parent)) {
+    if (At.Id === VehicleOwner) return true;
+    Seen.add(At.Id);
+  }
+  return false;
+}
+export function VehicleDescendants(Rows, Id = VehicleOwner, Depth = 1, Seen = new Set()) {
+  return Rows.filter((Row) => Row.Parent === Id && Row.Panel === VehiclePanel && !Seen.has(Row.Id)).flatMap((Row) => {
+    Seen.add(Row.Id);
+    return [{ Row, Depth }, ...VehicleDescendants(Rows, Row.Id, Depth + 1, Seen)];
+  });
+}
+
+// Rows retired from the Vehicle folder; removed from saved scenes on load. Revision 4 retires Vehicle Movement, the chassis collision and
+// the single front Suspension and Steering sockets (and any collision or movement component added to the vehicle).
+const RetiredRows = new Set(["vehicle-bumper", "vehicle-movement", "vehicle-collision", "vehicle-suspension", "vehicle-steering"]);
+const RetiredClasses = new Set(["VehicleMovement", "BoxCollision", "SphereCollision"]);
 
 // Added once per saved scene (VehicleRevision), so a later deletion is respected: revision 1 brought the Vehicle folder and its
 // components; revision 2 the Vehicles folder, with the old Vehicle folder turned into the Controlled Vehicle and two parked vehicles;
-// revision 3 moves the Tow Hitch from inside the body to the ControlVehicle's tail (−2.6 → −3.2 m), unless it was moved by hand.
-export const VehicleRevision = 3;
+// revision 3 moves the Tow Hitch from inside the body to the ControlVehicle's tail (−2.6 → −3.2 m), unless it was moved by hand;
+// revision 4 (Follow-up 63) builds the Component Viewer's tree: each wheel's suspension, steering, tyre and rim, everything else on the
+// Body, which now hangs the rest of the vehicle.
+export const VehicleRevision = 4;
 export function EnsureVehicleFolder(Rows = [], Revision) {
   if (!Array.isArray(Rows)) return Rows;
-  let Kept = Rows.filter((Row) => !RetiredRows.has(Row?.Id));
+  let Kept = Rows.filter((Row) => !RetiredRows.has(Row?.Id) && !(Row?.Panel === VehiclePanel && RetiredClasses.has(Row.Component)));
   if (!(Revision >= 1) && !Kept.some((Row) => Row?.Id === "vehicle")) Kept = [...Kept, { ...VehicleFolder }, ...VehicleRows.map((Row) => ({ ...Row }))];
   if (!(Revision >= 2) && !Kept.some((Row) => Row?.Id === "vehicles")) {
     const At = Kept.findIndex((Row) => Row?.Id === "vehicle");
@@ -66,27 +101,35 @@ export function EnsureVehicleFolder(Rows = [], Revision) {
     Kept.push(...ParkedVehicles.filter((Row) => !Kept.some((Each) => Each?.Id === Row.Id)).map((Row) => ({ ...Row })));
   }
   if (!(Revision >= 3)) Kept = Kept.map((Row) => (Row?.Id === "vehicle-tow" && Row.Mount === -2.6 ? { ...Row, Mount: -3.2 } : Row));
+  if (!(Revision >= 4) && Kept.some((Row) => Row?.Id === VehicleOwner)) {
+    const Ids = new Set(Kept.map((Row) => Row?.Id));
+    // Components that hung straight off the vehicle move onto the Body; the wheel rows go in after the Body.
+    if (Ids.has("vehicle-body")) Kept = Kept.map((Row) => (Row?.Panel === VehiclePanel && Row.Parent === VehicleOwner && Row.Id !== "vehicle-body" ? { ...Row, Parent: "vehicle-body" } : Row));
+    const Missing = VehicleRows.filter((Row) => !Ids.has(Row.Id) && (Row.Parent !== "vehicle-body" || Ids.has("vehicle-body") || Row.Id === "vehicle-body")).map((Row) => ({ ...Row }));
+    const After = Kept.findIndex((Row) => Row?.Id === (Ids.has("vehicle-body") ? "vehicle-body" : VehicleOwner));
+    Kept.splice(After < 0 ? Kept.length : After + 1, 0, ...Missing);
+  }
   return Kept;
 }
 
 // Socket mounts for rows saved before rows carried one (metres ahead of the wheelbase centre).
-const DefaultMounts = { "vehicle-suspension": 1.7, "vehicle-steering": 1.7, "vehicle-tow": -3.2 };
+const DefaultMounts = { "vehicle-tow": -3.2 };
 const MountOf = (Row) => Row.Mount ?? DefaultMounts[Row.Id] ?? 0;
 
 // Defaults straight from the Component Viewer's classes.
 const DefaultCache = new Map();
 function Defaults(Row) {
-  const Key = Row.Component + ":" + (Row.Joint || "") + ":" + MountOf(Row) + (Row.Trigger ? ":t" : "");
+  const Key = Row.Component + ":" + (Row.Joint || "") + ":" + MountOf(Row) + ":" + (Row.Mass ?? "");
   if (!DefaultCache.has(Key)) {
     const Props = createComponent(Row.Component, Row.Name).props;
     if (Row.Component === "Socket") Object.assign(Props, socketDefaults(Row.Joint || "fixed"), Row.Joint === "hinge" ? { angleMin: -35, angleMax: 35 } : {}, { mount: MountOf(Row) });
-    if (Row.Component === "BoxCollision") Props.extent = [3.12, 0.73, 1.26]; // wraps the ControlVehicle's body (6.22 × 1.46 × 2.50 m)
-    if (Row.Component === "SphereCollision") Object.assign(Props, { radius: 0.6, trigger: !!Row.Trigger });
-    if (Row.Component === "StaticMesh") Object.assign(Props, { mass: 0, slots: {} });
+    if (Row.Component === "StaticMesh") Object.assign(Props, { mass: Row.Mass ?? 0, slots: {} });
     DefaultCache.set(Key, Props);
   }
   return DefaultCache.get(Key);
 }
+// A socket is attached to the component it hangs from (the Body when it hangs from the vehicle itself).
+const DefaultAttach = (Row) => (Row.Parent && Row.Parent !== VehicleOwner ? Row.Parent : "vehicle-body");
 const Reader = (Row, Values) => (Key) => (Values[Key] === undefined ? Defaults(Row)[Key] : Values[Key]);
 // For the Component Viewer (VehicleComponentViewer.jsx): one component's value (saved or its class default), and a socket's full
 // parameters with its mount.
@@ -97,28 +140,33 @@ export function SocketParameters(Row, Values = {}) {
   return { ...P, Mount: Number.isFinite(+V("mount")) ? +V("mount") : 0 };
 }
 
-// Follow-up 62: each component's icon (Images/VehicleComponentIcons), by class, and for a socket by its current type.
-const ClassIcons = { VehicleMovement: "movement", StaticMesh: "body", BoxCollision: "box-collision", SphereCollision: "sphere-collision", SpotLight: "spot-light", PointLight: "point-light" };
+// Follow-up 62: each component's icon (Images/VehicleComponentIcons), by class, for a socket by its current type and for a mesh by its
+// asset (the body, a tyre or a rim).
+const ClassIcons = { StaticMesh: "body", SpotLight: "spot-light", PointLight: "point-light" };
+const AssetIcons = { Body: "body", Tyre: "tyre", Rim: "rim" };
 export function ComponentIcon(Row, Values = {}) {
   if (!Row || Row.Panel !== VehiclePanel) return Row?.Icon;
   if (Row.Component === "Socket") return "vehicle-component-" + (Reader(Row, Values)("kind") || "fixed");
+  if (Row.Component === "StaticMesh") return "vehicle-component-" + (AssetIcons[Row.Asset] || "body");
   return ClassIcons[Row.Component] ? "vehicle-component-" + ClassIcons[Row.Component] : Row.Icon;
 }
+// A mesh component's asset name, centre of mass in vehicle space at rest and mass.
+export const MeshAssets = { Body: "ControlVehicle Body", Tyre: "ControlVehicle Tyre", Rim: "ControlVehicle Rim" };
+export function MeshMass(Row, Values = {}) {
+  return Math.max(0, +Reader(Row, Values)("mass") || 0);
+}
+export const MeshCentre = (Row) => PartCentre(Row.Asset || "Body", Row.Corner ?? 0);
 
 export function VehicleSummary(Row, Values = {}) {
   const V = Reader(Row, Values);
   switch (Row.Component) {
-    case "VehicleMovement":
-      return `${Math.round(V("mass"))} kg · ${V("wheels")?.length || 4} wheels`;
     case "Socket":
       {
-      const Id = Values.attach ?? Row.Attach ?? "vehicle-body";
+      const Id = Values.attach ?? Row.Attach ?? DefaultAttach(Row);
       return `${SOCKET_KIND[V("kind")]?.label || "Fixed"} socket · on ${VehicleRows.find((Each) => Each.Id === Id)?.Name || "another asset"}`;
     }
-    case "BoxCollision":
-      return (V("extent") || [0, 0, 0]).map((Each) => (+Each * 2).toFixed(1)).join(" × ") + " m";
-    case "SphereCollision":
-      return `r ${(+V("radius")).toFixed(2)} m${V("trigger") ? " · trigger" : ""}`;
+    case "StaticMesh":
+      return `${MeshAssets[Row.Asset] || MeshAssets.Body} · ${Fixed(MeshMass(Row, Values))} kg`;
     case "SpotLight":
       return `${(+V("intensity")).toFixed(0)} cd · ${V("angle")}°`;
     case "PointLight":
@@ -132,8 +180,6 @@ export function VehicleSummary(Row, Values = {}) {
 //                                                   SHARED PIECES
 //------------------------------------------------------------------------------------------------------------------------
 
-const Wheelbase = VEHICLE_SHEET.axleMount[0][0] - VEHICLE_SHEET.axleMount[2][0];
-const Track = VEHICLE_SHEET.axleMount[0][1] - VEHICLE_SHEET.axleMount[1][1];
 const Gravity = 9.81;
 const Fixed = (Amount, Digits = 0) => (Number.isFinite(Amount) ? Amount.toLocaleString("en-US", { minimumFractionDigits: Digits, maximumFractionDigits: Digits }) : "–");
 const Lerp = (A, B, T) => A + (B - A) * T;
@@ -154,227 +200,6 @@ function Readouts({ Kit, Rows }) {
         <Kit.Control key={Label} Field={{ Label, Control: "Readout" }} Value={Value} />
       ))}
     </div>
-  );
-}
-
-//------------------------------------------------------------------------------------------------------------------------
-//                                                   VEHICLE MOVEMENT
-//------------------------------------------------------------------------------------------------------------------------
-
-function TorqueAt(Curve, Rpm) {
-  if (Rpm <= Curve[0][0]) return Curve[0][1];
-  for (let Index = 1; Index < Curve.length; Index++)
-    if (Rpm <= Curve[Index][0]) {
-      const [R0, T0] = Curve[Index - 1], [R1, T1] = Curve[Index];
-      return Lerp(T0, T1, (Rpm - R0) / (R1 - R0));
-    }
-  return Curve[Curve.length - 1][1];
-}
-
-// Pointer drag inside an svg chart, reported in viewBox units. Each handle passes its own move function.
-function usePlotDrag() {
-  const Active = useRef(null);
-  const Local = (Event) => {
-    const Svg = Event.currentTarget.ownerSVGElement || Event.currentTarget;
-    const Point = Svg.createSVGPoint();
-    Point.x = Event.clientX;
-    Point.y = Event.clientY;
-    return Point.matrixTransform(Svg.getScreenCTM().inverse());
-  };
-  return (Move) => ({
-    onPointerDown: (Event) => {
-      Event.preventDefault();
-      Event.currentTarget.setPointerCapture(Event.pointerId);
-      Active.current = Move;
-    },
-    onPointerMove: (Event) => {
-      if (Active.current !== Move) return;
-      const { x, y } = Local(Event);
-      Move(x, y);
-    },
-    onPointerUp: () => (Active.current = null),
-    onPointerCancel: () => (Active.current = null),
-  });
-}
-const Clamp = (Amount, Low, High) => Math.min(High, Math.max(Low, Amount));
-const Snap = (Amount, Step) => +(Math.round(Amount / Step) * Step).toFixed(4);
-function Handle({ X, Y, Colour, Label, Drag, Shape = "circle" }) {
-  return (
-    <g className="vc-handle" {...Drag} role="slider" aria-label={Label}>
-      <circle cx={X} cy={Y} r="11" fill="transparent" />
-      {Shape === "bar" ? <rect x={X - 3} y={Y - 8} width="6" height="16" rx="3" fill="#1a1a1a" stroke={Colour} strokeWidth="1.6" /> : <circle cx={X} cy={Y} r="4.6" fill="#1a1a1a" stroke={Colour} strokeWidth="1.8" />}
-    </g>
-  );
-}
-
-// Suspension: the handle sits on the first peak. Up and down sets the overshoot (damping ratio); left and right sets when the
-// peak arrives (natural frequency).
-function SuspensionPlot({ Hz, Zeta, Write, Drag }) {
-  const HzField = ClassField("VehicleMovement", "springHz"), ZetaField = ClassField("VehicleMovement", "dampingRatio");
-  const X = (T) => 20 + (T / 2) * 290, Y = (Value) => 118 - Value * 58;
-  const W = 2 * Math.PI * Hz;
-  const Response = Array.from({ length: 161 }, (_, Index) => {
-    const T = (Index / 160) * 2;
-    if (Zeta < 1) {
-      const Wd = W * Math.sqrt(1 - Zeta * Zeta);
-      return 1 - Math.exp(-Zeta * W * T) * (Math.cos(Wd * T) + ((Zeta * W) / Wd) * Math.sin(Wd * T));
-    }
-    return 1 - Math.exp(-W * T) * (1 + W * T);
-  });
-  const Under = Math.min(Zeta, 0.99);
-  const PeakTime = 1 / (2 * Hz * Math.sqrt(1 - Under * Under));
-  const Overshoot = Zeta < 1 ? Math.exp((-Zeta * Math.PI) / Math.sqrt(1 - Zeta * Zeta)) : 0;
-  const Settle = 4 / Math.max(0.01, Zeta * W);
-  const Move = (Px, Py) => {
-    const Peak = Clamp((118 - Py) / 58 - 1, 0, 0.9);
-    let Next = Zeta >= 1 && Peak < 0.002 ? Zeta : Peak < 0.002 ? 1 : -Math.log(Peak) / Math.sqrt(Math.PI ** 2 + Math.log(Peak) ** 2);
-    Next = Clamp(Snap(Next, ZetaField.step || 0.01), ZetaField.min, ZetaField.max);
-    const Time = Clamp(((Px - 20) / 290) * 2, 0.05, 2);
-    const U = Math.min(Next, 0.99);
-    Write("dampingRatio", Next);
-    Write("springHz", Clamp(Snap(1 / (2 * Time * Math.sqrt(1 - U * U)), HzField.step || 0.05), HzField.min, HzField.max));
-  };
-  return (
-    <svg className="vc-visual vc-editable" viewBox="0 0 320 136" role="img" aria-label="Suspension step response" data-plot="suspension">
-      <line x1="20" x2="310" y1={Y(1)} y2={Y(1)} stroke="#ffffff22" strokeDasharray="3 4" />
-      <line x1="20" x2="310" y1={Y(0)} y2={Y(0)} stroke="#ffffff22" />
-      <path d={Response.map((Value, Index) => (Index ? "L" : "M") + X((Index / 160) * 2).toFixed(1) + " " + Y(Value).toFixed(1)).join("")} fill="none" stroke="#5fe0a0" strokeWidth="1.8" />
-      {Settle < 2 && <line x1={X(Settle)} x2={X(Settle)} y1="14" y2={Y(0)} stroke="#ffffff30" strokeDasharray="2 3" />}
-      <line x1={X(PeakTime)} x2={X(PeakTime)} y1={Y(1 + Overshoot)} y2={Y(0)} stroke="#5fe0a033" />
-      <Handle X={X(PeakTime)} Y={Y(1 + Overshoot)} Colour="#5fe0a0" Label="First peak: drag to set damping and frequency" Drag={Drag(Move)} />
-      <text x="20" y="130">0 s</text>
-      <text x="310" y="130" textAnchor="end">2 s · drag the peak</text>
-    </svg>
-  );
-}
-
-// Torque: every curve point can be dragged (rpm between its neighbours, torque 0–600 N·m); the idle edge and the redline drag
-// sideways.
-const TorqueTop = 600, PowerScale = 450, ChartRpm = 9000;
-function TorquePlot({ Curve, Idle, Redline, Write, Drag }) {
-  const IdleField = ClassField("VehicleMovement", "idleRpm"), RedField = ClassField("VehicleMovement", "redlineRpm");
-  const X = (Rpm) => 24 + (Rpm / ChartRpm) * 286, Yt = (T) => 116 - (T / TorqueTop) * 96, Yp = (P) => 116 - (P / PowerScale) * 96;
-  const Rpm = (Px) => ((Px - 24) / 286) * ChartRpm, Torque = (Py) => ((116 - Py) / 96) * TorqueTop;
-  const Torques = [], Powers = [];
-  for (let At = Curve[0][0]; At <= Math.min(ChartRpm, Curve[Curve.length - 1][0]); At += 50) {
-    Torques.push(`${X(At).toFixed(1)} ${Yt(TorqueAt(Curve, At)).toFixed(1)}`);
-    Powers.push(`${X(At).toFixed(1)} ${Yp((TorqueAt(Curve, At) * At * 2 * Math.PI) / 60 / 1000).toFixed(1)}`);
-  }
-  const MovePoint = (Index) => (Px, Py) => {
-    const Low = Index ? Curve[Index - 1][0] + 100 : 300, High = Index < Curve.length - 1 ? Curve[Index + 1][0] - 100 : ChartRpm;
-    const Next = Curve.map((Point) => Point.slice());
-    Next[Index] = [Clamp(Snap(Rpm(Px), 50), Low, High), Clamp(Math.round(Torque(Py)), 0, TorqueTop)];
-    Write("torqueCurve", Next);
-  };
-  return (
-    <svg className="vc-visual vc-editable" viewBox="0 0 320 140" role="img" aria-label="Torque and power curve" data-plot="torque">
-      <rect x={X(Idle)} y="20" width={Math.max(0, X(Redline) - X(Idle))} height="96" fill="#ffffff06" />
-      <line x1="24" x2="310" y1="116" y2="116" stroke="#ffffff22" />
-      <path d={"M" + Torques.join("L")} fill="none" stroke="#ff9f5a" strokeWidth="1.8" />
-      <path d={"M" + Powers.join("L")} fill="none" stroke="#7cb7ff" strokeWidth="1.8" strokeDasharray="5 3" />
-      <line x1={X(Redline)} x2={X(Redline)} y1="16" y2="116" stroke="#ff6b6b" strokeDasharray="3 3" />
-      <Handle X={X(Redline)} Y={22} Colour="#ff6b6b" Shape="bar" Label="Redline: drag sideways" Drag={Drag((Px) => Write("redlineRpm", Clamp(Snap(Rpm(Px), RedField.step || 50), RedField.min, RedField.max)))} />
-      <Handle X={X(Idle)} Y={110} Colour="#b0b0b0" Shape="bar" Label="Idle: drag sideways" Drag={Drag((Px) => Write("idleRpm", Clamp(Snap(Rpm(Px), IdleField.step || 50), IdleField.min, IdleField.max)))} />
-      {Curve.map(([At, Nm], Index) => (
-        <Handle key={Index} X={X(At)} Y={Yt(Nm)} Colour="#ff9f5a" Label={`Torque point ${Index + 1}: ${At} rpm, ${Nm} N·m`} Drag={Drag(MovePoint(Index))} />
-      ))}
-      <text x={X(Redline) - 7} y="14" textAnchor="end">redline {Fixed(Redline)}</text>
-      <text x="24" y="132">{Fixed(Idle)} rpm idle</text>
-      <text x="310" y="132" textAnchor="end">drag the torque points · power dashed</text>
-    </svg>
-  );
-}
-
-// Aero: one handle per line at 250 km/h; up and down sets the drag area (CdA) or the downforce area (ClA).
-const AeroSpeed = 250;
-function AeroPlot({ DragArea, Lift, Rho, Limit, Write, Drag }) {
-  const DragField = ClassField("VehicleMovement", "dragArea"), LiftField = ClassField("VehicleMovement", "liftArea");
-  const X = (Kmh) => 24 + (Kmh / 300) * 286, Y = (Newtons) => 110 - (Newtons / 6000) * 92;
-  const Force = (Area, Kmh) => 0.5 * Rho * Area * (Kmh / 3.6) ** 2;
-  const Line = (Area) => Array.from({ length: 61 }, (_, Index) => `${X(Index * 5).toFixed(1)} ${Math.max(14, Y(Force(Area, Index * 5))).toFixed(1)}`);
-  const AreaAt = (Py, Field) => Clamp(Snap(((110 - Py) / 92) * 6000 / Force(1, AeroSpeed), Field.step || 0.01), Field.min, Field.max);
-  return (
-    <svg className="vc-visual vc-editable" viewBox="0 0 320 130" role="img" aria-label="Drag and downforce against speed" data-plot="aero">
-      <line x1="24" x2="310" y1="110" y2="110" stroke="#ffffff22" />
-      <line x1={X(AeroSpeed)} x2={X(AeroSpeed)} y1="14" y2="110" stroke="#ffffff14" />
-      <path d={"M" + Line(DragArea).join("L")} fill="none" stroke="#ff9f5a" strokeWidth="1.8" />
-      <path d={"M" + Line(Lift).join("L")} fill="none" stroke="#5fe0a0" strokeWidth="1.8" strokeDasharray="5 3" />
-      {Limit > 0 && <line x1={X(Limit)} x2={X(Limit)} y1="14" y2="110" stroke="#ffffff35" strokeDasharray="2 3" />}
-      <Handle X={X(AeroSpeed)} Y={Y(Force(DragArea, AeroSpeed))} Colour="#ff9f5a" Label="Drag: drag up or down" Drag={Drag((_, Py) => Write("dragArea", AreaAt(Py, DragField)))} />
-      <Handle X={X(AeroSpeed)} Y={Y(Force(Lift, AeroSpeed))} Colour="#5fe0a0" Label="Downforce: drag up or down" Drag={Drag((_, Py) => Write("liftArea", AreaAt(Py, LiftField)))} />
-      <text x="24" y="124">0</text>
-      <text x="310" y="124" textAnchor="end">300 km/h · drag solid · downforce dashed</text>
-    </svg>
-  );
-}
-
-function MovementInspector({ Kit, V, Write }) {
-  const Grab = usePlotDrag();
-  const { Card, Metric } = Kit;
-  const Mass = +V("mass"), Front = +V("frontWeight") / 100, Com = +V("comHeight");
-  const FrontLoad = Mass * Front, RearLoad = Mass - FrontLoad;
-  const Steer = +V("maxSteer"), Radius = +V("tyreRadius");
-  const TurnRadius = Wheelbase / Math.tan(Steer) + Track / 2;
-  const Hz = +V("springHz"), Zeta = +V("dampingRatio");
-  const Corner = Mass / 4, Stiffness = Corner * (2 * Math.PI * Hz) ** 2;
-  const Curve = V("torqueCurve") || VEHICLE_SHEET.torqueCurve;
-  const Idle = +V("idleRpm"), Redline = +V("redlineRpm"), Drive = +V("finalDrive");
-  const PeakTorque = Math.max(...Curve.map((Point) => Point[1]));
-  let PeakPower = 0, PeakPowerRpm = 0;
-  for (let Rpm = Idle; Rpm <= Redline; Rpm += 50) {
-    const Power = (TorqueAt(Curve, Rpm) * Rpm * 2 * Math.PI) / 60 / 1000;
-    if (Power > PeakPower) (PeakPower = Power), (PeakPowerRpm = Rpm);
-  }
-  const TopGear = VEHICLE_SHEET.gearRatios[VEHICLE_SHEET.gearRatios.length - 1];
-  const GearedTop = ((Redline / 60) * 2 * Math.PI * Radius) / (TopGear * Drive) * 3.6;
-  const Drag = +V("dragArea"), Lift = +V("liftArea"), Rho = VEHICLE_SHEET.airDensity;
-  // Speed where drag + rolling resistance absorb peak wheel power.
-  let PowerTop = 0;
-  for (let Speed = 1; Speed < 120; Speed += 0.25) {
-    const Need = (0.5 * Rho * Drag * Speed ** 3 + VEHICLE_SHEET.rollingResistance * Mass * Gravity * Speed) / 1000;
-    if (Need > PeakPower * VEHICLE_SHEET.driveEfficiency) break;
-    PowerTop = Speed * 3.6;
-  }
-  const Settle = 4 / Math.max(0.01, Zeta * 2 * Math.PI * Hz);
-  const Overshoot = Zeta < 1 ? Math.exp((-Zeta * Math.PI) / Math.sqrt(1 - Zeta * Zeta)) * 100 : 0;
-  return (
-    <>
-      <Card Title="Chassis & mass" Class="vc-card">
-        <Metric Value={Fixed(Mass)} Unit="kg" Caption={`${Fixed(Front * 100, 1)} % on the front axle · wheelbase ${Wheelbase.toFixed(2)} m`} />
-        <ClassSlider Kit={Kit} V={V} Write={Write} Type="VehicleMovement" Key="mass" />
-        <ClassSlider Kit={Kit} V={V} Write={Write} Type="VehicleMovement" Key="frontWeight" />
-        <ClassSlider Kit={Kit} V={V} Write={Write} Type="VehicleMovement" Key="comHeight" />
-        <Readouts Kit={Kit} Rows={[["Front axle", Fixed(FrontLoad) + " kg"], ["Rear axle", Fixed(RearLoad) + " kg"], ["Wheelbase", Wheelbase.toFixed(2) + " m"], ["Static load per front wheel", Fixed((FrontLoad / 2) * Gravity) + " N"], ["Static load per rear wheel", Fixed((RearLoad / 2) * Gravity) + " N"], ["Rollover threshold", Fixed(Track / (2 * Com), 2) + " g"]]} />
-      </Card>
-      <Card Title="Wheels & steering" Class="vc-card">
-        <Metric Value={Fixed(TurnRadius, 1)} Unit="m turning radius" Caption={`${(V("wheels")?.length || 4)} wheels · tyre Ø ${(Radius * 2).toFixed(2)} m`} />
-        <ClassSlider Kit={Kit} V={V} Write={Write} Type="VehicleMovement" Key="maxSteer" />
-        <ClassSlider Kit={Kit} V={V} Write={Write} Type="VehicleMovement" Key="tyreRadius" />
-        <Readouts Kit={Kit} Rows={[["Steering lock", ((Steer * 180) / Math.PI).toFixed(1) + "°"], ["Track", Track.toFixed(2) + " m"], ["Tyre circumference", (2 * Math.PI * Radius).toFixed(2) + " m"]]} />
-      </Card>
-      <Card Title="Suspension" Class="vc-card">
-        <SuspensionPlot Hz={Hz} Zeta={Zeta} Write={Write} Drag={Grab} />
-        <Metric Value={Fixed(Overshoot, 1)} Unit="% overshoot" Caption={`Settles in ${Fixed(Settle, 2)} s`} />
-        <ClassSlider Kit={Kit} V={V} Write={Write} Type="VehicleMovement" Key="springHz" />
-        <ClassSlider Kit={Kit} V={V} Write={Write} Type="VehicleMovement" Key="dampingRatio" />
-        <Readouts Kit={Kit} Rows={[["Spring rate per corner", Fixed(Stiffness / 1000, 1) + " kN/m"], ["Damping per corner", Fixed((2 * Zeta * Math.sqrt(Stiffness * Corner)) / 1000, 2) + " kN·s/m"]]} />
-      </Card>
-      <Card Title="Powertrain" Class="vc-card">
-        <TorquePlot Curve={Curve} Idle={Idle} Redline={Redline} Write={Write} Drag={Grab} />
-        <Metric Value={Fixed(PeakPower)} Unit="kW peak" Caption={`${Fixed(PeakTorque)} N·m peak torque · ${Fixed(PeakPower * 1.341)} hp at ${Fixed(PeakPowerRpm)} rpm`} />
-        <ClassSlider Kit={Kit} V={V} Write={Write} Type="VehicleMovement" Key="finalDrive" />
-        <ClassSlider Kit={Kit} V={V} Write={Write} Type="VehicleMovement" Key="idleRpm" />
-        <ClassSlider Kit={Kit} V={V} Write={Write} Type="VehicleMovement" Key="redlineRpm" />
-        <Readouts Kit={Kit} Rows={[["Gears", VEHICLE_SHEET.gearRatios.map((Ratio) => Ratio.toFixed(1)).join(" · ")], ["Top gear at redline", Fixed(GearedTop) + " km/h"]]} />
-      </Card>
-      <Card Title="Aerodynamics" Class="vc-card">
-        <AeroPlot DragArea={Drag} Lift={Lift} Rho={Rho} Limit={PowerTop} Write={Write} Drag={Grab} />
-        <Metric Value={Fixed(PowerTop)} Unit="km/h drag-limited" Caption="Where drag and rolling resistance use all the wheel power" />
-        <ClassSlider Kit={Kit} V={V} Write={Write} Type="VehicleMovement" Key="dragArea" />
-        <ClassSlider Kit={Kit} V={V} Write={Write} Type="VehicleMovement" Key="liftArea" />
-        <Readouts Kit={Kit} Rows={[["Drag at 100 km/h", Fixed(0.5 * Rho * Drag * (100 / 3.6) ** 2) + " N"], ["Downforce at 200 km/h", Fixed(0.5 * Rho * Lift * (200 / 3.6) ** 2) + " N"]]} />
-      </Card>
-    </>
   );
 }
 
@@ -846,7 +671,7 @@ function SocketType({ Kit, P, Write }) {
 
 // The asset this socket hangs from, as a link: one click selects it. No picture of the vehicle; the offset is numeric.
 function AttachmentTarget(Row, Rows, Values) {
-  const Id = Values?.attach ?? Row.Attach ?? "vehicle-body";
+  const Id = Values?.attach ?? Row.Attach ?? DefaultAttach(Row);
   return { Id, Target: Rows.find((Each) => Each.Id === Id) || null };
 }
 const ComponentLabel = (Row) => COMPONENT_CLASSES[Row?.Component]?.label || (Row?.Panel === "group" ? "Folder" : "Asset");
@@ -897,52 +722,8 @@ function SocketInspector({ Kit, V, Write, Row, Scene, Values }) {
 }
 
 //------------------------------------------------------------------------------------------------------------------------
-//                                                   COLLISION, LIGHTS, BODY
+//                                                   LIGHTS, MESHES
 //------------------------------------------------------------------------------------------------------------------------
-
-function CollisionInspector({ Kit, V, Write, Row }) {
-  const { Card, Control, Metric } = Kit;
-  const Box = Row.Component === "BoxCollision";
-  const Extent = V("extent") || [0.5, 0.5, 0.5], Radius = +V("radius") || 0.5;
-  const Volume = Box ? 8 * Extent[0] * Extent[1] * Extent[2] : (4 / 3) * Math.PI * Radius ** 3;
-  const Trigger = !!V("trigger");
-  const Colour = Trigger ? "#ffb15a" : "#7cb7ff";
-  const Iso = ([X, Y, Z]) => [160 + (X - Z) * 0.87 * 34, 88 - Y * 34 + (X + Z) * 0.5 * 34];
-  const Scale = Box ? 1 / Math.max(1, ...Extent.map((Each) => Each / 1.4)) : 1 / Math.max(1, Radius / 1.2);
-  return (
-    <Card Title={Box ? "Box collision" : "Sphere collision"} Class="vc-card">
-      <svg className="vc-visual" viewBox="0 0 320 170" role="img" aria-label={Box ? "Box extents" : "Sphere radius"}>
-        {Box ? (
-          (() => {
-            const [Ex, Ey, Ez] = Extent.map((Each) => Each * Scale);
-            const C = [[-Ex, -Ey, -Ez], [Ex, -Ey, -Ez], [Ex, Ey, -Ez], [-Ex, Ey, -Ez], [-Ex, -Ey, Ez], [Ex, -Ey, Ez], [Ex, Ey, Ez], [-Ex, Ey, Ez]].map((Point) => Iso([Point[0], Point[1] - 0.6, Point[2]]));
-            const Edges = [[0, 1], [1, 2], [2, 3], [3, 0], [4, 5], [5, 6], [6, 7], [7, 4], [0, 4], [1, 5], [2, 6], [3, 7]];
-            return Edges.map(([A, B], Index) => <line key={Index} x1={C[A][0]} y1={C[A][1]} x2={C[B][0]} y2={C[B][1]} stroke={Colour} strokeWidth="1.4" strokeDasharray="4 3" />);
-          })()
-        ) : (
-          <>
-            <circle cx="160" cy="92" r={Radius * Scale * 40} fill={Colour + "14"} stroke={Colour} strokeWidth="1.4" strokeDasharray="4 3" />
-            <ellipse cx="160" cy="92" rx={Radius * Scale * 40} ry={Radius * Scale * 12} fill="none" stroke={Colour} strokeOpacity="0.6" />
-          </>
-        )}
-      </svg>
-      <Metric Value={Fixed(Volume, 2)} Unit="m³" Caption={Trigger ? "Overlap events · nothing is blocked (OverlapAll)" : "Blocks everything (BlockAll)"} />
-      {Box ? (
-        ["X", "Y", "Z"].map((Axis, Index) => (
-          <Kit.Control
-            key={Axis}
-            Field={{ Label: `Half extent ${Axis}`, Minimum: 0.05, Maximum: 4, Decimals: 2, Unit: "m", Default: Extent[Index] }}
-            Value={Extent[Index]}
-            Change={(Next) => Write("extent", Extent.map((Each, Slot) => (Slot === Index ? Next : Each)))}
-          />
-        ))
-      ) : (
-        <ClassSlider Kit={Kit} V={V} Write={Write} Type="SphereCollision" Key="radius" />
-      )}
-      <Control Field={{ Label: "Generate overlap events", Control: "Switch" }} Value={Trigger} Change={(Next) => Write("trigger", Next)} />
-    </Card>
-  );
-}
 
 function LightInspector({ Kit, V, Write, Row }) {
   const { Card, Control, Metric } = Kit;
@@ -988,33 +769,55 @@ function LightInspector({ Kit, V, Write, Row }) {
   );
 }
 
-function BodyInspector({ Kit, V, Write }) {
+// A mesh component (the body, a tyre or a rim): its level of detail and collision preset, then its mass and centre of mass.
+function MeshInspector({ Kit, V, Write, Row }) {
   const { Card, Control, Metric } = Kit;
   const Lod = Math.round(+V("lod"));
   const Presets = ClassField("StaticMesh", "collisionPreset").options;
-  const Base = 48000;
+  const Asset = Row.Asset || "Body";
+  const Base = ControlVehicleCentres().Triangles[Asset] || 2924;
+  const Centre = MeshCentre(Row);
+  const Mass = MeshMass(Row, {});
+  const MassValue = Math.max(0, +V("mass") || 0);
+  const Side = Asset === "Body" ? [-3.4, 3.4] : [Centre[0] - 0.7, Centre[0] + 0.7];
+  const Across = (X) => 20 + ((X - Side[0]) / (Side[1] - Side[0])) * 280;
+  const Up = (Y) => 104 - (Y / (Asset === "Body" ? 1.9 : 1.1)) * 88;
   return (
-    <Card Title="Static mesh" Class="vc-card">
-      <svg className="vc-visual" viewBox="0 0 320 120" role="img" aria-label="Level of detail chain">
-        {Array.from({ length: 6 }, (_, Index) => {
-          const Width = 44 - Index * 4, X = 18 + Index * 50, Active = Lod < 0 ? Index === 0 : Index === Lod;
-          return (
-            <g key={Index} opacity={Active ? 1 : 0.45}>
-              <rect x={X} y={60 - Width / 2} width={Width} height={Width} rx="10" fill={Active ? "#3a3a3a" : "#222"} stroke={Active ? "#f0f0f0" : "#777"} />
-              <text x={X + Width / 2} y="104" textAnchor="middle">LOD{Index}</text>
-              <text x={X + Width / 2} y="116" textAnchor="middle">{Fixed(Base / 2 ** Index / 1000, 1)}k</text>
-            </g>
-          );
-        })}
-      </svg>
-      <Metric Value={Lod < 0 ? "Auto" : "LOD " + Lod} Unit="" Caption={Lod < 0 ? "Detail follows screen size" : `Forced · about ${Fixed(Base / 2 ** Math.min(Lod, 5))} triangles`} />
-      <ClassSlider Kit={Kit} V={V} Write={Write} Type="StaticMesh" Key="lod" />
-      <Control Field={{ Label: "Collision preset", Control: "Select", Options: Presets }} Value={Math.max(0, Presets.indexOf(V("collisionPreset")))} Change={(Index) => Write("collisionPreset", Presets[Index])} />
-      <Control Field={{ Label: "Cast shadow", Control: "Switch" }} Value={!!V("castShadow")} Change={(Next) => Write("castShadow", Next)} />
-      <Control Field={{ Label: "Simulate physics", Control: "Switch" }} Value={!!V("simulatePhysics")} Change={(Next) => Write("simulatePhysics", Next)} />
-      {V("simulatePhysics") && <ClassSlider Kit={Kit} V={V} Write={Write} Type="StaticMesh" Key="mass" />}
-      <p className="vc-note">The mesh asset itself is picked in the Component Viewer; this row carries its rendering and collision settings.</p>
-    </Card>
+    <>
+      <Card Title="Static mesh" Class="vc-card">
+        <svg className="vc-visual" viewBox="0 0 320 120" role="img" aria-label="Level of detail chain">
+          {Array.from({ length: 6 }, (_, Index) => {
+            const Width = 44 - Index * 4, X = 18 + Index * 50, Active = Lod < 0 ? Index === 0 : Index === Lod;
+            return (
+              <g key={Index} opacity={Active ? 1 : 0.45}>
+                <rect x={X} y={60 - Width / 2} width={Width} height={Width} rx="10" fill={Active ? "#3a3a3a" : "#222"} stroke={Active ? "#f0f0f0" : "#777"} />
+                <text x={X + Width / 2} y="104" textAnchor="middle">LOD{Index}</text>
+                <text x={X + Width / 2} y="116" textAnchor="middle">{Fixed(Base / 2 ** Index / 1000, 1)}k</text>
+              </g>
+            );
+          })}
+        </svg>
+        <Metric Value={Lod < 0 ? "Auto" : "LOD " + Lod} Unit="" Caption={`${MeshAssets[Asset]} · ${Lod < 0 ? "detail follows screen size" : `forced · about ${Fixed(Base / 2 ** Math.min(Lod, 5))} triangles`}`} />
+        <ClassSlider Kit={Kit} V={V} Write={Write} Type="StaticMesh" Key="lod" />
+        <Control Field={{ Label: "Collision preset", Control: "Select", Options: Presets }} Value={Math.max(0, Presets.indexOf(V("collisionPreset")))} Change={(Index) => Write("collisionPreset", Presets[Index])} />
+        <Control Field={{ Label: "Cast shadow", Control: "Switch" }} Value={!!V("castShadow")} Change={(Next) => Write("castShadow", Next)} />
+      </Card>
+      <Card Title="Mass and centre of mass" Class="vc-card vc-mass-card">
+        <svg className="vc-visual" viewBox="0 0 320 120" role="img" aria-label="Centre of mass from the side">
+          <line x1="12" y1="104" x2="308" y2="104" stroke="#ffffff30" />
+          <line x1={Across(Centre[0])} y1={Up(Centre[1])} x2={Across(Centre[0])} y2="104" stroke="#7fd1ff" strokeDasharray="3 3" />
+          <g transform={`translate(${Across(Centre[0])} ${Up(Centre[1])})`}>
+            <circle r="9" fill="#f2f2f2" />
+            <path d="M0 0V-9A9 9 0 0 1 9 0ZM0 0V9A9 9 0 0 1 -9 0Z" fill="#16171b" />
+            <circle r="9" fill="none" stroke="#7fd1ff" strokeWidth="1.2" />
+          </g>
+          <text x={Across(Centre[0]) + 14} y={Up(Centre[1]) - 10}>{Centre[1].toFixed(2)} m up</text>
+        </svg>
+        <Metric Value={Fixed(MassValue)} Unit="kg" Caption={`Centre of mass ${Centre.map((Each) => Each.toFixed(2)).join(", ")} m · from the mesh volume`} />
+        <Slider Kit={Kit} V={V} Write={Write} Key="mass" Label="Mass" Minimum={0} Maximum={Asset === "Body" ? 3000 : 80} Step={1} Unit="kg" />
+        <Readouts Kit={Kit} Rows={[["Ahead of the body centre", `${Centre[0].toFixed(3)} m`], ["Above the ground", `${Centre[1].toFixed(3)} m`], ["Across (right +)", `${Centre[2].toFixed(3)} m`], ["Default mass", `${Fixed(Mass)} kg`]]} />
+      </Card>
+    </>
   );
 }
 
@@ -1023,11 +826,9 @@ export function VehicleInspector({ Subject, Values, Change, Kit, Scene = null })
   const Write = (Key, Next) => Change(Key, Next);
   const Wiring = { Kit, V, Write, Row: Subject, Scene, Values };
   const Body =
-    Subject.Component === "VehicleMovement" ? <MovementInspector {...Wiring} />
-      : Subject.Component === "Socket" ? <SocketInspector {...Wiring} />
-        : /Collision/.test(Subject.Component) ? <CollisionInspector {...Wiring} />
-          : /Light/.test(Subject.Component) ? <LightInspector {...Wiring} />
-            : <BodyInspector {...Wiring} />;
+    Subject.Component === "Socket" ? <SocketInspector {...Wiring} />
+      : /Light/.test(Subject.Component) ? <LightInspector {...Wiring} />
+        : <MeshInspector {...Wiring} />;
   return (
     <div className="vehicle-inspector" data-component={Subject.Component}>
       {Body}
