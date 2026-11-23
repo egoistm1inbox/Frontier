@@ -75,8 +75,8 @@ try {
   );
   await Open("sun");
   assert.equal(
-    // Sun now opens the Sun's first lettered tab, right under the heading and the tab bar.
-    await Page.locator('[data-panel="sun"] > header + .inspector-tabs > [data-tab-page="sun:now"]:not([hidden]) > [data-card="Sun now"]:first-child').count(),
+    // Sun now opens the Sun's first numbered page, right under the heading and the page carousel's strip (Follow-up 64).
+    await Page.locator('[data-panel="sun"] > header + .inspector-tabs > .pc-strip + .pc-pages > [data-tab-page="sun:now"]:not([hidden]) > [data-card="Sun now"]:first-child').count(),
     1,
   );
   assert.equal(await Page.locator('[data-panel="sun"] .reference-inspector-copy').count(), 0);

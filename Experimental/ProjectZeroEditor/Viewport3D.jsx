@@ -347,7 +347,10 @@ export default function Viewport3D({ Rows, Values, Hidden, Selected, Picked = []
       Canvas.addEventListener("pointerdown", (Event) => (Down = { X: Event.clientX, Y: Event.clientY, Button: Event.button }));
       Canvas.addEventListener("pointerup", (Event) => {
         if (!Down || Down.Button !== 0 || Math.hypot(Event.clientX - Down.X, Event.clientY - Down.Y) > 4) return;
-        const Hit = View.pick(Event.clientX, Event.clientY);
+        // A light's head (its invisible grab sphere, LightProps.js) wins over whatever else is under the cursor.
+        const Heads = [];
+        View.content.traverse((Each) => Each.userData.grab && Each.visible && Heads.push(Each));
+        const Hit = (Heads.length && View.pick(Event.clientX, Event.clientY, Heads)) || View.pick(Event.clientX, Event.clientY);
         if (Hit) Latest.current.Select?.(Hit.componentId, { Add: Event.ctrlKey || Event.metaKey || Event.shiftKey });
       });
       Canvas.addEventListener("keydown", (Event) => {

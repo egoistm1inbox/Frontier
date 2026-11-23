@@ -3,12 +3,12 @@ import path from "node:path";
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
-import { OpenOrbit, PickTab } from "./TabReveal.mjs";
+import { PickTab, Settled } from "./TabReveal.mjs";
 
 // Follow-up 48: editor assets (EditorAssets.js) — scene cameras stand in the 3D viewport as camera models on tripods with their frustum,
 // the outliner shows each camera's model as its icon, and the camera inspector picks the body (A · Film, B · Digital, C · Mirrorless).
 // And the lettered inspector tabs (InspectorTabs.jsx): every tabbed inspector has its own look, one page open at a time, ← → move,
-// and the open tab is remembered while the editor is open. Follow-up 60: the pages are picked from an Orbit menu, and three vehicles
+// and the open tab is remembered while the editor is open. Follow-up 60: three vehicles (Follow-up 64: the pages turn in the page carousel)
 // (the Controlled Vehicle, an Off-road Vehicle and a Pickup Truck) park in the level, sit in a Vehicles folder and have an inspector.
 const Folder = path.dirname(fileURLToPath(import.meta.url));
 const Require = createRequire(process.env.FRONTIER_BROWSER_PACKAGE || path.resolve(Folder, "../../../_AgentScratch/Browser/package.json"));
@@ -97,35 +97,39 @@ try {
   await Page.waitForFunction(() => document.querySelector(".viewport-3d-canvas").dataset.cameras === "cine:film");
   Checks.push("Hiding Cine Camera takes its model out of the viewport; showing it brings it back");
 
-  // Lettered pages (Follow-up 60): picked from the Orbit menu, pinned after the cards, never above them; each inspector's ring has its
-  // own look; one page at a time; ← → on the button; remembered while the editor stays open.
+  // Numbered pages (Follow-up 64): the page carousel's strip sits right under the header, above the cards: ‹, a pill per page with a flat
+  // number badge, ›, and the count; one page at a time; a pick, the arrows or ← → turn it, sliding the pages across.
   const Looks = {};
   for (const Id of ["sun", "atmosphere", "stars", "moon", "flare", "cine"]) {
     await Open(Id);
     const Tabs = Page.locator("[data-tabs]").first();
     Looks[Id] = await Tabs.getAttribute("data-tabs-look");
     const Owner = await Tabs.getAttribute("data-tabs");
-    assert.equal(await Page.locator("[data-tab-for]").count(), 0, Id + ": the ring starts shut");
+    const Strip = Tabs.locator(`[data-strip="${Owner}"]`);
     const Header = await Page.locator(".inspector-scroll > [data-panel] > header").boundingBox();
+    const Bar = await Strip.boundingBox();
     const First = await Tabs.locator(".it-page:not([hidden]) [data-card]").first().boundingBox();
-    assert(First.y < Header.y + Header.height + 60, Id + ": the first card sits right under the header");
-    await OpenOrbit(Page, Owner);
-    assert.equal(await Page.locator(`[data-orbit="${Owner}"]`).getAttribute("data-orbit-look"), Looks[Id]);
-    const Letters = await Tabs.locator("[data-tab-for]").count();
-    assert(Letters >= 3, Id + " has lettered pages");
+    assert(Bar.y < Header.y + Header.height + 60 && First.y > Bar.y + Bar.height, Id + ": the strip sits right under the header, the cards under it");
+    const Count = await Tabs.locator("[data-tab-for]").count();
+    assert(Count >= 3, Id + " has numbered pages");
+    assert.deepEqual(await Strip.locator(".pc-number").allInnerTexts(), Array.from({ length: Count }, (_, At) => String(At + 1)), Id + ": the badges are numbers");
+    assert.equal(await Strip.locator(".pc-count").innerText(), `1 / ${Count}`);
     assert.equal(await Tabs.locator(".it-page:not([hidden])").count(), 1, Id + " shows one page");
-    await Page.locator(`[data-orbit="${Owner}"] .orbit-ring`).screenshot({ path: path.join(Proof, `Orbit-${Owner}.png`) });
+    await Strip.screenshot({ path: path.join(Proof, `Strip-${Owner}.png`) });
     const Second = await Tabs.locator("[data-tab-for]").nth(1).getAttribute("data-tab-for");
     await Tabs.locator("[data-tab-for]").nth(1).click();
+    await Settled(Page);
     assert(await Page.locator(`[data-tab-page="${Second}"]`).isVisible());
-    assert.equal(await Page.locator(`[data-orbit="${Owner}"] .orbit-ring`).count(), 0, Id + ": picking a page closes the ring");
     assert.equal(await Tabs.locator(".it-page:not([hidden])").count(), 1);
-    await Page.locator(`[data-orbit="${Owner}"] .orbit-button`).focus();
+    assert.equal(await Strip.locator(".pc-count").innerText(), `2 / ${Count}`);
     await Page.keyboard.press("ArrowRight");
+    await Settled(Page);
     const Third = await Tabs.locator(".it-page").nth(2).getAttribute("data-tab-page");
     assert(await Page.locator(`[data-tab-page="${Third}"]`).isVisible(), Id + " → opens the next page");
+    await Strip.getByRole("button", { name: "Previous page" }).click();
+    await Settled(Page);
+    assert(await Page.locator(`[data-tab-page="${Second}"]`).isVisible(), Id + " ‹ goes back");
   }
-  assert.equal(new Set(Object.values(Looks)).size, 6, "every tabbed inspector looks different: " + JSON.stringify(Looks));
   // Remembered: open Stars' third page, select another row and come back.
   await Open("stars");
   await PickTab(Page, "stars:renderer");
@@ -134,10 +138,10 @@ try {
   await Page.locator('[data-outliner-row="stars"]').click();
   await Page.locator('[data-tabs="stars"]').waitFor();
   assert(await Page.locator('[data-tab-page="stars:renderer"]').isVisible(), "Stars reopens on Renderer");
-  Checks.push("Orbit pages: " + Object.entries(Looks).map(([Id, Look]) => `${Id} ${Look}`).join(", ") + " — cards first, the ring starts shut, picking closes it, one page open, ← → move, the open page is remembered");
+  Checks.push("Page carousel: " + Object.keys(Looks).join(", ") + " — numbered strip under the header with its count, one page open, pills, ← → and ‹ › turn it, the open page is remembered");
 
   // Vehicles (Follow-up 60): the Controlled Vehicle, the Off-road Vehicle and the Pickup Truck park in the level, sit in a Vehicles folder
-  // in the outliner with their models as icons, and open the vehicle inspector (Orbit pages Model · Size · Drive).
+  // in the outliner with their models as icons, and open the vehicle inspector (carousel pages Model · Size · Drive).
   await Open("vehicle");
   assert.equal(await Canvas().getAttribute("data-vehicles"), "vehicle:controlled offroad-vehicle:offroad pickup-truck:pickup");
   const Order = await Page.locator("[data-outliner-row]").evaluateAll((Rows) => Rows.map((Row) => Row.dataset.outlinerRow));
@@ -160,8 +164,8 @@ try {
   await Page.locator(".outliner-rows").screenshot({ path: path.join(Proof, "Outliner-Vehicles.png") });
   Checks.push("Vehicles: three parked in the viewport (data-vehicles), a Vehicles folder holding them in the outliner with asset-vehicle-* model icons, the Controlled Vehicle's components under it");
 
-  // The inspector: the model picture with paints, then Size and Drive from the garage Orbit.
-  assert.equal(await Page.locator('[data-orbit="vehicle"]').getAttribute("data-orbit-look"), "garage");
+  // The inspector: the model picture with paints, then Size and Drive from the page carousel.
+  assert.equal(await Page.locator('[data-strip="vehicle"] .pc-count').innerText(), "1 / 3");
   assert.equal(await Page.locator("[data-vehicle-shown]").getAttribute("data-vehicle-shown"), "controlled");
   await Page.locator('[data-vehicle-paint="#b8262e"]').click();
   await Page.waitForFunction(() => document.querySelector("[data-vehicle-shown]")?.dataset.vehiclePaintShown === "#b8262e");
@@ -184,7 +188,7 @@ try {
     await Page.locator(".inspector-scroll").screenshot({ path: path.join(Proof, `Vehicle-${Id}.png`) });
   }
   await Canvas().screenshot({ path: path.join(Proof, "Viewport-Vehicles.png") });
-  Checks.push("Vehicle inspector: garage Orbit; a paint repaints the picture and the outliner summary (Rally red); Drive lists and selects the components");
+  Checks.push("Vehicle inspector: page carousel; a paint repaints the picture and the outliner summary (Rally red); Drive lists and selects the components");
 
   // Scenes saved before Follow-up 60 (a Vehicle group, no folder, no parked vehicles) gain the folder and the two parked vehicles.
   await Page.evaluate(() => {

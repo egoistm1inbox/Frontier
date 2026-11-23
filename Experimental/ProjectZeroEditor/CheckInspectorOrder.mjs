@@ -55,7 +55,8 @@ async function Open(Id, Wide = false) {
     Address + "?inspect=" + Id + (Wide ? "&workspace=inspector" : ""),
   );
   // A Controlled Vehicle component opens in its Component Viewer panel (Follow-up 62), whose Details come first in the page.
-  await Page.locator(".inspector-scroll > [data-panel]").first().waitFor();
+  // (The workspace Inspector behind it is hidden then, so wait for whichever is shown.)
+  await Page.locator(".inspector-scroll > [data-panel]:visible").first().waitFor();
   for (const Iframe of await Page.locator(
     ".reference-inspector-copy iframe",
   ).all())
@@ -263,10 +264,9 @@ try {
                 "input,select,textarea,button,[data-card]",
               ),
             ].every(
-              // The Orbit menu (Follow-up 60) that turns the pages is pinned after them on purpose.
+              // (The page carousel's strip, Follow-up 64, comes before the pages, so nothing of it follows.)
               (Other) =>
                 Node.contains(Other) ||
-                Other.closest(".orbit-menu") ||
                 !(
                   Node.compareDocumentPosition(Other) &
                   Node.DOCUMENT_POSITION_FOLLOWING

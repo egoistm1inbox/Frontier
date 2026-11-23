@@ -172,8 +172,9 @@ function ComponentOutliner({ Rows, Values, Hidden, Selected, Select, ToggleHidde
         >
           {Caret ? (Folded.has(Row.Id) ? "▸" : "▾") : ""}
         </span>
-        <span className="vcp-row-icon">
-          <Icon Name={Root ? "vehicle-component-origin" : ComponentIcon(Row, Values[Row.Id] || {})} Size={18} />
+        {/* A mesh row shows a render of its mesh (VehiclePartIcon) on a light tile; the rest show their class or socket icon. */}
+        <span className={"vcp-row-icon" + (!Root && Row.Component === "StaticMesh" ? " vcp-row-render" : "")}>
+          <Icon Name={Root ? "vehicle-component-origin" : ComponentIcon(Row, Values[Row.Id] || {})} Size={!Root && Row.Component === "StaticMesh" ? 22 : 18} />
         </span>
         <span className="vcp-row-text">
           <b>
@@ -450,7 +451,7 @@ function VehicleComponentView({ Rows, Values, Hidden, Selected, Select, Leave, R
       if (Event.target.closest?.("input, textarea, select, [contenteditable=true]")) return;
       const Inside = Event.target === document.body || !!Event.target.closest?.(".vcp");
       if (Event.key === "Escape") {
-        if (document.querySelector('.vcp .orbit-button[aria-expanded="true"], .vcp-add[aria-expanded="true"]')) return;
+        if (document.querySelector('.vcp-add[aria-expanded="true"]')) return;
         Event.stopPropagation();
         Latest.current.Leave?.();
       } else if (!Inside) return;

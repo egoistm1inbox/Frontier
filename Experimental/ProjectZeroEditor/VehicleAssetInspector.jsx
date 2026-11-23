@@ -3,10 +3,10 @@
 //============================================================================================================================================
 // 🚗 The level's vehicles (Outliner folder Vehicles): the Controlled Vehicle (the player's car, which holds the Vehicle Movement, Body,
 // socket, collision and light components), an Off-road Vehicle and a Pickup Truck. Each is one of VehicleAssets.js's models, parked in
-// the 3D viewport. Its inspector has three lettered pages behind the Orbit menu (InspectorTabs.jsx, the "garage" look):
-//   A · Model   the vehicle rendered large in its paint, and the paint swatches (the viewport and this picture follow).
-//   B · Size    length, then width, height, wheelbase, track, ground clearance and mass.
-//   C · Drive   who drives it; the Controlled Vehicle lists its components (each opens its row).
+// the 3D viewport. Its inspector has three numbered pages in the page carousel (InspectorTabs.jsx, PageCarousel.jsx):
+//   1 · Model   the vehicle rendered large in its paint, and the paint swatches (the viewport and this picture follow).
+//   2 · Size    length, then width, height, wheelbase, track, ground clearance and mass.
+//   3 · Drive   who drives it; the Controlled Vehicle lists its components (each opens its row).
 
 import React, { useMemo } from "react";
 import { InspectorTabs } from "./InspectorTabs.jsx";

@@ -319,4 +319,26 @@ export const VehicleFacts = {
 
 // For CaptureEditorAssetIcons.mjs: each vehicle's outliner icon (three-quarter front view, studio lit).
 export const VehicleIcon = (Id, Size = 96) => ModelIcon(VehicleAsset(Id), Size, { Yaw: -128, Pitch: 16 });
-if (typeof window !== "undefined") window.FrontierEditorAssets = { ...(window.FrontierEditorAssets || {}), VehicleIcon, VehicleModels };
+// For CaptureEditorAssetIcons.mjs (Follow-up 64): the Controlled Vehicle's Body, Tyre and Rim components shown as pictures of the real
+// ControlVehicle meshes (not drawn icons): the body three-quarter from the front, a tyre and a rim turned to show their face.
+export const VehiclePartIcons = [
+  ["Body", "vehicle-component-body", { Yaw: -128, Pitch: 16 }],
+  ["Tyre", "vehicle-component-tyre", { Yaw: -24, Pitch: 10 }],
+  ["Rim", "vehicle-component-rim", { Yaw: -24, Pitch: 10 }],
+];
+export function VehiclePartIcon(Part, Size = 96) {
+  const [, , View] = VehiclePartIcons.find(([Each]) => Each === Part) || VehiclePartIcons[0];
+  const { Body, Wheels } = ControlVehicleParts();
+  const Piece = Part === "Body" ? Body : Wheels[1][Part]; // the front right wheel's, which faces outward (+z once turned)
+  Piece.removeFromParent();
+  Piece.position.set(0, 0, 0);
+  const Turned = new THREE.Group();
+  // The body turned nose-forward like the parked car; a tyre or rim with its axle toward the camera, outer face out.
+  if (Part === "Body") Turned.rotation.y = Math.PI / 2;
+  else Piece.rotation.y = Math.PI; // a right-hand wheel's turn, which brings the outer face (the valve, the cap) round to +z
+  Turned.add(Piece);
+  const G = new THREE.Group();
+  G.add(Turned);
+  return ModelIcon(G, Size, View);
+}
+if (typeof window !== "undefined") window.FrontierEditorAssets = { ...(window.FrontierEditorAssets || {}), VehicleIcon, VehicleModels, VehiclePartIcon, VehiclePartIcons };

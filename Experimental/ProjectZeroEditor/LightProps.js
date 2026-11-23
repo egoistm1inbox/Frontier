@@ -402,6 +402,7 @@ export function LightProp(Type, Props) {
   // A large invisible target round the head, so the prop is easy to click.
   const Grab = new THREE.Mesh(new THREE.SphereGeometry(0.32, 10, 8), new THREE.MeshBasicMaterial({ visible: false }));
   Grab.position.set(0, Height, 0);
+  Grab.userData.grab = true; // the viewport tries these first, so a lamp head picks its light even with another prop's stand or canopy in front
   Group.add(Grab);
   Group.userData.light = { Type, Candela: +Strength.toFixed(2), Cone: Output.Cone, Lumens: Output.Lumens, Height, Hung };
   return { Group, Light, Output };

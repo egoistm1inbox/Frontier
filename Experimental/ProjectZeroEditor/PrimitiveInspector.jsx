@@ -4,7 +4,7 @@ import PrimitiveGlyph from "./PrimitiveIcons.jsx";
 import { convexHull, inflateHull } from "./ConvexHull.js";
 import { PrimitiveSurface } from "./WorkspaceGeometry.js";
 import { CustomKey, CustomModeKey, CustomModes, ColliderAccept, importCollider } from "./ColliderImport.js";
-import { OrbitMenu } from "./OrbitMenu.jsx";
+import { PageStrip, PageTurn, PageLook } from "./PageCarousel.jsx";
 import "./PrimitiveInspector.css";
 
 // 🧩 Inspector for the Showcase primitives (Cube, Sphere, Cylinder, Torus, Cone): one category carousel —
@@ -1318,66 +1318,62 @@ function GeometryPage({ Shape, Read, Change, Values, Size, Kit }) {
 //                                                    CAROUSEL
 //------------------------------------------------------------------------------------------------------------------------
 
-// The categories are picked from the Orbit menu (OrbitMenu.jsx): a round button pinned bottom right, ringed by the category colours,
-// that opens the categories in a circle around the object's summary. The cards always come first. ← and → (or a sideways swipe on the
-// cards) move between categories.
+// The categories are turned with the page carousel (PageCarousel.jsx, Follow-up 64): the numbered strip above the cards, the pages
+// sliding across. ← and → (or a sideways swipe on the cards) move between categories.
 function Carousel({ Pages, Focus = null, Summary }) {
   const [Current, Choose] = useState(Focus ? "components" : "overview");
-  const [Direction, Turn] = useState("none");
   const Index = Math.max(0, Categories.findIndex(([Key]) => Key === Current));
+  const Motion = PageTurn(Index);
   const Go = (Next) => {
     const Target = (Next + Categories.length) % Categories.length;
-    Turn(Target >= Index ? "next" : "previous");
+    Motion.Turn(Target);
     Choose(Categories[Target][0]);
   };
   // Opening a component from elsewhere turns to the Components page.
   useEffect(() => {
-    if (Focus && Current !== "components") { Turn("next"); Choose("components"); }
+    if (Focus && Current !== "components") Go(Categories.findIndex(([Key]) => Key === "components"));
   }, [Focus?.Stamp]);
   const Swipe = useRef(null);
-  const [Key, Label, Glyph, Tone] = Categories[Index];
+  const [Key, , , Tone] = Categories[Index];
+  // The page being left stays mounted (same key) while it slides out, then goes.
+  const Drawn = [Motion.Leaving, Index].filter((At) => At !== null && Categories[At]);
   return (
-    <section className="pi-carousel" aria-label="Categories" data-navigation="orbit" style={{ "--pi-current": Tone }}>
-      <div
-        key={Key}
-        className={"pi-page pi-enter-" + Direction}
-        role="tabpanel"
-        aria-label={Label}
-        data-page={Key}
-        onPointerDown={(Event) => {
-          // A press on a control (or a drag grip, whose pointerup never arrives) is not a swipe; drop any stale start too.
-          Swipe.current = Event.target.closest("input, textarea, button, select, [role=slider], label, [draggable=true]") ? null : { X: Event.clientX, Y: Event.clientY };
-        }}
-        onDragStart={() => (Swipe.current = null)}
-        onPointerUp={(Event) => {
-          const Start = Swipe.current;
-          Swipe.current = null;
-          if (!Start) return;
-          const Dx = Event.clientX - Start.X, Dy = Event.clientY - Start.Y;
-          if (Math.abs(Dx) > 60 && Math.abs(Dx) > Math.abs(Dy) * 1.5) Go(Index + (Dx < 0 ? 1 : -1));
-        }}
-      >
-        {Pages[Key]}
+    <section className="pi-carousel" aria-label="Categories" data-navigation="carousel" data-summary={`${Summary.Triangles} tris · ${Summary.Vertices} verts · ${Summary.Motion}`} style={{ "--pi-current": Tone }}>
+      <PageStrip Owner="Category" Label="Categories" Index={Index} Pick={Go} Pages={Categories.map(([Each, Caption]) => ({ Id: Each, Label: Caption, ClassName: "pi-pill" }))} />
+      <div className={"pc-pages" + (Motion.Leaving !== null ? " pc-turning" : "")}>
+        {Drawn.map((At) => {
+          const [Each, Caption] = Categories[At];
+          const { className, hidden, ...Shown } = PageLook(At, Index, Motion);
+          return (
+            <div
+              key={Each}
+              className={"pi-page " + className}
+              role="tabpanel"
+              aria-label={Caption}
+              data-page={Each}
+              {...Shown}
+              {...(At === Index
+                ? {
+                    onPointerDown: (Event) => {
+                      // A press on a control (or a drag grip, whose pointerup never arrives) is not a swipe; drop any stale start too.
+                      Swipe.current = Event.target.closest("input, textarea, button, select, [role=slider], label, [draggable=true]") ? null : { X: Event.clientX, Y: Event.clientY };
+                    },
+                    onDragStart: () => (Swipe.current = null),
+                    onPointerUp: (Event) => {
+                      const Start = Swipe.current;
+                      Swipe.current = null;
+                      if (!Start) return;
+                      const Dx = Event.clientX - Start.X, Dy = Event.clientY - Start.Y;
+                      if (Math.abs(Dx) > 60 && Math.abs(Dx) > Math.abs(Dy) * 1.5) Go(Index + (Dx < 0 ? 1 : -1));
+                    },
+                  }
+                : {})}
+            >
+              {Pages[Each]}
+            </div>
+          );
+        })}
       </div>
-      <OrbitMenu
-        Owner="Category"
-        Look="categories"
-        Index={Index}
-        Pick={Go}
-        Face={<PrimitiveGlyph Name={Glyph} Size={18} />}
-        Pages={Categories.map(([Each, Caption, EachGlyph, EachTone]) => ({ Id: Each, Label: Caption, Tone: EachTone, ClassName: "pi-pill" + (Each === Key ? " active" : ""), Inside: <PrimitiveGlyph Name={EachGlyph} Size={16} /> }))}
-        Middle={
-          <>
-            <b>{Summary.Triangles}</b>
-            <small>tris</small>
-            <span>
-              {Summary.Vertices} verts · {Summary.Materials} mat
-            </span>
-            <span>{Summary.Motion}</span>
-            <strong>{Label}</strong>
-          </>
-        }
-      />
     </section>
   );
 }

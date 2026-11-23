@@ -3,7 +3,7 @@ import path from "node:path";
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
-import { CategoryPill, OpenOrbit } from "./TabReveal.mjs";
+import { CategoryPill } from "./TabReveal.mjs";
 
 // Follow-up 40 / 46: object components (Mass, Rigid Body, Collision) in each showcase object's component stack, the per-workspace
 // carousel pages and the editable Vehicle Movement charts.
@@ -26,9 +26,9 @@ const Open = async (Id) => {
   await Page.waitForTimeout(300);
 };
 const Saved = () => Page.evaluate((Name) => JSON.parse(localStorage.getItem(Name)), Key);
-// Showcase categories are picked from the Orbit menu (Follow-up 60): Pill(Name).click() opens its ring and picks; Shown() names the open one.
+// Showcase categories are turned with the page carousel (Follow-up 64): Pill(Name).click() turns to one; Shown() names the open one.
 const Pill = (Name) => ({ click: async () => (await CategoryPill(Page, Name)).click() });
-const Shown = () => Page.locator(".pi-page").getAttribute("aria-label");
+const Shown = () => Page.locator(".pi-page:not([aria-hidden])").getAttribute("aria-label");
 const Metrics = () => Page.locator(".vc-card .metric").allInnerTexts();
 async function DragHandle(Plot, Index, Dx, Dy) {
   const Handle = Page.locator(`[data-plot="${Plot}"] .vc-handle`).nth(Index);
@@ -55,22 +55,31 @@ try {
   assert.equal(Rows.filter((Row) => Row.Panel === "object-component" && ["camera", "cine"].includes(Row.Parent)).length, 2);
   assert.equal(await Page.locator(".outliner-row", { hasText: /^\s*Mass/ }).count(), 0);
   assert.deepEqual(await Page.locator(".pi-components-card .oc-link b").allInnerTexts(), ["Mass", "Rigid Body", "Collision"]);
-  await OpenOrbit(Page, "Category");
   assert.deepEqual(await Page.locator(".pi-pill").evaluateAll((Pills) => Pills.map((Each) => Each.getAttribute("aria-label"))), ["Overview", "Components", "Geometry", "Material", "UV", "Fracture", "SDF", "LOD"]);
   assert.equal(await Page.locator('.pi-pill[aria-label="Physics"]').count(), 0);
-  await Page.locator('[data-orbit="Category"] .orbit-button').click();
-  assert.equal(await Page.locator('[data-orbit="Category"] .orbit-ring').count(), 0);
-  // Follow-up 60: every showcase object picks its category from the Orbit menu, which follows the cards, never above them.
+  // Follow-up 64: every showcase object turns its categories with the page carousel: the numbered strip right under the header, then
+  // the cards; ‹ › and the count; a turn slides the old page out as the new one comes in.
   for (const Id of ["cube", "sphere", "cylinder", "torus", "cone"]) {
     await Open(Id);
-    assert.equal(await Page.locator(".pi-carousel").getAttribute("data-navigation"), "orbit", Id + " navigation");
-    assert.equal(await Page.locator('[data-orbit="Category"]').getAttribute("data-orbit-look"), "categories");
+    assert.equal(await Page.locator(".pi-carousel").getAttribute("data-navigation"), "carousel", Id + " navigation");
+    const Strip = await Page.locator('[data-strip="Category"]').boundingBox();
     const Cards = await Page.locator(".pi-page [data-card]").first().boundingBox();
     const Top = await Page.locator(".inspector-scroll > [data-panel] header").first().boundingBox();
-    assert.ok(Cards.y < Top.y + Top.height + 140, Id + ": the first card sits right under the header " + JSON.stringify({ Cards, Top }));
+    assert.ok(Strip.y < Top.y + Top.height + 60 && Cards.y > Strip.y + Strip.height, Id + ": the strip sits under the header, the cards under it " + JSON.stringify({ Strip, Cards, Top }));
+    assert.deepEqual(await Page.locator('[data-strip="Category"] .pc-number').allInnerTexts(), ["1", "2", "3", "4", "5", "6", "7", "8"]);
+    assert.equal(await Page.locator('[data-strip="Category"] .pc-count').innerText(), "1 / 8");
   }
   await Open("cube");
-  Checks.push("Category navigation is the Orbit menu on every showcase object, after the cards; its ring opens on press and closes again");
+  await Page.getByRole("button", { name: "Next page" }).first().click();
+  // Mid-turn both pages are drawn: the Overview sliding out (hidden from assistive technology), Components coming in.
+  assert.deepEqual(await Page.locator(".pi-page").evaluateAll((Pages) => Pages.map((Each) => Each.dataset.page + (Each.getAttribute("aria-hidden") ? ":leaving" : ""))), ["overview:leaving", "components"]);
+  await Page.waitForFunction(() => document.querySelectorAll(".pi-page").length === 1);
+  assert.equal(await Shown(), "Components");
+  assert.equal(await Page.locator('[data-strip="Category"] .pc-count').innerText(), "2 / 8");
+  await Page.getByRole("button", { name: "Previous page" }).first().click();
+  await Page.waitForFunction(() => document.querySelectorAll(".pi-page").length === 1);
+  assert.equal(await Shown(), "Overview");
+  Checks.push("Category navigation is the page carousel on every showcase object: numbered strip (1–8, count 1 / 8) under the header, ‹ › turn, the pages slide across");
   Checks.push("No object component rows in the outliner (cameras keep their Render Engine row); the carousel is Overview, Components, Geometry, Material, UV, Fracture, SDF, LOD");
 
   // Opening Mass from the Overview turns to the Components page with the Mass entry open; edits are stored on the owning object.
@@ -105,8 +114,7 @@ try {
   await Page.waitForTimeout(250);
   await Page.locator(".outliner-row", { hasText: "Torus" }).first().click();
   await Page.waitForTimeout(250);
-  // Follow-up 59: the torus uses the Orbit navigation, whose category buttons appear only with the ring open; the open page tells it.
-  assert.equal(await Page.locator(".pi-page").getAttribute("data-page"), "overview");
+  assert.equal(await Page.locator(".pi-page:not([aria-hidden])").getAttribute("data-page"), "overview");
   Checks.push("A component focus belongs to its object: reselecting the torus opens on Overview");
 
   // Stack editing on the sphere: reorder, switch off, remove, reload, add back.

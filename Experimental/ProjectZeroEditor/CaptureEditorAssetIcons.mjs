@@ -3,7 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 
-// Captures the editor assets' icons (EditorAssets.js `CameraIcon`, VehicleAssets.js `VehicleIcon`, rendered in the editor's own browser bundle) as 96 px PNGs into
+// Captures the editor assets' icons (EditorAssets.js `CameraIcon`, VehicleAssets.js `VehicleIcon` and `VehiclePartIcon`, rendered in the editor's own browser bundle) as 96 px PNGs into
 // Images/EditorAssets, which Build.mjs ships as icons. Run against a served editor, then rebuild:
 //   FRONTIER_EDITOR_URL=http://127.0.0.1:8097/ node CaptureEditorAssetIcons.mjs && node Build.mjs
 const Folder = path.dirname(fileURLToPath(import.meta.url));
@@ -22,6 +22,7 @@ try {
     return [
       ...Assets.CameraBodies.map((Body) => [Body.Icon, Assets.CameraIcon(Body.Id, 96)]),
       ...Assets.VehicleModels.map((Model) => [Model.Icon, Assets.VehicleIcon(Model.Id, 96)]),
+      ...Assets.VehiclePartIcons.map(([Part, Icon]) => [Icon, Assets.VehiclePartIcon(Part, 96)]),
     ];
   });
   for (const [Name, Picture] of Icons) {

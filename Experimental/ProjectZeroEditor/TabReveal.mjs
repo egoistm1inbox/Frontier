@@ -1,31 +1,39 @@
-// For the checks: the lettered inspector pages (InspectorTabs.jsx) and the Showcase categories are picked from the Orbit menu
-// (OrbitMenu.jsx), whose page buttons exist only while its ring is open.
+// For the checks: the numbered inspector pages (InspectorTabs.jsx) and the Showcase categories are turned with the page carousel
+// (PageCarousel.jsx, Follow-up 64), whose strip of pills is always on screen above the pages.
 
-// Opens the Orbit ring (of the menu holding Owner's pages, or the only one) if it is shut.
+// Kept for older checks: the strip needs no opening (Follow-up 60's Orbit ring did); waits until Owner's strip is there.
 export async function OpenOrbit(Page, Owner = null) {
-  const Button = Page.locator(`${Owner ? `[data-orbit="${Owner}"]` : ".orbit-menu"} .orbit-button[aria-expanded="false"]`).first();
-  if (await Button.count()) await Button.click();
-  await Page.locator(`${Owner ? `[data-orbit="${Owner}"]` : ".orbit-menu"} .orbit-ring`).first().waitFor();
+  await Page.locator(Owner ? `[data-strip="${Owner}"]` : ".pc-strip").first().waitFor();
 }
-// Turns to a lettered page ("owner:page"), opening the ring first.
+// Turns to a numbered page ("owner:page") and waits for its slide to end.
 export async function PickTab(Page, Tab) {
-  if (await Page.locator(`[data-tab-page="${Tab}"]:not([hidden])`).count()) return;
-  await OpenOrbit(Page, Tab.split(":")[0]);
+  if (await Page.locator(`[data-tab-page="${Tab}"]:not([hidden]):not([aria-hidden])`).count()) return;
   await Page.locator(`[data-tab-for="${Tab}"]`).click();
   await Page.locator(`[data-tab-page="${Tab}"]`).waitFor();
+  await Settled(Page);
 }
-// A Showcase category button (by name), with the ring open.
+// Waits for any page slide to finish (the page being left is gone).
+export async function Settled(Page) {
+  await Page.waitForFunction(() => !document.querySelector(".pc-turning"));
+}
+// A Showcase category pill (by name): click() turns to it and waits for the slide to end.
 export async function CategoryPill(Page, Name) {
-  await OpenOrbit(Page, "Category");
-  return Page.locator(`.pi-pill[aria-label="${Name}"]`);
+  const Pill = Page.locator(`[data-strip="Category"] .pi-pill[aria-label="${Name}"]`);
+  return {
+    Pill,
+    click: async (Options) => {
+      await Pill.click(Options);
+      await Settled(Page);
+    },
+  };
 }
 // Turns to a Showcase category.
 export async function PickCategory(Page, Name) {
   await (await CategoryPill(Page, Name)).click();
-  await Page.locator(`.pi-page[aria-label="${Name}"]`).waitFor();
+  await Page.locator(`.pi-page[aria-label="${Name}"]:not([aria-hidden])`).waitFor();
 }
 
-// Opens the lettered page holding a control, when that page is shut.
+// Opens the numbered page holding a control, when that page is shut.
 export async function OpenTabOf(Target) {
   const Tab = await Target.evaluate((Each) => {
     const Holder = Each.closest("[data-tab-page]");

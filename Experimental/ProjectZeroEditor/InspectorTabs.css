@@ -1,4 +1,4 @@
-/* Lettered inspector pages (InspectorTabs.jsx); the Orbit menu that picks them is OrbitMenu.css. */
+/* Numbered inspector pages (InspectorTabs.jsx); the strip and the slide are PageCarousel.css. */
 .inspector-tabs {
   display: block;
 }

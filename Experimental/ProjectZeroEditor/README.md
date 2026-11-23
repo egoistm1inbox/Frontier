@@ -280,6 +280,33 @@ starting point for the UI redesign.
     - `CheckEditorAssets` and `CheckObjectComponents` drop Vehicle Movement.
     - `CheckEntityContext` has the strip's new place.
   - Evidence is in `Exhibits/ProjectZeroEditor/FollowUp53/`. Names are unapproved.
+- **Follow-up 64.**
+  - **Page carousel everywhere.** `PageCarousel.jsx` / `.css` replaces the Follow-up 60 Orbit menu (removed). Every paged
+    inspector uses it: the Showcase categories (`PrimitiveInspector.jsx`), Sun, Moon, Stars, Atmosphere, Lens Flare, the cameras
+    (`InspectorTabs.jsx`), and the vehicles.
+    - One strip under the heading: ‹, a rail of pill tabs, ›, and an "n / N" count.
+    - Each pill has a flat, monochrome number badge (1, 2, 3…) and its label. There are no letters and no category colours.
+      The open pill turns white.
+    - Pages slide: the open page goes out one way as the next comes in (0.32 s). Reduced motion turns the slide off.
+    - ‹ › wrap around, ← → on the rail turn the page, and a swipe turns a Showcase page. A rail too long for the panel scrolls
+      the open pill into view, and the hidden edge fades.
+  - **Real renders in the component tree.** The Body, every tyre and every rim in the Vehicle Component Viewer's outliner show a
+    render of the actual mesh, not a drawn icon.
+    - `VehiclePartIcon` in `VehicleAssets.js` renders a ControlVehicle piece: the body, or the front-right wheel's tyre or rim
+      with the outer face out.
+    - `CaptureEditorAssetIcons.mjs` writes these to `Images/EditorAssets/vehicle-component-body/tyre/rim.png`. The drawn SVGs
+      are gone.
+    - The rows show the renders on a light tile, because the rubber is near black.
+  - Checks:
+    - `TabReveal.mjs` waits for a turn to settle (`Settled`).
+    - `CheckEditorAssets` covers every inspector's strip, badges and count, a pill pick, ← →, and ‹.
+    - `CheckObjectComponents` covers the Showcase strip and the mid-turn pair (leaving and incoming).
+    - `CheckInspectorOrder` no longer skips the Orbit menu. It waits for whichever inspector is shown, because a vehicle component's
+      Details replace the workspace Inspector.
+    - `CheckInspectorLayout` looks for the Sun's first page after the strip.
+  - **Lamp heads pick first.** A click on a light's head selects that light even when another prop is in front. Before, the Studio
+    Tube's head selected the Area Light. The invisible grab spheres in `LightProps.js` are tried before the rest of the scene.
+  - Evidence is in `Exhibits/ProjectZeroEditor/FollowUp54/`. Names are unapproved.
 
 ---
 
