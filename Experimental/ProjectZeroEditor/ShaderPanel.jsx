@@ -3,8 +3,9 @@ import React, { useEffect, useRef, useState } from "react";
 // A non-modal editor window. Material ownership stays pinned while scene selection changes.
 export default function ShaderPanel({ Children, Close, Dock }) {
   const [Position, Move] = useState({
-      X: Math.max(12, (innerWidth - 1120) / 2),
-      Y: Math.max(40, (innerHeight - 820) / 2),
+      // Follow-up 69: centred for the wider workspace window (MaterialPanel.css).
+      X: Math.max(12, (innerWidth - Math.min(1480, innerWidth - 24)) / 2),
+      Y: Math.max(40, (innerHeight - Math.min(900, innerHeight - 58)) / 2),
     }),
     Drag = useRef(null),
     Window = useRef(null),

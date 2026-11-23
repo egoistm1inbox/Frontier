@@ -12,7 +12,7 @@ import { BakeShaderChannel } from "./ShaderChannel.js";
 const RestingTurn = 0.6;
 
 let Mesh;
-function ReadMesh() {
+export function ReadMesh() {
   if (Mesh) return Mesh;
   const Raw = Uint8Array.from(atob(window.NativeAssets.ShaderBall), (Byte) =>
     Byte.charCodeAt(0),

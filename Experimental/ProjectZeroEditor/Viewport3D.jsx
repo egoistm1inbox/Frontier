@@ -38,6 +38,9 @@ import { VehicleAssetPanel, PaintOf } from "./VehicleAssetInspector.jsx";
 import { IsEditorCamera } from "./ScenePolicy.js";
 import { LightPlacements, LightProp } from "./LightProps.js";
 import { ComMark, CentroidMark, OverAll, MassCentreOf, CentroidOf, SolidParts } from "./DebugMarks.js";
+import { AnemometerAsset, PaintScreen, CupHeight } from "./Anemometer.js";
+import { SampleWind, Cardinal, Beaufort } from "./WindSample.js";
+import { TraceBrush, PaintTrace } from "./LiveTrace.js";
 
 export const ShowcaseSpacing = 1.8;
 const Rad = Math.PI / 180;
@@ -178,8 +181,8 @@ function StarField() {
   return Stars;
 }
 
-export default function Viewport3D({ Rows, Values, Hidden, Selected, Picked = [], Select, Air, Sun, Stars = () => undefined, Flare = () => undefined, StarsOff = false, FlareOff = false, FrameToken = 0, Grid = true, ShowCentres = true, ShowCentroids = true }) {
-  const Host = useRef(null), Scene = useRef(null), Latest = useRef({});
+export default function Viewport3D({ Rows, Values, Hidden, Selected, Picked = [], Select, Air, Sun, Stars = () => undefined, Flare = () => undefined, StarsOff = false, FlareOff = false, FrameToken = 0, Grid = true, ShowCentres = true, ShowCentroids = true, Anemometer = true, AnemometerAt = [3.2, 4.2], MoveAnemometer = () => undefined }) {
+  const Host = useRef(null), Scene = useRef(null), Latest = useRef({}), Readout = useRef(null);
   const [Failed, Fail] = useState("");
   const Medium = SkyMedium(Air);
   const Light = SunLight(Sun, Medium);
@@ -363,6 +366,149 @@ export default function Viewport3D({ Rows, Values, Hidden, Selected, Picked = []
       const Marks = new THREE.Group();
       Marks.name = "Debug marks";
       View.scene.add(Marks);
+      // Follow-up 69: the anemometer (Anemometer.js), standing in the scene outside the shapes so it never joins a framing box or a
+      // pick. Its cups and vane are driven by the wind field at its own position (WindSample.js), and the readout card follows it.
+      const Station = AnemometerAsset();
+      View.scene.add(Station);
+      const Gauge = Station.userData.instrument;
+      const Reading = { Trace: new Array(120).fill(null), Since: 0, Painted: 0, Spin: 0, Turn: null, Sample: null, Clock: 0 };
+      const MoveStation = () => {
+        const Wind = Latest.current.Wind || [];
+        const At = Station.position;
+        Station.visible = Latest.current.Anemometer !== false;
+        if (!Station.visible) {
+          if (Readout.current) Readout.current.hidden = true;
+          return false;
+        }
+        Reading.Clock = performance.now() / 1000;
+        const Sample = SampleWind(Wind, At.x, At.z, CupHeight, Reading.Clock);
+        // The trace starts with half a minute of the field's history at this spot, so it never looks switched off (and a move
+        // rewrites it for the new spot).
+        const Spot = At.x.toFixed(2) + "," + At.z.toFixed(2) + "," + Wind.length;
+        if (Reading.Spot !== Spot && !Carry) {
+          Reading.Spot = Spot;
+          Reading.Trace = Reading.Trace.map((_, Back) => SampleWind(Wind, At.x, At.z, CupHeight, Reading.Clock - (Reading.Trace.length - Back) * 0.25).Speed);
+          Reading.Since = 0.25;
+        }
+        Reading.Sample = Sample;
+        // A cup rotor runs at about a third of the wind speed at its cups' centres (a cup's arm is 16 cm).
+        const Step = Math.min(0.05, Reading.Clock - (Reading.Last ?? Reading.Clock));
+        Reading.Last = Reading.Clock;
+        Reading.Spin += ((Sample.Speed / 3) / 0.16) * Step;
+        Gauge.Rotor.rotation.y = Reading.Spin;
+        // The vane's nose swings into the wind on a damped spring (a still day leaves it where it was).
+        const Goal = Math.PI - (Sample.From * Math.PI) / 180;
+        if (Reading.Turn === null) Reading.Turn = { Angle: Goal, Rate: 0 };
+        if (Sample.Speed > 0.2) {
+          const Off = Math.atan2(Math.sin(Goal - Reading.Turn.Angle), Math.cos(Goal - Reading.Turn.Angle));
+          Reading.Turn.Rate += (Off * 26 - Reading.Turn.Rate * 6.5) * Step;
+        } else Reading.Turn.Rate *= 0.9;
+        Reading.Turn.Angle += Reading.Turn.Rate * Step;
+        Gauge.Vane.rotation.y = Reading.Turn.Angle;
+        Gauge.Beacon.material.color.set(Math.sin(Reading.Clock * 3.4) > 0.6 ? "#ff3b30" : "#5a1410");
+        // Four samples a second into thirty seconds of history; the screen and the card redraw at that rate.
+        Reading.Since += Step;
+        if (Reading.Since >= 0.25) {
+          Reading.Since = 0;
+          Reading.Trace.push(Sample.Speed);
+          Reading.Trace.shift();
+          const Recent = Reading.Trace.slice(-40).filter((Each) => Each !== null);
+          const Gust = Math.max(Sample.Speed, ...Recent);
+          PaintScreen(Gauge, { Speed: Sample.Speed, From: Sample.From, Cardinal: Cardinal(Sample.From), Force: Beaufort(Sample.Speed), Gust });
+          PaintReadout(Sample, Gust);
+          Canvas.dataset.anemometer = JSON.stringify({ X: +At.x.toFixed(2), Z: +At.z.toFixed(2), Height: CupHeight, Speed: +Sample.Speed.toFixed(3), From: +Sample.From.toFixed(1), Steady: +Sample.Steady.toFixed(3), Sources: Wind.length });
+          // Where the logger box lands on the canvas (fractions), for checks and tools that aim at the instrument.
+          const Mast = new THREE.Vector3(At.x, 1.02, At.z).project(View.camera);
+          Canvas.dataset.anemometerScreen = JSON.stringify([+((Mast.x + 1) / 2).toFixed(4), +((1 - Mast.y) / 2).toFixed(4)]);
+        }
+        // The card rides above the instrument; behind the camera it hides.
+        const Card = Readout.current;
+        if (Card) {
+          const Over = new THREE.Vector3(At.x, 2.45, At.z).project(View.camera);
+          const Box = Host.current?.getBoundingClientRect();
+          Card.hidden = Over.z > 1 || !Box;
+          // It stays wholly inside the view (near an edge it slides along it, and its pointer hides).
+          if (Box) {
+            const Wide = Card.offsetWidth || 232, Tall = Card.offsetHeight || 150;
+            const Left = ((Over.x + 1) / 2) * Box.width, Top = ((1 - Over.y) / 2) * Box.height;
+            const SetLeft = Math.min(Box.width - Wide / 2 - 8, Math.max(Wide / 2 + 8, Left)), SetTop = Math.min(Box.height - 8, Math.max(Tall + 10, Top));
+            Card.style.transform = `translate(${SetLeft}px, ${SetTop}px) translate(-50%, -100%)`;
+            Card.classList.toggle("anemo-pinned", Math.abs(SetLeft - Left) > 1 || Math.abs(SetTop - Top) > 1);
+          }
+        }
+        return true;
+      };
+      const PaintReadout = (Sample, Gust) => {
+        const Card = Readout.current;
+        if (!Card) return;
+        const Put = (Name, Text) => {
+          const Spot = Card.querySelector(`[data-read="${Name}"]`);
+          if (Spot && Spot.textContent !== Text) Spot.textContent = Text;
+        };
+        Put("speed", Sample.Speed.toFixed(1));
+        Put("from", `${Cardinal(Sample.From)} ${Math.round(Sample.From)}°`);
+        Put("force", `F${Beaufort(Sample.Speed)}`);
+        Put("gust", `${Gust.toFixed(1)}`);
+        Put("mean", `${Sample.Steady.toFixed(1)}`);
+        Put("where", `X ${Station.position.x.toFixed(1)} · Z ${Station.position.z.toFixed(1)} · ${CupHeight.toFixed(1)} m`);
+        const Needle = Card.querySelector(".anemo-needle");
+        if (Needle) Needle.style.transform = `rotate(${Sample.From}deg)`;
+        const Plot = Card.querySelector("canvas");
+        if (Plot) {
+          const Brush = TraceBrush(Plot, 196, 46);
+          const Kept = Reading.Trace.map((Each, At) => ({ X: At / (Reading.Trace.length - 1), Y: Each })).filter((Each) => Each.Y !== null);
+          const Top = Math.max(2, ...Kept.map((Each) => Each.Y)) * 1.15;
+          PaintTrace(Brush, { Width: 196, Height: 46, Points: Kept, Top, Plot: { Left: 2, Right: 24, Top: 4, Bottom: 4 }, Reference: Sample.Steady, Short: "below", Decimals: 0 });
+        }
+      };
+      // Drag the instrument across the ground (a press on it takes over from the camera until release).
+      const Sight = new THREE.Raycaster(), Level = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), Pointer = new THREE.Vector2();
+      const Aim = (Event) => {
+        const Box = Canvas.getBoundingClientRect();
+        Pointer.set(((Event.clientX - Box.left) / Box.width) * 2 - 1, -((Event.clientY - Box.top) / Box.height) * 2 + 1);
+        Sight.setFromCamera(Pointer, View.camera);
+      };
+      let Carry = null;
+      const Grab = (Event) => {
+        if (Event.button !== 0 || !Station.visible || Event.target !== Canvas) return;
+        Aim(Event);
+        if (!Sight.intersectObject(Station, true).length) return;
+        Event.stopPropagation();
+        Event.preventDefault();
+        const Spot = Sight.ray.intersectPlane(Level, new THREE.Vector3());
+        Carry = { Offset: Spot ? Station.position.clone().sub(Spot).setY(0) : new THREE.Vector3(), Moved: false };
+        Canvas.dataset.anemometerDrag = "1";
+      };
+      const Carrying = (Event) => {
+        if (!Carry) return;
+        Aim(Event);
+        const Spot = Sight.ray.intersectPlane(Level, new THREE.Vector3());
+        if (!Spot) return;
+        Station.position.set(Spot.x + Carry.Offset.x, 0, Spot.z + Carry.Offset.z);
+        Carry.Moved = true;
+        Dirty = true;
+      };
+      const Drop = (Event) => {
+        if (!Carry) return;
+        Event.stopPropagation();
+        if (Carry.Moved) Latest.current.MoveAnemometer?.([+Station.position.x.toFixed(2), +Station.position.z.toFixed(2)]);
+        Carry = null;
+        delete Canvas.dataset.anemometerDrag;
+      };
+      // A double-click on it brings the camera in close.
+      Canvas.addEventListener("dblclick", (Event) => {
+        if (!Station.visible) return;
+        Aim(Event);
+        if (!Sight.intersectObject(Station, true).length) return;
+        View.frame(new THREE.Box3().setFromObject(Station), { keepAngle: true });
+        AimSun();
+        Dirty = true;
+      });
+      const Holder = Host.current;
+      Holder.addEventListener("pointerdown", Grab, true);
+      window.addEventListener("pointermove", Carrying);
+      Holder.addEventListener("pointerup", Drop, true);
+      window.addEventListener("pointerup", Drop);
       // Draw only when something changed: the camera moved, or the scene was touched.
       let Dirty = true, Last = "";
           View.renderer.setAnimationLoop(() => {
@@ -381,6 +527,8 @@ export default function Viewport3D({ Rows, Values, Hidden, Selected, Picked = []
           View.rig.pitch = Math.max(View.rig.pitch, Math.asin(Math.max(-1, Math.min(1, (0.08 - View.rig.target.y) / View.rig.distance))));
           View.rig.apply();
         }
+        // The anemometer turns whenever it is out, so the view redraws while it does.
+        if (MoveStation()) Dirty = true;
         const Seen = View.camera.matrixWorld.elements.map((Each) => Each.toFixed(5)).join(",") + View.camera.fov.toFixed(3) + View.canvas.width + "x" + View.canvas.height;
         if (!Dirty && Seen === Last) return;
         Last = Seen;
@@ -436,7 +584,13 @@ export default function Viewport3D({ Rows, Values, Hidden, Selected, Picked = []
       Canvas.addEventListener("keydown", (Event) => {
         if (Event.key.toLowerCase() === "f") Scene.current?.FrameChosen?.();
       });
-      Built = { View, Canvas, Layer, SkyImage, SkyTexture, Hemisphere, Ground, AimSun, Stars, Marks, Touch: () => (Dirty = true), Framed: false, Moved: false };
+      Built = { View, Canvas, Layer, SkyImage, SkyTexture, Hemisphere, Ground, AimSun, Stars, Marks, Station, Touch: () => (Dirty = true), Framed: false, Moved: false, Carrying: () => !!Carry };
+      Built.Unhook = () => {
+        Holder.removeEventListener("pointerdown", Grab, true);
+        Holder.removeEventListener("pointerup", Drop, true);
+        window.removeEventListener("pointermove", Carrying);
+        window.removeEventListener("pointerup", Drop);
+      };
       Scene.current = Built;
       // Until the camera is moved by hand, keep the shapes framed when the viewport changes shape (it opens before the panels settle).
       for (const Name of ["pointerdown", "wheel"]) Canvas.addEventListener(Name, () => (Built.Moved = true), { passive: true });
@@ -456,6 +610,7 @@ export default function Viewport3D({ Rows, Values, Hidden, Selected, Picked = []
       if (!Built) return;
       Built.View.resize = () => {}; // its ResizeObserver outlives the canvas
       Built.Refit.disconnect();
+      Built.Unhook();
       Built.View.renderer.setAnimationLoop(null);
       Built.View.setContent(null);
       Built.View.renderer.dispose();
@@ -475,6 +630,18 @@ export default function Viewport3D({ Rows, Values, Hidden, Selected, Picked = []
   Latest.current.FlareOff = FlareOff;
   Latest.current.Chosen = Chosen;
   Latest.current.Grid = Grid;
+  // Follow-up 69: the wind the anemometer reads, every Wind object that is out, and where it stands.
+  Latest.current.Wind = Rows.filter((Row) => Row.Panel === "wind" && !HiddenUp(Rows, Hidden, Row)).map((Row) => Values[Row.Id] || {});
+  Latest.current.Anemometer = Anemometer;
+  Latest.current.MoveAnemometer = MoveAnemometer;
+  const StationKey = (AnemometerAt || []).join(",");
+  useEffect(() => {
+    const Built = Scene.current;
+    if (!Built || Built.Carrying()) return;
+    const [X = 3.2, Z = 4.2] = (AnemometerAt || []).map(Number);
+    Built.Station.position.set(Number.isFinite(X) ? X : 3.2, 0, Number.isFinite(Z) ? Z : 4.2);
+    Built.Touch();
+  }, [StationKey]);
   useEffect(() => {
     Scene.current?.Touch();
   }, [Grid]);
@@ -708,6 +875,35 @@ export default function Viewport3D({ Rows, Values, Hidden, Selected, Picked = []
     <div className="viewport-3d" ref={Host} role="region" aria-label="3D viewport region">
       {Failed && <p className="viewport-3d-failed">The 3D viewport could not start: {Failed}</p>}
       <span className="viewport-3d-caption">3D PREVIEW · THREE.JS · SHOWCASE LINE {ShowcaseSpacing} M APART</span>
+      {/* Follow-up 69: the anemometer's readout, riding above the instrument (filled in by the render loop, four times a second). */}
+      <div className="anemo-card" ref={Readout} hidden data-anemometer-card aria-label="Anemometer reading">
+        <div className="anemo-top">
+          <span className="anemo-dot" />
+          <span className="anemo-eyebrow">Anemometer · live field</span>
+          <b data-read="force">F0</b>
+        </div>
+        <div className="anemo-main">
+          <svg className="anemo-rose" viewBox="-30 -30 60 60" aria-hidden="true">
+            <circle r="27" className="anemo-ring" />
+            {Array.from({ length: 24 }, (_, Tick) => (
+              <line key={Tick} x1="0" y1={Tick % 6 ? -24.5 : -22.5} x2="0" y2="-27" transform={`rotate(${Tick * 15})`} className={Tick % 6 ? "anemo-tick" : "anemo-tick major"} />
+            ))}
+            <text y="-13.5" className="anemo-north">N</text>
+            <g className="anemo-needle">
+              <path d="M0 -21 L5 3 L0 -1 L-5 3 Z" className="anemo-head" />
+              <path d="M0 21 L2.4 6 L-2.4 6 Z" className="anemo-tail" />
+            </g>
+            <circle r="2.6" className="anemo-pivot" />
+          </svg>
+          <div className="anemo-figures">
+            <div className="anemo-speed"><b data-read="speed">0.0</b><span>m/s</span></div>
+            <div className="anemo-from">from <b data-read="from">N 0°</b></div>
+            <div className="anemo-pair"><span>gust <b data-read="gust">0.0</b></span><span>mean <b data-read="mean">0.0</b></span></div>
+          </div>
+        </div>
+        <canvas className="anemo-trace" />
+        <div className="anemo-where" data-read="where" />
+      </div>
     </div>
   );
 }

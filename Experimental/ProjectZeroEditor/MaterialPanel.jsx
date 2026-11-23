@@ -27,7 +27,8 @@ import {
   GradientValue,
 } from "./MaterialSpecification.js";
 import { ColourSlotDropProps } from "./ColourCodex.js";
-import { AssetDropProps } from "./AssetDrag.js";
+import { AssetDropProps, AssetDragStart } from "./AssetDrag.js";
+import ShaderViewport from "./ShaderViewport.jsx";
 import { BakeShaderChannel, ShaderChannelPicture } from "./ShaderChannel.js";
 import { EngineAssets } from "./AssetDepot.js";
 import { ShapeOf } from "./PrimitiveInspector.jsx";
@@ -744,6 +745,8 @@ export default function MaterialPanel({
   Expand,
   Compact = false,
   Slots: ShowSlots = true,
+  Library = null,
+  SavePreset = null,
 }) {
   // Follow-up 68: material slots. Slot 0 is Values.Material; slots 1+ are Values.MaterialSlots. Each section of the shape (box face,
   // cylinder cap, …) is drawn by one slot (Values.MaterialSections).
@@ -813,33 +816,7 @@ export default function MaterialPanel({
   const Authored = Material.Used.filter(
     (Id) => Material.Channels[Id].Source !== "Fill",
   ).length;
-  return (
-    <div
-      className={
-        "material-panel " + (Compact ? "material-compact" : "material-expanded")
-      }
-      data-material-owner={Subject.Id}
-    >
-      <header className="material-heading">
-        <div>
-          <span className="material-eyebrow">MATERIAL / SLOT {Slot}</span>
-          <h2>{Compact ? "Material channels" : "ShaderEditor"}</h2>
-          <p>
-            Bound to <b>{Subject.Name}</b> · #{Subject.Id}
-          </p>
-        </div>
-        {Expand && (
-          <button
-            className="material-expand"
-            aria-label="Expand ShaderEditor"
-            title="Open dockable ShaderEditor"
-            onClick={Expand}
-          >
-            ↗
-          </button>
-        )}
-      </header>
-      {ShowSlots && (
+  const SlotCard = (
         <section className="material-slots" aria-label="Material slots">
           <div className="material-section-title">
             <h3>Material slots</h3>
@@ -930,7 +907,93 @@ export default function MaterialPanel({
             </div>
           )}
         </section>
-      )}
+        );
+  const ChannelAdder = Unused.length + Material.Used.length > 0 &&
+            Material.Used.length < MaterialChannels.length && (
+              <div className={"channel-adder " + (Adding ? "open" : "")}>
+                <button
+                  className="channel-add"
+                  aria-expanded={Adding}
+                  onClick={() => {
+                    ShowAdding(!Adding);
+                    Search("");
+                  }}
+                >
+                  {Adding ? "Done" : "+ Add channel"}
+                </button>
+                {Adding && (
+                  <div className="channel-picker" role="group" aria-label="Add a channel">
+                    <input
+                      className="channel-search"
+                      aria-label="Search material channels"
+                      placeholder="Search channels…"
+                      autoFocus
+                      value={Query}
+                      onChange={(Event) => Search(Event.target.value)}
+                    />
+                    {[...new Set(Unused.map((Entry) => Entry.Group))].map((Group) => (
+                      <div className="channel-picker-group" key={Group}>
+                        <small>{Group}</small>
+                        {Unused.filter((Entry) => Entry.Group === Group).map((Entry) => (
+                          <button
+                            key={Entry.Id}
+                            data-add-channel={Entry.Id}
+                            onClick={() => {
+                              Apply(AddChannel(Latest.current, Entry.Id));
+                              Select(Entry.Id);
+                            }}
+                          >
+                            <span
+                              className="channel-swatch"
+                              style={{ background: Entry.Kind === "Colour" ? Entry.Default : undefined }}
+                            >
+                              {Entry.Kind !== "Colour" ? "◈" : ""}
+                            </span>
+                            {Entry.Label}
+                            <i>+</i>
+                          </button>
+                        ))}
+                      </div>
+                    ))}
+                    {!Unused.length && <p>No matching channels.</p>}
+                  </div>
+                )}
+              </div>
+            );
+  if (!Compact)
+    return (
+      <ShaderWorkspace
+        {...{ Subject, Material, Slot, Slots, ShowSlots, SlotCard, ChannelAdder, Apply, Assign, Select, Current, Library, SavePreset, ReplaceSlot }}
+        Expand={Expand}
+      />
+    );
+  return (
+    <div
+      className={
+        "material-panel " + (Compact ? "material-compact" : "material-expanded")
+      }
+      data-material-owner={Subject.Id}
+    >
+      <header className="material-heading">
+        <div>
+          <span className="material-eyebrow">MATERIAL / SLOT {Slot}</span>
+          <h2>{Compact ? "Material channels" : "ShaderEditor"}</h2>
+          <p>
+            Bound to <b>{Subject.Name}</b> · #{Subject.Id}
+          </p>
+        </div>
+        {Expand && (
+          <button
+            className="material-expand"
+            aria-label="Expand ShaderEditor"
+            title="Open dockable ShaderEditor"
+            onClick={Expand}
+          >
+            ↗
+          </button>
+        )}
+      </header>
+      {ShowSlots && SlotCard}
       <div className="material-properties">
         <label>
           Material name
@@ -1076,58 +1139,7 @@ export default function MaterialPanel({
               </p>
             )}
           </div>
-          {Unused.length + Material.Used.length > 0 &&
-            Material.Used.length < MaterialChannels.length && (
-              <div className={"channel-adder " + (Adding ? "open" : "")}>
-                <button
-                  className="channel-add"
-                  aria-expanded={Adding}
-                  onClick={() => {
-                    ShowAdding(!Adding);
-                    Search("");
-                  }}
-                >
-                  {Adding ? "Done" : "+ Add channel"}
-                </button>
-                {Adding && (
-                  <div className="channel-picker" role="group" aria-label="Add a channel">
-                    <input
-                      className="channel-search"
-                      aria-label="Search material channels"
-                      placeholder="Search channels…"
-                      autoFocus
-                      value={Query}
-                      onChange={(Event) => Search(Event.target.value)}
-                    />
-                    {[...new Set(Unused.map((Entry) => Entry.Group))].map((Group) => (
-                      <div className="channel-picker-group" key={Group}>
-                        <small>{Group}</small>
-                        {Unused.filter((Entry) => Entry.Group === Group).map((Entry) => (
-                          <button
-                            key={Entry.Id}
-                            data-add-channel={Entry.Id}
-                            onClick={() => {
-                              Apply(AddChannel(Latest.current, Entry.Id));
-                              Select(Entry.Id);
-                            }}
-                          >
-                            <span
-                              className="channel-swatch"
-                              style={{ background: Entry.Kind === "Colour" ? Entry.Default : undefined }}
-                            >
-                              {Entry.Kind !== "Colour" ? "◈" : ""}
-                            </span>
-                            {Entry.Label}
-                            <i>+</i>
-                          </button>
-                        ))}
-                      </div>
-                    ))}
-                    {!Unused.length && <p>No matching channels.</p>}
-                  </div>
-                )}
-              </div>
-            )}
+          {ChannelAdder}
         </aside>
         {Field ? (
           <SourceEditor
@@ -1143,6 +1155,366 @@ export default function MaterialPanel({
         )}
         <ShaderballPanel Material={Material} Compact={Compact} />
       </div>
+    </div>
+  );
+}
+
+// ── Follow-up 69: the ShaderEditor workspace ─────────────────────────────────────────────────────────────────────────────────────
+// Viewport on the left (a live PBR preview, with the material library sliding in over it), the material inspector on the right:
+// the material's card, its slots, name and type, then its channels in collapsible cards by category, each a reference-style row
+// (label, value pill, wide slider or colour bar) whose source chip opens the full source editor (gradient, texture, shader, link).
+const GroupTitles = {
+  Surface: "Colour & finish",
+  Specular: "Specular",
+  Coating: "Clear coat",
+  Fabric: "Fabric & sheen",
+  Volume: "Volume & transmission",
+  Geometry: "Relief",
+};
+const GroupGlyphs = {
+  Surface: "M4 7h16M4 12h10M4 17h13M17 10v4M14 15v4",
+  Specular: "M12 3l2.2 5.8L20 11l-5.8 2.2L12 19l-2.2-5.8L4 11l5.8-2.2z",
+  Coating: "M4 15c3-5 13-5 16 0M6 18c2.5-3 9.5-3 12 0M12 4v5",
+  Fabric: "M4 6c3 2 5 2 8 0s5-2 8 0M4 12c3 2 5 2 8 0s5-2 8 0M4 18c3 2 5 2 8 0s5-2 8 0",
+  Volume: "M12 3l8 4.5v9L12 21l-8-4.5v-9zM12 12l8-4.5M12 12v9M12 12L4 7.5",
+  Geometry: "M3 18l5-7 4 4 3-5 6 8z",
+};
+const Percentish = (Field) => Field.Minimum === 0 && Field.Maximum === 1;
+const ShowAmount = (Field, Amount) =>
+  Percentish(Field) ? Math.round(+Amount * 100) + " %" : (+Amount).toFixed(Field.Maximum - Field.Minimum <= 0.5 ? 3 : 2) + (Field.Unit ? " " + Field.Unit : "");
+// A ball shaded with the material's colour, roughness and metal (CSS), for cards and library tiles.
+export function BallLook(Material) {
+  const Channels = Material.Channels;
+  const Ground = ShownChannel(Channels.colour);
+  const Colour = Ground.Source === "Gradient" ? GradientValue(Ground, 0.5, true) : Ground.Fill;
+  const Rough = Math.max(0.04, Math.min(1, +ShownChannel(Channels.roughness).Fill));
+  const Metal = Math.max(0, Math.min(1, +ShownChannel(Channels.metallic).Fill));
+  const Glint = 0.95 - Rough * 0.6;
+  return {
+    background: `radial-gradient(circle at 34% 28%, rgba(255,255,255,${Glint}) 0, rgba(255,255,255,${Glint * 0.25}) ${6 + Rough * 18}%, transparent ${16 + Rough * 30}%), radial-gradient(circle at 60% 72%, transparent 40%, rgba(0,0,0,${0.35 + Metal * 0.3}) 78%), radial-gradient(circle at 45% 40%, ${Colour}, color-mix(in srgb, ${Colour} ${55 - Metal * 25}%, #000) 85%)`,
+  };
+}
+function SliderRow({ Field, Amount, Change }) {
+  const [Draft, EditDraft] = useState(null);
+  const Shown = Draft ?? ShowAmount(Field, Amount);
+  const Fraction = (Amount - Field.Minimum) / (Field.Maximum - Field.Minimum || 1);
+  const Settle = () => {
+    if (Draft === null) return;
+    const Typed = parseFloat(Draft);
+    if (Number.isFinite(Typed)) Change(Clamp(Percentish(Field) && /%/.test(Draft) ? Typed / 100 : Percentish(Field) && Typed > 1 ? Typed / 100 : Typed, Field.Minimum, Field.Maximum));
+    EditDraft(null);
+  };
+  return (
+    <>
+      <input
+        className="si-pill"
+        aria-label={Field.Label + " value"}
+        value={Shown}
+        onChange={(Event) => EditDraft(Event.target.value)}
+        onFocus={(Event) => Event.target.select()}
+        onBlur={Settle}
+        onKeyDown={(Event) => Event.key === "Enter" && Event.currentTarget.blur()}
+      />
+      <input
+        className="si-slider"
+        aria-label={Field.Label + " slider"}
+        type="range"
+        min={Field.Minimum}
+        max={Field.Maximum}
+        step={(Field.Maximum - Field.Minimum) / 400}
+        value={Amount}
+        style={{ "--fill": Math.max(0, Math.min(1, Fraction)) * 100 + "%" }}
+        onChange={(Event) => Change(+Event.target.value)}
+      />
+    </>
+  );
+}
+function ChannelInspectorRow({ Field, Owned, Selected, Select, Assign, Apply, Latest, Subject, Slot }) {
+  const [Open, Toggle] = useState(false);
+  const Drawn = ShownChannel(Owned);
+  const Change = (Patch) => Assign(Field.Id, Patch);
+  const Summary =
+    Owned.Source === "Code"
+      ? Owned.Code.Language + " shader"
+      : Owned.Source === "Link"
+        ? Owned.Link
+          ? "Linked from " + Owned.Link.Name
+          : "Drop a material from the Content Browser"
+        : Owned.Source === "Texture"
+          ? Owned.Texture
+            ? Owned.Texture.Name
+            : "No texture yet"
+          : Owned.Source === "Gradient"
+            ? Owned.Stops.length + "-stop gradient along " + Owned.Axis
+            : "";
+  return (
+    <div
+      className={"si-row " + (Selected ? "selected " : "") + (Open ? "open" : "")}
+      data-channel-row={Field.Id}
+      {...AssetDropProps(["Materials", "Images"], async (Asset) => {
+        if (Asset.Kind === "Images") {
+          try {
+            Change({ Source: "Texture", Texture: await ShrinkPicture(Asset.Data, Asset.Name) });
+          } catch {}
+        } else Change({ Source: "Link", Link: LinkFromAsset(Asset, Field.Id) });
+      })}
+      onFocusCapture={() => Select(Field.Id)}
+    >
+      <div className="si-row-head">
+        <button className="si-label" data-material-channel={Field.Id} onClick={() => Select(Field.Id)}>
+          {Field.Label}
+        </button>
+        <button
+          className={"si-source " + Owned.Source.toLowerCase()}
+          aria-expanded={Open}
+          aria-label={Field.Label + " source · " + SourceNames[Owned.Source]}
+          title="Change the source (fill, gradient, texture, shader or a linked material)"
+          onClick={() => Toggle(!Open)}
+        >
+          {SourceNames[Owned.Source]}
+          <svg viewBox="0 0 10 10" aria-hidden="true">
+            <path d="M2 4l3 3 3-3" />
+          </svg>
+        </button>
+        {Owned.Source === "Fill" && Field.Kind !== "Colour" ? null : <span className="si-spacer" />}
+        {Owned.Source === "Fill" && Field.Kind !== "Colour" && (
+          <SliderRow Field={Field} Amount={+Owned.Fill} Change={(Fill) => Change({ Fill })} />
+        )}
+        <button
+          className="si-remove"
+          aria-label={"Remove channel " + Field.Label}
+          title="Remove channel (it goes back to its default)"
+          onClick={() => Apply(RemoveChannel(Latest.current, Field.Id))}
+        >
+          ×
+        </button>
+      </div>
+      {Owned.Source === "Fill" && Field.Kind === "Colour" && (
+        <div
+          className="si-colour"
+          {...ColourSlotDropProps({
+            Key: Subject.Id + ":material:" + Slot + ":" + Field.Id,
+            Label: Subject.Name + " · " + Field.Label,
+            AssignHex: (Hex) => Change({ Source: "Fill", Fill: Hex }),
+          })}
+        >
+          <label className="si-swatch" style={{ background: Owned.Fill }}>
+            <input aria-label={Field.Label} type="color" value={Owned.Fill} onChange={(Event) => Change({ Fill: Event.target.value })} />
+          </label>
+          <HexInput Amount={Owned.Fill} Label={Field.Label + " hex"} Change={(Fill) => Change({ Fill })} />
+        </div>
+      )}
+      {Owned.Source !== "Fill" && !Open && (
+        <button className="si-summary" onClick={() => Toggle(true)}>
+          <span className="si-summary-swatch" style={{ background: ChannelSwatch(Owned, Field) || "#2a2a2a" }}>
+            {Owned.Source === "Code" ? "</>" : Owned.Source === "Texture" && Owned.Texture ? <img src={Owned.Texture.Data} alt="" /> : ""}
+          </span>
+          <span>{Summary}</span>
+          <i>Edit</i>
+        </button>
+      )}
+      {Open && (
+        <div className="si-source-editor">
+          <SourceEditor Field={Field} Channel={Owned} Change={Change} />
+        </div>
+      )}
+    </div>
+  );
+}
+function HexInput({ Amount, Label, Change }) {
+  const [Draft, EditDraft] = useState(null);
+  return (
+    <input
+      className="si-hex"
+      aria-label={Label}
+      value={Draft ?? Amount.toUpperCase()}
+      maxLength={7}
+      onChange={(Event) => EditDraft(Event.target.value)}
+      onFocus={(Event) => Event.target.select()}
+      onBlur={() => {
+        if (Draft !== null && /^#[0-9a-f]{6}$/i.test(Draft)) Change(Draft.toLowerCase());
+        EditDraft(null);
+      }}
+      onKeyDown={(Event) => Event.key === "Enter" && Event.currentTarget.blur()}
+    />
+  );
+}
+function MaterialLibrary({ Library, Apply, Close, Current }) {
+  const [Query, Search] = useState(""),
+    [Type, ChooseType] = useState("All");
+  const Shown = Library.filter(
+    (Asset) =>
+      (Type === "All" || ResolveMaterial({ Material: Asset.Material }).Type === Type) &&
+      (Asset.Name || "").toLowerCase().includes(Query.toLowerCase()),
+  );
+  return (
+    <aside className="sw-library" aria-label="Material library">
+      <header>
+        <h3>
+          Material library <small>{Library.length}</small>
+        </h3>
+        <button aria-label="Close material library" onClick={Close}>
+          ×
+        </button>
+      </header>
+      <input className="sw-library-search" aria-label="Search materials" placeholder="Search materials…" value={Query} onChange={(Event) => Search(Event.target.value)} />
+      <div className="sw-library-types" role="group" aria-label="Material type">
+        {["All", ...MaterialTypes].map((Name) => (
+          <button key={Name} aria-pressed={Type === Name} onClick={() => ChooseType(Name)}>
+            {Name === "All" ? "All materials" : Name}
+          </button>
+        ))}
+      </div>
+      <div className="sw-library-grid">
+        {Shown.map((Asset) => {
+          const Resolved = ResolveMaterial({ Material: Asset.Material });
+          return (
+            <button
+              key={Asset.Id}
+              className={"sw-tile " + (Current === Asset.Id ? "current" : "")}
+              data-library-material={Asset.Id}
+              draggable
+              onDragStart={(Event) => AssetDragStart(Event, Asset)}
+              onClick={() => Apply(Asset)}
+              title={"Apply " + Asset.Name + " to this slot · or drag it onto a channel"}
+            >
+              <span className="sw-tile-ball" style={BallLook(Resolved)} />
+              <span className="sw-tile-plinth" />
+              <b>{Asset.Name}</b>
+              <small>{Asset.Origin === "Engine" ? Resolved.Type : "Project"}</small>
+            </button>
+          );
+        })}
+        {!Shown.length && <p>No materials match.</p>}
+      </div>
+      <footer>Click to apply to the slot · drag onto a channel to link it</footer>
+    </aside>
+  );
+}
+function ShaderWorkspace({ Subject, Material, Slot, Slots, ShowSlots, SlotCard, ChannelAdder, Apply, Assign, Select, Current, Library, SavePreset, ReplaceSlot }) {
+  const Latest = useRef(Material);
+  Latest.current = Material;
+  const [LibraryOpen, OpenLibrary] = useState(false),
+    [Folded, Fold] = useState({}),
+    [Saved, ReportSaved] = useState("");
+  const Groups = [...new Set(MaterialChannels.filter((Field) => Material.Used.includes(Field.Id)).map((Field) => Field.Group))];
+  const LibraryMaterials = useMemo(() => {
+    let Engine = [];
+    try {
+      Engine = EngineAssets().filter((Asset) => Asset.Kind === "Materials");
+    } catch {}
+    return [...Engine, ...(Library || []).filter((Asset) => Asset.Kind === "Materials")];
+  }, [Library]);
+  return (
+    <div className="shader-workspace material-panel material-expanded" data-material-owner={Subject.Id}>
+      <section className="sw-pane sw-view-pane">
+        <header className="sw-tabs">
+          <span className="sw-tab">Viewport</span>
+          <button className={"sw-pill " + (LibraryOpen ? "on" : "")} aria-pressed={LibraryOpen} onClick={() => OpenLibrary(!LibraryOpen)}>
+            {LibraryOpen ? "Close library" : "Open library"}
+          </button>
+        </header>
+        <div className="sw-view-body">
+          <ShaderViewport
+            Material={Material}
+            Eyebrow={(ShowSlots ? "SLOT " + String(Slot).padStart(2, "0") + " / " : "") + Material.Type.toUpperCase() + " MATERIAL"}
+            Title={Material.Name}
+            Note={
+              Material.Used.map((Id) => MaterialChannels.find((Field) => Field.Id === Id).Label).join(" · ") ||
+              "No channels yet · every input uses its default"
+            }
+          />
+          {LibraryOpen && (
+            <MaterialLibrary
+              Library={LibraryMaterials}
+              Current={null}
+              Close={() => OpenLibrary(false)}
+              Apply={(Asset) => ReplaceSlot(Slot, Asset)}
+            />
+          )}
+        </div>
+      </section>
+      <section className="sw-pane sw-inspector-pane">
+        <header className="sw-tabs">
+          <span className="sw-tab">Inspector</span>
+        </header>
+        <div className="sw-inspector-scroll">
+          <h2 className="sw-heading">Material inspector</h2>
+          <div className="sw-card-head">
+            <span className="sw-card-ball" style={BallLook(Material)} />
+            <span className="sw-card-name">
+              <b>{Material.Name}</b>
+              <small>
+                {Material.Type} · {Material.Used.length} channel{Material.Used.length === 1 ? "" : "s"} · bound to {Subject.Name}
+              </small>
+            </span>
+          </div>
+          <span className="sw-eyebrow">PROPERTIES & LAYERS</span>
+          {ShowSlots && SlotCard}
+          <div className="material-properties sw-properties">
+            <label>
+              Material name
+              <input aria-label="Material name" value={Material.Name} maxLength={80} onChange={(Event) => Apply({ ...Material, Name: Event.target.value })} />
+            </label>
+            <label>
+              Material type
+              <select aria-label="Material type" value={Material.Type} onChange={(Event) => Apply(ChooseMaterialType(Material, Event.target.value))}>
+                {MaterialTypes.map((Name) => (
+                  <option key={Name}>{Name}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <span className="sw-eyebrow">MATERIAL-AWARE CONTROLS</span>
+          {Groups.map((Group) => (
+            <section key={Group} className={"si-group " + (Folded[Group] ? "folded" : "")} data-channel-group={Group}>
+              <button className="si-group-head" aria-expanded={!Folded[Group]} onClick={() => Fold({ ...Folded, [Group]: !Folded[Group] })}>
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d={GroupGlyphs[Group]} />
+                </svg>
+                {GroupTitles[Group] || Group}
+                <small>{MaterialChannels.filter((Field) => Field.Group === Group && Material.Used.includes(Field.Id)).length}</small>
+                <svg className="si-chevron" viewBox="0 0 10 10" aria-hidden="true">
+                  <path d="M2 4l3 3 3-3" />
+                </svg>
+              </button>
+              {!Folded[Group] && (
+                <div className="si-group-body">
+                  {MaterialChannels.filter((Field) => Field.Group === Group && Material.Used.includes(Field.Id)).map((Field) => (
+                    <ChannelInspectorRow
+                      key={Subject.Id + Slot + Field.Id}
+                      Field={Field}
+                      Owned={Material.Channels[Field.Id]}
+                      Selected={Current === Field.Id}
+                      Select={Select}
+                      Assign={Assign}
+                      Apply={Apply}
+                      Latest={Latest}
+                      Subject={Subject}
+                      Slot={Slot}
+                    />
+                  ))}
+                </div>
+              )}
+            </section>
+          ))}
+          {!Material.Used.length && <p className="channel-none">No channels yet. Add the ones this material needs; the rest use their defaults.</p>}
+          <div className="sw-adder">{ChannelAdder}</div>
+        </div>
+        {SavePreset && (
+          <footer className="sw-footer">
+            <button
+              onClick={() => {
+                const Name = SavePreset(Material);
+                ReportSaved(Name ? "Saved to the library as " + Name : "");
+                setTimeout(() => ReportSaved(""), 2600);
+              }}
+            >
+              {Saved || "+ Save as preset"}
+            </button>
+          </footer>
+        )}
+      </section>
     </div>
   );
 }

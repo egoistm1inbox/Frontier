@@ -791,6 +791,26 @@ function App() {
           key={ShaderSubject.Id}
           Subject={ShaderSubject}
           Slots={!ShaderAsset}
+          Library={AssetRecords}
+          SavePreset={(Material) => {
+            // Follow-up 69: "Save as preset" adds a copy of the material to the project library (the Content Browser's Materials).
+            const Names = new Set(AssetRecords.map((Asset) => Asset.Name));
+            let Unique = Material.Name || "Untitled material",
+              Index = 2;
+            while (Names.has(Unique)) Unique = (Material.Name || "Untitled material") + " " + Index++;
+            StoreAssets((Previous) => [
+              ...Previous,
+              {
+                Id: "asset-" + crypto.randomUUID(),
+                Name: Unique,
+                Kind: "Materials",
+                Origin: "Project",
+                Material: { ...structuredClone(Material), Name: Unique },
+                Detail: "Saved from the ShaderEditor. Applying makes an independent object copy.",
+              },
+            ]);
+            return Unique;
+          }}
           Values={
             ShaderAsset
               ? { Material: ShaderAsset.Material }
@@ -2123,6 +2143,17 @@ function App() {
               onChange={(Event) => Assign("Socket debug", Event.target.checked)}
             />
           </label>
+          {/* Follow-up 69: the weather-station anemometer in the 3D view, reading the wind field where it stands (drag it to move it). */}
+          <label className="viewport-setting-toggle" title="A weather-station anemometer in the 3D view: its cups, vane and readout show the wind field at the spot it stands on, 2 m up. Drag it to measure somewhere else.">
+            Anemometer
+            <input
+              type="checkbox"
+              aria-label="Anemometer"
+              data-debug-anemometer
+              checked={Settings.Anemometer !== false}
+              onChange={(Event) => Assign("Anemometer", Event.target.checked)}
+            />
+          </label>
           <label className="viewport-setting-toggle" title="📝 Not in the Project Zero specification · kept for you to decide">
             📝 HiZ overlay
             <input
@@ -2200,6 +2231,9 @@ function App() {
             Grid={Settings.Grid !== false}
             ShowCentres={Settings["Centre of mass debug"] !== false}
             ShowCentroids={Settings["Centroid debug"] !== false}
+            Anemometer={Settings.Anemometer !== false}
+            AnemometerAt={Settings["Anemometer position"]}
+            MoveAnemometer={(At) => Assign("Anemometer position", At)}
           />
         )}
         {SplitView && !Workspace && (

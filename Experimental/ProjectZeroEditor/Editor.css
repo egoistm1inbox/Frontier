@@ -3668,3 +3668,165 @@ img {
   outline: 2px solid #ffb238;
   outline-offset: 2px;
 }
+
+/* Follow-up 69: the anemometer's readout, a glass card riding above the instrument in the 3D view. */
+.anemo-card {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 232px;
+  padding: 10px 12px 9px;
+  border-radius: 14px;
+  background: linear-gradient(160deg, #10181dd9, #0a0f12e6);
+  border: 1px solid #4fe3ff33;
+  box-shadow: 0 10px 30px #0008, inset 0 1px 0 #ffffff12;
+  backdrop-filter: blur(10px);
+  color: #dff7fc;
+  font-size: 11px;
+  pointer-events: none;
+  z-index: 3;
+  will-change: transform;
+}
+.anemo-card[hidden] {
+  display: none;
+}
+.anemo-card::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -7px;
+  width: 12px;
+  height: 12px;
+  transform: translateX(-50%) rotate(45deg);
+  background: #0a0f12;
+  border-right: 1px solid #4fe3ff33;
+  border-bottom: 1px solid #4fe3ff33;
+}
+.anemo-top {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 6px;
+}
+.anemo-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #3dff8e;
+  box-shadow: 0 0 8px #3dff8e;
+  animation: anemo-pulse 1.6s ease-in-out infinite;
+}
+@keyframes anemo-pulse {
+  50% { opacity: 0.35; }
+}
+.anemo-eyebrow {
+  flex: 1;
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #8fc9d6;
+}
+.anemo-top b {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: #4fe3ff22;
+  color: #4fe3ff;
+  font-size: 10px;
+  font-weight: 600;
+}
+.anemo-main {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.anemo-rose {
+  width: 64px;
+  height: 64px;
+  flex: none;
+}
+.anemo-ring {
+  fill: #ffffff08;
+  stroke: #4fe3ff40;
+  stroke-width: 1;
+}
+.anemo-tick {
+  stroke: #ffffff40;
+  stroke-width: 0.8;
+}
+.anemo-tick.major {
+  stroke: #4fe3ffb0;
+  stroke-width: 1.4;
+}
+.anemo-north {
+  fill: #8fc9d6;
+  font-size: 7px;
+  font-weight: 700;
+  text-anchor: middle;
+}
+.anemo-needle {
+  transition: transform 0.25s linear;
+}
+.anemo-head {
+  fill: #ff6a1f;
+}
+.anemo-tail {
+  fill: #ffffff60;
+}
+.anemo-pivot {
+  fill: #eef0f2;
+}
+.anemo-figures {
+  flex: 1;
+  min-width: 0;
+}
+.anemo-speed {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+.anemo-speed b {
+  font-size: 30px;
+  font-weight: 600;
+  line-height: 1;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+}
+.anemo-speed span {
+  color: #8fc9d6;
+  font-size: 11px;
+}
+.anemo-from {
+  margin-top: 3px;
+  color: #8fc9d6;
+}
+.anemo-from b {
+  color: #dff7fc;
+  font-weight: 600;
+}
+.anemo-pair {
+  display: flex;
+  gap: 10px;
+  margin-top: 2px;
+  color: #6f9aa5;
+  font-size: 10px;
+}
+.anemo-pair b {
+  color: #c8eef6;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.anemo-trace {
+  display: block;
+  width: 196px;
+  height: 46px;
+  margin: 7px 0 3px;
+}
+.anemo-where {
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  color: #6f9aa5;
+  font-variant-numeric: tabular-nums;
+}
+.anemo-card.anemo-pinned::after {
+  display: none;
+}
