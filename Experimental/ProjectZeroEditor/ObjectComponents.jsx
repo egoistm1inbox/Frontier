@@ -3,13 +3,13 @@
 //============================================================================================================================================
 // 🧩 Components. Showcase objects carry a component stack (Mass, Rigid Body, Collision) on the object's own Components page, the way
 // a modifier stack sits on a mesh: add, remove, switch off and reorder, and each entry opens its own page with its cards. Cameras keep
-// one Render Engine component as an outliner row (RenderComponents.jsx). In both cases the values live on the owner (Values[Owner]), so
+// one Camera Settings component as an outliner row (RenderComponents.jsx). In both cases the values live on the owner (Values[Owner]), so
 // the owner's viewport, checks and quick controls keep reading the same keys. Browser authoring only.
 
 import React, { useEffect, useState } from "react";
 import "./ObjectComponents.css";
 import { ShapeOf, Measure, MassOf, MassText, CollisionProxy, ObjectComponentCards, Switch } from "./PrimitiveInspector.jsx";
-import { RenderComponentTypes, RetiredRenderComponents, RenderSummary } from "./RenderComponents.jsx";
+import { RenderComponentTypes, RetiredRenderComponents, RenamedRenderComponents, RenderSummary } from "./RenderComponents.jsx";
 
 export const ComponentPanel = "object-component";
 export const ComponentSheet = [];
@@ -88,9 +88,30 @@ export function WithObjectComponents(Rows, Revision = 0) {
   return Result;
 }
 
+// Follow-up 77: camera rows saved under an older component name take the new name and address (`camera-render-engine` becomes
+// `camera-camera-settings`); older addresses still open them (RenamedAddress).
+function RenameComponents(Rows) {
+  const Owners = new Map(Rows.map((Row) => [Row.Id, Row]));
+  return Rows.map((Row) => {
+    const Owner = Owners.get(Row.Parent);
+    const Next = Row.Panel === ComponentPanel && OwnerKind(Owner) === "camera" && RenamedRenderComponents[Row.Component];
+    return Next ? { ...Row, ...ComponentRow(Owner, Next) } : Row;
+  });
+}
+export function RenamedAddress(Id, Rows = []) {
+  if (typeof Id !== "string" || Rows.some((Row) => Row.Id === Id)) return Id;
+  for (const [Before, After] of Object.entries(RenamedRenderComponents)) {
+    const Suffix = "-" + Slug(Before);
+    const Moved = Id.endsWith(Suffix) && Id.slice(0, -Suffix.length) + "-" + Slug(After);
+    if (Moved && Rows.some((Row) => Row.Id === Moved)) return Moved;
+  }
+  return Id;
+}
+
 // Saved scenes gain each kind's components once (ComponentRevision), so a component removed later stays removed.
 export function EnsureObjectComponents(Rows = [], Revision) {
   const Seen = +Revision || 0;
+  Rows = RenameComponents(Rows);
   const Gone = new Set(Object.entries(Retired).filter(([At]) => +At > Seen).flatMap(([, Names]) => Names));
   const Owners = new Map(Rows.map((Row) => [Row.Id, Row]));
   const Kept = Rows.filter((Row) => !(Row.Panel === ComponentPanel && Gone.has(Row.Component) && OwnerKind(Owners.get(Row.Parent)) === "camera"));

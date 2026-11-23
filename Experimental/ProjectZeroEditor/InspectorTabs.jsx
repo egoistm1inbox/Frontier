@@ -7,13 +7,14 @@
 // Every page stays in the document (hidden when shut) so its inputs keep their values and the BAKING page stays last. The open page is
 // remembered per inspector. ← and → move between pages.
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { PageStrip, PageTurn, PageLook } from "./PageCarousel.jsx";
 import "./InspectorTabs.css";
 
 const Opened = {};
 
-export function InspectorTabs({ Owner, Look, Pages }) {
+// Request ({ Id, Stamp }, optional) turns to a page from inside the pages (a new Stamp turns again).
+export function InspectorTabs({ Owner, Look, Pages, Request = null }) {
   const [Open, Choose] = useState(() => (Pages.some((Page) => Page.Id === Opened[Owner]) ? Opened[Owner] : Pages[0].Id));
   const Index = Math.max(0, Pages.findIndex((Page) => Page.Id === Open));
   const Motion = PageTurn(Index);
@@ -23,6 +24,9 @@ export function InspectorTabs({ Owner, Look, Pages }) {
     Opened[Owner] = Pages[At].Id;
     Choose(Pages[At].Id);
   };
+  useEffect(() => {
+    if (Request) Pick(Pages.findIndex((Page) => Page.Id === Request.Id));
+  }, [Request?.Stamp]);
   return (
     <div className={"inspector-tabs it-" + Look} data-tabs={Owner} data-tabs-look={Look}>
       <PageStrip

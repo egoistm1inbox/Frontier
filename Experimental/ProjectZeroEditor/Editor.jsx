@@ -30,7 +30,7 @@ import { ResolveRenderSettings, RenderSettingsKey } from "./RenderSettings.js";
 import { WorkspaceView } from "./Workspaces.jsx";
 import { VehiclePanel, VehicleSummary, ComponentIcon, EnsureVehicleFolder, InitialVehicleRows, VehicleRevision, InVehicleTree, VehicleDescendants } from "./VehicleComponents.jsx";
 import { VehicleAssetPanel, VehicleAssetSummary } from "./VehicleAssetInspector.jsx";
-import { ComponentPanel, ComponentSummary, WithObjectComponents, EnsureObjectComponents, ComponentRowsFor, OwnerKind, ComponentRevision, ComponentAddress } from "./ObjectComponents.jsx";
+import { ComponentPanel, ComponentSummary, WithObjectComponents, EnsureObjectComponents, ComponentRowsFor, OwnerKind, ComponentRevision, ComponentAddress, RenamedAddress } from "./ObjectComponents.jsx";
 import { BrowserFPS } from "./BrowserTiming.js";
 import {
   EnsureEditorCamera,
@@ -503,7 +503,7 @@ function App() {
     ),
     // An older component address (`cube-mass`) selects the object and opens that entry of its component stack.
     [Selected, Select] = useState(() => {
-      const Wanted = new URLSearchParams(location.search).get("inspect") || Saved.Selected || "sun";
+      const Wanted = RenamedAddress(new URLSearchParams(location.search).get("inspect") || Saved.Selected || "sun", Rows);
       return ComponentAddress(Wanted, Rows)?.Owner || Wanted;
     }),
     [ComponentFocus, FocusComponent] = useState(() => {
@@ -1177,7 +1177,8 @@ function App() {
       window.removeEventListener("pointerup", Up);
     };
   }, [LeftWidth]);
-  const SelectRow = (Id) => {
+  const SelectRow = (Wanted) => {
+    const Id = RenamedAddress(Wanted, Rows);
     AssignPicked([]);
     const Address = ComponentAddress(Id, Rows);
     Select(Address ? Address.Owner : Id);

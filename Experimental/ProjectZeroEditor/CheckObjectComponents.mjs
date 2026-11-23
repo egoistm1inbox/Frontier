@@ -80,7 +80,7 @@ try {
   await Page.waitForFunction(() => document.querySelectorAll(".pi-page").length === 1);
   assert.equal(await Shown(), "Overview");
   Checks.push("Category navigation is the page carousel on every showcase object: numbered strip (1–8, count 1 / 8) under the header, ‹ › turn, the pages slide across");
-  Checks.push("No object component rows in the outliner (cameras keep their Render Engine row); the carousel is Overview, Components, Geometry, Material, UV, Fracture, SDF, LOD");
+  Checks.push("No object component rows in the outliner (cameras keep their Camera Settings row); the carousel is Overview, Components, Geometry, Material, UV, Fracture, SDF, LOD");
 
   // Opening Mass from the Overview turns to the Components page with the Mass entry open; edits are stored on the owning object.
   await Page.locator('.oc-link[data-component="Mass"]').click();

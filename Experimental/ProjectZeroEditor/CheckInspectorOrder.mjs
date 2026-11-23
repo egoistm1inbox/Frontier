@@ -116,7 +116,7 @@ const Sections = {
   // Follow-up 65: every paged inspector's first page closes with Quick controls, Tags and Notes (the closing cards); the pages then
   // run in their order.
   post: [...TagsAndNotes, Card("Exposure")],
-  // Components (object: Mass, Rigid Body, Collision; camera: Render Engine): the owner link, then the cards.
+  // Components (object: Mass, Rigid Body, Collision; camera: Camera Settings): the owner link, then the cards.
   "object-component": [".oc-owner", ".pi-component [data-card], .rc-cards [data-card]"],
   ...Object.fromEntries(
     [

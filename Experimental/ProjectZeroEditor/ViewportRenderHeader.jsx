@@ -2,7 +2,7 @@
 //                                                         VIEWPORTRENDERHEADER.JSX
 //============================================================================================================================================
 // 🧩 Render settings and viewport toggles in the viewport settings sheet (Project Zero specification §10, Follow-up 48). Engine,
-// tier, shadows, penumbra, reflections, trace resolution and scale edit the Editor Camera's Render Engine component; the toggles edit
+// tier, shadows, penumbra, reflections, trace resolution and scale edit the Editor Camera's Camera Settings component; the toggles edit
 // the editor settings and scene visibility. Browser authoring only: no renderer is driven.
 
 import React from "react";
