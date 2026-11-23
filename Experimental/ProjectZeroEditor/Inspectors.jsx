@@ -21,6 +21,7 @@ import {
 import FogShapePanel from "./FogShapePanel.jsx";
 import { IsEditorCamera } from "./ScenePolicy.js";
 import TransformPanel from "./TransformPanel.jsx";
+import { CameraMountPage } from "./CameraMount.jsx";
 import MaterialPanel from "./MaterialPanel.jsx";
 import PrimitiveInspector, { ObjectComponentCards } from "./PrimitiveInspector.jsx";
 import { EffectSheets, IsEffectPanel, EffectStudy } from "./PostEffects.jsx";
@@ -1527,6 +1528,10 @@ export function Inspector({
         ])}
         {TagsAndNotes()}
         </>) },
+          // Follow-up 78: scene cameras stand in the viewport, on a tripod or floating, at their own position and angle.
+          ...(IsEditorCamera(Subject) ? [] : [{ Id: "mount", Label: "Mount", Content: (
+            <CameraMountPage Subject={Subject} Values={Values} Assign={AssignProperty} Kit={{ Card, Control, Metric }} Body={CameraBodyOf(Subject.Id, V("Camera body"))} />
+          ) }]),
           { Id: "focus", Label: "Focus", Content: (<>
         <div className="card-grid">
           <Card Title="Aperture study">

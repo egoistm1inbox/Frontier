@@ -110,12 +110,12 @@ function Segments({ Label, Options, Active, Choose }) {
 
 // Follow-up 77: the Camera Settings inspector reads in two steps. The Overview page picks the render type (four cards, each saying what
 // it draws) and lists the chosen renderer's settings, one line per page; the carousel then holds only that renderer's pages, in its own
-// order (Ray traced: GI | Shadows | AO | Reflections; MatCap: Shadows | Lighting | MatCap type), with Output last. The other renderers'
+// order (Ray traced: Tracer | GI | Shadows | AO | Reflections; MatCap: Shadows | Lighting | MatCap type), with Output last. The other renderers'
 // settings are kept (each renderer has its own keys) and come back when it is picked again.
 export const RenderPages = {
   pbr: [["shadows", "Shadows"], ["lighting", "Lighting"], ["ao", "AO"]],
   sdf: [["shadows", "Shadows"], ["gi", "GI"], ["ao", "AO"]],
-  ray: [["gi", "GI"], ["shadows", "Shadows"], ["ao", "AO"], ["reflections", "Reflections"]],
+  ray: [["tracer", "Tracer"], ["gi", "GI"], ["shadows", "Shadows"], ["ao", "AO"], ["reflections", "Reflections"]],
   matcap: [["shadows", "Shadows"], ["lighting", "Lighting"], ["matcap", "MatCap type"]],
 };
 // One line a page sums up, for the Overview's list.
@@ -127,6 +127,7 @@ export function PageLine(Settings, Renderer, Page) {
   if (Renderer === "sdf") return { shadows: `${Find(SDF_SHADOWS, S.SdfShadow).pick} · ${S.SdfSteps} steps`, gi: S.SdfGi ? `Cone GI · ${S.SdfCones} cones` : "Off · ambient fill" }[Page];
   if (Renderer === "ray")
     return {
+      tracer: Find(RENDER_ENGINES, S.RayTracer).pick,
       gi: S.RayGi ? `Traced GI · ${S.RayGiSamples} samples` : "Off · ambient fill",
       shadows: `${Find(RAY_SHADOWS, S.RayShadow).pick.replace("WideTree RayQuery · ", "BVH ")} · ${S.RayShadowRays} rays`,
       reflections: S.RayReflections ? `Traced · ${S.RayReflectionRays} × ${S.RayReflectionBounces} bounces` : "Sky / environment",
@@ -141,10 +142,10 @@ const TypeLines = {
   matcap: "Clay studio shading to read shape; no scene lights",
 };
 // A small sphere per render type: lit raster, distance-field contours, traced bounce, clay MatCap.
-function TypeThumb({ Renderer }) {
-  const Id = "rt-" + Renderer;
+function TypeThumb({ Renderer, Large = false }) {
+  const Id = "rt-" + Renderer + (Large ? "-large" : "");
   return (
-    <svg className="rc-type-thumb" viewBox="0 0 72 52" aria-hidden="true">
+    <svg className={"rc-type-thumb" + (Large ? " large" : "")} viewBox="0 0 72 52" aria-hidden="true">
       <defs>
         <radialGradient id={Id} cx="0.36" cy="0.32" r="0.75">
           {Renderer === "matcap" ? (
@@ -208,7 +209,6 @@ export function RenderComponentCards({ Component, Owner, Values, Change, Kit }) 
   const TierPick = (Label, Key, Patch) => <Control Field={{ Label, Control: "Select", Options: Tiers }} Value={Settings[Key]} Change={(Index) => Assign(Patch(Index))} />;
   const Active = RendererOf(Settings.RenderEngine);
   const Engine = Find(RENDER_ENGINES, Settings.RenderEngine);
-  const Tracers = RENDERERS[2].engines.map((Id) => [Id, Find(RENDER_ENGINES, Id).short]);
   const Wrap = (Id, Cards) => (
     <div className="rc-cards" data-render-component={Component} data-render-tab={Id}>
       {Cards}
@@ -222,30 +222,32 @@ export function RenderComponentCards({ Component, Owner, Values, Change, Kit }) 
     const Changed = Object.keys(CanonicalRenderSettings).filter((Key) => Settings[Key] !== CanonicalRenderSettings[Key]).length;
     return (
       <>
+        {/* Follow-up 78: laid out like the Camera body card: the chosen render type large, then the four to pick from (one at a time). */}
         <Card Title="Render type" Class="rs-card rc-type-card">
+          <div className="rc-type-hero" data-render-type-shown={Active.id}>
+            <TypeThumb Renderer={Active.id} Large />
+            <b>
+              {"ABCD"[RENDERERS.indexOf(Active)]} · {Active.label}
+            </b>
+            <small>{TypeLines[Active.id]}</small>
+            <span className="rc-type-pages">
+              {RenderPages[Active.id].map(([Id, Label]) => (
+                <em key={Id}>{Label}</em>
+              ))}
+            </span>
+          </div>
           <div className="rc-types" role="radiogroup" aria-label="Render type">
-            {RENDERERS.map((Each) => {
+            {RENDERERS.map((Each, At) => {
               const On = Each.id === Active.id;
               return (
-                <button key={Each.id} type="button" role="radio" aria-checked={On} aria-label={Each.label} data-render-type={Each.id} onClick={() => !On && Assign(RendererPatch(Each.id, Settings))}>
+                <button key={Each.id} type="button" role="radio" aria-checked={On} aria-label={Each.label} className={On ? "on" : ""} data-render-type={Each.id} onClick={() => !On && Assign(RendererPatch(Each.id, Settings))}>
+                  <i>{"ABCD"[At]}</i>
                   <TypeThumb Renderer={Each.id} />
-                  <b>{Each.label}</b>
-                  <small>{TypeLines[Each.id]}</small>
-                  <span className="rc-type-pages">
-                    {RenderPages[Each.id].map(([Id, Label]) => (
-                      <em key={Id}>{Label}</em>
-                    ))}
-                  </span>
+                  <span>{Each.label}</span>
                 </button>
               );
             })}
           </div>
-          {Active.id === "ray" && (
-            <>
-              <small className="rc-caption">Tracer</small>
-              <Segments Label="Tracer" Options={Tracers} Active={Settings.RenderEngine} Choose={(Id) => Assign(EnginePatch(Id))} />
-            </>
-          )}
           <p className="rs-note">{Engine.desc}</p>
         </Card>
         <Card Title={Active.title} Class="rs-card rc-chosen-card">
@@ -440,6 +442,18 @@ export function RenderComponentCards({ Component, Owner, Values, Change, Kit }) 
 
   //── Ray traced ────────────────────────────────────────────────────────────────────────────────────────────────────────
   const Ray = {
+    tracer: () => {
+      const Parts = { Shadow: Settings.RayShadowRays, Gi: Settings.RayGi ? Settings.RayGiSamples * 2 : 0, Reflection: Settings.RayReflections ? Settings.RayReflectionRays * Settings.RayReflectionBounces : 0 };
+      return (
+        <Card Title="Tracer" Class="rs-card" Accent={Tones.Reflection}>
+          <Metric Value={String(Parts.Shadow + Parts.Gi + Parts.Reflection)} Unit="rays / pixel" Caption={Find(RENDER_ENGINES, Settings.RayTracer).desc} />
+          <div className="graphic rs-graphic">
+            <BudgetBar Budget={Parts} Tones={Tones} />
+          </div>
+          <Tiles Label="Tracer" Columns={1} Options={RENDERERS[2].engines.map((Id) => ({ ...Find(RENDER_ENGINES, Id), pick: Find(RENDER_ENGINES, Id).short, line: Find(RENDER_ENGINES, Id).desc }))} Active={Settings.RayTracer} Choose={(Id) => Assign(EnginePatch(Id))} />
+        </Card>
+      );
+    },
     gi: () => (
       <>
           <Card Title="Traced GI" Class="rs-card" Accent={Tones.Gi}>

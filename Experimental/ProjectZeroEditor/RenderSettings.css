@@ -201,72 +201,99 @@
 
 /* Follow-up 77: the Overview page. Render type: four cards (thumbnail, name, what it draws, its pages); the chosen renderer's card
    lists one line per page and opens it. */
-.rc-types {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-  margin: 4px 0 6px;
-}
-.rc-types button {
+.rc-type-hero {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: 4px;
-  min-width: 0;
-  padding: 10px 11px 11px;
-  border-radius: 14px;
-  border: 1px solid #ffffff0d;
-  background: #171717;
-  color: inherit;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-  transition: border-color 0.15s, background 0.15s;
+  align-items: center;
+  text-align: center;
+  gap: 3px;
+  padding: 12px 12px 14px;
+  border-radius: 12px;
+  background: radial-gradient(70% 90% at 30% 50%, #2b3038, #15171b 80%);
+  box-shadow: inset 0 0 0 1px #ffffff0e;
 }
-.rc-types button:hover {
-  border-color: #ffffff22;
+.rc-type-hero b {
+  margin-top: 4px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #f1f1f1;
 }
-.rc-types button[aria-checked="true"] {
-  border-color: #e9e4da99;
-  background: #232220;
-  box-shadow: inset 0 0 0 1px #e9e4da33;
+.rc-type-hero small {
+  font-size: 10px;
+  color: #9aa0a8;
+}
+.rc-type-hero .rc-type-pages {
+  justify-content: center;
+  margin-top: 6px;
 }
 .rc-type-thumb {
+  display: block;
   width: 100%;
-  height: 46px;
-  margin-bottom: 4px;
-  border-radius: 9px;
-  background: #0f0f0f;
+  height: 34px;
 }
-.rc-types b {
-  font-size: 12.5px;
-  font-weight: 600;
-  color: #f0f0f0;
+.rc-type-thumb.large {
+  width: 70%;
+  height: 112px;
+  filter: drop-shadow(0 8px 10px #0008);
 }
-.rc-types small {
+.rc-types {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 7px;
+  margin: 10px 0 4px;
+}
+.property-card .rc-types button {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+  padding: 14px 2px 8px;
+  border: 0;
+  border-radius: 10px;
+  background: #ffffff06;
+  box-shadow: inset 0 0 0 1px #ffffff10;
+  color: #a9adb3;
+  font: inherit;
   font-size: 9.5px;
-  line-height: 1.4;
-  color: #8a8a8a;
-  min-height: 27px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.rc-types button i {
+  position: absolute;
+  left: 7px;
+  top: 5px;
+  font: 700 9px var(--mono, ui-monospace, monospace);
+  font-style: normal;
+  color: #ffffff60;
+}
+.rc-types button span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.property-card .rc-types button.on {
+  background: #ffffff10;
+  box-shadow: inset 0 0 0 1px #f2f2f2a0;
+  color: #fff;
+}
+.rc-types button.on i {
+  color: #ff3b30;
 }
 .rc-type-pages {
   display: flex;
   flex-wrap: wrap;
   gap: 3px;
-  margin-top: 2px;
 }
 .rc-type-pages em {
-  padding: 2px 6px;
+  padding: 2px 7px;
   border-radius: 999px;
-  background: #ffffff0b;
-  color: #a9a9a9;
-  font-size: 8.5px;
+  background: #ffffff10;
+  color: #d9d4ca;
+  font-size: 9px;
   font-style: normal;
   letter-spacing: 0.02em;
-}
-.rc-types button[aria-checked="true"] .rc-type-pages em {
-  background: #e9e4da1f;
-  color: #ece6dc;
 }
 .rc-page-list {
   list-style: none;

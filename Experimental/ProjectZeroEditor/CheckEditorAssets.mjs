@@ -92,6 +92,30 @@ try {
   await Page.waitForFunction(() => document.querySelector(".viewport-3d-canvas").dataset.cameras === "cine:film");
   Checks.push("Tripod switch: off draws the film camera alone at head height (cine:film:free, Tripod false stored); on brings the tripod back");
 
+  // Follow-up 78: the Mount page: A On tripod / B Floating, the tripod's legs following the camera's height, position and angle.
+  const Poses = () => Canvas().getAttribute("data-camera-poses");
+  await PickTab(Page, "camera:mount");
+  assert.equal(await Page.locator("[data-camera-mount-shown]").getAttribute("data-camera-mount-shown"), "tripod");
+  assert.match(await Poses(), /^cine:-?[\d.]+,1\.3,-?[\d.]+:/);
+  await Page.locator('[data-tab-page="camera:mount"] input[type=range][aria-label="Tripod height"]').fill("2");
+  await Page.waitForFunction(() => /^cine:-?[\d.]+,2,/.test(document.querySelector(".viewport-3d-canvas").dataset.cameraPoses));
+  await Page.waitForTimeout(400);
+  await Page.locator(".scene-image").screenshot({ path: path.join(Proof, "Viewport3D-TripodRaised.png") });
+  await Page.locator('[data-camera-mount="floating"]').click();
+  await Page.waitForFunction(() => document.querySelector(".viewport-3d-canvas").dataset.cameras === "cine:film:free");
+  await Page.locator('[data-tab-page="camera:mount"] input[type=range][aria-label="Height"]').fill("3.5");
+  await Page.locator('[data-tab-page="camera:mount"] input[aria-label="Camera Position X"]').fill("-4");
+  await Page.locator('[data-tab-page="camera:mount"] input[aria-label="Camera Angle Y"]').fill("-60");
+  await Page.waitForFunction(() => /^cine:-4,3\.5,[\d.-]+:[\d.-]+,-60,/.test(document.querySelector(".viewport-3d-canvas").dataset.cameraPoses));
+  let Cine = JSON.parse(await Page.evaluate(() => localStorage.getItem("Frontier.ProjectZeroHtml.v1"))).Values.cine;
+  assert.deepEqual([Cine.Tripod, Cine["Camera Position"][0], Cine["Camera Position"][1], Cine["Camera Angle"][1], Cine["Aim at Showcase"]], [false, -4, 3.5, -60, false]);
+  await Page.locator('[data-tab-page="camera:mount"]').screenshot({ path: path.join(Proof, "CameraMountFloating.png") });
+  await Page.locator('[data-camera-mount="tripod"]').click();
+  await Page.waitForFunction(() => /^cine:-4,2\.2,/.test(document.querySelector(".viewport-3d-canvas").dataset.cameraPoses));
+  await Page.getByRole("button", { name: "↺ Back on its arc" }).click();
+  await Page.waitForFunction(() => /^cine:-?[\d.]+,1\.3,/.test(document.querySelector(".viewport-3d-canvas").dataset.cameraPoses) && document.querySelector(".viewport-3d-canvas").dataset.cameras === "cine:film");
+  Checks.push("Mount: the tripod rises to 2 m with the camera; Floating at 3.5 m, x −4, pan −60° (aim off) is stored and drawn; back on a tripod it comes down to 2.2 m; Back on its arc restores the arc");
+
   // Hiding the camera takes it out of the viewport; showing it brings it back.
   await Page.getByRole("button", { name: "Toggle Cine Camera visibility" }).click();
   await Page.waitForFunction(() => document.querySelector(".viewport-3d-canvas").dataset.cameras === "");

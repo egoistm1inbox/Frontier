@@ -98,6 +98,7 @@ try {
   assert.deepEqual(await Pills(), ["Overview", "Shadows", "GI", "AO", "Output"]);
   assert.deepEqual(await Cards(), ["Render type", "SDF tracing", "Quality"]);
   assert.equal(await Page.locator('.rc-types [aria-checked="true"]').getAttribute("data-render-type"), "sdf");
+  assert.equal(await Page.locator(".rc-type-hero").getAttribute("data-render-type-shown"), "sdf");
   await Type("pbr");
   let Settings = await Stored("camera");
   assert.equal(Settings.RenderEngine, "openpbr_direct");
@@ -148,11 +149,14 @@ try {
   assert.deepEqual([Settings.PbrContactRays, Settings.SdfCones, Settings.RayGiSamples, Settings.RayReflectionBounces], [8, 10, 14, 3]);
   Checks.push("A renderer's own tier makes the global tier Custom; Ultra then fans out to PBR, SDF and ray tracing");
 
-  // Ray traced: GI | Shadows | AO | Reflections; tracer on Overview, remembered across renderer switches.
+  // Ray traced: Tracer | GI | Shadows | AO | Reflections; remembered across renderer switches.
   await Type("ray");
   assert.equal((await Stored("camera")).RenderEngine, "highend_bvh4_gi");
-  assert.deepEqual(await Pills(), ["Overview", "GI", "Shadows", "AO", "Reflections", "Output"]);
-  await Shown().getByRole("radiogroup", { name: "Tracer" }).getByRole("radio", { name: "PT final", exact: true }).click();
+  assert.deepEqual(await Pills(), ["Overview", "Tracer", "GI", "Shadows", "AO", "Reflections", "Output"]);
+  // Follow-up 78: the tracers have their own page.
+  await Turn("tracer");
+  await Shown().getByRole("radiogroup", { name: "Tracer" }).getByRole("radio", { name: /^PT final/ }).click();
+  await Turn("overview");
   await Shown().locator('.rc-page-list [data-open-page="reflections"]').click();
   await Page.locator('.rc-settings .it-page:not([hidden]) .rc-cards[data-render-tab="reflections"]').waitFor();
   await Page.waitForTimeout(350);
@@ -169,7 +173,7 @@ try {
   await Type("sdf");
   await Type("ray");
   assert.equal((await Stored("camera")).RenderEngine, "pt_final");
-  Checks.push("Ray traced: GI, Shadows, AO, Reflections pages; PT final, area shadows and reflections off are stored (a page line opens Reflections); the tracer is remembered across renderers");
+  Checks.push("Ray traced: Tracer, GI, Shadows, AO, Reflections pages; PT final, area shadows and reflections off are stored (a page line opens Reflections); the tracer is remembered across renderers");
 
   // MatCap on the Cine Camera: Shadows | Lighting | MatCap type; edits stay on the Cine Camera.
   await Open("cine-camera-settings");

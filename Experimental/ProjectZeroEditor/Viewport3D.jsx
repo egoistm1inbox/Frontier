@@ -30,6 +30,7 @@ import { ShapeOf } from "./PrimitiveInspector.jsx";
 import { ResolveSlots, SectionSlots } from "./MaterialSpecification.js";
 import { Solar } from "./Solar.mjs";
 import { SkyMedium, Direction, KelvinTint, SunAngularRadius } from "./SkyShader.js";
+import { MountOf, MountPoses, DefaultHeight } from "./CameraMounts.js";
 import { SkyViewMap, SunBeam, SkyFill, StarCatalogue, StarCount, StarSettings, FlareAtlasMap } from "./BakedMaps.js";
 import { FlareSettings, PaintFlare } from "./LensFlare.js";
 import { CameraAsset, CameraBodyOf, StudioLit } from "./EditorAssets.js";
@@ -105,6 +106,7 @@ export function CameraPlacements(Rows, Values, Hidden) {
       Row,
       Body: CameraBodyOf(Row.Id, Own["Camera body"]),
       Tripod: Own.Tripod !== false,
+      Mount: MountOf(Own),
       Turn: (-34 - Index * 22) * Rad,
       Focal: Read("Focal Length", 35),
       Sensor: Read("Sensor Width", 36),
@@ -756,15 +758,35 @@ export default function Viewport3D({ Rows, Values, Hidden, Selected, Picked = []
     // Cameras on tripods, each aimed at the Showcase's middle, with a frustum to its subject distance.
     const Aim = Bounds.isEmpty() ? new THREE.Vector3(0, 0.5, 0) : Bounds.getCenter(new THREE.Vector3());
     const Radius = Bounds.isEmpty() ? 1 : Bounds.getSize(new THREE.Vector3()).length() / 2;
-    for (const { Row, Body, Tripod, Turn, Focal, Sensor, Subject, Aspect } of Posed) {
-      const At = [Aim.x + Math.sin(Turn) * (Radius * 0.75 + 1.2), 0, Aim.z + Math.cos(Turn) * (Radius * 0.75 + 1.2)];
-      const Asset = CameraAsset(Body, { Stand: Tripod, Raised: !Tripod, Height: Body === "mirrorless" ? 1.45 : 1.3 });
+    // Follow-up 78: a camera's own position and angle (CameraMounts.js) when set; the tripod's legs follow its height; a floating
+    // camera hangs with a drop line to a ring on the ground under it.
+    for (const { Row, Body, Tripod, Mount, Turn, Focal, Sensor, Subject, Aspect } of Posed) {
+      const Arc = [Aim.x + Math.sin(Turn) * (Radius * 0.75 + 1.2), 0, Aim.z + Math.cos(Turn) * (Radius * 0.75 + 1.2)];
+      const At = Mount.Position ? [Mount.Position[0], 0, Mount.Position[2]] : Arc;
+      const Height = Mount.Position ? Mount.Position[1] : DefaultHeight(Body);
+      const Asset = CameraAsset(Body, { Stand: Tripod, Raised: !Tripod, Height });
       Asset.position.set(...At);
-      Asset.rotation.y = Math.atan2(At[0] - Aim.x, At[2] - Aim.z);
       const Head = Asset.userData.body;
       const Lens = new THREE.Vector3(...LensFront[Body]);
-      const Down = Math.atan2(Head.position.y + Lens.y - Aim.y, Math.hypot(At[0] - Aim.x, At[2] - Aim.z));
-      Head.rotation.x = -Down;
+      const Pan = Mount.Aim || !Mount.Angle ? Math.atan2(At[0] - Aim.x, At[2] - Aim.z) : Mount.Angle[1] * Rad;
+      const Tilt = Mount.Aim || !Mount.Angle ? -Math.atan2(Head.position.y + Lens.y - Aim.y, Math.hypot(At[0] - Aim.x, At[2] - Aim.z)) : Mount.Angle[0] * Rad;
+      const Roll = Mount.Angle ? Mount.Angle[2] * Rad : 0;
+      Asset.rotation.y = Pan;
+      Head.rotation.set(Tilt, 0, Roll);
+      MountPoses.set(Row.Id, { Position: [+At[0].toFixed(2), +Height.toFixed(2), +At[2].toFixed(2)], Angle: [+(Tilt / Rad).toFixed(1), +(Pan / Rad).toFixed(1), +(Roll / Rad).toFixed(1)] });
+      const Marks = [];
+      if (!Tripod) {
+        const Drop = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, Height - 0.05, 0), new THREE.Vector3(0, 0.01, 0)]), new THREE.LineDashedMaterial({ color: "#9fd0ff", dashSize: 0.06, gapSize: 0.05, transparent: true, opacity: 0.6, depthWrite: false }));
+        Drop.computeLineDistances();
+        const Ring = new THREE.Mesh(new THREE.RingGeometry(0.16, 0.19, 40), new THREE.MeshBasicMaterial({ color: "#9fd0ff", transparent: true, opacity: 0.55, depthWrite: false, side: THREE.DoubleSide }));
+        Ring.rotation.x = -Math.PI / 2;
+        Ring.position.y = 0.012;
+        for (const Mark of [Drop, Ring]) {
+          Mark.raycast = () => {};
+          Mark.userData.mountMark = true;
+          Marks.push(Mark);
+        }
+      }
       const Length = Math.min(Subject, 2.4), Wide = (Sensor / 2 / Focal) * Length, Tall = Wide / Aspect;
       const Far = [[-Wide, -Tall], [Wide, -Tall], [Wide, Tall], [-Wide, Tall]].map(([X, Y]) => new THREE.Vector3(Lens.x + X, Lens.y + Y, Lens.z - Length));
       const Lines = [];
@@ -774,6 +796,7 @@ export default function Viewport3D({ Rows, Values, Hidden, Selected, Picked = []
       Head.add(Frustum);
       // Studio-lit (a matcap) so its metal and glass read in any scene light.
       StudioLit(Asset);
+      for (const Mark of Marks) Asset.add(Mark);
       Asset.userData.componentId = Row.Id;
       Asset.userData.asset = true;
       Group.add(Asset);
@@ -818,6 +841,7 @@ export default function Viewport3D({ Rows, Values, Hidden, Selected, Picked = []
     Built.Canvas.dataset.vehicles = Parked.map(({ Row, Model }) => Row.Id + ":" + Model).join(" ");
     Built.Canvas.dataset.lights = Group.children.filter((Each) => Each.userData.light).map((Each) => Each.userData.componentId + ":" + Each.userData.light.Type + ":" + Each.userData.light.Candela).join(" ");
     Built.Canvas.dataset.cameras = Posed.map(({ Row, Body, Tripod }) => Row.Id + ":" + Body + (Tripod ? "" : ":free")).join(" ");
+    Built.Canvas.dataset.cameraPoses = Posed.map(({ Row }) => Row.Id + ":" + MountPoses.get(Row.Id)?.Position.join(",") + ":" + MountPoses.get(Row.Id)?.Angle.join(",")).join(" ");
   }, [ShapeKey, SkyKey]);
 
   // Selection outlines: only these change when the selection does, so picking doesn't rebuild the shapes.
