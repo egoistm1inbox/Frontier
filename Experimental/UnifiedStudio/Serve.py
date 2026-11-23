@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Preview server for Experimental/UnifiedStudio on 0.0.0.0:8130 (pass another port as the first argument)."""
+"""Preview server for Experimental/UnifiedStudio on 0.0.0.0:8130 (give another port as the first argument)."""
 
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
