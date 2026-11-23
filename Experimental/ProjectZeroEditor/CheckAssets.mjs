@@ -375,11 +375,11 @@ try {
   }).click();
   await Settled();
   await Page.getByRole("button", {
-    name: "Viewport settings",
+    name: "Grid and debug",
     exact: true,
   }).click();
   const Prefs = Page.getByRole("dialog", {
-    name: "Viewport settings",
+    name: "Grid and debug",
     exact: true,
   });
   await Prefs.getByLabel("Viewport debug view", { exact: true }).selectOption(

@@ -20,6 +20,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { THREE, Stage } from "../Shared/Studio/Render.js";
 import { beam, glowSprite, addHalo, anchorMark, markDebug } from "../Shared/Studio/Visuals.js";
+import { ComMark } from "./DebugMarks.js";
 import { socketVisual } from "../ComponentViewer/SocketVisuals.js";
 import { createSocketState, stepSocket, socketPose, socketReadout, SOCKET_KIND } from "../ComponentViewer/Sockets.js";
 import { COMPONENT_CLASSES } from "../ComponentViewer/Blueprint.js";
@@ -42,31 +43,6 @@ function SocketPoint(Mount, Corner) {
   const X = Sheet.Middle + Mount;
   const Wheel = VEHICLE_SHEET.axleMount[Corner];
   return Wheel ? [X, Sheet.AxleHeight, -Wheel[1]] : [X, 0.42, 0];
-}
-// The checkered centre-of-mass ball (the usual quartered mark).
-let Checker = null;
-function ComMark(Radius, Colour, Glow) {
-  if (!Checker) {
-    const Paper = document.createElement("canvas");
-    Paper.width = Paper.height = 64;
-    const Brush = Paper.getContext("2d");
-    Brush.fillStyle = "#f2f2f2";
-    Brush.fillRect(0, 0, 64, 64);
-    Brush.fillStyle = "#16171b";
-    Brush.fillRect(0, 0, 16, 32);
-    Brush.fillRect(32, 0, 16, 32);
-    Brush.fillRect(16, 32, 16, 32);
-    Brush.fillRect(48, 32, 16, 32);
-    Checker = new THREE.CanvasTexture(Paper);
-    Checker.colorSpace = THREE.SRGBColorSpace;
-  }
-  const Mark = new THREE.Group();
-  Mark.add(new THREE.Mesh(new THREE.SphereGeometry(Radius, 24, 16), new THREE.MeshBasicMaterial({ map: Checker })));
-  const Ring = new THREE.Mesh(new THREE.TorusGeometry(Radius * 1.25, Radius * 0.12, 8, 40), new THREE.MeshBasicMaterial({ color: Colour }));
-  Ring.rotation.x = Math.PI / 2;
-  Mark.add(Ring);
-  if (Glow) Mark.add(glowSprite(Colour, Radius * 7, 0.55));
-  return markDebug(Mark);
 }
 const Plumb = (Height, Colour) => {
   const Line = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, Height, 6), new THREE.MeshBasicMaterial({ color: Colour, transparent: true, opacity: 0.7 }));

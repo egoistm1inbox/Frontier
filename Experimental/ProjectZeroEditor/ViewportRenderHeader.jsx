@@ -114,7 +114,7 @@ export default function ViewportRenderHeader({ Render, AssignRender, Settings, A
         <Toggle Label="Clouds" On={!Hidden.clouds} Change={(On) => SetVisible("clouds", On)} />
         <Toggle Label="Cloud shadows" On={CloudShadows} Change={SetCloudShadows} />
         <Toggle Label="Stars" On={!Hidden.stars} Change={(On) => SetVisible("stars", On)} />
-        <Toggle Label="Split viewport" On={SplitView} Change={SetSplitView} />
+        {SetSplitView && <Toggle Label="Split viewport" On={SplitView} Change={SetSplitView} />}
       </div>
       {Occlusion && (
         <label className="vrh-field vrh-slider" title={Occlusion.Line}>

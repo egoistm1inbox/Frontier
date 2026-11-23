@@ -41,6 +41,18 @@ function OpenButton({ Tool, Label, Open }) {
   );
 }
 
+// Follow-up 66: the viewport's tool rail is gone, so the two workspaces without a page of their own open from small cards: Collision Fit
+// at the end of the Components page, Icon Capture at the end of the Overview.
+export function WorkspaceLaunchCard({ Tool, Title, Caption, Label, Open, Kit }) {
+  const { Card } = Kit;
+  return (
+    <Card Title={Title} Class="ws-launch-card">
+      <p>{Caption}</p>
+      <OpenButton Tool={Tool} Label={Label} Open={Open} />
+    </Card>
+  );
+}
+
 export function UvPreviewCard({ Subject, Values, Open, Kit }) {
   const { Card, Control, Metric } = Kit;
   const { Layout, Uvs, Statistics, Angle } = useUvLayout(Subject, Values);

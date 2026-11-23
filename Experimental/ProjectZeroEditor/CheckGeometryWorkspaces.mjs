@@ -35,7 +35,29 @@ const StoredBecomes = (Id, Key, Test) =>
   );
 const Card = (Title) => Page.locator(`[data-card="${Title}"]`);
 const Metric = (Title) => Card(Title).locator(".metric").first().innerText();
-const Launch = (Tool) => Page.locator(`.ws-rail button[aria-label="${Tool}"]`).click();
+// Follow-up 66: the viewport's tool rail is gone; each workspace opens from its button on the shape's inspector (UV, Fracture, SDF and
+// LOD pages; Collision Fit at the end of the Components page, Icon Capture at the end of the Overview). Launching a workspace that is
+// already open is not a toggle any more: leave with Done.
+const LaunchButtons = {
+  UV: "Edit in UV workspace",
+  Fracture: "Edit in fracture workspace",
+  "SDF Bake": "Edit in SDF workspace",
+  "LOD Clusters": "Edit in LOD workspace",
+  "Collision Fit": "Open Collision Fit",
+  "Icon Capture": "Open Icon Capture",
+};
+// The carousel only mounts the open page, so show the tool's page first.
+const LaunchPages = { UV: "UV", Fracture: "Fracture", "SDF Bake": "SDF", "LOD Clusters": "LOD", "Collision Fit": "Components", "Icon Capture": "Overview" };
+const LaunchPage = async (Tool) => {
+  await Page.locator(".inspector-scroll .pc-pill").filter({ hasText: new RegExp(`^\\d*${LaunchPages[Tool]}$`) }).first().click();
+  await Page.locator(".inspector-scroll").getByRole("button", { name: LaunchButtons[Tool], exact: true }).waitFor({ state: "attached" });
+};
+const Launch = async (Tool) => {
+  const Done = Page.locator(".inspector-scroll").getByRole("button", { name: "Done", exact: true });
+  if (await Done.count()) await Done.first().click();
+  await LaunchPage(Tool);
+  await Page.locator(".inspector-scroll").getByRole("button", { name: LaunchButtons[Tool], exact: true }).evaluate((Each) => Each.click());
+};
 const Banner = () => Page.locator(".ws-banner").innerText();
 const Number_ = (Text) => +Text.replace(/[^\d.]/g, "");
 const Switch = (Label) => Page.locator(`.ws-panel [role=switch][aria-label="${Label}"]`);
@@ -45,14 +67,11 @@ try {
   await Page.goto(Address);
   await Page.evaluate(() => localStorage.clear());
 
-  // F53: the six tools sit in a vertical rail on the viewport's left edge, not at the top of the inspector.
+  // Follow-up 66: no tool rail on the viewport; the six tools open from the shape's inspector.
   await Open("cube");
-  const Tools = await Page.locator(".ws-rail button").evaluateAll((Each) => Each.map((Button) => Button.getAttribute("aria-label")));
-  assert.deepEqual(Tools, ["UV", "Fracture", "SDF Bake", "LOD Clusters", "Collision Fit", "Icon Capture"]);
-  assert.equal(await Page.locator(".inspector-scroll .ws-launcher, .inspector-scroll .ws-tabs").count(), 0);
-  const Rail = await Page.locator(".ws-rail").boundingBox(), View = await Page.locator(".scene-image").boundingBox();
-  assert(Rail.x - View.x < 20 && Rail.height > Rail.width * 4, JSON.stringify({ Rail, View }));
-  Checks.push(`Rail on the viewport's left edge (${Math.round(Rail.x - View.x)} px in, ${Math.round(Rail.width)}×${Math.round(Rail.height)}): UV, Fracture, SDF Bake, LOD Clusters, Collision Fit, Icon Capture; nothing at the inspector top`);
+  assert.equal(await Page.locator(".ws-rail").count(), 0);
+  for (const Tool of Object.keys(LaunchButtons)) await LaunchPage(Tool);
+  Checks.push(`No rail on the viewport; each tool's button is on its inspector page: ${Object.entries(LaunchPages).map(([Tool, Name]) => Tool + " → " + Name).join(", ")}`);
 
   // Collision Fit on the cube: closed, 12 triangles, box is tightest; Use writes the Collision component.
   await Launch("Collision Fit");

@@ -99,7 +99,29 @@ const StoredBecomes = (Id, Key, Test) =>
     [Id, Key, Test],
   );
 const Card = (Title) => Page.locator(`[data-card="${Title}"]`);
-const Launch = (Tool) => Page.locator(`.ws-rail button[aria-label="${Tool}"]`).click();
+// Follow-up 66: the viewport's tool rail is gone; each workspace opens from its button on the shape's inspector (UV, Fracture, SDF and
+// LOD pages; Collision Fit at the end of the Components page, Icon Capture at the end of the Overview). Launching a workspace that is
+// already open is not a toggle any more: leave with Done.
+const LaunchButtons = {
+  UV: "Edit in UV workspace",
+  Fracture: "Edit in fracture workspace",
+  "SDF Bake": "Edit in SDF workspace",
+  "LOD Clusters": "Edit in LOD workspace",
+  "Collision Fit": "Open Collision Fit",
+  "Icon Capture": "Open Icon Capture",
+};
+// The carousel only mounts the open page, so show the tool's page first.
+const LaunchPages = { UV: "UV", Fracture: "Fracture", "SDF Bake": "SDF", "LOD Clusters": "LOD", "Collision Fit": "Components", "Icon Capture": "Overview" };
+const LaunchPage = async (Tool) => {
+  await Page.locator(".inspector-scroll .pc-pill").filter({ hasText: new RegExp(`^\\d*${LaunchPages[Tool]}$`) }).first().click();
+  await Page.locator(".inspector-scroll").getByRole("button", { name: LaunchButtons[Tool], exact: true }).waitFor({ state: "attached" });
+};
+const Launch = async (Tool) => {
+  const Done = Page.locator(".inspector-scroll").getByRole("button", { name: "Done", exact: true });
+  if (await Done.count()) await Done.first().click();
+  await LaunchPage(Tool);
+  await Page.locator(".inspector-scroll").getByRole("button", { name: LaunchButtons[Tool], exact: true }).evaluate((Each) => Each.click());
+};
 const Click = (Locator) => Locator.evaluate((Each) => Each.click());
 
 try {
@@ -209,14 +231,12 @@ try {
   await StoredBecomes("cube", "Fracture", "Stored && !Stored.Points");
   Checks.push(`Fracture workspace: click adds point 2, dragging moves it, Blast gives it ${Energies[1]} J (total ${Energies[0] + Energies[1]} J, ${Pieces} pieces); piece colliders box ${BoxFill} % vs convex hull 100 %; Keep only point → single-point format`);
 
-  // The workspace rail switches tools inside a workspace and the lit tool leaves it.
+  // Follow-up 66: from inside the fracture workspace, Done leaves it and the Components page's Collision Fit card opens the next one.
   await Launch("Collision Fit");
   await Card("Fitted shapes").waitFor();
-  assert.equal(await Page.locator('.ws-rail button[aria-pressed="true"]').getAttribute("aria-label"), "Collision Fit");
-  await Launch("Collision Fit");
+  await Page.locator(".inspector-scroll").getByRole("button", { name: "Done", exact: true }).click();
   await Page.locator(".ws-view").waitFor({ state: "detached" });
-  assert.equal(await Page.locator('.ws-rail button[aria-pressed="true"]').count(), 0);
-  Checks.push("Rail: switching Fracture → Collision Fit lights the new tool; clicking the lit tool leaves the workspace");
+  Checks.push("Switching Fracture → Collision Fit through Done and the Components page's card; Done leaves the workspace");
 
   assert.deepEqual(Errors, []);
   console.log(Checks.map((Check) => "🟢 " + Check).join("\n"));

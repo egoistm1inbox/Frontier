@@ -5,7 +5,7 @@ import HeightFogVisual from "./HeightFogVisual.jsx";
 import { HeightFogLayer, FogLightStudy, AerialRidges } from "./FogCards.jsx";
 import FracturePanel from "./FracturePanel.jsx";
 import { RenderComponentCards } from "./RenderComponents.jsx";
-import { UvPreviewCard, FracturePreviewCard, SdfPreviewCard, LodPreviewCard } from "./WorkspacePreviews.jsx";
+import { UvPreviewCard, WorkspaceLaunchCard, FracturePreviewCard, SdfPreviewCard, LodPreviewCard } from "./WorkspacePreviews.jsx";
 import { ComponentPanel, ComponentSheet, ComponentsCard, ComponentStack, OwnerKind } from "./ObjectComponents.jsx";
 import AtmosphereLab, { AtmosphereProfile } from "./AtmosphereLab.jsx";
 import MoonGlobe from "./MoonGlobe.jsx";
@@ -35,7 +35,7 @@ import { LightGlyphSource } from "./LightGlyphs.js";
 import { ColourSlotDropProps } from "./ColourCodex.js";
 import ActionIcon, { QuickSymbol } from "./ActionIcon.jsx";
 import React, { useState, useEffect, useRef } from "react";
-import { SunGizmo } from "../FrontierEditor/environment-graphics.jsx";
+import { SunDirection } from "./SunDial.jsx";
 import { DepthOfField } from "../FrontierEditor/camera-graphics.jsx";
 import { Iris, CloudCoverage } from "../FrontierEditor/property-graphics.jsx";
 import {
@@ -915,12 +915,22 @@ export function Inspector({
           />
         }
         Components={
-          <ComponentsCard
-            Owner={Subject}
-            Values={Values}
-            Scene={Scene}
-            Kit={{ Icon }}
-          />
+          <>
+            <ComponentsCard
+              Owner={Subject}
+              Values={Values}
+              Scene={Scene}
+              Kit={{ Icon }}
+            />
+            <WorkspaceLaunchCard
+              Tool="capture"
+              Title="Icon capture"
+              Caption="Frame the object in a square box and capture a transparent PNG thumbnail."
+              Label="Open Icon Capture"
+              Open={OpenWorkspace && (() => OpenWorkspace("capture"))}
+              Kit={{ Card }}
+            />
+          </>
         }
         Focus={Scene?.Focus}
         ComponentPage={
@@ -935,6 +945,16 @@ export function Inspector({
               // Stored on the owner under the component's name, so it doesn't overwrite the object's own notes.
               <EntityNotes Value={Values[`${Component} Notes`] || ""} Change={(Next) => Change(`${Component} Notes`, Next)} />
             )}
+          />
+        }
+        ComponentTools={
+          <WorkspaceLaunchCard
+            Tool="collision"
+            Title="Collision fit"
+            Caption="Fit box, sphere and capsule proxies, compare how tightly each wraps the object and check the surface is closed."
+            Label="Open Collision Fit"
+            Open={OpenWorkspace && (() => OpenWorkspace("collision"))}
+            Kit={{ Card }}
           />
         }
         FractureCards={
@@ -1223,6 +1243,12 @@ export function Inspector({
     const Manual = !!V("Manual direction");
     const Elevation = Manual ? V("Manual elevation") : Solved.Elevation,
       Azimuth = Manual ? V("Manual azimuth") : Solved.Azimuth;
+    // Today's track across the sky, every half hour, for the direction chart.
+    const SunPath = Array.from({ length: 49 }, (_, At) => {
+      const Hour = At / 2;
+      const Point = Solar({ LocalHours: Hour, Month: V("Month"), Day: V("Day of Month"), Latitude: V("Latitude"), Longitude: V("Longitude") });
+      return { Hour, Azimuth: Point.Azimuth, Elevation: Point.Elevation };
+    });
     // Follow-up 65: Overview (the old Now and Light pages in one), then Temperature, Sun disc and Dynamic each on their own page, then
     // Baking. Each value shows once: the time in Sun now (and the Daylight cycle), the solved angles in Sun direction.
     for (const Name of ["Manual direction", "Manual azimuth", "Manual elevation", "Cast shadows", "Animate"]) Drawn.add(Name);
@@ -1241,29 +1267,22 @@ export function Inspector({
           Switch("Manual direction", "compass"),
         ])}
         <Card Title="Sun direction" Class="direction-card">
-          <div className="solved-directions">
-            <div>
-              <small>Azimuth</small>
-              <Metric Value={Azimuth.toFixed(1) + "°"} />
-            </div>
-            <div>
-              <small>Elevation</small>
-              <Metric Value={Elevation.toFixed(1) + "°"} />
-            </div>
-          </div>
-          <div className="graphic tall solved-gizmo" title={Manual ? "Manual direction" : "Solved direction. Change the time or date on the Dynamic page."}>
-            <SunGizmo azimuth={Azimuth} elevation={Elevation} onChange={() => {}} />
-          </div>
+          <SunDirection
+            Azimuth={Azimuth}
+            Elevation={Elevation}
+            Manual={Manual}
+            Path={Manual ? [] : SunPath}
+            Change={(NextAzimuth, NextElevation) => {
+              // Steering the sun by hand takes over from the date and time (the Manual direction switch hands it back).
+              if (!Manual) AssignProperty("Manual direction", true);
+              AssignProperty("Manual azimuth", NextAzimuth);
+              AssignProperty("Manual elevation", NextElevation);
+            }}
+          />
           <p>
             {Elevation < 0 ? "Below the horizon" : "Above the horizon"} ·{" "}
-            {Manual ? "manual direction, the solved angles are overridden" : "solved from the date, time and place"}
+            {Manual ? "steered by hand; switch Manual direction off to follow the date and time" : "solved from the date, time and place; drag to steer it by hand"}
           </p>
-          {Manual && (
-            <>
-              {F("Manual azimuth")}
-              {F("Manual elevation")}
-            </>
-          )}
         </Card>
         <Card Title="Sunlight intensity" GraphHandled>
           <Metric Value={Number(V("Intensity")).toFixed(1)} Unit="×" Caption="Sunlight intensity multiplier" />
@@ -1531,6 +1550,12 @@ export function Inspector({
         </Card>
         </>) },
           { Id: "render", Label: "Render", Content: (<>
+        {/* Follow-up 66: the render settings (formerly in the viewport's gear menu) sit with the camera's render components. */}
+        {Scene?.RenderSettings && (
+          <Card Title="Render settings" Class="render-settings-card">
+            {Scene.RenderSettings}
+          </Card>
+        )}
         <ComponentsCard Owner={Subject} Values={Values} Scene={Scene} Kit={{ Icon }} Title="Render" />
           {SpecificationCard()}
           </>) },

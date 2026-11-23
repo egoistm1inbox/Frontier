@@ -3289,3 +3289,308 @@ img {
   text-transform: uppercase;
   color: var(--muted, #9aa3ad);
 }
+
+/* Follow-up 66: render settings on the Camera's Render page; the viewport's Grid and debug menu headings. */
+.render-settings-card .viewport-render-header > h4:first-child {
+  display: none;
+}
+.render-settings-card .vrh-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 10px 0;
+  font-size: 11px;
+  color: #aaa;
+}
+.render-settings-card .vrh-field select {
+  width: 100%;
+  height: 32px;
+  font-size: 12px;
+}
+.render-settings-card .vrh-toggles {
+  margin-top: 6px;
+  row-gap: 4px;
+}
+.render-settings-card .vrh-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 0;
+  font-size: 11px;
+  color: #cfcfcf;
+  border-bottom: 1px solid #ffffff0d;
+}
+.render-settings-card .vrh-slider {
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+  font-size: 11px;
+  color: #aaa;
+}
+.viewport-settings h4.viewport-settings-group {
+  margin: 14px 0 0;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #d0d0d0;
+  font-weight: 500;
+}
+.viewport-settings h4.viewport-settings-group:first-of-type {
+  margin-top: 0;
+}
+.viewport-modes .viewport-run {
+  min-width: 78px;
+  justify-content: center;
+}
+
+/* Follow-up 66: the Sun direction card: a polar sky chart with an elevation ruler beside it and an azimuth ruler under it. */
+.sun-direction {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 64px;
+  grid-template-rows: auto auto;
+  gap: 8px;
+  margin: 6px 0 4px;
+}
+.sun-direction-chart {
+  display: grid;
+  place-items: center;
+  min-width: 0;
+}
+.sun-dial {
+  width: 100%;
+  max-width: 300px;
+  aspect-ratio: 1;
+  cursor: crosshair;
+  touch-action: none;
+  user-select: none;
+}
+.sun-dial .dial-ground { fill: #17140f; }
+.sun-dial .dial-edge { fill: none; stroke: #4a4438; stroke-width: 1; }
+.sun-dial .dial-horizon { fill: none; stroke: #b7a684; stroke-width: 1.3; }
+.sun-dial .dial-ring { fill: none; stroke: #ffffff1c; stroke-width: 0.8; }
+.sun-dial .dial-ring.main { stroke: #ffffff33; }
+.sun-dial .dial-ring.under { stroke: #ffffff12; stroke-dasharray: 2 4; }
+.sun-dial .dial-spoke { stroke: #ffffff12; stroke-width: 0.8; }
+.sun-dial .dial-spoke.main { stroke: #ffffff2e; }
+.sun-dial .dial-ring-label { fill: #8b8f97; font-size: 8.5px; }
+.sun-dial .dial-compass { fill: #a39a88; font-size: 11px; font-weight: 600; text-anchor: middle; }
+.sun-dial .dial-compass.north { fill: #ff8a6b; }
+.sun-dial .dial-track { fill: none; stroke: #e2ac5b; stroke-width: 1.4; stroke-dasharray: 3 3; opacity: 0.8; }
+.sun-dial .dial-hour circle { fill: #e2ac5b; }
+.sun-dial .dial-hour text { fill: #c9a56c; font-size: 8.5px; }
+.sun-dial .dial-ray { stroke: #f4cd7599; stroke-width: 1; stroke-dasharray: 2 3; }
+.sun-dial .dial-sun { fill: #f4cd75; stroke: #fff4c7; stroke-width: 2; }
+.sun-dial .dial-sun.night { fill: #6f5f47; stroke: #9b805c; }
+.sun-dial .dial-zenith { fill: #c9ced8; }
+.sun-dial:active .dial-sun { stroke: #ffffff; stroke-width: 2.6; }
+
+.angle-ruler {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 64px;
+  align-items: stretch;
+  gap: 8px;
+  min-width: 0;
+}
+.angle-ruler.upright {
+  grid-template-columns: none;
+  grid-template-rows: minmax(0, 1fr) auto;
+}
+.angle-ruler:not(.upright) {
+  grid-template-columns: none;
+  grid-template-rows: 46px auto;
+  gap: 4px;
+}
+.angle-ruler:not(.upright) .angle-readout {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  justify-content: center;
+}
+.sun-direction > .angle-ruler:not(.upright) {
+  grid-column: 1 / -1;
+}
+.angle-tape {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid #3a3d44;
+  border-radius: 7px;
+  background: linear-gradient(#1b1d22, #15161a);
+  cursor: ew-resize;
+  touch-action: none;
+  user-select: none;
+  outline: none;
+  /* fade the ends so the tape reads as turning past */
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 18%, #000 82%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 18%, #000 82%, transparent);
+}
+.angle-ruler.upright .angle-tape {
+  cursor: ns-resize;
+  min-height: 220px;
+  -webkit-mask-image: linear-gradient(180deg, transparent, #000 14%, #000 86%, transparent);
+  mask-image: linear-gradient(180deg, transparent, #000 14%, #000 86%, transparent);
+}
+.angle-tape:focus-visible {
+  border-color: #ffb238;
+}
+.angle-tick {
+  position: absolute;
+  bottom: 0;
+  width: 1px;
+  height: 7px;
+  background: #6c7079;
+  transform: translateX(-50%);
+}
+.angle-tick.major {
+  height: 15px;
+  background: #b9bdc6;
+}
+.angle-tick.named {
+  background: #ffb238;
+}
+.angle-tick b {
+  position: absolute;
+  bottom: 19px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 10px;
+  font-weight: 600;
+  color: #b9bdc6;
+  white-space: nowrap;
+}
+.angle-tick.named b {
+  color: #ffcf7a;
+}
+.angle-ruler.upright .angle-tick {
+  bottom: auto;
+  left: auto;
+  right: 0;
+  width: 7px;
+  height: 1px;
+  transform: translateY(-50%);
+}
+.angle-ruler.upright .angle-tick.major {
+  width: 15px;
+}
+.angle-ruler.upright .angle-tick.zero {
+  width: 100%;
+  background: #b7a684;
+}
+.angle-ruler.upright .angle-tick b {
+  bottom: auto;
+  left: auto;
+  right: 19px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+.angle-ruler.upright .angle-tick.zero b {
+  right: auto;
+  left: 4px;
+  top: -8px;
+  color: #d8c8a4;
+}
+.angle-ground {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: #2a2216;
+  opacity: 0.7;
+}
+.angle-ruler:not(.upright) .angle-ground {
+  display: none;
+}
+.angle-needle {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: #ffb238;
+  box-shadow: 0 0 6px #ffb23866;
+  pointer-events: none;
+}
+.angle-needle::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -4px;
+  border: 5px solid transparent;
+  border-top-color: #ffb238;
+}
+.angle-ruler.upright .angle-needle {
+  left: 0;
+  right: 0;
+  top: 50%;
+  bottom: auto;
+  width: auto;
+  height: 2px;
+  margin: -1px 0 0;
+}
+.angle-ruler.upright .angle-needle::before {
+  top: -4px;
+  left: 0;
+  border-top-color: transparent;
+  border-left-color: #ffb238;
+}
+.angle-readout {
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  font: 600 13px/1.2 var(--mono, ui-monospace, monospace);
+  color: #f1efe7;
+  text-align: center;
+}
+.angle-readout small {
+  font: 500 9px/1.2 inherit;
+  font-family: inherit;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #8b8f97;
+}
+
+/* Follow-up 66: the Grid and debug switches and the Render settings toggles share the Component stack's switch look. */
+.viewport-settings .viewport-setting-toggle input[type="checkbox"],
+.render-settings-card .vrh-toggle input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  position: relative;
+  flex: none;
+  width: 34px;
+  height: 20px;
+  margin: 0;
+  border-radius: 999px;
+  border: 1px solid #3a3d44;
+  background: #24262b;
+  cursor: pointer;
+  transition: background 0.16s ease, border-color 0.16s ease;
+}
+.viewport-settings .viewport-setting-toggle input[type="checkbox"]::after,
+.render-settings-card .vrh-toggle input[type="checkbox"]::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #8b8f97;
+  transform: translate(0, -50%);
+  transition: transform 0.16s ease, background 0.16s ease;
+}
+.viewport-settings .viewport-setting-toggle input[type="checkbox"]:checked,
+.render-settings-card .vrh-toggle input[type="checkbox"]:checked {
+  background: #34d17a;
+  border-color: #34d17a;
+}
+.viewport-settings .viewport-setting-toggle input[type="checkbox"]:checked::after,
+.render-settings-card .vrh-toggle input[type="checkbox"]:checked::after {
+  background: #fff;
+  transform: translate(14px, -50%);
+}
+.viewport-settings .viewport-setting-toggle input[type="checkbox"]:focus-visible,
+.render-settings-card .vrh-toggle input[type="checkbox"]:focus-visible {
+  outline: 2px solid #ffb238;
+  outline-offset: 2px;
+}

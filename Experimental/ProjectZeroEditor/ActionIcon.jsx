@@ -69,7 +69,7 @@ export const ActionIconNames = new Set([
   "lock", "shadow", "gi", "visible", "sunlight", "disc", "stars", "twinkle", "cycle", "motion", "pause", "orbit", "wind", "shear", "cloud",
   "cloud-spawn", "rain", "collision", "fog", "rainbow", "band", "bake", "image", "anamorphic", "streaks", "starburst", "construct", "focus",
   "split", "diagnostics", "edit", "simulate", "play", "settings", "compass", "horizon", "atmosphere", "galaxy", "zodiac", "tripod",
-  "vignette", "toggle",
+  "vignette", "toggle", "debug",
 ]);
 
 export default function ActionIcon({ Name, Size = 24 }) {
@@ -346,6 +346,15 @@ export default function ActionIcon({ Name, Size = 24 }) {
           fillRule="evenodd"
           d="m9 1 6 0 1 4 3-1 3 5-3 3 3 3-3 5-3-1-1 4H9l-1-4-3 1-3-5 3-3-3-3 3-5 3 1Zm3 6a5 5 0 1 0 0 10 5 5 0 0 0 0-10Z"
         />
+      );
+      break;
+    case "debug":
+      // Follow-up 66: a grid square with a crosshair mark (the viewport's grid and debug views).
+      Drawing = (
+        <>
+          <path fillRule="evenodd" d="M3 3h18v18H3Zm2 2v6h6V5Zm8 0v6h6V5Zm-8 8v6h6v-6Zm8 0v6h6v-6Z" opacity="0.55" />
+          <path d="M11 7h2v4h4v2h-4v4h-2v-4H7v-2h4Z" />
+        </>
       );
       break;
     case "compass":

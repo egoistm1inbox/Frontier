@@ -27,7 +27,7 @@ import ProjectBrowser, { RestoreProjects, StoreProjects, BlankSceneRows, BlankSc
 import ViewportRenderHeader from "./ViewportRenderHeader.jsx";
 import { StartThoughtLog, useThoughtScope, OpenThought } from "./ThoughtLog.js";
 import { ResolveRenderSettings, RenderSettingsKey } from "./RenderSettings.js";
-import { WorkspaceView, WorkspaceRail } from "./Workspaces.jsx";
+import { WorkspaceView } from "./Workspaces.jsx";
 import { VehiclePanel, VehicleSummary, ComponentIcon, EnsureVehicleFolder, InitialVehicleRows, VehicleRevision, InVehicleTree, VehicleDescendants } from "./VehicleComponents.jsx";
 import { VehicleAssetPanel, VehicleAssetSummary } from "./VehicleAssetInspector.jsx";
 import { ComponentPanel, ComponentSummary, WithObjectComponents, EnsureObjectComponents, ComponentRowsFor, OwnerKind, ComponentRevision, ComponentAddress } from "./ObjectComponents.jsx";
@@ -239,8 +239,10 @@ const DefaultSettings = {
   Patches: false,
   Raytracing: true,
   Scale: 100,
-  // The main view: "3d" is the three.js preview (Viewport3D.jsx); "markers" is the checkerboard authoring view.
+  // The main view: the three.js preview (Viewport3D.jsx). (The checkerboard marker view now only shows as the split view's second pane.)
   Viewport: "3d",
+  // Follow-up 66: the viewport's ground grid, switched in the viewport's Grid and debug menu.
+  Grid: true,
 };
 // Debug views 00–16 and the earlier editor views: DebugViews.js.
 const StorageKey = "Frontier.ProjectZeroHtml.v1";
@@ -535,6 +537,8 @@ function App() {
     [Settings, ChangeSettings] = useState({
       ...DefaultSettings,
       ...Saved.Settings,
+      // Follow-up 66: the 3D / marker switch is gone, so the main view is always the 3D one.
+      Viewport: "3d",
     }),
     [Wide, Expand] = useState(
       () =>
@@ -1312,7 +1316,7 @@ function App() {
         ...ConsolidateAtmosphereFlags(Loaded.Hidden, Loaded.Rows),
         camera: false,
       });
-      ChangeSettings({ ...DefaultSettings, ...Loaded.Settings });
+      ChangeSettings({ ...DefaultSettings, ...Loaded.Settings, Viewport: "3d" });
       RenameProject(Loaded.Name || "Project-Zero");
       Select(
         Loaded.Rows[0]?.Id === "sky" && Loaded.Rows[0]?.Panel === "atmosphere"
@@ -1855,6 +1859,27 @@ function App() {
       </footer>
     </>
   );
+  // Follow-up 66: the render settings (engine, quality, shadows, reflections and the render toggles) live on the Camera's Render page.
+  const RenderSettingsCard = () => (
+    <ViewportRenderHeader
+      Render={ResolveRenderSettings(Values.camera?.[RenderSettingsKey])}
+      AssignRender={(Patch) =>
+        AssignValues((Previous) => ({
+          ...Previous,
+          camera: {
+            ...Previous.camera,
+            [RenderSettingsKey]: { ...ResolveRenderSettings(Previous.camera?.[RenderSettingsKey]), ...Patch },
+          },
+        }))
+      }
+      Settings={Settings}
+      AssignSetting={Assign}
+      Hidden={Hidden}
+      SetVisible={(Id, On) => AssignHidden((Previous) => ({ ...Previous, [Id]: !On }))}
+      CloudShadows={Values.clouds?.["Shadow Enabled"] ?? true}
+      SetCloudShadows={(On) => AssignValues((Previous) => ({ ...Previous, clouds: { ...Previous.clouds, "Shadow Enabled": On } }))}
+    />
+  );
   const Viewport = () => (
     <>
       <div
@@ -1879,35 +1904,40 @@ function App() {
             </span>
           </div>
           <div className="viewport-modes" role="group" aria-label="Editor mode">
+            {/* Follow-up 66: Play and Pause share one button: it plays, and while playing it pauses (and resumes from a pause). */}
             {[
               ["EDIT", "edit", "Edit"],
               ["SIM", "simulate", "Sim"],
-              ["PLAY", "play", "Play"],
-              ["PAUSE", "pause", "Pause"],
-            ].map(([Mode, Symbol, Label]) => (
-              <button
-                key={Mode}
-                aria-label={Label + " mode"}
-                aria-pressed={RunMode === Mode}
-                className={RunMode === Mode ? "active" : ""}
-                title={
-                  Mode === "EDIT"
-                    ? "Edit the HTML scene"
-                    : "UI mode only — native simulation is not connected"
-                }
-                onClick={() => {
-                  SetRunMode(Mode);
-                  if (Mode !== "EDIT")
-                    Toast(
-                      Label +
-                        " selected · UI preview only; no native simulation runs",
-                    );
-                }}
-              >
-                <ActionIcon Name={Symbol} Size={13} />
-                <span>{Label}</span>
-              </button>
-            ))}
+              RunMode === "PLAY" ? ["PAUSE", "pause", "Pause"] : ["PLAY", "play", RunMode === "PAUSE" ? "Resume" : "Play"],
+            ].map(([Mode, Symbol, Label]) => {
+              const Running = Mode === "PLAY" || Mode === "PAUSE";
+              const Pressed = Running ? RunMode === "PLAY" || RunMode === "PAUSE" : RunMode === Mode;
+              return (
+                <button
+                  key={Running ? "RUN" : Mode}
+                  aria-label={(Running ? (Mode === "PAUSE" ? "Pause" : "Play") : Label) + " mode"}
+                  aria-pressed={Pressed}
+                  data-run-mode={RunMode}
+                  className={(Pressed ? "active" : "") + (Running ? " viewport-run" : "")}
+                  title={
+                    Mode === "EDIT"
+                      ? "Edit the HTML scene"
+                      : (Running ? (Mode === "PAUSE" ? "Pause · " : "Play · ") : "") + "UI mode only — native simulation is not connected"
+                  }
+                  onClick={() => {
+                    SetRunMode(Mode);
+                    if (Mode !== "EDIT")
+                      Toast(
+                        (Mode === "PAUSE" ? "Paused" : Label) +
+                          " · UI preview only; no native simulation runs",
+                      );
+                  }}
+                >
+                  <ActionIcon Name={Symbol} Size={13} />
+                  <span>{Label}</span>
+                </button>
+              );
+            })}
           </div>
         </div>
         <div className="viewport-action-row">
@@ -1988,16 +2018,6 @@ function App() {
           </label>
           <div className="viewport-secondary-tools">
             <button
-              className="viewport-icon-button viewport-view-switch"
-              aria-label="3D view"
-              aria-pressed={Settings.Viewport !== "markers"}
-              data-viewport-switch={Settings.Viewport === "markers" ? "markers" : "3d"}
-              title={Settings.Viewport === "markers" ? "Show the 3D view" : "Show the marker view (checkerboard)"}
-              onClick={() => Assign("Viewport", Settings.Viewport === "markers" ? "3d" : "markers")}
-            >
-              3D
-            </button>
-            <button
               className="viewport-icon-button"
               aria-label="Split viewport"
               aria-pressed={SplitView}
@@ -2015,14 +2035,16 @@ function App() {
             >
               <ActionIcon Name="diagnostics" Size={16} />
             </button>
+            {/* Follow-up 66: the gear's render settings moved to the Camera's Render page; what is left is the viewport's own grid and
+                debug views, behind this button. */}
             <button
               className="viewport-icon-button"
-              aria-label="Viewport settings"
+              aria-label="Grid and debug"
               aria-expanded={ViewportSettings}
-              title="Viewport settings and debug views"
+              title="Viewport grid and debug views (centre of mass, centroid, sockets, buffers)"
               onClick={() => ShowViewportSettings(!ViewportSettings)}
             >
-              <ActionIcon Name="settings" Size={17} />
+              <ActionIcon Name="debug" Size={17} />
             </button>
           </div>
         </div>
@@ -2031,7 +2053,7 @@ function App() {
         <section
           className="viewport-settings"
           role="dialog"
-          aria-label="Viewport settings"
+          aria-label="Grid and debug"
           onKeyDown={(Event) => {
             if (Event.key === "Escape") {
               Event.stopPropagation();
@@ -2040,34 +2062,20 @@ function App() {
           }}
         >
           <header>
-            Viewport settings
+            Grid and debug
             <button
-              aria-label="Close viewport settings"
+              aria-label="Close grid and debug"
               onClick={() => ShowViewportSettings(false)}
             >
               ×
             </button>
           </header>
-          <ViewportRenderHeader
-            Render={ResolveRenderSettings(Values.camera?.[RenderSettingsKey])}
-            AssignRender={(Patch) =>
-              AssignValues((Previous) => ({
-                ...Previous,
-                camera: {
-                  ...Previous.camera,
-                  [RenderSettingsKey]: { ...ResolveRenderSettings(Previous.camera?.[RenderSettingsKey]), ...Patch },
-                },
-              }))
-            }
-            Settings={Settings}
-            AssignSetting={Assign}
-            Hidden={Hidden}
-            SetVisible={(Id, On) => AssignHidden((Previous) => ({ ...Previous, [Id]: !On }))}
-            CloudShadows={Values.clouds?.["Shadow Enabled"] ?? true}
-            SetCloudShadows={(On) => AssignValues((Previous) => ({ ...Previous, clouds: { ...Previous.clouds, "Shadow Enabled": On } }))}
-            SplitView={SplitView}
-            SetSplitView={SetSplitView}
-          />
+          <h4 className="viewport-settings-group">Grid</h4>
+          <label className="viewport-setting-toggle" title="The ground grid under the scene">
+            Show grid
+            <input type="checkbox" aria-label="Show grid" data-grid-switch checked={Settings.Grid !== false} onChange={(Event) => Assign("Grid", Event.target.checked)} />
+          </label>
+          <h4 className="viewport-settings-group">Debug</h4>
           <label>
             Debug view
             <select
@@ -2084,7 +2092,7 @@ function App() {
             </select>
           </label>
           {/* Follow-up 65: the Component Viewer's centre-of-mass marks and socket gizmos, switched here with the other debug views. */}
-          <label className="viewport-setting-toggle" title="Each part's centre of mass and the whole vehicle's, in the Component Viewer">
+          <label className="viewport-setting-toggle" title="Each object's centre of mass and centroid in the viewport, and each part's (and the whole vehicle's) in the Component Viewer">
             Centre of mass debug
             <input
               type="checkbox"
@@ -2092,6 +2100,16 @@ function App() {
               data-debug-centres
               checked={Settings["Centre of mass debug"] !== false}
               onChange={(Event) => Assign("Centre of mass debug", Event.target.checked)}
+            />
+          </label>
+          <label className="viewport-setting-toggle" title="Each object's centroid (the middle of its bounds) in the viewport, as a hollow diamond">
+            Centroid debug
+            <input
+              type="checkbox"
+              aria-label="Centroid debug"
+              data-debug-centroids
+              checked={Settings["Centroid debug"] !== false}
+              onChange={(Event) => Assign("Centroid debug", Event.target.checked)}
             />
           </label>
           <label className="viewport-setting-toggle" title="The socket gizmos (hinges, springs, the tow dock), in the Component Viewer">
@@ -2147,9 +2165,7 @@ function App() {
         data-viewport={Settings.Viewport === "markers" ? "markers" : "3d"}
         title={Settings.Viewport === "markers" ? "Checkerboard authoring preview. Symbols represent constructed entities, not engine rendering." : undefined}
       >
-        {Subject?.Panel === "geometry" && Subject?.Parent === "showcase" && (
-          <WorkspaceRail Active={Workspace?.Tool || null} Open={OpenWorkspace} Leave={() => SetWorkspace(null)} />
-        )}
+        {/* Follow-up 66: no EDIT rail over the viewport; the UV, Fracture, SDF and LOD workspaces open from the shape's inspector pages. */}
         {Workspace ? (
           <WorkspaceView
             Subject={Subject}
@@ -2180,6 +2196,9 @@ function App() {
             Flare={ReaderOf(Values, "flare")}
             StarsOff={!!Hidden.stars || !Rows.some((Row) => Row.Id === "stars")}
             FlareOff={!!Hidden.flare || !Rows.some((Row) => Row.Id === "flare")}
+            Grid={Settings.Grid !== false}
+            ShowCentres={Settings["Centre of mass debug"] !== false}
+            ShowCentroids={Settings["Centroid debug"] !== false}
           />
         )}
         {SplitView && !Workspace && (
@@ -2328,7 +2347,7 @@ function App() {
               Workspace={Workspace}
               OpenWorkspace={OpenWorkspace}
               SetWorkspace={SetWorkspace}
-              Scene={{ Rows, SelectRow, AddRows: InsertUnder, PatchRow, OpenComponent, Focus: ComponentFocus, Air: AirOf(Values), Sun: ReaderOf(Values, "sun"), OpenComponentViewer: OpenVehiclePanel, Values }}
+              Scene={{ Rows, SelectRow, AddRows: InsertUnder, PatchRow, OpenComponent, Focus: ComponentFocus, Air: AirOf(Values), Sun: ReaderOf(Values, "sun"), OpenComponentViewer: OpenVehiclePanel, Values, RenderSettings: Subject.Panel === "camera" ? RenderSettingsCard() : null }}
               OpenWind={() => {
                 WindOpener.current = document.activeElement;
                 EditWind(Selected);

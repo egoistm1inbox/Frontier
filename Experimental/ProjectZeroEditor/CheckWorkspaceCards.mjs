@@ -94,7 +94,7 @@ try {
     "Frame selected",
     "Split viewport",
     "Viewport diagnostics",
-    "Viewport settings",
+    "Grid and debug",
   ]) {
     const Radius = await Page.getByRole("button", {
       name: Name,

@@ -207,11 +207,11 @@ try {
     );
   }
   await Page.getByRole("button", {
-    name: "Viewport settings",
+    name: "Grid and debug",
     exact: true,
   }).click();
   await Page.getByRole("dialog", {
-    name: "Viewport settings",
+    name: "Grid and debug",
     exact: true,
   }).waitFor();
   await Page.getByLabel("Viewport debug view", { exact: true }).selectOption(
@@ -228,7 +228,7 @@ try {
   await Page.keyboard.press("Escape");
   assert.equal(
     await Page.getByRole("dialog", {
-      name: "Viewport settings",
+      name: "Grid and debug",
       exact: true,
     }).count(),
     0,

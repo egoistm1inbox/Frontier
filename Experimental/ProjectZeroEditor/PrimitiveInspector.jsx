@@ -1382,7 +1382,7 @@ function Carousel({ Pages, Focus = null, Summary }) {
 //                                                    INSPECTOR
 //------------------------------------------------------------------------------------------------------------------------
 
-export default function PrimitiveInspector({ Subject, Values, Change, Hidden, ToggleHidden, MaterialCards, FractureCards, UvCards = null, SdfCards = null, LodCards = null, Components = null, ComponentPage = null, Focus = null, Kit }) {
+export default function PrimitiveInspector({ Subject, Values, Change, Hidden, ToggleHidden, MaterialCards, FractureCards, UvCards = null, SdfCards = null, LodCards = null, Components = null, ComponentPage = null, ComponentTools = null, Focus = null, Kit }) {
   const Shape = ShapeOf(Subject);
   const Read = (Key, Initial) => (Values[Key] === undefined ? Initial : Values[Key]);
   const Size = Measure(Shape, Read, Array.isArray(Values.Scale) ? Values.Scale : [1, 1, 1]);
@@ -1400,7 +1400,12 @@ export default function PrimitiveInspector({ Subject, Values, Change, Hidden, To
         }}
         Pages={{
           overview: <OverviewPage {...Shared} Components={Components} />,
-          components: ComponentPage,
+          components: ComponentPage && (
+            <>
+              {ComponentPage}
+              {ComponentTools}
+            </>
+          ),
           geometry: <GeometryPage {...Shared} />,
           material: MaterialCards,
           uv: UvCards,

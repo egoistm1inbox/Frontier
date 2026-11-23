@@ -32,7 +32,29 @@ const Stored = async (Id, Key) => ((await Saved())?.Values?.[Id] || {})[Key];
 const Category = async (Name) => (await CategoryPill(Page, Name)).click();
 const Card = (Title) => Page.locator(`[data-card="${Title}"]`);
 const Metric = (Title) => Card(Title).locator(".metric").first().innerText();
-const Launch = (Tool) => Page.locator(`.ws-rail button[aria-label="${Tool}"]`).click();
+// Follow-up 66: the viewport's tool rail is gone; each workspace opens from its button on the shape's inspector (UV, Fracture, SDF and
+// LOD pages; Collision Fit at the end of the Components page, Icon Capture at the end of the Overview). Launching a workspace that is
+// already open is not a toggle any more: leave with Done.
+const LaunchButtons = {
+  UV: "Edit in UV workspace",
+  Fracture: "Edit in fracture workspace",
+  "SDF Bake": "Edit in SDF workspace",
+  "LOD Clusters": "Edit in LOD workspace",
+  "Collision Fit": "Open Collision Fit",
+  "Icon Capture": "Open Icon Capture",
+};
+// The carousel only mounts the open page, so show the tool's page first.
+const LaunchPages = { UV: "UV", Fracture: "Fracture", "SDF Bake": "SDF", "LOD Clusters": "LOD", "Collision Fit": "Components", "Icon Capture": "Overview" };
+const LaunchPage = async (Tool) => {
+  await Page.locator(".inspector-scroll .pc-pill").filter({ hasText: new RegExp(`^\\d*${LaunchPages[Tool]}$`) }).first().click();
+  await Page.locator(".inspector-scroll").getByRole("button", { name: LaunchButtons[Tool], exact: true }).waitFor({ state: "attached" });
+};
+const Launch = async (Tool) => {
+  const Done = Page.locator(".inspector-scroll").getByRole("button", { name: "Done", exact: true });
+  if (await Done.count()) await Done.first().click();
+  await LaunchPage(Tool);
+  await Page.locator(".inspector-scroll").getByRole("button", { name: LaunchButtons[Tool], exact: true }).evaluate((Each) => Each.click());
+};
 const Banner = () => Page.locator(".ws-banner").innerText();
 const Number_ = (Text) => +Text.replace(/[^\d.]/g, "");
 

@@ -37,6 +37,7 @@ import { VehicleAsset } from "./VehicleAssets.js";
 import { VehicleAssetPanel, PaintOf } from "./VehicleAssetInspector.jsx";
 import { IsEditorCamera } from "./ScenePolicy.js";
 import { LightPlacements, LightProp } from "./LightProps.js";
+import { ComMark, CentroidMark, OverAll, MassCentreOf, CentroidOf, SolidParts } from "./DebugMarks.js";
 
 export const ShowcaseSpacing = 1.8;
 const Rad = Math.PI / 180;
@@ -177,7 +178,7 @@ function StarField() {
   return Stars;
 }
 
-export default function Viewport3D({ Rows, Values, Hidden, Selected, Picked = [], Select, Air, Sun, Stars = () => undefined, Flare = () => undefined, StarsOff = false, FlareOff = false, FrameToken = 0 }) {
+export default function Viewport3D({ Rows, Values, Hidden, Selected, Picked = [], Select, Air, Sun, Stars = () => undefined, Flare = () => undefined, StarsOff = false, FlareOff = false, FrameToken = 0, Grid = true, ShowCentres = true, ShowCentroids = true }) {
   const Host = useRef(null), Scene = useRef(null), Latest = useRef({});
   const [Failed, Fail] = useState("");
   const Medium = SkyMedium(Air);
@@ -284,6 +285,84 @@ export default function Viewport3D({ Rows, Values, Hidden, Selected, Picked = []
         Canvas.dataset.flare = (Strength * (Now.Lens?.Enabled && !Now.FlareOff ? Now.Lens.Intensity : 0)).toFixed(2);
         Canvas.dataset.flareSprites = String(Drawn);
       };
+      // Follow-up 66: selection is an outline around what is chosen (no bounding boxes). The chosen objects' solid parts are on layer 5
+      // (the selected one) or 6 (the others picked with it); they are drawn flat into a mask (red, green), and a full-screen pass draws
+      // a 2–3 px line where the mask ends, in the accent colour (or pale gold for the others), with a faint tint over the selected one.
+      const Mask = new THREE.WebGLRenderTarget(1, 1);
+      const MaskCamera = new THREE.PerspectiveCamera();
+      const Flat = (Hex) => new THREE.MeshBasicMaterial({ color: Hex, fog: false, toneMapped: false });
+      const MaskSelected = Flat(0xff0000), MaskOthers = Flat(0x00ff00);
+      const Linear = (Hex) => new THREE.Vector3(...[1, 3, 5].map((At) => parseInt(Hex.slice(At, At + 2), 16) / 255));
+      const Line = new THREE.Mesh(
+        new THREE.PlaneGeometry(2, 2),
+        new THREE.ShaderMaterial({
+          uniforms: { uMask: { value: Mask.texture }, uTexel: { value: new THREE.Vector2() }, uSelected: { value: Linear(Accent) }, uOthers: { value: Linear("#ffd98a") } },
+          vertexShader: `varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`,
+          fragmentShader: `
+            uniform sampler2D uMask; uniform vec2 uTexel; uniform vec3 uSelected, uOthers; varying vec2 vUv;
+            void main() {
+              vec4 Here = texture2D(uMask, vUv);
+              float NearSelected = 0.0, NearOthers = 0.0;
+              for (int Step = 0; Step < 16; Step++) {
+                float Turn = float(Step) * 0.39269908;
+                for (int Ring = 1; Ring <= 2; Ring++) {
+                  vec4 Seen = texture2D(uMask, vUv + vec2(cos(Turn), sin(Turn)) * uTexel * float(Ring) * 1.35);
+                  NearSelected = max(NearSelected, Seen.r);
+                  NearOthers = max(NearOthers, Seen.g);
+                }
+              }
+              float EdgeSelected = NearSelected * (1.0 - Here.r);
+              float EdgeOthers = NearOthers * (1.0 - max(Here.r, Here.g));
+              float Tint = Here.r * 0.07;
+              vec3 Colour = EdgeSelected > 0.01 || EdgeOthers <= 0.01 ? uSelected : uOthers;
+              gl_FragColor = vec4(Colour, max(max(EdgeSelected, EdgeOthers), Tint));
+            }`,
+          transparent: true,
+          depthTest: false,
+          depthWrite: false,
+          toneMapped: false,
+        }),
+      );
+      Line.frustumCulled = false;
+      const LineScene = new THREE.Scene();
+      LineScene.add(Line);
+      const LineCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+      const Clear = new THREE.Color();
+      const DrawOutline = () => {
+        if (!Latest.current.Outlined) return;
+        const Renderer = View.renderer, Size = Renderer.getDrawingBufferSize(new THREE.Vector2());
+        if (Mask.width !== Size.x || Mask.height !== Size.y) Mask.setSize(Size.x, Size.y);
+        Line.material.uniforms.uTexel.value.set(1 / Size.x, 1 / Size.y);
+        const Background = View.scene.background, Haze = View.scene.fog, Shadows = Renderer.shadowMap.autoUpdate;
+        const Alpha = Renderer.getClearAlpha();
+        Renderer.getClearColor(Clear);
+        View.scene.background = null;
+        View.scene.fog = null;
+        Renderer.shadowMap.autoUpdate = false;
+        MaskCamera.copy(View.camera);
+        Renderer.setRenderTarget(Mask);
+        Renderer.setClearColor(0x000000, 0);
+        Renderer.clear();
+        Renderer.autoClear = false;
+        for (const [Layer, Paint] of [[6, MaskOthers], [5, MaskSelected]]) {
+          MaskCamera.layers.set(Layer);
+          View.scene.overrideMaterial = Paint;
+          Renderer.render(View.scene, MaskCamera);
+        }
+        View.scene.overrideMaterial = null;
+        Renderer.setRenderTarget(null);
+        Renderer.setClearColor(Clear, Alpha);
+        Renderer.render(LineScene, LineCamera);
+        Renderer.autoClear = true;
+        Renderer.shadowMap.autoUpdate = Shadows;
+        View.scene.background = Background;
+        View.scene.fog = Haze;
+      };
+      // Follow-up 66: the centre-of-mass and centroid marks (the Grid and debug menu's switches) sit in their own group, outside the
+      // shapes, so they never catch a click, a framing box or the flare's rays.
+      const Marks = new THREE.Group();
+      Marks.name = "Debug marks";
+      View.scene.add(Marks);
       // Draw only when something changed: the camera moved, or the scene was touched.
       let Dirty = true, Last = "";
           View.renderer.setAnimationLoop(() => {
@@ -318,11 +397,12 @@ export default function Viewport3D({ Rows, Values, Hidden, Selected, Picked = []
           View.scene.fog.far = Reach;
         }
         // The dot grid only reads when looking down; edge-on its dots smear into streaks.
-        View.grid.visible = View.camera.position.y - View.rig.target.y > View.rig.distance * 0.2;
+        View.grid.visible = Latest.current.Grid !== false && View.camera.position.y - View.rig.target.y > View.rig.distance * 0.2;
         const Floor = View.grid.material.uniforms;
         Floor.uFocus.value.copy(View.rig.target);
         Floor.uRadius.value = Math.max(6, View.rig.distance * 2.6);
         View.renderer.render(View.scene, View.camera);
+        DrawOutline();
         DrawFlare();
         Canvas.dataset.frames = String(+(Canvas.dataset.frames || 0) + 1);
         // Where each object's centre lands on the canvas (fractions), for checks and tools that aim at objects.
@@ -356,7 +436,7 @@ export default function Viewport3D({ Rows, Values, Hidden, Selected, Picked = []
       Canvas.addEventListener("keydown", (Event) => {
         if (Event.key.toLowerCase() === "f") Scene.current?.FrameChosen?.();
       });
-      Built = { View, Canvas, Layer, SkyImage, SkyTexture, Hemisphere, Ground, AimSun, Stars, Touch: () => (Dirty = true), Framed: false, Moved: false };
+      Built = { View, Canvas, Layer, SkyImage, SkyTexture, Hemisphere, Ground, AimSun, Stars, Marks, Touch: () => (Dirty = true), Framed: false, Moved: false };
       Scene.current = Built;
       // Until the camera is moved by hand, keep the shapes framed when the viewport changes shape (it opens before the panels settle).
       for (const Name of ["pointerdown", "wheel"]) Canvas.addEventListener(Name, () => (Built.Moved = true), { passive: true });
@@ -394,6 +474,10 @@ export default function Viewport3D({ Rows, Values, Hidden, Selected, Picked = []
   Latest.current.Lens = Lens;
   Latest.current.FlareOff = FlareOff;
   Latest.current.Chosen = Chosen;
+  Latest.current.Grid = Grid;
+  useEffect(() => {
+    Scene.current?.Touch();
+  }, [Grid]);
 
   // Sky and sun.
   const SkyKey = JSON.stringify([Medium, Light.Elevation, Light.Azimuth, Light.Tint, Light.Latitude, Light.Hours, Field, StarsOff]);
@@ -551,36 +635,65 @@ export default function Viewport3D({ Rows, Values, Hidden, Selected, Picked = []
   useEffect(() => {
     const Built = Scene.current;
     if (!Built?.Group) return;
-    for (const Mesh of Built.Group.children) {
-      for (const Old of Mesh.children.filter((Each) => Each.userData.outline)) {
-        Mesh.remove(Old);
-        Old.geometry.dispose();
-        Old.material.dispose();
-      }
-      const Id = Mesh.userData.componentId;
+    // Follow-up 66: an outline, not a box: the chosen objects' solid parts go on the outline's layers (5 the selected, 6 the others).
+    let Outlined = false;
+    for (const Root of Built.Group.children) {
+      const Id = Root.userData.componentId;
+      Root.traverse((Part) => {
+        Part.layers.disable(5);
+        Part.layers.disable(6);
+      });
       if (!Chosen.has(Id)) continue;
-      // An asset (several parts) gets a box around it; a shape its own edges.
-      let Outline = Mesh.geometry;
-      if (Mesh.userData.asset) {
-        const Box = new THREE.Box3();
-        Mesh.updateMatrixWorld(true);
-        const Inverse = Mesh.matrixWorld.clone().invert();
-        Mesh.traverse((Part) => {
-          // Its solid parts only (not a light's beam, glow or invisible click target).
-          if (Part.isMesh && !Part.userData.debug && Part.material?.visible !== false) Box.union(new THREE.Box3().setFromObject(Part).applyMatrix4(Inverse));
-        });
-        Outline = new THREE.BoxGeometry(...Box.getSize(new THREE.Vector3()).toArray());
-        Outline.translate(...Box.getCenter(new THREE.Vector3()).toArray());
-      }
-      const Edges = new THREE.LineSegments(new THREE.EdgesGeometry(Outline, 30), new THREE.LineBasicMaterial({ color: Id === Selected ? Accent : "#ffd98a", depthTest: false, transparent: true, opacity: 0.95 }));
-      Edges.renderOrder = 5;
-      Edges.raycast = () => {};
-      Edges.userData.outline = true;
-      Mesh.add(Edges);
+      for (const Part of SolidParts(Root)) Part.layers.enable(Id === Selected ? 5 : 6);
+      Outlined = true;
     }
+    Latest.current.Outlined = Outlined;
     Built.Touch();
     Built.Canvas.dataset.chosen = Built.Group.children.map((Mesh) => Mesh.userData.componentId).filter((Id) => Chosen.has(Id)).join(" ");
   }, [ChosenKey, ShapeKey, SkyKey]);
+
+  // Follow-up 66: centre of mass (the checkered ball) and centroid (the hollow diamond) for every physical object (the Showcase's shapes
+  // and the parked vehicles) and for whatever is chosen; the selected object's are in the accent colour.
+  useEffect(() => {
+    const Built = Scene.current;
+    if (!Built?.Group || !Built.Marks) return;
+    for (const Old of [...Built.Marks.children]) {
+      Built.Marks.remove(Old);
+      Old.traverse((Each) => {
+        Each.geometry?.dispose();
+        Each.material?.dispose();
+      });
+    }
+    const Massed = [], Middles = [];
+    if (ShowCentres || ShowCentroids)
+      for (const Root of Built.Group.children) {
+        const Id = Root.userData.componentId;
+        const Physical = !Root.userData.asset || Root.userData.vehicle || Parked.some(({ Row }) => Row.Id === Id);
+        if (!Physical && !Chosen.has(Id)) continue;
+        const Middle = CentroidOf(Root);
+        if (!Middle) continue;
+        const Radius = Math.max(0.035, Math.min(0.09, Middle.Size.length() * 0.035));
+        const Picked = Id === Selected;
+        if (ShowCentres) {
+          const Centre = MassCentreOf(Root);
+          if (Centre) {
+            const Mark = OverAll(ComMark(Radius, Picked ? Accent : "#7fd1ff", Picked));
+            Mark.position.copy(Centre);
+            Built.Marks.add(Mark);
+            Massed.push(Id + ":" + Centre.toArray().map((Each) => Each.toFixed(2)).join(","));
+          }
+        }
+        if (ShowCentroids) {
+          const Mark = OverAll(CentroidMark(Radius, Picked ? Accent : "#b8f28a"));
+          Mark.position.copy(Middle.Centre);
+          Built.Marks.add(Mark);
+          Middles.push(Id + ":" + Middle.Centre.toArray().map((Each) => Each.toFixed(2)).join(","));
+        }
+      }
+    Built.Canvas.dataset.massCentres = Massed.join(" ");
+    Built.Canvas.dataset.centroids = Middles.join(" ");
+    Built.Touch();
+  }, [ChosenKey, ShapeKey, ShowCentres, ShowCentroids]);
 
   useEffect(() => {
     if (FrameToken) Scene.current?.FrameChosen?.();
