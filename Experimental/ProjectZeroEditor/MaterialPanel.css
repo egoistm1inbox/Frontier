@@ -2100,8 +2100,7 @@
   letter-spacing: 0.3px;
   pointer-events: none;
 }
-/* Shared slider look (wide track, pale round thumb, filled part) */
-.si-slider,
+/* The viewport's exposure slider (wide track, pale round thumb, filled part) */
 .sv-exposure input {
   -webkit-appearance: none;
   appearance: none;
@@ -2112,7 +2111,6 @@
   margin: 0;
   cursor: pointer;
 }
-.si-slider::-webkit-slider-thumb,
 .sv-exposure input::-webkit-slider-thumb {
   -webkit-appearance: none;
   width: 18px;
@@ -2122,7 +2120,6 @@
   box-shadow: 0 1px 4px #0008;
   border: 0;
 }
-.si-slider::-moz-range-thumb,
 .sv-exposure input::-moz-range-thumb {
   width: 18px;
   height: 18px;
@@ -2388,8 +2385,8 @@
 }
 .si-row-head {
   display: grid;
-  grid-template-columns: auto auto 1fr auto auto;
-  grid-template-areas: "label source gap pill remove" "slider slider slider slider slider";
+  grid-template-columns: auto auto 1fr auto;
+  grid-template-areas: "label source gap remove";
   align-items: center;
   column-gap: 8px;
   row-gap: 10px;
@@ -2443,21 +2440,12 @@
 .si-spacer {
   grid-area: gap;
 }
-.si-pill {
-  grid-area: pill;
-  width: 64px;
-  height: 22px;
-  padding: 0 9px;
-  border-radius: 6px;
-  border: 1px solid #ffffff0a;
-  background: #0f0f0f;
-  color: #ddd;
-  font-size: 8.5px;
-  text-align: left;
-  font-variant-numeric: tabular-nums;
+/* Follow-up 74: a fill amount is the editor's own slider (Editor.css .slider-pill, .split-value), under the row's label */
+.si-slider-pill {
+  margin-top: 10px;
 }
-.si-slider {
-  grid-area: slider;
+.si-slider-pill .split-value input {
+  font-variant-numeric: tabular-nums;
 }
 .si-remove {
   grid-area: remove;

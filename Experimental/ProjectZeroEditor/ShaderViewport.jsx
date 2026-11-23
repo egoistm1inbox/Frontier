@@ -284,7 +284,7 @@ function DrapedCloth(Steps = 160) {
   Geometry.computeVertexNormals();
   return Geometry;
 }
-function Shape(Name) {
+export function PreviewGeometry(Name) {
   if (Name === "Sphere") return new THREE.SphereGeometry(0.55, 128, 64).translate(0, 0.6, 0);
   if (Name === "Rounded cube") return RoundedCube().translate(0, 0.06, 0);
   if (Name === "Draped cloth") return DrapedCloth();
@@ -292,10 +292,66 @@ function Shape(Name) {
 }
 
 // ── The viewport ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-export default function ShaderViewport({ Material, Eyebrow, Title, Note }) {
+// Follow-up 74: the Texture paint and Baking workspaces show the same viewport. They may hold the preview shape themselves (Shape and
+// ChooseShape), lay live pictures over channels while they are painted (Live: { channel id: canvas }, redrawn whenever LiveRevision
+// changes), show one picture flat on the subject instead of the lit material (Showing: a canvas, with ShowingRevision), and paint with
+// the left button (Painter: { Active, Radius (a share of the texture), Down(Hit, Event), Move(Hit or null, Event), Up() }).
+// Orbiting stays on Alt-drag, the right and middle buttons and Shift-drag while a painter is active.
+const LiveSlots = {
+  colour: (Look, Texture) => {
+    Texture.colorSpace = THREE.SRGBColorSpace;
+    Look.map = Texture;
+    Look.color?.set("#ffffff");
+  },
+  roughness: (Look, Texture) => {
+    Look.roughnessMap = Texture;
+    Look.roughness = 1;
+  },
+  metallic: (Look, Texture) => {
+    Look.metalnessMap = Texture;
+    Look.metalness = 1;
+  },
+  emission: (Look, Texture) => {
+    Look.emissiveMap = Texture;
+    Look.emissiveIntensity = 20 * 0.12;
+  },
+  occlusion: (Look, Texture) => {
+    Look.aoMap = Texture;
+    Look.aoMapIntensity = 1;
+  },
+  opacity: (Look, Texture) => {
+    Look.alphaMap = Texture;
+    Look.opacity = 1;
+    Look.transparent = true;
+    Look.alphaTest = 0.02;
+    Look.side = THREE.DoubleSide;
+  },
+  displacement: (Look, Texture) => {
+    Look.displacementMap = Texture;
+    Look.displacementScale = 0.2;
+    Look.displacementBias = -0.1;
+  },
+};
+const UvSpan = (Geometry, Face) => {
+  // World length per unit of texture across the face under the brush (√ of the face's world area over its texture area).
+  const P = Geometry.attributes.position, T = Geometry.attributes.uv;
+  if (!T) return 1;
+  const A = new THREE.Vector3().fromBufferAttribute(P, Face.a), B = new THREE.Vector3().fromBufferAttribute(P, Face.b), C = new THREE.Vector3().fromBufferAttribute(P, Face.c);
+  const World = new THREE.Vector3().subVectors(B, A).cross(new THREE.Vector3().subVectors(C, A)).length() / 2;
+  const Ua = [T.getX(Face.a), T.getY(Face.a)], Ub = [T.getX(Face.b), T.getY(Face.b)], Uc = [T.getX(Face.c), T.getY(Face.c)];
+  const Flat = Math.abs((Ub[0] - Ua[0]) * (Uc[1] - Ua[1]) - (Uc[0] - Ua[0]) * (Ub[1] - Ua[1])) / 2;
+  return Flat > 1e-9 ? Math.sqrt(World / Flat) : 1;
+};
+export default function ShaderViewport({ Material, Eyebrow, Title, Note, Shape: HeldShape, ChooseShape, Live, LiveRevision = 0, Showing = null, ShowingRevision = 0, Painter = null }) {
   const Host = useRef(null), Built = useRef(null);
-  const [Shown, ShowShape] = useState("Shader ball"),
+  const PainterNow = useRef(Painter);
+  PainterNow.current = Painter;
+  const LiveNow = useRef(Live);
+  LiveNow.current = Live;
+  const [OwnShape, ShowOwnShape] = useState("Shader ball"),
     [Studio, ChooseStudio] = useState("Studio softbox"),
+    Shown = HeldShape || OwnShape,
+    ShowShape = ChooseShape || ShowOwnShape,
     [Exposure, Expose] = useState(1),
     [Zoom, ReportZoom] = useState(100),
     [Full, ShowFull] = useState(false),
@@ -350,7 +406,7 @@ export default function ShaderViewport({ Material, Eyebrow, Title, Note }) {
         Each.castShadow = true;
         Plinth.add(Each);
       }
-      const Subject = new THREE.Mesh(Shape("Shader ball"), new THREE.MeshPhysicalMaterial());
+      const Subject = new THREE.Mesh(PreviewGeometry("Shader ball"), new THREE.MeshPhysicalMaterial());
       Subject.castShadow = Subject.receiveShadow = true;
       const Content = new THREE.Group();
       Content.add(Plinth, Subject);
@@ -371,7 +427,16 @@ export default function ShaderViewport({ Material, Eyebrow, Title, Note }) {
           ReportZoom(Percent);
         }
       });
-      Built.current = { View, Subject, Reflections, Fit, Made: [], Percent: 100, Rest: () => (Rest = 0) };
+      // The brush ring that follows the surface under a painter.
+      const Ring = new THREE.Mesh(
+        new THREE.RingGeometry(0.86, 1, 64),
+        new THREE.MeshBasicMaterial({ color: "#ffb454", transparent: true, opacity: 0.9, depthTest: false, side: THREE.DoubleSide }),
+      );
+      Ring.userData.debug = true;
+      Ring.renderOrder = 10;
+      Ring.visible = false;
+      Content.add(Ring);
+      Built.current = { View, Subject, Ring, Reflections, Fit, Made: [], Percent: 100, Rest: () => (Rest = 0), Lit: Subject.material, Flat: null, Textures: new Map() };
     } catch (Problem) {
       Report("Preview unavailable · " + String(Problem?.message || Problem).slice(0, 80));
     }
@@ -381,6 +446,8 @@ export default function ShaderViewport({ Material, Eyebrow, Title, Note }) {
       View.renderer.setAnimationLoop(null);
       View.setContent(null);
       for (const Each of Built.current?.Made || []) Each.dispose();
+      for (const Each of Built.current?.Textures.values() || []) Each.dispose();
+      Built.current?.Flat?.dispose();
       Built.current?.Reflections?.dispose();
       View.renderer.dispose();
       View.renderer.forceContextLoss();
@@ -401,8 +468,10 @@ export default function ShaderViewport({ Material, Eyebrow, Title, Note }) {
           for (const Each of Made) Each.dispose();
           return;
         }
-        const Old = Now.Subject.material;
-        Now.Subject.material = Look;
+        const Old = Now.Lit;
+        Now.Lit = Look;
+        LayLive(Now);
+        Now.Subject.material = Now.Flat || Look;
         Old.dispose();
         for (const Each of Now.Made) Each.dispose();
         Now.Made = Made;
@@ -416,12 +485,131 @@ export default function ShaderViewport({ Material, Eyebrow, Title, Note }) {
       clearTimeout(Timer);
     };
   }, [Material]);
+  // Live pictures over the channels being painted. A texture is made once per canvas; a new revision only re-uploads it.
+  function LayLive(Now) {
+    const Pictures = LiveNow.current || {};
+    for (const [Canvas, Texture] of Now.Textures)
+      if (!Object.values(Pictures).includes(Canvas)) {
+        Texture.dispose();
+        Now.Textures.delete(Canvas);
+      }
+    for (const [Id, Canvas] of Object.entries(Pictures)) {
+      if (!Canvas || !LiveSlots[Id]) continue;
+      let Texture = Now.Textures.get(Canvas);
+      if (!Texture) {
+        Texture = new THREE.CanvasTexture(Canvas);
+        Texture.wrapS = Texture.wrapT = THREE.RepeatWrapping;
+        Texture.anisotropy = 4;
+        Now.Textures.set(Canvas, Texture);
+      }
+      LiveSlots[Id](Now.Lit, Texture);
+    }
+    Now.Lit.needsUpdate = true;
+  }
+  useEffect(() => {
+    const Now = Built.current;
+    if (!Now || !Live) return;
+    // A different set of live canvases needs the material rebuilt from its channels (a channel no longer live goes back to its own).
+    const Same = Object.keys(Live).join() === (Now.LiveKeys || "") && Object.values(Live).every((Canvas) => Now.Textures.has(Canvas));
+    if (!Same) {
+      Now.LiveKeys = Object.keys(Live).join();
+      PhysicalLook(Material).then(({ Look, Made }) => {
+        if (Built.current !== Now) return Look.dispose();
+        const Old = Now.Lit;
+        Now.Lit = Look;
+        LayLive(Now);
+        if (!Now.Flat) Now.Subject.material = Look;
+        Old.dispose();
+        for (const Each of Now.Made) Each.dispose();
+        Now.Made = Made;
+      });
+    }
+    for (const Texture of Now.Textures.values()) Texture.needsUpdate = true;
+  }, [Live, LiveRevision]);
+  // One picture shown flat on the subject (a baked map), in place of the lit material.
+  useEffect(() => {
+    const Now = Built.current;
+    if (!Now) return;
+    Now.Flat?.map?.dispose();
+    Now.Flat?.dispose();
+    Now.Flat = null;
+    if (Showing) {
+      const Texture = new THREE.CanvasTexture(Showing);
+      Texture.colorSpace = THREE.SRGBColorSpace;
+      Texture.wrapS = Texture.wrapT = THREE.RepeatWrapping;
+      Now.Flat = new THREE.MeshBasicMaterial({ map: Texture });
+    }
+    Now.Subject.material = Now.Flat || Now.Lit;
+  }, [Showing, ShowingRevision]);
+  // Painting: the left button on the subject paints (captured before the camera sees it); the ring follows the brush.
+  useEffect(() => {
+    const Now = Built.current, Box = Host.current;
+    if (!Now || !Box) return;
+    let Stroke = null;
+    const HitAt = (Event) => {
+      const Hit = Now.View.surfaceAt(Event.clientX, Event.clientY);
+      return Hit && Hit.object === Now.Subject && Hit.uv ? { Uv: Hit.uv, Point: Hit.point, Span: UvSpan(Now.Subject.geometry, Hit.face), Normal: Hit.face.normal } : null;
+    };
+    const Place = (Hit) => {
+      const Paint = PainterNow.current;
+      Now.Ring.visible = !!(Hit && Paint?.Active);
+      if (!Now.Ring.visible) return;
+      Now.Ring.position.copy(Hit.Point).addScaledVector(Hit.Normal, 0.002);
+      Now.Ring.lookAt(Hit.Point.clone().add(Hit.Normal));
+      Now.Ring.scale.setScalar(Math.max(0.004, Paint.Radius * Hit.Span));
+    };
+    const Down = (Event) => {
+      const Paint = PainterNow.current;
+      if (!Paint?.Active || Event.button !== 0 || Event.altKey || Event.shiftKey) return;
+      const Hit = HitAt(Event);
+      if (!Hit) return;
+      Event.stopPropagation();
+      Event.preventDefault();
+      Box.setPointerCapture?.(Event.pointerId);
+      Stroke = Event.pointerId;
+      Paint.Down(Hit, Event);
+      Place(Hit);
+    };
+    const Move = (Event) => {
+      const Paint = PainterNow.current;
+      if (!Paint?.Active) {
+        Now.Ring.visible = false;
+        return;
+      }
+      const Hit = HitAt(Event);
+      Place(Hit);
+      if (Stroke === Event.pointerId) Paint.Move(Hit, Event);
+    };
+    const Up = (Event) => {
+      if (Stroke !== Event.pointerId) return;
+      Stroke = null;
+      PainterNow.current?.Up();
+    };
+    const Leave = () => {
+      Now.Ring.visible = false;
+    };
+    Box.addEventListener("pointerdown", Down, true);
+    Box.addEventListener("pointermove", Move);
+    Box.addEventListener("pointerup", Up);
+    Box.addEventListener("pointercancel", Up);
+    Box.addEventListener("pointerleave", Leave);
+    return () => {
+      Box.removeEventListener("pointerdown", Down, true);
+      Box.removeEventListener("pointermove", Move);
+      Box.removeEventListener("pointerup", Up);
+      Box.removeEventListener("pointercancel", Up);
+      Box.removeEventListener("pointerleave", Leave);
+    };
+  }, []);
+  useEffect(() => {
+    if (!Painter?.Active && Built.current) Built.current.Ring.visible = false;
+  }, [Painter?.Active]);
   // Shape, studio and exposure.
   useEffect(() => {
     const Now = Built.current;
     if (!Now) return;
     const Old = Now.Subject.geometry;
-    Now.Subject.geometry = Shape(Shown);
+    Now.Subject.geometry = PreviewGeometry(Shown);
     Old.dispose();
   }, [Shown]);
   useEffect(() => {
@@ -454,7 +642,7 @@ export default function ShaderViewport({ Material, Eyebrow, Title, Note }) {
   };
   return (
     <div
-      className={"sv-viewport " + (Full ? "full" : "")}
+      className={"sv-viewport " + (Full ? "full" : "") + (Painter?.Active ? " painting" : "")}
       style={{ background: `radial-gradient(120% 90% at 50% 38%, ${Background[0]}, ${Background[1]} 75%)` }}
       data-preview-status={Status}
     >

@@ -382,6 +382,13 @@ const TextureStudioBridge = {
     Build.onResolve({ filter: /^three(\/addons\/.*)?$/ }, (Args) => ({
       path: Args.path === "three" ? path.resolve(Folder, "../Shared/Studio/Vendor/three.esm.min.js") : Shared("three/examples/jsm/" + Args.path.slice("three/addons/".length)),
     }));
+    // Follow-up 74: the Texture Studio's controls module comes through SurfaceControls.jsx, whose Slider is the editor's own.
+    const Controls = path.resolve(Folder, "../TextureStudio/src/MaterialControls.jsx"), Drawn = path.join(Folder, "SurfaceControls.jsx");
+    Build.onResolve({ filter: /MaterialControls(\.jsx)?$/ }, (Args) => {
+      if (Args.importer === Drawn) return undefined;
+      const Wanted = path.resolve(Args.resolveDir, Args.path.endsWith(".jsx") ? Args.path : Args.path + ".jsx");
+      return Wanted === Controls ? { path: Drawn } : undefined;
+    });
     Build.onResolve({ filter: /\?url$/ }, (Args) => ({
       path: Require.resolve(Args.path.replace(/\?url$/, "")),
       namespace: "font-url",
@@ -407,6 +414,7 @@ const Output = await build({
     paper: Shared("paper"),
     "opentype.js": Shared("opentype.js"),
     fflate: Shared("fflate"),
+    "three-mesh-bvh": Shared("three-mesh-bvh"),
   },
   loader: { ".woff": "dataurl", ".woff2": "dataurl" },
   entryPoints: [path.join(Folder, "Editor.jsx")],

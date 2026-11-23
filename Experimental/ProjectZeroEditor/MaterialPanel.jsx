@@ -34,6 +34,8 @@ import { EngineAssets } from "./AssetDepot.js";
 import { ShapeOf } from "./PrimitiveInspector.jsx";
 import PatternWorkspace from "./PatternWorkspace.jsx";
 import StampWorkspace from "./StampWorkspace.jsx";
+import PaintWorkspace from "./PaintWorkspace.jsx";
+import BakeWorkspace from "./BakeWorkspace.jsx";
 import { PatternMaterial, StampMaterial } from "./SurfaceTextures.js";
 
 // Follow-up 68: Content Browser drops. A dropped image is shrunk to the embedded preview size; a dropped material lends
@@ -1201,29 +1203,34 @@ export function BallLook(Material) {
     background: `radial-gradient(circle at 34% 28%, rgba(255,255,255,${Glint}) 0, rgba(255,255,255,${Glint * 0.25}) ${6 + Rough * 18}%, transparent ${16 + Rough * 30}%), radial-gradient(circle at 60% 72%, transparent 40%, rgba(0,0,0,${0.35 + Metal * 0.3}) 78%), radial-gradient(circle at 45% 40%, ${Colour}, color-mix(in srgb, ${Colour} ${55 - Metal * 25}%, #000) 85%)`,
   };
 }
+// Follow-up 74: the editor's own slider (Inspectors.jsx Control): a value pill with its unit box, then the wide pill track.
 function SliderRow({ Field, Amount, Change }) {
+  const Percent = Percentish(Field);
+  const Decimals = Percent ? 0 : Field.Maximum - Field.Minimum <= 0.5 ? 3 : 2;
   const [Draft, EditDraft] = useState(null);
-  const Shown = Draft ?? ShowAmount(Field, Amount);
+  const Shown = Draft ?? String(Number((Percent ? +Amount * 100 : +Amount).toFixed(Decimals)));
   const Fraction = (Amount - Field.Minimum) / (Field.Maximum - Field.Minimum || 1);
   const Settle = () => {
     if (Draft === null) return;
     const Typed = parseFloat(Draft);
-    if (Number.isFinite(Typed)) Change(Clamp(Percentish(Field) && /%/.test(Draft) ? Typed / 100 : Percentish(Field) && Typed > 1 ? Typed / 100 : Typed, Field.Minimum, Field.Maximum));
+    if (Number.isFinite(Typed)) Change(Clamp(Percent ? Typed / 100 : Typed, Field.Minimum, Field.Maximum));
     EditDraft(null);
   };
   return (
-    <>
+    <div className="slider-pill si-slider-pill">
+      <div className="split-value">
+        <input
+          aria-label={Field.Label + " value"}
+          inputMode="decimal"
+          value={Shown}
+          onChange={(Event) => EditDraft(Event.target.value)}
+          onFocus={(Event) => Event.target.select()}
+          onBlur={Settle}
+          onKeyDown={(Event) => Event.key === "Enter" && Event.currentTarget.blur()}
+        />
+        <small>{Percent ? "%" : Field.Unit}</small>
+      </div>
       <input
-        className="si-pill"
-        aria-label={Field.Label + " value"}
-        value={Shown}
-        onChange={(Event) => EditDraft(Event.target.value)}
-        onFocus={(Event) => Event.target.select()}
-        onBlur={Settle}
-        onKeyDown={(Event) => Event.key === "Enter" && Event.currentTarget.blur()}
-      />
-      <input
-        className="si-slider"
         aria-label={Field.Label + " slider"}
         type="range"
         min={Field.Minimum}
@@ -1233,7 +1240,7 @@ function SliderRow({ Field, Amount, Change }) {
         style={{ "--fill": Math.max(0, Math.min(1, Fraction)) * 100 + "%" }}
         onChange={(Event) => Change(+Event.target.value)}
       />
-    </>
+    </div>
   );
 }
 function ChannelInspectorRow({ Field, Owned, Selected, Select, Assign, Apply, Latest, Subject, Slot }) {
@@ -1283,10 +1290,7 @@ function ChannelInspectorRow({ Field, Owned, Selected, Select, Assign, Apply, La
             <path d="M2 4l3 3 3-3" />
           </svg>
         </button>
-        {Owned.Source === "Fill" && Field.Kind !== "Colour" ? null : <span className="si-spacer" />}
-        {Owned.Source === "Fill" && Field.Kind !== "Colour" && (
-          <SliderRow Field={Field} Amount={+Owned.Fill} Change={(Fill) => Change({ Fill })} />
-        )}
+        <span className="si-spacer" />
         <button
           className="si-remove"
           aria-label={"Remove channel " + Field.Label}
@@ -1296,6 +1300,7 @@ function ChannelInspectorRow({ Field, Owned, Selected, Select, Assign, Apply, La
           ×
         </button>
       </div>
+      {Owned.Source === "Fill" && Field.Kind !== "Colour" && <SliderRow Field={Field} Amount={+Owned.Fill} Change={(Fill) => Change({ Fill })} />}
       {Owned.Source === "Fill" && Field.Kind === "Colour" && (
         <div
           className="si-colour"
@@ -1405,12 +1410,20 @@ const StudioTabs = [
   { Id: "material", Label: "Material", Glyph: "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zm-6 9a6 6 0 0 1 6-6" },
   { Id: "pattern", Label: "Pattern", Glyph: "M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z" },
   { Id: "stamp", Label: "Stamp", Glyph: "M9 3h6l-1 7h4l1 5H5l1-5h4zM5 18h14v3H5z" },
+  // Follow-up 74: Texture paint (a material brush on the live viewport) and Baking (mesh maps and channels into pictures).
+  { Id: "paint", Label: "Texture paint", Glyph: "M18.4 3.6a2 2 0 0 1 2.8 2.8L11 16.6 7.4 13zM6.5 14.5l3 3c-.8 2.4-2.6 3.5-6 3.5.5-1.2.4-2.6 1-4 .4-1.1 1-2 2-2.5z" },
+  { Id: "bake", Label: "Baking", Glyph: "M12 3c1 3 4 4.5 4 8a4 4 0 0 1-8 0c0-1.6.7-2.7 1.5-3.5.2 1.5 1 2.5 2 2.5 0-2.5-.5-4.5.5-7zM5 21h14" },
 ];
 function ShaderStudios({ Studio, ChooseStudio, Subject, Material, Latest, Apply, Slot, ShowSlots, children }) {
   const [OwnStudio, ChooseOwnStudio] = useState("material");
   const Shown = (ChooseStudio ? Studio : OwnStudio) || "material",
     Choose = ChooseStudio || ChooseOwnStudio;
   const Where = Subject.Name + (ShowSlots ? " · slot " + String(Slot).padStart(2, "0") : "");
+  // Texture paint keeps its canvases per object and slot; Baking keeps its maps (Texture paint paints through them). Both share the
+  // preview shape, since a bake and its mask must be read through the same UVs.
+  const Sessions = useRef(new Map());
+  const [Bakes, KeepBakes] = useState({});
+  const [PreviewShape, ChoosePreviewShape] = useState("Shader ball");
   return (
     <div className="shader-studios" data-studio={Shown}>
       <nav className="shader-studio-tabs" role="tablist" aria-label="ShaderEditor workspaces">
@@ -1423,7 +1436,7 @@ function ShaderStudios({ Studio, ChooseStudio, Subject, Material, Latest, Apply,
           </button>
         ))}
         {Shown !== "material" && (
-          <span className="shader-studio-owner" title="Pattern and Stamp write into this material">
+          <span className="shader-studio-owner" title="Pattern, Stamp, Texture paint and Baking write into this material">
             Writes into <b>{Material.Name}</b> · {Where}
           </span>
         )}
@@ -1436,6 +1449,28 @@ function ShaderStudios({ Studio, ChooseStudio, Subject, Material, Latest, Apply,
               Apply(await PatternMaterial(Latest.current, Layers, Pattern.repeats, Pattern.name));
               return "Applied to " + Latest.current.Name + " · colour, roughness, metallic";
             }}
+          />
+        ) : Shown === "paint" ? (
+          <PaintWorkspace
+            Material={Material}
+            Owner={Material.Name}
+            Apply={Apply}
+            Sessions={Sessions}
+            SessionKey={Subject.Id + ":" + Slot}
+            Bakes={Bakes}
+            Shape={PreviewShape}
+            ChooseShape={ChoosePreviewShape}
+          />
+        ) : Shown === "bake" ? (
+          <BakeWorkspace
+            Material={Material}
+            Latest={Latest}
+            Owner={Material.Name}
+            Apply={Apply}
+            Bakes={Bakes}
+            KeepBakes={KeepBakes}
+            Shape={PreviewShape}
+            ChooseShape={ChoosePreviewShape}
           />
         ) : Shown === "stamp" ? (
           <StampWorkspace

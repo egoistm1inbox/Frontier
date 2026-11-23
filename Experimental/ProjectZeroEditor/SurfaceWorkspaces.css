@@ -2480,3 +2480,366 @@
     display: none;
   }
 }
+
+/* ── Follow-up 74 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+   The Texture Studio's sliders as the editor draws them (SurfaceControls.jsx): Editor.css .field, .slider-pill, .split-value and the
+   global range, kept clear of the Texture Studio's own range and label rules. */
+.surface-workspace .surface-slider {
+  display: block;
+  margin: 14px 0;
+  min-width: 0;
+}
+.surface-workspace .surface-slider > span {
+  display: block;
+  color: #919191;
+  font-size: 11px;
+  margin-bottom: 8px;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.surface-workspace .surface-slider input[type="range"] {
+  appearance: none;
+  -webkit-appearance: none;
+  height: 26px;
+  border: 0;
+  border-radius: 30px;
+  padding: 0;
+  accent-color: auto;
+  background: linear-gradient(90deg, #454545 0 var(--fill, 50%), #242424 var(--fill, 50%) 100%);
+}
+.surface-workspace .surface-slider input[type="range"]::-webkit-slider-thumb {
+  appearance: none;
+  width: 24px;
+  height: 24px;
+  margin: 0;
+  border: 0;
+  border-radius: 50%;
+  background: #e0e0e0;
+  box-shadow: 0 1px 2px #0008;
+}
+.surface-workspace .surface-slider .split-value input {
+  height: auto;
+  border-radius: 0;
+  background: #000;
+  box-shadow: none;
+}
+.surface-workspace .surface-slider-ends {
+  display: flex;
+  justify-content: space-between;
+  margin: 6px 0 0 102px;
+  color: #5c5c5c;
+  font-size: 9px;
+}
+
+/* Texture paint and Baking (PaintWorkspace.jsx, BakeWorkspace.jsx) */
+.surface-workspace .pw-centre {
+  position: relative;
+  min-height: 0;
+  overflow: hidden;
+  background: #151515;
+}
+.surface-workspace .pw-centre[data-tool="pick"] .sv-host {
+  cursor: copy;
+}
+.surface-workspace .pw-thumbnail {
+  display: block;
+  flex: none;
+  border-radius: 6px;
+  background: #0c0c0c;
+  box-shadow: inset 0 0 0 1px #ffffff12;
+}
+.surface-workspace .pw-name {
+  max-width: 22ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.surface-workspace .pw-size {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.surface-workspace .pw-size input[type="range"] {
+  width: 120px;
+  height: 20px;
+}
+.surface-workspace .pw-size input[type="range"]::-webkit-slider-thumb {
+  width: 18px;
+  height: 18px;
+}
+.surface-workspace .pw-size output {
+  min-width: 38px;
+  color: var(--ws-muted, #8a8a8a);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+.surface-workspace .pw-tip {
+  height: 104px;
+  margin: 4px 0 6px;
+  display: grid;
+  place-items: center;
+  position: relative;
+  border-radius: 14px;
+  background: #0b0b0b;
+  box-shadow: inset 0 0 0 1px #ffffff0a;
+}
+.surface-workspace .pw-tip > span {
+  border-radius: 50%;
+}
+.surface-workspace .pw-tip small {
+  position: absolute;
+  left: 12px;
+  bottom: 8px;
+  color: #7a7a7a;
+  font-size: 9.5px;
+}
+.surface-workspace .pw-materials {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px 6px;
+}
+.surface-workspace .pw-material {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  padding: 6px 0;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: #a8a8a8;
+  font-size: 9.5px;
+}
+.surface-workspace .pw-material > span {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  box-shadow: 0 2px 6px #000a;
+}
+.surface-workspace .pw-material:hover {
+  background: #ffffff08;
+  color: #eee;
+}
+.surface-workspace .pw-mask-preview,
+.surface-workspace .pw-canvas-preview {
+  display: grid;
+  place-items: center;
+  margin: 6px 0 10px;
+}
+.surface-workspace .pw-canvas-preview .pw-thumbnail,
+.surface-workspace .pw-mask-preview .pw-thumbnail {
+  border-radius: 12px;
+  image-rendering: auto;
+}
+.surface-workspace .pw-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+.surface-workspace .pw-buttons.column {
+  flex-direction: column;
+  align-items: stretch;
+}
+.surface-workspace .pw-buttons .sfw-icon-button {
+  width: auto;
+  height: 30px;
+  padding: 0 12px;
+  gap: 7px;
+  border-radius: 15px;
+  justify-content: flex-start;
+  font-size: 10.5px;
+}
+.surface-workspace .pw-warning {
+  color: #ffb454;
+  font-size: 10px;
+}
+/* The UV view: the channel picture as a square, as large as the viewport allows */
+.surface-workspace .pw-sheet {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  container-type: size;
+  background-color: #121212;
+  background-image: linear-gradient(45deg, #ffffff05 25%, transparent 25% 75%, #ffffff05 75%), linear-gradient(45deg, #ffffff05 25%, transparent 25% 75%, #ffffff05 75%);
+  background-size: 24px 24px;
+  background-position: 0 0, 12px 12px;
+}
+.surface-workspace .pw-sheet-square {
+  position: relative;
+  width: min(100cqw, 100cqh);
+  aspect-ratio: 1;
+  box-shadow: 0 0 0 1px #ffffff1a, 0 10px 40px #000a;
+}
+.surface-workspace .pw-sheet-square canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: crosshair;
+  touch-action: none;
+}
+.surface-workspace .pw-sheet-ring {
+  display: none;
+  position: absolute;
+  transform: translate(-50%, -50%);
+  border: 1.5px solid #ffb454;
+  border-radius: 50%;
+  pointer-events: none;
+  box-shadow: 0 0 0 1px #0008;
+}
+.surface-workspace .bw-dot {
+  width: 26px;
+  height: 26px;
+  flex: none;
+  border-radius: 6px;
+  background: #1d1d1d;
+  box-shadow: inset 0 0 0 1px #ffffff12;
+  position: relative;
+}
+.surface-workspace .bw-dot::after {
+  content: "";
+  position: absolute;
+  inset: 9px;
+  border-radius: 50%;
+  background: #6d6d6d;
+}
+.surface-workspace .bw-dot.coordinates-ids::after {
+  background: #d9b26f;
+}
+.surface-workspace .bw-dot.surface::after,
+.surface-workspace .bw-dot.normals::after {
+  background: #8ab4e8;
+}
+.surface-workspace .bw-dot.masks::after {
+  background: #a4c98f;
+}
+.surface-workspace .bw-progress {
+  width: 120px;
+  height: 6px;
+  border-radius: 3px;
+  overflow: hidden;
+  background: #ffffff12;
+}
+.surface-workspace .bw-progress i {
+  display: block;
+  height: 100%;
+  background: #ffb454;
+  transition: width 0.2s;
+}
+.surface-workspace .bw-sheet {
+  position: absolute;
+  inset: 0;
+  overflow: auto;
+  padding: 22px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  grid-auto-rows: max-content;
+  gap: 16px;
+}
+.surface-workspace .bw-tile {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  padding: 10px 10px 12px;
+  border: 1px solid #ffffff0d;
+  border-radius: 16px;
+  background: #1b1b1b;
+  color: #d8d8d8;
+  font-size: 11px;
+}
+.surface-workspace .bw-tile small {
+  color: #777;
+  font-size: 9.5px;
+}
+.surface-workspace .bw-tile.on {
+  border-color: #ffb454;
+}
+.surface-workspace .bw-tile .pw-thumbnail {
+  border-radius: 10px;
+}
+.surface-workspace .bw-empty {
+  grid-column: 1 / -1;
+  align-self: center;
+  justify-self: center;
+  margin-top: 30%;
+  color: var(--ws-muted, #777);
+  font-size: 12px;
+}
+.surface-workspace .bw-list {
+  list-style: none;
+  margin: 0 0 6px;
+  padding: 0;
+}
+.surface-workspace .bw-list li {
+  display: flex;
+  justify-content: space-between;
+  padding: 7px 0;
+  border-bottom: 1px solid #ffffff08;
+  font-size: 11px;
+}
+.surface-workspace .bw-list small {
+  color: #8a8a8a;
+}
+.surface-workspace .bw-refusal {
+  position: absolute;
+  z-index: 5;
+  left: 50%;
+  top: 14px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: calc(100% - 28px);
+  padding: 6px 6px 6px 14px;
+  border: 1px solid #ffb45433;
+  border-radius: 18px;
+  background: #1e1a14ee;
+  color: #f0d3a8;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.surface-workspace .bw-refusal span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.surface-workspace .bw-refusal button {
+  flex: none;
+  height: 26px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 13px;
+  background: #ffb454;
+  color: #1a1408;
+  font-size: 10.5px;
+}
+.surface-workspace .bw-refusal button + button {
+  background: #ffffff14;
+  color: #e6e6e6;
+}
+.surface-workspace .bw-baking {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: #ffb454;
+}
+.surface-workspace .bw-baking b {
+  color: #e8e8e8;
+  font-weight: 400;
+  font-size: 15px;
+  text-transform: capitalize;
+}
+.surface-workspace .bw-baking small {
+  color: var(--ws-muted, #8a8a8a);
+  font-size: 10.5px;
+}
+.surface-workspace .bw-progress.large {
+  width: min(360px, 70%);
+  height: 8px;
+  border-radius: 4px;
+}
