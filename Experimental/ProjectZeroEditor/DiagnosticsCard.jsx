@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useBrowserTiming } from "./BrowserTiming.js";
+import { PaintTrace, TraceBrush } from "./LiveTrace.js";
 import { ThoughtReport, ThoughtStatistics, SaveThoughtLog, ThoughtLogPath } from "./ThoughtLog.js";
 import "./WorkspaceCards.css";
 // Header / footer glyphs drawn as SVG with round caps and joins (text glyphs rendered as boxes in some fonts).
@@ -245,6 +246,29 @@ export default function DiagnosticsCard({
     Path = Samples.map(
       (S, I) => `${I ? "L" : "M"}${PX(S)},${PY(S[Prefs.Metric])}`,
     ).join(" ");
+  // Follow-up 67: the history on the shared live trace; red where the rate falls under 60 fps (or the frame runs over 16.7 ms).
+  const TraceCanvas = useRef(null);
+  useEffect(() => {
+    const Canvas = TraceCanvas.current;
+    if (!Canvas) return;
+    const Width = Canvas.clientWidth || 420, Height = Canvas.clientHeight || 168;
+    const Brush = TraceBrush(Canvas, Width, Height);
+    const Start = Last ? Last.Time - Prefs.Seconds * 1000 : 0;
+    const Across = (S) => Clamp((S.Time - Start) / (Prefs.Seconds * 1000), 0, 1);
+    PaintTrace(Brush, {
+      Width,
+      Height,
+      Plot: { Left: Width * 0.08, Right: Width * 0.08, Top: Height * 0.1, Bottom: Height * 0.2 },
+      Top: Maximum,
+      Points: Samples.filter((S) => Number.isFinite(S[Prefs.Metric])).map((S) => ({ X: Across(S), Y: S[Prefs.Metric] })),
+      Reference: Target,
+      Short: Prefs.Metric === "FPS" ? "below" : "above",
+      Decimals: 0,
+      Ticks: [[0, "\u2212" + Prefs.Seconds + "s"], [1, "now"]],
+      Guide: Sample && Probe !== null ? Across(Sample) : null,
+      Marker: Sample ? { X: Across(Sample), Y: Sample[Prefs.Metric] } : null,
+    });
+  });
   const Stats = Numeric
     ? [
         [
@@ -471,6 +495,8 @@ export default function DiagnosticsCard({
         {Prefs.View !== "stats" &&
           (Numeric ? (
             <div className="debug-history">
+              {/* Follow-up 67: drawn by the shared live trace (as the Wind anemometer); the SVG on top only takes the pointer. */}
+              <canvas ref={TraceCanvas} className="debug-trace" aria-hidden="true" />
               <svg
                 viewBox="0 0 500 200"
                 preserveAspectRatio="none"
@@ -528,55 +554,6 @@ export default function DiagnosticsCard({
                   }
                 }}
               >
-                {[0, 0.5, 1].map((T) => (
-                  <g key={T}>
-                    <path
-                      d={`M40 ${PY(Maximum * T)}H460`}
-                      stroke="#ffffff14"
-                      strokeDasharray="4 7"
-                    />
-                    <text x="475" y={PY(Maximum * T) + 4}>
-                      {Math.round(Maximum * T)}
-                    </text>
-                  </g>
-                ))}
-                <path
-                  d={`M40 ${PY(Target)}H460`}
-                  stroke="#a3ac9260"
-                  strokeDasharray="7 8"
-                />
-                <text x="40" y="191">
-                  −{Prefs.Seconds}s
-                </text>
-                <text x="430" y="191">
-                  now
-                </text>
-                {Samples.length > 1 && (
-                  <>
-                    <path
-                      d={`${Path}L${PX(Samples.at(-1))},160L${PX(Samples[0])},160Z`}
-                      fill="#a3ac920c"
-                    />
-                    <path
-                      d={Path}
-                      stroke="#dbded6"
-                      strokeWidth="1.4"
-                      vectorEffect="non-scaling-stroke"
-                      fill="none"
-                    />
-                  </>
-                )}
-                {Sample && (
-                  <>
-                    <path d={`M${PX(Sample)} 20V160`} stroke="#b7c8a947" />
-                    <circle
-                      cx={PX(Sample)}
-                      cy={PY(Sample[Prefs.Metric])}
-                      r="4"
-                      fill="#b8c9a8"
-                    />
-                  </>
-                )}
               </svg>
               <div className="debug-graph-caption">
                 <span>

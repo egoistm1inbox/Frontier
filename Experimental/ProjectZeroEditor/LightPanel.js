@@ -586,7 +586,8 @@ export function LightPanel(Subject, Context) {
   const Transform = MountLightTransform(Placement, Subject, Context);
   Bindings.push(Transform.Refresh);
   const Visibility = Card("Scene participation", "FLAGS", "lp-participation");
-  Toggle(Visibility, "shadows", "Cast shadows");
+  // Follow-up 67: only the spot and IES lights draw shadows in the viewport, so only they offer Cast shadows.
+  if (Spot || Photometric) Toggle(Visibility, "shadows", "Cast shadows");
   Toggle(
     Visibility,
     Photometric

@@ -9,46 +9,46 @@ export function RecolourInstrument(Name, Source) {
     Source = Source.replace(Before, () => After);
   };
   if (Name === "wind.js") {
+    // Follow-up 67: the anemometer draws with the editor's shared live trace (the Diagnostics graph): dashed grid, the mean as the
+    // reference line, and red wherever the wind drops below the mean.
     Replace(
-      `    /* the mean, and the band the gusts live in */
-    const mean = SPD();
-    const hi = Math.max(...TRACE), lo = Math.min(...TRACE);
-    g.fillStyle = 'rgba(137,224,196,.07)';
-    g.fillRect(px(0), py(hi), px(1) - px(0), Math.max(1, py(lo) - py(hi)));`,
-      `    /* Neutral under-trace wash; no green rectangular gust band. */
-    const mean = SPD();
-    const Wash = g.createLinearGradient(0, T, 0, h - B);
-    Wash.addColorStop(0, 'rgba(224,224,224,.10)');
-    Wash.addColorStop(1, 'rgba(224,224,224,.01)');
-    g.beginPath(); g.moveTo(px(0), py(0));
-    TRACE.forEach((Speed, Index) => g.lineTo(px(Index / (TRACE.length - 1)), py(Speed)));
-    g.lineTo(px(1), py(0)); g.closePath(); g.fillStyle = Wash; g.fill();`,
+      "import { flat } from '../world.js';",
+      "import { flat } from '../world.js';\nimport { PaintTrace, TraceBrush } from '../../LiveTrace.js';",
     );
-    Replace(
-      "g.strokeStyle = 'rgba(137,224,196,.9)';",
-      "g.strokeStyle = 'rgba(210,210,210,.36)';",
-    );
-    Replace(
-      `    g.lineWidth = 1.4;
-    g.stroke();
-    g.lineWidth = 1;
-    g.fillStyle = '#fff';`,
-      `    g.lineWidth = 1.2;
-    g.stroke();
-    // Highlight the actual above-mean samples, not a separate invented trace.
-    g.beginPath();
-    for (let Index = 1; Index < TRACE.length; Index++) {
-      if (TRACE[Index] <= mean || TRACE[Index - 1] <= mean) continue;
-      g.moveTo(px((Index - 1) / (TRACE.length - 1)), py(TRACE[Index - 1]));
-      g.lineTo(px(Index / (TRACE.length - 1)), py(TRACE[Index]));
-    }
-    g.strokeStyle = 'rgba(242,242,242,.95)'; g.stroke(); g.lineWidth = 1;
-    const Peak = TRACE.indexOf(Math.max(...TRACE)), Trough = TRACE.indexOf(Math.min(...TRACE));
-    [[Peak, '#eeeeee'], [Trough, '#d69a54']].forEach(([Index, Colour]) => {
-      g.fillStyle = Colour; g.beginPath();
-      g.arc(px(Index / (TRACE.length - 1)), py(TRACE[Index]), 2.3, 0, Math.PI * 2); g.fill();
+    const Start = Source.indexOf("  function paintTrace() {");
+    const End = Source.indexOf("  /* ── the scale");
+    if (Start < 0 || End < Start) throw new Error(`Instrument presentation anchor changed: ${Name}: paintTrace`);
+    Source =
+      Source.slice(0, Start) +
+      `  function paintTrace() {
+    const w = chartWrap.clientWidth || 280, h = mc.classList.contains('tall') ? 170 : 112;
+    chart.style.height = h + 'px';
+    const g = TraceBrush(chart, w, h);
+    const mean = SPD();
+    PaintTrace(g, {
+      Width: w, Height: h,
+      Top: Math.max(2, Math.max(...TRACE, mean) * 1.18),
+      Points: TRACE.map((Speed, Index) => ({ X: Index / (TRACE.length - 1), Y: Speed })),
+      Reference: mean, Short: 'below',
+      Ticks: [[0, '\u221260 s'], [0.5, '\u221230 s'], [1, 'now']],
+      Marker: { X: 1, Y: TRACE[TRACE.length - 1] },
     });
-    g.fillStyle = '#fff';`,
+  }
+
+` +
+      Source.slice(End);
+    // Follow-up 67: one set of readings, inside the anemometer card: Mean, Gust, Lull, From, Force and Gust factor (the separate
+    // Gusting to / Lulling to cards repeated Gust and are no longer shown).
+    Replace(
+      "const pSpd = pill('Mean'), pGust = pill('Gust'), pFrom = pill('From'), pBf = pill('Force');",
+      "const pSpd = pill('Mean'), pGust = pill('Gust'), pLull = pill('Lull'), pFrom = pill('From'), pBf = pill('Force'), pFactor = pill('Gust factor');",
+    );
+    Replace("  host.appendChild(rail);\n", "");
+    Replace("  host.appendChild(duo);\n", "");
+    Replace("  mc.appendChild(chartWrap);\n", "  mc.appendChild(chartWrap);\n  rail.classList.add('wf-readings');\n  mc.appendChild(rail);\n");
+    Replace(
+      "    pBf.innerHTML = `${b.n}<em>bf</em>`;",
+      "    pBf.innerHTML = `${b.n}<em>bf</em>`;\n    pLull.innerHTML = `${lo.toFixed(1)}<em>m/s</em>`;\n    pFactor.innerHTML = `${(hi / Math.max(SPD(), 0.1)).toFixed(2)}<em>\u00d7</em>`;\n    pGust.parentElement.classList.toggle('down', hi > 17);",
     );
   } else if (Name === "fog.js") {
     Replace(

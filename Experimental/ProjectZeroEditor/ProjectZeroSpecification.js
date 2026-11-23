@@ -66,6 +66,7 @@ export const PanelSpecification = {
       Slider("Year", 1900, 2100, 2026, "", 0, "Observer / date"),
       Slider("UTC offset", -12, 14, 2, "h", 1, "Observer / date"),
       Switch("Cast shadows", true, "Sunlight gain"),
+      Switch("Real time", false, "Daylight cycle"),
     ],
   },
   moon: {

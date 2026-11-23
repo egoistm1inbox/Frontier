@@ -92,10 +92,12 @@ export function AngleRuler({ Label, Angle, Low, High, Wrap = false, Span = 90, U
         {Ticks}
         <i className="angle-needle" />
       </div>
-      <output className="angle-readout">
-        <small>{Label}</small>
-        {Readout ?? Angle.toFixed(1) + "°"}
-      </output>
+      {Readout !== false && (
+        <output className="angle-readout">
+          <small>{Label}</small>
+          {Readout ?? Angle.toFixed(1) + "°"}
+        </output>
+      )}
     </div>
   );
 }
@@ -192,33 +194,45 @@ export function SunDial({ Azimuth, Elevation, Path = [], Manual, Change }) {
   );
 }
 
-// The whole card body: the chart with the elevation ruler at its side and the azimuth ruler under it.
-export function SunDirection({ Azimuth, Elevation, Path, Manual, Change }) {
+// The whole card body (Follow-up 67): the two angles on top as the card's readouts, the chart with the elevation ruler at its side, the
+// azimuth ruler under them, and, when steered by hand, a way back to the solved direction.
+export function SunDirection({ Azimuth, Elevation, Path, Manual, Clock = false, Change, Solve }) {
   const Facing = Compass[Math.round(Turn(Azimuth) / 45) % 8];
   return (
     <div className="sun-direction">
-      <div className="sun-direction-chart">
-        <SunDial Azimuth={Azimuth} Elevation={Elevation} Path={Path} Manual={Manual} Change={Change} />
+      <div className="sun-direction-readouts">
+        <div>
+          <small>Azimuth</small>
+          <b>
+            {Azimuth.toFixed(1)}
+            <em>°</em>
+          </b>
+          <span>{Facing}</span>
+        </div>
+        <div>
+          <small>Elevation</small>
+          <b>
+            {Elevation.toFixed(1)}
+            <em>°</em>
+          </b>
+          <span>{Elevation < 0 ? "below horizon" : Elevation > 60 ? "high" : "above horizon"}</span>
+        </div>
       </div>
-      <AngleRuler
-        Label="Elevation"
-        Angle={Elevation}
-        Low={-90}
-        High={90}
-        Span={90}
-        Upright
-        Change={(Next) => Change(Azimuth, Next)}
-      />
-      <AngleRuler
-        Label="Azimuth"
-        Angle={Azimuth}
-        Low={0}
-        High={360}
-        Wrap
-        Span={90}
-        Change={(Next) => Change(Next, Elevation)}
-        Readout={`${Azimuth.toFixed(1)}° ${Facing}`}
-      />
+      <div className="sun-direction-body">
+        <div className="sun-direction-chart">
+          <SunDial Azimuth={Azimuth} Elevation={Elevation} Path={Path} Manual={Manual} Change={Change} />
+        </div>
+        <AngleRuler Label="Elevation" Angle={Elevation} Low={-90} High={90} Span={90} Upright Readout={false} Change={(Next) => Change(Azimuth, Next)} />
+      </div>
+      <AngleRuler Label="Azimuth" Angle={Azimuth} Low={0} High={360} Wrap Span={90} Readout={false} Change={(Next) => Change(Next, Elevation)} />
+      <div className="sun-direction-foot">
+        <span className={"sun-direction-source" + (Manual ? " manual" : "")}>{Manual ? "Steered by hand" : Clock ? "Following this computer's clock" : "Solved from date, time and place"}</span>
+        {Manual && Solve && (
+          <button type="button" onClick={Solve}>
+            Follow the clock
+          </button>
+        )}
+      </div>
     </div>
   );
 }

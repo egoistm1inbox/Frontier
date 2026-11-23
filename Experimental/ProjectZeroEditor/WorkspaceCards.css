@@ -638,3 +638,19 @@
   border-radius: 8px;
   cursor: pointer;
 }
+
+/* Follow-up 67: the history is painted on a canvas (the shared live trace) under the pointer-only SVG. */
+.debug-history {
+  position: relative;
+}
+.debug-history .debug-trace {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: var(--debug-plot-height, 145px);
+  pointer-events: none;
+}
+.debug-history svg {
+  position: relative;
+}

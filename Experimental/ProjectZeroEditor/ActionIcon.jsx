@@ -16,6 +16,7 @@ export function QuickSymbol(Label, Context = "", Fallback = null) {
     Sunlight: "sunlight",
     "Sun disc": "disc",
     "Day cycle": "cycle",
+    "Real time": "clock",
     Dynamic: "motion",
     Static: "pause",
     "Follow Sky": "orbit",
@@ -69,7 +70,7 @@ export const ActionIconNames = new Set([
   "lock", "shadow", "gi", "visible", "sunlight", "disc", "stars", "twinkle", "cycle", "motion", "pause", "orbit", "wind", "shear", "cloud",
   "cloud-spawn", "rain", "collision", "fog", "rainbow", "band", "bake", "image", "anamorphic", "streaks", "starburst", "construct", "focus",
   "split", "diagnostics", "edit", "simulate", "play", "settings", "compass", "horizon", "atmosphere", "galaxy", "zodiac", "tripod",
-  "vignette", "toggle", "debug",
+  "vignette", "toggle", "debug", "clock",
 ]);
 
 export default function ActionIcon({ Name, Size = 24 }) {
@@ -354,6 +355,16 @@ export default function ActionIcon({ Name, Size = 24 }) {
         <>
           <path fillRule="evenodd" d="M3 3h18v18H3Zm2 2v6h6V5Zm8 0v6h6V5Zm-8 8v6h6v-6Zm8 0v6h6v-6Z" opacity="0.55" />
           <path d="M11 7h2v4h4v2h-4v4h-2v-4H7v-2h4Z" />
+        </>
+      );
+      break;
+    case "clock":
+      // Follow-up 67: a clock face (the sun's Real time switch).
+      Drawing = (
+        <>
+          <path fillRule="evenodd" d="M12 1a11 11 0 1 1 0 22 11 11 0 0 1 0-22Zm0 2.5a8.5 8.5 0 1 0 0 17 8.5 8.5 0 0 0 0-17Z" />
+          <path d="M10.8 6h2.4v5.5l3.6 2.1-1.2 2.1-4.8-2.8Z" />
+          <circle cx="12" cy="12" r="5.6" opacity=".25" />
         </>
       );
       break;

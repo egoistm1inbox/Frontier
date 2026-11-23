@@ -749,3 +749,11 @@
 
 /* §13 Transform: Enabled and Cast shadows switches on geometry transforms. */
 .transform-flags { display: grid; gap: 4px; margin: 8px 0 4px; }
+
+/* Follow-up 67: the wind's readings sit inside the anemometer card, under the trace; a gust past near-gale turns its reading red. */
+#ReferenceMount[data-reference-kind="wind"] .mp-metric .wf-readings {
+  margin-top: 12px;
+}
+#ReferenceMount[data-reference-kind="wind"] .mp-pill.down .v {
+  color: #ff5a52;
+}

@@ -1,6 +1,5 @@
 import React, { useRef, useState, useLayoutEffect } from "react";
 import { Clamp } from "./MaterialSpecification.js";
-import GizmoPanel from "./GizmoPanel.jsx";
 
 function TransformValue(Props) {
   const [Draft, EditDraft] = useState(String(Props.value));
@@ -163,8 +162,7 @@ export default function TransformPanel({
         Browser transform draft; native scene unchanged.
       </p>
     </section>
-    {/* Geometry transforms carry the editor-wide gizmo preferences (§13) once; lights, fog and emitters do not. */}
-    {Gizmo && <GizmoPanel Disabled={Locked} />}
+    {/* Follow-up 67: the gizmo preferences panel is no longer shown under object transforms. */}
     </>
   );
 }

@@ -709,6 +709,21 @@ export function Inspector({
     }, 100);
     return () => clearInterval(Timer);
   }, [Subject.Id, Values.Animate]);
+  // Follow-up 67: Real time sets the sun's date and time from this computer's clock, now and every 20 seconds.
+  useEffect(() => {
+    if (Subject.Panel !== "sun" || !Values["Real time"]) return;
+    const Follow = () => {
+      const Now = new Date();
+      Change("Local Hours", Now.getHours() + Now.getMinutes() / 60 + Now.getSeconds() / 3600);
+      Change("Day of Month", Now.getDate());
+      Change("Month", Now.getMonth() + 1);
+      Change("Year", Now.getFullYear());
+      Change("UTC offset", -Now.getTimezoneOffset() / 60);
+    };
+    Follow();
+    const Timer = setInterval(Follow, 20000);
+    return () => clearInterval(Timer);
+  }, [Subject.Id, Values["Real time"]]);
   // Labels the panel drew through F; specification fields it did not draw are listed in a closing card.
   const Drawn = new Set();
   const F = (Name, Disabled = false) => {
@@ -1251,7 +1266,7 @@ export function Inspector({
     });
     // Follow-up 65: Overview (the old Now and Light pages in one), then Temperature, Sun disc and Dynamic each on their own page, then
     // Baking. Each value shows once: the time in Sun now (and the Daylight cycle), the solved angles in Sun direction.
-    for (const Name of ["Manual direction", "Manual azimuth", "Manual elevation", "Cast shadows", "Animate"]) Drawn.add(Name);
+    for (const Name of ["Manual direction", "Manual azimuth", "Manual elevation", "Cast shadows", "Animate", "Real time"]) Drawn.add(Name);
     Content = (
       <>
         {Header("Environment")}
@@ -1262,9 +1277,44 @@ export function Inspector({
         </Card>
         {Quick([
           { Label: "Enabled", Icon: "sunlight", On: !Hidden, Action: ToggleHidden },
-          Switch("Cast shadows", "shadow"),
-          { ...Switch("Animate", "cycle"), Label: "Day cycle" },
-          Switch("Manual direction", "compass"),
+          // Follow-up 67: Real time replaces Cast shadows (the sun always shadows the viewport): the sun follows this computer's clock.
+          // It, the Day cycle and Manual direction each take the sun over, so turning one on turns the other two off.
+          {
+            Label: "Real time",
+            Icon: "clock",
+            On: !!V("Real time"),
+            Action: () => {
+              const Next = !V("Real time");
+              AssignProperty("Real time", Next);
+              if (Next) {
+                AssignProperty("Animate", false);
+                AssignProperty("Manual direction", false);
+              }
+            },
+          },
+          {
+            ...Switch("Animate", "cycle"),
+            Label: "Day cycle",
+            Action: () => {
+              const Next = !V("Animate");
+              AssignProperty("Animate", Next);
+              if (Next) {
+                AssignProperty("Real time", false);
+                AssignProperty("Manual direction", false);
+              }
+            },
+          },
+          {
+            ...Switch("Manual direction", "compass"),
+            Action: () => {
+              const Next = !V("Manual direction");
+              AssignProperty("Manual direction", Next);
+              if (Next) {
+                AssignProperty("Real time", false);
+                AssignProperty("Animate", false);
+              }
+            },
+          },
         ])}
         <Card Title="Sun direction" Class="direction-card">
           <SunDirection
@@ -1272,17 +1322,19 @@ export function Inspector({
             Elevation={Elevation}
             Manual={Manual}
             Path={Manual ? [] : SunPath}
+            Clock={!!V("Real time")}
             Change={(NextAzimuth, NextElevation) => {
               // Steering the sun by hand takes over from the date and time (the Manual direction switch hands it back).
-              if (!Manual) AssignProperty("Manual direction", true);
+              if (!Manual) {
+                AssignProperty("Manual direction", true);
+                AssignProperty("Real time", false);
+                AssignProperty("Animate", false);
+              }
               AssignProperty("Manual azimuth", NextAzimuth);
               AssignProperty("Manual elevation", NextElevation);
             }}
+            Solve={() => AssignProperty("Manual direction", false)}
           />
-          <p>
-            {Elevation < 0 ? "Below the horizon" : "Above the horizon"} ·{" "}
-            {Manual ? "steered by hand; switch Manual direction off to follow the date and time" : "solved from the date, time and place; drag to steer it by hand"}
-          </p>
         </Card>
         <Card Title="Sunlight intensity" GraphHandled>
           <Metric Value={Number(V("Intensity")).toFixed(1)} Unit="×" Caption="Sunlight intensity multiplier" />
@@ -1645,7 +1697,11 @@ export function Inspector({
           {Fields("Brightness", "Point Size", "Loaded", "Sidereal Time")}
           <p>The chart omits atmosphere and daylight extinction. The pole dial is a schematic.</p>
         </Card>
-        <Card Title="Zodiacal light">{F("Zodiacal radiance", !V("Zodiacal light"))}</Card>
+        {/* Follow-up 67: the same Zodiacal light switch as the Overview's quick control, beside the radiance it unlocks. */}
+        <Card Title="Zodiacal light">
+          {F("Zodiacal light")}
+          {F("Zodiacal radiance", !V("Zodiacal light"))}
+        </Card>
         {SpecificationCard()}
         </>) },
           { Id: "baking", Label: "Baking", Content: (<>
@@ -1753,10 +1809,11 @@ export function Inspector({
           {F("Size")}
           <button onClick={() => AssignProperty("Size", 0.52)}>Natural size · 0.52°</button>
           <div className="moon-look-group">Atmosphere</div>
+          {/* Follow-up 67: the same Has atmosphere switch as the Overview's quick control (one key, two places). */}
+          {F("Has atmosphere")}
           {F("Atmosphere intensity", !V("Has atmosphere"))}
           {F("Thickness scale", !V("Has atmosphere"))}
           {F("Atmosphere tint", !V("Has atmosphere"))}
-          {!V("Has atmosphere") && <p className="card-foot">Turn on Has atmosphere in Quick controls to give this moon air.</p>}
         </Card>
         </>) },
           { Id: "position", Label: "Position", Content: (<>
@@ -2000,16 +2057,13 @@ export function Inspector({
       </>
     );
   } else if (Subject.Panel === "wind") {
-    // Follow-up 65: Overview (the field, its switches and the WindEditor, tags, notes) and Air (the stored atmospheric descriptors).
+    // Follow-up 65: Overview (the field, its switches, tags, notes; F67: the WindEditor button is gone) and Air (the stored atmospheric descriptors).
     Content = (
       <>
         {Header("Environment", Subject.Name)}
         <InspectorTabs Owner="wind" Look="wind" Pages={[
           { Id: "overview", Label: "Overview", Content: (<>
         {ReferenceCards}
-        <button className="wind-wide-button" onClick={OpenWind} aria-label="Expand WindEditor" title="Expand WindEditor">
-          Open WindEditor · place and combine components
-        </button>
         {Quick([{ Label: "Enabled", Icon: "wind", On: !Hidden, Action: ToggleHidden }, Switch("Air shear", "shear")])}
         {TagsAndNotes()}
         </>) },
