@@ -140,6 +140,8 @@ const ShapeEditorCanvas = forwardRef(function ShapeEditorCanvas(
     onWorkingDraft,
     onPathDirty,
     pathPanelTarget,
+    ViewControlsTarget,
+    WorldGrid = false,
   },
   ref,
 ) {
@@ -1864,10 +1866,18 @@ const ShapeEditorCanvas = forwardRef(function ShapeEditorCanvas(
     () => ({ tileAxes: doc.tileAxes, repeat: doc.repeat }),
     [doc.tileAxes, doc.repeat],
   );
+  const rulerStep = units > 2 ? 128 : units > 0.8 ? 64 : units > 0.3 ? 32 : 16;
   const rulerTicks = useMemo(() => {
-    const step = units > 2 ? 128 : units > 0.8 ? 64 : units > 0.3 ? 32 : 16;
+    const step = rulerStep;
     const x = [],
-      y = [];
+      y = [],
+      minorX = [],
+      minorY = [];
+    // Optional finer ticks between the labelled ones (unstyled unless a host theme draws them).
+    for (let v = Math.floor(viewX / designAspect / (step / 4)) * (step / 4); v <= (viewX + viewWidth) / designAspect; v += step / 4)
+      if (v % step) minorX.push({ v, px: (v * designAspect - viewX) / units });
+    for (let v = Math.floor(viewY / (step / 4)) * (step / 4); v <= viewY + viewHeight; v += step / 4)
+      if (v % step) minorY.push({ v, px: (v - viewY) / units });
     for (
       let v = Math.floor(viewX / designAspect / step) * step;
       v <= (viewX + viewWidth) / designAspect;
@@ -1880,8 +1890,19 @@ const ShapeEditorCanvas = forwardRef(function ShapeEditorCanvas(
       v += step
     )
       y.push({ v, px: (v - viewY) / units });
-    return { x, y };
-  }, [viewX, viewY, viewWidth, viewHeight, units, designAspect]);
+    return { x, y, minorX, minorY };
+  }, [viewX, viewY, viewWidth, viewHeight, units, designAspect, rulerStep]);
+  // The tile's and the selection's extents along each ruler, as screen offsets.
+  const rulerExtent = {
+    x: { left: -viewX / units, width: (512 * designAspect) / units },
+    y: { top: -viewY / units, height: 512 / units },
+  };
+  const rulerSelection = bounds && ids.length
+    ? {
+        x: { left: ((bounds.x - bounds.width / 2) * designAspect - viewX) / units, width: (bounds.width * designAspect) / units },
+        y: { top: (bounds.y - bounds.height / 2 - viewY) / units, height: bounds.height / units },
+      }
+    : null;
   const help =
     tool === "curve"
       ? "Click to curve · Alt-click corners · first point closes · Enter finishes"
@@ -1975,63 +1996,70 @@ const ShapeEditorCanvas = forwardRef(function ShapeEditorCanvas(
         onPaint={changePathPaint}
       />
     ) : null;
+  const zoomControls = (
+    <div className="se-zoom-controls">
+      <button
+        aria-label="Zoom out canvas"
+        title="Zoom out (−)"
+        onClick={() => zoomAt(0.8)}
+      >
+        <Minus size={14} />
+      </button>
+      <select
+        aria-label="Canvas zoom"
+        value={String(Math.round(camera.zoom * 100))}
+        onChange={(e) =>
+          zoomAt(Number(e.target.value) / 100 / cameraRef.current.zoom)
+        }
+      >
+        {[
+          ...new Set([
+            25,
+            50,
+            75,
+            100,
+            150,
+            200,
+            400,
+            800,
+            Math.round(camera.zoom * 100),
+          ]),
+        ]
+          .sort((a, b) => a - b)
+          .map((v) => (
+            <option key={v} value={v}>
+              {v}%
+            </option>
+          ))}
+      </select>
+      <button
+        aria-label="Zoom in canvas"
+        title="Zoom in (+)"
+        onClick={() => zoomAt(1.25)}
+      >
+        <Plus size={14} />
+      </button>
+      <button onClick={fit} title="Fit tile (0)">
+        <Scan size={14} /> Fit
+      </button>
+    </div>
+  );
   return (
     <section className="se-editor" aria-label="2D shape editor">
       {pathControls &&
         pathPanelTarget &&
         createPortal(pathControls, pathPanelTarget)}
-      <div className="se-view-controls">
-        <span>
-          <span className="se-live-dot" /> VECTOR CANVAS{" "}
-          <small>512 × 512</small>
-        </span>
-        <div>
-          <button
-            aria-label="Zoom out canvas"
-            title="Zoom out (−)"
-            onClick={() => zoomAt(0.8)}
-          >
-            <Minus size={14} />
-          </button>
-          <select
-            aria-label="Canvas zoom"
-            value={String(Math.round(camera.zoom * 100))}
-            onChange={(e) =>
-              zoomAt(Number(e.target.value) / 100 / cameraRef.current.zoom)
-            }
-          >
-            {[
-              ...new Set([
-                25,
-                50,
-                75,
-                100,
-                150,
-                200,
-                400,
-                800,
-                Math.round(camera.zoom * 100),
-              ]),
-            ]
-              .sort((a, b) => a - b)
-              .map((v) => (
-                <option key={v} value={v}>
-                  {v}%
-                </option>
-              ))}
-          </select>
-          <button
-            aria-label="Zoom in canvas"
-            title="Zoom in (+)"
-            onClick={() => zoomAt(1.25)}
-          >
-            <Plus size={14} />
-          </button>
-          <button onClick={fit} title="Fit tile (0)">
-            <Scan size={14} /> Fit
-          </button>
+      {ViewControlsTarget ? (
+        createPortal(zoomControls, ViewControlsTarget)
+      ) : (
+        <div className="se-view-controls">
+          <span>
+            <span className="se-live-dot" /> VECTOR CANVAS{" "}
+            <small>512 × 512</small>
+          </span>
+          {zoomControls}
         </div>
-      </div>
+      )}
       <div className="se-viewport" ref={stageRef}>
         <svg
           ref={svgRef}
@@ -2161,6 +2189,16 @@ const ShapeEditorCanvas = forwardRef(function ShapeEditorCanvas(
                 opacity="0.38"
               />
             </pattern>
+            {WorldGrid && (
+              <>
+                <pattern id="se-world-minor" patternUnits="userSpaceOnUse" width={(rulerStep / 4) * designAspect} height={rulerStep / 4}>
+                  <path className="se-world-minor" d={`M${(rulerStep / 4) * designAspect} 0H0V${rulerStep / 4}`} fill="none" stroke="#ffffff" strokeOpacity=".04" strokeWidth={units * 2} />
+                </pattern>
+                <pattern id="se-world-major" patternUnits="userSpaceOnUse" width={rulerStep * designAspect} height={rulerStep}>
+                  <path className="se-world-major" d={`M${rulerStep * designAspect} 0H0V${rulerStep}`} fill="none" stroke="#ffffff" strokeOpacity=".08" strokeWidth={units * 2} />
+                </pattern>
+              </>
+            )}
             <clipPath id="se-tile-clip">
               <rect width="512" height="512" />
             </clipPath>
@@ -2180,6 +2218,12 @@ const ShapeEditorCanvas = forwardRef(function ShapeEditorCanvas(
             </filter>
           </defs>
           <g dangerouslySetInnerHTML={{ __html: textilePreviewDefs }} />
+          {WorldGrid && (
+            <g className="se-world-grid" pointerEvents="none">
+              <rect x={viewX} y={viewY} width={viewWidth} height={viewHeight} fill="url(#se-world-minor)" />
+              <rect x={viewX} y={viewY} width={viewWidth} height={viewHeight} fill="url(#se-world-major)" />
+            </g>
+          )}
           <g
             ref={contentRef}
             data-coordinate-space="tile"
@@ -2457,6 +2501,11 @@ const ShapeEditorCanvas = forwardRef(function ShapeEditorCanvas(
           </g>
         </svg>
         <div className="se-ruler se-ruler-x" aria-hidden="true">
+          <b className="se-ruler-extent" style={rulerExtent.x} />
+          {rulerSelection && <b className="se-ruler-selection" style={rulerSelection.x} />}
+          {rulerTicks.minorX.map(({ v, px }) => (
+            <i key={v} className="se-ruler-minor" style={{ left: px }} />
+          ))}
           {rulerTicks.x.map(({ v, px }) => (
             <span key={v} style={{ left: px }}>
               {v}
@@ -2464,6 +2513,11 @@ const ShapeEditorCanvas = forwardRef(function ShapeEditorCanvas(
           ))}
         </div>
         <div className="se-ruler se-ruler-y" aria-hidden="true">
+          <b className="se-ruler-extent" style={rulerExtent.y} />
+          {rulerSelection && <b className="se-ruler-selection" style={rulerSelection.y} />}
+          {rulerTicks.minorY.map(({ v, px }) => (
+            <i key={v} className="se-ruler-minor" style={{ top: px }} />
+          ))}
           {rulerTicks.y.map(({ v, px }) => (
             <span key={v} style={{ top: px }}>
               {v}

@@ -2635,7 +2635,20 @@ function App() {
         />
       )}
       {ShaderFloating && (
-        <div inert={Shade || AssetsBlocking || WindSubject ? "" : undefined}>
+        // Follow-up 73: the floating ShaderEditor sits outside the workspace, so it carries the workspace theme's colours itself.
+        <div
+          inert={Shade || AssetsBlocking || WindSubject ? "" : undefined}
+          style={{
+            display: "contents",
+            "--ws-strip": ActiveWsTheme.Strip,
+            "--ws-dock": ActiveWsTheme.Dock,
+            "--ws-tab": ActiveWsTheme.Tab,
+            "--ws-tab-hover": ActiveWsTheme.TabHover,
+            "--ws-text": ActiveWsTheme.Text,
+            "--ws-muted": ActiveWsTheme.Muted,
+            "--ws-gap": ActiveWsTheme.Gap,
+          }}
+        >
           <ShaderPanel
             Close={() => FloatShader(false)}
             Dock={DockShader}

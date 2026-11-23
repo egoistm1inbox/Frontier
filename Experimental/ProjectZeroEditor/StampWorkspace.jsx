@@ -5,22 +5,24 @@
 // Everything it does comes from the Texture Studio's stamp model (useStampStudioModel in TextureStudio/src/StampStudio.jsx): the 512 × 512
 // composition with text, SVG, image and vector components, the G / R / S transforms, the vector canvas, masks, arrays, the 15 channel
 // targets, the preset library and the exports. Only the arrangement is new:
-//   • One bar on top: the stamp's name and status, Composition | Vector, undo and redo, a ⋯ menu and Press onto material.
-//   • Under it, a toolbar across the top (Follow-up 72): the G / R / S transforms and the artwork to add — or, in Vector, the vector
-//     canvas's own drawing tools — then the canvas size and the exports.
-//   • The left rail shows Components or Presets. Components is drawn as the editor's Outliner (ArtworkOutliner.jsx); each row has its
-//     eye and lock, and the order, duplicate and delete buttons sit in its footer.
-//   • The canvas takes the middle.
-//   • The inspector turns pages: Component, Targets (the channels the stamp writes and their amounts) and Place (where it lands on the
-//     material, with a preview over the material's current colour).
+//   • Three docks side by side, each with the editor's document tabs (Follow-up 73): LayerStack | Viewport | Inspector. The side docks
+//     close from their tab and come back from the + on the Viewport tab strip.
+//   • The left dock shows Components (LayerStack) or Presets. Components is drawn as the editor's Outliner (ArtworkOutliner.jsx); each
+//     row has its eye and lock, and the order, duplicate and delete buttons sit in its footer.
+//   • The Viewport dock carries its own header, as the editor's viewport does: the stamp's name and status, Composition | Vector, undo,
+//     redo and a ⋯ menu; then Place / Press onto material, the G / R / S transforms and the artwork to add — or, in Vector, the vector
+//     canvas's own drawing tools and zoom — then the canvas size and the exports. The canvas sits under it.
+//   • The Inspector dock turns pages: Component, Targets (the channels the stamp writes and their amounts) and Place (where it lands on
+//     the material, with a preview over the material's current colour).
 // Press onto material composites the stamp into every targeted channel of the bound material (SurfaceTextures.js).
 
 import React, { useEffect, useMemo, useState } from "react";
 import {
   Type, Code2, ImagePlus, Plus, Copy, Trash2, LockKeyhole, UnlockKeyhole, ArrowUp, ArrowDown, Undo2, Redo2, Save,
-  FolderOpen, Download, Move, RotateCw, Scaling, MoreHorizontal, Stamp, FilePlus2, X, LibraryBig, Layers3,
+  FolderOpen, Download, Move, RotateCw, Scaling, MoreHorizontal, Stamp, FilePlus2, X,
 } from "lucide-react";
 import ArtworkOutliner, { OutlinerHeading } from "./ArtworkOutliner.jsx";
+import { DockTabs, ViewportHeader } from "./SurfaceDocks.jsx";
 import { useStampStudioModel, StampChannelControls, SVGMarkupEditor } from "../TextureStudio/src/StampStudio.jsx";
 import ArtworkArrayControls from "../TextureStudio/src/ArtworkArrayControls.jsx";
 import ArtworkMaskCanvas from "../TextureStudio/src/ArtworkMaskCanvas.jsx";
@@ -117,6 +119,8 @@ export default function StampWorkspace({ Material, Owner, Press }) {
     add("vector", { name: Caption, vector: patternLayer(Shape, DrawingPaint) });
   };
   const [ToolSlot, PlaceToolSlot] = useState(null);
+  const [ZoomSlot, PlaceZoomSlot] = useState(null);
+  const [Shut, ShutDocks] = useState({});
 
   // ── Left rail: the components, drawn as the editor's Outliner (ArtworkOutliner.jsx) ───────────────────────────────────────────────
   const SetComponents = (Id, Change) => commit({ ...doc, layers: doc.layers.map((Each) => (Each.id === Id ? Change(Each) : Each)) });
@@ -200,9 +204,6 @@ export default function StampWorkspace({ Material, Owner, Press }) {
               })}
             </div>
           </Popover>
-          <button type="button" className="ao-round" aria-label="Show the stamp presets" title="Stamp presets" onClick={() => ShowRail("presets")}>
-            <LibraryBig size={15} />
-          </button>
         </>
       }
       Visible={doc.layers.filter((Layer) => Layer.visible).length}
@@ -578,71 +579,71 @@ export default function StampWorkspace({ Material, Owner, Press }) {
       ? `${{ move: "Move", rotate: "Rotate", scale: "Scale" }[transform.active.mode]}${transform.active.axis ? ` · ${transform.active.axis.toUpperCase()} axis` : ""}${transform.active.mode !== "rotate" ? " · X/Y constrain" : ""} · Shift snaps · Click/Enter confirms · Esc cancels`
       : "Drag to move · G move · R rotate · S scale · Shift snaps";
 
-  // ── The toolbar along the top: the G / R / S transforms and the artwork to add (Composition), or the vector canvas's own drawing tools
-  // (Vector, placed here by StampVectorCanvas), then the canvas size and the exports.
-  const Toolbar = (
-    <div className="sfw-toolbar" role="toolbar" aria-label="Stamp tools">
-      {MaskActive ? (
-        <span className="sfw-toolbar-note">Painting the mask of {selected?.name} · its brushes sit on the mask canvas</span>
-      ) : VectorMode ? (
-        <span className="sfw-toolbar-slot" ref={PlaceToolSlot} />
-      ) : (
-        <>
-          <span className="sfw-toolbar-family" role="group" aria-label="Transform">
-            {[
-              ["move", "Move", "G", Move],
-              ["rotate", "Rotate", "R", RotateCw],
-              ["scale", "Scale", "S", Scaling],
-            ].map(([Mode, Caption, Shortcut, Glyph]) => (
-              <button
-                key={Mode}
-                className={"sfw-tool labelled" + (transform.active?.mode === Mode ? " on" : "")}
-                aria-label={`${Caption} stamp component`}
-                aria-keyshortcuts={Shortcut}
-                aria-pressed={transform.active?.mode === Mode}
-                disabled={!selected || selected.locked || !selected.visible}
-                title={`${Caption} (${Shortcut}) · click or Enter confirms · Esc cancels`}
-                onClick={() => transform.startModal(Mode)}
-              >
-                <Glyph size={15} />
-                <kbd>{Shortcut}</kbd>
-              </button>
-            ))}
-          </span>
-          <span className="sfw-toolbar-split" />
-          <span className="sfw-toolbar-family" role="group" aria-label="Add artwork">
-            <button className="sfw-tool" aria-label="Add text" title="Add text" disabled={doc.layers.length >= STAMP_LAYER_LIMIT} onClick={() => add("text")}>
-              <Type size={15} />
-            </button>
-            <button className="sfw-tool" aria-label="Add SVG markup" title="Add SVG markup" disabled={doc.layers.length >= STAMP_LAYER_LIMIT} onClick={() => add("svg")}>
-              <Code2 size={15} />
-            </button>
-            <button className="sfw-tool" aria-label="Import an image" title="Import an image" disabled={doc.layers.length >= STAMP_LAYER_LIMIT} onClick={() => pickFile("image")}>
-              <ImagePlus size={15} />
-            </button>
-          </span>
-          <span className="sfw-toolbar-split" />
-          <span className="sfw-toolbar-family" role="group" aria-label="Add a vector shape">
-            {Shapes.map(([Shape, Caption]) => {
-              const Glyph = shapeTools.find(([Each]) => Each === Shape)?.[3] || Code2;
-              return (
-                <button key={Shape} className={"sfw-tool" + (["triangle", "diamond"].includes(Shape) ? " spare" : "")} aria-label={`Add ${Caption.toLowerCase()}`} title={`Add a ${Caption.toLowerCase()} · opens the vector canvas`} disabled={doc.layers.length >= STAMP_LAYER_LIMIT} onClick={() => AddShape(Shape, Caption)}>
-                  <Glyph size={15} />
-                </button>
-              );
-            })}
-          </span>
-        </>
-      )}
-      <span className="sfw-toolbar-gap" />
-      <span className="sfw-toolbar-note">512 × 512</span>
+  // ── The Viewport header's action row: the G / R / S transforms and the artwork to add (Composition), or the vector canvas's own
+  // drawing tools (Vector, placed here by StampVectorCanvas); then its zoom, the canvas size and the exports.
+  const Tools = MaskActive ? (
+  <span className="sfw-view-note">Painting the mask of {selected?.name} · its brushes sit on the mask canvas</span>
+) : VectorMode ? (
+  <span className="sfw-tool-slot" ref={PlaceToolSlot} />
+) : (
+  <>
+    <span className="sfw-view-family" role="group" aria-label="Transform">
+      {[
+        ["move", "Move", "G", Move],
+        ["rotate", "Rotate", "R", RotateCw],
+        ["scale", "Scale", "S", Scaling],
+      ].map(([Mode, Caption, Shortcut, Glyph]) => (
+        <button
+          key={Mode}
+          className={"sfw-tool labelled" + (transform.active?.mode === Mode ? " on" : "")}
+          aria-label={`${Caption} stamp component`}
+          aria-keyshortcuts={Shortcut}
+          aria-pressed={transform.active?.mode === Mode}
+          disabled={!selected || selected.locked || !selected.visible}
+          title={`${Caption} (${Shortcut}) · click or Enter confirms · Esc cancels`}
+          onClick={() => transform.startModal(Mode)}
+        >
+          <Glyph size={15} />
+          <kbd>{Shortcut}</kbd>
+        </button>
+      ))}
+    </span>
+    <span className="sfw-view-divider" />
+    <span className="sfw-view-family" role="group" aria-label="Add artwork">
+      <button className="sfw-tool" aria-label="Add text" title="Add text" disabled={doc.layers.length >= STAMP_LAYER_LIMIT} onClick={() => add("text")}>
+        <Type size={15} />
+      </button>
+      <button className="sfw-tool" aria-label="Add SVG markup" title="Add SVG markup" disabled={doc.layers.length >= STAMP_LAYER_LIMIT} onClick={() => add("svg")}>
+        <Code2 size={15} />
+      </button>
+      <button className="sfw-tool" aria-label="Import an image" title="Import an image" disabled={doc.layers.length >= STAMP_LAYER_LIMIT} onClick={() => pickFile("image")}>
+        <ImagePlus size={15} />
+      </button>
+    </span>
+    <span className="sfw-view-divider" />
+    <span className="sfw-view-family" role="group" aria-label="Add a vector shape">
+      {Shapes.map(([Shape, Caption]) => {
+        const Glyph = shapeTools.find(([Each]) => Each === Shape)?.[3] || Code2;
+        return (
+          <button key={Shape} className={"sfw-tool" + (["triangle", "diamond"].includes(Shape) ? " spare" : "")} aria-label={`Add ${Caption.toLowerCase()}`} title={`Add a ${Caption.toLowerCase()} · opens the vector canvas`} disabled={doc.layers.length >= STAMP_LAYER_LIMIT} onClick={() => AddShape(Shape, Caption)}>
+            <Glyph size={15} />
+          </button>
+        );
+      })}
+    </span>
+  </>
+);
+  const Trailing = (
+    <>
+      {VectorMode && !MaskActive && <span className="sfw-zoom-slot" ref={PlaceZoomSlot} />}
+      <span className="sfw-view-note">512 × 512</span>
       <button className="sfw-tool labelled" onClick={() => exportArtwork("svg")} title="Export SVG">
         SVG
       </button>
       <button className="sfw-tool labelled" onClick={() => exportArtwork("png")} title="Export PNG">
         PNG <Download size={12} />
       </button>
-    </div>
+    </>
   );
 
   return (
@@ -650,155 +651,166 @@ export default function StampWorkspace({ Material, Owner, Press }) {
       className="surface-workspace stamp-workspace alloy-scope studio-themed"
       data-surface-workspace="stamp"
     >
-      <header className="sfw-bar">
-        <div className="sfw-title">
-          <input
-            aria-label="Stamp title"
-            value={doc.name}
-            onChange={(Event) => commit({ ...current.current, name: Event.target.value }, "stamp-name")}
+      <div className={"sfw-body sfw-docks" + (Shut.left ? " no-left" : "") + (Shut.right ? " no-right" : "")}>
+        {!Shut.left && (
+          <section className="sfw-rail ao-rail sfw-pane left" aria-label="LayerStack dock">
+            <DockTabs
+              Label="LayerStack dock"
+              Tabs={[
+                { Id: "components", Label: "LayerStack" },
+                { Id: "presets", Label: "Presets" },
+              ]}
+              Active={Rail}
+              Pick={ShowRail}
+              Close={() => ShutDocks((Previous) => ({ ...Previous, left: true }))}
+            />
+            {Rail === "components" ? (
+              Components
+            ) : (
+              <>
+                <OutlinerHeading Title="Presets" Detail={`${presets.length} saved stamps`} />
+                {Presets}
+              </>
+            )}
+          </section>
+        )}
+        <section className="sfw-pane centre" aria-label="Viewport dock">
+          <DockTabs Label="Viewport dock" Tabs={[{ Id: "viewport", Label: "Viewport" }]} Active="viewport" Restore={Shut.left || Shut.right ? () => ShutDocks({}) : undefined} />
+          <ViewportHeader
+            Picture={
+              <span className="sfw-view-picture">
+                <Stamp size={15} />
+              </span>
+            }
+            Name={
+              <input
+                className="sfw-view-name"
+                aria-label="Stamp title"
+                value={doc.name}
+                onChange={(Event) => commit({ ...current.current, name: Event.target.value }, "stamp-name")}
+              />
+            }
+            Detail={
+              <>
+                .stamp · <span role="status">{Pressed || status}</span>
+              </>
+            }
+            ModesLabel="Stamp canvas mode"
+            Modes={[
+              ["composition", "Composition", !VectorMode && !MaskActive, () => { if (!Finished()) return; ConfigureMaskIdentity(null); ConfigureVectorMode(false); }],
+              ["vector", "Vector", VectorMode && !MaskActive, () => { transform.cancel(); ConfigureMaskIdentity(null); ConfigureVectorMode(true); }],
+            ]}
+            Actions={
+              <>
+                <button className="sfw-icon-button" aria-label="Undo stamp edit" title="Undo · Ctrl/⌘ Z" disabled={!undo.current.length} onClick={() => travel("undo")}>
+                  <Undo2 size={15} />
+                </button>
+                <button className="sfw-icon-button" aria-label="Redo stamp edit" title="Redo · Ctrl/⌘ Shift Z" disabled={!redo.current.length} onClick={() => travel("redo")}>
+                  <Redo2 size={15} />
+                </button>
+                <Popover Label="Stamp document" Glyph={<MoreHorizontal size={15} />} Align="end">
+                  <button
+                    data-closes
+                    onClick={() => {
+                      VectorCanvas.current?.cancelInteraction();
+                      const Next = createStampDocument();
+                      commit({ ...Next, name: "Untitled stamp" }, null, Next.layers[0]?.id);
+                    }}
+                  >
+                    <FilePlus2 size={13} /> New stamp
+                  </button>
+                  <button data-closes onClick={() => pickFile("project")}>
+                    <FolderOpen size={13} /> Open project…
+                  </button>
+                  <button data-closes onClick={() => exportArtwork("json")}>
+                    <Save size={13} /> Save project
+                  </button>
+                  <button data-closes disabled={busy} onClick={() => savePreset(false, true)}>
+                    <Copy size={13} /> Save as new preset
+                  </button>
+                </Popover>
+              </>
+            }
+            Primary={
+              <button className="sfw-apply" disabled={busy || Pressing} onClick={() => (Pages[Page].Id === "place" ? savePreset(true) : Turn(2))} title={`Press this stamp into ${Owner}'s targeted channels`}>
+                <Stamp size={14} /> {Pressing ? "Pressing…" : Pages[Page].Id === "place" ? "Press onto material" : "Place on material"}
+              </button>
+            }
+            Tools={Tools}
+            Trailing={Trailing}
           />
-          <small>.stamp</small>
-          <span className="sfw-status" role="status">
-            {Pressed || status}
-          </span>
-        </div>
-        <div className="sfw-views" role="group" aria-label="Stamp canvas mode">
-          <button
-            aria-pressed={!VectorMode && !MaskActive}
-            onClick={() => {
-              if (!Finished()) return;
-              ConfigureMaskIdentity(null);
-              ConfigureVectorMode(false);
-            }}
-          >
-            Composition
-          </button>
-          <button
-            aria-pressed={VectorMode && !MaskActive}
-            onClick={() => {
-              transform.cancel();
-              ConfigureMaskIdentity(null);
-              ConfigureVectorMode(true);
-            }}
-          >
-            Vector
-          </button>
-        </div>
-        <div className="sfw-actions">
-          <button className="sfw-icon-button" aria-label="Undo stamp edit" title="Undo · Ctrl/⌘ Z" disabled={!undo.current.length} onClick={() => travel("undo")}>
-            <Undo2 size={15} />
-          </button>
-          <button className="sfw-icon-button" aria-label="Redo stamp edit" title="Redo · Ctrl/⌘ Shift Z" disabled={!redo.current.length} onClick={() => travel("redo")}>
-            <Redo2 size={15} />
-          </button>
-          <Popover Label="Stamp document" Glyph={<MoreHorizontal size={15} />} Align="end">
-            <button
-              data-closes
-              onClick={() => {
-                VectorCanvas.current?.cancelInteraction();
-                const Next = createStampDocument();
-                commit({ ...Next, name: "Untitled stamp" }, null, Next.layers[0]?.id);
-              }}
-            >
-              <FilePlus2 size={13} /> New stamp
-            </button>
-            <button data-closes onClick={() => pickFile("project")}>
-              <FolderOpen size={13} /> Open project…
-            </button>
-            <button data-closes onClick={() => exportArtwork("json")}>
-              <Save size={13} /> Save project
-            </button>
-            <button data-closes disabled={busy} onClick={() => savePreset(false, true)}>
-              <Copy size={13} /> Save as new preset
-            </button>
-          </Popover>
-          <button className="sfw-primary" disabled={busy || Pressing} onClick={() => (Pages[Page].Id === "place" ? savePreset(true) : Turn(2))} title={`Press this stamp into ${Owner}'s targeted channels`}>
-            <Stamp size={14} /> {Pressing ? "Pressing…" : Pages[Page].Id === "place" ? "Press onto material" : "Place on material"}
-          </button>
-        </div>
-      </header>
-      {Toolbar}
-      <div className="sfw-body">
-        <aside className="sfw-rail ao-rail">
-          {Rail === "components" ? (
-            Components
-          ) : (
-            <>
-              <OutlinerHeading Title="Presets" Detail={`${presets.length} saved stamps`}>
-                <button type="button" className="ao-round" aria-label="Show the stamp components" title="Stamp components" onClick={() => ShowRail("components")}>
-                  <Layers3 size={15} />
-                </button>
-              </OutlinerHeading>
-              {Presets}
-            </>
-          )}
-        </aside>
-        <main className="sfw-centre" data-mask-editing={MaskActive || undefined}>
-          {MaskActive ? (
-            <ArtworkMaskCanvas
-              key={selected.id}
-              Mask={selected.mask}
-              Name={selected.name}
-              Disabled={selected.locked}
-              OnSave={() => exportArtwork("json")}
-              OnClose={() => ConfigureMaskIdentity(null)}
-              OnHistory={travel}
-              OnError={setError}
-              OnChange={(Mask) => {
-                if (!selected.locked) commit({ ...current.current, layers: current.current.layers.map((Entry) => (Entry.id === selected.id ? { ...Entry, mask: Mask } : Entry)) });
-              }}
-            />
-          ) : VectorMode ? (
-            <StampVectorCanvas
-              InspectorTarget={InspectorTarget}
-              Appearance={CanvasAppearance}
-              OnAppearance={ConfigureCanvasAppearance}
-              ref={VectorCanvas}
-              Document={doc}
-              SelectedIDs={VectorSelection.includes(selectedId) ? VectorSelection : selectedId ? [selectedId] : []}
-              OnSelection={(IDs) => choose(IDs.at(-1), IDs)}
-              OnFinalize={commit}
-              OnError={setError}
-              OnHistory={travel}
-              Paint={selected?.kind === "vector" ? VectorPaintStyle(StampVectorGeometry(selected)) : DrawingPaint}
-              OnPaint={ApplyVectorPaint}
-              OnAddText={(Position) => add("text", Position)}
-              OnImportSVG={() => pickFile("svg")}
-              ToolbarTarget={ToolSlot}
-            />
-          ) : (
-            <>
-              {Composition}
-              <p className="sfw-canvas-note" role="status" aria-live="polite">
-                {Help}
+          <main className="sfw-centre" data-mask-editing={MaskActive || undefined}>
+            {MaskActive ? (
+              <ArtworkMaskCanvas
+                key={selected.id}
+                Mask={selected.mask}
+                Name={selected.name}
+                Disabled={selected.locked}
+                OnSave={() => exportArtwork("json")}
+                OnClose={() => ConfigureMaskIdentity(null)}
+                OnHistory={travel}
+                OnError={setError}
+                OnChange={(Mask) => {
+                  if (!selected.locked) commit({ ...current.current, layers: current.current.layers.map((Entry) => (Entry.id === selected.id ? { ...Entry, mask: Mask } : Entry)) });
+                }}
+              />
+            ) : VectorMode ? (
+              <StampVectorCanvas
+                InspectorTarget={InspectorTarget}
+                Appearance={CanvasAppearance}
+                OnAppearance={ConfigureCanvasAppearance}
+                ref={VectorCanvas}
+                Document={doc}
+                SelectedIDs={VectorSelection.includes(selectedId) ? VectorSelection : selectedId ? [selectedId] : []}
+                OnSelection={(IDs) => choose(IDs.at(-1), IDs)}
+                OnFinalize={commit}
+                OnError={setError}
+                OnHistory={travel}
+                Paint={selected?.kind === "vector" ? VectorPaintStyle(StampVectorGeometry(selected)) : DrawingPaint}
+                OnPaint={ApplyVectorPaint}
+                OnAddText={(Position) => add("text", Position)}
+                OnImportSVG={() => pickFile("svg")}
+                ToolbarTarget={ToolSlot}
+              ZoomTarget={ZoomSlot}
+              WorldGrid
+              />
+            ) : (
+              <>
+                {Composition}
+                <p className="sfw-canvas-note" role="status" aria-live="polite">
+                  {Help}
+                </p>
+              </>
+            )}
+            {(error || fontWarning) && (
+              <p className="sfw-error" role="alert">
+                {error || fontWarning}
+                {error && (
+                  <button aria-label="Dismiss" onClick={() => setError("")}>
+                    <X size={12} />
+                  </button>
+                )}
               </p>
-            </>
-          )}
-          {(error || fontWarning) && (
-            <p className="sfw-error" role="alert">
-              {error || fontWarning}
-              {error && (
-                <button aria-label="Dismiss" onClick={() => setError("")}>
-                  <X size={12} />
-                </button>
-              )}
-            </p>
-          )}
-        </main>
-        <aside className="sfw-inspector" data-mask-editing={MaskActive || undefined}>
-          <PageStrip Owner="Stamp" Pages={Pages} Index={Page} Pick={Turn} />
-          <div className="sfw-pages">
-            {PageBodies.map((Body, At) => (
-              <div key={Pages[At].Id} {...PageLook(At, Page, Motion)} data-page={Pages[At].Id}>
-                {Body}
-              </div>
-            ))}
+            )}
+          </main>
+          <div className="sfw-view-foot">
+            {doc.layers.length} components · {doc.channels.length} targets · {revision} edits
           </div>
-        </aside>
+        </section>
+        {!Shut.right && (
+          <section className="sfw-inspector sfw-pane right" data-mask-editing={MaskActive || undefined} aria-label="Inspector dock">
+            <DockTabs Label="Inspector dock" Tabs={[{ Id: "inspector", Label: "Inspector" }]} Active="inspector" Close={() => ShutDocks((Previous) => ({ ...Previous, right: true }))} />
+            <PageStrip Owner="Stamp" Pages={Pages} Index={Page} Pick={Turn} />
+            <div className="sfw-pages">
+              {PageBodies.map((Body, At) => (
+                <div key={Pages[At].Id} {...PageLook(At, Page, Motion)} data-page={Pages[At].Id}>
+                  {Body}
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
       </div>
-      <footer className="sfw-foot">
-        {doc.layers.length} components · {doc.channels.length} targets · {revision} edits
-      </footer>
       <input
         type="file"
         ref={input}

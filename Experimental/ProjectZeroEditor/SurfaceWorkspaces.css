@@ -113,16 +113,6 @@
   container-type: inline-size;
   container-name: surface;
 }
-.surface-workspace .sfw-bar {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  height: 46px;
-  flex: none;
-  padding: 0 12px 0 14px;
-  background: #161616;
-  border-bottom: 1px solid #ffffff0d;
-}
 .surface-workspace .sfw-title {
   display: flex;
   align-items: baseline;
@@ -157,28 +147,6 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-.surface-workspace .sfw-views {
-  display: inline-flex;
-  padding: 3px;
-  gap: 2px;
-  border-radius: 10px;
-  background: #0d0d0d;
-  border: 1px solid #ffffff0d;
-  flex: none;
-}
-.surface-workspace .sfw-views button {
-  height: 26px;
-  padding: 0 14px;
-  border: 0;
-  border-radius: 7px;
-  background: transparent;
-  color: #8d8d8d;
-  font-size: 10px;
-}
-.surface-workspace .sfw-views button[aria-pressed="true"] {
-  background: #2a2a2a;
-  color: #f2f2f2;
 }
 .surface-workspace .sfw-actions {
   display: flex;
@@ -1301,11 +1269,6 @@
     border-left: 0;
     border-top: 1px solid #ffffff0d;
   }
-  .surface-workspace .sfw-bar {
-    flex-wrap: wrap;
-    height: auto;
-    padding: 8px 12px;
-  }
 }
 
 /* Stamp canvas: the component buttons are transparent hit areas over the assembled picture (as in the Texture Studio). */
@@ -1414,57 +1377,316 @@
   accent-color: #d9cdb9;
 }
 
-/* ── Follow-up 72: a toolbar across the top of both workspaces, and the layer stacks drawn as the editor's Outliner ──────────────────── */
+/* ── Follow-up 72–73: the workspaces as the editor's own docks — LayerStack | Viewport | Inspector — each with the editor's slanted
+   tabs; the tools live in the Viewport dock's header, laid out as the editor Viewport's header. Colours follow the workspace theme
+   (the --ws-* variables Editor.jsx sets; the fallbacks are the Dark theme). ──────────────────────────────────────────────────────── */
 
-/* Toolbar — the editor viewport's action row: 31 px keys on #1a1a1a, the pressed key in the viewport's warm tint. */
-.surface-workspace .sfw-toolbar {
+.surface-workspace .sfw-body.sfw-docks {
+  gap: 2px;
+  background: var(--ws-gap, #262626);
+  grid-template-columns: 268px minmax(0, 1fr) 300px;
+}
+.surface-workspace .sfw-body.sfw-docks.no-left {
+  grid-template-columns: minmax(0, 1fr) 300px;
+}
+.surface-workspace .sfw-body.sfw-docks.no-right {
+  grid-template-columns: 268px minmax(0, 1fr);
+}
+.surface-workspace .sfw-body.sfw-docks.no-left.no-right {
+  grid-template-columns: minmax(0, 1fr);
+}
+.surface-workspace .sfw-pane {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  position: relative;
+  background: var(--ws-dock, #121212);
+  border: 0;
+  color: #d8d8d8;
+}
+.surface-workspace .sfw-pane.left {
+  border-radius: 0 0 0 8px;
+}
+.surface-workspace .sfw-pane.right {
+  border-radius: 0 0 8px 0;
+}
+.surface-workspace .sfw-pane.centre > .sfw-centre {
+  flex: 1;
+  background: var(--ws-dock, #121212);
+}
+
+/* Tabs — Editor.css .tab-strip / .document-tab / .tab-add */
+.surface-workspace .sfw-tab-strip {
+  height: 30px;
   flex: none;
+  display: flex;
+  align-items: end;
+  padding: 4px 4px 0 0;
+  background: var(--ws-strip, #0a0a0a);
+  overflow: hidden;
+  gap: 0;
+}
+.surface-workspace .sfw-document-tab {
+  height: 26px;
+  min-width: 110px;
+  padding: 0 14px 0 26px;
+  background: var(--ws-tab, #26262c);
+  clip-path: polygon(14px 0, calc(100% - 14px) 0, 100% 100%, 0 100%);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  position: relative;
+  cursor: default;
+  font-size: 11px;
+  color: var(--ws-muted, #999);
+  margin-left: -12px;
+  user-select: none;
+  outline: none;
+}
+.surface-workspace .sfw-document-tab:first-child {
+  margin-left: 0;
+}
+.surface-workspace .sfw-document-tab.active {
+  background: var(--ws-dock, #121212);
+  color: var(--ws-text, #f0f0f0);
+  z-index: 1;
+}
+.surface-workspace .sfw-document-tab:hover {
+  background: var(--ws-tab-hover, #32323a);
+}
+.surface-workspace .sfw-document-tab.active:hover {
+  background: var(--ws-dock, #171717);
+}
+.surface-workspace .sfw-document-tab:focus-visible span {
+  text-decoration: underline;
+}
+.surface-workspace .sfw-document-tab button {
+  border: 0;
+  min-height: 18px;
+  height: 18px;
+  width: 18px;
+  padding: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  box-shadow: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.surface-workspace .sfw-document-tab button:hover {
+  background: var(--ws-tab-hover, #444);
+}
+.surface-workspace .sfw-tab-add {
+  height: 24px;
+  width: 24px;
+  min-height: 24px;
+  border-radius: 50%;
+  padding: 0;
+  margin: 0 0 1px 12px;
+  border: 0;
+  background: var(--ws-tab, #26262c);
+  color: var(--ws-text, #bebec4);
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Viewport header — Editor.css .viewport-toolbar / .viewport-heading-row / .viewport-action-row */
+.surface-workspace .sfw-view-toolbar {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  padding: 0 12px 11px;
+  background: var(--ws-dock, #121212);
+  position: relative;
+  z-index: 6;
+}
+.surface-workspace .sfw-view-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 51px;
+  min-width: 0;
+}
+.surface-workspace .sfw-view-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.surface-workspace .sfw-view-title > div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.surface-workspace .sfw-view-title > div > span {
+  color: var(--ws-muted, #696969);
+  opacity: 0.75;
+  font-size: 9px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.surface-workspace .sfw-view-picture {
+  width: 24px;
+  height: 24px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 7px;
+  background: var(--ws-tab, #26262c);
+  color: var(--ws-text, #e2e2e2);
+}
+.surface-workspace input.sfw-view-name {
+  width: min(260px, 100%);
+  height: 18px;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--ws-text, #e2e2e2);
+  font-size: 13px;
+  font-weight: 400;
+  outline: none;
+}
+.surface-workspace input.sfw-view-name:focus {
+  box-shadow: 0 1px 0 #ffb45488;
+}
+.surface-workspace .sfw-view-end {
   display: flex;
   align-items: center;
   gap: 6px;
-  height: 44px;
-  padding: 0 14px;
-  background: #141414;
-  border-bottom: 1px solid #ffffff0d;
-  position: relative;
-  z-index: 6;
-  min-width: 0;
+  flex: none;
 }
-.surface-workspace .sfw-toolbar-family,
-.surface-workspace .sfw-toolbar-slot {
+.surface-workspace .sfw-view-end > .sfw-icon-button,
+.surface-workspace .sfw-view-end > .sfw-popover > .sfw-icon-button {
+  width: 29px;
+  height: 29px;
+  min-height: 29px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ws-muted, #8a8a8a);
+  box-shadow: none;
+}
+.surface-workspace .sfw-view-end > .sfw-icon-button:hover:not(:disabled),
+.surface-workspace .sfw-view-end > .sfw-popover > .sfw-icon-button:hover:not(:disabled),
+.surface-workspace .sfw-view-end > .sfw-popover > .sfw-icon-button[aria-expanded="true"] {
+  background: var(--ws-tab, #222);
+  color: var(--ws-text, #dedede);
+}
+.surface-workspace .sfw-view-modes {
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid #ffffff0a;
+  border-radius: 10px;
+  background: var(--ws-strip, #090909);
+  flex: none;
+}
+.surface-workspace .sfw-view-modes button {
+  height: 25px;
+  min-height: 25px;
+  min-width: 45px;
+  padding: 4px 9px;
+  border: 0;
+  border-radius: 6px;
+  font-size: 10px;
+  color: var(--ws-muted, #747474);
+  background: transparent;
+  box-shadow: none;
+}
+.surface-workspace .sfw-view-modes button.active {
+  color: var(--ws-text, #ececec);
+  background: var(--ws-tab, #2c2c2c);
+  box-shadow:
+    0 1px 3px #0005,
+    inset 0 1px #ffffff08;
+}
+.surface-workspace .sfw-view-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding-top: 9px;
+  border-top: 1px solid #ffffff08;
+}
+.surface-workspace .sfw-view-family,
+.surface-workspace .sfw-tool-slot {
   display: inline-flex;
   align-items: center;
   gap: 4px;
   flex: none;
 }
-.surface-workspace .sfw-toolbar-slot {
+.surface-workspace .sfw-tool-slot {
   flex: 0 1 auto;
   min-width: 0;
 }
-.surface-workspace .sfw-toolbar-split {
+.surface-workspace .sfw-view-divider {
   flex: none;
   width: 1px;
   height: 19px;
   margin: 0 3px;
   background: #ffffff0c;
 }
-.surface-workspace .sfw-toolbar-gap {
-  flex: 1;
-  min-width: 8px;
+.surface-workspace .sfw-view-trailing {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: auto;
+  flex: none;
 }
-.surface-workspace .sfw-toolbar-note {
+.surface-workspace .sfw-view-note {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: #6f6f6f;
+  color: var(--ws-muted, #6f6f6f);
+  opacity: 0.8;
   font-size: 9.5px;
-  padding: 0 6px;
+  padding: 0 4px;
 }
-.surface-workspace .sfw-toolbar .sfw-tool,
-.surface-workspace .sfw-toolbar .sfw-popover > .sfw-icon-button,
-.surface-workspace .sfw-toolbar .se-drawing-tools > button,
-.surface-workspace .sfw-toolbar .se-tool-menu > summary {
+/* The light primary key, as the editor's Construct. */
+.surface-workspace .sfw-apply {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 31px;
+  min-height: 31px;
+  padding: 0 11px;
+  border-radius: 8px;
+  background: #dededb;
+  border: 1px solid #eeeeeb;
+  color: #242424;
+  font-size: 11px;
+  font-weight: 400;
+  box-shadow: inset 0 -1px #0001;
+  white-space: nowrap;
+}
+.surface-workspace .sfw-apply:hover:not(:disabled) {
+  background: #fff;
+}
+.surface-workspace .sfw-apply:disabled {
+  opacity: 0.5;
+}
+/* Tool keys — Editor.css .viewport-icon-button: 31 px on #1a1a1a, the pressed key in the viewport's warm tint. */
+.surface-workspace .sfw-view-actions .sfw-tool,
+.surface-workspace .sfw-view-actions .sfw-popover > .sfw-icon-button,
+.surface-workspace .sfw-view-actions .se-drawing-tools > button,
+.surface-workspace .sfw-view-actions .se-tool-menu > summary,
+.surface-workspace .sfw-view-actions .se-zoom-controls > button,
+.surface-workspace .sfw-view-actions .se-zoom-controls > select {
   flex: none;
   width: 31px;
   min-width: 31px;
@@ -1478,47 +1700,59 @@
   margin: 0;
   border: 1px solid #ffffff0c;
   border-radius: 8px;
-  background: #1a1a1a;
-  color: #939393;
+  background: var(--ws-tab, #1a1a1a);
+  background: color-mix(in srgb, var(--ws-dock, #121212) 70%, var(--ws-tab, #26262c));
+  color: var(--ws-muted, #939393);
   box-shadow: none;
   font-size: 10px;
 }
-.surface-workspace .sfw-toolbar .sfw-tool.labelled {
+.surface-workspace .sfw-view-actions .sfw-tool.labelled,
+.surface-workspace .sfw-view-actions .se-zoom-controls > button:last-child {
   width: auto;
   padding: 0 10px;
 }
-.surface-workspace .sfw-toolbar .sfw-tool kbd {
+.surface-workspace .sfw-view-actions .se-zoom-controls > select {
+  width: 70px;
+  padding: 0 6px;
+  appearance: auto;
+}
+.surface-workspace .sfw-view-actions .sfw-tool kbd {
   font: inherit;
   font-size: 9px;
-  color: #666;
+  opacity: 0.6;
 }
-.surface-workspace .sfw-toolbar .sfw-tool:hover:not(:disabled),
-.surface-workspace .sfw-toolbar .sfw-popover > .sfw-icon-button:hover:not(:disabled),
-.surface-workspace .sfw-toolbar .se-drawing-tools > button:hover,
-.surface-workspace .sfw-toolbar .se-tool-menu > summary:hover {
-  background: #2b2b2b;
-  color: #dedede;
+.surface-workspace .sfw-view-actions .sfw-tool:hover:not(:disabled),
+.surface-workspace .sfw-view-actions .sfw-popover > .sfw-icon-button:hover:not(:disabled),
+.surface-workspace .sfw-view-actions .se-drawing-tools > button:hover,
+.surface-workspace .sfw-view-actions .se-tool-menu > summary:hover,
+.surface-workspace .sfw-view-actions .se-zoom-controls > button:hover {
+  background: var(--ws-tab-hover, #2b2b2b);
+  color: var(--ws-text, #dedede);
 }
-.surface-workspace .sfw-toolbar .sfw-tool.on,
-.surface-workspace .sfw-toolbar .sfw-tool.on:hover:not(:disabled),
-.surface-workspace .sfw-toolbar .sfw-popover > .sfw-icon-button[aria-expanded="true"],
-.surface-workspace .sfw-toolbar .se-drawing-tools > button.selected,
-.surface-workspace .sfw-toolbar .se-tool-menu[open] > summary {
+.surface-workspace .sfw-view-actions .sfw-tool.on,
+.surface-workspace .sfw-view-actions .sfw-tool.on:hover:not(:disabled),
+.surface-workspace .sfw-view-actions .sfw-popover > .sfw-icon-button[aria-expanded="true"],
+.surface-workspace .sfw-view-actions .se-drawing-tools > button.selected,
+.surface-workspace .sfw-view-actions .se-tool-menu[open] > summary {
   background: #bfa27a19;
   border-color: #bfa27a55;
   color: #dec193;
 }
-.surface-workspace .sfw-toolbar .sfw-tool.on kbd {
-  color: #b39a74;
-}
-.surface-workspace .sfw-toolbar .sfw-tool:disabled {
+.surface-workspace .sfw-view-actions .sfw-tool:disabled {
   opacity: 0.35;
 }
-.surface-workspace .sfw-toolbar-more {
+.surface-workspace .sfw-view-more {
   display: none;
 }
-/* The vector canvas's own toolbar, placed into the top bar in the Stamp's Vector mode. */
-.surface-workspace .sfw-toolbar .se-toolbar-wrap {
+.surface-workspace .sfw-zoom-slot,
+.surface-workspace .sfw-view-actions .se-zoom-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+}
+/* The vector canvas's own toolbar, placed into the header in the Stamp's Vector mode. */
+.surface-workspace .sfw-view-actions .se-toolbar-wrap {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -1528,7 +1762,7 @@
   background: none;
   min-width: 0;
 }
-.surface-workspace .sfw-toolbar .se-drawing-tools {
+.surface-workspace .sfw-view-actions .se-drawing-tools {
   display: flex;
   flex-wrap: nowrap;
   align-items: center;
@@ -1537,17 +1771,29 @@
   border: 0;
   background: none;
 }
-.surface-workspace .sfw-toolbar .se-drawing-tools > button:nth-child(n) {
+.surface-workspace .sfw-view-actions .se-drawing-tools > button:nth-child(n) {
   margin: 0 !important;
 }
-.surface-workspace .sfw-toolbar .se-tool-menu > summary {
+.surface-workspace .sfw-view-actions .se-tool-menu > summary {
   width: auto;
   padding: 0 10px;
 }
-.surface-workspace .sfw-toolbar .se-tool-menu > .se-menu-content {
+.surface-workspace .sfw-view-actions .se-tool-menu > .se-menu-content {
   top: calc(100% + 8px);
 }
-/* The hint that used to ride in the dock now sits quietly under the stamp's picture. */
+.surface-workspace .sfw-view-foot {
+  flex: none;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 0 14px;
+  border-top: 1px solid #ffffff08;
+  color: var(--ws-muted, #707070);
+  opacity: 0.8;
+  font-size: 9px;
+}
+/* The hint under the stamp's picture. */
 .surface-workspace .sfw-canvas-note {
   position: absolute;
   left: 50%;
@@ -1566,29 +1812,234 @@
   pointer-events: none;
   z-index: 3;
 }
-@container surface (max-width: 1080px) {
-  .surface-workspace .sfw-toolbar .sfw-tool.spare {
+@container surface (max-width: 1180px) {
+  .surface-workspace .sfw-view-actions .sfw-tool.spare {
     display: none;
   }
-  .surface-workspace .sfw-toolbar-more {
+  .surface-workspace .sfw-view-more {
     display: inline-flex;
   }
-  .surface-workspace .sfw-toolbar-note:not(:last-of-type) {
+}
+@container surface (max-width: 980px) {
+  .surface-workspace .sfw-body.sfw-docks {
+    grid-template-columns: 240px minmax(0, 1fr) 260px;
+  }
+  .surface-workspace .sfw-body.sfw-docks.no-left {
+    grid-template-columns: minmax(0, 1fr) 260px;
+  }
+  .surface-workspace .sfw-body.sfw-docks.no-right {
+    grid-template-columns: 240px minmax(0, 1fr);
+  }
+  .surface-workspace .sfw-view-trailing .sfw-view-note {
     display: none;
   }
 }
 @container surface (max-width: 760px) {
-  .surface-workspace .sfw-toolbar {
-    height: auto;
-    min-height: 44px;
-    flex-wrap: wrap;
-    padding: 6px 12px;
+  .surface-workspace .sfw-body.sfw-docks,
+  .surface-workspace .sfw-body.sfw-docks.no-left,
+  .surface-workspace .sfw-body.sfw-docks.no-right {
+    grid-template-columns: minmax(0, 1fr);
   }
+  .surface-workspace .sfw-pane.left,
+  .surface-workspace .sfw-pane.right {
+    border-radius: 0;
+  }
+  .surface-workspace .sfw-view-heading {
+    flex-wrap: wrap;
+    padding: 8px 0;
+  }
+  .surface-workspace .sfw-view-actions {
+    flex-wrap: wrap;
+  }
+  .surface-workspace .sfw-view-trailing {
+    margin-left: 0;
+  }
+}
+
+/* ── The vector canvas (Follow-up 73): the world grid and rulers redrawn in the workspace theme. The Texture Studio's green canvas
+   colours are presentation attributes, so they are re-pointed here by value; the grid and ruler parts carry their own classes. */
+.surface-workspace .se-editor text[fill="#9cab9e"] {
+  fill: var(--ws-muted, #999);
+}
+.surface-workspace .se-editor {
+  background: var(--ws-dock, #121212);
+  border: 0;
+  border-radius: 0;
+}
+.surface-workspace .se-viewport {
+  background: var(--ws-dock, #121212);
+  background-image: none;
+}
+.surface-workspace .se-world-minor {
+  stroke: var(--ws-muted, #999);
+  stroke-opacity: 0.07;
+}
+.surface-workspace .se-world-major {
+  stroke: var(--ws-muted, #999);
+  stroke-opacity: 0.16;
+}
+.surface-workspace #se-grid path {
+  stroke: #ffb454;
+  stroke-opacity: 0.55;
+  opacity: 0.6;
+}
+.surface-workspace #se-checker rect {
+  fill: var(--ws-tab, #26262c);
+}
+.surface-workspace #se-checker path {
+  fill: var(--ws-tab-hover, #32323a);
+}
+.surface-workspace .se-canvas [stroke="#9ba89a"] {
+  stroke: var(--ws-muted, #999);
+  stroke-opacity: 0.55;
+}
+.surface-workspace .se-canvas [fill="#9cab9e"] {
+  fill: var(--ws-muted, #999);
+}
+.surface-workspace .se-canvas [stroke="#c1dcab"],
+.surface-workspace .se-canvas [stroke="#c5ddb0"],
+.surface-workspace .se-canvas [stroke="#cfe5bb"],
+.surface-workspace .se-canvas [stroke="#b9d6a8"],
+.surface-workspace .se-canvas [stroke="#c7ddaf"] {
+  stroke: #ffb454;
+}
+.surface-workspace .se-canvas [stroke="#b9d6a6"] {
+  stroke: #ffb454;
+  stroke-opacity: 0.45;
+}
+.surface-workspace .se-canvas [fill="#d4e8c0"],
+.surface-workspace .se-canvas [fill="#e0efca"],
+.surface-workspace .se-canvas [fill="#edffd6"] {
+  fill: #f2f2f2;
+}
+.surface-workspace .se-canvas [stroke="#28382b"],
+.surface-workspace .se-canvas [stroke="#334437"],
+.surface-workspace .se-canvas [stroke="#d8ebc3"],
+.surface-workspace .se-canvas [stroke="#d4e9bd"] {
+  stroke: #ffb454;
+}
+.surface-workspace .se-canvas [fill="#25372c"],
+.surface-workspace .se-canvas [fill="#222f28"] {
+  fill: var(--ws-dock, #121212);
+}
+.surface-workspace .se-canvas [stroke="#b5d69b"] {
+  stroke: #ffb454;
+}
+.surface-workspace .se-canvas [fill="#b5d69b"] {
+  fill: #ffb454;
+  fill-opacity: 0.08;
+}
+.surface-workspace .se-canvas:focus-visible {
+  outline: 1px solid #ffb45466;
+}
+/* Rulers: a strip in the theme's darkest tone, labelled ticks with finer ticks between, the tile's extent and the selection's span. */
+.surface-workspace .se-ruler,
+.surface-workspace .se-ruler-corner {
+  background: var(--ws-strip, #0a0a0a);
+  color: var(--ws-muted, #8a8a8a);
+  border-color: #ffffff0d;
+  font:
+    8px "DM Sans",
+    sans-serif;
+  font-variant-numeric: tabular-nums;
+  z-index: 2;
+}
+.surface-workspace .se-ruler-x {
+  height: 20px;
+  border-bottom: 1px solid #ffffff0d;
+}
+.surface-workspace .se-ruler-y {
+  width: 22px;
+  top: 20px;
+  border-right: 1px solid #ffffff0d;
+}
+.surface-workspace .se-ruler-corner {
+  width: 22px;
+  height: 20px;
+  border-radius: 0;
+  border-right: 1px solid #ffffff0d;
+  border-bottom: 1px solid #ffffff0d;
+  opacity: 1;
+}
+.surface-workspace .se-ruler-x span {
+  top: 0;
+  height: 20px;
+  padding: 2px 0 0 4px;
+  border-left: 1px solid color-mix(in srgb, var(--ws-muted, #999) 45%, transparent);
+  line-height: 10px;
+  opacity: 0.85;
+}
+.surface-workspace .se-ruler-y span {
+  width: 22px;
+  transform: none;
+  padding: 3px 0 0 3px;
+  border-top: 1px solid color-mix(in srgb, var(--ws-muted, #999) 45%, transparent);
+  font-size: 7px;
+  line-height: 8px;
+  opacity: 0.85;
+}
+.surface-workspace .se-ruler-minor {
+  position: absolute;
+  background: color-mix(in srgb, var(--ws-muted, #999) 35%, transparent);
+}
+.surface-workspace .se-ruler-x .se-ruler-minor {
+  bottom: 0;
+  width: 1px;
+  height: 5px;
+}
+.surface-workspace .se-ruler-y .se-ruler-minor {
+  right: 0;
+  height: 1px;
+  width: 5px;
+}
+.surface-workspace .se-ruler-extent,
+.surface-workspace .se-ruler-selection {
+  position: absolute;
+  pointer-events: none;
+}
+.surface-workspace .se-ruler-x .se-ruler-extent {
+  top: 0;
+  bottom: 0;
+  background: color-mix(in srgb, var(--ws-muted, #999) 7%, transparent);
+  box-shadow:
+    inset 1px 0 color-mix(in srgb, var(--ws-muted, #999) 50%, transparent),
+    inset -1px 0 color-mix(in srgb, var(--ws-muted, #999) 50%, transparent);
+}
+.surface-workspace .se-ruler-y .se-ruler-extent {
+  left: 0;
+  right: 0;
+  background: color-mix(in srgb, var(--ws-muted, #999) 7%, transparent);
+  box-shadow:
+    inset 0 1px color-mix(in srgb, var(--ws-muted, #999) 50%, transparent),
+    inset 0 -1px color-mix(in srgb, var(--ws-muted, #999) 50%, transparent);
+}
+.surface-workspace .se-ruler-x .se-ruler-selection {
+  bottom: 0;
+  height: 3px;
+  background: #ffb454;
+  opacity: 0.85;
+}
+.surface-workspace .se-ruler-y .se-ruler-selection {
+  right: 0;
+  width: 3px;
+  background: #ffb454;
+  opacity: 0.85;
+}
+.surface-workspace .se-canvas-status {
+  background: var(--ws-dock, #121212);
+  border-top: 1px solid #ffffff08;
+  color: var(--ws-muted, #707070);
+}
+.surface-workspace .se-canvas-status small {
+  color: inherit;
+}
+.surface-workspace .se-canvas-status i {
+  background: #ffffff14;
 }
 
 /* Layer stacks — the Outliner's heading, count cards, search, rows and footer (Editor.css .outliner-*), at the rail's width. */
 .surface-workspace .ao-rail {
-  background: #151515;
+  background: var(--ws-dock, #121212);
 }
 .surface-workspace .ao-outliner {
   flex: 1;
@@ -1610,7 +2061,7 @@
   font-size: 20px;
   font-weight: 300;
   letter-spacing: 1px;
-  color: #f0f0f0;
+  color: var(--ws-text, #f0f0f0);
   white-space: nowrap;
 }
 .surface-workspace .ao-heading > small {
@@ -1814,20 +2265,20 @@
   cursor: default;
   font-size: 12px;
   white-space: nowrap;
-  color: #bababa;
+  color: color-mix(in srgb, var(--ws-text, #f0f0f0) 76%, transparent);
 }
 .surface-workspace .ao-row:focus-visible {
   border-color: #555;
 }
 .surface-workspace .ao-row.chosen {
-  background: #262626;
-  border-color: #444;
-  color: #f0f0f0;
+  background: color-mix(in srgb, var(--ws-text, #f0f0f0) 10%, var(--ws-dock, #121212));
+  border-color: color-mix(in srgb, var(--ws-text, #f0f0f0) 22%, var(--ws-dock, #121212));
+  color: var(--ws-text, #f0f0f0);
 }
 .surface-workspace .ao-row.picked {
-  background: #222;
-  border-color: #3a3a3a;
-  color: #e6e6e6;
+  background: color-mix(in srgb, var(--ws-text, #f0f0f0) 7%, var(--ws-dock, #121212));
+  border-color: color-mix(in srgb, var(--ws-text, #f0f0f0) 17%, var(--ws-dock, #121212));
+  color: var(--ws-text, #e6e6e6);
 }
 .surface-workspace .ao-row.chosen::before,
 .surface-workspace .ao-row.picked::before {
@@ -1843,7 +2294,7 @@
   background: #ffb45470;
 }
 .surface-workspace .ao-row:hover:not(.chosen) {
-  background: #1c1c1c;
+  background: color-mix(in srgb, var(--ws-text, #f0f0f0) 5%, var(--ws-dock, #121212));
 }
 .surface-workspace .ao-row.hidden-row > :not(.ao-visibility) {
   opacity: 0.4;
@@ -1908,7 +2359,7 @@
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-  color: #747474;
+  color: var(--ws-muted, #747474);
   font-size: 8px;
   line-height: 10px;
   text-transform: capitalize;
