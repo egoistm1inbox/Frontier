@@ -2,7 +2,10 @@ import React from "react";
 
 // Solid silhouettes for inspector actions; intentionally separate from the
 // native outliner artwork and thin graph annotations.
-export function QuickSymbol(Label, Context = "", Fallback = "visible") {
+// Follow-up 65: an icon named by the caller wins when it is drawn here; otherwise the label picks one, and a label with no picture gets
+// the switch glyph rather than the eye (the eye only means visibility).
+export function QuickSymbol(Label, Context = "", Fallback = null) {
+  if (Fallback && ActionIconNames.has(Fallback)) return Fallback;
   const Named = {
     Visible: "visible",
     "Star field": "stars",
@@ -24,6 +27,24 @@ export function QuickSymbol(Label, Context = "", Fallback = "visible") {
     Anamorphic: "anamorphic",
     Streaks: "streaks",
     Starburst: "starburst",
+    "Cast shadows": "shadow",
+    GI: "gi",
+    Physics: "collision",
+    Locked: "lock",
+    "Manual direction": "compass",
+    "Line at civil only": "horizon",
+    "Orbital view": "atmosphere",
+    "Has atmosphere": "atmosphere",
+    "Milky Way": "galaxy",
+    "Zodiacal light": "zodiac",
+    "Bright star catalogue": "stars",
+    Tripod: "tripod",
+    Vignette: "vignette",
+    "Depth of field": "focus",
+    "Location lag": "motion",
+    "Rotation lag": "orbit",
+    "Cloud interaction": "cloud",
+    "Fog interaction": "fog",
   };
   if (Label === "Enabled")
     return (
@@ -37,10 +58,19 @@ export function QuickSymbol(Label, Context = "", Fallback = "visible") {
         precipitation: "rain",
         rainbow: "rainbow",
         "environment-light": "sunlight",
+        flare: "starburst",
+        "god-rays": "sunlight",
+        "motion-blur": "motion",
       }[Context] || "visible"
     );
-  return Named[Label] || Fallback;
+  return Named[Label] || "toggle";
 }
+export const ActionIconNames = new Set([
+  "lock", "shadow", "gi", "visible", "sunlight", "disc", "stars", "twinkle", "cycle", "motion", "pause", "orbit", "wind", "shear", "cloud",
+  "cloud-spawn", "rain", "collision", "fog", "rainbow", "band", "bake", "image", "anamorphic", "streaks", "starburst", "construct", "focus",
+  "split", "diagnostics", "edit", "simulate", "play", "settings", "compass", "horizon", "atmosphere", "galaxy", "zodiac", "tripod",
+  "vignette", "toggle",
+]);
 
 export default function ActionIcon({ Name, Size = 24 }) {
   let Drawing;
@@ -316,6 +346,70 @@ export default function ActionIcon({ Name, Size = 24 }) {
           fillRule="evenodd"
           d="m9 1 6 0 1 4 3-1 3 5-3 3 3 3-3 5-3-1-1 4H9l-1-4-3 1-3-5 3-3-3-3 3-5 3 1Zm3 6a5 5 0 1 0 0 10 5 5 0 0 0 0-10Z"
         />
+      );
+      break;
+    case "compass":
+      Drawing = (
+        <>
+          <path fillRule="evenodd" d="M12 1a11 11 0 1 1 0 22 11 11 0 0 1 0-22Zm0 2.5a8.5 8.5 0 1 0 0 17 8.5 8.5 0 0 0 0-17Z" />
+          <path d="m12 5 2.6 7H9.4Z" />
+          <path d="m12 19-2.6-7h5.2Z" opacity=".4" />
+        </>
+      );
+      break;
+    case "horizon":
+      Drawing = (
+        <>
+          <path d="M5 15a7 7 0 0 1 14 0Z" />
+          <rect x="1" y="16.5" width="22" height="2.5" rx="1.2" />
+          <rect x="4" y="20.5" width="16" height="2" rx="1" opacity=".4" />
+          <path d="M11 2h2v4h-2zM3.5 6.6l1.4-1.4 2.8 2.8-1.4 1.4zM16.3 8l2.8-2.8 1.4 1.4-2.8 2.8z" opacity=".6" />
+        </>
+      );
+      break;
+    case "atmosphere":
+      Drawing = (
+        <>
+          <circle cx="12" cy="12" r="6.5" />
+          <path fillRule="evenodd" d="M12 1a11 11 0 1 1 0 22 11 11 0 0 1 0-22Zm0 2a9 9 0 1 0 0 18 9 9 0 0 0 0-18Z" opacity=".45" />
+        </>
+      );
+      break;
+    case "galaxy":
+      Drawing = (
+        <>
+          <ellipse cx="12" cy="12" rx="11" ry="4.5" transform="rotate(-25 12 12)" opacity=".4" />
+          <ellipse cx="12" cy="12" rx="6" ry="2.6" transform="rotate(-25 12 12)" />
+          <circle cx="12" cy="12" r="2.4" />
+        </>
+      );
+      break;
+    case "zodiac":
+      Drawing = (
+        <>
+          <path d="M12 3 20 20H4Z" opacity=".45" />
+          <path d="M12 9 16 20H8Z" />
+          <rect x="1" y="20" width="22" height="2.5" rx="1.2" />
+        </>
+      );
+      break;
+    case "tripod":
+      Drawing = (
+        <>
+          <rect x="5" y="2" width="14" height="8" rx="2" />
+          <path d="M11 10h2v3l6 9h-2.4L12 15l-4.6 7H5l6-9Z" />
+          <path d="M11 13h2v9h-2z" opacity=".5" />
+        </>
+      );
+      break;
+    case "vignette":
+      Drawing = (
+        <path fillRule="evenodd" d="M2 4h20v16H2Zm10 2.5c-4.4 0-7.5 2.5-7.5 5.5s3.1 5.5 7.5 5.5 7.5-2.5 7.5-5.5-3.1-5.5-7.5-5.5Z" />
+      );
+      break;
+    case "toggle":
+      Drawing = (
+        <path fillRule="evenodd" d="M7 6h10a6 6 0 0 1 0 12H7A6 6 0 0 1 7 6Zm10 2.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Z" />
       );
       break;
     default:

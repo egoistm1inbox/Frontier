@@ -293,12 +293,6 @@
   width: 24px;
   height: 24px;
 }
-/* A mesh row's render (the body, a tyre or a rim) sits on a light studio tile so dark rubber reads against the panel. */
-.vcp-row-render {
-  border-radius: 6px;
-  background: radial-gradient(circle at 50% 38%, #f1f2f4, #b9bcc2);
-  box-shadow: inset 0 0 0 1px #ffffff22;
-}
 .vcp-row-text {
   min-width: 0;
 }

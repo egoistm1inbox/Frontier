@@ -30,7 +30,12 @@ Page.on("requestfailed", (Request) => {
 });
 const Open = async (Id) => {
   await Page.goto(Address + "?inspect=" + Id);
-  await Page.locator(".vcp-details > [data-panel]").waitFor();
+  // Follow-up 65: a component link selects the vehicle; the Component Viewer opens from the inspector's button.
+  // (The button is on the Model and Drive pages; it is pressed wherever it is.)
+  await Page.locator("[data-open-component-viewer]").first().waitFor({ state: "attached", timeout: 40000 });
+  await Page.waitForTimeout(800);
+  await Page.locator("[data-open-component-viewer]").first().evaluate((Button) => Button.click());
+  await Page.locator(".vcp-details > [data-panel]").waitFor({ timeout: 30000 });
   await Page.waitForTimeout(250);
 };
 const Saved = () =>

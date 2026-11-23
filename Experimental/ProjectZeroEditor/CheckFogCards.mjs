@@ -3,6 +3,7 @@ import path from "node:path";
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
+import { PickTab } from "./TabReveal.mjs";
 
 const Folder = path.dirname(fileURLToPath(import.meta.url));
 const Require = createRequire(
@@ -43,7 +44,8 @@ try {
   const Models = [
     {
       Id: "height-fog",
-      Cards: ["Fog layer", "Density by altitude", "Light in the fog"],
+      // Follow-up 65: Overview (the layer, Quick controls, Tags, Notes), Density, Light.
+      Cards: ["Fog layer", "Quick controls", "Tags", "Notes", "Density by altitude", "Light in the fog"],
       Fields: [
         ["Density", "0", "0.2"],
         ["Falloff Height", "10", "3000"],
@@ -53,7 +55,7 @@ try {
     },
     {
       Id: "aerial-fog",
-      Cards: ["Aerial perspective", "Spectral transmission"],
+      Cards: ["Aerial perspective", "Quick controls", "Tags", "Notes", "Spectral transmission"],
       Fields: [
         ["Density", "0", "4"],
         ["Start", "0", "2000"],
@@ -63,7 +65,7 @@ try {
     },
     {
       Id: "local-fog",
-      Cards: ["Fog settings", "Visibility through fog", "Medium", "Fog volume shape"],
+      Cards: ["Visibility through fog", "Quick controls", "Tags", "Notes", "Medium", "Fog volume shape"],
       Fields: [
         ["Density", "0", "4"],
         ["Coverage", "0", "1"],
@@ -107,12 +109,14 @@ try {
       Model.Id === "height-fog" ? 1 : 0,
     );
     if (Model.Id === "local-fog") {
+      await PickTab(Page, "local-fog:medium");
       const Beam = Page.locator('[data-card="Medium"] .fog-shared-beam');
       assert.equal(await Beam.count(), 1);
       const BeamBefore = await Beam.locator("svg").innerHTML();
       await Page.getByLabel("Anisotropy value", { exact: true }).fill("0.8");
       await Page.getByLabel("Anisotropy value", { exact: true }).press("Tab");
       assert.notEqual(await Beam.locator("svg").innerHTML(), BeamBefore, "Anisotropy must repaint the chamber");
+      await PickTab(Page, "local-fog:overview");
     } else assert.equal(await Page.locator(".fog-shared-beam").count(), 0);
     const Probe = Page.getByRole("slider", { name: Model.Probe, exact: true }),
       ProbeBefore = await Probe.locator("circle").first().getAttribute(Model.Id === "height-fog" ? "cy" : "cx");
@@ -132,6 +136,7 @@ try {
   Checks.push("Height Fog layer handle edits Falloff Height");
 
   await Open("height-fog");
+  await PickTab(Page, "height-fog:density");
   const DensityProfile = Page.getByRole("img", {
     name: "Interactive Height Fog density profile",
   });
@@ -147,6 +152,7 @@ try {
   Checks.push("Density by altitude retains its interactive profile; Light in the fog holds the colour control");
 
   await Open("aerial-fog");
+  await PickTab(Page, "aerial-fog:spectrum");
   const Spectrum = Page.getByRole("slider", {
       name: "Aerial fog spectrum",
       exact: true,

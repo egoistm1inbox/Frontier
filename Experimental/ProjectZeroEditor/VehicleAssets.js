@@ -323,8 +323,9 @@ export const VehicleIcon = (Id, Size = 96) => ModelIcon(VehicleAsset(Id), Size, 
 // ControlVehicle meshes (not drawn icons): the body three-quarter from the front, a tyre and a rim turned to show their face.
 export const VehiclePartIcons = [
   ["Body", "vehicle-component-body", { Yaw: -128, Pitch: 16 }],
-  ["Tyre", "vehicle-component-tyre", { Yaw: -24, Pitch: 10 }],
-  ["Rim", "vehicle-component-rim", { Yaw: -24, Pitch: 10 }],
+  // Follow-up 65: on a transparent background; the dark rubber and alloy are exposed brighter so they read on the dark panel.
+  ["Tyre", "vehicle-component-tyre", { Yaw: -24, Pitch: 10, Exposure: 4.2 }],
+  ["Rim", "vehicle-component-rim", { Yaw: -24, Pitch: 10, Exposure: 3.4 }],
 ];
 export function VehiclePartIcon(Part, Size = 96) {
   const [, , View] = VehiclePartIcons.find(([Each]) => Each === Part) || VehiclePartIcons[0];

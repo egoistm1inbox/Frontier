@@ -431,6 +431,11 @@ function OutlinerMetadata(Row, Record = {}, Rows = []) {
 }
 
 const Saved = Restore();
+// Follow-up 65: the outliner opens folded, with only the World folder's items showing. A scene saved before this revision folds the
+// same way once; afterwards the folding the user leaves is kept.
+const OutlinerRevision = 1;
+const FoldedOutliner = (Rows) =>
+  Object.fromEntries([...new Set(Rows.map((Row) => Row.Parent).filter(Boolean))].filter((Id) => Id !== "world").map((Id) => [Id, true]));
 const SceneRows = Saved.Rows ? ConsolidateAtmosphere(Saved.Rows) : undefined;
 const SkyAlias = !SceneRows?.some((Row) => Row.Id === "sky");
 Saved.Values = NormalizeHeightFogValues(
@@ -520,7 +525,9 @@ function App() {
       return Restored;
     }),
     [Hidden, AssignHidden] = useState({ ...Saved.Hidden, camera: false }),
-    [Collapsed, Collapse] = useState(Saved.Collapsed || {}),
+    [Collapsed, Collapse] = useState(() =>
+      Saved.OutlinerRevision === OutlinerRevision && Saved.Collapsed ? Saved.Collapsed : FoldedOutliner(Saved.Rows || InitialRows),
+    ),
     [Query, Search] = useState(""),
     [Filters, Filter] = useState([]),
     [Menu, ShowMenu] = useState(null),
@@ -980,6 +987,7 @@ function App() {
           Values,
           Hidden,
           Collapsed,
+          OutlinerRevision,
           Settings,
           Name,
         }),
@@ -1097,14 +1105,35 @@ function App() {
   }, [Selected]);
   const PatchRow = (Id, Patch) => AssignRows((Previous) => Previous.map((Row) => (Row.Id === Id ? { ...Row, ...Patch } : Row)));
   const Workspace = WorkspaceState && WorkspaceState.Id === Selected ? WorkspaceState : null;
-  // Follow-up 62: the Controlled Vehicle's components are inspected in its Component Viewer panel, not here. Its inspector opens the
-  // panel; choosing one of its components anywhere (outliner, search, a link, ?inspect=) selects the vehicle and opens the panel on it.
+  // Follow-up 62: the Controlled Vehicle's components are inspected in its Component Viewer panel, not here. Follow-up 65: the panel
+  // opens only from the vehicle inspector's Component Viewer button; choosing one of its components elsewhere (a search, a link,
+  // ?inspect=) selects the vehicle, and the button then opens the panel on that component.
+  const VehiclePanelPending = useRef(null);
   const [VehiclePanelFocus, FocusVehiclePanel] = useState(null);
-  const OpenVehiclePanel = (Id = VehicleOwner) => FocusVehiclePanel({ Id, Stamp: Date.now() });
+  const OpenVehiclePanel = (Id = VehiclePanelPending.current || VehicleOwner) => {
+    VehiclePanelPending.current = null;
+    FocusVehiclePanel({ Id, Stamp: Date.now() });
+  };
   useEffect(() => {
     if (Subject?.Panel !== VehiclePanel || !InVehicleTree(Rows, Subject)) return;
-    OpenVehiclePanel(Subject.Id);
+    VehiclePanelPending.current = Subject.Id;
     Select(VehicleOwner);
+  }, [Selected]);
+  // The selected row is always in view: its folders unfold when it is chosen (from the viewport, a link, search or ?inspect=). The
+  // selection a scene reopens with does not unfold anything, so the outliner still starts with the World folder alone.
+  const FirstSelection = useRef(!new URLSearchParams(location.search).get("inspect"));
+  useEffect(() => {
+    if (FirstSelection.current) {
+      FirstSelection.current = false;
+      return;
+    }
+    const Folders = [];
+    let Row = SceneInventory.ById.get(Selected);
+    while (Row?.Parent && !Folders.includes(Row.Parent)) {
+      Folders.push(Row.Parent);
+      Row = SceneInventory.ById.get(Row.Parent);
+    }
+    if (Folders.some((Id) => Collapsed[Id])) Collapse((Previous) => ({ ...Previous, ...Object.fromEntries(Folders.map((Id) => [Id, false])) }));
   }, [Selected]);
   // Follow-up 63: components hang in a tree. A new one goes in after everything already under its holder; a removed one's own
   // components move up to its holder, as in the Component Viewer.
@@ -1147,11 +1176,14 @@ function App() {
     () => FolderInventory(Rows, null, Hidden),
     [Rows, Hidden],
   );
-  const HasChildren = (Id) => SceneInventory.Children.has(Id);
+  // Follow-up 65: the Controlled Vehicle's components live in its Component Viewer only; the scene outliner lists the vehicle alone.
+  const OutlinerShows = (Row) => !(Row.Panel === VehiclePanel && InVehicleTree(Rows, Row));
+  const ShownUnder = (Id) => (SceneInventory.Children.get(Id) || []).filter(OutlinerShows);
+  const HasChildren = (Id) => ShownUnder(Id).length > 0;
   const DisplayRows = () => {
     const Result = [];
     const Seen = new Set(),
-      Stack = [...(SceneInventory.Children.get(null) || [])]
+      Stack = [...ShownUnder(null)]
         .reverse()
         .map((Row) => ({ Row, Depth: 0 }));
     while (Stack.length) {
@@ -1188,7 +1220,7 @@ function App() {
           ));
       if (Match) Result.push({ ...Row, Depth });
       if (!Collapsed[Row.Id] || Query || Filters.length) {
-        const Children = SceneInventory.Children.get(Row.Id) || [];
+        const Children = ShownUnder(Row.Id);
         for (let I = Children.length - 1; I >= 0; I--)
           Stack.push({ Row: Children[I], Depth: Depth + 1 });
       }
@@ -2051,6 +2083,27 @@ function App() {
               ))}
             </select>
           </label>
+          {/* Follow-up 65: the Component Viewer's centre-of-mass marks and socket gizmos, switched here with the other debug views. */}
+          <label className="viewport-setting-toggle" title="Each part's centre of mass and the whole vehicle's, in the Component Viewer">
+            Centre of mass debug
+            <input
+              type="checkbox"
+              aria-label="Centre of mass debug"
+              data-debug-centres
+              checked={Settings["Centre of mass debug"] !== false}
+              onChange={(Event) => Assign("Centre of mass debug", Event.target.checked)}
+            />
+          </label>
+          <label className="viewport-setting-toggle" title="The socket gizmos (hinges, springs, the tow dock), in the Component Viewer">
+            Socket debug
+            <input
+              type="checkbox"
+              aria-label="Socket debug"
+              data-debug-sockets
+              checked={Settings["Socket debug"] !== false}
+              onChange={(Event) => Assign("Socket debug", Event.target.checked)}
+            />
+          </label>
           <label className="viewport-setting-toggle" title="📝 Not in the Project Zero specification · kept for you to decide">
             📝 HiZ overlay
             <input
@@ -2280,11 +2333,7 @@ function App() {
                 WindOpener.current = document.activeElement;
                 EditWind(Selected);
               }}
-              ReferenceDetailCards={
-                Subject.Panel === "light" && !Subject.ReferenceOnly
-                  ? ReferenceCards("details")
-                  : null
-              }
+              ReferenceDetailCards={Subject.Panel === "light" ? ReferenceCards("details") : null}
               CloudCoverageCards={
                 ["clouds", "local-cloud"].includes(Subject.Panel)
                   ? ReferenceCards("coverage")
@@ -2294,11 +2343,7 @@ function App() {
                 ["sun", "wind", "clouds", "local-cloud", "light"].includes(
                   Subject.Panel,
                 )
-                  ? ReferenceCards(
-                      Subject.Panel === "light" && !Subject.ReferenceOnly
-                        ? "summary"
-                        : undefined,
-                    )
+                  ? ReferenceCards(Subject.Panel === "light" ? "summary" : undefined)
                   : null
               }
             />
@@ -2517,6 +2562,11 @@ function App() {
           Details={VehicleDetails}
           Add={AddVehicleComponent}
           Remove={RemoveVehicleComponent}
+          Debug={{
+            Centres: Settings["Centre of mass debug"] !== false,
+            Sockets: Settings["Socket debug"] !== false,
+            Set: (Key, On) => Assign(Key === "Centres" ? "Centre of mass debug" : "Socket debug", On),
+          }}
         />
       )}
       {ShaderFloating && (

@@ -8,7 +8,7 @@ import path from "node:path";
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
-import { PickTab } from "./TabReveal.mjs";
+import { PickTab, ReferenceSheet } from "./TabReveal.mjs";
 const Folder = path.dirname(fileURLToPath(import.meta.url));
 const Require = createRequire(
   process.env.FRONTIER_BROWSER_PACKAGE ||
@@ -56,17 +56,31 @@ async function Open(Id, Wide = false) {
   );
   // A Controlled Vehicle component opens in its Component Viewer panel (Follow-up 62), whose Details come first in the page.
   // (The workspace Inspector behind it is hidden then, so wait for whichever is shown.)
-  await Page.locator(".inspector-scroll > [data-panel]:visible").first().waitFor();
+  // (Heavy rows such as God Rays and the Controlled Vehicle can take longer than the default under the software renderer.)
+  await Page.locator(".inspector-scroll > [data-panel]:visible").first().waitFor({ timeout: 40000 });
+  // Follow-up 65: a component link selects the vehicle; its Component Viewer opens only from the inspector's button.
+  const Shown = await Page.evaluate(() => document.querySelector(".outliner-row.selected")?.dataset.outlinerRow);
+  if (Shown && Shown !== Id && (await Page.locator("[data-open-component-viewer]").count())) {
+    // (The button is on the Model and Drive pages, so it is pressed wherever it is.)
+    await Page.locator("[data-open-component-viewer]").first().evaluate((Button) => Button.click());
+    await Page.locator(`.vcp[data-vcp-selected="${Id}"]`).waitFor({ timeout: 40000 });
+    await Page.locator(".inspector-scroll > [data-panel]:visible").first().waitFor({ timeout: 40000 });
+  }
   for (const Iframe of await Page.locator(
     ".reference-inspector-copy iframe",
   ).all())
-    await Iframe.contentFrame().locator(".mpanel > *").first().waitFor();
+    // (A sheet on a shut page is loaded but not shown, Follow-up 65.)
+    await Iframe.contentFrame().locator(".mpanel > *").first().waitFor({ state: "attached" });
   await Page.waitForTimeout(150);
 }
 // Inspectors with lettered tabs (InspectorTabs.jsx): opens the tab holding an entry, returning its place among the tabs (or -1).
 async function Reveal(Entry) {
-  if (typeof Entry !== "string") return -1;
-  const Tab = await Node(Entry).evaluate((Each) => Each.closest("[data-tab-page]")?.dataset.tabPage || null);
+  // An entry inside a reference sheet is found through the sheet's frame on the page (Follow-up 65: those sit on pages too).
+  const Host =
+    typeof Entry === "string"
+      ? Node(Entry)
+      : Page.locator(Entry[0] ? `[data-reference-slice="${Entry[0]}"] iframe` : 'iframe[title^="Reference inspector"]').first();
+  const Tab = await Host.evaluate((Each) => Each.closest("[data-tab-page]")?.dataset.tabPage || null);
   if (!Tab) return -1;
   await PickTab(Page, Tab);
   return Page.locator(`[data-tab-page="${Tab}"]`).evaluate((Each) => [...Each.parentElement.querySelectorAll(":scope > [data-tab-page]")].indexOf(Each));
@@ -88,6 +102,7 @@ async function Sequence(Name, Entries) {
     Bottom = Rect.y + Rect.height;
   }
 }
+const TagsAndNotes = [Card("Quick controls"), Card("Tags"), Card("Notes")];
 const Sections = {
   group: [
     ".collection-total",
@@ -98,7 +113,9 @@ const Sections = {
   ],
   // Showcase primitives: the cards come first (Follow-up 59: the category navigation no longer sits at the top); quick controls, then Notes holding the Purpose.
   geometry: [".pi-quick", ".pi-purpose"],
-  post: [".entity-capabilities"],
+  // Follow-up 65: every paged inspector's first page closes with Quick controls, Tags and Notes (the closing cards); the pages then
+  // run in their order.
+  post: [...TagsAndNotes, Card("Exposure")],
   // Components (object: Mass, Rigid Body, Collision; camera: Render Engine): the owner link, then the cards.
   "object-component": [".oc-owner", ".pi-component [data-card], .rc-cards [data-card]"],
   ...Object.fromEntries(
@@ -112,36 +129,52 @@ const Sections = {
       "scanlines",
       "sharpen",
       "environment-light",
-    ].map((Panel) => [Panel, [".effect-study", ".entity-capabilities"]]),
+    ].map((Panel) => [Panel, [".effect-study", ...TagsAndNotes]]),
   ),
-  camera: [Card("Lens + field of view"), Card("Aperture study")],
-  // Follow-up 48: God Rays (Project Zero specification §7), a generic inspector.
-  "god-rays": [".entity-capabilities", "details.generic-card"],
+  camera: [Card("Lens + field of view"), ...TagsAndNotes, Card("Aperture study"), Card("Camera body"), Card("Sensor")],
+  // Follow-up 48: God Rays (Project Zero specification §7), sheet-driven.
+  "god-rays": [...TagsAndNotes, Card("Shafts"), Card("March"), Card("Interaction")],
   atmosphere: [
-    ".atmosphere-lab-cards",
-    Card("Atmosphere settings"),
+    Card("Atmosphere overview"),
+    ...TagsAndNotes,
     Card("Atmospheric scattering"),
-    Card("Native atmosphere controls"),
+    Card("Aerosol haze"),
+    Card("Density falloff"),
+    Card("Planet and air"),
+    Card("Sky colour"),
+    Card("Ground reflectance"),
+    Card("Atmosphere from space"),
     Card("Atmosphere bake"),
     Card("Baked atmosphere"),
   ],
   sun: [
     Card("Sun now"),
-    ".sun-tiles",
-    ".sun-properties",
+    Card("Quick controls"),
+    Card("Sun direction"),
+    Card("Sunlight intensity"),
+    Card("Tags"),
+    Card("Notes"),
+    Card("Temperature"),
+    Card("Sun disc"),
+    Card("Daylight cycle"),
+    Card("Dynamic settings"),
+    Card("Observer and date"),
     Card("Sun lighting bake"),
   ],
   flare: [
     Card("Flare composite"),
-    Card("Flare settings"),
+    Card("Quick controls"),
     Card("Flare source"),
-    Card("Legacy preset settings"),
+    Card("Tags"),
+    Card("Notes"),
+    Card("Flare layers"),
+    Card("Halo & optical response"),
     Card("Lens flare image"),
   ],
-  moon: [Card("Lunar phase"), Card("Moon settings"), Card("Moon catalogue")],
+  moon: [Card("Moon slot"), Card("Lunar phase"), ...TagsAndNotes, Card("Moon catalogue"), Card("Moonlight, size and atmosphere"), Card("Lunar position")],
   stars: [
     Card("Star field"),
-    Card("Stars settings"),
+    ...TagsAndNotes,
     Card("Twinkle"),
     Card("Renderer scale"),
     Card("Star field bake"),
@@ -150,37 +183,40 @@ const Sections = {
     [null, ".wf-trace"],
     [null, ".mp-rail"],
     [null, ".mp-duo"],
-    Card("Wind controls"),
+    ...TagsAndNotes,
+    Card("Atmospheric modifiers · native draft"),
   ],
-  "height-fog": [Card("Fog layer"), Card("Density by altitude")],
-  "aerial-fog": [Card("Aerial perspective"), Card("Spectral transmission")],
-  "local-fog": [
-    Card("Fog settings"),
-    Card("Visibility through fog"),
-    Card("Medium"),
-  ],
+  "height-fog": [Card("Fog layer"), ...TagsAndNotes, Card("Density by altitude"), Card("Light in the fog")],
+  "aerial-fog": [Card("Aerial perspective"), ...TagsAndNotes, Card("Spectral transmission")],
+  "local-fog": [Card("Visibility through fog"), ...TagsAndNotes, Card("Medium"), Card("Fog volume shape")],
   clouds: [
-    ["summary", ".cl-hero"],
-    ["summary", ".mp-duo"],
-    Card("Cloud settings"),
+    [null, ".cl-hero"],
+    [null, ".mp-duo"],
+    ...TagsAndNotes,
     ".cloud-coverage-replacement",
     Card("Cloud base"),
+    Card("Cloud body"),
+    Card("Cloud wind"),
+    Card("Quality"),
   ],
   "local-cloud": [
-    ["summary", ".cl-hero"],
-    ["summary", ".mp-duo"],
-    Card("Cloud settings"),
+    [null, ".cl-hero"],
+    [null, ".mp-duo"],
+    ...TagsAndNotes,
     ".cloud-coverage-replacement",
     Card("Cloud base"),
+    Card("Local bounds"),
+    Card("Cloud body"),
   ],
   precipitation: [
     Card("Precipitation type"),
-    Card("Emission + collision"),
+    ...TagsAndNotes,
     Card("Fall + density"),
+    Card("Simulation + settling"),
   ],
   rainbow: [
     Card("Optical preview"),
-    Card("Visibility"),
+    ...TagsAndNotes,
     Card("Bow response"),
     Card("Bake / image"),
   ],
@@ -219,13 +255,9 @@ try {
           [null, ".lp-preview .lp-readings"],
           [null, ".lp-preview > .lp-output"],
         ]);
-        const Controls = Row.ReferenceOnly ? Frame() : Frame("details");
-        if (!Row.ReferenceOnly)
-          await Sequence(Row.Id, [
-            ["summary", ".lp-participation"],
-            ".entity-capabilities",
-            ["details", ".lp-shape"],
-          ]);
+        const Controls = Frame("details");
+        // Follow-up 65: Overview (the summary, then Quick controls, Tags, Notes), then Source (the light's source and controls).
+        await Sequence(Row.Id, [["summary", ".lp-participation"], ...TagsAndNotes, ["details", ".lp-shape"]]);
         // The analytical study sits inside the optics card's visual, with no card or header of its own.
         assert(
           (await Controls.locator(".lp-shape .lp-shape-visual > .lp-response").count()) <= 1,
@@ -242,8 +274,8 @@ try {
           assert(Shape && Transform && Transform.y >= Shape.y - 2);
         } else
           await Sequence(Row.Id, [
-            [Row.ReferenceOnly ? null : "details", ".lp-shape"],
-            [Row.ReferenceOnly ? null : "details", ".lp-transform"],
+            ["details", ".lp-shape"],
+            ["details", ".lp-transform"],
           ]);
       } else await Sequence(Row.Id, Sections[Row.Panel]);
       if (BakeCards[Row.Panel]) {
@@ -359,7 +391,8 @@ try {
     await Previous.close();
   }
   await Open("reference-fill-point", true);
-  const Table = Frame().locator(".lp-response-samples");
+  // Follow-up 65: the light's sheet sits over its Overview and Source pages; ReferenceSheet finds the slice holding each target.
+  const Table = ReferenceSheet(Page).locator(".lp-response-samples");
   assert.deepEqual(await Table.locator("tbody tr").allTextContents(), [
     "1 m10.00 lx100.0%",
     "2 m2.50 lx25.0%",
@@ -367,33 +400,33 @@ try {
     "10 m0.10 lx1.0%",
   ]);
   const Image = () =>
-    Frame()
+    ReferenceSheet(Page)
       .locator(".lp-response canvas")
       .evaluate((Canvas) => Canvas.toDataURL());
   const Before = await Image();
-  await Frame().getByLabel("Intensity value", { exact: true }).fill("50");
+  await ReferenceSheet(Page).getByLabel("Intensity value", { exact: true }).fill("50");
   await Page.waitForFunction(
     () =>
       JSON.parse(localStorage.getItem("Frontier.ProjectZeroHtml.v1")).Values[
         "reference-fill-point"
-      ].ReferenceInspector.Properties.intensity === 50,
+      ]?.ReferenceInspector?.Properties?.intensity === 50,
   );
-  await Frame().getByLabel("Decay exponent value", { exact: true }).fill("1");
+  await ReferenceSheet(Page).getByLabel("Decay exponent value", { exact: true }).fill("1");
   await Table.getByText("10.00 lx", { exact: true }).waitFor();
   assert.notEqual(await Image(), Before);
   await Open("reference-fill-point", true);
   await Table.getByText("10.00 lx", { exact: true }).waitFor();
-  await Frame()
+  await ReferenceSheet(Page)
     .locator(".lp-shape")
     .evaluate((Node) => Node.scrollIntoView({ block: "start" }));
   await Page.screenshot({
     path: path.join(Proof, "PointResponseExpanded.png"),
   });
-  await Page.locator('iframe[title^="Reference inspector"]').evaluate(
-    (Node) => (Node.style.width = "240px"),
+  await Page.locator('iframe[title^="Reference inspector"]').evaluateAll((Iframes) =>
+    Iframes.forEach((Iframe) => (Iframe.style.width = "240px")),
   );
   assert(
-    await Frame()
+    await ReferenceSheet(Page)
       .locator("body")
       .evaluate((Node) => Node.scrollWidth <= innerWidth),
   );

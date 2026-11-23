@@ -3161,3 +3161,131 @@ img {
   mix-blend-mode: screen;
   mix-blend-mode: plus-lighter;
 }
+
+/* Follow-up 65: the shared Quick controls, Tags and Notes cards that close every inspector's first page. A switch is lit green when on
+   and grey when off (an off switch is not an error, so it is no longer red). */
+.quick-tile.off {
+  --quick-ink: #9a9a9a;
+  --quick-tint: #6f6f6f;
+  color: #a9a9a9;
+}
+.quick-controls h3,
+.tags-card h3,
+.notes-card h3 {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.quick-count {
+  color: #8d8d8d;
+  font-size: 11px;
+  font-weight: 400;
+}
+.quick-count b {
+  color: #5bdb87;
+  font-weight: 500;
+}
+.quick-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+  gap: 10px;
+}
+.quick-grid .quick-tile {
+  height: 100px;
+}
+.quick-controls .card-foot {
+  margin: 14px 0 0;
+}
+.tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 4px 4px 11px;
+  border-radius: 99px;
+  background: #24303f;
+  color: #bcd8ff;
+  font-size: 11px;
+}
+.tag-chip button {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  min-height: 0;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: #ffffff12;
+  color: inherit;
+  font-size: 12px;
+  line-height: 1;
+}
+.tag-add input {
+  width: 92px;
+  height: 26px;
+  padding: 0 11px;
+  border-radius: 99px;
+  border: 1px dashed #464646;
+  background: transparent;
+  color: #d6d6d6;
+  font-size: 11px;
+  outline: none;
+}
+.notes-card textarea {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 84px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid #333;
+  background: #161616;
+  color: #d6d6d6;
+  font: inherit;
+  font-size: 12px;
+  resize: vertical;
+  outline: none;
+}
+.notes-card textarea:focus {
+  border-color: #ffffff30;
+}
+
+/* Follow-up 65: the Moon's one Appearance preview (moonlight, size, atmosphere) and the orientation sphere. */
+.moon-globe {
+  display: block;
+  margin: 10px auto;
+  max-width: 100%;
+  height: auto !important;
+}
+.moon-look .moon-look-preview {
+  width: 100% !important;
+  border-radius: 10px;
+  border: 1px solid #ffffff14;
+}
+.moon-look-readings {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  font-size: 11px;
+  color: var(--muted, #9aa3ad);
+}
+.moon-look-readings b {
+  display: block;
+  font-size: 17px;
+  font-weight: 400;
+  color: var(--text, #e8ecf1);
+}
+.moon-look-group {
+  margin: 12px 0 2px;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted, #9aa3ad);
+}

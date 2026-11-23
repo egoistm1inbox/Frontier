@@ -3,6 +3,7 @@ import path from "node:path";
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
+import { PickTab } from "./TabReveal.mjs";
 const Folder = path.dirname(fileURLToPath(import.meta.url)),
   Root = path.resolve(Folder, "../../..");
 const Require = createRequire(
@@ -34,13 +35,15 @@ const Frame = (Slice) =>
 try {
   await Open("clouds");
   await Frame("summary").locator(".cl-hero").waitFor();
-  await Frame("coverage").locator(".cl-cover").waitFor();
+  // Follow-up 65: the summary opens the Overview page; Coverage is its own page.
   assert.equal(
     await Page.locator(
-      "[data-panel=clouds] > header + [data-reference-slice=summary]",
+      '[data-panel=clouds] [data-tab-page="clouds:overview"] > [data-reference-slice=summary]:first-child',
     ).count(),
     1,
   );
+  await PickTab(Page, "clouds:coverage");
+  await Frame("coverage").locator(".cl-cover").waitFor();
   assert.equal(await Page.locator('[data-card="Cloud coverage"]').count(), 1);
   assert.equal(
     await Frame("summary").locator(".cl-cover,.cl-layer,.ident").count(),
@@ -63,6 +66,7 @@ try {
   );
   await Page.screenshot({ path: path.join(Proof, "CloudsTop.png") });
   // Follow-up 48: cloud cover is shown 0–100 % (§4); storage stays 0–1.
+  await PickTab(Page, "clouds:coverage");
   await Page.getByLabel("Coverage value", { exact: true }).fill("75");
   const CoverageFrame = await (
     await Page.locator("[data-reference-slice=coverage] iframe").elementHandle()
@@ -94,6 +98,7 @@ try {
   Checks.push(
     "Coverage graph and retained slider synchronize in both directions and survive reload",
   );
+  await PickTab(Page, "clouds:layer");
   await Page.locator('[data-card="Cloud base"]').evaluate((Node) =>
     Node.scrollIntoView({ block: "center" }),
   );
@@ -135,14 +140,15 @@ try {
     "reference-studio-tube",
   ]) {
     await Open(Id);
-    const Light = Frame(Id === "light" ? "summary" : "all");
-    const Controls = Frame(Id === "light" ? "details" : "all");
+    // Follow-up 65: every light opens on Overview (its summary first) with the source and controls on Source.
+    const Light = Frame("summary");
+    const Controls = Frame("details");
     await Light.locator(".lp-preview").waitFor();
     assert.equal(await Light.locator(".ident").count(), 0);
     assert.equal(await Page.locator(".inspector-scroll .ident").count(), 0);
     assert.equal(
       await Page.locator(
-        "[data-panel=light] > header + .reference-inspector-copy",
+        '[data-panel=light] [data-tab-page="light:overview"] > .reference-inspector-copy:first-child',
       ).count(),
       1,
     );
@@ -151,17 +157,14 @@ try {
       1,
     );
     if (Id === "light") {
+      // Follow-up 65: the light's intensity is its reference sheet's (what the viewport reads); the sheet's draft LIGHT group is gone.
       assert.equal(
         await Page.getByLabel("Intensity value", { exact: true }).count(),
-        1,
+        0,
       );
-      assert.equal(
-        await Page.getByRole("button", {
-          name: "Add notes",
-          exact: true,
-        }).count(),
-        1,
-      );
+      // The notes are the Overview page's Notes card (the header no longer repeats an Add notes button).
+      assert.equal(await Page.getByRole("button", { name: "Add notes", exact: true }).count(), 0);
+      assert.equal(await Page.getByLabel("Instance notes", { exact: true }).count(), 1);
       await Page.screenshot({ path: path.join(Proof, "AreaLightTop.png") });
     }
     Checks.push(
@@ -180,14 +183,16 @@ try {
     localStorage.setItem("Frontier.ProjectZeroHtml.v1", JSON.stringify(Saved));
   });
   await Open("reference-studio-tube");
+  await PickTab(Page, "light:source");
   assert(
-    await Frame("all").getByLabel("Position X", { exact: true }).isDisabled(),
+    await Frame("details").getByLabel("Position X", { exact: true }).isDisabled(),
   );
   await Page.getByRole("button", {
     name: "Unlock editing",
     exact: true,
   }).click();
-  await Frame("all").getByLabel("Position X", { exact: true }).fill("5");
+  await PickTab(Page, "light:source");
+  await Frame("details").getByLabel("Position X", { exact: true }).fill("5");
   await Page.waitForFunction(
     () =>
       JSON.parse(localStorage.getItem("Frontier.ProjectZeroHtml.v1")).Values[
@@ -226,6 +231,7 @@ try {
     name: "Unlock editing",
     exact: true,
   }).click();
+  await PickTab(Page, "clouds:coverage");
   await Page.getByLabel("Coverage value", { exact: true }).fill("80");
   await Open("clouds");
   assert.equal(

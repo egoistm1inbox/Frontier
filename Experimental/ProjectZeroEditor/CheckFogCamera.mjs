@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
+import { PickTab } from "./TabReveal.mjs";
 import {
   FogShapes,
   ResolveFogShape,
@@ -138,6 +139,8 @@ try {
   });
   await Page.evaluate(() => document.fonts.ready);
   await Select("Local Fog");
+  // Follow-up 65: the volume shape is Local Fog's Shape page.
+  await PickTab(Page, "local-fog:shape");
   const Card = Page.locator('[data-card="Fog volume shape"]');
   await Card.scrollIntoViewIfNeeded();
   assert.equal(await Card.locator("select").inputValue(), "Box");
@@ -209,6 +212,8 @@ try {
   assert.deepEqual((await Saved()).Values["local-fog"].FogShape, Good);
   await Page.reload({ waitUntil: "networkidle" });
   await Select("Local Fog");
+  // Follow-up 65: the volume shape is Local Fog's Shape page.
+  await PickTab(Page, "local-fog:shape");
   assert.equal(
     await Page.getByLabel("Fog volume shape", { exact: true }).inputValue(),
     "Custom",

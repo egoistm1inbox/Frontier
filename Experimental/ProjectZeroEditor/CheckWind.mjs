@@ -137,17 +137,18 @@ try {
   await Quick.getByRole("button", { name: "Visible", exact: true }).click();
   assert.equal((await Saved()).Hidden.cube, true);
   await Quick.getByRole("button", { name: "Visible", exact: true }).click();
-  const Cap = Page.locator(".entity-capabilities");
+  // Follow-up 65: the shared Quick controls card on each inspector's Overview page.
+  const Cap = Page.locator(".quick-controls");
   await Page.screenshot({ path: Proof + "/EntityQuickTiles.png" });
   await Select("Post Process");
-  assert.equal(await Cap.locator(".quick-tile").count(), 1);
   assert.equal(
-    await Cap.locator(".quick-tile").getAttribute("aria-label"),
+    await Cap.locator(".quick-tile").first().getAttribute("aria-label"),
     "Enabled",
   );
   assert.equal(await Page.locator(".instance-tags").count(), 0);
   await Select("Area Light");
-  assert.equal(await Cap.locator(".quick-tile").count(), 3);
+  // Visible and GI; Cast shadows is the light sheet's own switch (Scene participation), so it is not repeated here.
+  assert.deepEqual(await Cap.locator(".quick-tile").evaluateAll((Tiles) => Tiles.map((Tile) => Tile.getAttribute("aria-label"))), ["Visible", "GI"]);
   Checks.push(
     "Entity-specific circular toggles, keyboard activation, visibility persistence and removal of irrelevant Instance tags",
   );

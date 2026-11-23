@@ -8,6 +8,7 @@ import { RenderComponentCards } from "./RenderComponents.jsx";
 import { UvPreviewCard, FracturePreviewCard, SdfPreviewCard, LodPreviewCard } from "./WorkspacePreviews.jsx";
 import { ComponentPanel, ComponentSheet, ComponentsCard, ComponentStack, OwnerKind } from "./ObjectComponents.jsx";
 import AtmosphereLab, { AtmosphereProfile } from "./AtmosphereLab.jsx";
+import MoonGlobe from "./MoonGlobe.jsx";
 import {
   GraphContext,
   SunGraph,
@@ -43,7 +44,7 @@ import {
 } from "../FrontierEditor/celestial-controls.jsx";
 import { LunarSphere } from "../FrontierEditor/moon-controls.jsx";
 import Native from "./NativePanels.json";
-import { SpecifyPanels, SpecificationNoteMark, MoonSlotCount, MoonPresets, MoonPresetSizes, SensorGates } from "./ProjectZeroSpecification.js";
+import { SpecifyPanels, SpecificationNoteMark, MoonSlotCount, MoonPresets, MoonPresetSizes, SensorGates, GodRaysPanel } from "./ProjectZeroSpecification.js";
 import { Solar } from "./Solar.mjs";
 import SunCard from "./SunCards.jsx";
 import { SkyMedium, SunAngularRadius } from "./SkyShader.js";
@@ -428,7 +429,7 @@ export function Tile({
   On,
   Action,
   Disabled = false,
-  IconName = "visible",
+  IconName = null,
   Context = "",
   Large = false,
 }) {
@@ -498,6 +499,104 @@ export function EntityNotes({ Value = "", Change }) {
         placeholder="Purpose, ownership, review notes…"
         value={Value}
         onChange={(Event) => Change(Event.target.value)}
+      />
+    </section>
+  );
+}
+
+// Follow-up 65: every paged inspector opens on an Overview page (or its first page) that ends with the same three cards: Quick controls
+// (one switch each, lit green when on, grey when off), Tags and Notes. The header no longer carries its own Add notes button there.
+export const PanelTags = {
+  sun: ["environment", "sky", "light"],
+  moon: ["environment", "sky", "night"],
+  stars: ["environment", "sky", "night"],
+  atmosphere: ["environment", "sky"],
+  rainbow: ["environment", "optics"],
+  wind: ["environment", "air"],
+  "height-fog": ["environment", "fog"],
+  "aerial-fog": ["environment", "fog"],
+  "local-fog": ["environment", "fog"],
+  clouds: ["environment", "weather"],
+  "local-cloud": ["environment", "weather"],
+  precipitation: ["environment", "weather"],
+  "god-rays": ["environment", "light"],
+  light: ["lighting"],
+  "environment-light": ["lighting", "sky"],
+  camera: ["camera"],
+  flare: ["camera", "optics"],
+  "motion-blur": ["camera", "effect"],
+  post: ["post process"],
+  "vehicle-asset": ["vehicle"],
+};
+// The panels whose first page ends with the Tags and Notes cards.
+export const NotesInPage = (Panel) => (Object.hasOwn(PanelTags, Panel) && Panel !== "vehicle-asset") || IsEffectPanel(Panel);
+// Quick controls: Tiles are { Label, On, Action, Icon, Disabled }.
+export function QuickControls({ Tiles, Context = "", Note = null }) {
+  const Live = Tiles.filter((Each) => !Each.Disabled);
+  return (
+    <section className="property-card quick-controls" data-card="Quick controls">
+      <h3>
+        <span>Quick controls</span>
+        <small className="quick-count">
+          <b>{Live.filter((Each) => Each.On).length}</b> / {Live.length} on
+        </small>
+      </h3>
+      <div className="quick-grid">
+        {Tiles.map((Each) => (
+          <Tile key={Each.Label} Label={Each.Label} On={Each.On} Action={Each.Action} IconName={Each.Icon} Context={Context} Disabled={Each.Disabled} />
+        ))}
+      </div>
+      {Note && <p className="card-foot">{Note}</p>}
+    </section>
+  );
+}
+// Tags: free words on the row (Values.Tags), starting from the panel's defaults.
+export function TagsCard({ Values, Change, Panel }) {
+  const Tags = Array.isArray(Values.Tags) ? Values.Tags : PanelTags[Panel] || (IsEffectPanel(Panel) ? ["post process", "effect"] : []);
+  const [Draft, EditDraft] = useState("");
+  return (
+    <section className="property-card tags-card" data-card="Tags">
+      <h3>
+        <span>Tags</span>
+        <small className="quick-count">{Tags.length}</small>
+      </h3>
+      <div className="tag-list">
+        {Tags.map((Tag) => (
+          <span className="tag-chip" key={Tag}>
+            {Tag}
+            <button type="button" aria-label={"Remove tag " + Tag} onClick={() => Change("Tags", Tags.filter((Each) => Each !== Tag))}>
+              ×
+            </button>
+          </span>
+        ))}
+        <form
+          className="tag-add"
+          onSubmit={(Event) => {
+            Event.preventDefault();
+            const Next = Draft.trim();
+            if (Next && !Tags.includes(Next)) Change("Tags", [...Tags, Next]);
+            EditDraft("");
+          }}
+        >
+          <input aria-label="New tag" placeholder="Add tag" value={Draft} onChange={(Event) => EditDraft(Event.target.value)} />
+        </form>
+      </div>
+    </section>
+  );
+}
+// Notes: the row's notes (Values.Notes, the same text the header's Add notes edits elsewhere).
+export function NotesCard({ Values, Change }) {
+  return (
+    <section className="property-card notes-card" data-card="Notes">
+      <h3>
+        <span>Notes</span>
+      </h3>
+      <textarea
+        aria-label="Instance notes"
+        rows={4}
+        placeholder="Purpose, ownership, review notes…"
+        value={Values.Notes || ""}
+        onChange={(Event) => Change("Notes", Event.target.value)}
       />
     </section>
   );
@@ -626,6 +725,56 @@ export function Inspector({
     ) : null;
   };
   const Fields = (...Names) => Names.map((Name) => F(Name));
+  // Follow-up 65: the shared first-page cards. Switch(Label, Icon) is a quick control for a switch field (it counts as drawn); a
+  // card of fields is Group(Title, ...Labels); TagsAndNotes() is the Tags and Notes cards.
+  const Switch = (Label, Icon) => {
+    Drawn.add(Label);
+    return { Label, Icon, On: !!V(Label), Action: () => AssignProperty(Label, !V(Label)) };
+  };
+  const Quick = (Tiles, Note = null) => <QuickControls Tiles={Tiles} Context={Subject.Panel} Note={Note} />;
+  const Group = (Title, ...Labels) => (
+    <Card Title={Title} key={Title}>
+      {Fields(...Labels)}
+    </Card>
+  );
+  const TagsAndNotes = () => (
+    <>
+      <TagsCard Values={Values} Change={Change} Panel={Subject.Panel} />
+      <NotesCard Values={Values} Change={Change} />
+    </>
+  );
+  // A sheet-driven inspector in pages: Overview (Top, Quick controls from First and the sheet's switch fields, Tags, Notes), then the
+  // other fields by group, one card each: on one Settings page when there are ten or fewer, otherwise a page per group. Skip leaves
+  // fields out (another card draws them); Last closes the final page.
+  const SheetPages = ({ Owner, Look, Top = null, First = [], Skip = [], Symbols = {}, Last = null, More = [] }) => {
+    const Groups = [...new Set(Sheet.map((Field) => Field.Group))]
+      .map((Name) => [Name, Sheet.filter((Field) => Field.Group === Name && Field.Control !== "Switch" && !Skip.includes(Field.Label))])
+      .filter(([, Members]) => Members.length);
+    const Count = Groups.reduce((Sum, [, Members]) => Sum + Members.length, 0);
+    const Cards = (List) =>
+      List.map(([Name, Members]) => (
+        <Card Title={Name} key={Name}>
+          {Members.map((Field) => F(Field.Label))}
+        </Card>
+      ));
+    const Switches = Sheet.filter((Field) => Field.Control === "Switch" && !Skip.includes(Field.Label)).map((Field) =>
+      Switch(Field.Label, Symbols[Field.Label]),
+    );
+    const Rest =
+      Count <= 10
+        ? [{ Id: "settings", Label: "Settings", Content: Cards(Groups) }]
+        : Groups.map(([Name, Members]) => ({ Id: Name.toLowerCase().replace(/\W+/g, "-"), Label: Name, Content: Cards([[Name, Members]]) }));
+    const Pages = [
+      { Id: "overview", Label: "Overview", Content: (<>{Top}{Quick([...First, ...Switches])}{TagsAndNotes()}</>) },
+      ...(Groups.length ? Rest : []),
+      ...More,
+    ];
+    if (Last) {
+      const End = Pages[Pages.length - 1];
+      End.Content = (<>{End.Content}{Last}</>);
+    }
+    return <InspectorTabs Owner={Owner} Look={Look} Pages={Pages} />;
+  };
   const Tiles = (Names, Large = false) => (
     <div className="tiles">
       {Names.map((Name) => (
@@ -645,10 +794,13 @@ export function Inspector({
       <div className="breadcrumbs">Inspector / {Category}</div>
       <h1 title={Title}>{Title}</h1>
       <p className="eyebrow">{Subject.Description}</p>
-      <EntityNotes
-        Value={Values.Notes || ""}
-        Change={(Next) => Change("Notes", Next)}
-      />
+      {/* Inspectors with a Notes card on their first page (Follow-up 65) leave the header's Add notes out. */}
+      {!NotesInPage(Subject.Panel) && (
+        <EntityNotes
+          Value={Values.Notes || ""}
+          Change={(Next) => Change("Notes", Next)}
+        />
+      )}
     </header>
   );
   const Capabilities = () => (
@@ -805,9 +957,44 @@ export function Inspector({
       )}
     </>
   );
+  const Unlock = Values.ReferenceInspector?.Locked && (
+    <button onClick={() => Change("ReferenceInspector", { ...Values.ReferenceInspector, Locked: false })}>Unlock editing</button>
+  );
+  // Follow-up 65: lights open on Overview (the light's summary from its reference sheet, its quick controls, tags, notes) with the
+  // light's source and controls on Source. The reference sheet already carries Cast shadows and the light's aim, so the sheet's
+  // own Cast shadows tile and LIGHT / AIM groups are left out.
+  const LightPages = () => (
+    <>
+      {Header("Lighting")}
+      {Unlock}
+      {SheetPages({
+        Owner: "light",
+        Look: "light",
+        Top: ReferenceCards,
+        First: [
+          { Label: "Visible", Icon: "visible", On: !Hidden, Action: ToggleHidden },
+          ...(Subject.ReferenceOnly ? [] : [{ Label: "GI", Icon: "gi", On: Values.GI ?? true, Action: () => Change("GI", !(Values.GI ?? true)) }]),
+        ],
+        Skip: Sheet.map((Field) => Field.Label),
+        More: ReferenceDetailCards ? [{ Id: "source", Label: "Source", Content: ReferenceDetailCards }] : [],
+      })}
+    </>
+  );
   const Generic = () =>
     Subject.Panel === "geometry" && Subject.Parent === "showcase" ? (
       Showcase()
+    ) : Subject.Panel === "light" ? (
+      LightPages()
+    ) : Subject.Panel === "post" ? (
+      <>
+        {Header("Post processing")}
+        {SheetPages({ Owner: "post", Look: "effect", First: [{ Label: "Enabled", Icon: "visible", On: !Hidden, Action: ToggleHidden }] })}
+      </>
+    ) : Subject.Panel === GodRaysPanel ? (
+      <>
+        {Header("Environment")}
+        {SheetPages({ Owner: "god-rays", Look: "rays", Symbols: { Enabled: "sunlight", "Cloud interaction": "cloud", "Fog interaction": "fog" } })}
+      </>
     ) : (
     <>
       {Header(
@@ -940,48 +1127,16 @@ export function Inspector({
               ? "Camera"
               : "Post processing",
         )}
-        {Environment ? (
-          <EnvironmentStudy Read={V} Assign={AssignProperty} Active={!Hidden} />
-        ) : (
-          <EffectStudy Panel={Subject.Panel} Read={V} Assign={AssignProperty} Active={!Hidden} />
-        )}
-        <section
-          className="generic-card entity-capabilities"
-          data-card="Quick controls"
-        >
-          <h4>QUICK CONTROLS</h4>
-          <div className="tiles">
-            <Tile
-              Label="Enabled"
-              Context={Subject.Panel}
-              IconName="visible"
-              On={!Hidden}
-              Action={ToggleHidden}
-            />
-            {Sheet.filter((Field) => Field.Control === "Switch").map(
-              (Field) => (
-                <Tile
-                  key={Field.Label}
-                  Label={Field.Label}
-                  Context={Subject.Panel}
-                  IconName={Symbols[Field.Label] || "visible"}
-                  On={V(Field.Label)}
-                  Action={() => AssignProperty(Field.Label, !V(Field.Label))}
-                />
-              ),
-            )}
-          </div>
-        </section>
-        {[...new Set(Sheet.map((Field) => Field.Group))].map((Group) => {
-          const Members = Sheet.filter(
-            (Field) => Field.Group === Group && Field.Control !== "Switch",
-          );
-          return Members.length ? (
-            <details open className="generic-card" key={Group}>
-              <summary>{Group}</summary>
-              {Members.map((Field) => F(Field.Label))}
-            </details>
-          ) : null;
+        {SheetPages({
+          Owner: Subject.Panel,
+          Look: Environment ? "environment" : "effect",
+          Top: Environment ? (
+            <EnvironmentStudy Read={V} Assign={AssignProperty} Active={!Hidden} />
+          ) : (
+            <EffectStudy Panel={Subject.Panel} Read={V} Assign={AssignProperty} Active={!Hidden} />
+          ),
+          First: [{ Label: "Enabled", Icon: "visible", On: !Hidden, Action: ToggleHidden }],
+          Symbols,
         })}
       </div>
     );
@@ -1004,26 +1159,7 @@ export function Inspector({
           }
           data-panel={Subject.Panel}
         >
-          {Subject.ReferenceOnly && Subject.Panel === "light" ? (
-            <>
-              {Header("Lighting")}
-              {Values.ReferenceInspector?.Locked && (
-                <button
-                  onClick={() =>
-                    Change("ReferenceInspector", {
-                      ...Values.ReferenceInspector,
-                      Locked: false,
-                    })
-                  }
-                >
-                  Unlock editing
-                </button>
-              )}
-              {ReferenceCards}
-            </>
-          ) : (
-            Generic()
-          )}
+          {Generic()}
         </div>
       </GraphContext.Provider>
     );
@@ -1087,116 +1223,61 @@ export function Inspector({
     const Manual = !!V("Manual direction");
     const Elevation = Manual ? V("Manual elevation") : Solved.Elevation,
       Azimuth = Manual ? V("Manual azimuth") : Solved.Azimuth;
+    // Follow-up 65: Overview (the old Now and Light pages in one), then Temperature, Sun disc and Dynamic each on their own page, then
+    // Baking. Each value shows once: the time in Sun now (and the Daylight cycle), the solved angles in Sun direction.
+    for (const Name of ["Manual direction", "Manual azimuth", "Manual elevation", "Cast shadows", "Animate"]) Drawn.add(Name);
     Content = (
       <>
         {Header("Environment")}
         <InspectorTabs Owner="sun" Look="arc" Pages={[
-          { Id: "now", Label: "Now", Content: (<>
-
+          { Id: "overview", Label: "Overview", Content: (<>
         <Card Title="Sun now" Class="sun-now" GraphHandled>
           <SunCard V={V} Change={AssignProperty} Air={Scene?.Air} />
         </Card>
-        </>) },
-          { Id: "light", Label: "Light", Content: (<>
-        <div className="section-caption">
-          PROPERTIES <small>Light, direction & atmosphere</small>
-        </div>
-        <div className="tiles sun-tiles">
-          <Tile
-            Label="Enabled"
-            Context="sun"
-            On={!Hidden}
-            Action={ToggleHidden}
-            Large
-          />
-          <button disabled>↺ Reset</button>
-          <Tile Label="Sunlight" Large Disabled IconName="sun" />
-          <Tile Label="Sun disc" Large Disabled IconName="sun" />
-          <Tile
-            Label="Day cycle"
-            Large
-            IconName="celestial-orbit"
-            On={V("Animate")}
-            Action={() => AssignProperty("Animate", !V("Animate"))}
-          />
-          <Tile
-            Label={V("Animate") ? "Dynamic" : "Static"}
-            Large
-            IconName="celestial-orbit"
-            On={V("Animate")}
-            Action={() => AssignProperty("Animate", !V("Animate"))}
-          />
-        </div>
-        <div className="subcomponent">
-          <Icon Name="lens-flare" />
-          <div>
-            Lens Flare<small>Optical effect subcomponent</small>
+        {Quick([
+          { Label: "Enabled", Icon: "sunlight", On: !Hidden, Action: ToggleHidden },
+          Switch("Cast shadows", "shadow"),
+          { ...Switch("Animate", "cycle"), Label: "Day cycle" },
+          Switch("Manual direction", "compass"),
+        ])}
+        <Card Title="Sun direction" Class="direction-card">
+          <div className="solved-directions">
+            <div>
+              <small>Azimuth</small>
+              <Metric Value={Azimuth.toFixed(1) + "°"} />
+            </div>
+            <div>
+              <small>Elevation</small>
+              <Metric Value={Elevation.toFixed(1) + "°"} />
+            </div>
           </div>
-          <Glyph Name="arrow" />
-        </div>
-        <div className="card-grid sun-properties">
-          <Card Title="Sun direction" Height={711} Class="direction-card">
-            <Metric
-              Value={Elevation.toFixed(1) + "°"}
-              Caption={
-                Elevation < 0 ? "Below the horizon" : "Above the horizon"
-              }
-            />
-            <div
-              className="graphic tall solved-gizmo"
-              title="Solved direction. Edit Local Hours to change it."
-            >
-              <SunGizmo
-                azimuth={Azimuth}
-                elevation={Elevation}
-                onChange={() => {}}
-              />
-            </div>
-            {F("Local Hours")}
-            <div className="solved-directions">
-              <div>
-                <small>Azimuth</small>
-                <Metric Value={Azimuth.toFixed(1) + "°"} />
-                <input
-                  type="range"
-                  disabled
-                  value={Azimuth}
-                  min="0"
-                  max="360"
-                />
-              </div>
-              <div>
-                <small>Elevation</small>
-                <Metric Value={Elevation.toFixed(1) + "°"} />
-                <input
-                  type="range"
-                  disabled
-                  value={Elevation}
-                  min="-90"
-                  max="90"
-                />
-              </div>
-            </div>
-            <p>{Manual ? "Manual direction on · the solved angles are overridden" : "Shared time above · angles solved by date / location"}</p>
-            {F("Manual direction")}
-            {F("Manual azimuth", !Manual)}
-            {F("Manual elevation", !Manual)}
-          </Card>
-          <Card Title="Sunlight intensity" Height={347} GraphHandled>
-            <Metric
-              Value={Number(V("Intensity")).toFixed(1)}
-              Unit="×"
-              Caption="Sunlight intensity multiplier"
-            />
-            <SunGraph V={V} Change={AssignProperty} Mode="gain" />
-            {F("Intensity")}
-            <div className="ends">
-              <span>0 ×</span>
-              <span>60 ×</span>
-            </div>
-            {F("Cast shadows")}
-          </Card>
-          <Card Title="Temperature" Height={347} GraphHandled>
+          <div className="graphic tall solved-gizmo" title={Manual ? "Manual direction" : "Solved direction. Change the time or date on the Dynamic page."}>
+            <SunGizmo azimuth={Azimuth} elevation={Elevation} onChange={() => {}} />
+          </div>
+          <p>
+            {Elevation < 0 ? "Below the horizon" : "Above the horizon"} ·{" "}
+            {Manual ? "manual direction, the solved angles are overridden" : "solved from the date, time and place"}
+          </p>
+          {Manual && (
+            <>
+              {F("Manual azimuth")}
+              {F("Manual elevation")}
+            </>
+          )}
+        </Card>
+        <Card Title="Sunlight intensity" GraphHandled>
+          <Metric Value={Number(V("Intensity")).toFixed(1)} Unit="×" Caption="Sunlight intensity multiplier" />
+          <SunGraph V={V} Change={AssignProperty} Mode="gain" />
+          {F("Intensity")}
+          <div className="ends">
+            <span>0 ×</span>
+            <span>60 ×</span>
+          </div>
+        </Card>
+        {TagsAndNotes()}
+        </>) },
+          { Id: "temperature", Label: "Temperature", Content: (<>
+          <Card Title="Temperature" GraphHandled>
             <Metric
               Value={V("Colour source") ? V("Temperature") : "RGB"}
               Unit={V("Colour source") ? "K" : ""}
@@ -1212,14 +1293,9 @@ export function Inspector({
             <p>Blackbody tint approximation · linear RGB</p>
             {F("Sun Tint", !!V("Colour source"))}
           </Card>
-          <Card Title="Daylight cycle" Height={329} GraphHandled>
-            <Metric
-              Value={`${String(Math.floor(Time)).padStart(2, "0")}:${String(Math.floor((Time % 1) * 60)).padStart(2, "0")}`}
-            />
-            <SunGraph V={V} Change={AssignProperty} Mode="day" />
-            {F("Local Hours")}
-          </Card>
-          <Card Title="Sun disc" Height={329}>
+        </>) },
+          { Id: "disc", Label: "Sun disc", Content: (<>
+          <Card Title="Sun disc">
             <Metric Value={Number(V("Angular Diameter")).toFixed(2) + "°"} />
             <div
               className="solar-disc"
@@ -1232,23 +1308,22 @@ export function Inspector({
             {F("Appearance")}
             {F("Flare / glare")}
           </Card>
-        </div>
         </>) },
-          { Id: "cycle", Label: "Day cycle", Content: (<>
-        <Card Title="Dynamic settings" Wide GraphHandled>
+          { Id: "dynamic", Label: "Dynamic", Content: (<>
+        <Card Title="Daylight cycle" GraphHandled>
+          <Metric
+            Value={`${String(Math.floor(Time)).padStart(2, "0")}:${String(Math.floor((Time % 1) * 60)).padStart(2, "0")}`}
+            Caption={V("Animate") ? "Day cycle running" : "Day cycle stopped · Quick controls on the Overview start it"}
+          />
+          <SunGraph V={V} Change={AssignProperty} Mode="day" />
+          {F("Local Hours")}
+        </Card>
+        <Card Title="Dynamic settings">
+          {Fields("Day duration", "Speed", "Direct")}
+        </Card>
+        <Card Title="Observer and date" GraphHandled>
           <SunGraph V={V} Change={AssignProperty} Mode="year" />
-          {Fields(
-            "Animate",
-            "Day duration",
-            "Speed",
-            "Direct",
-            "Latitude",
-            "Longitude",
-            "Day of Month",
-            "Month",
-            "Year",
-            "UTC offset",
-          )}
+          {Fields("Latitude", "Longitude", "Day of Month", "Month", "Year", "UTC offset")}
           <div className="readout">
             <span>Declination</span>
             <output>{Solved.Declination.toFixed(2)}°</output>
@@ -1257,11 +1332,8 @@ export function Inspector({
             <span>Equation of Time</span>
             <output>{Solved.EquationOfTime.toFixed(2)} min</output>
           </div>
+          <p className="native-note">Solar position uses the native NOAA calculation, translated to JavaScript.</p>
         </Card>
-        <p className="native-note">
-          Solar position uses the native NOAA calculation, translated to
-          JavaScript. No GPU lighting is running.
-        </p>
         {SpecificationCard()}
         </>) },
           { Id: "baking", Label: "Baking", Content: (<>
@@ -1338,9 +1410,8 @@ export function Inspector({
           </div>
         )}
         <InspectorTabs Owner="camera" Look="viewfinder" Pages={[
-          { Id: "lens", Label: "Lens", Content: (<>
-
-        <Card Title="Lens + field of view" Height={440}>
+          { Id: "overview", Label: "Overview", Content: (<>
+        <Card Title="Lens + field of view">
           <Metric Value={Focal.toFixed(1)} Unit="mm" />
           <div className="graphic lens">
             <SensorField
@@ -1362,10 +1433,18 @@ export function Inspector({
             {Optics.frameWidth.toFixed(2)} × {Optics.frameHeight.toFixed(2)} m
           </p>
         </Card>
+        {Quick([
+          { Label: "Tripod", Icon: "tripod", On: V("Tripod") !== false, Action: () => AssignProperty("Tripod", V("Tripod") === false) },
+          Switch("Depth of field", "focus"),
+          Switch("Vignette", "vignette"),
+          Switch("Location lag", "motion"),
+          Switch("Rotation lag", "orbit"),
+        ])}
+        {TagsAndNotes()}
         </>) },
           { Id: "focus", Label: "Focus", Content: (<>
         <div className="card-grid">
-          <Card Title="Aperture study" Height={464}>
+          <Card Title="Aperture study">
             <Metric Value={"f / " + Aperture.toFixed(1)} />
             <p>
               Entrance pupil and acceptable-sharpness limits update together. No
@@ -1377,7 +1456,7 @@ export function Inspector({
             {F("Aperture")}
             <p>Pupil diameter {Optics.pupil.toFixed(1)} mm</p>
           </Card>
-          <Card Title="Subject plane + sharpness" Height={464}>
+          <Card Title="Subject plane + sharpness">
             <Metric Value={Distance.toFixed(1)} Unit="m" />
             <p>
               Drag the subject plane. Thin-lens diagnostic · circle of confusion
@@ -1414,20 +1493,6 @@ export function Inspector({
                   <small>{Chosen.Caption}</small>
                 </div>
               </div>
-              <button
-                type="button"
-                role="switch"
-                aria-checked={V("Tripod") !== false}
-                aria-label="Tripod"
-                className={"camera-tripod" + (V("Tripod") !== false ? " on" : "")}
-                onClick={() => AssignProperty("Tripod", V("Tripod") === false)}
-              >
-                <span>
-                  <b>Tripod</b>
-                  <small>{V("Tripod") !== false ? "Standing on its tripod" : "Free · for a camera that moves"}</small>
-                </span>
-                <i />
-              </button>
               <div className="camera-body-choices" role="radiogroup" aria-label="Camera body">
                 {CameraBodies.map((Body) => (
                   <button
@@ -1449,7 +1514,7 @@ export function Inspector({
             </Card>
           );
         })()}
-        <Card Title="Sensor / support" Height={196} Class="sensor-card">
+        <Card Title="Sensor" Class="sensor-card">
           <Metric
             Value={(36 / Sensor).toFixed(2)}
             Unit="× crop"
@@ -1473,13 +1538,13 @@ export function Inspector({
       </>
     );
   } else if (Subject.Panel === "stars") {
+    // Follow-up 65: Overview (the field, its switches, tags, notes), Motion, Renderer (scale and the zodiacal glow), Baking.
     Content = (
       <>
         {Header("Environment", "Stars")}
         <InspectorTabs Owner="stars" Look="constellation" Pages={[
-          { Id: "field", Label: "Field", Content: (<>
-
-        <Card Title="Star field" Height={444}>
+          { Id: "overview", Label: "Overview", Content: (<>
+        <Card Title="Star field">
           <Metric
             Value={V("Limiting magnitude").toFixed(1)}
             Unit="mag"
@@ -1513,23 +1578,18 @@ export function Inspector({
           {F("Limiting magnitude")}
           <p>Equatorial chart study · no live star catalogue connection</p>
         </Card>
-        <Card Title="Stars settings" Height={165}>
-          <div className="tiles">
-            {["Star field", "Twinkle"].map((Name) => (
-              <Tile
-                key={Name}
-                Label={Name}
-                On={V(Name)}
-                Action={() => AssignProperty(Name, !V(Name))}
-              />
-            ))}
-          </div>
-          <p>Catalogue field controls.</p>
-        </Card>
+        {Quick([
+          Switch("Star field", "stars"),
+          Switch("Twinkle", "twinkle"),
+          Switch("Bright star catalogue", "stars"),
+          Switch("Milky Way", "galaxy"),
+          Switch("Zodiacal light", "zodiac"),
+        ])}
+        {TagsAndNotes()}
         </>) },
           { Id: "motion", Label: "Motion", Content: (<>
         <div className="card-grid">
-          <Card Title="Twinkle" Height={547}>
+          <Card Title="Twinkle">
             <Metric
               Value={V("Twinkle depth")}
               Unit="%"
@@ -1542,7 +1602,7 @@ export function Inspector({
             />
             {Fields("Twinkle depth", "Twinkle rate")}
           </Card>
-          <Card Title="Celestial rotation" Height={547}>
+          <Card Title="Celestial rotation">
             <Metric
               Value={V("Celestial rotation").toFixed(0) + "°"}
               Caption="Rotate the field around the celestial pole"
@@ -1556,13 +1616,11 @@ export function Inspector({
         </div>
         </>) },
           { Id: "renderer", Label: "Renderer", Content: (<>
-        <Card Title="Renderer scale" Height={168}>
+        <Card Title="Renderer scale">
           {Fields("Brightness", "Point Size", "Loaded", "Sidereal Time")}
-          <p>
-            The chart omits atmosphere and daylight extinction. The pole dial is
-            a schematic.
-          </p>
+          <p>The chart omits atmosphere and daylight extinction. The pole dial is a schematic.</p>
         </Card>
+        <Card Title="Zodiacal light">{F("Zodiacal radiance", !V("Zodiacal light"))}</Card>
         {SpecificationCard()}
         </>) },
           { Id: "baking", Label: "Baking", Content: (<>
@@ -1588,23 +1646,14 @@ export function Inspector({
     );
   } else if (Subject.Panel === "moon") {
     const Preset = V("Preset");
+    // Follow-up 65: Overview (the slot, its phase, quick controls, tags, notes), Appearance (which moon, its light, size and atmosphere),
+    // Position (where it sits and how it is turned).
     Content = (
       <>
         {Header("Environment", "Moon")}
         <InspectorTabs Owner="moon" Look="phases" Pages={[
-          { Id: "phase", Label: "Phase", Content: (<>
-
-        <Card Title="Lunar phase" Height={443}>
-          <Metric
-            Value={(V("Phase") * 29.53).toFixed(1)}
-            Unit="days"
-            Caption={`${Math.round((1 - Math.cos(V("Phase") * Math.PI * 2)) * 0.5 * 100)}% illuminated`}
-          />
-          <p>Position in the 29.53-day synodic cycle</p>
-          <MoonImage Preset={Preset} Phase={V("Phase")} />
-          {F("Phase", V("Follow Sky"))}
-        </Card>
-        <Card Title="Moon settings" Height={178}>
+          { Id: "overview", Label: "Overview", Content: (<>
+        <Card Title="Moon slot" Class="moon-slot-card">
           <select
             className="moon-instance"
             aria-label="Active moon instance"
@@ -1617,20 +1666,23 @@ export function Inspector({
               </option>
             ))}
           </select>
-          <div className="moon-settings-tiles">
-            {["Visible", "Follow Sky"].map((Label) => (
-              <Tile
-                key={Label}
-                Label={Label}
-                Large
-                IconName="celestial-orbit"
-                On={V(Label)}
-                Action={() => AssignProperty(Label, !V(Label))}
-              />
-            ))}
-          </div>
+          <p>Six moons can be up at once; every card edits the slot chosen here.</p>
         </Card>
-        <Card Title="Moon catalogue" Height={216}>
+        <Card Title="Lunar phase">
+          <Metric
+            Value={(V("Phase") * 29.53).toFixed(1)}
+            Unit="days"
+            Caption={`${Math.round((1 - Math.cos(V("Phase") * Math.PI * 2)) * 0.5 * 100)}% illuminated`}
+          />
+          <p>Position in the 29.53-day synodic cycle</p>
+          <MoonImage Preset={Preset} Phase={V("Phase")} />
+          {F("Phase", V("Follow Sky"))}
+        </Card>
+        {Quick([Switch("Visible", "visible"), Switch("Follow Sky", "orbit"), Switch("Has atmosphere", "cloud")])}
+        {TagsAndNotes()}
+        </>) },
+          { Id: "appearance", Label: "Appearance", Content: (<>
+        <Card Title="Moon catalogue">
           <div className="moon-catalogue">
             {["Luna", "Ember", "Glacier", "Sulfur", "Shroud", "Shard"].map(
               (Name, Index) => (
@@ -1646,37 +1698,45 @@ export function Inspector({
             )}
           </div>
         </Card>
+        {/* Follow-up 65: moonlight, size and the moon's atmosphere share one preview, the moon as it sits in the night sky. */}
+        <Card Title="Moonlight, size and atmosphere" Class="moon-look">
+          <div className="moon-look-readings">
+            <span><b>{V("Bright").toFixed(2)}×</b> moonlight</span>
+            <span><b>{V("Size").toFixed(2)}°</b> across</span>
+            <span><b>{V("Has atmosphere") ? V("Atmosphere intensity").toFixed(2) + "×" : "None"}</b> atmosphere</span>
+          </div>
+          <MoonGlobe
+            Class="moon-look-preview"
+            Label="Moonlight, size and atmosphere preview"
+            Preset={Preset}
+            Width={300}
+            Height={210}
+            // Angular size, compressed for oversized moons (the dashed ring is Luna's natural 0.52°).
+            Radius={Math.min(78, 14 + 26 * Math.sqrt(V("Size")))}
+            Natural={14 + 26 * Math.sqrt(0.52)}
+            Phase={V("Phase")}
+            Roll={V("Roll")}
+            Pitch={V("Pitch")}
+            Bright={V("Bright")}
+            Glow={V("Glow")}
+            Air={V("Has atmosphere") ? { Intensity: V("Atmosphere intensity"), Thickness: V("Thickness scale"), Tint: V("Atmosphere tint") } : null}
+            Backdrop
+          />
+          <div className="moon-look-group">Moonlight</div>
+          {Fields("Bright", "Glow")}
+          <div className="moon-look-group">Size</div>
+          {F("Size")}
+          <button onClick={() => AssignProperty("Size", 0.52)}>Natural size · 0.52°</button>
+          <div className="moon-look-group">Atmosphere</div>
+          {F("Atmosphere intensity", !V("Has atmosphere"))}
+          {F("Thickness scale", !V("Has atmosphere"))}
+          {F("Atmosphere tint", !V("Has atmosphere"))}
+          {!V("Has atmosphere") && <p className="card-foot">Turn on Has atmosphere in Quick controls to give this moon air.</p>}
+        </Card>
         </>) },
-          { Id: "light", Label: "Light", Content: (<>
+          { Id: "position", Label: "Position", Content: (<>
         <div className="card-grid">
-          <Card Title="Moonlight" Height={452}>
-            <Metric
-              Value={V("Bright").toFixed(2)}
-              Unit="×"
-              Caption="Full-disc brightness multiplier · not calibrated lux"
-            />
-            <MoonImage Preset={Preset} Size={86} />
-            {Fields("Bright", "Glow")}
-          </Card>
-          <Card Title="Moon size" Height={452}>
-            <Metric
-              Value={V("Size").toFixed(2) + "°"}
-              Caption="Angular diameter · compressed preview for oversized moons"
-            />
-            <MoonImage
-              Preset={Preset}
-              Size={100 + Math.min(60, V("Size") * 2)}
-            />
-            {F("Size")}
-            <button onClick={() => AssignProperty("Size", 0.52)}>
-              Natural size · 0.52°
-            </button>
-          </Card>
-        </div>
-        </>) },
-          { Id: "sky", Label: "Sky", Content: (<>
-        <div className="card-grid">
-          <Card Title="Lunar position" Height={484}>
+          <Card Title="Lunar position">
             <p>
               {V("Follow Sky")
                 ? "Solved direction · Follow sky is ON"
@@ -1697,9 +1757,10 @@ export function Inspector({
             {F("Azimuth", V("Follow Sky"))}
             {F("Elevation", V("Follow Sky"))}
           </Card>
-          <Card Title="Moon rotation" Height={532}>
+          <Card Title="Moon rotation">
             <p>Surface orientation · independent of sky position</p>
-            <MoonImage Preset={Preset} Rotation={V("Roll")} Size={175} />
+            {/* Follow-up 65: a lit sphere, so Pitch tips the surface toward or away from the viewer as Roll turns it. */}
+            <MoonGlobe Preset={Preset} Radius={84} Roll={V("Roll")} Pitch={V("Pitch")} Label="Moon orientation preview" Class="moon-turn" />
             {Fields("Roll", "Pitch")}
             <button
               onClick={() => {
@@ -1711,23 +1772,29 @@ export function Inspector({
             </button>
           </Card>
         </div>
-          {SpecificationCard()}
-          </>) },
+        {SpecificationCard()}
+        </>) },
         ]} />
       </>
     );
   } else if (Subject.Panel === "atmosphere") {
+    // Follow-up 65: Overview, Scattering (what the air does to light), Density (how it thins with height), Sky colour, View (the planet
+    // from space and the observer), Baking.
     Content = (
       <>
         {Header("Environment", "Atmosphere")}
         <InspectorTabs Owner="atmosphere" Look="strata" Pages={[
-          { Id: "look", Label: "Look", Content: (<>
-
-        <AtmosphereLab V={V} Change={AssignProperty} />
-        <Card Title="Atmosphere settings">{Tiles(["Line at civil only"])}</Card>
+          { Id: "overview", Label: "Overview", Content: (<>
+        <AtmosphereLab V={V} Change={AssignProperty} Part="overview" />
+        {Quick([
+          { Label: "Visible", Icon: "visible", On: !Hidden, Action: ToggleHidden },
+          Switch("Line at civil only", "horizon"),
+          Switch("Orbital view", "orbit"),
+        ])}
+        {TagsAndNotes()}
         </>) },
           { Id: "scattering", Label: "Scattering", Content: (<>
-        <Card Title="Atmospheric scattering" Height={485} GraphHandled>
+        <Card Title="Atmospheric scattering" GraphHandled>
           <Metric
             Value={V("Rayleigh").toFixed(1)}
             Unit="×"
@@ -1737,7 +1804,7 @@ export function Inspector({
           {F("Rayleigh")}
         </Card>
         <div className="card-grid">
-          <Card Title="Aerosol haze" Height={380} GraphHandled>
+          <Card Title="Aerosol haze" GraphHandled>
             <Metric
               Value={V("Mie").toFixed(2)}
               Unit="×"
@@ -1745,8 +1812,9 @@ export function Inspector({
             />
             <AtmosphereProfile V={V} Change={AssignProperty} Mode="haze" />
             {F("Mie")}
+            {F("Mie Anisotropy")}
           </Card>
-          <Card Title="Ozone absorption" Height={380} GraphHandled>
+          <Card Title="Ozone absorption" GraphHandled>
             <Metric
               Value={V("Ozone").toFixed(2)}
               Unit="×"
@@ -1756,12 +1824,18 @@ export function Inspector({
             {F("Ozone")}
           </Card>
         </div>
-        <Card Title="Density falloff" Height={410} GraphHandled>
+        </>) },
+          { Id: "density", Label: "Density", Content: (<>
+        <Card Title="Density falloff" GraphHandled>
           {F("Rayleigh Scale H")}
           <AtmosphereProfile V={V} Change={AssignProperty} Mode="height" />
           {F("Mie Scale H")}
         </Card>
-        <Card Title="Ground reflectance" Height={150}>
+        {Group("Planet and air", "Atmosphere", "Planet radius", "Air Mass")}
+        </>) },
+          { Id: "colour", Label: "Sky colour", Content: (<>
+        {Group("Sky colour", "Sky Tint", "Sky Brightness", "Horizon Glow", "White Line")}
+        <Card Title="Ground reflectance">
           {F("Ground Albedo")}
           <p>
             Original RGB ground albedo · applied separately, not stored in the
@@ -1769,19 +1843,9 @@ export function Inspector({
           </p>
         </Card>
         </>) },
-          { Id: "controls", Label: "Controls", Content: (<>
-        <Card Title="Native atmosphere controls">
-          {Fields(
-            "Mie Anisotropy",
-            "Atmosphere",
-            "Horizon Glow",
-            "White Line",
-            "Sky Tint",
-            "Sky Brightness",
-            "Air Mass",
-            "Tier Samples",
-          )}
-        </Card>
+          { Id: "view", Label: "View", Content: (<>
+        <AtmosphereLab V={V} Change={AssignProperty} Part="space" />
+        {Group("Wind binding", "Wind source")}
         {SpecificationCard()}
         </>) },
           { Id: "baking", Label: "Baking", Content: (<>
@@ -1818,27 +1882,30 @@ export function Inspector({
             </Card>
           );
         })()}
-        <Card Title="Baked atmosphere" Height={210}>
+        <Card Title="Baked atmosphere">
           <div className="empty-image">No native dome image loaded</div>
           <p>
             Loading a dome image from disk needs the native engine. The browser
             bakes above are what the 3D viewport draws.
           </p>
           {F("Fetch Baked Dome", true)}
-          {Fields("Dome Path", "Sheet")}
+          {Fields("Dome Path", "Sheet", "Tier Samples")}
         </Card>
         </>) },
         ]} />
       </>
     );
   } else if (Subject.Panel === "flare") {
+    // Follow-up 65: Overview (the composite, its layer switches and source), Optics (layers and ghosts), Halo, Baking. The preview pose
+    // is the composite's drag (no separate fields); the aperture blades sit with the ghosts they shape.
+    Drawn.add("Preview X");
+    Drawn.add("Preview Y");
     Content = (
       <>
         {Header("Camera / Optics", "Lens Flare")}
         <InspectorTabs Owner="flare" Look="aperture" Pages={[
-          { Id: "composite", Label: "Composite", Content: (<>
-
-        <Card Title="Flare composite" Height={430}>
+          { Id: "overview", Label: "Overview", Content: (<>
+        <Card Title="Flare composite">
           <Metric Value={V("Intensity").toFixed(2)} Unit="×" />
           <FlarePreview
             Settings={FlareSettings(V)}
@@ -1855,37 +1922,34 @@ export function Inspector({
             below, over a stand-in dusk sky. Only this preview moves.
           </p>
         </Card>
-        <Card Title="Flare settings">
-          {Tiles(["Enabled", "Anamorphic", "Streaks", "Starburst"])}
-        </Card>
-        <Card Title="Flare source">{Fields("Intensity", "Type")}</Card>
+        {Quick([Switch("Enabled", "starburst"), Switch("Anamorphic", "anamorphic"), Switch("Streaks", "streaks"), Switch("Starburst", "starburst")])}
+        {Group("Flare source", "Intensity", "Type", "Style")}
+        {TagsAndNotes()}
         </>) },
           { Id: "optics", Label: "Optics", Content: (<>
         <div className="card-grid">
-          <Card Title="Flare layers" Height={565}>
+          <Card Title="Flare layers">
             <p>
               Combine layers instead of choosing just one. Editing a layer
               selects Custom layers.
             </p>
             {Fields("Spread", "Rotation", "Ray pairs", "Streak gain")}
           </Card>
-          <Card Title="Lens ghosts" Height={565}>
+          <Card Title="Lens ghosts">
             <Metric Value={V("Ghosts")} Unit="elements" />
             {Fields(
               "Ghosts",
               "Ghost brightness",
               "Ghost spacing",
               "Ghost shape",
+              "Aperture Blades",
             )}
           </Card>
         </div>
+        </>) },
+          { Id: "halo", Label: "Halo", Content: (<>
         <Card Title="Halo & optical response">
           {Fields("Halo Radius", "Halo brightness", "Halo width", "Chromatic")}
-        </Card>
-        </>) },
-          { Id: "legacy", Label: "Legacy", Content: (<>
-        <Card Title="Legacy preset settings">
-          {Fields("Aperture Blades", "Preview X", "Preview Y")}
         </Card>
         {SpecificationCard()}
         </>) },
@@ -1911,34 +1975,20 @@ export function Inspector({
       </>
     );
   } else if (Subject.Panel === "wind") {
+    // Follow-up 65: Overview (the field, its switches and the WindEditor, tags, notes) and Air (the stored atmospheric descriptors).
     Content = (
       <>
         {Header("Environment", Subject.Name)}
+        <InspectorTabs Owner="wind" Look="wind" Pages={[
+          { Id: "overview", Label: "Overview", Content: (<>
         {ReferenceCards}
-        <Card Title="Wind controls">
-          <div className="tiles">
-            <Tile
-              Label="Enabled"
-              Context="wind"
-              On={!Hidden}
-              Action={ToggleHidden}
-            />
-            <Tile
-              Label="Air shear"
-              Context="wind"
-              On={V("Air shear")}
-              Action={() => AssignProperty("Air shear", !V("Air shear"))}
-            />
-          </div>
-          <button
-            className="wind-wide-button"
-            onClick={OpenWind}
-            aria-label="Expand WindEditor"
-            title="Expand WindEditor"
-          >
-            Open WindEditor · place and combine components
-          </button>
-        </Card>
+        <button className="wind-wide-button" onClick={OpenWind} aria-label="Expand WindEditor" title="Expand WindEditor">
+          Open WindEditor · place and combine components
+        </button>
+        {Quick([{ Label: "Enabled", Icon: "wind", On: !Hidden, Action: ToggleHidden }, Switch("Air shear", "shear")])}
+        {TagsAndNotes()}
+        </>) },
+          { Id: "air", Label: "Air", Content: (<>
         <Card Title="Atmospheric modifiers · native draft">
           {Fields("Shear", "Veer", "Turbulence", "Steadiness")}
           {F("Force")}
@@ -1948,13 +1998,18 @@ export function Inspector({
             field preview.
           </p>
         </Card>
+        </>) },
+        ]} />
       </>
     );
   } else if (Subject.Panel === "precipitation") {
+    // Follow-up 65: Overview (the type, its switches, tags, notes), Particles, Simulation.
     Content = (
       <>
         {Header("Environment", "Precipitation")}
-        <Card Title="Precipitation type" Height={270}>
+        <InspectorTabs Owner="precipitation" Look="precipitation" Pages={[
+          { Id: "overview", Label: "Overview", Content: (<>
+        <Card Title="Precipitation type">
           <div className="precip-types">
             {["Rain", "Drizzle", "Hail", "Snow", "Sleet"].map((Name, Index) => (
               <button
@@ -1977,19 +2032,15 @@ export function Inspector({
             ))}
           </div>
         </Card>
-        <Card Title="Emission + collision" Height={224}>
-          {Tiles([
-            "Enabled",
-            "Follow Wind",
-            "Spawn from Clouds",
-            "Ground Collision",
-          ])}
-        </Card>
+        {Quick([Switch("Enabled", "rain"), Switch("Follow Wind", "wind"), Switch("Spawn from Clouds", "cloud-spawn"), Switch("Ground Collision", "collision")])}
+        {TagsAndNotes()}
+        </>) },
+          { Id: "particles", Label: "Particles", Content: (<>
         <div className="card-grid">
-          <Card Title="Fall + density" Height={446}>
+          <Card Title="Fall + density">
             {Fields("Intensity", "Density", "Particle Size", "Wind Drift")}
           </Card>
-          <Card Title="Particle scale" Height={446}>
+          <Card Title="Particle scale">
             <Metric
               Value={(V("Particle Size") * 3).toFixed(2)}
               Unit="mm"
@@ -2003,19 +2054,26 @@ export function Inspector({
             </p>
           </Card>
         </div>
-        <Card Title="Simulation + settling" Height={290}>
+        </>) },
+          { Id: "simulation", Label: "Simulation", Content: (<>
+        <Card Title="Simulation + settling">
           {Fields("Accumulation", "Particles", "Snow Depth")}
           <p>
             Native simulation disconnected in HTML. No live particle count is
             fabricated.
           </p>
         </Card>
+        </>) },
+        ]} />
       </>
     );
   } else if (Subject.Panel === "rainbow") {
+    // Follow-up 65: Overview (the preview, its switches, tags, notes), Bow (its response), Baking.
     Content = (
       <>
         {Header("Environment", "Rainbow")}
+        <InspectorTabs Owner="rainbow" Look="rainbow" Pages={[
+          { Id: "overview", Label: "Overview", Content: (<>
         <Card Title="Optical preview">
           <div
             className="rainbow-preview"
@@ -2028,21 +2086,30 @@ export function Inspector({
             kernel.
           </p>
         </Card>
-        <Card Title="Visibility" Height={154}>
-          {Tiles(["Enabled", "Alexander's Band"])}
-        </Card>
-        <Card Title="Bow response" Height={458}>
+        {Quick([Switch("Enabled", "rainbow"), Switch("Alexander's Band", "band")])}
+        {TagsAndNotes()}
+        </>) },
+          { Id: "bow", Label: "Bow", Content: (<>
+        <Card Title="Bow response">
           {Fields("Intensity", "Width", "Secondary", "Minimum Path")}
         </Card>
         {SpecificationCard()}
+        </>) },
+          { Id: "baking", Label: "Baking", Content: (<>
         <Bake Title="Bake / image" />
+        </>) },
+        ]} />
       </>
     );
   } else if (["clouds", "local-cloud"].includes(Subject.Panel)) {
     const Local = Subject.Panel === "local-cloud";
+    // Follow-up 65: Overview (the cloud study, its switch, tags, notes), Coverage, Layer (base, thickness, bounds and shape), Body, then
+    // for the global layer Wind and Quality (march, render scale, cloud shadows).
     Content = (
       <>
         {Header("Environment", Local ? "Local Cloud" : "Clouds")}
+        <InspectorTabs Owner={Subject.Panel} Look="clouds" Pages={[
+          { Id: "overview", Label: "Overview", Content: (<>
         {Values.ReferenceInspector?.Locked && (
           <button
             onClick={() =>
@@ -2056,9 +2123,10 @@ export function Inspector({
           </button>
         )}
         {ReferenceCards}
-        <Card Title="Cloud settings" Height={165}>
-          {Tiles(["Enabled"])}
-        </Card>
+        {Quick([Switch("Enabled", "cloud")])}
+        {TagsAndNotes()}
+        </>) },
+          { Id: "coverage", Label: "Coverage", Content: (<>
         <section
           className="cloud-coverage-replacement"
           data-card="Cloud coverage"
@@ -2066,8 +2134,10 @@ export function Inspector({
           {CloudCoverageCards}
           {F("Coverage")}
         </section>
+        </>) },
+          { Id: "layer", Label: "Layer", Content: (<>
         <div className="card-grid">
-          <Card Title="Cloud base" Height={452} GraphHandled>
+          <Card Title="Cloud base" GraphHandled>
             <Metric
               Value={(V("Base") / 1000).toFixed(2)}
               Unit="km"
@@ -2080,7 +2150,7 @@ export function Inspector({
             <CloudDeckPanel V={V} Change={AssignProperty} Local={Local} />
             {!Local && F("Base")}
           </Card>
-          <Card Title="Layer thickness" Height={452} GraphHandled>
+          <Card Title="Layer thickness" GraphHandled>
             <Metric
               Value={(V("Thickness") / 1000).toFixed(2)}
               Unit="km"
@@ -2095,7 +2165,7 @@ export function Inspector({
           </Card>
         </div>
         {Local && (
-          <Card Title="Local bounds" Height={452}>
+          <Card Title="Local bounds">
             <TransformPanel
               Values={Values}
               Change={Change}
@@ -2123,6 +2193,15 @@ export function Inspector({
             <CloudBounds V={V} Change={AssignProperty} />
           </Card>
         )}
+        {Local && (
+          <Card Title="Shape">
+            {F("Shape")}
+            {F("Prism sides", V("Shape") !== 1)}
+            {Fields("Yaw", "Edge softness")}
+          </Card>
+        )}
+        </>) },
+          { Id: "body", Label: "Body", Content: (<>
         <Card Title="Cloud body">
           {Fields(
             "Density",
@@ -2131,6 +2210,14 @@ export function Inspector({
             ...(!Local ? ["Type", "Anvil", "Ceiling"] : []),
           )}
         </Card>
+        {Local && SpecificationCard()}
+        </>) },
+          ...(Local ? [] : [
+          { Id: "wind", Label: "Wind", Content: (<>
+        {Group("Cloud wind", "Wind speed", "Wind bearing", "Wind shear", "Wind veer", "Turbulence")}
+        </>) },
+          { Id: "quality", Label: "Quality", Content: (<>
+        {Group("Quality", "March steps", "Render scale")}
         {!Local && (
           <details className="property-card">
             <summary>GPU cloud shadows · separate field</summary>
@@ -2141,6 +2228,10 @@ export function Inspector({
             ).map((Field) => F(Field.Label))}
           </details>
         )}
+        {SpecificationCard()}
+        </>) },
+          ]),
+        ]} />
       </>
     );
   } else if (Subject.Panel === "height-fog") {
@@ -2150,24 +2241,31 @@ export function Inspector({
       Readout = (Label, Text) => <Control key={Label} Field={{ Label, Control: "Readout" }} Value={Text} />,
       Far = (Sigma) => (Sigma > 1e-9 ? 3.912 / Sigma : Infinity),
       Metres = (Value) => (!isFinite(Value) ? "clear" : Value >= 1000 ? (Value / 1000).toFixed(1) + " km" : Math.round(Value) + " m");
+    // Follow-up 65: Overview (the layer, its switch, tags, notes), Density, Light.
     Content = (
       <>
         {Header("Environment")}
+        <InspectorTabs Owner="height-fog" Look="fog" Pages={[
+          { Id: "overview", Label: "Overview", Content: (<>
         <Card Title="Fog layer" Class="fog-own-card" GraphHandled>
-          {Tiles(["Enabled"])}
           <Metric Value={Metres(Far(Ground))} Caption="How far you can see at ground level" />
           <div className="graphic fog-scene-wrap">
             <HeightFogLayer V={V} Change={AssignProperty} />
           </div>
           {Fields("Density", "Falloff Height")}
         </Card>
-        <div className="card-grid fog-model-cards">
+        {Quick([Switch("Enabled", "fog")])}
+        {TagsAndNotes()}
+        </>) },
+          { Id: "density", Label: "Density", Content: (<>
           <Card Title="Density by altitude" Class="fog-own-card" GraphHandled>
             <HeightFogVisual V={V} Change={AssignProperty} />
             {Readout("Visibility at 0 m", Metres(Far(Ground)))}
             {Readout(`Visibility at ${Metres(Falloff)}`, Metres(Far(FogDensity("height-fog", V, Falloff, true))))}
             {Readout("Looking straight up", Number((Math.exp(-V("Density") * Falloff) * 100).toPrecision(2)) + " % of the light")}
           </Card>
+        </>) },
+          { Id: "light", Label: "Light", Content: (<>
           <Card Title="Light in the fog" Class="fog-own-card" GraphHandled>
             <Metric Value={Number(V("Sun Scatter")).toFixed(2)} Unit="×" Caption="Forward glow around the sun" />
             <div className="graphic fog-scene-wrap">
@@ -2176,7 +2274,8 @@ export function Inspector({
             {Fields("Sun Scatter")}
             {F("Colour")}
           </Card>
-        </div>
+        </>) },
+        ]} />
       </>
     );
   } else if (Subject.Panel === "aerial-fog") {
@@ -2184,11 +2283,13 @@ export function Inspector({
     const Sigma = FogDensity("aerial-fog", V, 2, true),
       Probe = V("Probe distance") ?? 200,
       Metres = (Value) => (!isFinite(Value) ? "clear" : Value >= 1000 ? (Value / 1000).toFixed(1) + " km" : Math.round(Value) + " m");
+    // Follow-up 65: Overview (the ridges, the switch, tags, notes) and Spectrum.
     Content = (
       <>
         {Header("Environment")}
+        <InspectorTabs Owner="aerial-fog" Look="fog" Pages={[
+          { Id: "overview", Label: "Overview", Content: (<>
         <Card Title="Aerial perspective" Class="fog-own-card" GraphHandled>
-          {Tiles(["Enabled"])}
           <Metric Value={Metres(Sigma > 1e-9 ? 3.912 / Sigma + V("Start") : Infinity)} Caption="Visibility, counting the clear air before Start" />
           <div className="graphic fog-scene-wrap">
             <AerialRidges V={V} Change={AssignProperty} />
@@ -2199,31 +2300,42 @@ export function Inspector({
             native atmosphere march.
           </p>
         </Card>
+        {Quick([Switch("Enabled", "fog")])}
+        {TagsAndNotes()}
+        </>) },
+          { Id: "spectrum", Label: "Spectrum", Content: (<>
         <Card Title="Spectral transmission" Class="fog-own-card" GraphHandled>
           <Metric Value={Math.round(V("Mie Blend") * 100)} Unit="% aerosol" Caption={V("Mie Blend") < 0.5 ? "Blue, clean-air haze" : "Grey-white, dusty haze"} />
           <FogSpectrum V={V} Change={AssignProperty} />
           {Fields("Mie Blend")}
         </Card>
+        </>) },
+        ]} />
       </>
     );
   } else if (Subject.Panel.includes("fog")) {
-    // Local Fog keeps the shared fog cards.
+    // Local Fog keeps the shared fog cards. Follow-up 65: Overview (visibility, the switch, tags, notes), Medium, Shape.
     Content = (
       <>
         {Header("Environment")}
-        <Card Title="Fog settings" Height={142}>
-          {Tiles(["Enabled"])}
-        </Card>
-        <Card Title="Visibility through fog" Height={435} GraphHandled>
+        <InspectorTabs Owner={Subject.Panel} Look="fog" Pages={[
+          { Id: "overview", Label: "Overview", Content: (<>
+        <Card Title="Visibility through fog" GraphHandled>
           <FogGraph Kind={Subject.Panel} V={V} Change={AssignProperty} />
         </Card>
-        <div className="card-grid fog-model-cards">
-          <Card Title="Medium" Height={416}>
+        {Quick([Switch("Enabled", "fog")])}
+        {TagsAndNotes()}
+        </>) },
+          { Id: "medium", Label: "Medium", Content: (<>
+          <Card Title="Medium">
             {Fields("Density", "Coverage", "Feature Scale", "Anisotropy")}
             <FogBeamChamber Kind={Subject.Panel} V={V} />
           </Card>
-          <FogShapePanel Values={Values} Change={Change} />
-        </div>
+        </>) },
+          { Id: "shape", Label: "Shape", Content: (<>
+        <FogShapePanel Values={Values} Change={Change} />
+        </>) },
+        ]} />
       </>
     );
   } else Content = Generic();

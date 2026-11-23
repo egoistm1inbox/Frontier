@@ -289,7 +289,8 @@ let IconStudio = null;
 export const CameraIcon = (Body, Size = 96) => ModelIcon(CameraAsset(Body), Size);
 // A transparent PNG of any model looking down −z (three-quarter view from the front left, studio lit), fitted to Width × Height, as a
 // data URL. The model is disposed afterwards.
-export function ModelIcon(Model, Size = 96, { Height = Size, Yaw = -140, Pitch = 18 } = {}) {
+// Exposure lifts a dark subject (a black tyre or rim) so it reads on its own against a dark panel, with no backing tile.
+export function ModelIcon(Model, Size = 96, { Height = Size, Yaw = -140, Pitch = 18, Exposure = 1.45 } = {}) {
   if (!IconStudio) {
     const Canvas = document.createElement("canvas");
     const Renderer = new THREE.WebGLRenderer({ canvas: Canvas, antialias: true, alpha: true, preserveDrawingBuffer: true });
@@ -310,6 +311,7 @@ export function ModelIcon(Model, Size = 96, { Height = Size, Yaw = -140, Pitch =
   Renderer.setPixelRatio(1);
   Renderer.setSize(Size, Height, false);
   Renderer.setClearColor(0x000000, 0);
+  Renderer.toneMappingExposure = Exposure;
   Camera.aspect = Size / Height;
   Scene.add(Model);
   Model.updateMatrixWorld(true);

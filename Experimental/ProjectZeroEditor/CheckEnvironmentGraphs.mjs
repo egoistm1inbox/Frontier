@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
-import { OpenTabWith } from "./TabReveal.mjs";
+import { OpenTabWith, PickTab } from "./TabReveal.mjs";
 const Require = createRequire(
   process.env.FRONTIER_BROWSER_PACKAGE ||
     new URL("../FrontierEditor/package.json", import.meta.url),
@@ -128,6 +128,8 @@ try {
   assert.equal(await Card("Sky presets").count(), 0);
   assert.equal(await Page.locator('[aria-label^="Atmosphere preset"]').count(), 0);
   assert.equal(await Card("Baked atmosphere").count(), 1);
+  // Follow-up 65: the from-space card (with the expand button) is the Atmosphere's View page.
+  await OpenTabWith(Page, "Expand AtmosphereLab");
   await Page.getByRole("button", {
     name: "Expand AtmosphereLab",
     exact: true,
@@ -202,6 +204,8 @@ try {
     name: "Animate orbit",
     exact: true,
   }).click();
+  // Follow-up 65: the from-space card (with the expand button) is the Atmosphere's View page.
+  await OpenTabWith(Page, "Expand AtmosphereLab");
   await Page.getByRole("button", {
     name: "Expand AtmosphereLab",
     exact: true,
@@ -249,6 +253,8 @@ try {
   await Select("Atmospheric Fog");
   if (!(await Saved()).Values["aerial-fog"].Enabled)
     await Page.getByRole("button", { name: "Enabled", exact: true }).click();
+  // Follow-up 65: the spectrum is Atmospheric Fog's Spectrum page; Local Cloud's bounds are on its Layer page.
+  await PickTab(Page, "aerial-fog:spectrum");
   const Spectrum = Page.getByRole("slider", {
       name: "Aerial fog spectrum",
       exact: true,
@@ -269,6 +275,7 @@ try {
     380,
   );
   await Select("Local Cloud");
+  await PickTab(Page, "local-cloud:layer");
   const Bounds = Card("Local bounds").locator(".cloud-bounds-plot"),
     BoundPath = await Bounds.locator("path").first().getAttribute("d");
   await Page.getByRole("slider", {

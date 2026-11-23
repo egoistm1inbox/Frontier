@@ -67,6 +67,18 @@ const Symbols = new Set([
   "anamorphic",
   "streaks",
   "starburst",
+  // Follow-up 65 tiles (the generic "toggle" switch is deliberately not semantic).
+  "lock",
+  "shadow",
+  "gi",
+  "focus",
+  "compass",
+  "horizon",
+  "atmosphere",
+  "galaxy",
+  "zodiac",
+  "tripod",
+  "vignette",
 ]);
 try {
   await Page.goto(process.env.FRONTIER_EDITOR_URL || "http://127.0.0.1:5180/", {

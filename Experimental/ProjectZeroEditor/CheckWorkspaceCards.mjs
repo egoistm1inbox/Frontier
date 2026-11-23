@@ -343,6 +343,8 @@ try {
       lighting: true,
       archive: true,
     },
+    // Follow-up 65: the fixture's folding is a saved choice, so the outliner keeps it.
+    OutlinerRevision: 1,
   };
   await Page.evaluate(
     (F) =>

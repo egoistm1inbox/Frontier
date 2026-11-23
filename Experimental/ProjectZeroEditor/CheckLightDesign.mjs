@@ -3,6 +3,7 @@ import path from "node:path";
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
+import { OpenTabWith, ReferenceSheet } from "./TabReveal.mjs";
 const Folder = path.dirname(fileURLToPath(import.meta.url));
 const Require = createRequire(
   process.env.FRONTIER_BROWSER_PACKAGE ||
@@ -33,8 +34,8 @@ const Open = async (Id) => {
   await Page.goto(Address + "?inspect=" + Id);
   await Page.locator(".inspector-scroll > [data-panel]").waitFor();
 };
-const Frame = () =>
-  Page.frameLocator('iframe[title^="Reference inspector"]').first();
+// Follow-up 65: the light's sheet sits over its Overview and Source pages; ReferenceSheet finds the slice holding each target.
+const Frame = () => ReferenceSheet(Page);
 const Ready = async (Id) => {
   await Open(Id);
   await Frame().locator(".lp-preview").waitFor();
@@ -105,7 +106,7 @@ try {
     );
     Pictures.push(await Plot());
     await Capture(Id);
-    await Page.locator('iframe[title^="Reference inspector"]').evaluate(
+    await Page.locator('iframe[title^="Reference inspector"]').first().evaluate(
       (Iframe) => (Iframe.style.width = "240px"),
     );
     await Page.waitForTimeout(100);
@@ -373,12 +374,13 @@ try {
   await Frame().locator(".wf-trace").waitFor();
   assert.equal(
     await Page.locator(
-      '[data-panel="wind"] > header + .reference-inspector-copy',
+      // Follow-up 65: the wind sheet opens Wind's Overview page.
+      '[data-panel="wind"] [data-tab-page="wind:overview"] > .reference-inspector-copy:first-child',
     ).count(),
     1,
   );
   const Order = await Page.locator(
-    '[data-panel="wind"] > .reference-inspector-copy,[data-panel="wind"] > [data-card="Wind field"]',
+    '[data-panel="wind"] .reference-inspector-copy,[data-panel="wind"] [data-card="Wind field"]',
   ).evaluateAll((Cards) =>
     Cards.map((Card) => Card.dataset.card || "Anemometer"),
   );
@@ -396,6 +398,7 @@ try {
     await Open(Id);
     const Visual = Page.locator(Picture),
       Before = await Visual.evaluate((Node) => Node.outerHTML);
+    await OpenTabWith(Page, "Density value");
     await Page.getByLabel("Density value", { exact: true }).fill(
       Id === "height-fog" ? "0.08" : "2",
     );

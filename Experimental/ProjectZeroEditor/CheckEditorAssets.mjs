@@ -77,15 +77,17 @@ try {
   Checks.push("Camera body: B · Digital swaps the viewport model (cine:digital) and the outliner icon (asset-camera-digital); A · Film swaps back");
 
   // Follow-up 59: Tripod off draws the body alone at head height (a camera that moves); on brings the tripod back. Stored per camera.
-  const Tripod = Page.getByRole("switch", { name: "Tripod" });
-  assert.equal(await Tripod.getAttribute("aria-checked"), "true");
+  // Follow-up 65: Tripod is one of the Overview page's Quick controls.
+  await PickTab(Page, "camera:overview");
+  const Tripod = Page.locator('[data-tab-page="camera:overview"] [data-quick-action="Tripod"]');
+  assert.equal(await Tripod.getAttribute("aria-pressed"), "true");
   await Tripod.click();
   await Page.waitForFunction(() => document.querySelector(".viewport-3d-canvas").dataset.cameras === "cine:film:free");
-  assert.equal(await Tripod.getAttribute("aria-checked"), "false");
+  assert.equal(await Tripod.getAttribute("aria-pressed"), "false");
   assert.equal(JSON.parse(await Page.evaluate(() => localStorage.getItem("Frontier.ProjectZeroHtml.v1"))).Values.cine.Tripod, false);
   await Page.waitForTimeout(400);
   await Page.locator(".scene-image").screenshot({ path: path.join(Proof, "Viewport3D-CameraNoTripod.png") });
-  await Page.locator('[data-card="Camera body"]').screenshot({ path: path.join(Proof, "CameraBodyNoTripod.png") });
+  await Page.locator('[data-card="Quick controls"]:visible').first().screenshot({ path: path.join(Proof, "CameraQuickNoTripod.png") });
   await Tripod.click();
   await Page.waitForFunction(() => document.querySelector(".viewport-3d-canvas").dataset.cameras === "cine:film");
   Checks.push("Tripod switch: off draws the film camera alone at head height (cine:film:free, Tripod false stored); on brings the tripod back");
@@ -154,7 +156,8 @@ try {
   );
   const Depth = (Id) => Page.locator(`[data-outliner-row="${Id}"]`).evaluate((Row) => Number(getComputedStyle(Row).getPropertyValue("--depth")));
   assert.equal(await Depth("vehicle"), (await Depth("vehicles")) + 1, "the vehicles nest in the folder");
-  assert.equal(await Depth("vehicle-body"), (await Depth("vehicle")) + 1, "the Controlled Vehicle's components nest under it");
+  // Follow-up 65: the Controlled Vehicle's components are listed in its Component Viewer only, not in the scene outliner.
+  assert.equal(await Page.locator('[data-outliner-row="vehicle-body"]').count(), 0, "no vehicle components in the scene outliner");
   for (const [Id, Model] of [["vehicle", "controlled"], ["offroad-vehicle", "offroad"], ["pickup-truck", "pickup"]]) {
     assert.equal(await RowIcon(Id).getAttribute("data-native-icon"), "asset-vehicle-" + Model);
     const [Drawn, Area] = await Opaque(Id);
@@ -175,8 +178,13 @@ try {
   await Page.locator(".inspector-scroll").screenshot({ path: path.join(Proof, "Vehicle-Size.png") });
   await PickTab(Page, "vehicle:drive");
   assert((await Page.locator("[data-vehicle-part]").count()) >= 6, "Drive lists the Controlled Vehicle's components");
-  // Follow-up 62: a Drive link opens the Component Viewer panel on that component; the editor stays on the vehicle.
+  // Follow-up 65: pressing a Drive component only picks it (no Component Viewer); the Open Component Viewer button then opens the
+  // panel on it, and the editor stays on the vehicle.
   await Page.locator('[data-vehicle-part="vehicle-suspension-fr"]').click();
+  await Page.locator('[data-vehicle-part="vehicle-suspension-fr"][aria-pressed="true"]').waitFor();
+  await Page.waitForTimeout(300);
+  assert.equal(await Page.locator(".vcp").count(), 0, "picking a component does not open the Component Viewer");
+  await Page.locator('[data-tab-page="vehicle:drive"] [data-open-component-viewer]').click();
   await Page.locator('.vcp[data-vcp-selected="vehicle-suspension-fr"]').waitFor();
   await Page.locator('[data-outliner-row="vehicle"][aria-selected="true"]').waitFor();
   await Page.keyboard.press("Escape");
@@ -188,7 +196,7 @@ try {
     await Page.locator(".inspector-scroll").screenshot({ path: path.join(Proof, `Vehicle-${Id}.png`) });
   }
   await Canvas().screenshot({ path: path.join(Proof, "Viewport-Vehicles.png") });
-  Checks.push("Vehicle inspector: page carousel; a paint repaints the picture and the outliner summary (Rally red); Drive lists and selects the components");
+  Checks.push("Vehicle inspector: page carousel; a paint repaints the picture and the outliner summary (Rally red); Drive lists and picks the components, and its button opens the Component Viewer on the picked one");
 
   // Scenes saved before Follow-up 60 (a Vehicle group, no folder, no parked vehicles) gain the folder and the two parked vehicles.
   await Page.evaluate(() => {

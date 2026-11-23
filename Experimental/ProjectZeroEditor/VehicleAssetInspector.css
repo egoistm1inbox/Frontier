@@ -213,3 +213,11 @@
   font-size: 10px;
   color: #55585e;
 }
+/* Follow-up 65: a picked component (the Component Viewer button opens on it). */
+.va-part.on {
+  background: #1c2a3a;
+  box-shadow: inset 0 0 0 1px #6aa9ff55;
+}
+.va-parts + .va-viewer {
+  margin-top: 12px;
+}

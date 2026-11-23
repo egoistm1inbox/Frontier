@@ -3,6 +3,7 @@ import path from "node:path";
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
+import { PickTab, ReferenceSheet } from "./TabReveal.mjs";
 const Folder = path.dirname(fileURLToPath(import.meta.url));
 const Require = createRequire(
   process.env.FRONTIER_BROWSER_PACKAGE ||
@@ -56,13 +57,15 @@ try {
   for (const Id of ["clouds", "local-cloud"]) {
     await Open(Id);
     await Slice("summary").locator(".cl-hero").waitFor();
-    await Slice("coverage").locator(".cl-cover").waitFor();
+    // Follow-up 65: the summary opens the Overview page; Coverage and the deck have pages of their own.
     assert.equal(
       await Page.locator(
-        `[data-panel="${Id}"] > header + .reference-inspector-copy`,
+        `[data-panel="${Id}"] [data-tab-page="${Id}:overview"] > .reference-inspector-copy:first-child`,
       ).count(),
       1,
     );
+    await PickTab(Page, `${Id}:coverage`);
+    await Slice("coverage").locator(".cl-cover").waitFor();
     assert.equal(await Page.locator("iframe").count(), 2);
     assert.equal(await Page.locator('[data-card="Cloud base"]').count(), 1);
     assert.equal(
@@ -73,6 +76,7 @@ try {
     await Capture(Id + "Dock");
     // Follow-up 48: global cloud cover is shown 0–100 % (§4); local cloud keeps its 0–1 fraction (§5). Storage stays 0–1.
     const Shown = Id === "clouds" ? 100 : 1;
+    await PickTab(Page, `${Id}:coverage`);
     await Page.getByLabel("Coverage value", { exact: true }).fill(String(0.65 * Shown));
     await Page.waitForFunction(
       (Id) =>
@@ -128,6 +132,7 @@ try {
     await Slice("summary").locator(".cl-local-domain").innerText(),
     "LOCAL VOLUME · SCHEMATIC",
   );
+  await PickTab(Page, "local-cloud:layer");
   const Centre = Page.getByRole("spinbutton", {
       name: "Centre Z",
       exact: true,
@@ -151,7 +156,7 @@ try {
   await Slice("summary")
     .locator(".mp-rail")
     .filter({ hasText: "300" })
-    .waitFor();
+    .waitFor({ state: "attached" });
   assert(
     (await Page.locator('[data-card="Layer thickness"]').innerText()).includes(
       "0.30",
@@ -171,6 +176,7 @@ try {
   );
   assert.equal(await Half.inputValue(), "150");
   await Open("local-cloud");
+  await PickTab(Page, "local-cloud:layer");
   assert.equal(await Centre.inputValue(), "460");
   Checks.push(
     "Local base = centre Z − half height; thickness = twice half height; keyboard deck edits translate bounds without changing size and persist",
@@ -222,12 +228,10 @@ try {
   ];
   for (const Id of Lights) {
     await Open(Id);
-    const Controls =
-      Id === "light"
-        ? Page.frameLocator('[data-reference-slice="details"] iframe')
-        : Light();
-    await Controls.locator(".lp-shape").waitFor();
-    const Image = Light().locator(".lp-source-icon img");
+    // Follow-up 65: every light has the summary on Overview and the source and controls on Source.
+    const Controls = Page.frameLocator('[data-reference-slice="details"] iframe');
+    await Controls.locator(".lp-shape").waitFor({ state: "attached" });
+    const Image = ReferenceSheet(Page).locator(".lp-source-icon img");
     await Image.evaluate((Image) => Image.decode());
     const Record = (await Saved()).Rows.find((Row) => Row.Id === Id);
     const Asset = await Page.evaluate(
@@ -242,9 +246,11 @@ try {
     if (["light", "reference-softbox"].includes(Id))
       assert.equal(Record.Icon, "editor-area-light");
     await Wide();
+    await PickTab(Page, "light:overview");
     const Source = await Light().locator(".lp-preview").boundingBox();
     const Rail = await Light().locator(".lp-preview .lp-readings").boundingBox();
     const Output = await Light().locator(".lp-preview > .lp-output").boundingBox();
+    await PickTab(Page, "light:source");
     const Shape = await Controls.locator(".lp-shape").boundingBox();
     const Visual = await Controls.locator(".lp-shape > .lp-shape-visual").boundingBox();
     assert(Source.width > 650);

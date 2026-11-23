@@ -140,7 +140,7 @@ export const PanelSpecification = {
     Added: [
       Slider("Planet radius", 1000, 20000, 6371, "km", 0, "Planet"),
       Switch("Orbital view", false, "Observer"),
-      Slider("Observer altitude", 0, 400000, 2, "m", 0, "Observer"),
+      // Observer altitude is the from-space card's Space altitude (Follow-up 65), so the specification does not add a second slider.
       Choice("Wind source", WindSources, 0, "Wind binding"),
     ],
   },

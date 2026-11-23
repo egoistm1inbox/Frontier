@@ -125,8 +125,8 @@ try {
   }
   // A real pointer drag, rather than synthetic value assignment.
   await Select("Editor Camera");
-  // The camera inspector reopens on the tab last used; Focal Length is on A · Lens.
-  await PickTab(Page, "camera:lens");
+  // The camera inspector reopens on the tab last used; Focal Length is on 1 · Overview (Follow-up 65).
+  await PickTab(Page, "camera:overview");
   const Range = Page.getByRole("slider", { name: "Focal Length", exact: true });
   await Range.scrollIntoViewIfNeeded();
   const Rect = await Range.boundingBox(),
@@ -296,18 +296,33 @@ try {
   await Page.getByRole("combobox", {
     name: "Active moon instance",
   }).selectOption("1");
+  // Follow-up 65: the catalogue is the Moon's Appearance page (the slot picker stays on Overview).
+  await PickTab(Page, "moon:appearance");
   await Page.locator(".moon-catalogue")
     .getByRole("button", { name: "Ember", exact: true })
     .click();
+  await PickTab(Page, "moon:overview");
   await Page.getByRole("combobox", {
     name: "Active moon instance",
   }).selectOption("0");
   await Page.getByRole("combobox", {
     name: "Active moon instance",
   }).selectOption("1");
+  await PickTab(Page, "moon:appearance");
   assert.ok(
     await Page.locator(".moon-catalogue .selected").getByText("Ember").count(),
   );
+  // Follow-up 65: Appearance holds one moonlight / size / atmosphere preview, and Pitch really turns the orientation sphere.
+  assert.equal(await Page.locator('[data-card="Moonlight, size and atmosphere"] canvas.moon-look-preview').count(), 1);
+  assert.equal(await Page.locator('[data-card="Moonlight"], [data-card="Moon size"], [data-card="Moon atmosphere"]').count(), 0);
+  await PickTab(Page, "moon:position");
+  const Turn = Page.locator('[data-card="Moon rotation"] canvas.moon-turn');
+  await Page.waitForTimeout(400);
+  const Level = await Turn.evaluate((Canvas) => Canvas.toDataURL());
+  await Page.getByLabel("Pitch value", { exact: true }).fill("60");
+  await Page.getByLabel("Pitch value", { exact: true }).press("Enter");
+  await Page.waitForFunction(() => document.querySelector(".moon-turn")?.dataset.moonPitch === "60");
+  assert.notEqual(await Turn.evaluate((Canvas) => Canvas.toDataURL()), Level, "Pitch redraws the moon");
   // Clean baseline screenshots, not the control torture-test state.
   await Page.evaluate(() => localStorage.clear());
   await Page.reload({ waitUntil: "networkidle" });

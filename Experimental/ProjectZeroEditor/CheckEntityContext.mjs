@@ -41,7 +41,19 @@ const Metadata = (Name) => Row(Name).locator(".row-identity small").innerText();
 try {
   await Page.goto(Address + "?inspect=precipitation");
   await Page.evaluate(() => localStorage.clear());
-  await Page.reload();
+  await Page.goto(Address);
+  await Page.locator(".outliner-row").first().waitFor();
+  await Page.waitForTimeout(500);
+  // Follow-up 65: a fresh outliner is folded: the five top folders, with only the World folder's items showing; no vehicle
+  // components (they live in the Component Viewer).
+  assert.deepEqual(
+    await Page.locator(".outliner-row").evaluateAll((Rows) => Rows.map((Row) => Row.dataset.outlinerRow)),
+    ["showcase", "cameras", "world", "atmosphere", "sun", "moon", "stars", "wind", "height-fog", "aerial-fog", "local-fog", "clouds", "local-cloud", "lighting", "vehicles"],
+  );
+  Checks.push("A fresh outliner starts folded with only the World folder's items showing");
+  // Unfold everything for the counts below (the folding the user leaves is kept from then on).
+  await Page.evaluate(() => localStorage.setItem("Frontier.ProjectZeroHtml.v1", JSON.stringify({ Collapsed: {}, OutlinerRevision: 1 })));
+  await Page.goto(Address + "?inspect=precipitation");
   await Page.locator(".outliner-row").first().waitFor();
   await Page.waitForTimeout(500);
 
@@ -49,11 +61,11 @@ try {
   // 71: Follow-up 48 adds the God Rays row (Project Zero specification §7). 56: Follow-up 46 moves the 15 Mass / Rigid Body / Collision
   // rows of the five primitives into each object's Components stack. 59: Follow-up 60 adds the Vehicles folder and two parked vehicles.
   // 69: Follow-up 63's component tree (18 vehicle components, was 8: no collision or movement, a suspension, wheel and rim per corner,
-  // steering per front corner).
-  assert.equal(Labels.length, 69);
+  // steering per front corner). 51: Follow-up 65 lists those 18 in the Component Viewer only.
+  assert.equal(Labels.length, 51);
   assert(Labels.every((Label) => Label.trim().length));
   Checks.push(
-    "All 69 default outliner entities expose a non-empty contextual value line",
+    "All 51 default outliner entities expose a non-empty contextual value line",
   );
 
   assert.equal(await Metadata("Area Light"), "32 lx · Area · 0,0,0");
@@ -95,17 +107,19 @@ try {
       await Page.locator(".vcp").waitFor({ state: "detached" });
       continue;
     }
+    // Follow-up 65: paged inspectors carry a Notes card on their first page instead of the header's Add notes action.
     assert.equal(
-      await Page.locator(".inspector-scroll .entity-notes-add").count(),
+      await Page.locator(".inspector-scroll .entity-notes-add, .inspector-scroll .notes-card").count(),
       1,
+      "one notes place for " + (await Entry.getAttribute("data-outliner-row")),
     );
   }
   Checks.push(
-    "Every default entity and collection exposes exactly one optional Add notes action",
+    "Every default row and collection exposes exactly one notes place (Add notes, or the first page's Notes card)",
   );
 
   await Row("Precipitation").click();
-  await Page.getByRole("button", { name: "Add notes", exact: true }).click();
+  assert.equal(await Page.getByRole("button", { name: "Add notes", exact: true }).count(), 0);
   const Notes = Page.getByRole("textbox", { name: "Instance notes" });
   await Notes.fill("Weather pass review");
   await Page.waitForFunction(
@@ -120,10 +134,13 @@ try {
     "Weather pass review",
   );
   Checks.push(
-    "Entity notes open on demand and persist across reload without becoming mandatory",
+    "Row notes (the Notes card) persist across reload",
   );
 
   await Page.screenshot({ path: path.join(Proof, "NotesAndMetadata.png") });
+  // A folder keeps the optional header notes: Add notes opens them, Hide folds them away again.
+  await Row("World").click();
+  await Page.getByRole("button", { name: "Add notes", exact: true }).click();
   await Page.getByRole("button", { name: "Hide", exact: true }).click();
   assert.equal(
     await Page.getByRole("button", { name: "Add notes" }).count(),

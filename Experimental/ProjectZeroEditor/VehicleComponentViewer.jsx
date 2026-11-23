@@ -172,8 +172,8 @@ function ComponentOutliner({ Rows, Values, Hidden, Selected, Select, ToggleHidde
         >
           {Caret ? (Folded.has(Row.Id) ? "▸" : "▾") : ""}
         </span>
-        {/* A mesh row shows a render of its mesh (VehiclePartIcon) on a light tile; the rest show their class or socket icon. */}
-        <span className={"vcp-row-icon" + (!Root && Row.Component === "StaticMesh" ? " vcp-row-render" : "")}>
+        {/* A mesh row shows a render of its mesh (VehiclePartIcon, on a transparent background); the rest show their class or socket icon. */}
+        <span className="vcp-row-icon">
           <Icon Name={Root ? "vehicle-component-origin" : ComponentIcon(Row, Values[Row.Id] || {})} Size={!Root && Row.Component === "StaticMesh" ? 22 : 18} />
         </span>
         <span className="vcp-row-text">
@@ -303,7 +303,9 @@ const Views = [
 ];
 
 // The centre dock: the vehicle with its components drawn (the visual debugs), its heading and tools.
-function VehicleComponentView({ Rows, Values, Hidden, Selected, Select, Leave, Remove, Controls, Icon }) {
+// Debug: the editor's debug-menu switches for the centre-of-mass marks and the socket gizmos (Follow-up 65); the toolbar's buttons
+// flip the same switches.
+function VehicleComponentView({ Rows, Values, Hidden, Selected, Select, Leave, Remove, Controls, Icon, Debug = null }) {
   const Host = useRef(null);
   const Tag = useRef(null);
   const Scene = useRef(null);
@@ -311,7 +313,12 @@ function VehicleComponentView({ Rows, Values, Hidden, Selected, Select, Leave, R
   const [Simulating, Simulate] = useState(false);
   const [XRay, SetXRay] = useState(false);
   const [OnlySelected, SetOnlySelected] = useState(false);
-  const [ShowCentres, SetShowCentres] = useState(true);
+  const [OwnCentres, SetOwnCentres] = useState(true);
+  const [OwnSockets, SetOwnSockets] = useState(true);
+  const ShowCentres = Debug ? Debug.Centres : OwnCentres;
+  const ShowSockets = Debug ? Debug.Sockets : OwnSockets;
+  const SetShowCentres = (On) => (Debug ? Debug.Set("Centres", On) : SetOwnCentres(On));
+  const SetShowSockets = (On) => (Debug ? Debug.Set("Sockets", On) : SetOwnSockets(On));
   const [Readout, SetReadout] = useState("");
   const Vehicle = Rows.find((Row) => Row.Id === Owner);
   const Mine = VehicleDescendants(Rows).map((Each) => Each.Row);
@@ -489,7 +496,7 @@ function VehicleComponentView({ Rows, Values, Hidden, Selected, Select, Leave, R
   }, [Paint]);
 
   // The components: rebuilt whenever one of them, the selection or the display options change.
-  const Signature = JSON.stringify([Mine.map((Row) => [Row.Id, Row.Parent, Row.Component, Row.Mount, Row.Corner, Row.Asset, Values[Row.Id], Hidden[Row.Id]]), Selected, OnlySelected, XRay, ShowCentres]);
+  const Signature = JSON.stringify([Mine.map((Row) => [Row.Id, Row.Parent, Row.Component, Row.Mount, Row.Corner, Row.Asset, Values[Row.Id], Hidden[Row.Id]]), Selected, OnlySelected, XRay, ShowCentres, ShowSockets]);
   useEffect(() => {
     const Built = Scene.current;
     if (!Built) return;
@@ -614,7 +621,7 @@ function VehicleComponentView({ Rows, Values, Hidden, Selected, Select, Leave, R
       const Socket = { P, Axle, Points, Corners, Looks: [] };
       Built.Sockets.set(Row.Id, Socket);
       Built.Anchors.set(Row.Id, [Points[Points.length - 1][0], Points[Points.length - 1][1] + 0.45, Points[Points.length - 1][2]]);
-      if (!Shown(Row)) continue;
+      if (!Shown(Row) || !ShowSockets) continue;
       Drawn.push(Row.Id);
       for (const At of Points) {
         const Look = socketVisual(P, { selected: Selected === Row.Id });
@@ -727,6 +734,9 @@ function VehicleComponentView({ Rows, Values, Hidden, Selected, Select, Leave, R
         <button type="button" className="vcp-tool" aria-pressed={ShowCentres} onClick={() => SetShowCentres(!ShowCentres)} title="Show each mesh's centre of mass and the whole vehicle's" data-vcp-centres>
           Centre of mass
         </button>
+        <button type="button" className="vcp-tool" aria-pressed={ShowSockets} onClick={() => SetShowSockets(!ShowSockets)} title="Show the socket gizmos (also in the editor's debug menu)" data-vcp-sockets>
+          Sockets
+        </button>
         <button type="button" className="vcp-tool round" onClick={() => Scene.current?.FitSelection?.()} aria-label="Fit selection" title="Fit the selected component in view (F)">
           <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
             <path d="M2 5.5V2h3.5M10.5 2H14v3.5M14 10.5V14h-3.5M5.5 14H2v-3.5" />
@@ -756,7 +766,7 @@ function VehicleComponentView({ Rows, Values, Hidden, Selected, Select, Leave, R
 // The Component Viewer panel for the Controlled Vehicle, opened from its inspector (or by choosing one of its components anywhere): its
 // own Components outliner, the vehicle view and its own Details, where the selected component's native inspector edits it. Choosing a
 // component here never changes the editor's selection.
-export function VehicleComponentPanel({ Rows, Values, Hidden, Focus, ToggleHidden, Close, Icon, Details, Add, Remove }) {
+export function VehicleComponentPanel({ Rows, Values, Hidden, Focus, ToggleHidden, Close, Icon, Details, Add, Remove, Debug = null }) {
   const [Selected, Select] = useState(Focus?.Id || Owner);
   const Controls = useRef(null);
   useEffect(() => {
@@ -781,7 +791,7 @@ export function VehicleComponentPanel({ Rows, Values, Hidden, Focus, ToggleHidde
       </header>
       <div className="vcp-body">
         <ComponentOutliner Rows={Rows} Values={Values} Hidden={Hidden} Selected={Subject.Id} Select={Select} ToggleHidden={ToggleHidden} Icon={Icon} Add={Add} Fit={() => Controls.current?.Fit()} />
-        <VehicleComponentView Rows={Rows} Values={Values} Hidden={Hidden} Selected={Subject.Id} Select={Select} Leave={Close} Remove={(Id) => (Remove(Id), Select(Owner))} Controls={Controls} Icon={Icon} />
+        <VehicleComponentView Rows={Rows} Values={Values} Hidden={Hidden} Selected={Subject.Id} Select={Select} Leave={Close} Remove={(Id) => (Remove(Id), Select(Owner))} Controls={Controls} Icon={Icon} Debug={Debug} />
         <section className="vcp-dock vcp-right" aria-label="Details">
           <div className="vcp-tabs">
             <span className="vcp-tab on">Details</span>

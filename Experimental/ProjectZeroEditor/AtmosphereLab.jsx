@@ -349,7 +349,8 @@ function Space({ V, Change, Expand, Turn, Orbit }) {
     </section>
   );
 }
-export default function AtmosphereLab({ V, Change }) {
+// Part: "overview" draws only the limb card, "space" only the from-space card (and its expanded window); both by default.
+export default function AtmosphereLab({ V, Change, Part = "both" }) {
   const [Open, Expand] = useState(false),
     Root = useRef(null),
     Opener = useRef(null),
@@ -408,9 +409,9 @@ export default function AtmosphereLab({ V, Change }) {
   };
   return (
     <>
-      <div className="card-grid atmosphere-lab-cards">
-        <AtmosphereCard V={V} Change={Change} />
-        <Space
+      <div className={"card-grid atmosphere-lab-cards" + (Part === "both" ? "" : " single")}>
+        {Part !== "space" && <AtmosphereCard V={V} Change={Change} />}
+        {Part !== "overview" && <Space
           Turn={Turn}
           Orbit={Orbit}
           V={V}
@@ -419,7 +420,7 @@ export default function AtmosphereLab({ V, Change }) {
             Opener.current = document.activeElement;
             Expand(true);
           }}
-        />
+        />}
       </div>
       {Open &&
         createPortal(

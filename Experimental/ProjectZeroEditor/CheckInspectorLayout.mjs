@@ -8,6 +8,7 @@ import {
   ConsolidateAtmosphereValues,
   ConsolidateAtmosphereFlags,
 } from "./ScenePolicy.js";
+import { OpenTabWith, ReferenceSheet } from "./TabReveal.mjs";
 const Folder = path.dirname(fileURLToPath(import.meta.url)),
   Root = path.resolve(Folder, "../../..");
 const Require = createRequire(
@@ -76,7 +77,7 @@ try {
   await Open("sun");
   assert.equal(
     // Sun now opens the Sun's first numbered page, right under the heading and the page carousel's strip (Follow-up 64).
-    await Page.locator('[data-panel="sun"] > header + .inspector-tabs > .pc-strip + .pc-pages > [data-tab-page="sun:now"]:not([hidden]) > [data-card="Sun now"]:first-child').count(),
+    await Page.locator('[data-panel="sun"] > header + .inspector-tabs > .pc-strip + .pc-pages > [data-tab-page="sun:overview"]:not([hidden]) > [data-card="Sun now"]:first-child').count(),
     1,
   );
   assert.equal(await Page.locator('[data-panel="sun"] .reference-inspector-copy').count(), 0);
@@ -114,13 +115,13 @@ try {
   const Trace = await Wind.locator("canvas")
     .first()
     .evaluate((Node) => Node.toDataURL());
-  await Page.waitForTimeout(600);
-  assert.notEqual(
-    await Wind.locator("canvas")
-      .first()
-      .evaluate((Node) => Node.toDataURL()),
-    Trace,
-  );
+  // The trace is live: it redraws within a few seconds (polled, since the software renderer can stall a frame or two).
+  let Redrawn = false;
+  for (let Try = 0; Try < 20 && !Redrawn; Try++) {
+    await Page.waitForTimeout(300);
+    Redrawn = (await Wind.locator("canvas").first().evaluate((Node) => Node.toDataURL())) !== Trace;
+  }
+  assert(Redrawn, "the wind trace redraws");
   await Page.screenshot({ path: path.join(Proof, "Anemometer.png") });
   Checks.push(
     "Anemometer retains its live trace and removes all four secondary readouts",
@@ -139,6 +140,8 @@ try {
     await Open(Id);
     assert.equal(await Page.locator(".reference-inspector-copy,.fog-instruments").count(), 0);
     assert.equal(await Page.getByLabel("Fog probe distance", { exact: true }).count(), 1);
+    // Follow-up 65: the beam chamber has a page of its own (role locators skip shut pages).
+    await OpenTabWith(Page, "Fog beam chamber");
     assert.equal(
       await Page.getByRole("img", { name: "Fog beam chamber", exact: true }).count(),
       1,
@@ -147,10 +150,11 @@ try {
       await Page.locator('[data-card="Medium"] > .fog-shared-beam').count(),
       1,
     );
-    const Before = await Page.locator('[data-card="Visibility through fog"] .graph-metric').innerText();
+    const Before = await Page.locator('[data-card="Visibility through fog"] .graph-metric').evaluate((Node) => Node.textContent);
+    await OpenTabWith(Page, "Density value");
     await Page.getByLabel("Density value", { exact: true }).fill("2");
     assert.notEqual(
-      await Page.locator('[data-card="Visibility through fog"] .graph-metric').innerText(),
+      await Page.locator('[data-card="Visibility through fog"] .graph-metric').evaluate((Node) => Node.textContent),
       Before,
     );
     await Open(Id);
@@ -169,7 +173,8 @@ try {
     );
   }
   await Open("reference-key-spot");
-  let Frame = Page.frameLocator("iframe");
+  // Follow-up 65: the light's sheet sits over its Overview and Source pages; ReferenceSheet finds the slice holding each target.
+  let Frame = ReferenceSheet(Page);
   await Frame.locator(".transform-card").waitFor();
   assert.equal(await Frame.locator(".lp-placement").count(), 0);
   assert.equal(await Frame.getByLabel("Target X", { exact: true }).count(), 0);
@@ -187,10 +192,10 @@ try {
     () =>
       JSON.parse(localStorage.getItem("Frontier.ProjectZeroHtml.v1")).Values[
         "reference-key-spot"
-      ].ReferenceInspector.Properties.scale[0] === 1.5,
+      ].ReferenceInspector?.Properties?.scale?.[0] === 1.5,
   );
   await Open("reference-key-spot");
-  Frame = Page.frameLocator("iframe");
+  Frame = ReferenceSheet(Page);
   assert.equal(
     await Frame.getByLabel("Rotation Y", { exact: true }).inputValue(),
     "45",
@@ -224,7 +229,7 @@ try {
     localStorage.setItem("Frontier.ProjectZeroHtml.v1", JSON.stringify(Saved));
   });
   await Open("reference-key-spot");
-  Frame = Page.frameLocator("iframe");
+  Frame = ReferenceSheet(Page);
   assert(await Frame.getByLabel("Position X", { exact: true }).isDisabled());
   Checks.push(
     "Shared light Transform supports position, aim-preserving moves, rotation, scale, reset, persistence and locking; old target/map UI removed",

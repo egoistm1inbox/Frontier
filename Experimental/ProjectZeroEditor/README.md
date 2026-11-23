@@ -307,6 +307,50 @@ starting point for the UI redesign.
   - **Lamp heads pick first.** A click on a light's head selects that light even when another prop is in front. Before, the Studio
     Tube's head selected the Area Light. The invisible grab spheres in `LightProps.js` are tried before the rest of the scene.
   - Evidence is in `Exhibits/ProjectZeroEditor/FollowUp54/`. Names are unapproved.
+- **Follow-up 65.**
+  - **Inspectors in categories.** Every environment, camera, light and effect inspector opens on an **Overview** page that ends
+    with three shared cards (`QuickControls`, `TagsCard`, `NotesCard` in `Inspectors.jsx`, placed by `TagsAndNotes`): Quick controls (one tile per switch,
+    lit green when on and grey when off, with an "n / N on" count), Tags (`Values.Tags`, starting from `PanelTags`) and Notes
+    (`Values.Notes`). On these inspectors the header no longer has its own Add notes button. Folders keep it.
+    - **Sun:** Overview (Sun now; Quick controls for Enabled, Cast shadows, Day cycle and Manual direction; Sun direction;
+      Sunlight intensity), Temperature, Sun disc, Dynamic (Daylight cycle, Dynamic settings, Observer and date), Baking. "Now" and
+      "Light" are now one page. Sun direction shows one Azimuth / Elevation pair, and the manual sliders appear only when Manual
+      direction is on. The Lens Flare subcomponent row is gone.
+    - **Atmosphere:** Overview, Scattering, Density (falloff; Planet and air, formerly Shell), Sky colour, View (from space, wind
+      binding), Baking. The specification's
+      Observer altitude slider is dropped because the from-space card's Space altitude is the same thing.
+    - **Moon:** Overview (slot, phase), Appearance (the catalogue, then one **Moonlight, size and atmosphere** card whose preview
+      shows the moon in a night sky with its halo, its angular size against a dashed 0.52° ring and its tinted atmosphere rim),
+      Position. `MoonGlobe.jsx` draws the moon as a lit sphere from its equirectangular texture, so the Moon rotation card's
+      **Pitch** now tips the surface (before, only Roll spun a flat picture and Pitch did nothing). **Stars:** Overview, Motion,
+      Renderer, Baking. **Lens Flare:** Overview, Optics (Aperture Blades with the ghosts), Halo, Baking. The preview pose is the
+      composite's drag, and the Legacy page is gone. **Camera:** Overview (lens; Tripod, Depth of field, Vignette and the lags as
+      Quick controls), Focus, Body, Render.
+    - **Rainbow, Wind, Precipitation, Clouds, Local Cloud, the three fogs:** paged the same way.
+    - **Lights:** Overview (the reference summary, Quick controls, Tags, Notes) and Source (the light's source and controls), for the reference
+      lights too. The sheet's duplicate Cast shadows tile and the LIGHT / AIM groups are gone.
+    - **God Rays, Post Process, Environment Light and the effects:** `SheetPages` builds Overview plus Settings, or one page per
+      group when a sheet has more than ten fields.
+    - Quick-control icons (`ActionIcon.jsx`): a named icon now wins. New glyphs: compass, horizon, atmosphere, galaxy, zodiac,
+      tripod, vignette and toggle. A label with no picture gets the switch glyph instead of the eye.
+  - **Outliner.** It opens folded, with only the World folder's items showing (`OutlinerRevision`, `FoldedOutliner`). Choosing a row
+    elsewhere unfolds its folders. The Controlled Vehicle's components are listed only in the Component Viewer.
+  - **Component Viewer opens only from its button.** A component link, search or `?inspect=` selects the vehicle without opening
+    the panel. Pressing a component on the vehicle's Drive page only picks it. The Open Component Viewer button then opens on that
+    component.
+  - **Debug switches.** The viewport settings now have **Centre of mass debug** and **Socket debug** switches, saved in Settings.
+    They drive the Component Viewer's COM marks and socket gizmos. Its toolbar has matching Centre of mass and Sockets buttons.
+  - **Part renders on transparent backgrounds.** The light tile is gone. The tyre and rim are rendered with more exposure
+    (`ModelIcon`'s `Exposure`) so they read on the dark panel.
+  - Checks:
+    - `TabReveal.mjs` adds `ReferenceSheet`, which finds a light's sheet slice on whichever page holds it.
+    - `CheckInspectorOrder`, `CheckEntityContext` (folded start, 51 rows), `CheckFogCards`, `CheckCloudPlacement`,
+      `CheckLightDesign`, `CheckWind`, `CheckFogCamera`, `CheckEnvironmentGraphs`, `CheckEditorAssets`, `CheckSharedCards`,
+      `CheckInspectorLayout`, `CheckBrowser` (the one Moon preview; Pitch redraws the sphere), `CheckQuickTools`,
+      `CheckWorkspaceCards`,
+      `CheckVehicleComponentViewer` (button-only opening, no component rows, debug switches) and `CheckVehicleSockets` follow
+      the new pages.
+  - Evidence is in `Exhibits/ProjectZeroEditor/FollowUp55/`. Names are unapproved.
 
 ---
 

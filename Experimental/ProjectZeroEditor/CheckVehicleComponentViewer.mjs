@@ -187,13 +187,35 @@ try {
   await Page.locator(".vcp").waitFor({ state: "detached" });
   Checks.push("Esc closes the panel");
 
-  // Choosing a component elsewhere (here ?inspect=) selects the vehicle and opens the panel on that component.
+  // Follow-up 65: choosing a component elsewhere (here ?inspect=) selects the vehicle without opening the panel; the inspector's
+  // Open Component Viewer button then opens it on that component.
   await Page.goto(Address + "?inspect=vehicle-wheel-rl");
+  await Page.locator('[data-outliner-row="vehicle"][aria-selected="true"]').waitFor();
+  await Page.waitForTimeout(400);
+  assert.equal(await Page.locator(".vcp").count(), 0, "a component link does not open the Component Viewer");
+  assert.equal(await MainHeading(), "Controlled Vehicle");
+  await Page.locator("[data-open-component-viewer]").first().click();
   await Page.locator(".vcp").waitFor();
   await PanelOn("vehicle-wheel-rl");
   assert.equal(await Details(), "WheelRL");
-  assert.equal(await MainHeading(), "Controlled Vehicle");
-  Checks.push("Choosing a component outside the panel opens the panel on it; the editor selects the vehicle");
+  Checks.push("Choosing a component outside the panel selects the vehicle only; the button opens the panel on that component");
+
+  // Follow-up 65: the scene outliner lists the vehicle but none of its components (they live in the Component Viewer).
+  assert.equal(await Page.locator('[data-outliner-row^="vehicle-"]').count(), 0, "no vehicle component rows in the scene outliner");
+  // The debug menu's Centre of mass and Socket switches drive the panel's marks (the toolbar buttons flip the same switches).
+  const Drawn = () => Page.locator(".vcp canvas[data-components]").getAttribute("data-components");
+  assert.match(await Drawn(), /vehicle-suspension-fl/);
+  await Page.locator("[data-vcp-sockets]").click();
+  await Page.waitForFunction(() => !/vehicle-suspension-fl/.test(document.querySelector(".vcp canvas[data-components]")?.dataset.components || ""));
+  assert.equal(await Page.locator("[data-vcp-sockets]").getAttribute("aria-pressed"), "false");
+  await Page.locator("[data-vcp-sockets]").click();
+  await Page.waitForFunction(() => /vehicle-suspension-fl/.test(document.querySelector(".vcp canvas[data-components]")?.dataset.components || ""));
+  const Stored = async () => (await Page.evaluate(() => JSON.parse(localStorage.getItem("Frontier.ProjectZeroHtml.v1")).Settings)) || {};
+  await Page.locator("[data-vcp-centres]").click();
+  await Page.waitForFunction(() => JSON.parse(localStorage.getItem("Frontier.ProjectZeroHtml.v1")).Settings["Centre of mass debug"] === false);
+  assert.equal((await Stored())["Socket debug"], true);
+  await Page.locator("[data-vcp-centres]").click();
+  Checks.push("Scene outliner shows no vehicle components; Centre of mass and Socket debugs switch from the debug settings (and the panel toolbar)");
 } catch (Error) {
   Errors.push(Error.stack);
 } finally {

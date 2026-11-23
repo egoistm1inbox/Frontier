@@ -6,9 +6,10 @@
 // the 3D viewport. Its inspector has three numbered pages in the page carousel (InspectorTabs.jsx, PageCarousel.jsx):
 //   1 · Model   the vehicle rendered large in its paint, and the paint swatches (the viewport and this picture follow).
 //   2 · Size    length, then width, height, wheelbase, track, ground clearance and mass.
-//   3 · Drive   who drives it; the Controlled Vehicle lists its components (each opens its row).
+//   3 · Drive   who drives it; the Controlled Vehicle lists its components. Pressing one picks it (Follow-up 65): the Component
+//               Viewer opens only from its button, on the picked component.
 
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import { InspectorTabs } from "./InspectorTabs.jsx";
 import { ModelIcon } from "./EditorAssets.js";
 import { VehicleAsset, VehicleModelOf, VehiclePaints, VehicleFacts } from "./VehicleAssets.js";
@@ -29,6 +30,7 @@ export function VehicleAssetInspector({ Subject, Values, Change, Kit, Scene = nu
   const Model = VehicleModelOf(Subject.Model);
   const Paint = PaintOf(Subject, Values);
   const Facts = VehicleFacts[Model.Id];
+  const [Picked, Pick] = useState(null);
   // The picture is the viewport's own model, rendered in the studio the outliner icons come from.
   const Picture = useMemo(() => {
     try {
@@ -49,6 +51,24 @@ export function VehicleAssetInspector({ Subject, Values, Change, Kit, Scene = nu
         {Unit && <em> {Unit}</em>}
       </b>
     </div>
+  );
+  // The one way into the Component Viewer (Model page, and under the Drive page's component list).
+  const ViewerButton = Parts.length > 0 && Scene?.OpenComponentViewer && (
+    <button type="button" className="va-viewer" data-open-component-viewer onClick={() => Scene.OpenComponentViewer(Picked || undefined)}>
+      <span className="va-viewer-icons" aria-hidden="true">
+        {Parts.slice(0, 4).map((Row) => (
+          <Icon key={Row.Id} Name={ComponentIcon(Row, Scene.Values?.[Row.Id] || {})} Size={18} />
+        ))}
+      </span>
+      <span className="va-viewer-text">
+        <b>Open Component Viewer</b>
+        <small>
+          {Picked ? (Parts.find((Row) => Row.Id === Picked)?.Name || "Component") + " · " : ""}
+          {Parts.length} components · outliner, view and inspector
+        </small>
+      </span>
+      <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
+    </button>
   );
   return (
     <InspectorTabs
@@ -84,20 +104,7 @@ export function VehicleAssetInspector({ Subject, Values, Change, Kit, Scene = nu
                 ))}
                 <span>{VehiclePaints.find(([, Colour]) => Colour === Paint)?.[0] || "Custom"}</span>
               </div>
-              {Parts.length > 0 && Scene?.OpenComponentViewer && (
-                <button type="button" className="va-viewer" data-open-component-viewer onClick={() => Scene.OpenComponentViewer()}>
-                  <span className="va-viewer-icons" aria-hidden="true">
-                    {Parts.slice(0, 4).map((Row) => (
-                      <Icon key={Row.Id} Name={ComponentIcon(Row, Scene.Values?.[Row.Id] || {})} Size={18} />
-                    ))}
-                  </span>
-                  <span className="va-viewer-text">
-                    <b>Open Component Viewer</b>
-                    <small>{Parts.length} components · outliner, view and inspector</small>
-                  </span>
-                  <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                </button>
-              )}
+              {ViewerButton}
             </Card>
           ),
         },
@@ -146,7 +153,15 @@ export function VehicleAssetInspector({ Subject, Values, Change, Kit, Scene = nu
               {Mounted.length > 0 && (
                 <div className="va-parts" aria-label="Components">
                   {Mounted.map((Row) => (
-                    <button key={Row.Id} type="button" className="va-part" data-vehicle-part={Row.Id} onClick={() => (Scene?.OpenComponentViewer ? Scene.OpenComponentViewer(Row.Id) : Scene?.SelectRow?.(Row.Id))}>
+                    <button
+                      key={Row.Id}
+                      type="button"
+                      className={"va-part" + (Picked === Row.Id ? " on" : "")}
+                      aria-pressed={Picked === Row.Id}
+                      data-vehicle-part={Row.Id}
+                      title="Pick · Open Component Viewer on the Model page opens it here"
+                      onClick={() => Pick(Picked === Row.Id ? null : Row.Id)}
+                    >
                       <Icon Name={ComponentIcon(Row, Scene?.Values?.[Row.Id] || {})} Size={18} />
                       <span>
                         <b>{Row.Name}</b>
@@ -156,6 +171,7 @@ export function VehicleAssetInspector({ Subject, Values, Change, Kit, Scene = nu
                   ))}
                 </div>
               )}
+              {Mounted.length > 0 && Picked && ViewerButton}
             </Card>
           ),
         },
