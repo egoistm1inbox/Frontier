@@ -16,7 +16,7 @@ import { loadPatternTextFonts } from "./patternTextFonts.js";
 import "./shapeEditor.css";
 import "./stampVectorCanvas.css";
 
-export default forwardRef(function StampVectorCanvas({ Appearance, OnAppearance, Document, SelectedIDs, OnSelection, OnFinalize, OnError, OnHistory, Paint, OnPaint, OnAddText, OnImportSVG, InspectorTarget }, Reference)
+export default forwardRef(function StampVectorCanvas({ Appearance, OnAppearance, Document, SelectedIDs, OnSelection, OnFinalize, OnError, OnHistory, Paint, OnPaint, OnAddText, OnImportSVG, InspectorTarget, ToolbarTarget }, Reference)
 {
     const Canvas = useRef(null);
     const DocumentRevision = useRef(Document); DocumentRevision.current = Document;
@@ -123,7 +123,7 @@ export default forwardRef(function StampVectorCanvas({ Appearance, OnAppearance,
             {Appearance.Category === "fill" && <label>Colour<input type="color" aria-label="Vector canvas background colour" value={Appearance.Colour} onChange={Event => OnAppearance({ ...Appearance, Colour: Event.target.value })}/></label>}
             <small>View only · exports stay transparent</small>
         </div>
-        <ShapeEditorToolbar tool={Tool} onToolChange={ChangeTool} grid={Grid} onGridChange={ConfigureGrid} showGrid={GridVisible} onGridToggle={() => ConfigureGridVisible(!GridVisible)} smartGuides={Guides} onGuidesToggle={() => ConfigureGuides(!Guides)} aspect={Aspect} onAspectChange={ConfigureAspect} snapping={Snapping} onSnappingChange={ConfigureSnapping} onSVGSource={OnImportSVG}/>
+        {ToolbarTarget ? createPortal(<ShapeEditorToolbar tool={Tool} onToolChange={ChangeTool} grid={Grid} onGridChange={ConfigureGrid} showGrid={GridVisible} onGridToggle={() => ConfigureGridVisible(!GridVisible)} smartGuides={Guides} onGuidesToggle={() => ConfigureGuides(!Guides)} aspect={Aspect} onAspectChange={ConfigureAspect} snapping={Snapping} onSnappingChange={ConfigureSnapping} onSVGSource={OnImportSVG}/>, ToolbarTarget) : <ShapeEditorToolbar tool={Tool} onToolChange={ChangeTool} grid={Grid} onGridChange={ConfigureGrid} showGrid={GridVisible} onGridToggle={() => ConfigureGridVisible(!GridVisible)} smartGuides={Guides} onGuidesToggle={() => ConfigureGuides(!Guides)} aspect={Aspect} onAspectChange={ConfigureAspect} snapping={Snapping} onSnappingChange={ConfigureSnapping} onSVGSource={OnImportSVG}/>}
         {InspectorTarget && createPortal(<ShapeSelectionActions count={Selected.length} hasGroup={Editable.some(Index => Current.layers[Index].group)} canBoolean={BooleanEnabled} onAction={Action}
             MaskNames={Selected.length === 2 && Editable.length === 2 ? Selected.map(Index => Current.layers[Index].name) : null}
             OnUseMask={async SourceOffset => { try { const Snapshot = Document; const Next = await ArtworkSelectionMask(Current, Selected[1 - SourceOffset], Selected[SourceOffset]); if (DocumentRevision.current !== Snapshot || SelectionRevision.current !== SelectedIDs.join("|")) throw new Error("Selection changed; try again."); Finalize(Next, { selected: [Selected[1 - SourceOffset]] }); } catch (Failure) { OnError(Failure.message); } }}/>, InspectorTarget)}

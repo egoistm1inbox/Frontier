@@ -6,18 +6,22 @@
 // the vector canvas and its tools, layers, groups, masks, booleans, arrays, text, SVG and image imports, the 100-card library, the layout
 // generator, textile and rug controls, the repeat and the exports. Only the arrangement is new:
 //   • One bar on top: the pattern's name, its save status, undo and redo, a ⋯ menu (new, open, save, shortcuts) and Apply to material.
-//   • The left rail shows Layers or the Library, never both. Adding a layer, importing and grouping open from small menus.
-//   • The canvas takes the middle with a slim tool rail on its left edge; zoom and fit sit in a dock along the bottom (as in the
-//     material viewport). A Repeat view shows the tile repeating at full size.
+//   • Under it, a toolbar across the top (Follow-up 72): every drawing tool in families, a hint for the tool in hand, the grid, snapping
+//     and the canvas options.
+//   • The left rail shows Layers or the Library, never both. Layers is drawn as the editor's Outliner (ArtworkOutliner.jsx): groups and
+//     folders fold, each row has its eye and lock, rows drag to reorder. Adding a layer and grouping open from its round buttons.
+//   • The canvas takes the middle. A Repeat view shows the tile repeating at full size.
 //   • The inspector turns pages: Shape (what is selected, or the style of the next shape), Surface, Repeat and Export.
 // Apply to material writes the pattern into the bound material's colour, roughness and metalness (SurfaceTextures.js).
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Plus, Undo2, Redo2, Eye, EyeOff, LockKeyhole, UnlockKeyhole, GripVertical, Layers3, MoreHorizontal, Upload, Spline, Lock,
+  Plus, Undo2, Redo2, Layers3, MoreHorizontal, Upload, Spline, Lock,
   ArrowUp, ArrowDown, Download, FilePlus2, FolderOpen, Save, CircleHelp, X, Grid3X3, Magnet, SlidersHorizontal, Code2, Wand2,
-  LayoutGrid, Search,
+  LayoutGrid, Search, FolderTree, LibraryBig,
 } from "lucide-react";
+import ArtworkOutliner, { OutlinerHeading, FolderPicture, GroupPicture } from "./ArtworkOutliner.jsx";
+import { PatternEnclosureContains } from "../TextureStudio/src/PatternOrganization.js";
 import { usePatternEditorModel } from "../TextureStudio/src/PatternEditor.jsx";
 import ShapeEditorCanvas from "../TextureStudio/src/ShapeEditorCanvas.jsx";
 import { ShapeSelectionActions, shapeTools } from "../TextureStudio/src/ShapeEditorToolbar.jsx";
@@ -56,7 +60,24 @@ import "./SurfaceWorkspaces.css";
 
 const LibraryGroups = ["All patterns", ...new Set(patternStarterCatalog.map((Entry) => Entry.group))];
 const UnpalettedGroups = ["Fabric weaves", "Stitch patterns", "Islamic geometry", "African traditional"];
-const RailTools = ["move", "node", "rect", "ellipse", "polygon", "star", "pen", "pencil", "text", "hand"];
+// The top toolbar's families; "~" marks the tools that fold into More when the workspace is narrow.
+const ToolFamilies = [
+  ["Select", ["move", "node"]],
+  ["Shapes", ["rect", "ellipse", "~line", "~triangle", "~diamond", "polygon", "star", "~arc"]],
+  ["Paths", ["pen", "~curve", "pencil"]],
+  ["Marks", ["text", "~eyedropper", "hand"]],
+];
+const ShapeToolTip = (Tool) =>
+  ({
+    move: "Click to choose · Shift-click adds · drag to move",
+    node: "Drag points and their curve handles",
+    pen: "Click to place points · drag to curve · Enter finishes",
+    curve: "Place points for a smooth curve · Enter finishes",
+    pencil: "Draw freehand with the current stroke",
+    text: "Click on the tile to place text",
+    eyedropper: "Click a motif to take its appearance",
+    hand: "Drag to pan · 0 fits the tile",
+  })[Tool] || "Drag on the tile to draw · Shift keeps proportions";
 const Shortcuts = [
   ["Select / Points", "V / A"],
   ["Rectangle / Ellipse", "R / O"],
@@ -153,6 +174,7 @@ export default function PatternWorkspace({ Owner, Apply }) {
   }, [doc]);
   const [Rail, ShowRail] = useState(doc.layers.length ? "layers" : "library");
   const [View, ShowView] = useState("design");
+  const [FoldedEnclosures, FoldEnclosures] = useState(() => new Set());
   const [Page, TurnTo] = useState(0);
   const Motion = PageTurn(Page);
   const [ShortcutsOpen, ShowShortcuts] = useState(false);
@@ -201,25 +223,65 @@ export default function PatternWorkspace({ Owner, Apply }) {
     }
   }
 
-  // ── Left rail ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-  const LayerRow = ({ Layer: P, Index: I }) => (
-    <React.Fragment key={P.id}>
-      <div
-        role="listitem"
-        className={"sfw-layer" + (selected.includes(I) && !MaskActive ? " chosen" : "") + (!P.visible ? " dim" : "") + (P.locked ? " locked" : "")}
-        draggable={!P.locked}
-        onDragStart={(Event) => {
+  // ── Left rail: the layer stack, drawn as the editor's Outliner (ArtworkOutliner.jsx) ───────────────────────────────────────────────
+  // Groups and folders (doc.Enclosures) become disclosure rows; each sits where its topmost layer sits, holding all its layers.
+  const SetLayers = (Change) => commit({ ...doc, layers: doc.layers.map((Layer, At) => Change(Layer, At)) });
+  const ArtworkRows = (() => {
+    const Enclosures = doc.Enclosures || [], Root = { Members: [] }, Branches = new Map();
+    const BranchOf = (Token, Guard = 0) => {
+      if (Branches.has(Token)) return Branches.get(Token);
+      const Enclosure = Enclosures.find((Each) => Each.Token === Token);
+      if (!Enclosure || Guard > 12) return Root;
+      const Holder = Enclosure.EnclosureToken ? BranchOf(Enclosure.EnclosureToken, Guard + 1) : Root;
+      const Branch = { Enclosure, Members: [] };
+      Holder.Members.push(Branch);
+      Branches.set(Token, Branch);
+      return Branch;
+    };
+    for (const Match of [...LayerMatches].reverse()) (Match.Layer.EnclosureToken ? BranchOf(Match.Layer.EnclosureToken) : Root).Members.push(Match);
+    const Rows = [];
+    const LayerRow = ({ Layer: P, Index: I }, Depth) => ({
+      Id: P.id,
+      Name: P.name,
+      Label: P.name,
+      Detail: `${P.kind} · ${Math.round((P.opacity ?? 1) * 100)}%${P.mask ? " · masked" : ""}`,
+      Picture: <PatternLayerThumbnail layer={P} size={24} FallbackIcon={shapeTools.find(([Shape]) => Shape === P.kind)?.[3] || Layers3} />,
+      Depth,
+      Chosen: selected.includes(I) && !MaskActive,
+      Hidden: !P.visible,
+      Locked: P.locked,
+      Pick: (Event) => selectLayer(I, Event),
+      Show: () => SetLayers((Q, J) => (J === I ? { ...Q, visible: !Q.visible } : Q)),
+      Lock: () => SetLayers((Q, J) => (J === I ? { ...Q, locked: !Q.locked } : Q)),
+      Below: P.mask ? (
+        <ArtworkMaskStackRow
+          Mask={P.mask}
+          Name={P.name}
+          Selected={MaskActive && MaskIdentity === P.id}
+          Locked={P.locked}
+          OnSelect={() => {
+            if (canvasRef.current?.hasPendingPath() && !canvasRef.current.prepareExport()) return;
+            setSelected([I]);
+            ConfigureMaskIdentity(P.id);
+            setMode("design");
+          }}
+          OnChange={(Mask) => commit({ ...docRef.current, layers: docRef.current.layers.map((Entry) => (Entry.id === P.id ? { ...Entry, mask: Mask } : Entry)) })}
+        />
+      ) : null,
+      Drag: {
+        draggable: !P.locked,
+        onDragStart: (Event) => {
           layerDrag.current = selected.includes(I) ? selected.filter((J) => !doc.layers[J].locked) : expandPatternSelection(doc, I);
           Event.dataTransfer.effectAllowed = "move";
           Event.dataTransfer.setData("text/plain", String(I));
-        }}
-        onDragOver={(Event) => {
+        },
+        onDragOver: (Event) => {
           if (layerDrag.current?.length) {
             Event.preventDefault();
             Event.dataTransfer.dropEffect = "move";
           }
-        }}
-        onDrop={(Event) => {
+        },
+        onDrop: (Event) => {
           Event.preventDefault();
           const Moving = layerDrag.current;
           layerDrag.current = null;
@@ -231,114 +293,142 @@ export default function PatternWorkspace({ Owner, Apply }) {
             Into = Kept.findIndex((Entry) => Entry.At === I) + 1;
           Kept.splice(Into, 0, ...Moved);
           commit({ ...doc, layers: Kept.map((Entry) => Entry.Layer) }, { selected: Kept.flatMap((Entry, At) => (Chosen.has(Entry.At) ? [At] : [])) });
-        }}
-        onDragEnd={() => (layerDrag.current = null)}
-      >
-        <span className="sfw-grip" aria-hidden="true">
-          <GripVertical size={11} />
-        </span>
-        <button className="sfw-layer-pick" aria-pressed={selected.includes(I) && !MaskActive} aria-label={P.name} title={P.name + (P.group ? " · grouped" : "")} onClick={(Event) => selectLayer(I, Event)}>
-          <PatternLayerThumbnail layer={P} size={28} FallbackIcon={shapeTools.find(([Shape]) => Shape === P.kind)?.[3] || Layers3} />
-          <span>
-            <b>{P.name}</b>
-            <small>
-              {P.kind} · {Math.round((P.opacity ?? 1) * 100)}%{P.group ? " · grouped" : ""}
-            </small>
-          </span>
-        </button>
-        <button className="sfw-layer-toggle" aria-label={`${P.visible ? "Hide" : "Show"} ${P.name}`} title={P.visible ? "Hide layer" : "Show layer"} onClick={() => commit({ ...doc, layers: doc.layers.map((Q, J) => (J === I ? { ...Q, visible: !Q.visible } : Q)) })}>
-          {P.visible ? <Eye size={13} /> : <EyeOff size={13} />}
-        </button>
-        <button className={"sfw-layer-toggle" + (P.locked ? " on" : "")} aria-label={`${P.locked ? "Unlock" : "Lock"} ${P.name}`} title={P.locked ? "Unlock layer" : "Lock layer"} onClick={() => commit({ ...doc, layers: doc.layers.map((Q, J) => (J === I ? { ...Q, locked: !Q.locked } : Q)) })}>
-          {P.locked ? <LockKeyhole size={12} /> : <UnlockKeyhole size={12} />}
-        </button>
-      </div>
-      <ArtworkMaskStackRow
-        Mask={P.mask}
-        Name={P.name}
-        Selected={MaskActive && MaskIdentity === P.id}
-        Locked={P.locked}
-        OnSelect={() => {
-          if (canvasRef.current?.hasPendingPath() && !canvasRef.current.prepareExport()) return;
-          setSelected([I]);
-          ConfigureMaskIdentity(P.id);
-          setMode("design");
-        }}
-        OnChange={(Mask) => commit({ ...docRef.current, layers: docRef.current.layers.map((Entry) => (Entry.id === P.id ? { ...Entry, mask: Mask } : Entry)) })}
-      />
-    </React.Fragment>
-  );
+        },
+        onDragEnd: () => (layerDrag.current = null),
+      },
+    });
+    const EnclosureRow = ({ Enclosure }, Depth) => {
+      const Within = doc.layers.flatMap((Layer, At) => (PatternEnclosureContains(doc, Enclosure.Token, Layer.EnclosureToken) ? [At] : []));
+      const Unlocked = Within.filter((At) => !doc.layers[At].locked);
+      const AllLocked = !!Within.length && !Unlocked.length, AnyShown = Within.some((At) => doc.layers[At].visible);
+      return {
+        Id: "enclosure-" + Enclosure.Token,
+        Name: Enclosure.Caption,
+        Label: /group|folder/i.test(Enclosure.Caption) ? Enclosure.Caption : `${Enclosure.Category === "folder" ? "Folder" : "Group"} ${Enclosure.Caption}`,
+        Detail: `${Enclosure.Category === "folder" ? "Folder" : "Group"} · ${Within.length} layer${Within.length === 1 ? "" : "s"}`,
+        Picture: Enclosure.Category === "folder" ? <FolderPicture /> : <GroupPicture />,
+        Depth,
+        Folder: true,
+        Folded: FoldedEnclosures.has(Enclosure.Token),
+        Fold: () =>
+          FoldEnclosures((Previous) => {
+            const Next = new Set(Previous);
+            Next.has(Enclosure.Token) ? Next.delete(Enclosure.Token) : Next.add(Enclosure.Token);
+            return Next;
+          }),
+        Chosen: !MaskActive && !!Within.length && Within.every((At) => selected.includes(At)),
+        Picked: !MaskActive && Within.some((At) => selected.includes(At)),
+        Hidden: !!Within.length && !AnyShown,
+        Locked: AllLocked,
+        Pick: (Event) => {
+          ConfigureMaskIdentity(null);
+          setSelected(Event.shiftKey || Event.ctrlKey || Event.metaKey ? [...new Set([...selected, ...Within])] : Within);
+        },
+        Show: Within.length ? () => SetLayers((Q, J) => (Within.includes(J) && (!AnyShown || !Q.locked) ? { ...Q, visible: !AnyShown } : Q)) : undefined,
+        Lock: Within.length ? () => SetLayers((Q, J) => (Within.includes(J) ? { ...Q, locked: !AllLocked } : Q)) : undefined,
+      };
+    };
+    const Walk = (Holder, Depth) => {
+      for (const Member of Holder.Members)
+        if (Member.Enclosure) {
+          Rows.push(EnclosureRow(Member, Depth));
+          if (!FoldedEnclosures.has(Member.Enclosure.Token)) Walk(Member, Depth + 1);
+        } else Rows.push(LayerRow(Member, Depth));
+    };
+    Walk(Root, 0);
+    return Rows;
+  })();
   const Layers = (
-    <div className="sfw-rail-body">
-      <div className="sfw-rail-tools">
-        <label className="sfw-search">
-          <Search size={13} />
-          <input aria-label="Find a layer" placeholder="Find a layer…" value={LayerQuery} onChange={(Event) => SetLayerQuery(Event.target.value)} />
-        </label>
-        <select aria-label="Layer filter" value={LayerFilter} onChange={(Event) => SetLayerFilter(Event.target.value)}>
-          <option value="all">All</option>
-          <option value="visible">Visible</option>
-          <option value="hidden">Hidden</option>
-          <option value="locked">Locked</option>
-        </select>
-        <Popover Label="Add pattern layer" Glyph={<Plus size={15} />} Align="end" Disabled={doc.layers.length >= 64}>
-          <span className="sfw-menu-title">Shapes</span>
-          <div className="sfw-menu-grid">
-            {shapeTools
-              .filter(([Shape]) => ["rect", "ellipse", "triangle", "diamond", "polygon", "star"].includes(Shape))
-              .map(([Shape, Caption, , Glyph]) => (
-                <button key={Shape} data-closes onClick={() => add(Shape) && (SetLayerQuery(""), SetLayerFilter("all"))}>
-                  <Glyph size={14} />
-                  {Caption.replace(" tool", "")}
+    <ArtworkOutliner
+      Title="Layers"
+      Detail={`${doc.layers.length}/64 · ${doc.name}`}
+      Label="Pattern layers"
+      Actions={
+        <>
+          <Popover Label="Add pattern layer" Glyph={<Plus size={15} />} Align="side" Disabled={doc.layers.length >= 64}>
+            <span className="sfw-menu-title">Shapes</span>
+            <div className="sfw-menu-grid">
+              {shapeTools
+                .filter(([Shape]) => ["rect", "ellipse", "triangle", "diamond", "polygon", "star"].includes(Shape))
+                .map(([Shape, Caption, , Glyph]) => (
+                  <button key={Shape} data-closes onClick={() => add(Shape) && (SetLayerQuery(""), SetLayerFilter("all"))}>
+                    <Glyph size={14} />
+                    {Caption.replace(" tool", "")}
+                  </button>
+                ))}
+            </div>
+            <span className="sfw-menu-title">Editable motifs</span>
+            <div className="sfw-menu-grid">
+              {[
+                ["Rosette", "star", { starPoints: 12, innerRadius: 0.65, width: 128, height: 128 }],
+                ["Ribbon", "rect", { width: 240, height: 48, cornerRadius: 20, rotation: -30 }],
+                ["Ring", "ellipse", { width: 140, height: 140, fillEnabled: false, strokeWidth: 8 }],
+                ["Flower", "flower", {}],
+                ["Arch", "path", { path: "M10 80 Q50 0 90 80", strokeWidth: 3 }],
+              ].map(([Caption, Shape, Preset]) => (
+                <button key={Caption} data-closes onClick={() => add(Shape, { ...Preset, name: Caption }) && (SetLayerQuery(""), SetLayerFilter("all"))}>
+                  {Caption}
                 </button>
               ))}
-          </div>
-          <span className="sfw-menu-title">Editable motifs</span>
-          <div className="sfw-menu-grid">
-            {[
-              ["Rosette", "star", { starPoints: 12, innerRadius: 0.65, width: 128, height: 128 }],
-              ["Ribbon", "rect", { width: 240, height: 48, cornerRadius: 20, rotation: -30 }],
-              ["Ring", "ellipse", { width: 140, height: 140, fillEnabled: false, strokeWidth: 8 }],
-              ["Flower", "flower", {}],
-              ["Arch", "path", { path: "M10 80 Q50 0 90 80", strokeWidth: 3 }],
-            ].map(([Caption, Shape, Preset]) => (
-              <button key={Caption} data-closes onClick={() => add(Shape, { ...Preset, name: Caption }) && (SetLayerQuery(""), SetLayerFilter("all"))}>
-                {Caption}
-              </button>
-            ))}
-          </div>
-          <span className="sfw-menu-title">Import</span>
-          <button data-closes disabled={busy} onClick={() => input.current.click()}>
-            <Upload size={13} /> Image (PNG, JPEG, WebP)
+            </div>
+            <span className="sfw-menu-title">Import</span>
+            <button data-closes disabled={busy} onClick={() => input.current.click()}>
+              <Upload size={13} /> Image (PNG, JPEG, WebP)
+            </button>
+            <button data-closes disabled={busy} onClick={() => svgInput.current.click()}>
+              <Upload size={13} /> SVG file
+            </button>
+            <button data-closes onClick={() => openSVGSource()}>
+              <Code2 size={13} /> Paste SVG source
+            </button>
+          </Popover>
+          <Popover Label="Groups and folders" Glyph={<FolderTree size={15} />} Align="side" className="sfw-popover-wide">
+            <span className="sfw-menu-title">Groups & folders</span>
+            <PatternOrganizationControls Document={doc} Selection={selected} OnFinalize={commit} OnSelect={setSelected} OnError={setError} Scope={EnclosureScope} OnScope={ConfigureEnclosureScope} />
+          </Popover>
+          <button type="button" className="ao-round" aria-label="Show the pattern library" title="Pattern library" onClick={() => ShowRail("library")}>
+            <LibraryBig size={15} />
           </button>
-          <button data-closes disabled={busy} onClick={() => svgInput.current.click()}>
-            <Upload size={13} /> SVG file
-          </button>
-          <button data-closes onClick={() => openSVGSource()}>
-            <Code2 size={13} /> Paste SVG source
-          </button>
-        </Popover>
-      </div>
-      <details className="sfw-fold">
-        <summary>
-          Groups & folders <small>{(doc.Enclosures || []).length + (doc.StoredGroups || []).length || ""}</small>
-        </summary>
-        <PatternOrganizationControls Document={doc} Selection={selected} OnFinalize={commit} OnSelect={setSelected} OnError={setError} Scope={EnclosureScope} OnScope={ConfigureEnclosureScope} />
-      </details>
-      <div className="sfw-list" role="list" aria-label="Pattern layers">
-        {LayerMatches.map(LayerRow).reverse()}
-      </div>
-      {!!doc.layers.length && !LayerMatches.length && (
-        <p className="sfw-hint">
-          No matching layers.{" "}
-          <button className="sfw-link" onClick={() => (SetLayerQuery(""), SetLayerFilter("all"))}>
-            Clear filters
-          </button>
-        </p>
-      )}
-      {!doc.layers.length && <p className="sfw-hint">Draw a shape, add one with +, or start from the Library.</p>}
-      <p className="sfw-rail-foot">Top layers draw in front · drag to reorder</p>
-    </div>
+        </>
+      }
+      Visible={doc.layers.filter((Layer) => Layer.visible).length}
+      Hidden={doc.layers.filter((Layer) => !Layer.visible).length}
+      ShowAll={() => SetLayers((Layer) => (Layer.visible ? Layer : { ...Layer, visible: true }))}
+      HideAll={() => SetLayers((Layer) => (Layer.locked || !Layer.visible ? Layer : { ...Layer, visible: false }))}
+      Query={LayerQuery}
+      Search={SetLayerQuery}
+      Filter={LayerFilter}
+      Sift={SetLayerFilter}
+      Rows={ArtworkRows}
+      Empty={
+        doc.layers.length ? (
+          <>
+            No matching layers.{" "}
+            <button className="sfw-link" onClick={() => (SetLayerQuery(""), SetLayerFilter("all"))}>
+              Clear filters
+            </button>
+          </>
+        ) : (
+          "Draw a shape, add one with +, or start from the Library."
+        )
+      }
+      Footer={
+        <>
+          <span>
+            <small>LAYERS</small>
+            <b>{doc.layers.length} / 64</b>
+          </span>
+          <span>
+            <small>CHOSEN</small>
+            <b>{selected.length}</b>
+          </span>
+          <span>
+            <small>ORDER</small>
+            <b>Top draws in front · drag</b>
+          </span>
+        </>
+      }
+    />
   );
   const Library = (
     <div className="sfw-rail-body">
@@ -946,11 +1036,6 @@ export default function PatternWorkspace({ Owner, Apply }) {
   const PageBodies = [ShapePage, SurfacePage, RepeatPage, ExportPage];
 
   // ── The canvas column ─────────────────────────────────────────────────────────────────────────────────────────────────────────────
-  const ToolButton = ([Key, Caption, Keys, Glyph, Title]) => (
-    <button key={Key} className={"sfw-tool" + (tool === Key ? " on" : "")} aria-pressed={tool === Key} aria-label={`${Caption} (${Keys})`} title={(Title || Caption) + " · " + Keys} onClick={() => changeTool(Key)}>
-      <Glyph size={16} />
-    </button>
-  );
   const Design = MaskActive ? (
     <ArtworkMaskCanvas
       key={l.id}
@@ -967,69 +1052,6 @@ export default function PatternWorkspace({ Owner, Apply }) {
     />
   ) : (
     <div className="sfw-canvas-row">
-      <nav className="sfw-tools" role="toolbar" aria-label="Drawing tools" aria-orientation="vertical">
-        {shapeTools.filter(([Key]) => RailTools.includes(Key)).map(ToolButton)}
-        <Popover Label="More drawing tools" Glyph={<MoreHorizontal size={16} />} Align="side">
-          <div className="sfw-menu-tools">{shapeTools.filter(([Key]) => !RailTools.includes(Key)).map((Tool) => <span key={Tool[0]} data-closes>{ToolButton(Tool)}</span>)}</div>
-          <button data-closes onClick={() => openSVGSource()}>
-            <Code2 size={13} /> Paste SVG source
-          </button>
-        </Popover>
-        <span className="sfw-tools-gap" />
-        <Popover Label="Canvas options" Glyph={<SlidersHorizontal size={15} />} Align="side">
-          <span className="sfw-menu-title">Grid & snapping</span>
-          <label className="sfw-switch">
-            <input type="checkbox" role="switch" aria-label="Show grid" checked={showGrid} onChange={() => setShowGrid((On) => !On)} />
-            <Grid3X3 size={13} /> Show grid
-          </label>
-          <label className="sfw-row">
-            Grid snap
-            <select
-              aria-label="Grid snapping"
-              value={grid}
-              onChange={(Event) => {
-                setGrid(+Event.target.value);
-                if (+Event.target.value) setShowGrid(true);
-              }}
-            >
-              <option value="0">Off</option>
-              {[8, 16, 32, 64].map((Step) => (
-                <option key={Step} value={Step}>
-                  {Step} units
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="sfw-switch">
-            <input type="checkbox" role="switch" aria-label="Smart alignment guides" checked={smartGuides} onChange={() => setSmartGuides((On) => !On)} />
-            <Magnet size={13} /> Snap to targets
-          </label>
-          {[
-            ["points", "Anchors & centres"],
-            ["curves", "Curves & edges"],
-            ["guides", "Object alignment"],
-          ].map(([Key, Caption]) => (
-            <label key={Key} className="sfw-switch indent">
-              <input aria-label={`Snap to ${Caption.toLowerCase()}`} type="checkbox" role="switch" checked={snapping[Key]} onChange={(Event) => setSnapping({ ...snapping, [Key]: Event.target.checked })} />
-              {Caption}
-            </label>
-          ))}
-          <label className="sfw-row">
-            Angle snap
-            <select aria-label="Angle snapping" value={snapping.angle} onChange={(Event) => setSnapping({ ...snapping, angle: +Event.target.value })}>
-              {[0, 15, 30, 45, 90].map((Step) => (
-                <option key={Step} value={Step}>
-                  {Step ? `${Step}°` : "Off"}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="sfw-switch">
-            <input type="checkbox" role="switch" aria-label="Keep aspect ratio" checked={aspect} onChange={(Event) => setAspect(Event.target.checked)} />
-            Constrain proportions
-          </label>
-        </Popover>
-      </nav>
       <ShapeEditorCanvas
         ref={canvasRef}
         doc={doc}
@@ -1057,6 +1079,102 @@ export default function PatternWorkspace({ Owner, Apply }) {
         onPathDirty={(Points) => setDraftStatus(Points < 2 ? "Place another anchor" : "Saving path draft…")}
         pathPanelTarget={Model.pathPanelTarget}
       />
+    </div>
+  );
+  // ── The toolbar along the top: every drawing tool in families, then the canvas options ──────────────────────────────────────────────
+  // At narrow widths the less used tools fold into More (ToolFamilies marks them Spare).
+  const ToolPick = (Key) => {
+    changeTool(Key);
+    if (View !== "design") Show("design");
+  };
+  const ToolButton = ([Key, Caption, Keys, Glyph, Title], Spare) => (
+    <button key={Key} className={"sfw-tool" + (tool === Key && View === "design" ? " on" : "") + (Spare ? " spare" : "")} disabled={MaskActive} aria-pressed={tool === Key && View === "design"} aria-label={`${Caption} (${Keys})`} title={(Title || Caption) + " · " + Keys} onClick={() => ToolPick(Key)}>
+      <Glyph size={16} />
+    </button>
+  );
+  const Toolbar = (
+    <div className="sfw-toolbar" role="toolbar" aria-label="Drawing tools" inert={svgSource ? "" : undefined}>
+      {ToolFamilies.map(([Family, Keys], At) => (
+        <React.Fragment key={Family}>
+          {At > 0 && <span className="sfw-toolbar-split" />}
+          <span className="sfw-toolbar-family" role="group" aria-label={Family}>
+            {Keys.map((Key) => ToolButton(shapeTools.find(([Each]) => Each === Key.replace("~", "")), Key.startsWith("~")))}
+          </span>
+        </React.Fragment>
+      ))}
+      <Popover Label="More drawing tools" Glyph={<MoreHorizontal size={16} />} className="sfw-toolbar-more" Disabled={MaskActive}>
+        <div className="sfw-menu-tools">
+          {ToolFamilies.flatMap(([, Keys]) => Keys.filter((Key) => Key.startsWith("~"))).map((Key) => (
+            <span key={Key} data-closes>
+              {ToolButton(shapeTools.find(([Each]) => Each === Key.slice(1)))}
+            </span>
+          ))}
+        </div>
+        <button data-closes onClick={() => openSVGSource()}>
+          <Code2 size={13} /> Paste SVG source
+        </button>
+      </Popover>
+      <span className="sfw-toolbar-gap" />
+      <span className="sfw-toolbar-note">{MaskActive ? "Painting a mask · its brushes sit on the mask canvas" : ShapeToolTip(tool)}</span>
+      <button className={"sfw-tool" + (showGrid ? " on" : "")} aria-label="Show grid" aria-pressed={showGrid} title="Show grid" onClick={() => setShowGrid((On) => !On)}>
+        <Grid3X3 size={15} />
+      </button>
+      <button className={"sfw-tool" + (smartGuides ? " on" : "")} aria-label="Snap to targets" aria-pressed={smartGuides} title="Snap to anchors, curves and alignment guides" onClick={() => setSmartGuides((On) => !On)}>
+        <Magnet size={15} />
+      </button>
+      <Popover Label="Canvas options" Glyph={<SlidersHorizontal size={15} />} Align="end">
+        <span className="sfw-menu-title">Grid & snapping</span>
+        <label className="sfw-switch">
+          <input type="checkbox" role="switch" aria-label="Show grid" checked={showGrid} onChange={() => setShowGrid((On) => !On)} />
+          <Grid3X3 size={13} /> Show grid
+        </label>
+        <label className="sfw-row">
+          Grid snap
+          <select
+            aria-label="Grid snapping"
+            value={grid}
+            onChange={(Event) => {
+              setGrid(+Event.target.value);
+              if (+Event.target.value) setShowGrid(true);
+            }}
+          >
+            <option value="0">Off</option>
+            {[8, 16, 32, 64].map((Step) => (
+              <option key={Step} value={Step}>
+                {Step} units
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="sfw-switch">
+          <input type="checkbox" role="switch" aria-label="Smart alignment guides" checked={smartGuides} onChange={() => setSmartGuides((On) => !On)} />
+          <Magnet size={13} /> Snap to targets
+        </label>
+        {[
+          ["points", "Anchors & centres"],
+          ["curves", "Curves & edges"],
+          ["guides", "Object alignment"],
+        ].map(([Key, Caption]) => (
+          <label key={Key} className="sfw-switch indent">
+            <input aria-label={`Snap to ${Caption.toLowerCase()}`} type="checkbox" role="switch" checked={snapping[Key]} onChange={(Event) => setSnapping({ ...snapping, [Key]: Event.target.checked })} />
+            {Caption}
+          </label>
+        ))}
+        <label className="sfw-row">
+          Angle snap
+          <select aria-label="Angle snapping" value={snapping.angle} onChange={(Event) => setSnapping({ ...snapping, angle: +Event.target.value })}>
+            {[0, 15, 30, 45, 90].map((Step) => (
+              <option key={Step} value={Step}>
+                {Step ? `${Step}°` : "Off"}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="sfw-switch">
+          <input type="checkbox" role="switch" aria-label="Keep aspect ratio" checked={aspect} onChange={(Event) => setAspect(Event.target.checked)} />
+          Constrain proportions
+        </label>
+      </Popover>
     </div>
   );
   const Repeat = (
@@ -1177,17 +1295,21 @@ export default function PatternWorkspace({ Owner, Apply }) {
           </button>
         </div>
       )}
+      {Toolbar}
       <div className="sfw-body" inert={svgSource ? "" : undefined}>
-        <aside className="sfw-rail">
-          <div className="sfw-segments" role="tablist" aria-label="Pattern rail">
-            <button role="tab" aria-selected={Rail === "layers"} onClick={() => ShowRail("layers")}>
-              Layers <small>{doc.layers.length}/64</small>
-            </button>
-            <button role="tab" aria-selected={Rail === "library"} onClick={() => ShowRail("library")}>
-              Library <small>{patternStarterCatalog.length}</small>
-            </button>
-          </div>
-          {Rail === "layers" ? Layers : Library}
+        <aside className="sfw-rail ao-rail">
+          {Rail === "layers" ? (
+            Layers
+          ) : (
+            <>
+              <OutlinerHeading Title="Library" Detail={`${patternStarterCatalog.length} patterns`}>
+                <button type="button" className="ao-round" aria-label="Show the pattern layers" title="Pattern layers" onClick={() => ShowRail("layers")}>
+                  <Layers3 size={15} />
+                </button>
+              </OutlinerHeading>
+              {Library}
+            </>
+          )}
         </aside>
         <main className="sfw-centre" data-mask-editing={MaskActive || undefined}>
           {Construction && View === "design" && !MaskActive && <p className="sfw-construction">{Construction}</p>}

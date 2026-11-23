@@ -246,7 +246,7 @@
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: 236px minmax(0, 1fr) 300px;
+  grid-template-columns: 268px minmax(0, 1fr) 300px;
 }
 .surface-workspace .sfw-foot {
   flex: none;
@@ -700,7 +700,7 @@
 .surface-workspace .sfw-construction {
   position: absolute;
   top: 10px;
-  left: 56px;
+  left: 12px;
   right: 12px;
   z-index: 2;
   margin: 0;
@@ -1280,7 +1280,7 @@
 /* Narrow (docked) layouts */
 @container surface (max-width: 980px) {
   .surface-workspace .sfw-body {
-    grid-template-columns: 200px minmax(0, 1fr) 260px;
+    grid-template-columns: 240px minmax(0, 1fr) 260px;
   }
   .surface-workspace .sfw-status {
     display: none;
@@ -1412,4 +1412,620 @@
   border: 0;
   background: transparent;
   accent-color: #d9cdb9;
+}
+
+/* ── Follow-up 72: a toolbar across the top of both workspaces, and the layer stacks drawn as the editor's Outliner ──────────────────── */
+
+/* Toolbar — the editor viewport's action row: 31 px keys on #1a1a1a, the pressed key in the viewport's warm tint. */
+.surface-workspace .sfw-toolbar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 44px;
+  padding: 0 14px;
+  background: #141414;
+  border-bottom: 1px solid #ffffff0d;
+  position: relative;
+  z-index: 6;
+  min-width: 0;
+}
+.surface-workspace .sfw-toolbar-family,
+.surface-workspace .sfw-toolbar-slot {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+}
+.surface-workspace .sfw-toolbar-slot {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+.surface-workspace .sfw-toolbar-split {
+  flex: none;
+  width: 1px;
+  height: 19px;
+  margin: 0 3px;
+  background: #ffffff0c;
+}
+.surface-workspace .sfw-toolbar-gap {
+  flex: 1;
+  min-width: 8px;
+}
+.surface-workspace .sfw-toolbar-note {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #6f6f6f;
+  font-size: 9.5px;
+  padding: 0 6px;
+}
+.surface-workspace .sfw-toolbar .sfw-tool,
+.surface-workspace .sfw-toolbar .sfw-popover > .sfw-icon-button,
+.surface-workspace .sfw-toolbar .se-drawing-tools > button,
+.surface-workspace .sfw-toolbar .se-tool-menu > summary {
+  flex: none;
+  width: 31px;
+  min-width: 31px;
+  height: 31px;
+  min-height: 31px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 0;
+  margin: 0;
+  border: 1px solid #ffffff0c;
+  border-radius: 8px;
+  background: #1a1a1a;
+  color: #939393;
+  box-shadow: none;
+  font-size: 10px;
+}
+.surface-workspace .sfw-toolbar .sfw-tool.labelled {
+  width: auto;
+  padding: 0 10px;
+}
+.surface-workspace .sfw-toolbar .sfw-tool kbd {
+  font: inherit;
+  font-size: 9px;
+  color: #666;
+}
+.surface-workspace .sfw-toolbar .sfw-tool:hover:not(:disabled),
+.surface-workspace .sfw-toolbar .sfw-popover > .sfw-icon-button:hover:not(:disabled),
+.surface-workspace .sfw-toolbar .se-drawing-tools > button:hover,
+.surface-workspace .sfw-toolbar .se-tool-menu > summary:hover {
+  background: #2b2b2b;
+  color: #dedede;
+}
+.surface-workspace .sfw-toolbar .sfw-tool.on,
+.surface-workspace .sfw-toolbar .sfw-tool.on:hover:not(:disabled),
+.surface-workspace .sfw-toolbar .sfw-popover > .sfw-icon-button[aria-expanded="true"],
+.surface-workspace .sfw-toolbar .se-drawing-tools > button.selected,
+.surface-workspace .sfw-toolbar .se-tool-menu[open] > summary {
+  background: #bfa27a19;
+  border-color: #bfa27a55;
+  color: #dec193;
+}
+.surface-workspace .sfw-toolbar .sfw-tool.on kbd {
+  color: #b39a74;
+}
+.surface-workspace .sfw-toolbar .sfw-tool:disabled {
+  opacity: 0.35;
+}
+.surface-workspace .sfw-toolbar-more {
+  display: none;
+}
+/* The vector canvas's own toolbar, placed into the top bar in the Stamp's Vector mode. */
+.surface-workspace .sfw-toolbar .se-toolbar-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  background: none;
+  min-width: 0;
+}
+.surface-workspace .sfw-toolbar .se-drawing-tools {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+.surface-workspace .sfw-toolbar .se-drawing-tools > button:nth-child(n) {
+  margin: 0 !important;
+}
+.surface-workspace .sfw-toolbar .se-tool-menu > summary {
+  width: auto;
+  padding: 0 10px;
+}
+.surface-workspace .sfw-toolbar .se-tool-menu > .se-menu-content {
+  top: calc(100% + 8px);
+}
+/* The hint that used to ride in the dock now sits quietly under the stamp's picture. */
+.surface-workspace .sfw-canvas-note {
+  position: absolute;
+  left: 50%;
+  bottom: 12px;
+  transform: translateX(-50%);
+  margin: 0;
+  padding: 5px 12px;
+  border-radius: 8px;
+  background: #121212d9;
+  color: #8c8c8c;
+  font-size: 9.5px;
+  white-space: nowrap;
+  max-width: calc(100% - 24px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+  z-index: 3;
+}
+@container surface (max-width: 1080px) {
+  .surface-workspace .sfw-toolbar .sfw-tool.spare {
+    display: none;
+  }
+  .surface-workspace .sfw-toolbar-more {
+    display: inline-flex;
+  }
+  .surface-workspace .sfw-toolbar-note:not(:last-of-type) {
+    display: none;
+  }
+}
+@container surface (max-width: 760px) {
+  .surface-workspace .sfw-toolbar {
+    height: auto;
+    min-height: 44px;
+    flex-wrap: wrap;
+    padding: 6px 12px;
+  }
+}
+
+/* Layer stacks — the Outliner's heading, count cards, search, rows and footer (Editor.css .outliner-*), at the rail's width. */
+.surface-workspace .ao-rail {
+  background: #151515;
+}
+.surface-workspace .ao-outliner {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.surface-workspace .ao-heading {
+  height: 63px;
+  padding: 14px 14px 12px 18px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: none;
+  min-width: 0;
+}
+.surface-workspace .ao-heading h1 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 300;
+  letter-spacing: 1px;
+  color: #f0f0f0;
+  white-space: nowrap;
+}
+.surface-workspace .ao-heading > small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 10px;
+  white-space: nowrap;
+  color: #5c5c5c;
+}
+.surface-workspace .ao-heading-actions {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex: none;
+}
+.surface-workspace .ao-heading-actions .ao-round,
+.surface-workspace .ao-heading-actions .sfw-popover > .sfw-icon-button {
+  width: 29px;
+  height: 29px;
+  min-height: 29px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #666;
+  box-shadow: none;
+}
+.surface-workspace .ao-heading-actions .ao-round:hover,
+.surface-workspace .ao-heading-actions .sfw-popover > .sfw-icon-button:hover:not(:disabled),
+.surface-workspace .ao-heading-actions .sfw-popover > .sfw-icon-button[aria-expanded="true"] {
+  background: #222;
+  color: #dedede;
+}
+.surface-workspace .sfw-popover-wide .sfw-menu {
+  min-width: 280px;
+}
+.surface-workspace .ao-stats {
+  display: flex;
+  gap: 8px;
+  padding: 0 12px;
+  flex: none;
+}
+.surface-workspace .ao-stats button {
+  height: 64px;
+  min-height: 64px;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  justify-content: flex-start;
+  align-items: flex-start;
+  position: relative;
+  border-radius: 20px;
+  background: #191919;
+  border: 1px solid #2c2c2c;
+  padding: 11px 12px;
+  color: #f0f0f0;
+  box-shadow: none;
+}
+.surface-workspace .ao-stats button:hover {
+  background: #1f1f1f;
+}
+.surface-workspace .ao-stats small {
+  position: absolute;
+  bottom: 10px;
+  left: 12px;
+  letter-spacing: 0.5px;
+  color: #a1a1a1;
+  font-size: 10px;
+}
+.surface-workspace .ao-stats strong {
+  font-size: 28px;
+  font-weight: 300;
+  line-height: 1;
+  position: absolute;
+  bottom: 9px;
+  right: 14px;
+}
+.surface-workspace .ao-status-disc,
+.surface-workspace .ao-muted-disc {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #34c759;
+  color: #103719;
+  font-size: 11px;
+}
+.surface-workspace .ao-muted-disc {
+  background: #242424;
+  color: #5c5c5c;
+}
+.surface-workspace .ao-search {
+  display: flex;
+  padding: 10px 12px 6px;
+  gap: 8px;
+  flex: none;
+}
+.surface-workspace .ao-search label {
+  height: 40px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  background: #191919;
+  border: 1px solid #2c2c2c;
+  border-radius: 22px;
+  flex: 1;
+  min-width: 0;
+  color: #696969;
+}
+.surface-workspace .ao-search input {
+  width: 100%;
+  min-width: 0;
+  height: 30px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+  outline: none;
+  font-size: 11px;
+  color: #e6e6e6;
+}
+.surface-workspace .ao-filter {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+}
+.surface-workspace .ao-filter > button {
+  height: 40px;
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+  border: 1px solid #ffffff0d;
+  border-radius: 20px;
+  background: #191919;
+  font-size: 10px;
+  color: #939393;
+  box-shadow: none;
+}
+.surface-workspace .ao-filter > button:hover,
+.surface-workspace .ao-filter > button[aria-expanded="true"] {
+  background: #222;
+  color: #dedede;
+}
+.surface-workspace .ao-filter > button.on {
+  color: #dec193;
+  border-color: #bfa27a55;
+}
+.surface-workspace .ao-filter-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 150px;
+  padding: 5px;
+  border-radius: 10px;
+  background: #1b1b1b;
+  border: 1px solid #ffffff17;
+  box-shadow: 0 14px 40px #000b;
+}
+.surface-workspace .ao-filter-menu button {
+  justify-content: space-between;
+  min-height: 28px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #c4c4c4;
+  font-size: 10.5px;
+}
+.surface-workspace .ao-filter-menu button:hover {
+  background: #262626;
+  color: #f0f0f0;
+}
+.surface-workspace .ao-rows {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 4px 10px 10px;
+}
+.surface-workspace .ao-row {
+  height: 39px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 8px 0 calc(2px + var(--depth) * 13px);
+  border: 1px solid transparent;
+  border-radius: 8px;
+  position: relative;
+  outline: none;
+  user-select: none;
+  cursor: default;
+  font-size: 12px;
+  white-space: nowrap;
+  color: #bababa;
+}
+.surface-workspace .ao-row:focus-visible {
+  border-color: #555;
+}
+.surface-workspace .ao-row.chosen {
+  background: #262626;
+  border-color: #444;
+  color: #f0f0f0;
+}
+.surface-workspace .ao-row.picked {
+  background: #222;
+  border-color: #3a3a3a;
+  color: #e6e6e6;
+}
+.surface-workspace .ao-row.chosen::before,
+.surface-workspace .ao-row.picked::before {
+  content: "";
+  position: absolute;
+  left: -1px;
+  top: -1px;
+  bottom: -1px;
+  width: 3px;
+  background: #ffb454;
+}
+.surface-workspace .ao-row.picked::before {
+  background: #ffb45470;
+}
+.surface-workspace .ao-row:hover:not(.chosen) {
+  background: #1c1c1c;
+}
+.surface-workspace .ao-row.hidden-row > :not(.ao-visibility) {
+  opacity: 0.4;
+}
+.surface-workspace .ao-row button {
+  box-shadow: none;
+}
+.surface-workspace .ao-disclosure {
+  width: 13px;
+  min-width: 13px;
+  min-height: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #7b7b7b;
+  flex: none;
+  transition: transform 0.14s ease;
+}
+.surface-workspace .ao-disclosure:hover {
+  background: transparent;
+  color: #dedede;
+}
+.surface-workspace .ao-disclosure.empty {
+  visibility: hidden;
+}
+.surface-workspace .ao-picture {
+  width: 24px;
+  height: 24px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  overflow: hidden;
+}
+.surface-workspace .ao-picture > * {
+  max-width: 24px;
+  max-height: 24px;
+}
+.surface-workspace .ao-glyph {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  background: #202020;
+  border: 1px solid #2c2c2c;
+  color: #b8b8b8;
+}
+.surface-workspace .ao-caption {
+  min-width: 0;
+  flex: 1;
+  display: grid;
+  gap: 2px;
+}
+.surface-workspace .ao-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 14px;
+}
+.surface-workspace .ao-caption small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #747474;
+  font-size: 8px;
+  line-height: 10px;
+  text-transform: capitalize;
+}
+.surface-workspace .ao-row-status {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #34c759;
+  color: #0d3c16;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+.surface-workspace .ao-row-status.off {
+  background: #2a2a2a;
+  color: #5c5c5c;
+}
+.surface-workspace .ao-lock,
+.surface-workspace .ao-visibility {
+  padding: 0;
+  min-height: 20px;
+  width: 16px;
+  min-width: 16px;
+  height: 20px;
+  background: transparent;
+  border: 0;
+  color: #777;
+  opacity: 0;
+  flex: none;
+}
+.surface-workspace .ao-lock:hover,
+.surface-workspace .ao-visibility:hover {
+  background: transparent;
+  color: #f0f0f0;
+}
+.surface-workspace .ao-row:hover :is(.ao-lock, .ao-visibility),
+.surface-workspace .ao-row.chosen :is(.ao-lock, .ao-visibility),
+.surface-workspace .ao-row:focus-within :is(.ao-lock, .ao-visibility),
+.surface-workspace .ao-row.hidden-row .ao-visibility,
+.surface-workspace .ao-lock.on {
+  opacity: 1;
+}
+.surface-workspace .ao-lock.on {
+  color: #dec193;
+}
+.surface-workspace .ao-below {
+  padding: 2px 0 4px calc(22px + var(--depth) * 13px);
+}
+.surface-workspace .ao-empty {
+  padding: 18px 10px;
+  color: #6a6a6a;
+  font-size: 10.5px;
+  line-height: 1.5;
+}
+.surface-workspace .ao-footer {
+  height: 45px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 7px 15px;
+  border-top: 1px solid #ffffff06;
+  background: #151515;
+  overflow: hidden;
+}
+.surface-workspace .ao-footer > span:not(.ao-footer-actions) {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  white-space: nowrap;
+  min-width: 0;
+}
+.surface-workspace .ao-footer small {
+  font-size: 7px;
+  letter-spacing: 0.7px;
+  color: #555;
+}
+.surface-workspace .ao-footer b {
+  font-size: 10px;
+  font-weight: 400;
+  color: #b0b0b0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.surface-workspace .ao-footer > span:first-child b {
+  color: #34c759;
+}
+.surface-workspace .ao-footer-actions {
+  margin-left: auto;
+  display: inline-flex;
+  gap: 3px;
+}
+.surface-workspace .ao-footer-actions button {
+  width: 27px;
+  height: 27px;
+  min-height: 27px;
+  padding: 0;
+  border: 1px solid #ffffff0c;
+  border-radius: 8px;
+  background: #1a1a1a;
+  color: #939393;
+}
+.surface-workspace .ao-footer-actions button:hover:not(:disabled) {
+  background: #2b2b2b;
+  color: #dedede;
+}
+.surface-workspace .ao-rail > .sfw-rail-body {
+  padding-top: 0;
+}
+@container surface (max-width: 760px) {
+  .surface-workspace .sfw-rail.ao-rail {
+    height: 440px;
+    max-height: none;
+  }
+  .surface-workspace .sfw-toolbar-note {
+    display: none;
+  }
 }

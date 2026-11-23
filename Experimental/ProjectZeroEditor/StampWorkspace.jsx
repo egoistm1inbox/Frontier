@@ -6,17 +6,21 @@
 // composition with text, SVG, image and vector components, the G / R / S transforms, the vector canvas, masks, arrays, the 15 channel
 // targets, the preset library and the exports. Only the arrangement is new:
 //   • One bar on top: the stamp's name and status, Composition | Vector, undo and redo, a ⋯ menu and Press onto material.
-//   • The left rail shows Components or Presets. Each component row carries its own eye, lock and order controls.
-//   • The canvas takes the middle; the transform tools, the canvas size and the exports sit in a dock along its bottom edge.
+//   • Under it, a toolbar across the top (Follow-up 72): the G / R / S transforms and the artwork to add — or, in Vector, the vector
+//     canvas's own drawing tools — then the canvas size and the exports.
+//   • The left rail shows Components or Presets. Components is drawn as the editor's Outliner (ArtworkOutliner.jsx); each row has its
+//     eye and lock, and the order, duplicate and delete buttons sit in its footer.
+//   • The canvas takes the middle.
 //   • The inspector turns pages: Component, Targets (the channels the stamp writes and their amounts) and Place (where it lands on the
 //     material, with a preview over the material's current colour).
 // Press onto material composites the stamp into every targeted channel of the bound material (SurfaceTextures.js).
 
 import React, { useEffect, useMemo, useState } from "react";
 import {
-  Type, Code2, ImagePlus, Plus, Copy, Trash2, Eye, EyeOff, LockKeyhole, UnlockKeyhole, ArrowUp, ArrowDown, Undo2, Redo2, Save,
-  FolderOpen, Download, Move, RotateCw, Scaling, MoreHorizontal, Stamp, FilePlus2, Search, X,
+  Type, Code2, ImagePlus, Plus, Copy, Trash2, LockKeyhole, UnlockKeyhole, ArrowUp, ArrowDown, Undo2, Redo2, Save,
+  FolderOpen, Download, Move, RotateCw, Scaling, MoreHorizontal, Stamp, FilePlus2, X, LibraryBig, Layers3,
 } from "lucide-react";
+import ArtworkOutliner, { OutlinerHeading } from "./ArtworkOutliner.jsx";
 import { useStampStudioModel, StampChannelControls, SVGMarkupEditor } from "../TextureStudio/src/StampStudio.jsx";
 import ArtworkArrayControls from "../TextureStudio/src/ArtworkArrayControls.jsx";
 import ArtworkMaskCanvas from "../TextureStudio/src/ArtworkMaskCanvas.jsx";
@@ -107,165 +111,159 @@ export default function StampWorkspace({ Material, Owner, Press }) {
     commit({ ...doc, layers: Layers });
   };
   const Unmapped = doc.channels.filter((Id) => !StampTargets[Id]);
+  const AddShape = (Shape, Caption) => {
+    transform.cancel();
+    ConfigureVectorMode(true);
+    add("vector", { name: Caption, vector: patternLayer(Shape, DrawingPaint) });
+  };
+  const [ToolSlot, PlaceToolSlot] = useState(null);
 
-  // ── Left rail ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  // ── Left rail: the components, drawn as the editor's Outliner (ArtworkOutliner.jsx) ───────────────────────────────────────────────
+  const SetComponents = (Id, Change) => commit({ ...doc, layers: doc.layers.map((Each) => (Each.id === Id ? Change(Each) : Each)) });
+  const ComponentRows = ComponentMatches.map((Layer) => {
+    const Glyph = GlyphOf(Layer);
+    return {
+      Id: Layer.id,
+      Name: Layer.name,
+      Label: `stamp component ${Layer.name}`,
+      Detail: `${Layer.kind} · ${Math.round(Layer.opacity * 100)}%${Layer.mask ? " · masked" : ""}`,
+      Picture: (
+        <span className="ao-glyph">
+          <Glyph size={14} />
+        </span>
+      ),
+      Chosen: !MaskActive && (VectorMode ? VectorSelection.includes(Layer.id) : selectedId === Layer.id),
+      Hidden: !Layer.visible,
+      Locked: Layer.locked,
+      Pick: (Event) => {
+        const Adding = Event.ctrlKey || Event.metaKey || Event.shiftKey;
+        if (Adding) {
+          transform.cancel();
+          ConfigureVectorMode(true);
+        }
+        const IDs = Adding ? (VectorSelection.includes(Layer.id) ? VectorSelection.filter((Each) => Each !== Layer.id) : [...VectorSelection, Layer.id]) : [Layer.id];
+        choose(IDs.at(-1), IDs);
+      },
+      Show: () => {
+        choose(Layer.id);
+        SetComponents(Layer.id, (Each) => ({ ...Each, visible: !Each.visible }));
+      },
+      Lock: () => SetComponents(Layer.id, (Each) => ({ ...Each, locked: !Each.locked })),
+      Below: Layer.mask ? (
+        <ArtworkMaskStackRow
+          Mask={Layer.mask}
+          Name={Layer.name}
+          Selected={MaskActive && MaskIdentity === Layer.id}
+          Locked={Layer.locked}
+          OnSelect={() => {
+            if (!Finished()) return;
+            choose(Layer.id);
+            ConfigureMaskIdentity(Layer.id);
+          }}
+          OnChange={(Mask) => {
+            if (!Layer.locked) commit({ ...current.current, layers: current.current.layers.map((Entry) => (Entry.id === Layer.id ? { ...Entry, mask: Mask } : Entry)) });
+          }}
+        />
+      ) : null,
+    };
+  });
   const Components = (
-    <div className="sfw-rail-body">
-      <div className="sfw-rail-tools">
-        <label className="sfw-search">
-          <Search size={13} />
-          <input aria-label="Find a component" placeholder="Find a component…" value={ComponentQuery} onChange={(Event) => ConfigureComponentQuery(Event.target.value)} />
-        </label>
-        <select aria-label="Component filter" value={ComponentFilter} onChange={(Event) => ConfigureComponentFilter(Event.target.value)}>
-          <option value="all">All</option>
-          <option value="visible">Visible</option>
-          <option value="hidden">Hidden</option>
-          <option value="locked">Locked</option>
-        </select>
-        <Popover Label="Add stamp component" Glyph={<Plus size={15} />} Align="end" Disabled={doc.layers.length >= STAMP_LAYER_LIMIT}>
-          <span className="sfw-menu-title">Artwork</span>
-          <button data-closes onClick={() => add("text")}>
-            <Type size={13} /> Text
+    <ArtworkOutliner
+      Title="Components"
+      Detail={`${doc.layers.length}/${STAMP_LAYER_LIMIT} · ${doc.channels.length} targets`}
+      Label="Stamp components"
+      Actions={
+        <>
+          <Popover Label="Add stamp component" Glyph={<Plus size={15} />} Align="side" Disabled={doc.layers.length >= STAMP_LAYER_LIMIT}>
+            <span className="sfw-menu-title">Artwork</span>
+            <button data-closes onClick={() => add("text")}>
+              <Type size={13} /> Text
+            </button>
+            <button data-closes onClick={() => add("svg")}>
+              <Code2 size={13} /> SVG markup
+            </button>
+            <button data-closes onClick={() => pickFile("svg")}>
+              <FolderOpen size={13} /> Import SVG…
+            </button>
+            <button data-closes onClick={() => pickFile("image")}>
+              <ImagePlus size={13} /> Image…
+            </button>
+            <span className="sfw-menu-title">Vector shapes</span>
+            <div className="sfw-menu-grid">
+              {Shapes.map(([Shape, Caption]) => {
+                const Glyph = shapeTools.find(([Each]) => Each === Shape)?.[3] || Code2;
+                return (
+                  <button key={Shape} data-closes onClick={() => AddShape(Shape, Caption)}>
+                    <Glyph size={13} /> {Caption}
+                  </button>
+                );
+              })}
+            </div>
+          </Popover>
+          <button type="button" className="ao-round" aria-label="Show the stamp presets" title="Stamp presets" onClick={() => ShowRail("presets")}>
+            <LibraryBig size={15} />
           </button>
-          <button data-closes onClick={() => add("svg")}>
-            <Code2 size={13} /> SVG markup
-          </button>
-          <button data-closes onClick={() => pickFile("svg")}>
-            <FolderOpen size={13} /> Import SVG…
-          </button>
-          <button data-closes onClick={() => pickFile("image")}>
-            <ImagePlus size={13} /> Image…
-          </button>
-          <span className="sfw-menu-title">Vector shapes</span>
-          <div className="sfw-menu-grid">
-            {Shapes.map(([Shape, Caption]) => {
-              const Glyph = shapeTools.find(([Each]) => Each === Shape)?.[3] || Code2;
-              return (
-                <button
-                  key={Shape}
-                  data-closes
-                  onClick={() => {
-                    transform.cancel();
-                    ConfigureVectorMode(true);
-                    add("vector", { name: Caption, vector: patternLayer(Shape, DrawingPaint) });
-                  }}
-                >
-                  <Glyph size={13} /> {Caption}
-                </button>
-              );
-            })}
-          </div>
-        </Popover>
-      </div>
-      <div className="sfw-list" role="list" aria-label="Stamp components">
-        {ComponentMatches.map((Layer) => {
-          const Glyph = GlyphOf(Layer);
-          const Chosen = !MaskActive && (VectorMode ? VectorSelection.includes(Layer.id) : selectedId === Layer.id);
-          return (
-            <React.Fragment key={Layer.id}>
-              <div role="listitem" className={"sfw-layer" + (Chosen ? " chosen" : "") + (!Layer.visible ? " dim" : "") + (Layer.locked ? " locked" : "")}>
-                <button
-                  className="sfw-layer-pick"
-                  aria-pressed={Chosen}
-                  aria-label={`Select stamp component ${Layer.name}`}
-                  onClick={(Event) => {
-                    const Adding = Event.ctrlKey || Event.metaKey || Event.shiftKey;
-                    if (Adding) {
-                      transform.cancel();
-                      ConfigureVectorMode(true);
-                    }
-                    const IDs = Adding ? (VectorSelection.includes(Layer.id) ? VectorSelection.filter((Each) => Each !== Layer.id) : [...VectorSelection, Layer.id]) : [Layer.id];
-                    choose(IDs.at(-1), IDs);
-                  }}
-                >
-                  <span className="sfw-kind">
-                    <Glyph size={15} />
-                  </span>
-                  <span>
-                    <b>{Layer.name}</b>
-                    <small>
-                      {Layer.kind} · {Math.round(Layer.opacity * 100)}%
-                    </small>
-                  </span>
-                </button>
-                <button
-                  className="sfw-layer-toggle"
-                  aria-label={`${Layer.visible ? "Hide" : "Show"} stamp component ${Layer.name}`}
-                  onClick={() => {
-                    choose(Layer.id);
-                    commit({ ...doc, layers: doc.layers.map((Each) => (Each.id === Layer.id ? { ...Each, visible: !Each.visible } : Each)) });
-                  }}
-                >
-                  {Layer.visible ? <Eye size={13} /> : <EyeOff size={13} />}
-                </button>
-                <button
-                  className={"sfw-layer-toggle" + (Layer.locked ? " on" : "")}
-                  aria-label={`${Layer.locked ? "Unlock" : "Lock"} stamp component ${Layer.name}`}
-                  onClick={() => commit({ ...doc, layers: doc.layers.map((Each) => (Each.id === Layer.id ? { ...Each, locked: !Each.locked } : Each)) })}
-                >
-                  {Layer.locked ? <LockKeyhole size={12} /> : <UnlockKeyhole size={12} />}
-                </button>
-              </div>
-              <ArtworkMaskStackRow
-                Mask={Layer.mask}
-                Name={Layer.name}
-                Selected={MaskActive && MaskIdentity === Layer.id}
-                Locked={Layer.locked}
-                OnSelect={() => {
-                  if (!Finished()) return;
-                  choose(Layer.id);
-                  ConfigureMaskIdentity(Layer.id);
-                }}
-                OnChange={(Mask) => {
-                  if (!Layer.locked) commit({ ...current.current, layers: current.current.layers.map((Entry) => (Entry.id === Layer.id ? { ...Entry, mask: Mask } : Entry)) });
-                }}
-              />
-            </React.Fragment>
-          );
-        })}
-      </div>
-      {!ComponentMatches.length && (
-        <p className="sfw-hint">
-          {doc.layers.length ? "No matching components." : "No components yet. Add artwork with +."}{" "}
-          {doc.layers.length > 0 && (
+        </>
+      }
+      Visible={doc.layers.filter((Layer) => Layer.visible).length}
+      Hidden={doc.layers.filter((Layer) => !Layer.visible).length}
+      ShowAll={() => commit({ ...doc, layers: doc.layers.map((Layer) => (Layer.visible ? Layer : { ...Layer, visible: true })) })}
+      HideAll={() => commit({ ...doc, layers: doc.layers.map((Layer) => (Layer.locked || !Layer.visible ? Layer : { ...Layer, visible: false })) })}
+      Query={ComponentQuery}
+      Search={ConfigureComponentQuery}
+      Filter={ComponentFilter}
+      Sift={ConfigureComponentFilter}
+      Rows={ComponentRows}
+      Empty={
+        doc.layers.length ? (
+          <>
+            No matching components.{" "}
             <button className="sfw-link" onClick={() => (ConfigureComponentQuery(""), ConfigureComponentFilter("all"))}>
               Clear filters
             </button>
-          )}
-        </p>
-      )}
-      <div className="sfw-rail-actions" role="toolbar" aria-label="Component order">
-        <button aria-label="Move stamp component up" title="Bring forward" disabled={!selected || selected.locked || doc.layers.indexOf(selected) === 0} onClick={() => Reorder(selected, -1)}>
-          <ArrowUp size={14} />
-        </button>
-        <button aria-label="Move stamp component down" title="Send backward" disabled={!selected || selected.locked || doc.layers.indexOf(selected) === doc.layers.length - 1} onClick={() => Reorder(selected, 1)}>
-          <ArrowDown size={14} />
-        </button>
-        <button
-          aria-label="Duplicate stamp component"
-          title="Duplicate"
-          disabled={!selected || selected.locked || doc.layers.length >= STAMP_LAYER_LIMIT}
-          onClick={() => add(selected.kind, { ...selected, id: stampId(), name: `${selected.name} copy`, x: selected.x + 12, y: selected.y + 12 })}
-        >
-          <Copy size={14} />
-        </button>
-        <button
-          aria-label="Delete stamp component"
-          title="Delete"
-          disabled={!selected || selected.locked}
-          onClick={() => {
-            const Layers = doc.layers.filter((Each) => Each.id !== selectedId);
-            commit({ ...doc, layers: Layers }, null, Layers[0]?.id);
-          }}
-        >
-          <Trash2 size={14} />
-        </button>
-        <span className="sfw-rail-count">
-          {doc.layers.length} / {STAMP_LAYER_LIMIT}
-        </span>
-      </div>
-      <p className="sfw-rail-foot">Top components draw in front</p>
-    </div>
+          </>
+        ) : (
+          "No components yet. Add artwork with +."
+        )
+      }
+      Footer={
+        <>
+          <span>
+            <small>COMPONENTS</small>
+            <b>
+              {doc.layers.length} / {STAMP_LAYER_LIMIT}
+            </b>
+          </span>
+          <span className="ao-footer-actions" role="toolbar" aria-label="Component order">
+            <button aria-label="Move stamp component up" title="Bring forward" disabled={!selected || selected.locked || doc.layers.indexOf(selected) === 0} onClick={() => Reorder(selected, -1)}>
+              <ArrowUp size={13} />
+            </button>
+            <button aria-label="Move stamp component down" title="Send backward" disabled={!selected || selected.locked || doc.layers.indexOf(selected) === doc.layers.length - 1} onClick={() => Reorder(selected, 1)}>
+              <ArrowDown size={13} />
+            </button>
+            <button
+              aria-label="Duplicate stamp component"
+              title="Duplicate"
+              disabled={!selected || selected.locked || doc.layers.length >= STAMP_LAYER_LIMIT}
+              onClick={() => add(selected.kind, { ...selected, id: stampId(), name: `${selected.name} copy`, x: selected.x + 12, y: selected.y + 12 })}
+            >
+              <Copy size={13} />
+            </button>
+            <button
+              aria-label="Delete stamp component"
+              title="Delete"
+              disabled={!selected || selected.locked}
+              onClick={() => {
+                const Layers = doc.layers.filter((Each) => Each.id !== selectedId);
+                commit({ ...doc, layers: Layers }, null, Layers[0]?.id);
+              }}
+            >
+              <Trash2 size={13} />
+            </button>
+          </span>
+        </>
+      }
+    />
   );
   const Presets = (
     <div className="sfw-rail-body">
@@ -580,6 +578,73 @@ export default function StampWorkspace({ Material, Owner, Press }) {
       ? `${{ move: "Move", rotate: "Rotate", scale: "Scale" }[transform.active.mode]}${transform.active.axis ? ` · ${transform.active.axis.toUpperCase()} axis` : ""}${transform.active.mode !== "rotate" ? " · X/Y constrain" : ""} · Shift snaps · Click/Enter confirms · Esc cancels`
       : "Drag to move · G move · R rotate · S scale · Shift snaps";
 
+  // ── The toolbar along the top: the G / R / S transforms and the artwork to add (Composition), or the vector canvas's own drawing tools
+  // (Vector, placed here by StampVectorCanvas), then the canvas size and the exports.
+  const Toolbar = (
+    <div className="sfw-toolbar" role="toolbar" aria-label="Stamp tools">
+      {MaskActive ? (
+        <span className="sfw-toolbar-note">Painting the mask of {selected?.name} · its brushes sit on the mask canvas</span>
+      ) : VectorMode ? (
+        <span className="sfw-toolbar-slot" ref={PlaceToolSlot} />
+      ) : (
+        <>
+          <span className="sfw-toolbar-family" role="group" aria-label="Transform">
+            {[
+              ["move", "Move", "G", Move],
+              ["rotate", "Rotate", "R", RotateCw],
+              ["scale", "Scale", "S", Scaling],
+            ].map(([Mode, Caption, Shortcut, Glyph]) => (
+              <button
+                key={Mode}
+                className={"sfw-tool labelled" + (transform.active?.mode === Mode ? " on" : "")}
+                aria-label={`${Caption} stamp component`}
+                aria-keyshortcuts={Shortcut}
+                aria-pressed={transform.active?.mode === Mode}
+                disabled={!selected || selected.locked || !selected.visible}
+                title={`${Caption} (${Shortcut}) · click or Enter confirms · Esc cancels`}
+                onClick={() => transform.startModal(Mode)}
+              >
+                <Glyph size={15} />
+                <kbd>{Shortcut}</kbd>
+              </button>
+            ))}
+          </span>
+          <span className="sfw-toolbar-split" />
+          <span className="sfw-toolbar-family" role="group" aria-label="Add artwork">
+            <button className="sfw-tool" aria-label="Add text" title="Add text" disabled={doc.layers.length >= STAMP_LAYER_LIMIT} onClick={() => add("text")}>
+              <Type size={15} />
+            </button>
+            <button className="sfw-tool" aria-label="Add SVG markup" title="Add SVG markup" disabled={doc.layers.length >= STAMP_LAYER_LIMIT} onClick={() => add("svg")}>
+              <Code2 size={15} />
+            </button>
+            <button className="sfw-tool" aria-label="Import an image" title="Import an image" disabled={doc.layers.length >= STAMP_LAYER_LIMIT} onClick={() => pickFile("image")}>
+              <ImagePlus size={15} />
+            </button>
+          </span>
+          <span className="sfw-toolbar-split" />
+          <span className="sfw-toolbar-family" role="group" aria-label="Add a vector shape">
+            {Shapes.map(([Shape, Caption]) => {
+              const Glyph = shapeTools.find(([Each]) => Each === Shape)?.[3] || Code2;
+              return (
+                <button key={Shape} className={"sfw-tool" + (["triangle", "diamond"].includes(Shape) ? " spare" : "")} aria-label={`Add ${Caption.toLowerCase()}`} title={`Add a ${Caption.toLowerCase()} · opens the vector canvas`} disabled={doc.layers.length >= STAMP_LAYER_LIMIT} onClick={() => AddShape(Shape, Caption)}>
+                  <Glyph size={15} />
+                </button>
+              );
+            })}
+          </span>
+        </>
+      )}
+      <span className="sfw-toolbar-gap" />
+      <span className="sfw-toolbar-note">512 × 512</span>
+      <button className="sfw-tool labelled" onClick={() => exportArtwork("svg")} title="Export SVG">
+        SVG
+      </button>
+      <button className="sfw-tool labelled" onClick={() => exportArtwork("png")} title="Export PNG">
+        PNG <Download size={12} />
+      </button>
+    </div>
+  );
+
   return (
     <div
       className="surface-workspace stamp-workspace alloy-scope studio-themed"
@@ -652,17 +717,21 @@ export default function StampWorkspace({ Material, Owner, Press }) {
           </button>
         </div>
       </header>
+      {Toolbar}
       <div className="sfw-body">
-        <aside className="sfw-rail">
-          <div className="sfw-segments" role="tablist" aria-label="Stamp rail">
-            <button role="tab" aria-selected={Rail === "components"} onClick={() => ShowRail("components")}>
-              Components <small>{doc.layers.length}</small>
-            </button>
-            <button role="tab" aria-selected={Rail === "presets"} onClick={() => ShowRail("presets")}>
-              Presets <small>{presets.length}</small>
-            </button>
-          </div>
-          {Rail === "components" ? Components : Presets}
+        <aside className="sfw-rail ao-rail">
+          {Rail === "components" ? (
+            Components
+          ) : (
+            <>
+              <OutlinerHeading Title="Presets" Detail={`${presets.length} saved stamps`}>
+                <button type="button" className="ao-round" aria-label="Show the stamp components" title="Stamp components" onClick={() => ShowRail("components")}>
+                  <Layers3 size={15} />
+                </button>
+              </OutlinerHeading>
+              {Presets}
+            </>
+          )}
         </aside>
         <main className="sfw-centre" data-mask-editing={MaskActive || undefined}>
           {MaskActive ? (
@@ -695,43 +764,14 @@ export default function StampWorkspace({ Material, Owner, Press }) {
               OnPaint={ApplyVectorPaint}
               OnAddText={(Position) => add("text", Position)}
               OnImportSVG={() => pickFile("svg")}
+              ToolbarTarget={ToolSlot}
             />
           ) : (
             <>
               {Composition}
-              <div className="sfw-dock" role="toolbar" aria-label="Stamp transform tools">
-                {[
-                  ["move", "Move", "G", Move],
-                  ["rotate", "Rotate", "R", RotateCw],
-                  ["scale", "Scale", "S", Scaling],
-                ].map(([Mode, Caption, Shortcut, Glyph]) => (
-                  <button
-                    key={Mode}
-                    className="sfw-dock-button"
-                    aria-label={`${Caption} stamp component`}
-                    aria-keyshortcuts={Shortcut}
-                    aria-pressed={transform.active?.mode === Mode}
-                    disabled={!selected || selected.locked || !selected.visible}
-                    title={`${Caption} (${Shortcut}) · click or Enter confirms · Esc cancels`}
-                    onClick={() => transform.startModal(Mode)}
-                  >
-                    <Glyph size={14} />
-                    <kbd>{Shortcut}</kbd>
-                  </button>
-                ))}
-                <span className="sfw-dock-split" />
-                <span className="sfw-dock-note" role="status" aria-live="polite">
-                  {Help}
-                </span>
-                <span className="sfw-dock-split" />
-                <span className="sfw-dock-note">512 × 512</span>
-                <button className="sfw-dock-button" onClick={() => exportArtwork("svg")} title="Export SVG">
-                  SVG
-                </button>
-                <button className="sfw-dock-button" onClick={() => exportArtwork("png")} title="Export PNG">
-                  PNG <Download size={12} />
-                </button>
-              </div>
+              <p className="sfw-canvas-note" role="status" aria-live="polite">
+                {Help}
+              </p>
             </>
           )}
           {(error || fontWarning) && (
