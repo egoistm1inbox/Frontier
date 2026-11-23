@@ -513,7 +513,7 @@ export default function StampWorkspace({ Material, Owner, Press }) {
       </section>
       <section className="sfw-card">
         <p className="sfw-hint">
-          Pressing writes the stamp over what each targeted channel shows now — its fill or its picture — so earlier stamps and patterns stay. Undo with the material’s history, or reset the channel.
+          Pressing writes the stamp over what each targeted channel shows now — its fill or its picture — so earlier stamps and patterns stay. It is baked into the channel picture; to take it back, choose the channel’s source again in Material.
         </p>
         <button className="sfw-primary sfw-wide" disabled={busy || Pressing} onClick={() => savePreset(true)}>
           <Stamp size={14} /> {Pressing ? "Pressing…" : "Press onto material"}
