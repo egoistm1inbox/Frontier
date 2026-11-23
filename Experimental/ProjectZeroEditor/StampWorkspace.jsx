@@ -16,10 +16,10 @@
 //     the material, with a preview over the material's current colour).
 // Press onto material composites the stamp into every targeted channel of the bound material (SurfaceTextures.js).
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Type, Code2, ImagePlus, Plus, Copy, Trash2, LockKeyhole, UnlockKeyhole, ArrowUp, ArrowDown, Undo2, Redo2, Save,
-  FolderOpen, Download, Move, RotateCw, Scaling, MoreHorizontal, Stamp, FilePlus2, X,
+  FolderOpen, Download, Move, RotateCw, Scaling, MoreHorizontal, Stamp, FilePlus2, X, SlidersHorizontal, Paintbrush,
 } from "lucide-react";
 import ArtworkOutliner, { OutlinerHeading } from "./ArtworkOutliner.jsx";
 import { DockTabs, ViewportHeader } from "./SurfaceDocks.jsx";
@@ -42,6 +42,7 @@ import { composeStampSVG, outlineStampText } from "../TextureStudio/src/stampRas
 import { STAMP_LAYER_LIMIT, createStampDocument, removeStampPreset, stampId } from "../TextureStudio/src/stampDocument.js";
 import { PageStrip, PageTurn, PageLook } from "./PageCarousel.jsx";
 import { Popover } from "./PatternWorkspace.jsx";
+import { QuickMenu, useQuickMenu, MenuTabs, MenuLabel, MenuChips } from "./QuickMenu.jsx";
 import { RestingPlacement, StampTargets, ChannelCanvas } from "./SurfaceTextures.js";
 import "./SurfaceWorkspaces.css";
 
@@ -60,9 +61,12 @@ const Shapes = [
   ["star", "Star"],
 ];
 
-export default function StampWorkspace({ Material, Owner, Press }) {
+export default function StampWorkspace({ Material, Owner, Press, OpenStudio }) {
   const [Placement, Place] = useState(RestingPlacement);
   const [Pressing, Busy] = useState(false), [Pressed, Report] = useState("");
+  // Set by the quick menu's Send to Texture paint: once the stamp is pressed, the ShaderEditor turns to Texture paint.
+  const ThenPaint = useRef(false), Opener = useRef(OpenStudio);
+  Opener.current = OpenStudio;
   // Press onto material: the model saves the stamp as a preset first (as Use in Texture does), then hands it here.
   const Model = useStampStudioModel({
     onUse: async (Preset) => {
@@ -72,10 +76,12 @@ export default function StampWorkspace({ Material, Owner, Press }) {
         const Targets = await Press(Preset.project, svg, Placement);
         Report(Targets.length ? `Pressed into ${Targets.join(", ")}` : "No channel targets — enable some under Targets");
         setTimeout(() => Report(""), 3600);
+        if (Targets.length && ThenPaint.current) Opener.current?.("paint");
       } catch (Failure) {
         Model.setError(Failure.message);
       } finally {
         Busy(false);
+        ThenPaint.current = false;
       }
     },
   });
@@ -551,6 +557,7 @@ export default function StampWorkspace({ Material, Owner, Press }) {
                 transform: `translate(-50%,-50%) rotate(${Component.rotation}deg)`,
                 zIndex: doc.layers.length - doc.layers.findIndex((Layer) => Layer.id === Component.id),
               }}
+              data-component={Component.id}
               onClick={() => choose(Component.id)}
               onPointerDown={(Event) => transform.startDrag(Event, Component)}
               onKeyDown={(Event) => {
@@ -579,12 +586,138 @@ export default function StampWorkspace({ Material, Owner, Press }) {
       ? `${{ move: "Move", rotate: "Rotate", scale: "Scale" }[transform.active.mode]}${transform.active.axis ? ` · ${transform.active.axis.toUpperCase()} axis` : ""}${transform.active.mode !== "rotate" ? " · X/Y constrain" : ""} · Shift snaps · Click/Enter confirms · Esc cancels`
       : "Drag to move · G move · R rotate · S scale · Shift snaps";
 
+  // ── The quick menu (the remastered Texture Studio's): right-click the canvas, press Q or Tab, or the rail's Quick menu pill ───────────
+  // A right-click on a component (Composition) chooses it first.
+  const StampRoot = useRef(null);
+  const Menu = useQuickMenu(StampRoot, {
+    Keys: ["Tab"],
+    Before: (Target) => {
+      const Hit = Target?.closest?.("[data-component]");
+      if (Hit && Hit.dataset.component !== selectedId) choose(Hit.dataset.component);
+    },
+  });
+  const Full = doc.layers.length >= STAMP_LAYER_LIMIT;
+  const Movable = !!selected && !selected.locked && selected.visible;
+  const SendToPaint = () => {
+    if (!OpenStudio) return savePreset(true);
+    ThenPaint.current = true;
+    Menu.Hide();
+    savePreset(true);
+  };
+  const MenuPill = (
+    <button type="button" data-quick-menu-toggle className={"sfw-tool labelled sfw-menu-pill" + (Menu.At ? " on" : "")} aria-label="Stamp quick menu" aria-expanded={!!Menu.At} title="Quick menu · right-click the canvas or press Q" onClick={Menu.Toggle}>
+      <SlidersHorizontal size={14} /> Quick menu <kbd>Q</kbd>
+    </button>
+  );
+  const MoreTools = (
+    <Popover Label="More tools" Caption="More tools" Glyph={<MoreHorizontal size={15} />} className="sfw-more-pill" Disabled={MaskActive}>
+      <span className="sfw-menu-title">Artwork</span>
+      <button data-closes disabled={Full} onClick={() => pickFile("svg")}>
+        <FolderOpen size={13} /> Import SVG…
+      </button>
+      <button data-closes disabled={Full} onClick={() => add("svg")}>
+        <Code2 size={13} /> SVG markup
+      </button>
+      <span className="sfw-menu-title">Vector shapes</span>
+      <div className="sfw-menu-grid">
+        {Shapes.map(([Shape, Caption]) => {
+          const Glyph = shapeTools.find(([Each]) => Each === Shape)?.[3] || Code2;
+          return (
+            <button key={Shape} data-closes disabled={Full} onClick={() => AddShape(Shape, Caption)}>
+              <Glyph size={13} /> {Caption}
+            </button>
+          );
+        })}
+      </div>
+      <span className="sfw-menu-title">Stamp</span>
+      <button data-closes onClick={() => exportArtwork("svg")}>
+        <Download size={13} /> Export SVG
+      </button>
+      <button data-closes onClick={() => exportArtwork("png")}>
+        <Download size={13} /> Export PNG
+      </button>
+    </Popover>
+  );
+  const QuickPanel = (
+    <QuickMenu Control={Menu} Category="stamp" Glyph={<Stamp size={14} />} Title={selected ? `${selected.name} quick menu` : "Stamp quick menu"} Keys="Q / Tab / Esc">
+      {!VectorMode && !MaskActive && (
+        <MenuTabs
+          Label="Transform"
+          Columns={3}
+          Tabs={[
+            ["move", "Move · G", Move],
+            ["rotate", "Rotate · R", RotateCw],
+            ["scale", "Scale · S", Scaling],
+          ]}
+          Active={transform.active?.mode || ""}
+          Pick={(Mode) => {
+            if (!Movable) return;
+            Menu.Hide();
+            transform.startModal(Mode);
+          }}
+        />
+      )}
+      <MenuLabel Note={VectorMode ? "the vector canvas's tools sit in the header" : "drag components to place them"}>Canvas view</MenuLabel>
+      <MenuChips
+        Label="Canvas view"
+        Chips={[
+          ["composition", "Composition", !VectorMode && !MaskActive, () => { if (!Finished()) return; ConfigureMaskIdentity(null); ConfigureVectorMode(false); }],
+          ["vector", "Vector", VectorMode && !MaskActive, () => { transform.cancel(); ConfigureMaskIdentity(null); ConfigureVectorMode(true); }],
+          ["place", "Placement", Pages[Page].Id === "place", () => Turn(2)],
+        ]}
+      />
+      <MenuLabel Note={`${doc.layers.length} / ${STAMP_LAYER_LIMIT}`}>Quick add</MenuLabel>
+      <MenuChips
+        Label="Quick add"
+        Chips={[
+          ["text", <><Type size={12} /> Text</>, undefined, () => add("text"), Full],
+          ["image", <><ImagePlus size={12} /> Image</>, undefined, () => pickFile("image"), Full],
+          ...Shapes.slice(0, 4).map(([Shape, Caption]) => {
+            const Glyph = shapeTools.find(([Each]) => Each === Shape)?.[3] || Code2;
+            return [Shape, <><Glyph size={12} /> {Caption}</>, undefined, () => AddShape(Shape, Caption), Full];
+          }),
+        ]}
+      />
+      <MenuLabel Note={selected ? selected.name : "choose a component"}>Component</MenuLabel>
+      <div className="qm-actions">
+        <button type="button" className="qm-action" disabled={!selected || selected.locked || Full} onClick={() => add(selected.kind, { ...selected, id: stampId(), name: `${selected.name} copy`, x: selected.x + 12, y: selected.y + 12 })}>
+          <Copy size={13} /> Duplicate
+        </button>
+        <button type="button" className="qm-action" disabled={!selected || selected.locked || doc.layers.indexOf(selected) === 0} onClick={() => Reorder(selected, -1)}>
+          <ArrowUp size={13} /> Forward
+        </button>
+        <button type="button" className="qm-action" disabled={!selected || selected.locked || doc.layers.indexOf(selected) === doc.layers.length - 1} onClick={() => Reorder(selected, 1)}>
+          <ArrowDown size={13} /> Back
+        </button>
+        <button type="button" className="qm-action" disabled={!selected} onClick={() => SetComponents(selected.id, (Each) => ({ ...Each, locked: !Each.locked }))}>
+          {selected?.locked ? <UnlockKeyhole size={13} /> : <LockKeyhole size={13} />} {selected?.locked ? "Unlock" : "Lock"}
+        </button>
+        <button
+          type="button"
+          className="qm-action"
+          disabled={!selected || selected.locked}
+          onClick={() => {
+            const Layers = doc.layers.filter((Each) => Each.id !== selectedId);
+            commit({ ...doc, layers: Layers }, null, Layers[0]?.id);
+          }}
+        >
+          <Trash2 size={13} /> Delete
+        </button>
+      </div>
+      <button type="button" className="qm-accent" disabled={busy || Pressing || !doc.layers.length} onClick={SendToPaint} title={`Press this stamp into ${Owner}'s targeted channels${OpenStudio ? ", then open Texture paint" : ""}`}>
+        <Paintbrush size={14} /> {Pressing ? "Pressing…" : OpenStudio ? "Send stamp to Texture paint" : "Press onto material"}
+      </button>
+    </QuickMenu>
+  );
   // ── The Viewport header's action row: the G / R / S transforms and the artwork to add (Composition), or the vector canvas's own
   // drawing tools (Vector, placed here by StampVectorCanvas); then its zoom, the canvas size and the exports.
   const Tools = MaskActive ? (
   <span className="sfw-view-note">Painting the mask of {selected?.name} · its brushes sit on the mask canvas</span>
 ) : VectorMode ? (
-  <span className="sfw-tool-slot" ref={PlaceToolSlot} />
+  <>
+    <span className="sfw-tool-slot" ref={PlaceToolSlot} />
+    {MenuPill}
+  </>
 ) : (
   <>
     <span className="sfw-view-family" role="group" aria-label="Transform">
@@ -631,6 +764,9 @@ export default function StampWorkspace({ Material, Owner, Press }) {
         );
       })}
     </span>
+    <span className="sfw-view-divider" />
+    {MoreTools}
+    {MenuPill}
   </>
 );
   const Trailing = (
@@ -648,9 +784,11 @@ export default function StampWorkspace({ Material, Owner, Press }) {
 
   return (
     <div
+      ref={StampRoot}
       className="surface-workspace stamp-workspace alloy-scope studio-themed"
       data-surface-workspace="stamp"
     >
+      {QuickPanel}
       <div className={"sfw-body sfw-docks" + (Shut.left ? " no-left" : "") + (Shut.right ? " no-right" : "")}>
         {!Shut.left && (
           <section className="sfw-rail ao-rail sfw-pane left" aria-label="LayerStack dock">
@@ -739,7 +877,7 @@ export default function StampWorkspace({ Material, Owner, Press }) {
             Tools={Tools}
             Trailing={Trailing}
           />
-          <main className="sfw-centre" data-mask-editing={MaskActive || undefined}>
+          <main className="sfw-centre" data-mask-editing={MaskActive || undefined} {...Menu.Viewport}>
             {MaskActive ? (
               <ArtworkMaskCanvas
                 key={selected.id}

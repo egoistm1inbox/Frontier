@@ -1471,6 +1471,7 @@ function ShaderStudios({ Studio, ChooseStudio, Subject, Material, Latest, Apply,
         {Shown === "pattern" ? (
           <PatternWorkspace
             Owner={Material.Name}
+            OpenStudio={OpenStudio}
             Apply={async (Pattern, Layers) => {
               Apply(await PatternMaterial(Latest.current, Layers, Pattern.repeats, Pattern.name));
               return "Applied to " + Latest.current.Name + " · colour, roughness, metallic";
@@ -1514,6 +1515,7 @@ function ShaderStudios({ Studio, ChooseStudio, Subject, Material, Latest, Apply,
           <StampWorkspace
             Material={Material}
             Owner={Material.Name}
+            OpenStudio={OpenStudio}
             Press={async (Stamp, Svg, Placement) => {
               const Outcome = await StampMaterial(Latest.current, Stamp, Svg, Placement);
               if (Outcome.Targets.length) Apply(Outcome.Material);

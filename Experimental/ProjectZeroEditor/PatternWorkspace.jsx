@@ -19,10 +19,11 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Plus, Undo2, Redo2, Layers3, MoreHorizontal, Upload, Spline, Lock,
   ArrowUp, ArrowDown, Download, FilePlus2, FolderOpen, Save, CircleHelp, X, Grid3X3, Magnet, SlidersHorizontal, Code2, Wand2,
-  LayoutGrid, Search, FolderTree,
+  LayoutGrid, Search, FolderTree, Copy, Trash2, Group, BringToFront, SendToBack, FlipHorizontal2, FlipVertical2, Orbit, Paintbrush,
 } from "lucide-react";
 import ArtworkOutliner, { OutlinerHeading, FolderPicture, GroupPicture } from "./ArtworkOutliner.jsx";
 import { DockTabs, ViewportHeader } from "./SurfaceDocks.jsx";
+import { QuickMenu, useQuickMenu, MenuTabs, MenuLabel, MenuChips } from "./QuickMenu.jsx";
 import { PatternEnclosureContains } from "../TextureStudio/src/PatternOrganization.js";
 import { usePatternEditorModel } from "../TextureStudio/src/PatternEditor.jsx";
 import ShapeEditorCanvas from "../TextureStudio/src/ShapeEditorCanvas.jsx";
@@ -83,6 +84,8 @@ const Shortcuts = [
   ["Nudge / Fast nudge", "Arrow / Shift Arrow"],
   ["Finish / Cancel path", "Enter / Esc"],
 ];
+// The quick menu's tool grid: the tools used most, two rows of four.
+const MenuTools = ["move", "node", "pen", "pencil", "rect", "ellipse", "text", "hand"];
 const Pages = [
   { Id: "shape", Label: "Shape" },
   { Id: "surface", Label: "Surface" },
@@ -143,7 +146,7 @@ export function Popover({ Label, Glyph, Caption, className = "", Align = "start"
 // The pattern being edited outlives the tab: turning to Material or Stamp and back (or binding another object) reopens it.
 let KeptPattern = null;
 
-export default function PatternWorkspace({ Owner, Apply }) {
+export default function PatternWorkspace({ Owner, Apply, OpenStudio }) {
   const Deselect = useRef(() => {});
   const Model = usePatternEditorModel({ initial: KeptPattern || undefined, onClose: () => Deselect.current() });
   const {
@@ -173,6 +176,7 @@ export default function PatternWorkspace({ Owner, Apply }) {
   const [ShortcutsOpen, ShowShortcuts] = useState(false);
   const [Applying, Busy] = useState(""), [Applied, Report] = useState("");
   const [TileSize, SizeTiles] = useState(160);
+  const PatternRoot = useRef(null);
   const Finish = () => !(canvasRef.current && !canvasRef.current.prepareExport());
   const Turn = (At) => {
     Motion.Turn(At);
@@ -194,7 +198,7 @@ export default function PatternWorkspace({ Owner, Apply }) {
   const Selection = selected.length > 1 ? "many" : l ? "one" : "none";
 
   async function ApplyToMaterial() {
-    if (!Finish()) return;
+    if (!Finish()) return false;
     canvasRef.current?.cancelInteraction();
     try {
       savePatternDraft(docRef.current);
@@ -209,8 +213,10 @@ export default function PatternWorkspace({ Owner, Apply }) {
       });
       Report(Outcome || "Applied to the material");
       setTimeout(() => Report(""), 3200);
+      return true;
     } catch (Failure) {
       setError(Failure.message);
+      return false;
     } finally {
       Busy("");
     }
@@ -1079,6 +1085,78 @@ export default function PatternWorkspace({ Owner, Apply }) {
     changeTool(Key);
     if (View !== "design") Show("design");
   };
+  // ── The quick menu (the remastered Texture Studio's): right-click the canvas, press Q or Tab, or the rail's Quick menu pill ───────────
+  // A right-click on a shape selects it first, as the canvas's own menu did; its actions (duplicate, group, order, lock, delete) live here.
+  const Menu = useQuickMenu(PatternRoot, {
+    Keys: ["Tab"],
+    Before: (Target) => {
+      const Hit = Target?.closest?.("[data-layer]");
+      if (!Hit || MaskActive) return;
+      const At = Number(Hit.dataset.layer);
+      if (!selected.includes(At)) setSelected(expandPatternSelection(doc, At));
+    },
+  });
+  const Editable = selected.filter((At) => doc.layers[At] && !doc.layers[At].locked);
+  const ToolEntry = (Key) => shapeTools.find(([Each]) => Each === Key);
+  const SendToPaint = async () => {
+    if ((await ApplyToMaterial()) && OpenStudio) {
+      Menu.Hide();
+      OpenStudio("paint");
+    }
+  };
+  const QuickPanel = (
+    <QuickMenu Control={Menu} Category="pattern" Glyph={<LayoutGrid size={14} />} Title={selected.length > 1 ? `${selected.length} shapes · quick menu` : l ? `${l.name} quick menu` : "Pattern quick menu"} Keys="Q / Tab / Esc">
+      {!MaskActive && (
+        <MenuTabs
+          Label="Drawing tools"
+          Columns={4}
+          Tabs={MenuTools.map((Key) => {
+            const [, Caption, , Glyph] = ToolEntry(Key);
+            return [Key, Caption.replace(/ tool$/i, ""), Glyph];
+          })}
+          Active={View === "design" ? tool : ""}
+          Pick={ToolPick}
+        />
+      )}
+      <MenuLabel Note={doc.tileAxes === "xy" ? "edges wrap" : doc.tileAxes === "none" ? "finite rug" : "one-way border"}>Canvas view</MenuLabel>
+      <MenuChips
+        Label="Canvas view"
+        Chips={[
+          ["design", "Design", View === "design" && !MaskActive, () => Show("design"), MaskActive],
+          ["repeat", "Repeat", View === "repeat" && !MaskActive, () => Show("repeat"), MaskActive],
+          ["grid", "Grid", showGrid, () => setShowGrid((On) => !On)],
+          ["snap", "Snap", smartGuides, () => setSmartGuides((On) => !On)],
+        ]}
+      />
+      <MenuLabel Note={l ? l.name : "select a shape"}>Quick add modifier</MenuLabel>
+      <MenuChips
+        Label="Quick add modifier"
+        Chips={[
+          ["reflect-x", <><FlipHorizontal2 size={12} /> Reflect X</>, undefined, () => add(l.kind, reflectPatternLayer(l, "x")), !l || l.locked, "Add a copy reflected across X"],
+          ["reflect-y", <><FlipVertical2 size={12} /> Reflect Y</>, undefined, () => add(l.kind, reflectPatternLayer(l, "y")), !l || l.locked, "Add a copy reflected across Y"],
+          ["ring", <><Orbit size={12} /> Ring × {ring.count}</>, undefined, () => commit({ ...doc, layers: doc.layers.flatMap((P, I) => (I === selection ? radialPatternLayers(P, ring.count, ring.radius) : [P])) }), !l || l.locked, `Arrange ${ring.count} copies in a ring of radius ${ring.radius} (Shape page · Reflect & ring)`],
+          ["duplicate", <><Copy size={12} /> Duplicate</>, undefined, () => action("duplicate"), !Editable.length, "Duplicate · Ctrl/⌘ D"],
+        ]}
+      />
+      <MenuLabel Note={selected.length ? `${selected.length} selected` : "nothing selected"}>Selection</MenuLabel>
+      <div className="qm-actions">
+        {[
+          ["group", "Group", Group, Editable.length < 2],
+          ["front", "To front", BringToFront, !Editable.length],
+          ["back", "To back", SendToBack, !Editable.length],
+          ["lock", "Lock", Lock, !Editable.length],
+          ["delete", "Delete", Trash2, !Editable.length],
+        ].map(([Act, Caption, Glyph, Disabled]) => (
+          <button key={Act} type="button" className="qm-action" disabled={Disabled || MaskActive} onClick={() => action(Act)}>
+            <Glyph size={13} /> {Caption}
+          </button>
+        ))}
+      </div>
+      <button type="button" className="qm-accent" disabled={busy || !!Applying} onClick={OpenStudio ? SendToPaint : ApplyToMaterial} title={`Write this pattern into ${Owner}, then open Texture paint`}>
+        <Paintbrush size={14} /> {Applying || (OpenStudio ? "Send pattern to Texture paint" : "Apply to material")}
+      </button>
+    </QuickMenu>
+  );
   const ToolButton = ([Key, Caption, Keys, Glyph, Title], Spare) => (
     <button key={Key} className={"sfw-tool" + (tool === Key && View === "design" ? " on" : "") + (Spare ? " spare" : "")} disabled={MaskActive} aria-pressed={tool === Key && View === "design"} aria-label={`${Caption} (${Keys})`} title={(Title || Caption) + " · " + Keys} onClick={() => ToolPick(Key)}>
       <Glyph size={16} />
@@ -1096,7 +1174,9 @@ export default function PatternWorkspace({ Owner, Apply }) {
             </span>
           </React.Fragment>
         ))}
-        <Popover Label="More drawing tools" Glyph={<MoreHorizontal size={16} />} className="sfw-view-more" Disabled={MaskActive}>
+        <span className="sfw-view-divider" />
+        <Popover Label="More tools" Caption="More tools" Glyph={<MoreHorizontal size={15} />} className="sfw-more-pill" Disabled={MaskActive}>
+          <span className="sfw-menu-title">More drawing tools</span>
           <div className="sfw-menu-tools">
             {ToolFamilies.flatMap(([, Keys]) => Keys.filter((Key) => Key.startsWith("~"))).map((Key) => (
               <span key={Key} data-closes>
@@ -1107,7 +1187,13 @@ export default function PatternWorkspace({ Owner, Apply }) {
           <button data-closes onClick={() => openSVGSource()}>
             <Code2 size={13} /> Paste SVG source
           </button>
+          <button data-closes onClick={() => ShowShortcuts(true)}>
+            <CircleHelp size={13} /> Keyboard shortcuts
+          </button>
         </Popover>
+        <button type="button" data-quick-menu-toggle className={"sfw-tool labelled sfw-menu-pill" + (Menu.At ? " on" : "")} aria-label="Pattern quick menu" aria-expanded={!!Menu.At} title="Quick menu · right-click the canvas or press Q" onClick={Menu.Toggle}>
+          <SlidersHorizontal size={14} /> Quick menu <kbd>Q</kbd>
+        </button>
     </>
   );
   const Trailing = (
@@ -1204,6 +1290,7 @@ export default function PatternWorkspace({ Owner, Apply }) {
 
   return (
     <div
+      ref={PatternRoot}
       className="surface-workspace pattern-workspace alloy-scope studio-themed"
       data-surface-workspace="pattern"
       onKeyDown={(Event) => {
@@ -1323,7 +1410,7 @@ export default function PatternWorkspace({ Owner, Apply }) {
               </button>
             </div>
           )}
-          <main className="sfw-centre" data-mask-editing={MaskActive || undefined}>
+          <main className="sfw-centre" data-mask-editing={MaskActive || undefined} {...Menu.Viewport}>
             {Construction && View === "design" && !MaskActive && <p className="sfw-construction">{Construction}</p>}
             {View === "repeat" && !MaskActive ? Repeat : Design}
             {error && (
@@ -1375,6 +1462,7 @@ export default function PatternWorkspace({ Owner, Apply }) {
         </div>
       )}
       {svgSource && <SVGSourceEditor source={svgSource.source} editing={svgSource.index !== null} onApply={embedSVG} onClose={() => setSVGSource(null)} />}
+      {QuickPanel}
     </div>
   );
 }

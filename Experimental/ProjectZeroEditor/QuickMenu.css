@@ -1,0 +1,237 @@
+/* ============================================================================================================================================
+                                                                  QUICKMENU.CSS
+   ============================================================================================================================================
+   The tool menus of Texture paint, Pattern and Stamp (Follow-up 80): the remastered Texture Studio's floating card, in the editor's own
+   look — the property card's dark gradient and 22 px corners, DM Sans, pill chips, the light primary button for the chosen entry and the
+   amber accent for the action at the foot. It sits in a portal on the page, so every rule here is unscoped and prefixed qm-. */
+
+.qm-card {
+  position: fixed;
+  z-index: 4000;
+  max-width: calc(100vw - 24px);
+  max-height: min(660px, calc(100vh - 24px));
+  overflow-y: auto;
+  padding: 12px;
+  border: 1px solid #343434;
+  border-radius: 22px;
+  background: linear-gradient(135deg, rgba(37, 37, 37, 0.97), rgba(24, 24, 24, 0.97));
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.03) inset;
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  color: #f0f0f0;
+  font-family: "DM Sans", system-ui, sans-serif;
+  font-weight: 300;
+  font-size: 12px;
+  scrollbar-width: thin;
+  scrollbar-color: #3a3a3a transparent;
+  animation: qm-rise 0.14s ease-out;
+}
+@keyframes qm-rise {
+  from { opacity: 0; transform: translateY(4px) scale(0.985); }
+  to { opacity: 1; transform: none; }
+}
+.qm-card button { font: inherit; color: inherit; cursor: pointer; }
+.qm-card button:disabled { cursor: default; opacity: 0.4; }
+
+.qm-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: -2px 0 10px;
+  padding: 0 0 10px 2px;
+  border-bottom: 1px solid #ffffff12;
+}
+.qm-glyph {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 9px;
+  background: #ffb4541f;
+  color: #ffb454;
+  flex: none;
+}
+.qm-head strong { font-weight: 500; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.qm-head small {
+  margin-left: auto;
+  color: #8a8a8a;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+.qm-close {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid #ffffff0d;
+  border-radius: 999px;
+  background: #222;
+  flex: none;
+}
+.qm-close:hover { background: #2c2c2c; }
+
+.qm-body { display: flex; flex-direction: column; gap: 8px; }
+
+.qm-tabs,
+.qm-sections {
+  display: grid;
+  gap: 3px;
+  padding: 3px;
+  border: 1px solid #ffffff10;
+  border-radius: 14px;
+  background: #0f0f0f;
+}
+.qm-tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  height: 44px;
+  border: 0;
+  border-radius: 11px;
+  background: transparent;
+  color: #9a9a9a !important;
+  font-size: 10.5px !important;
+}
+.qm-tab:hover { background: #ffffff0a; color: #fff !important; }
+.qm-tab.on { background: #f0f0f0; color: #111 !important; font-weight: 500 !important; }
+.qm-sections { border-radius: 12px; }
+.qm-section {
+  height: 26px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: #8f8f8f !important;
+  font-size: 10.5px !important;
+  white-space: nowrap;
+}
+.qm-section:hover { color: #fff !important; }
+.qm-section.on { background: #ffb45424; color: #ffcf8f !important; font-weight: 500 !important; }
+
+.qm-label {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 4px 2px -2px;
+  color: #b8b8b8;
+  font-size: 10.5px;
+  letter-spacing: 0.02em;
+}
+.qm-label small { color: #6f6f6f; font-size: 10px; }
+
+.qm-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.qm-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 11px;
+  border: 1px solid #ffffff14;
+  border-radius: 999px;
+  background: #1c1c1c;
+  color: #a9a9a9 !important;
+  font-size: 10.5px !important;
+  white-space: nowrap;
+}
+.qm-chip:hover:not(:disabled) { color: #fff !important; border-color: #ffffff2e; }
+.qm-chip.on { background: #f0f0f0; border-color: transparent; color: #111 !important; font-weight: 500 !important; }
+
+/* Round swatches (the brush materials, the sampled material). */
+.qm-swatches { display: flex; flex-wrap: wrap; gap: 7px; margin: 2px 2px 0; }
+.qm-swatch {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid #ffffff38;
+  border-radius: 999px;
+}
+.qm-swatch.on { box-shadow: 0 0 0 2px #1d1d1d, 0 0 0 3.5px #ffb454; }
+
+/* The tip preview and the readouts. */
+.qm-tip {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  border: 1px solid #ffffff0d;
+  border-radius: 16px;
+  background: #0d0d0d;
+}
+.qm-tip canvas { width: 64px; height: 64px; flex: none; }
+.qm-tip span { display: flex; flex-direction: column; gap: 2px; color: #9a9a9a; font-size: 10.5px; }
+.qm-tip b { color: #f0f0f0; font-weight: 500; font-size: 12px; }
+
+.qm-sample {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px;
+  border: 1px solid #ffffff0d;
+  border-radius: 16px;
+  background: #0d0d0d;
+}
+.qm-sample i { width: 44px; height: 44px; border-radius: 12px; border: 1px solid #ffffff26; flex: none; }
+.qm-sample span { display: flex; flex-direction: column; gap: 2px; color: #9a9a9a; font-size: 10.5px; }
+.qm-sample b { color: #f0f0f0; font-weight: 500; font-size: 12px; }
+
+.qm-note { margin: 0 2px; color: #7c7c7c; font-size: 10.5px; line-height: 1.45; }
+
+/* The editor's sliders, a little tighter inside the card. */
+.qm-body .field { margin: 0; }
+.qm-controls { display: flex; flex-direction: column; gap: 6px; }
+
+.qm-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 5px; }
+.qm-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 30px;
+  border: 1px solid #ffffff0d;
+  border-radius: 16px;
+  background: #222;
+  font-size: 11px !important;
+}
+.qm-action:hover:not(:disabled) { background: #2b2b2b; }
+.qm-accent {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  height: 34px;
+  margin-top: 2px;
+  border: 0;
+  border-radius: 999px;
+  background: #ffb454;
+  color: #1a1206 !important;
+  font-weight: 500 !important;
+  font-size: 12px !important;
+}
+.qm-accent:hover:not(:disabled) { background: #ffc172; }
+
+/* The rail's More tools pill and the tool menu button (the remastered header's labelled pills). */
+.sfw-more-pill > .sfw-icon-button,
+.sfw-more-pill.sfw-tool,
+.sfw-menu-pill {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 6px;
+  width: auto !important;
+  padding: 0 11px !important;
+  border-radius: 999px !important;
+  font-size: 11px !important;
+  white-space: nowrap;
+}
+.sfw-menu-pill kbd {
+  padding: 0 5px;
+  border-radius: 6px;
+  background: #ffffff12;
+  color: #9a9a9a;
+  font: 500 9.5px/16px "DM Sans", system-ui, sans-serif;
+}
+.sfw-menu-pill.on { background: #f0f0f0 !important; color: #111 !important; }
+.sfw-menu-pill.on kbd { background: #0000001a; color: #333; }

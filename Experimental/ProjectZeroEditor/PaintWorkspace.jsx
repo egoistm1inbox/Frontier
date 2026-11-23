@@ -17,9 +17,11 @@
 // picture. The canvases live in Sessions (held by the ShaderEditor), so leaving the tab keeps the work.
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Brush, Eraser, Droplet, PaintBucket, Pipette, FlipHorizontal2, Undo2, Redo2, Paintbrush, Download, RotateCcw, Grid3x3 } from "lucide-react";
+import { Brush, Eraser, Droplet, PaintBucket, Pipette, FlipHorizontal2, Undo2, Redo2, Paintbrush, Download, RotateCcw, Grid3x3, MoreHorizontal, SlidersHorizontal } from "lucide-react";
 import ArtworkOutliner from "./ArtworkOutliner.jsx";
 import { DockTabs, ViewportHeader } from "./SurfaceDocks.jsx";
+import { Popover } from "./PatternWorkspace.jsx";
+import { QuickMenu, useQuickMenu, MenuTabs, MenuSections, MenuLabel, MenuChips } from "./QuickMenu.jsx";
 import { PageStrip, PageTurn, PageLook } from "./PageCarousel.jsx";
 import { Control, Card } from "./Inspectors.jsx";
 import ShaderViewport, { ChannelPixels, PreviewGeometry, PreviewShapes, BoundShape } from "./ShaderViewport.jsx";
@@ -42,6 +44,20 @@ const Tools = [
   ["soften", "Soften", "S", Droplet],
   ["fill", "Fill", "F", PaintBucket],
   ["pick", "Picker", "I", Pipette],
+];
+// Brush tip shapes (the remastered Texture Studio's Brush Inspector): each is a white stamp whose alpha is the tip.
+const Nibs = [
+  ["round", "Round"],
+  ["chisel", "Chisel"],
+  ["chalk", "Chalk"],
+  ["splatter", "Splatter"],
+  ["sponge", "Sponge"],
+];
+// The Brush inspector's sections while the Brush is chosen.
+const MenuParts = [
+  ["tip", "Tip & channels"],
+  ["material", "Material"],
+  ["mask", "Mask"],
 ];
 // Brush materials: amounts for colour, roughness and metallic (the channels they unlock).
 const BrushMaterials = [
@@ -105,23 +121,89 @@ const Copy = (Canvas) => {
   Next.getContext("2d").drawImage(Canvas, 0, 0);
   return Next;
 };
-// The brush tip: white with a soft edge (Hardness is the share of the radius kept solid).
+// The brush tip: white with a soft edge (Hardness is the share of the radius kept solid), in one of the Nibs' shapes. The grain of
+// chalk, splatter and sponge comes from a seeded sequence, so a tip looks the same on every dab.
 const Tips = new Map();
-function TipOf(Radius, Hardness) {
-  const Key = Math.round(Radius * 2) / 2 + ":" + Hardness.toFixed(2);
+const SeededSequence = (Seed) => () => ((Seed = (Seed * 16807) % 2147483647) - 1) / 2147483646;
+function TipOf(Radius, Hardness, Nib = "round") {
+  const Key = Math.round(Radius * 2) / 2 + ":" + Hardness.toFixed(2) + ":" + Nib;
   if (Tips.has(Key)) return Tips.get(Key);
   const Side = Math.ceil(Radius * 2) + 2, Canvas = document.createElement("canvas");
   Canvas.width = Canvas.height = Side;
   const Brush = Canvas.getContext("2d"), Middle = Side / 2;
-  const Fade = Brush.createRadialGradient(Middle, Middle, 0, Middle, Middle, Radius);
-  Fade.addColorStop(0, "#fff");
-  Fade.addColorStop(Math.min(0.99, Hardness), "#fff");
-  Fade.addColorStop(1, "rgba(255,255,255,0)");
-  Brush.fillStyle = Fade;
-  Brush.fillRect(0, 0, Side, Side);
+  const Random = SeededSequence(Side * 7919 + Nibs.findIndex(([Id]) => Id === Nib) + 11);
+  const Soft = (X, Y, Reach) => {
+    const Fade = Brush.createRadialGradient(X, Y, 0, X, Y, Reach);
+    Fade.addColorStop(0, "#fff");
+    Fade.addColorStop(Math.min(0.99, Hardness), "#fff");
+    Fade.addColorStop(1, "rgba(255,255,255,0)");
+    return Fade;
+  };
+  if (Nib === "chisel") {
+    // A flat, slanted blade.
+    Brush.save();
+    Brush.translate(Middle, Middle);
+    Brush.rotate(-Math.PI / 5);
+    Brush.scale(1, 0.32);
+    Brush.fillStyle = Soft(0, 0, Radius);
+    Brush.fillRect(-Middle, -Middle / 0.32, Side, Side / 0.32);
+    Brush.restore();
+  } else if (Nib === "splatter") {
+    // Drops scattered inside the radius, larger towards the middle.
+    const Count = Math.max(8, Math.min(46, Math.round(Radius * 0.9)));
+    for (let At = 0; At < Count; At++) {
+      const Angle = Random() * Math.PI * 2, Reach = Math.sqrt(Random()) * Radius * 0.86;
+      const X = Middle + Math.cos(Angle) * Reach, Y = Middle + Math.sin(Angle) * Reach;
+      const Drop = Math.max(0.8, Radius * (0.05 + Random() * 0.16) * (1.15 - Reach / Radius));
+      Brush.fillStyle = Soft(X, Y, Drop);
+      Brush.fillRect(X - Drop, Y - Drop, Drop * 2, Drop * 2);
+    }
+  } else {
+    Brush.fillStyle = Soft(Middle, Middle, Radius);
+    Brush.fillRect(0, 0, Side, Side);
+    if (Nib === "chalk" || Nib === "sponge") {
+      const Pixels = Brush.getImageData(0, 0, Side, Side), Alpha = Pixels.data;
+      if (Nib === "chalk") {
+        // Grain: most texels keep their cover, a share drop away in short streaks along the stroke.
+        for (let Y = 0; Y < Side; Y++) {
+          let Streak = 0;
+          for (let X = 0; X < Side; X++) {
+            if (Streak <= 0 && Random() < 0.16) Streak = 1 + Math.floor(Random() * 4);
+            const Keep = Streak-- > 0 ? 0.12 : 0.72 + Random() * 0.28;
+            Alpha[(Y * Side + X) * 4 + 3] *= Keep;
+          }
+        }
+      } else {
+        // Pores: a coarse lattice of random cover, blended between its corners.
+        const Cell = Math.max(2, Radius / 4), Across = Math.ceil(Side / Cell) + 2;
+        const Lattice = Array.from({ length: Across * Across }, () => (Random() < 0.38 ? 0.08 : 0.55 + Random() * 0.45));
+        for (let Y = 0; Y < Side; Y++)
+          for (let X = 0; X < Side; X++) {
+            const U = X / Cell, V = Y / Cell, I = Math.floor(U), J = Math.floor(V), Fu = U - I, Fv = V - J;
+            const A = Lattice[J * Across + I], B = Lattice[J * Across + I + 1], C = Lattice[(J + 1) * Across + I], D = Lattice[(J + 1) * Across + I + 1];
+            Alpha[(Y * Side + X) * 4 + 3] *= (A * (1 - Fu) + B * Fu) * (1 - Fv) + (C * (1 - Fu) + D * Fu) * Fv;
+          }
+      }
+      Brush.putImageData(Pixels, 0, 0);
+    }
+  }
   if (Tips.size > 64) Tips.clear();
   Tips.set(Key, Canvas);
   return Canvas;
+}
+// The chosen tip drawn small (the Brush inspector's preview).
+function NibPicture({ Nib, Hardness, Strength, Size = 64 }) {
+  const Sheet = useRef(null);
+  useEffect(() => {
+    const Canvas = Sheet.current;
+    if (!Canvas) return;
+    Canvas.width = Canvas.height = Size * 2;
+    const Brush = Canvas.getContext("2d");
+    Brush.clearRect(0, 0, Size * 2, Size * 2);
+    Brush.globalAlpha = 0.35 + Strength * 0.65;
+    Brush.drawImage(TipOf(Size * 0.8, Hardness, Nib), Size * 0.2, Size * 0.2, Size * 1.6, Size * 1.6);
+  }, [Nib, Hardness, Strength, Size]);
+  return <canvas ref={Sheet} aria-label={`${Nib} brush tip`} />;
 }
 // A mask picture (white, its alpha the mask) at 512 × 512 from a baked map: Level picks where it turns on, Spread how softly.
 function MaskPicture(Baked, Invert, Level, Spread) {
@@ -277,6 +359,9 @@ export default function PaintWorkspace({ Material, Owner, Apply, Sessions, Sessi
   const [Hardness, Harden] = useState(0.55);
   const [Spacing, Space] = useState(0.18);
   const [Mirror, Reflect] = useState(false);
+  const [Nib, ChooseNib] = useState("round");
+  const [Sampled, KeepSample] = useState(null);
+  const [MenuPart, TurnMenuPart] = useState("tip");
   const [Amounts, SetAmounts] = useState(() => ({
     ...Object.fromEntries(PaintChannels.map((Id) => [Id, ShownChannel(Material.Channels[Id]).Fill])),
     colour: "#8a4528",
@@ -297,7 +382,7 @@ export default function PaintWorkspace({ Material, Owner, Apply, Sessions, Sessi
   const Brushing = useRef(null);
   const Pending = useRef(0);
   const Now = useRef({});
-  Now.current = { Tool, Size, Strength, Hardness, Spacing, Mirror, Amounts, Unlocked, MaskCanvas };
+  Now.current = { Tool, Size, Strength, Hardness, Spacing, Mirror, Amounts, Unlocked, MaskCanvas, Nib };
   const Targets = () => PaintChannels.filter((Id) => Now.current.Unlocked.has(Id));
   const Soon = () => {
     if (Pending.current) return;
@@ -309,8 +394,8 @@ export default function PaintWorkspace({ Material, Owner, Apply, Sessions, Sessi
   useEffect(() => () => cancelAnimationFrame(Pending.current), []);
   // One dab of every target channel at texel (X, Y), wrapped across the edges, mirrored across U when asked.
   const Dab = (X, Y, Weight) => {
-    const { Tool: Using, Size: Radius, Strength: Flow, Hardness: Solid, Amounts: Lay, MaskCanvas: Limit } = Now.current;
-    const Tip = TipOf(Radius, Solid), Side = Tip.width;
+    const { Tool: Using, Size: Radius, Strength: Flow, Hardness: Solid, Amounts: Lay, MaskCanvas: Limit, Nib: Grain } = Now.current;
+    const Tip = TipOf(Radius, Solid, Using === "soften" ? "round" : Grain), Side = Tip.width;
     const Spots = [[X, Y]];
     if (Now.current.Mirror) Spots.push([Edge - X, Y]);
     const Wrapped = [];
@@ -364,6 +449,7 @@ export default function PaintWorkspace({ Material, Owner, Apply, Sessions, Sessi
         Taken[Id] = Field.Kind === "Colour" ? Hex(R, G, B) : +(Field.Minimum + (R / 255) * (Field.Maximum - Field.Minimum)).toFixed(3);
       }
       SetAmounts((Before) => ({ ...Before, ...Taken }));
+      KeepSample(Taken);
       ChooseTool("brush");
       Report("Picked the material under the cursor");
       return;
@@ -551,6 +637,29 @@ export default function PaintWorkspace({ Material, Owner, Apply, Sessions, Sessi
   };
   const MaskOptions = ["None", ...MaskMaps.filter((Id) => Bakes[Id]).map((Id) => MaskNames[Id])];
   const MaskIndex = Mask.Map ? MaskOptions.indexOf(MaskNames[Mask.Map]) : 0;
+  // The brush's sliders, shared by the Brush page and the Brush inspector.
+  const SizeField = <Control Field={{ Label: "Size", Minimum: 1, Maximum: 160, Decimals: 0, Unit: "px", Default: 24, Curve: 2 }} Value={Size} Change={Resize} />;
+  const StrengthField = <Control Field={{ Label: "Strength", Minimum: 0, Maximum: 1, Decimals: 0, Unit: "%", Default: 0.85, DisplayScale: 100 }} Value={Strength} Change={Strengthen} />;
+  const HardnessField = <Control Field={{ Label: "Hardness", Minimum: 0, Maximum: 1, Decimals: 0, Unit: "%", Default: 0.55, DisplayScale: 100 }} Value={Hardness} Change={Harden} />;
+  const SpacingField = <Control Field={{ Label: "Spacing", Minimum: 0.05, Maximum: 1, Decimals: 0, Unit: "%", Default: 0.18, DisplayScale: 100 }} Value={Spacing} Change={Space} />;
+  const MirrorField = <Control Field={{ Label: "Mirror U", Control: "Switch" }} Value={Mirror} Change={Reflect} />;
+  const MaskFields = (
+    <>
+      <Control Field={{ Label: "Mask", Control: "Select", Options: MaskOptions }} Value={Math.max(0, MaskIndex)} Change={(At) => SetMask({ ...Mask, Map: At ? MaskMaps.find((Id) => MaskNames[Id] === MaskOptions[At]) : "" })} />
+      {Mask.Map && (
+        <>
+          <Control Field={{ Label: "Invert", Control: "Switch" }} Value={Mask.Invert} Change={(Invert) => SetMask({ ...Mask, Invert })} />
+          <Control Field={{ Label: "Level", Minimum: 0, Maximum: 1, Decimals: 2, Default: 0.5 }} Value={Mask.Level} Change={(Level) => SetMask({ ...Mask, Level })} />
+          <Control Field={{ Label: "Spread", Minimum: 0.01, Maximum: 1, Decimals: 2, Default: 0.5 }} Value={Mask.Spread} Change={(Spread) => SetMask({ ...Mask, Spread })} />
+        </>
+      )}
+    </>
+  );
+  const LoadMaterial = (Name, Look) => {
+    SetAmounts((Before) => ({ ...Before, ...Look }));
+    Unlock((Before) => new Set([...Before, "colour", "roughness", "metallic"]));
+    Report(`Brush loaded with ${Name}`);
+  };
   const PageBodies = [
     <>
       <Card Title={Tools.find(([Id]) => Id === Tool)[1]}>
@@ -560,12 +669,13 @@ export default function PaintWorkspace({ Material, Owner, Apply, Sessions, Sessi
             {Size} px · {Math.round(Strength * 100)} % · {Math.round(Hardness * 100)} % hard
           </small>
         </div>
-        <Control Field={{ Label: "Size", Minimum: 1, Maximum: 160, Decimals: 0, Unit: "px", Default: 24, Curve: 2 }} Value={Size} Change={Resize} />
-        <Control Field={{ Label: "Strength", Minimum: 0, Maximum: 1, Decimals: 0, Unit: "%", Default: 0.85, DisplayScale: 100 }} Value={Strength} Change={Strengthen} />
-        <Control Field={{ Label: "Hardness", Minimum: 0, Maximum: 1, Decimals: 0, Unit: "%", Default: 0.55, DisplayScale: 100 }} Value={Hardness} Change={Harden} />
-        <Control Field={{ Label: "Spacing", Minimum: 0.05, Maximum: 1, Decimals: 0, Unit: "%", Default: 0.18, DisplayScale: 100 }} Value={Spacing} Change={Space} />
-        <Control Field={{ Label: "Mirror U", Control: "Switch" }} Value={Mirror} Change={Reflect} />
-        <p className="card-foot">[ and ] resize · a pen's pressure scales the strength · Alt-drag orbits while painting</p>
+        <Control Field={{ Label: "Tip", Control: "Select", Options: Nibs.map(([, Caption]) => Caption) }} Value={Math.max(0, Nibs.findIndex(([Id]) => Id === Nib))} Change={(At) => ChooseNib(Nibs[At][0])} />
+        {SizeField}
+        {StrengthField}
+        {HardnessField}
+        {SpacingField}
+        {MirrorField}
+        <p className="card-foot">Right-click the viewport or press Q for the Brush inspector · [ and ] resize · a pen's pressure scales the strength · Alt-drag orbits while painting</p>
       </Card>
     </>,
     <>
@@ -578,11 +688,7 @@ export default function PaintWorkspace({ Material, Owner, Apply, Sessions, Sessi
               role="listitem"
               className="pw-material"
               title={`${Name} · colour, roughness and metallic`}
-              onClick={() => {
-                SetAmounts((Before) => ({ ...Before, ...Look }));
-                Unlock((Before) => new Set([...Before, "colour", "roughness", "metallic"]));
-                Report(`Brush loaded with ${Name}`);
-              }}
+              onClick={() => LoadMaterial(Name, Look)}
             >
               <span
                 style={{
@@ -602,15 +708,12 @@ export default function PaintWorkspace({ Material, Owner, Apply, Sessions, Sessi
     </>,
     <>
       <Card Title="Paint through a bake">
-        <Control Field={{ Label: "Mask", Control: "Select", Options: MaskOptions }} Value={Math.max(0, MaskIndex)} Change={(At) => SetMask({ ...Mask, Map: At ? MaskMaps.find((Id) => MaskNames[Id] === MaskOptions[At]) : "" })} />
+        {MaskFields}
         {Mask.Map && (
           <>
             <div className="pw-mask-preview">
               <Thumbnail Canvas={MaskCanvas} Revision={JSON.stringify(Mask)} Size={120} />
             </div>
-            <Control Field={{ Label: "Invert", Control: "Switch" }} Value={Mask.Invert} Change={(Invert) => SetMask({ ...Mask, Invert })} />
-            <Control Field={{ Label: "Level", Minimum: 0, Maximum: 1, Decimals: 2, Default: 0.5 }} Value={Mask.Level} Change={(Level) => SetMask({ ...Mask, Level })} />
-            <Control Field={{ Label: "Spread", Minimum: 0.01, Maximum: 1, Decimals: 2, Default: 0.5 }} Value={Mask.Spread} Change={(Spread) => SetMask({ ...Mask, Spread })} />
             {MaskShape && MaskShape !== Shape && <p className="pw-warning">Baked on the {ShapeName(MaskShape).toLowerCase()} · its UVs differ from the {ShapeName(Shape).toLowerCase()} shown now.</p>}
           </>
         )}
@@ -641,6 +744,153 @@ export default function PaintWorkspace({ Material, Owner, Apply, Sessions, Sessi
     </>,
   ];
 
+  // ── The Brush inspector (the remastered Texture Studio's tool menu): right-click the viewport, press Q, or the rail's Brush pill ────────
+  const Menu = useQuickMenu(Root);
+  const [, ToolCaption, , ToolGlyph] = Tools.find(([Id]) => Id === Tool);
+  const ChannelChips = (
+    <>
+      <MenuLabel Note={`${Unlocked.size} of ${PaintChannels.length} · the rest are locked`}>Paint channels</MenuLabel>
+      <MenuChips Label="Paint channels" Chips={PaintChannels.map((Id) => [Id, FieldOf(Id).Label, Unlocked.has(Id), () => Toggle(Unlock, Id)])} />
+    </>
+  );
+  const NibChips = (
+    <>
+      <MenuLabel>Brush tip shape</MenuLabel>
+      <MenuChips Label="Brush tip shape" Chips={Nibs.map(([Id, Caption]) => [Id, Caption, Nib === Id, () => ChooseNib(Id)])} />
+    </>
+  );
+  const TipCard = (
+    <div className="qm-tip">
+      <NibPicture Nib={Tool === "soften" ? "round" : Nib} Hardness={Hardness} Strength={Strength} />
+      <span>
+        <b>{Tool === "soften" ? "Soft blur" : Nibs.find(([Id]) => Id === Nib)[1]} tip</b>
+        {Size} px · {Math.round(Strength * 100)} % · {Math.round(Hardness * 100)} % hard
+        {Mirror ? <em>Mirrored across U</em> : null}
+      </span>
+    </div>
+  );
+  const Amountless = !PaintChannels.some((Id) => Unlocked.has(Id));
+  const MenuBodies = {
+    brush: (
+      <>
+        <MenuSections Label="Brush inspector sections" Sections={MenuParts} Active={MenuPart} Pick={TurnMenuPart} />
+        {MenuPart === "tip" ? (
+          <>
+            {TipCard}
+            {ChannelChips}
+            {NibChips}
+            <div className="qm-controls">
+              {SizeField}
+              {StrengthField}
+              {HardnessField}
+              {SpacingField}
+              {MirrorField}
+            </div>
+          </>
+        ) : MenuPart === "material" ? (
+          <>
+            <MenuLabel Note="colour · roughness · metallic">Brush materials</MenuLabel>
+            <div className="qm-swatches" role="list" aria-label="Brush materials">
+              {BrushMaterials.map(([Name, Look]) => (
+                <button
+                  key={Name}
+                  type="button"
+                  role="listitem"
+                  className={"qm-swatch" + (Amounts.colour === Look.colour && Amounts.roughness === Look.roughness ? " on" : "")}
+                  aria-label={Name}
+                  title={Name}
+                  style={{ background: `radial-gradient(circle at 35% 30%, rgba(255,255,255,${0.9 - Look.roughness * 0.7}) 0, transparent ${18 + Look.roughness * 28}%), radial-gradient(circle at 45% 42%, ${Look.colour}, color-mix(in srgb, ${Look.colour} ${60 - Look.metallic * 25}%, #000) 85%)` }}
+                  onClick={() => LoadMaterial(Name, Look)}
+                />
+              ))}
+            </div>
+            <MenuLabel>What the brush lays</MenuLabel>
+            <div className="qm-controls">{PaintChannels.filter((Id) => Unlocked.has(Id)).map(AmountControl)}</div>
+            {Amountless && <p className="qm-note">Every channel is locked · turn one on under Tip & channels.</p>}
+          </>
+        ) : (
+          <>
+            <div className="qm-controls">{MaskFields}</div>
+            <p className="qm-note">{MaskOptions.length > 1 ? "Brush, Eraser, Soften and Fill land only where the mask is white." : "Bake geometry maps in the Baking tab to paint through occlusion, curvature, edge wear, dirt and more."}</p>
+          </>
+        )}
+      </>
+    ),
+    erase: (
+      <>
+        {TipCard}
+        {ChannelChips}
+        {NibChips}
+        <div className="qm-controls">
+          {SizeField}
+          {StrengthField}
+          {HardnessField}
+        </div>
+        <p className="qm-note">The eraser brings back what each channel showed before painting.</p>
+      </>
+    ),
+    soften: (
+      <>
+        {TipCard}
+        {ChannelChips}
+        <div className="qm-controls">
+          {SizeField}
+          {StrengthField}
+        </div>
+        <p className="qm-note">Soften blurs the paint under the tip · the blur grows with the size.</p>
+      </>
+    ),
+    fill: (
+      <>
+        {ChannelChips}
+        <MenuLabel>Fill with</MenuLabel>
+        <div className="qm-controls">
+          {PaintChannels.filter((Id) => Unlocked.has(Id)).map(AmountControl)}
+          {StrengthField}
+        </div>
+        <p className="qm-note">{MaskCanvas ? `Fills only where ${MaskNames[Mask.Map].toLowerCase()} is white.` : "One click fills every channel in the brush across the whole texture."}</p>
+      </>
+    ),
+    pick: (
+      <>
+        <MenuLabel>Sampled material</MenuLabel>
+        {Sampled ? (
+          <div className="qm-sample">
+            <i style={{ background: Sampled.colour }} />
+            <span>
+              <b>{Sampled.colour}</b>
+              Roughness {Number(Sampled.roughness).toFixed(2)} · Metallic {Number(Sampled.metallic).toFixed(2)}
+            </span>
+          </div>
+        ) : (
+          <p className="qm-note">Click the model with the Picker to sample every channel under the cursor.</p>
+        )}
+        <button
+          type="button"
+          className="qm-accent"
+          disabled={!Sampled}
+          onClick={() => {
+            SetAmounts((Before) => ({ ...Before, ...Sampled }));
+            ChooseTool("brush");
+          }}
+        >
+          <Brush size={14} /> Paint with the sampled material
+        </button>
+      </>
+    ),
+  };
+  const BrushInspector = (
+    <QuickMenu Control={Menu} Category="paint" Glyph={<ToolGlyph size={14} />} Title={`${ToolCaption} inspector`} Keys="Right-click / Q / Esc" Width={372}>
+      <MenuTabs Label="Paint tools" Tabs={Tools.map(([Id, Caption, , Glyph]) => [Id, Caption, Glyph])} Active={Tool} Pick={ChooseTool} />
+      {MenuBodies[Tool]}
+      {Tool !== "pick" && (
+        <button type="button" className="qm-accent" disabled={!Painted.length || Applying} onClick={ApplyToMaterial}>
+          <Paintbrush size={14} /> {Applying ? "Applying…" : Painted.length ? `Apply ${Painted.length} painted channel${Painted.length === 1 ? "" : "s"}` : "Nothing painted yet"}
+        </button>
+      )}
+    </QuickMenu>
+  );
+
   const ToolKeys = (
     <>
       <span className="sfw-view-family" role="group" aria-label="Paint tools">
@@ -662,6 +912,33 @@ export default function PaintWorkspace({ Material, Owner, Apply, Sessions, Sessi
           </button>
         )}
       </span>
+      <span className="sfw-view-divider" />
+      <Popover Label="More tools" Caption="More tools" Glyph={<MoreHorizontal size={15} />} className="sfw-more-pill">
+        <span className="sfw-menu-title">Texture paint</span>
+        <button data-closes onClick={() => Reflect(!Mirror)}>
+          <FlipHorizontal2 size={13} /> {Mirror ? "Stop mirroring across U" : "Mirror across U"}
+        </button>
+        <button data-closes onClick={() => ChooseMode(Mode === "3d" ? "uv" : "3d")}>
+          <Grid3x3 size={13} /> {Mode === "3d" ? "Paint on the UV sheet" : "Paint on the model"}
+        </button>
+        <span className="sfw-menu-title">Tip</span>
+        {Nibs.map(([Id, Caption]) => (
+          <button key={Id} data-closes aria-pressed={Nib === Id} onClick={() => ChooseNib(Id)}>
+            <Brush size={13} /> {Caption}
+            {Nib === Id ? " ✓" : ""}
+          </button>
+        ))}
+        <span className="sfw-menu-title">{FieldOf(Focus).Label}</span>
+        <button data-closes disabled={!Ready} onClick={() => ResetChannel(Focus)}>
+          <RotateCcw size={13} /> Clear the paint
+        </button>
+        <button data-closes disabled={!Ready} onClick={() => SavePicture(Focus)}>
+          <Download size={13} /> Save as PNG
+        </button>
+      </Popover>
+      <button type="button" data-quick-menu-toggle className={"sfw-tool labelled sfw-menu-pill" + (Menu.At ? " on" : "")} aria-label="Brush inspector" aria-expanded={!!Menu.At} title="Brush inspector · right-click the viewport or press Q" onClick={Menu.Toggle}>
+        <SlidersHorizontal size={14} /> Brush inspector <kbd>Q</kbd>
+      </button>
     </>
   );
   const Trailing = (
@@ -678,6 +955,7 @@ export default function PaintWorkspace({ Material, Owner, Apply, Sessions, Sessi
 
   return (
     <div className="surface-workspace paint-workspace" data-surface-workspace="paint" ref={Root}>
+      {BrushInspector}
       <div className={"sfw-body sfw-docks" + (Shut.left ? " no-left" : "") + (Shut.right ? " no-right" : "")}>
         {!Shut.left && (
           <section className="sfw-rail ao-rail sfw-pane left" aria-label="LayerStack dock">
@@ -743,7 +1021,7 @@ export default function PaintWorkspace({ Material, Owner, Apply, Sessions, Sessi
             Tools={ToolKeys}
             Trailing={Trailing}
           />
-          <main className="sfw-centre pw-centre" data-tool={Tool}>
+          <main className="sfw-centre pw-centre" data-tool={Tool} {...Menu.Viewport}>
             {Mode === "3d" ? (
               <ShaderViewport
                 Material={Material}
@@ -762,7 +1040,7 @@ export default function PaintWorkspace({ Material, Owner, Apply, Sessions, Sessi
             )}
           </main>
           <div className="sfw-view-foot">
-            {Mode === "3d" ? "Left-drag paints · Alt-drag, Shift-drag or the right button move the camera" : `UV of the ${ShapeName(Shape).toLowerCase()} · ${FieldOf(Focus).Label}`}
+            {Mode === "3d" ? "Left-drag paints · Alt-drag, Shift-drag or a right-drag move the camera · right-click or Q opens the Brush inspector" : `UV of the ${ShapeName(Shape).toLowerCase()} · ${FieldOf(Focus).Label}`}
             {MaskCanvas ? ` · masked by ${MaskNames[Mask.Map].toLowerCase()}` : ""}
           </div>
         </section>
