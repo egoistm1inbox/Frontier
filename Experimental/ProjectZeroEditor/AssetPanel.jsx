@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import DrawerPanel from "./DrawerPanel.jsx";
 import ShaderballPanel from "./ShaderballPanel.jsx";
 import { ResolveMaterial } from "./MaterialSpecification.js";
+import { AssetDragStart } from "./AssetDrag.js";
 import {
   AssetFile,
   AssetKinds,
@@ -328,6 +329,14 @@ export default function AssetPanel({
   const EndColourDrag = () => {
     document.body.classList.remove("dragging-codex-colour");
     OnColourDragChange?.(false);
+  };
+  // Follow-up 68: materials and images drag onto the material panel (slots, channels, textures) the same way colours do.
+  const Draggable = (Asset) => ["Colours", "Materials", "Images"].includes(Asset.Kind);
+  const BeginAssetDrag = (Event, Asset) => {
+    if (Asset.Kind === "Colours") return BeginColourDrag(Event, Asset.Colour);
+    AssetDragStart(Event, Asset);
+    OnColourDragChange?.(true);
+    if (DrawerStage === "full") SnapDrawerTo(0.46);
   };
 
   const TriggerDoubleClickColour = (Asset) => {
@@ -815,15 +824,13 @@ export default function AssetPanel({
                     data-asset-id={Asset.Id}
                     aria-label={"Select asset " + Asset.Name}
                     aria-pressed={Current?.Id === Asset.Id}
-                    draggable={Asset.Kind === "Colours"}
+                    draggable={Draggable(Asset)}
                     onDragStart={
-                      Asset.Kind === "Colours"
-                        ? (Event) => BeginColourDrag(Event, Asset.Colour)
+                      Draggable(Asset)
+                        ? (Event) => BeginAssetDrag(Event, Asset)
                         : undefined
                     }
-                    onDragEnd={
-                      Asset.Kind === "Colours" ? EndColourDrag : undefined
-                    }
+                    onDragEnd={Draggable(Asset) ? EndColourDrag : undefined}
                     onClick={() => {
                       Select(Asset.Id);
                       RenameDraft("");

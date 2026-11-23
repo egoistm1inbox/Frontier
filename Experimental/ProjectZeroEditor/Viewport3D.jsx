@@ -27,7 +27,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { THREE, Stage } from "../Shared/Studio/Render.js";
 import { ShapeOf } from "./PrimitiveInspector.jsx";
-import { ResolveMaterial } from "./MaterialSpecification.js";
+import { ResolveSlots, SectionSlots } from "./MaterialSpecification.js";
 import { Solar } from "./Solar.mjs";
 import { SkyMedium, Direction, KelvinTint, SunAngularRadius } from "./SkyShader.js";
 import { SkyViewMap, SunBeam, SkyFill, StarCatalogue, StarCount, StarSettings, FlareAtlasMap } from "./BakedMaps.js";
@@ -532,8 +532,8 @@ export default function Viewport3D({ Rows, Values, Hidden, Selected, Picked = []
   const ShapeKey = JSON.stringify(
     Placed.map(({ Row, Along, Position, Rotation, Scale }) => {
       const Own = Values[Row.Id] || {};
-      const Material = ResolveMaterial(Own).Channels;
-      return [Row.Id, Along, Position, Rotation, Scale, Object.entries(Own).filter(([Key]) => Key.startsWith("Geometry ")), Material.colour?.Fill, Material.roughness?.Fill, Material.metallic?.Fill];
+      const Slots = ResolveSlots(Own).map(({ Channels }) => [Channels.colour?.Fill, Channels.roughness?.Fill, Channels.metallic?.Fill]);
+      return [Row.Id, Along, Position, Rotation, Scale, Object.entries(Own).filter(([Key]) => Key.startsWith("Geometry ")), Slots, SectionSlots(Own, ShapeOf(Row))];
     }).concat(Posed.map(({ Row, ...Pose }) => [Row.Id, Pose]), Parked.map(({ Row, ...Pose }) => [Row.Id, Pose]), Lamps.map(({ Row, Type, Props }) => [Row.Id, Type, Props])),
   );
   useEffect(() => {
@@ -544,15 +544,20 @@ export default function Viewport3D({ Rows, Values, Hidden, Selected, Picked = []
     for (const { Row, Shape, Along, Position, Rotation, Scale } of Placed) {
       const Own = Values[Row.Id] || {};
       const { Geometry, Lift } = ShapeGeometry(Shape, (Key) => Own[Key]);
-      const Material = ResolveMaterial(Own).Channels;
-      const Colour = /^#[\da-f]{6}$/i.test(Material.colour?.Fill || "") ? Material.colour.Fill : "#c7ada0";
-      const Mesh = new THREE.Mesh(
-        Geometry,
-        new THREE.MeshStandardMaterial({
+      // Follow-up 68: one three.js material per slot; each section (box face, cylinder cap, …) draws with the slot it is assigned to.
+      const Drawn = ResolveSlots(Own).map(({ Channels: Material }) => {
+        const Colour = /^#[\da-f]{6}$/i.test(Material.colour?.Fill || "") ? Material.colour.Fill : "#c7ada0";
+        return new THREE.MeshStandardMaterial({
           color: new THREE.Color(Colour),
           roughness: Math.max(0.04, Math.min(1, +Material.roughness?.Fill || 0.32)),
           metalness: Math.max(0, Math.min(1, +Material.metallic?.Fill || 0)),
-        }),
+        });
+      });
+      const Sections = SectionSlots(Own, Shape);
+      Geometry.groups.forEach((Part, Index) => (Part.materialIndex = Index)); // cones skip the top cap's index
+      const Mesh = new THREE.Mesh(
+        Geometry,
+        Geometry.groups.length && Drawn.length > 1 ? Geometry.groups.map((_, Index) => Drawn[Sections[Index] ?? 0]) : Drawn[Sections[0] ?? 0],
       );
       Mesh.castShadow = Mesh.receiveShadow = true;
       Mesh.position.set(Along + Position[0], Lift * Scale[1] + Position[1], Position[2]);

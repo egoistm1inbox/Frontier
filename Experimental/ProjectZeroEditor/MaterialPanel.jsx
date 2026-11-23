@@ -11,13 +11,66 @@ import {
   MaterialTypes,
   SourceNames,
   ResolveMaterial,
+  ResolveSlots,
   ChangeChannel,
   ChooseMaterialType,
+  AddChannel,
+  RemoveChannel,
+  ShownChannel,
+  ShaderLanguages,
+  ShaderTemplate,
+  MaterialSections,
+  SectionSlots,
+  MaximumMaterialSlots,
   Clamp,
   GradientCss,
   GradientValue,
 } from "./MaterialSpecification.js";
 import { ColourSlotDropProps } from "./ColourCodex.js";
+import { AssetDropProps } from "./AssetDrag.js";
+import { BakeShaderChannel, ShaderChannelPicture } from "./ShaderChannel.js";
+import { EngineAssets } from "./AssetDepot.js";
+import { ShapeOf } from "./PrimitiveInspector.jsx";
+
+// Follow-up 68: Content Browser drops. A dropped image is shrunk to the embedded preview size; a dropped material lends
+// one channel (its fill, gradient or texture is copied so the preview can draw it).
+async function ShrinkPicture(Source, Name) {
+  const Image = new window.Image();
+  Image.src = Source;
+  await Image.decode();
+  const Canvas = document.createElement("canvas"),
+    Ratio = Math.min(1, 160 / Math.max(Image.width, Image.height));
+  Canvas.width = Math.max(1, Math.round(Image.width * Ratio));
+  Canvas.height = Math.max(1, Math.round(Image.height * Ratio));
+  Canvas.getContext("2d").drawImage(Image, 0, 0, Canvas.width, Canvas.height);
+  return { Name, Data: Canvas.toDataURL("image/png"), Width: Image.width, Height: Image.height };
+}
+export function LinkFromAsset(Asset, Id) {
+  const Lent = ResolveMaterial({ Material: Asset.Material }).Channels[Id];
+  const Drawn = ShownChannel(Lent);
+  const Copyable = ["Fill", "Gradient", "Texture"].includes(Drawn.Source);
+  return {
+    AssetId: Asset.Id,
+    Name: Asset.Name || Asset.Material?.Name || "Material",
+    Snapshot: {
+      Source: Copyable ? Drawn.Source : "Fill",
+      Fill: Drawn.Fill,
+      Stops: Drawn.Stops,
+      Axis: Drawn.Axis,
+      Texture: Drawn.Texture,
+      Component: Drawn.Component,
+      Repeat: Drawn.Repeat,
+    },
+  };
+}
+const ChannelSwatch = (Owned, Field) => {
+  const Drawn = ShownChannel(Owned);
+  return Drawn.Source === "Gradient"
+    ? GradientCss(Drawn, Field)
+    : Field.Kind === "Colour"
+      ? Drawn.Fill
+      : undefined;
+};
 import "./MaterialPanel.css";
 
 function NumericInput(Props) {
@@ -247,7 +300,84 @@ function GradientEditor({ Field, Channel, Change }) {
     </div>
   );
 }
+// Follow-up 68: the Material source borrows this channel from a material asset, dropped from the Content Browser or picked here.
+function MaterialLinkEditor({ Field, Channel, Change }) {
+  const Presets = useMemo(() => {
+    try {
+      return EngineAssets().filter((Asset) => Asset.Kind === "Materials");
+    } catch {
+      return [];
+    }
+  }, []);
+  const Link = Channel.Link;
+  const Shown = ShownChannel(Channel);
+  return (
+    <div className="link-editor">
+      <div
+        className={"link-drop " + (Link ? "linked" : "")}
+        {...AssetDropProps(["Materials"], (Asset) =>
+          Change({ Source: "Link", Link: LinkFromAsset(Asset, Field.Id) }),
+        )}
+      >
+        {Link ? (
+          <>
+            <span
+              className="link-swatch"
+              style={{ background: ChannelSwatch(Channel, Field) || "#3a3a3a" }}
+            >
+              {Field.Kind !== "Colour" && Shown.Source === "Fill"
+                ? (+Shown.Fill).toFixed(2)
+                : ""}
+            </span>
+            <span className="link-name">
+              {Link.Name}
+              <small>
+                {Field.Label} · {Shown.Source === "Fill" ? "constant" : Shown.Source.toLowerCase()} copied from the asset
+              </small>
+            </span>
+            <button aria-label="Unlink material" onClick={() => Change({ Source: "Fill", Link: null })}>
+              ×
+            </button>
+          </>
+        ) : (
+          <span className="link-empty">
+            ⬚<small>Drop a material from the Content Browser</small>
+          </span>
+        )}
+      </div>
+      <label>
+        Or choose a built-in material
+        <select
+          aria-label="Linked material"
+          value={Presets.some((Asset) => Asset.Id === Link?.AssetId) ? Link.AssetId : ""}
+          onChange={(Event) => {
+            const Asset = Presets.find((Each) => Each.Id === Event.target.value);
+            if (Asset) Change({ Source: "Link", Link: LinkFromAsset(Asset, Field.Id) });
+          }}
+        >
+          <option value="">{Link && !Presets.some((Asset) => Asset.Id === Link.AssetId) ? Link.Name : "Choose…"}</option>
+          {Presets.map((Asset) => (
+            <option key={Asset.Id} value={Asset.Id}>
+              {Asset.Name}
+            </option>
+          ))}
+        </select>
+      </label>
+      <p>
+        The link copies the asset's {Field.Label.toLowerCase()} at the moment it
+        is dropped. Drop again to refresh it.
+      </p>
+    </div>
+  );
+}
+
 function SourceEditor({ Field, Channel, Change }) {
+  const Compiled = useMemo(() => {
+    if (Channel.Source !== "Code" || Channel.Code.Language !== "GLSL") return null;
+    const Result = BakeShaderChannel(Channel.Code.Text, Field);
+    const Line = +(/^Line (\d+):/.exec(Result.Error || "")?.[1] || 0);
+    return { Error: Result.Error, Line, Picture: ShaderChannelPicture(Result) };
+  }, [Channel.Source, Channel.Code.Language, Channel.Code.Text, Field]);
   const [Message, Report] = useState(""),
     Request = useRef(0),
     Mounted = useRef(true);
@@ -317,10 +447,16 @@ function SourceEditor({ Field, Channel, Change }) {
         </div>
         <span className={"source-indicator " + Channel.Source.toLowerCase()}>
           {Channel.Source === "Code"
-            ? "Unresolved"
-            : Channel.Source === "Texture" && !Channel.Texture
-              ? "No image"
-              : "Authored"}
+            ? Channel.Code.Language === "GLSL"
+              ? Compiled?.Error
+                ? "Shader error"
+                : "Live shader"
+              : "Native only"
+            : Channel.Source === "Link"
+              ? "Linked"
+              : Channel.Source === "Texture" && !Channel.Texture
+                ? "No image"
+                : "Authored"}
         </span>
       </div>
       <div
@@ -339,8 +475,8 @@ function SourceEditor({ Field, Channel, Change }) {
         ))}
       </div>
       <p className="source-explanation">
-        One active source per channel. Other source drafts are kept when
-        switching.
+        One active source per channel; the others keep their drafts. Drop a
+        material or image from the Content Browser onto the channel.
       </p>
       {Channel.Source === "Fill" && (
         <div className="fill-editor">
@@ -368,12 +504,26 @@ function SourceEditor({ Field, Channel, Change }) {
       )}
       {Channel.Source === "Texture" && (
         <div className="texture-editor">
-          <div className="texture-drop">
+          <div
+            className="texture-drop"
+            {...AssetDropProps(["Images"], async (Asset) => {
+              const Ticket = ++Request.current;
+              try {
+                const Texture = await ShrinkPicture(Asset.Data, Asset.Name);
+                if (Mounted.current && Ticket === Request.current) {
+                  Change({ Texture });
+                  Report(Asset.Name + " placed from the Content Browser.");
+                }
+              } catch {
+                if (Mounted.current) Report("That image could not be decoded.");
+              }
+            })}
+          >
             {Channel.Texture ? (
               <img src={Channel.Texture.Data} alt={Channel.Texture.Name} />
             ) : (
               <span className="texture-empty">
-                ▧<small>No texture assigned</small>
+                ▧<small>No texture assigned · drop an image from the Content Browser</small>
               </span>
             )}
             <label className="texture-upload">
@@ -444,67 +594,120 @@ function SourceEditor({ Field, Channel, Change }) {
         </div>
       )}
       {Channel.Source === "Code" && (
-        <div className="code-editor">
-          <div className="code-warning">
-            <b>Native link pending</b>
-            <p>
-              This channel is driven by a code descriptor. Nothing is compiled
-              or executed in this HTML editor.
-            </p>
-          </div>
-          <label>
-            Provider
-            <select
-              aria-label="Code provider"
-              value={Channel.Code.Language}
-              onChange={(Event) =>
-                Change({
-                  Code: { ...Channel.Code, Language: Event.target.value },
-                })
+        <div className="code-editor shader-source">
+          <div className="shader-toolbar">
+            <label>
+              Language
+              <select
+                aria-label="Shader language"
+                value={Channel.Code.Language}
+                onChange={(Event) =>
+                  Change({
+                    Code: { ...Channel.Code, Language: Event.target.value },
+                  })
+                }
+              >
+                {ShaderLanguages.map((Name) => (
+                  <option key={Name}>{Name}</option>
+                ))}
+              </select>
+            </label>
+            <button
+              className="shader-reset"
+              onClick={() =>
+                Change({ Code: { ...Channel.Code, Text: ShaderTemplate(Field) } })
               }
             >
-              <option>C++</option>
-              <option>Slang / HLSL</option>
-              <option>GLSL</option>
-            </select>
-          </label>
-          <label>
-            Symbol / entry point
-            <input
-              aria-label="Code symbol"
-              placeholder="Project.Materials.UpdateColour"
-              value={Channel.Code.Symbol}
-              onChange={(Event) =>
-                Change({
-                  Code: {
-                    ...Channel.Code,
-                    Symbol: Event.target.value.slice(0, 256),
-                  },
-                })
-              }
-            />
-          </label>
-          <label>
-            Source / integration notes
+              Start from template
+            </button>
+          </div>
+          <p className="shader-signature">
+            {Channel.Code.Language === "GLSL" ? (
+              <>
+                Write <code>{Field.Kind === "Colour" ? "vec3" : "float"} channel(vec2 uv)</code>
+                {Field.Kind === "Colour"
+                  ? " returning a colour 0–1."
+                  : ` returning ${Field.Minimum} to ${Field.Maximum}${Field.Unit ? " " + Field.Unit : ""}.`}{" "}
+                It compiles as you type and the shader ball draws it.
+              </>
+            ) : (
+              "Kept for the native renderer; the shader ball shows the fallback value below."
+            )}
+          </p>
+          {Channel.Code.Language !== "GLSL" && (
+            <label>
+              Entry point
+              <input
+                aria-label="Shader entry point"
+                placeholder="Project.Materials.UpdateColour"
+                value={Channel.Code.Symbol}
+                onChange={(Event) =>
+                  Change({
+                    Code: {
+                      ...Channel.Code,
+                      Symbol: Event.target.value.slice(0, 256),
+                    },
+                  })
+                }
+              />
+            </label>
+          )}
+          <div className="shader-text">
+            <ol className="shader-lines" aria-hidden="true">
+              {Channel.Code.Text.split("\n").map((_, Index) => (
+                <li
+                  key={Index}
+                  className={Compiled?.Line === Index + 1 ? "wrong" : ""}
+                >
+                  {Index + 1}
+                </li>
+              ))}
+            </ol>
             <textarea
-              aria-label="Channel code"
+              aria-label="Channel shader"
               spellCheck="false"
-              placeholder="Describe the native producer or paste shader source for the later C++ integration."
+              wrap="off"
               maxLength={12000}
               value={Channel.Code.Text}
+              onKeyDown={(Event) => {
+                if (Event.key !== "Tab") return;
+                Event.preventDefault();
+                const Area = Event.currentTarget,
+                  From = Area.selectionStart,
+                  To = Area.selectionEnd,
+                  Text = Area.value.slice(0, From) + "  " + Area.value.slice(To);
+                Change({ Code: { ...Channel.Code, Text } });
+                requestAnimationFrame(() => Area.setSelectionRange(From + 2, From + 2));
+              }}
               onChange={(Event) =>
                 Change({ Code: { ...Channel.Code, Text: Event.target.value } })
               }
             />
-          </label>
-          <h3>Preview fallback</h3>
+          </div>
+          {Channel.Code.Language === "GLSL" && (
+            <div
+              className={"shader-result " + (Compiled?.Error ? "wrong" : "fine")}
+              role="status"
+              data-shader-result={Compiled?.Error ? "error" : "compiled"}
+            >
+              {Compiled?.Picture && <img src={Compiled.Picture} alt="Shader output" />}
+              <span>
+                <b>{Compiled?.Error ? "Doesn't compile" : "Compiled · drawing live"}</b>
+                <small>{Compiled?.Error || "128 × 128 across the surface UVs"}</small>
+              </span>
+            </div>
+          )}
+          <h3>{Channel.Code.Language === "GLSL" ? "Fallback while it doesn't compile" : "Preview fallback"}</h3>
           <ValueInput
             Field={Field}
             Value={Channel.Fill}
-            Label="Code fallback"
+            Label="Shader fallback"
             Change={(Fill) => Change({ Fill })}
           />
         </div>
+      )}
+      {Channel.Source === "Link" && (
+        <MaterialLinkEditor Field={Field} Channel={Channel} Change={Change} />
       )}
       {Message && (
         <p role="status" className="material-message">
@@ -540,20 +743,75 @@ export default function MaterialPanel({
   Change,
   Expand,
   Compact = false,
+  Slots: ShowSlots = true,
 }) {
-  const Material = useMemo(() => ResolveMaterial(Values), [Values]),
+  // Follow-up 68: material slots. Slot 0 is Values.Material; slots 1+ are Values.MaterialSlots. Each section of the shape (box face,
+  // cylinder cap, …) is drawn by one slot (Values.MaterialSections).
+  const Slots = useMemo(() => (ShowSlots ? ResolveSlots(Values) : [ResolveMaterial(Values)]), [Values, ShowSlots]),
+    [SlotShown, ShowSlot] = useState(0),
+    Slot = Math.min(SlotShown, Slots.length - 1),
+    Material = Slots[Slot],
+    Shape = ShapeOf(Subject),
+    Sections = MaterialSections(Shape),
+    Covered = SectionSlots(Values, Shape),
     Latest = useRef(Material),
+    LatestValues = useRef(Values),
     LatestChange = useRef(Change);
   Latest.current = Material;
+  LatestValues.current = Values;
   LatestChange.current = Change;
-  const [Selected, Select] = useState("colour"),
+  const [Selected, Select] = useState(() => Material.Used[0] || "colour"),
+    [Adding, ShowAdding] = useState(false),
     [Query, Search] = useState("");
-  const Field = MaterialChannels.find((Item) => Item.Id === Selected),
-    Channel = Material.Channels[Selected];
-  const Apply = (Next) => LatestChange.current("Material", Next);
+  const Current = Material.Used.includes(Selected) ? Selected : Material.Used[0];
+  const Field = MaterialChannels.find((Entry) => Entry.Id === Current),
+    Channel = Current ? Material.Channels[Current] : null;
+  const Others = () => (Array.isArray(LatestValues.current.MaterialSlots) ? LatestValues.current.MaterialSlots : []);
+  const Apply = (Next) => {
+    if (Slot === 0) return LatestChange.current("Material", Next);
+    const List = [...Others()];
+    List[Slot - 1] = Next;
+    LatestChange.current("MaterialSlots", List);
+  };
   const Assign = (Id, Patch) => Apply(ChangeChannel(Latest.current, Id, Patch));
-  const Authored = Object.values(Material.Channels).filter(
-    (Item) => Item.Source !== "Fill",
+  const AddSlot = (From) => {
+    if (Slots.length >= MaximumMaterialSlots) return;
+    const Fresh = From
+      ? { ...ResolveMaterial({ Material: From.Material }), Name: From.Name || From.Material?.Name || "Material" }
+      : { ...ResolveMaterial({}), Name: "Material " + Slots.length };
+    LatestChange.current("MaterialSlots", [...Others(), Fresh]);
+    ShowSlot(Slots.length);
+  };
+  const RemoveSlot = (Index) => {
+    LatestChange.current("MaterialSlots", Others().filter((_, At) => At !== Index - 1));
+    LatestChange.current(
+      "MaterialSections",
+      Covered.map((Owner) => (Owner === Index ? 0 : Owner > Index ? Owner - 1 : Owner)),
+    );
+    if (Slot >= Index) ShowSlot(Slot - 1);
+  };
+  const ReplaceSlot = (Index, Asset) => {
+    const Next = { ...ResolveMaterial({ Material: Asset.Material }), Name: Asset.Name || Asset.Material?.Name || "Material" };
+    if (Index === 0) LatestChange.current("Material", Next);
+    else {
+      const List = [...Others()];
+      List[Index - 1] = Next;
+      LatestChange.current("MaterialSlots", List);
+    }
+    ShowSlot(Index);
+  };
+  const Cover = (Section) =>
+    LatestChange.current(
+      "MaterialSections",
+      Covered.map((Owner, At) => (At === Section ? (Owner === Slot && Slot !== 0 ? 0 : Slot) : Owner)),
+    );
+  const Unused = MaterialChannels.filter(
+    (Entry) =>
+      !Material.Used.includes(Entry.Id) &&
+      (Entry.Label + Entry.Group).toLowerCase().includes(Query.toLowerCase()),
+  );
+  const Authored = Material.Used.filter(
+    (Id) => Material.Channels[Id].Source !== "Fill",
   ).length;
   return (
     <div
@@ -564,7 +822,7 @@ export default function MaterialPanel({
     >
       <header className="material-heading">
         <div>
-          <span className="material-eyebrow">MATERIAL / SURFACE SLOT 0</span>
+          <span className="material-eyebrow">MATERIAL / SLOT {Slot}</span>
           <h2>{Compact ? "Material channels" : "ShaderEditor"}</h2>
           <p>
             Bound to <b>{Subject.Name}</b> · #{Subject.Id}
@@ -581,6 +839,98 @@ export default function MaterialPanel({
           </button>
         )}
       </header>
+      {ShowSlots && (
+        <section className="material-slots" aria-label="Material slots">
+          <div className="material-section-title">
+            <h3>Material slots</h3>
+            <small>
+              {Slots.length} / {MaximumMaterialSlots}
+            </small>
+          </div>
+          <div className="slot-list" role="group" aria-label="Choose a material slot">
+            {Slots.map((Each, Index) => {
+              const Count = Covered.filter((Owner) => Owner === Index).length;
+              return (
+                <div
+                  key={Index}
+                  className={"slot-chip " + (Index === Slot ? "active" : "")}
+                  data-material-slot={Index}
+                  {...AssetDropProps(["Materials"], (Asset) => ReplaceSlot(Index, Asset))}
+                >
+                  <button
+                    className="slot-pick"
+                    aria-pressed={Index === Slot}
+                    aria-label={"Material slot " + Index + " · " + Each.Name}
+                    onClick={() => ShowSlot(Index)}
+                  >
+                    <span
+                      className="slot-swatch"
+                      style={{ background: ChannelSwatch(Each.Channels.colour, MaterialChannels[0]) }}
+                    />
+                    <span className="slot-name">
+                      <small>Slot {Index}</small>
+                      {Each.Name}
+                    </span>
+                    <span className="slot-count">
+                      {Count === Sections.length ? "all" : Count + " / " + Sections.length}
+                    </span>
+                  </button>
+                  {Index > 0 && (
+                    <button
+                      className="slot-remove"
+                      aria-label={"Remove material slot " + Index}
+                      title="Remove slot (its parts go back to slot 0)"
+                      onClick={() => RemoveSlot(Index)}
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+            {Slots.length < MaximumMaterialSlots && (
+              <button
+                className="slot-add"
+                aria-label="Add material slot"
+                title="Add a slot, or drop a material from the Content Browser"
+                onClick={() => AddSlot()}
+                {...AssetDropProps(["Materials"], (Asset) => AddSlot(Asset))}
+              >
+                + Add slot
+              </button>
+            )}
+          </div>
+          {Sections.length > 1 && (
+            <div className="slot-sections">
+              <span>
+                Slot {Slot} draws
+                {Slot === 0 ? " every part not given to another slot" : ""}
+              </span>
+              <div role="group" aria-label={"Parts drawn by slot " + Slot}>
+                {Sections.map((Name, Index) => (
+                  <button
+                    key={Name}
+                    data-material-section={Index}
+                    aria-pressed={Covered[Index] === Slot}
+                    disabled={Slot === 0 && Covered[Index] === 0}
+                    title={
+                      Covered[Index] === Slot
+                        ? Slot === 0
+                          ? "Drawn by slot 0"
+                          : "Click to give back to slot 0"
+                        : "Drawn by slot " + Covered[Index] + " · click to take it"
+                    }
+                    onClick={() => Cover(Index)}
+                  >
+                    {Name}
+                    {Covered[Index] !== Slot && <small>{Covered[Index]}</small>}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </section>
+      )}
       <div className="material-properties">
         <label>
           Material name
@@ -611,15 +961,15 @@ export default function MaterialPanel({
       <p className="material-type-note">
         {Material.Type === "SSR"
           ? "SSR is a reflection route, not a BSDF. Reflective preset here; screen-space tracing needs the native renderer."
-          : "Type presets adjust fill defaults without removing gradient, texture or code drafts."}
+          : "A type sets the channels it needs (Emissive adds Emission, Glass adds Transmission) and keeps your gradient, texture and shader drafts."}
       </p>
       <div className="material-stats">
         <div>
           <span>
             <i className="material-dot" />
-            Surface channels
+            Channels in use
           </span>
-          <strong>20</strong>
+          <strong>{Material.Used.length}</strong>
         </div>
         <div>
           <span>
@@ -633,95 +983,164 @@ export default function MaterialPanel({
         <aside className="channel-library">
           <div className="material-section-title">
             <h3>Channels</h3>
-            <small>ALL 20</small>
+            <small>
+              {Material.Used.length} OF {MaterialChannels.length}
+            </small>
           </div>
-          <input
-            className="channel-search"
-            aria-label="Search material channels"
-            placeholder="Search channels…"
-            value={Query}
-            onChange={(Event) => Search(Event.target.value)}
-          />
-          <div className="channel-list">
-            {MaterialChannels.filter((Item) =>
-              (Item.Label + Item.Group)
-                .toLowerCase()
-                .includes(Query.toLowerCase()),
-            ).map((Item) => {
-              const Data = Material.Channels[Item.Id];
+          <div className="channel-list" data-channel-list>
+            {Material.Used.map((Id) => {
+              const Entry = MaterialChannels.find((Each) => Each.Id === Id);
+              const Owned = Material.Channels[Id];
+              const Drawn = ShownChannel(Owned);
               return (
-                <button
-                  className={Selected === Item.Id ? "active" : ""}
-                  key={Item.Id}
-                  data-material-channel={Item.Id}
-                  aria-pressed={Selected === Item.Id}
-                  onClick={() => Select(Item.Id)}
-                  {...(Item.Kind === "Colour"
-                    ? ColourSlotDropProps({
-                        Key: Subject.Id + ":material:" + Item.Id,
-                        Label: Subject.Name + " · " + Item.Label,
-                        AssignHex: (Hex) => {
-                          Select(Item.Id);
-                          Assign(Item.Id, { Source: "Fill", Fill: Hex });
-                        },
-                      })
-                    : {})}
+                <div
+                  className={"channel-row " + (Current === Id ? "active" : "")}
+                  key={Id}
+                  {...AssetDropProps(["Materials", "Images"], async (Asset) => {
+                    Select(Id);
+                    if (Asset.Kind === "Images") {
+                      try {
+                        Assign(Id, { Source: "Texture", Texture: await ShrinkPicture(Asset.Data, Asset.Name) });
+                      } catch {}
+                    } else Assign(Id, { Source: "Link", Link: LinkFromAsset(Asset, Id) });
+                  })}
                 >
-                  <span
-                    className="channel-swatch"
-                    style={{
-                      background:
-                        Data.Source === "Gradient"
-                          ? GradientCss(Data, Item)
-                          : Item.Kind === "Colour"
-                            ? Data.Fill
-                            : undefined,
-                    }}
+                  <button
+                    className={Current === Id ? "active" : ""}
+                    data-material-channel={Id}
+                    aria-pressed={Current === Id}
+                    onClick={() => Select(Id)}
+                    {...(Entry.Kind === "Colour"
+                      ? ColourSlotDropProps({
+                          Key: Subject.Id + ":material:" + Slot + ":" + Id,
+                          Label: Subject.Name + " · " + Entry.Label,
+                          AssignHex: (Hex) => {
+                            Select(Id);
+                            Assign(Id, { Source: "Fill", Fill: Hex });
+                          },
+                        })
+                      : {})}
                   >
-                    {Item.Kind !== "Colour" && Data.Source !== "Gradient"
-                      ? "◈"
-                      : ""}
-                  </span>
-                  <span className="channel-name">
-                    {Item.Label}
-                    <small>{Item.Group}</small>
-                  </span>
-                  <span className="channel-value">
-                    {Data.Source === "Fill"
-                      ? Item.Kind === "Colour"
-                        ? Data.Fill
-                        : (+Data.Fill).toFixed(2)
-                      : SourceNames[Data.Source]}
-                    <small
-                      className={Data.Source === "Code" ? "unresolved" : ""}
+                    <span
+                      className="channel-swatch"
+                      style={{ background: ChannelSwatch(Owned, Entry) }}
                     >
-                      {Data.Source === "Code"
-                        ? "unresolved"
-                        : Data.Source === "Texture"
-                          ? Data.Texture
-                            ? "embedded"
-                            : "unassigned"
-                          : Data.Source === "Gradient"
-                            ? Data.Stops.length + " stops"
-                            : "constant"}
-                    </small>
-                  </span>
-                </button>
+                      {Entry.Kind !== "Colour" && Drawn.Source !== "Gradient"
+                        ? "◈"
+                        : ""}
+                    </span>
+                    <span className="channel-name">
+                      {Entry.Label}
+                      <small>{Entry.Group}</small>
+                    </span>
+                    <span className="channel-value">
+                      {Owned.Source === "Fill"
+                        ? Entry.Kind === "Colour"
+                          ? Owned.Fill
+                          : (+Owned.Fill).toFixed(2)
+                        : Owned.Source === "Link" && Owned.Link
+                          ? Owned.Link.Name
+                          : SourceNames[Owned.Source]}
+                      <small>
+                        {Owned.Source === "Code"
+                          ? Owned.Code.Language
+                          : Owned.Source === "Link"
+                            ? Owned.Link
+                              ? "linked"
+                              : "unlinked"
+                            : Owned.Source === "Texture"
+                              ? Owned.Texture
+                                ? "embedded"
+                                : "unassigned"
+                              : Owned.Source === "Gradient"
+                                ? Owned.Stops.length + " stops"
+                                : "constant"}
+                      </small>
+                    </span>
+                  </button>
+                  <button
+                    className="channel-remove"
+                    aria-label={"Remove channel " + Entry.Label}
+                    title="Remove channel (it goes back to its default)"
+                    onClick={() => Apply(RemoveChannel(Latest.current, Id))}
+                  >
+                    ×
+                  </button>
+                </div>
               );
             })}
+            {!Material.Used.length && (
+              <p className="channel-none">
+                No channels yet. Add the ones this material needs; the rest use
+                their defaults.
+              </p>
+            )}
           </div>
-          {!MaterialChannels.some((Item) =>
-            (Item.Label + Item.Group)
-              .toLowerCase()
-              .includes(Query.toLowerCase()),
-          ) && <p>No matching channels.</p>}
+          {Unused.length + Material.Used.length > 0 &&
+            Material.Used.length < MaterialChannels.length && (
+              <div className={"channel-adder " + (Adding ? "open" : "")}>
+                <button
+                  className="channel-add"
+                  aria-expanded={Adding}
+                  onClick={() => {
+                    ShowAdding(!Adding);
+                    Search("");
+                  }}
+                >
+                  {Adding ? "Done" : "+ Add channel"}
+                </button>
+                {Adding && (
+                  <div className="channel-picker" role="group" aria-label="Add a channel">
+                    <input
+                      className="channel-search"
+                      aria-label="Search material channels"
+                      placeholder="Search channels…"
+                      autoFocus
+                      value={Query}
+                      onChange={(Event) => Search(Event.target.value)}
+                    />
+                    {[...new Set(Unused.map((Entry) => Entry.Group))].map((Group) => (
+                      <div className="channel-picker-group" key={Group}>
+                        <small>{Group}</small>
+                        {Unused.filter((Entry) => Entry.Group === Group).map((Entry) => (
+                          <button
+                            key={Entry.Id}
+                            data-add-channel={Entry.Id}
+                            onClick={() => {
+                              Apply(AddChannel(Latest.current, Entry.Id));
+                              Select(Entry.Id);
+                            }}
+                          >
+                            <span
+                              className="channel-swatch"
+                              style={{ background: Entry.Kind === "Colour" ? Entry.Default : undefined }}
+                            >
+                              {Entry.Kind !== "Colour" ? "◈" : ""}
+                            </span>
+                            {Entry.Label}
+                            <i>+</i>
+                          </button>
+                        ))}
+                      </div>
+                    ))}
+                    {!Unused.length && <p>No matching channels.</p>}
+                  </div>
+                )}
+              </div>
+            )}
         </aside>
-        <SourceEditor
-          key={Subject.Id + Selected}
-          Field={Field}
-          Channel={Channel}
-          Change={(Patch) => Assign(Selected, Patch)}
-        />
+        {Field ? (
+          <SourceEditor
+            key={Subject.Id + Slot + Current}
+            Field={Field}
+            Channel={Channel}
+            Change={(Patch) => Assign(Current, Patch)}
+          />
+        ) : (
+          <section className="channel-editor channel-editor-empty">
+            <p>Add a channel to edit its source.</p>
+          </section>
+        )}
         <ShaderballPanel Material={Material} Compact={Compact} />
       </div>
     </div>

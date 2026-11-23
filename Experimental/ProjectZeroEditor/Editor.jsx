@@ -790,6 +790,7 @@ function App() {
         <MaterialPanel
           key={ShaderSubject.Id}
           Subject={ShaderSubject}
+          Slots={!ShaderAsset}
           Values={
             ShaderAsset
               ? { Material: ShaderAsset.Material }

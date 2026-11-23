@@ -51,14 +51,37 @@ export const MaterialTypes = [
   "Emissive",
   "Unlit",
 ];
+// Follow-up 68: Code is a shader (GLSL compiles live for the preview); Link takes a channel from a material in the Content Browser.
 export const SourceNames = {
   Fill: "Fill",
   Gradient: "Gradient",
   Texture: "Texture",
-  Code: "Code link",
+  Code: "Shader",
+  Link: "Material",
 };
+export const ShaderLanguages = ["GLSL", "Slang / HLSL", "C++"];
+export const ShaderTemplate = (Field) =>
+  Field.Kind === "Colour"
+    ? `// ${Field.Label}: return a colour for this point (uv runs 0 to 1).\nvec3 channel(vec2 uv) {\n  float Bands = 0.5 + 0.5 * sin(uv.x * 24.0);\n  return mix(vec3(0.78, 0.68, 0.63), vec3(0.32, 0.22, 0.2), Bands);\n}\n`
+    : `// ${Field.Label}: return the value for this point (uv runs 0 to 1, the channel runs ${Field.Minimum} to ${Field.Maximum}).\nfloat channel(vec2 uv) {\n  return mix(${Field.Minimum.toFixed(2)}, ${Field.Maximum.toFixed(2)}, step(0.5, fract(uv.x * 8.0)));\n}\n`;
+// Follow-up 68: a material carries only the channels it uses (Used, in list order); the rest read as their defaults. Saved materials
+// without a list keep the starter three plus whatever was authored away from its default.
+export const StarterChannels = ["colour", "metallic", "roughness"];
+export const MaximumMaterialSlots = 8;
+const ChannelIds = new Set(MaterialChannels.map((Field) => Field.Id));
+function UsedChannels(Saved, Values) {
+  if (Array.isArray(Saved.Used)) return [...new Set(Saved.Used.filter((Id) => ChannelIds.has(Id)))];
+  const Authored = MaterialChannels.filter((Field) => {
+    const Channel = Saved.Channels?.[Field.Id];
+    if (!Channel) return false;
+    return (Channel.Source && Channel.Source !== "Fill") || (Channel.Fill !== undefined && String(Channel.Fill).toLowerCase() !== String(Field.Default).toLowerCase());
+  }).map((Field) => Field.Id);
+  const Legacy = [Values.Emission ? "emission" : null].filter(Boolean);
+  return [...new Set([...StarterChannels, ...Authored, ...Legacy])];
+}
 export function ResolveMaterial(Values = {}) {
   const Saved = Values.Material || {};
+  const Used = UsedChannels(Saved, Values);
   const Channels = Object.fromEntries(
     MaterialChannels.map((Field) => {
       const Legacy = {
@@ -88,8 +111,9 @@ export function ResolveMaterial(Values = {}) {
           Texture: null,
           Component: Field.Kind === "Colour" ? "RGB" : "R",
           Repeat: 1,
-          Code: { Language: "C++", Symbol: "", Text: "" },
-          ...Saved.Channels?.[Field.Id],
+          Code: { Language: "GLSL", Symbol: "", Text: ShaderTemplate(Field) },
+          Link: null,
+          ...(Used.includes(Field.Id) ? Saved.Channels?.[Field.Id] : null),
         },
       ];
     }),
@@ -137,12 +161,30 @@ export function ResolveMaterial(Values = {}) {
       }));
     const Code = Channel.Code || {};
     Channel.Code = {
-      Language: ["C++", "Slang / HLSL", "GLSL"].includes(Code.Language)
+      Language: ShaderLanguages.includes(Code.Language)
         ? Code.Language
-        : "C++",
+        : "GLSL",
       Symbol: String(Code.Symbol || "").slice(0, 256),
-      Text: String(Code.Text || "").slice(0, 12000),
+      Text: String(Code.Text ?? ShaderTemplate(Field)).slice(0, 12000),
     };
+    // A linked channel keeps the material asset's name and id and a copy of its channel (fill, gradient or texture) to draw with.
+    const Link = Channel.Link;
+    Channel.Link =
+      Link && typeof Link === "object" && Link.Snapshot && typeof Link.Snapshot === "object"
+        ? {
+            AssetId: String(Link.AssetId || "").slice(0, 120),
+            Name: String(Link.Name || "Material").slice(0, 80),
+            Snapshot: {
+              Source: ["Fill", "Gradient", "Texture"].includes(Link.Snapshot.Source) ? Link.Snapshot.Source : "Fill",
+              Fill: Sanitize(Link.Snapshot.Fill ?? Field.Default),
+              Stops: Array.isArray(Link.Snapshot.Stops) && Link.Snapshot.Stops.length >= 2 ? Link.Snapshot.Stops.slice(0, 8).map((Stop, Index) => ({ Id: String(Stop?.Id || Index), Position: Clamp(Stop?.Position), Value: Sanitize(Stop?.Value) })) : Channel.Stops,
+              Axis: Link.Snapshot.Axis === "V" ? "V" : "U",
+              Texture: /^data:image\/(png|jpeg|webp);base64,/.test(Link.Snapshot.Texture?.Data || "") ? Link.Snapshot.Texture : null,
+              Component: Link.Snapshot.Component || Channel.Component,
+              Repeat: Clamp(Link.Snapshot.Repeat ?? 1, 0.1, 16),
+            },
+          }
+        : null;
     if (
       !/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(
         Channel.Texture?.Data,
@@ -151,11 +193,12 @@ export function ResolveMaterial(Values = {}) {
     )
       Channel.Texture = null;
   }
-  Channels.reflectance = Channels.ior = Saved.Channels?.ior
-    ? Channels.ior
-    : Saved.Channels?.reflectance
-      ? Channels.reflectance
-      : Channels.ior;
+  Channels.reflectance = Channels.ior =
+    Used.includes("ior") && Saved.Channels?.ior
+      ? Channels.ior
+      : Used.includes("reflectance") && Saved.Channels?.reflectance
+        ? Channels.reflectance
+        : Channels.ior;
   return {
     ...Saved,
     Name:
@@ -163,13 +206,34 @@ export function ResolveMaterial(Values = {}) {
         ? Saved.Name.slice(0, 80)
         : "Surface material",
     Type: MaterialTypes.includes(Saved.Type) ? Saved.Type : "Standard",
+    Used,
     Channels,
   };
 }
-export function ChangeChannel(Material, Id, Patch) {
+// Follow-up 68: material slots. Slot 0 is the object's Material (what the viewport draws); the others are kept in MaterialSlots.
+export function ResolveSlots(Values = {}) {
+  const Others = Array.isArray(Values.MaterialSlots) ? Values.MaterialSlots.slice(0, MaximumMaterialSlots - 1) : [];
+  return [ResolveMaterial(Values), ...Others.map((Saved) => ResolveMaterial({ Material: Saved }))];
+}
+// A channel joins the list (fresh, at its default) or leaves it (back to its default).
+const Fresh = (Id) => ResolveMaterial({ Material: { Used: [Id] } }).Channels[Id];
+export function AddChannel(Material, Id) {
+  if (!ChannelIds.has(Id) || Material.Used?.includes(Id)) return Material;
+  return { ...Material, Used: [...(Material.Used || []), Id], Channels: { ...Material.Channels, [Id]: Fresh(Id) } };
+}
+export function RemoveChannel(Material, Id) {
+  const Channels = { ...Material.Channels };
+  delete Channels[Id];
+  return { ...Material, Used: (Material.Used || []).filter((Each) => Each !== Id), Channels };
+}
+// The channel to draw: a linked channel draws its material's copy.
+export const ShownChannel = (Channel) => (Channel?.Source === "Link" && Channel.Link?.Snapshot ? Channel.Link.Snapshot : Channel);
+export function ChangeChannel(Material, Id, Patch, Join = true) {
   const Channel = { ...Material.Channels[Id], ...Patch };
+  const Used = Material.Used || [];
   return {
     ...Material,
+    Used: Join && !Used.includes(Id) ? [...Used, Id] : Used,
     Channels: {
       ...Material.Channels,
       [Id]: Channel,
@@ -224,8 +288,13 @@ export function ChooseMaterialType(Material, Type) {
     sheen: "#000000",
     ior: 1.5,
     ...(Presets[Type] || {}),
-  }))
-    Next = ChangeChannel(Next, Id, { Fill });
+  })) {
+    // Follow-up 68: a preset adds the channels it actually sets away from their defaults (Emissive adds Emission, Glass adds
+    // Transmission); the others are only written when the material already uses them.
+    const Field = MaterialChannels.find((Each) => Each.Id === Id);
+    const Join = Object.hasOwn(Presets[Type] || {}, Id) && String(Fill).toLowerCase() !== String(Field.Default).toLowerCase();
+    if (Join || Next.Used?.includes(Id)) Next = ChangeChannel(Next, Id, { Fill }, Join);
+  }
   return Next;
 }
 export const Clamp = (Value, Minimum = 0, Maximum = 1) =>
@@ -266,4 +335,24 @@ export function GradientCss(Channel, Field) {
         `${Field.Kind === "Colour" ? Stop.Value : `rgb(${Math.round(Clamp((Stop.Value - Field.Minimum) / (Field.Maximum - Field.Minimum)) * 255)} ${Math.round(Clamp((Stop.Value - Field.Minimum) / (Field.Maximum - Field.Minimum)) * 255)} ${Math.round(Clamp((Stop.Value - Field.Minimum) / (Field.Maximum - Field.Minimum)) * 255)})`} ${Stop.Position * 100}%`,
     )
     .join(",")})`;
+}
+// Follow-up 68: the parts of each primitive a material slot can cover, in the order of its geometry's groups (three.js box faces
+// run +X, −X, +Y, −Y, +Z, −Z; cylinders side, top, bottom; cones side, bottom). Spheres and tori are one surface.
+export function MaterialSections(Shape) {
+  return (
+    {
+      cube: ["Right", "Left", "Top", "Bottom", "Front", "Back"],
+      cylinder: ["Side", "Top cap", "Bottom cap"],
+      cone: ["Side", "Bottom"],
+    }[Shape] || ["Whole surface"]
+  );
+}
+// Which slot draws each section (unassigned sections, or ones pointing at a removed slot, use slot 0).
+export function SectionSlots(Values = {}, Shape) {
+  const Count = 1 + (Array.isArray(Values.MaterialSlots) ? Math.min(Values.MaterialSlots.length, MaximumMaterialSlots - 1) : 0);
+  const Saved = Array.isArray(Values.MaterialSections) ? Values.MaterialSections : [];
+  return MaterialSections(Shape).map((_, Index) => {
+    const Slot = Math.round(+Saved[Index] || 0);
+    return Slot > 0 && Slot < Count ? Slot : 0;
+  });
 }

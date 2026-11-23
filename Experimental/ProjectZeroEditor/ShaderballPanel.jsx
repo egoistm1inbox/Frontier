@@ -4,7 +4,12 @@ import {
   GradientValue,
   Rgb,
   MaterialChannels,
+  ShownChannel,
 } from "./MaterialSpecification.js";
+import { BakeShaderChannel } from "./ShaderChannel.js";
+
+// Follow-up 68: the orbit starts at 0° (the slider's left end) and turns a full circle; 0° is the usual three-quarter pose.
+const RestingTurn = 0.6;
 
 let Mesh;
 function ReadMesh() {
@@ -93,7 +98,15 @@ function Rasterize(Size, Angle) {
 async function ReadTextures(Material) {
   const Textures = {};
   await Promise.all(
-    Object.entries(Material.Channels).map(async ([Id, Channel]) => {
+    Object.entries(Material.Channels).map(async ([Id, Owned]) => {
+      // Follow-up 68: a GLSL shader channel is drawn to an image here; a linked channel draws its material's copy.
+      if (Owned.Source === "Code" && Owned.Code?.Language === "GLSL") {
+        const Field = MaterialChannels.find((Each) => Each.Id === Id);
+        const Result = BakeShaderChannel(Owned.Code.Text, Field);
+        if (Result.Pixels) Textures[Id] = Result.Pixels;
+        return;
+      }
+      const Channel = ShownChannel(Owned);
       if (Channel.Source !== "Texture" || !Channel.Texture?.Data) return;
       const Image = new window.Image();
       Image.src = Channel.Texture.Data;
@@ -110,7 +123,8 @@ async function ReadTextures(Material) {
   return Textures;
 }
 function Sample(Material, Textures, Id, U, V) {
-  const Channel = Material.Channels[Id],
+  const Owned = Material.Channels[Id],
+    Channel = Owned.Source === "Code" && Textures[Id] ? { ...Owned, Source: "Texture", Repeat: 1, Component: MaterialChannels.find((Each) => Each.Id === Id).Kind === "Colour" ? "RGB" : "R" } : ShownChannel(Owned),
     Field = MaterialChannels.find((Item) => Item.Id === Id),
     Colour = Field.Kind === "Colour";
   let Value = Channel.Fill;
@@ -136,7 +150,7 @@ function Sample(Material, Textures, Id, U, V) {
 export default function ShaderballPanel({ Material, Compact = false }) {
   const Canvas = useRef(null),
     Cache = useRef(null),
-    [Angle, Rotate] = useState(0.6),
+    [Angle, Rotate] = useState(0),
     [Status, Report] = useState("Preparing mesh"),
     [Studio, ChooseStudio] = useState("Softbox");
   useEffect(() => {
@@ -149,7 +163,7 @@ export default function ShaderballPanel({ Material, Compact = false }) {
           Cache.current.Angle !== Angle ||
           Cache.current.Size !== Size
         )
-          Cache.current = { Angle, Size, Surface: Rasterize(Size, Angle) };
+          Cache.current = { Angle, Size, Surface: Rasterize(Size, Angle + RestingTurn) };
         const Textures = await ReadTextures(Material);
         if (Cancelled || !Canvas.current) return;
         const Context = Canvas.current.getContext("2d"),
@@ -250,12 +264,13 @@ export default function ShaderballPanel({ Material, Compact = false }) {
           <input
             aria-label="Shader ball orbit"
             type="range"
-            min="-3.14"
-            max="3.14"
+            min="0"
+            max="6.28"
             step=".05"
             value={Angle}
             onChange={(Event) => Rotate(+Event.target.value)}
           />
+          <output className="orbit-readout">{Math.round((Angle * 180) / Math.PI)}°</output>
         </label>
         <select
           aria-label="Preview studio"
@@ -270,7 +285,7 @@ export default function ShaderballPanel({ Material, Compact = false }) {
       <p>
         Original shader-ball mesh · browser lighting study.
         <br />
-        Not the native BSDF. Code links use the stored fill fallback.
+        Not the native BSDF. GLSL shaders draw live; other shader languages use the stored fill.
       </p>
       {!Compact && (
         <details className="preview-limits">
