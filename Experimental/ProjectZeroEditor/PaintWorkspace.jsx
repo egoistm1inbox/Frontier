@@ -22,7 +22,7 @@ import ArtworkOutliner from "./ArtworkOutliner.jsx";
 import { DockTabs, ViewportHeader } from "./SurfaceDocks.jsx";
 import { PageStrip, PageTurn, PageLook } from "./PageCarousel.jsx";
 import { Control, Card } from "./Inspectors.jsx";
-import ShaderViewport, { ChannelPixels, PreviewGeometry, PreviewShapes } from "./ShaderViewport.jsx";
+import ShaderViewport, { ChannelPixels, PreviewGeometry, PreviewShapes, BoundShape } from "./ShaderViewport.jsx";
 import { MaterialChannels, ShownChannel, Rgb } from "./MaterialSpecification.js";
 import { TextureEdge, ChannelCanvas, EncodePicture, WithPicture } from "./SurfaceTextures.js";
 import "./SurfaceWorkspaces.css";
@@ -141,9 +141,10 @@ function MaskPicture(Baked, Invert, Level, Spread) {
 }
 // The preview shape's UV layout drawn as lines over a transparent 512 × 512 picture.
 const Layouts = new Map();
-function LayoutOf(Shape) {
-  if (Layouts.has(Shape)) return Layouts.get(Shape);
-  const Geometry = PreviewGeometry(Shape), Uv = Geometry.attributes.uv, Index = Geometry.index;
+function LayoutOf(Shape, Bound) {
+  const Key = Shape === BoundShape ? Shape + ":" + Bound?.Key : Shape;
+  if (Layouts.has(Key)) return Layouts.get(Key);
+  const Geometry = PreviewGeometry(Shape, Bound), Uv = Geometry.attributes.uv, Index = Geometry.index;
   const Canvas = Blank(), Brush = Canvas.getContext("2d");
   Brush.strokeStyle = "rgba(255,180,84,0.16)";
   Brush.lineWidth = 0.6;
@@ -159,7 +160,8 @@ function LayoutOf(Shape) {
   }
   Brush.stroke();
   Geometry.dispose();
-  Layouts.set(Shape, Canvas);
+  if (Layouts.size > 8) Layouts.clear();
+  Layouts.set(Key, Canvas);
   return Canvas;
 }
 
@@ -231,7 +233,9 @@ function UvSheet({ Canvas, Revision, Layout, ShowLayout, Radius, Paint }) {
   );
 }
 
-export default function PaintWorkspace({ Material, Owner, Apply, Sessions, SessionKey, Bakes = {}, Shape, ChooseShape }) {
+export default function PaintWorkspace({ Material, Owner, Apply, Sessions, SessionKey, Bakes = {}, Shape, ChooseShape, Bound = null }) {
+  const Shapes = Bound ? [...PreviewShapes, BoundShape] : PreviewShapes;
+  const ShapeName = (Name) => (Name === BoundShape ? Bound?.Name || "bound object" : Name);
   // ── The session: one canvas per channel (and what it showed before painting), kept by the ShaderEditor between visits ──────────
   const Session = useMemo(() => {
     if (!Sessions.current.has(SessionKey)) Sessions.current.set(SessionKey, { Canvases: {}, Originals: {}, Signatures: {}, Strokes: {}, Back: [], Ahead: [] });
@@ -607,7 +611,7 @@ export default function PaintWorkspace({ Material, Owner, Apply, Sessions, Sessi
             <Control Field={{ Label: "Invert", Control: "Switch" }} Value={Mask.Invert} Change={(Invert) => SetMask({ ...Mask, Invert })} />
             <Control Field={{ Label: "Level", Minimum: 0, Maximum: 1, Decimals: 2, Default: 0.5 }} Value={Mask.Level} Change={(Level) => SetMask({ ...Mask, Level })} />
             <Control Field={{ Label: "Spread", Minimum: 0.01, Maximum: 1, Decimals: 2, Default: 0.5 }} Value={Mask.Spread} Change={(Spread) => SetMask({ ...Mask, Spread })} />
-            {MaskShape && MaskShape !== Shape && <p className="pw-warning">Baked on the {MaskShape.toLowerCase()} · its UVs differ from the {Shape.toLowerCase()} shown now.</p>}
+            {MaskShape && MaskShape !== Shape && <p className="pw-warning">Baked on the {ShapeName(MaskShape).toLowerCase()} · its UVs differ from the {ShapeName(Shape).toLowerCase()} shown now.</p>}
           </>
         )}
         <p className="card-foot">{MaskOptions.length > 1 ? "Brush, Eraser, Soften and Fill land only where the mask is white." : "Bake geometry maps in the Baking tab to paint through occlusion, curvature, edge wear, dirt and more."}</p>
@@ -631,8 +635,8 @@ export default function PaintWorkspace({ Material, Owner, Apply, Sessions, Sessi
         </div>
       </Card>
       <Card Title="Preview shape">
-        <Control Field={{ Label: "Shape", Control: "Select", Options: PreviewShapes }} Value={PreviewShapes.indexOf(Shape)} Change={(At) => ChooseShape(PreviewShapes[At])} />
-        <p className="card-foot">Painting follows the shape's UVs. The rounded cube repeats one square on every face.</p>
+        <Control Field={{ Label: "Shape", Control: "Select", Options: Shapes.map(ShapeName) }} Value={Math.max(0, Shapes.indexOf(Shape))} Change={(At) => ChooseShape(Shapes[At])} />
+        <p className="card-foot">Painting follows the shape's UVs. The rounded cube repeats one square on every face; {Bound ? `${Bound.Name} paints through ${Bound.Unwrapped ? "the UV tab's layout" : "its primitive's own UVs"}.` : "bind a scene object to paint on it."}</p>
       </Card>
     </>,
   ];
@@ -751,13 +755,14 @@ export default function PaintWorkspace({ Material, Owner, Apply, Sessions, Sessi
                 Live={Live}
                 LiveRevision={Revision}
                 Painter={Painter}
+                Bound={Bound}
               />
             ) : (
-              Ready && <UvSheet Canvas={Session.Canvases[Focus]} Revision={Revision} Layout={LayoutOf(Shape)} ShowLayout={ShowLayout} Radius={Size} Paint={Painter} />
+              Ready && <UvSheet Canvas={Session.Canvases[Focus]} Revision={Revision} Layout={LayoutOf(Shape, Bound)} ShowLayout={ShowLayout} Radius={Size} Paint={Painter} />
             )}
           </main>
           <div className="sfw-view-foot">
-            {Mode === "3d" ? "Left-drag paints · Alt-drag, Shift-drag or the right button move the camera" : `UV of the ${Shape.toLowerCase()} · ${FieldOf(Focus).Label}`}
+            {Mode === "3d" ? "Left-drag paints · Alt-drag, Shift-drag or the right button move the camera" : `UV of the ${ShapeName(Shape).toLowerCase()} · ${FieldOf(Focus).Label}`}
             {MaskCanvas ? ` · masked by ${MaskNames[Mask.Map].toLowerCase()}` : ""}
           </div>
         </section>

@@ -14,14 +14,17 @@
 //     pictures, and every channel saved as a PNG).
 // Baked maps are kept by the ShaderEditor (Bakes), so Texture paint can paint through them as masks.
 
-import React, { useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Flame, Download, CircleStop, Check } from "lucide-react";
 import * as THREE from "three";
 import ArtworkOutliner from "./ArtworkOutliner.jsx";
 import { DockTabs, ViewportHeader } from "./SurfaceDocks.jsx";
 import { PageStrip, PageTurn, PageLook } from "./PageCarousel.jsx";
-import { Control, Card } from "./Inspectors.jsx";
-import ShaderViewport, { PreviewGeometry, PreviewShapes } from "./ShaderViewport.jsx";
+import { Control, Card, Metric } from "./Inspectors.jsx";
+import ShaderViewport, { PreviewGeometry, PreviewShapes, BoundShape } from "./ShaderViewport.jsx";
+import { OverlappingUvs } from "./BoundSurface.js";
+import GeometryMapIcon from "./GeometryMapIcons.jsx";
+import { SdfView, SdfPanel } from "./SdfWorkspace.jsx";
 import { ChannelPicture } from "./PaintWorkspace.jsx";
 import { MaterialChannels, ShownChannel } from "./MaterialSpecification.js";
 import { TextureEdge, ChannelCanvas, EncodePicture, WithPicture } from "./SurfaceTextures.js";
@@ -50,6 +53,8 @@ const Pages = [
   { Id: "settings", Label: "Settings" },
   { Id: "map", Label: "Map" },
   { Id: "material", Label: "Material" },
+  // Follow-up 75: the signed distance field (SdfWorkspace.jsx) belongs to Baking; it needs a scene object rather than a preview shape.
+  { Id: "sdf", Label: "Distance field" },
 ];
 const Resolutions = [128, 256, 512];
 const DustAxes = ["+Y", "-Y", "+X", "-X", "+Z", "-Z"];
@@ -115,10 +120,22 @@ function Picture({ Canvas, Size = 26 }) {
   return <canvas ref={Own} className="pw-thumbnail" width={Size * 2} height={Size * 2} style={{ width: Size, height: Size }} aria-hidden="true" />;
 }
 
-export default function BakeWorkspace({ Material, Latest, Owner, Apply, Bakes, KeepBakes, Shape, ChooseShape }) {
+// Scene: { Subject, Values, Change } of the bound scene object (a primitive), for the distance field; Open: "sdf" opens on it.
+export default function BakeWorkspace({ Material, Latest, Owner, Apply, Bakes, KeepBakes, Shape, ChooseShape, Bound = null, OpenStudio, Scene = null, Open = "", OpenAt = 0 }) {
+  const Shapes = Bound ? [...PreviewShapes, BoundShape] : PreviewShapes;
+  const ShapeName = (Name) => (Name === BoundShape ? Bound?.Name || "bound object" : Name);
+  // The bound object bakes when its UVs allow it (the UV tab's layout always does; a primitive's own UVs may overlap).
+  const BoundRefusal = useMemo(() => {
+    if (Shape !== BoundShape || !Bound) return null;
+    const Geometry = Bound.Make(), Problem = OverlappingUvs(Geometry);
+    Geometry.dispose();
+    return Problem;
+  }, [Shape, Bound?.Key]);
   const [Chosen, Choose] = useState(() => new Set(["occlusion", "curvature", "cavity", "edge-wear", "thickness"]));
   const [Focus, FocusOn] = useState(() => Object.keys(Bakes)[0] || "occlusion");
-  const [Mode, ChooseMode] = useState("lit");
+  const [Mode, ChooseMode] = useState(Open === "sdf" ? "sdf" : "lit");
+  const [FieldLook, LookAtField] = useState({ Tool: "sdf" });
+  const SetFieldLook = (Next) => LookAtField((Before) => (typeof Next === "function" ? Next(Before) : Next) || Before);
   const [Settings, Tune] = useState({ resolution: 256, samples: 16, aoDistance: 0.35, curvatureRadius: 0.03, thicknessRange: 1.2, padding: 6, maskStrength: 3, dustAxis: "+Y", dustFalloff: 2 });
   const [Progress, Report] = useState(null); // { Phase, Done, Total } while baking
   const [Status, Say] = useState("");
@@ -126,13 +143,13 @@ export default function BakeWorkspace({ Material, Latest, Owner, Apply, Bakes, K
 
   const Bake = async () => {
     const Channels = BakeMaps.filter((Id) => Chosen.has(Id));
-    if (!Channels.length || Unbakeable[Shape]) return;
+    if (!Channels.length || (Shape === BoundShape ? BoundRefusal : Unbakeable[Shape])) return;
     const Stopper = new AbortController();
     Stop.current = Stopper;
     const Started = performance.now();
-    Report({ Phase: "Preparing the " + Shape.toLowerCase(), Done: 0, Total: 1 });
+    Report({ Phase: "Preparing the " + ShapeName(Shape).toLowerCase(), Done: 0, Total: 1 });
     Say("");
-    const Geometry = PreviewGeometry(Shape);
+    const Geometry = PreviewGeometry(Shape, Bound);
     try {
       const Surface = BakeSurface(Geometry);
       const Result = await bakeMeshMaps(
@@ -149,7 +166,7 @@ export default function BakeWorkspace({ Material, Latest, Owner, Apply, Bakes, K
       const Made = {};
       for (const Key of Channels)
         if (Result.maps[Key])
-          Made[Key] = { Canvas: FieldPicture(Key, Result.maps[Key], Settings.resolution, Result.coverage, Settings.padding), Label: Short[Key], Resolution: Settings.resolution, Shape, Seconds, At: Date.now() };
+          Made[Key] = { Canvas: FieldPicture(Key, Result.maps[Key], Settings.resolution, Result.coverage, Settings.padding), Label: Short[Key], Resolution: Settings.resolution, Shape, Named: ShapeName(Shape), Seconds, At: Date.now() };
       KeepBakes((Before) => ({ ...Before, ...Made }));
       if (!Made[Focus]) FocusOn(Object.keys(Made)[0]);
       Say(`Baked ${Object.keys(Made).length} map${Object.keys(Made).length === 1 ? "" : "s"} · ${Settings.resolution}² · ${Seconds.toFixed(1)} s`);
@@ -164,7 +181,7 @@ export default function BakeWorkspace({ Material, Latest, Owner, Apply, Bakes, K
 
   // ── Using a map ───────────────────────────────────────────────────────────────────────────────────────────────────────────────
   const Focused = Bakes[Focus];
-  const Refusal = Unbakeable[Shape];
+  const Refusal = Shape === BoundShape ? BoundRefusal : Unbakeable[Shape];
   const UseAs = (Id) => {
     Apply(WithPicture(Latest.current, Id, EncodePicture(Larger(Focused.Canvas), `Baked ${Short[Focus]}`), 1));
     Say(`${Short[Focus]} is now ${Owner}'s ${FieldOf(Id).Label.toLowerCase()}`);
@@ -215,24 +232,48 @@ export default function BakeWorkspace({ Material, Latest, Owner, Apply, Bakes, K
       Id,
       Name: Short[Id],
       Label: Short[Id] + " map",
-      Detail: Bakes[Id] ? `Baked · ${Bakes[Id].Resolution}² · ${Bakes[Id].Shape.toLowerCase()}` : Chosen.has(Id) ? "In the next bake" : "Skipped",
-      Picture: Bakes[Id] ? <Picture Canvas={Bakes[Id].Canvas} /> : <span className={"bw-dot " + MESH_MAPS[Id].group.toLowerCase().replace(/[^a-z]+/g, "-")} />,
-      Chosen: Focus === Id,
+      Detail: Bakes[Id] ? `Baked · ${Bakes[Id].Resolution}² · ${Bakes[Id].Named.toLowerCase()}` : Chosen.has(Id) ? "In the next bake" : "Skipped",
+      Picture: Bakes[Id] ? <Picture Canvas={Bakes[Id].Canvas} /> : <GeometryMapIcon Name={Id} />,
+      Chosen: Focus === Id && Mode !== "sdf",
       Pick: () => {
         FocusOn(Id);
-        if (Bakes[Id] && Mode === "lit") ChooseMode("map");
+        if (Mode === "sdf" || (Bakes[Id] && Mode === "lit")) ChooseMode(Bakes[Id] ? "map" : "lit");
       },
       Hidden: !Chosen.has(Id),
       Show: () => Flip(Id),
     }));
+  // The distance field, last: it is baked from the scene object on its own page rather than through the UVs.
+  if ("distance field".includes(Query.toLowerCase()) && Filter !== "hidden")
+    Rows.push({
+      Id: "distance-field",
+      Name: "Distance field",
+      Label: "Signed distance field",
+      Detail: Scene ? `Sparse SDF · ${Scene.Subject.Name}` : "Needs a scene object",
+      Picture: <GeometryMapIcon Name="distance-field" />,
+      Chosen: Mode === "sdf",
+      Pick: () => ShowField(),
+    });
 
-  const [Page, TurnTo] = useState(0);
+  const [Page, TurnTo] = useState(Open === "sdf" ? 3 : 0);
   const Motion = PageTurn(Page);
   const Turn = (At) => {
     Motion.Turn(At);
     TurnTo(At);
   };
   const [Shut, ShutDocks] = useState({});
+  const ShowField = () => {
+    ChooseMode("sdf");
+    Turn(Pages.findIndex((Each) => Each.Id === "sdf"));
+  };
+  useEffect(() => {
+    if (Open === "sdf" && OpenAt) ShowField();
+  }, [OpenAt]);
+  const Unbound = (
+    <Card Title="Distance field">
+      <p className="card-foot">The distance field is baked from a scene object. Bind a primitive with "Bound to" (or follow the selection) to bake it.</p>
+    </Card>
+  );
+  const FieldKit = { Card, Control, Metric };
   const Tuner = (Key) => (Amount) => Tune((Before) => ({ ...Before, [Key]: Amount }));
   const PageBodies = [
     <>
@@ -240,8 +281,8 @@ export default function BakeWorkspace({ Material, Latest, Owner, Apply, Bakes, K
         <Control Field={{ Label: "Resolution", Control: "Select", Options: Resolutions.map((Each) => `${Each} × ${Each}`) }} Value={Resolutions.indexOf(Settings.resolution)} Change={(At) => Tuner("resolution")(Resolutions[At])} />
         <Control Field={{ Label: "Samples", Minimum: 4, Maximum: 64, Decimals: 0, Default: 16 }} Value={Settings.samples} Change={(Amount) => Tuner("samples")(Math.round(Amount))} />
         <Control Field={{ Label: "Padding", Minimum: 0, Maximum: 16, Decimals: 0, Unit: "px", Default: 6 }} Value={Settings.padding} Change={(Amount) => Tuner("padding")(Math.round(Amount))} />
-        <Control Field={{ Label: "Preview shape", Control: "Select", Options: PreviewShapes }} Value={PreviewShapes.indexOf(Shape)} Change={(At) => ChooseShape(PreviewShapes[At])} />
-        <p className="card-foot">{Refusal ? `The ${Shape.toLowerCase()} cannot be baked: ${Refusal}. The sphere and the draped cloth can.` : "The shape is baked against itself, through its own UVs."}</p>
+        <Control Field={{ Label: "Preview shape", Control: "Select", Options: Shapes.map(ShapeName) }} Value={Math.max(0, Shapes.indexOf(Shape))} Change={(At) => ChooseShape(Shapes[At])} />
+        <p className="card-foot">{Refusal ? `The ${ShapeName(Shape).toLowerCase()} cannot be baked: ${Refusal}. The sphere, the draped cloth and an object unwrapped in the UV tab can.` : "The shape is baked against itself, through its own UVs."}</p>
       </Card>
       <Card Title="Reach">
         <Control Field={{ Label: "Occlusion distance", Minimum: 0.02, Maximum: 1.5, Decimals: 2, Unit: "m", Default: 0.35 }} Value={Settings.aoDistance} Change={Tuner("aoDistance")} />
@@ -260,7 +301,7 @@ export default function BakeWorkspace({ Material, Latest, Owner, Apply, Bakes, K
               <Picture Canvas={Focused.Canvas} Size={180} />
             </div>
             <p>
-              {Focused.Resolution} × {Focused.Resolution} · {Focused.Shape} · {Focused.Seconds.toFixed(1)} s
+              {Focused.Resolution} × {Focused.Resolution} · {Focused.Named} · {Focused.Seconds.toFixed(1)} s
             </p>
           </>
         ) : (
@@ -319,6 +360,7 @@ export default function BakeWorkspace({ Material, Latest, Owner, Apply, Bakes, K
         <p className="card-foot">Gradients, GLSL and linked channels become {TextureEdge} × {TextureEdge} pictures the engine reads directly.</p>
       </Card>
     </>,
+    Scene ? <SdfPanel {...Scene} Workspace={FieldLook} SetWorkspace={SetFieldLook} Kit={FieldKit} /> : Unbound,
   ];
 
   const Baked = BakeMaps.filter((Id) => Bakes[Id]);
@@ -368,12 +410,13 @@ export default function BakeWorkspace({ Material, Latest, Owner, Apply, Bakes, K
               </span>
             }
             Name={<span className="sfw-view-name pw-name">{Material.Name}</span>}
-            Detail={<span role="status">{Progress ? `${Progress.Phase} · ${Math.round((100 * Progress.Done) / Progress.Total)} %` : Status || `Baking · ${Shape.toLowerCase()} · ${Baked.length} maps baked`}</span>}
+            Detail={<span role="status">{Progress ? `${Progress.Phase} · ${Math.round((100 * Progress.Done) / Progress.Total)} %` : Status || `Baking · ${ShapeName(Shape).toLowerCase()} · ${Baked.length} maps baked`}</span>}
             ModesLabel="Bake view"
             Modes={[
               ["lit", "Lit", Mode === "lit", () => ChooseMode("lit")],
               ["map", "Map", Mode === "map", () => ChooseMode("map")],
               ["sheet", "Sheet", Mode === "sheet", () => ChooseMode("sheet")],
+              ["sdf", "Distance field", Mode === "sdf", ShowField],
             ]}
             Actions={null}
             Primary={
@@ -382,7 +425,7 @@ export default function BakeWorkspace({ Material, Latest, Owner, Apply, Bakes, K
                   <CircleStop size={14} /> Cancel
                 </button>
               ) : (
-                <button type="button" className="sfw-apply" disabled={!Chosen.size || !!Refusal} onClick={Bake} title={Refusal ? `The ${Shape.toLowerCase()} cannot be baked: ${Refusal}` : `Bake the chosen maps from the ${Shape.toLowerCase()}`}>
+                <button type="button" className="sfw-apply" disabled={!Chosen.size || !!Refusal} onClick={Bake} title={Refusal ? `The ${ShapeName(Shape).toLowerCase()} cannot be baked: ${Refusal}` : `Bake the chosen maps from the ${ShapeName(Shape).toLowerCase()}`}>
                   <Flame size={14} /> Bake {Chosen.size} map{Chosen.size === 1 ? "" : "s"}
                 </button>
               )
@@ -408,14 +451,20 @@ export default function BakeWorkspace({ Material, Latest, Owner, Apply, Bakes, K
             }
           />
           <main className="sfw-centre pw-centre">
-            {Refusal && !Progress && (
+            {Refusal && !Progress && Mode !== "sdf" && (
               <div className="bw-refusal" role="note">
                 <span>
-                  The {Shape.toLowerCase()} cannot be baked: {Refusal}.
+                  The {ShapeName(Shape).toLowerCase()} cannot be baked: {Refusal}.
                 </span>
-                <button type="button" onClick={() => ChooseShape("Sphere")}>
-                  Bake on the sphere
-                </button>
+                {Shape === BoundShape && OpenStudio ? (
+                  <button type="button" onClick={() => OpenStudio("uv")}>
+                    Unwrap in the UV tab
+                  </button>
+                ) : (
+                  <button type="button" onClick={() => ChooseShape(Bound ? BoundShape : "Sphere")}>
+                    {Bound ? `Bake on ${Bound.Name}` : "Bake on the sphere"}
+                  </button>
+                )}
                 <button type="button" onClick={() => ChooseShape("Draped cloth")}>
                   Draped cloth
                 </button>
@@ -433,6 +482,14 @@ export default function BakeWorkspace({ Material, Latest, Owner, Apply, Bakes, K
                   {Math.round((100 * Progress.Done) / Progress.Total)} % · {Chosen.size} maps · {Settings.resolution}² · {Settings.samples} samples
                 </small>
               </div>
+            ) : Mode === "sdf" ? (
+              Scene ? (
+                <div className="bw-field">
+                  <SdfView {...Scene} Workspace={FieldLook} SetWorkspace={SetFieldLook} />
+                </div>
+              ) : (
+                <p className="bw-empty">The distance field is baked from a scene object · bind one with "Bound to" above.</p>
+              )
             ) : Mode === "sheet" ? (
               <div className="bw-sheet">
                 {Baked.length ? (
@@ -441,7 +498,7 @@ export default function BakeWorkspace({ Material, Latest, Owner, Apply, Bakes, K
                       <Picture Canvas={Bakes[Id].Canvas} Size={150} />
                       <span>{Short[Id]}</span>
                       <small>
-                        {Bakes[Id].Resolution}² · {Bakes[Id].Shape}
+                        {Bakes[Id].Resolution}² · {Bakes[Id].Named}
                       </small>
                     </button>
                   ))
@@ -452,16 +509,17 @@ export default function BakeWorkspace({ Material, Latest, Owner, Apply, Bakes, K
             ) : (
               <ShaderViewport
                 Material={Material}
-                Eyebrow={Mode === "map" ? "BAKED MAP" : "BAKING / " + Shape.toUpperCase()}
+                Eyebrow={Mode === "map" ? "BAKED MAP" : "BAKING / " + ShapeName(Shape).toUpperCase()}
                 Title={Mode === "map" ? Short[Focus] : Material.Name}
-                Note={Mode === "map" ? (Focused ? `${Focused.Resolution} × ${Focused.Resolution} · baked on the ${Focused.Shape.toLowerCase()}` : "Not baked yet") : `${Chosen.size} maps chosen · ${Settings.resolution}² · ${Settings.samples} samples`}
+                Note={Mode === "map" ? (Focused ? `${Focused.Resolution} × ${Focused.Resolution} · baked on the ${Focused.Named.toLowerCase()}` : "Not baked yet") : `${Chosen.size} maps chosen · ${Settings.resolution}² · ${Settings.samples} samples`}
                 Shape={Shape}
                 ChooseShape={ChooseShape}
                 Showing={Showing}
+                Bound={Bound}
               />
             )}
           </main>
-          <div className="sfw-view-foot">{Mode === "map" && Focused && Focused.Shape !== Shape ? `Baked on the ${Focused.Shape.toLowerCase()} · shown on the ${Shape.toLowerCase()}` : "Bakes in the page · the shape is baked against itself"}</div>
+          <div className="sfw-view-foot">{Mode === "sdf" ? "Sparse signed distance field of the bound object · drag to orbit · the slice reads the field inside it" : Mode === "map" && Focused && Focused.Shape !== Shape ? `Baked on the ${Focused.Named.toLowerCase()} · shown on the ${ShapeName(Shape).toLowerCase()}` : "Bakes in the page · the shape is baked against itself"}</div>
         </section>
         {!Shut.right && (
           <section className="sfw-inspector sfw-pane right" aria-label="Inspector dock">

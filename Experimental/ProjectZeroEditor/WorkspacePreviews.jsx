@@ -30,10 +30,19 @@ function IslandTiles(Layout, Uvs) {
   });
 }
 
-function OpenButton({ Tool, Label, Open }) {
+// Follow-up 75: Studio opens the object in its dedicated ShaderEditor workspace (UV, Fracture, Nanite, or Baking's distance field);
+// that is the main button, and the in-viewport edit workspace stays beside it as the quieter one.
+const StudioNames = { uv: "UV editor", fracture: "Fracture editor", sdf: "Baking · distance field", lod: "Nanite workspace" };
+function OpenButton({ Tool, Label, Open, Studio = null }) {
   return (
     <div className="ws-actions">
-      <button type="button" className="ws-open" disabled={!Open} onClick={Open}>
+      {Studio && (
+        <button type="button" className="ws-open ws-open-studio" onClick={Studio} title={`Open this object in the ShaderEditor's ${StudioNames[Tool]}`}>
+          <WorkspaceGlyph Tool={Tool} Size={14} />
+          Open in {StudioNames[Tool]}
+        </button>
+      )}
+      <button type="button" className={"ws-open" + (Studio ? " ws-open-quiet" : "")} disabled={!Open} onClick={Open} title={Studio ? "Edit in the viewport, beside the rest of the scene" : undefined}>
         <WorkspaceGlyph Tool={Tool} Size={14} />
         {Label}
       </button>
@@ -53,7 +62,7 @@ export function WorkspaceLaunchCard({ Tool, Title, Caption, Label, Open, Kit }) 
   );
 }
 
-export function UvPreviewCard({ Subject, Values, Open, Kit }) {
+export function UvPreviewCard({ Subject, Values, Open, Studio = null, Kit }) {
   const { Card, Control, Metric } = Kit;
   const { Layout, Uvs, Statistics, Angle } = useUvLayout(Subject, Values);
   const Tiles = IslandTiles(Layout, Uvs);
@@ -111,7 +120,7 @@ export function UvPreviewCard({ Subject, Values, Open, Kit }) {
         Unit="% of 1001 used"
         Caption={`${Layout.charts.length} islands · ${Layout.seams.length} seam edges · ${Counts.size} UDIM tile${Counts.size === 1 ? "" : "s"} in use`}
       />
-      <button type="button" className="ws-preview-canvas ws-preview-uv" onClick={Open} disabled={!Open} aria-label="Open the UV workspace">
+      <button type="button" className="ws-preview-canvas ws-preview-uv" onClick={Studio || Open} disabled={!(Studio || Open)} aria-label="Open the UV workspace">
         <Surface Paint={Paint} Label={`${Subject.Name} UV tiles`} Deps={[Values["UV Layout"]]} />
       </button>
       <div className="ws-udims" aria-label="UDIM tiles">
@@ -125,12 +134,12 @@ export function UvPreviewCard({ Subject, Values, Open, Kit }) {
       {Elsewhere.length > 0 && <p className="ws-note">Also in {Elsewhere.sort((A, B) => A - B).join(", ")}.</p>}
       <Control Field={{ Label: "Texel scale", Control: "Readout" }} Value={Statistics.texelScale.toFixed(3) + " UV/m"} />
       <Control Field={{ Label: "Unwrap angle", Control: "Readout" }} Value={Angle + "°"} />
-      <OpenButton Tool="uv" Label="Edit in UV workspace" Open={Open} />
+      <OpenButton Tool="uv" Label="Edit in UV workspace" Open={Open} Studio={Studio} />
     </Card>
   );
 }
 
-export function FracturePreviewCard({ Subject, Values, Open, Kit }) {
+export function FracturePreviewCard({ Subject, Values, Open, Studio = null, Kit }) {
   const { Card, Control, Metric } = Kit;
   const { Owner, Settings, Result } = useShatter(Subject, Values);
   const [Explode, SetExplode] = useState(0.3);
@@ -147,7 +156,7 @@ export function FracturePreviewCard({ Subject, Values, Open, Kit }) {
         Unit={Settings.Enabled ? "pieces" : ""}
         Caption={Settings.Enabled ? `${Material.note} ${FormatEnergy(Settings.Energy)} impact · limited by ${Result.budget.limiter}.` : "Fracture is off for this object. The preview shows it whole."}
       />
-      <button type="button" className="ws-preview-canvas ws-preview-fracture" onClick={Open} disabled={!Open} aria-label="Open the fracture workspace">
+      <button type="button" className="ws-preview-canvas ws-preview-fracture" onClick={Studio || Open} disabled={!(Studio || Open)} aria-label="Open the fracture workspace">
         <Surface Paint={Paint} Label={`${Subject.Name} fracture preview`} Deps={[Explode]} />
       </button>
       <div className="ws-preview-control" data-preview-control="explode">
@@ -162,7 +171,7 @@ export function FracturePreviewCard({ Subject, Values, Open, Kit }) {
       {Readout("Execution", Settings.Mode === "baked" ? "Baked" : "Dynamic")}
       {Readout("Baked storage", Settings.Enabled ? FormatBytes(Storage.total) : "–")}
       <p className="ws-note">{STATE_TEXT[Standing]}</p>
-      <OpenButton Tool="fracture" Label="Edit in fracture workspace" Open={Open} />
+      <OpenButton Tool="fracture" Label="Edit in fracture workspace" Open={Open} Studio={Studio} />
     </Card>
   );
 }
@@ -177,7 +186,7 @@ function BakeLine({ Standing, Baked }) {
   );
 }
 
-export function SdfPreviewCard({ Subject, Values, Open, Kit }) {
+export function SdfPreviewCard({ Subject, Values, Open, Studio = null, Kit }) {
   const { Card, Control, Metric } = Kit;
   const Sdf = useSdfVolume(Subject, Values);
   const { Volume, Settings } = Sdf;
@@ -209,7 +218,7 @@ export function SdfPreviewCard({ Subject, Values, Open, Kit }) {
         Unit={Volume ? `of ${Volume.totalBricks} bricks` : "baking"}
         Caption={Volume ? `${Volume.dim}³ voxels · ${Volume.prunedPercent}% of bricks pruned` : Sdf.Problem || "Building the sparse volume from the surface."}
       />
-      <button type="button" className="ws-preview-canvas ws-preview-sdf" onClick={Open} disabled={!Open} aria-label="Open the SDF workspace">
+      <button type="button" className="ws-preview-canvas ws-preview-sdf" onClick={Studio || Open} disabled={!(Studio || Open)} aria-label="Open the SDF workspace">
         <Surface Paint={Paint} Label={`${Subject.Name} distance field slice`} Deps={[Image, Depth]} />
       </button>
       <div className="ws-preview-control" data-preview-control="slice">
@@ -220,12 +229,12 @@ export function SdfPreviewCard({ Subject, Values, Open, Kit }) {
       {Readout("Memory", Volume ? `${FormatBytes(Volume.mip0Bytes + Volume.mip1Bytes)} · dense ${FormatBytes(Volume.denseBytes)}` : "–")}
       {Readout("Source", `${(Sdf.Body.Indices.length / 3).toLocaleString("en-US")} triangles · ${Sdf.Closed ? "closed" : "open shell"}`)}
       <BakeLine Standing={Sdf.Standing} Baked={Settings.Baked} />
-      <OpenButton Tool="sdf" Label="Edit in SDF workspace" Open={Open} />
+      <OpenButton Tool="sdf" Label="Edit in SDF workspace" Open={Open} Studio={Studio} />
     </Card>
   );
 }
 
-export function LodPreviewCard({ Subject, Values, Open, Kit }) {
+export function LodPreviewCard({ Subject, Values, Open, Studio = null, Kit }) {
   const { Card, Control, Metric } = Kit;
   const Build = useClusters(Subject, Values);
   const { Dag, Settings } = Build;
@@ -253,7 +262,7 @@ export function LodPreviewCard({ Subject, Values, Open, Kit }) {
         Unit="levels"
         Caption={Dag ? `${Dag.clusterCount} clusters in ${Dag.groupCount} groups · ${Source.toLocaleString("en-US")} source triangles` : Build.Problem || ""}
       />
-      <button type="button" className="ws-preview-canvas ws-preview-lod" onClick={Open} disabled={!Open} aria-label="Open the LOD workspace">
+      <button type="button" className="ws-preview-canvas ws-preview-lod" onClick={Studio || Open} disabled={!(Studio || Open)} aria-label="Open the LOD workspace">
         <svg viewBox="0 0 300 150" role="img" aria-label="Triangles per level">
           {Levels.map((Each, Index) => {
             const Width = 268 / Levels.length, X = 22 + Index * Width, Height = Math.max(3, (Math.log10(Math.max(1, Each.triangles)) / Top) * 104);
@@ -279,7 +288,7 @@ export function LodPreviewCard({ Subject, Values, Open, Kit }) {
       {Readout("Coarsest level", Levels.length ? `${Levels[Levels.length - 1].triangles.toLocaleString("en-US")} triangles · ${ErrorText(Levels[Levels.length - 1].error, Levels.length - 1)} error` : "–")}
       {Readout("Build time", Dag ? `${Dag.buildMs.toFixed(0)} ms` : "–")}
       <BakeLine Standing={Build.Standing} Baked={Settings.Baked} />
-      <OpenButton Tool="lod" Label="Edit in LOD workspace" Open={Open} />
+      <OpenButton Tool="lod" Label="Edit in LOD workspace" Open={Open} Studio={Studio} />
     </Card>
   );
 }

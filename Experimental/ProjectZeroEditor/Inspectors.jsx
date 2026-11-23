@@ -452,7 +452,7 @@ export function Tile({
     </button>
   );
 }
-function Metric({ Value, Unit, Caption }) {
+export function Metric({ Value, Unit, Caption }) {
   return (
     <>
       <div className="metric">
@@ -649,6 +649,7 @@ export function Inspector({
   ReferenceDetailCards = null,
   Workspace = null,
   OpenWorkspace = null,
+  OpenStudio = null, // Follow-up 75: opens a ShaderEditor workspace ("uv", "fracture", "nanite", "sdf") on this object
   SetWorkspace = null,
   Scene = null,
 }) {
@@ -910,6 +911,7 @@ export function Inspector({
             Subject={Subject}
             Values={Values}
             Open={OpenWorkspace && (() => OpenWorkspace("uv"))}
+            Studio={OpenStudio && (() => OpenStudio("uv"))}
             Kit={{ Card, Control, Metric }}
           />
         }
@@ -918,6 +920,7 @@ export function Inspector({
             Subject={Subject}
             Values={Values}
             Open={OpenWorkspace && (() => OpenWorkspace("sdf"))}
+            Studio={OpenStudio && (() => OpenStudio("sdf"))}
             Kit={{ Card, Control, Metric }}
           />
         }
@@ -926,6 +929,7 @@ export function Inspector({
             Subject={Subject}
             Values={Values}
             Open={OpenWorkspace && (() => OpenWorkspace("lod"))}
+            Studio={OpenStudio && (() => OpenStudio("nanite"))}
             Kit={{ Card, Control, Metric }}
           />
         }
@@ -984,6 +988,7 @@ export function Inspector({
               Subject={Subject}
               Values={Values}
               Open={OpenWorkspace && (() => OpenWorkspace("fracture"))}
+              Studio={OpenStudio && (() => OpenStudio("fracture"))}
               Kit={{ Card, Control, Metric }}
             />
           </>

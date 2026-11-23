@@ -28,7 +28,7 @@ import {
 } from "./MaterialSpecification.js";
 import { ColourSlotDropProps } from "./ColourCodex.js";
 import { AssetDropProps, AssetDragStart } from "./AssetDrag.js";
-import ShaderViewport from "./ShaderViewport.jsx";
+import ShaderViewport, { BoundShape } from "./ShaderViewport.jsx";
 import { BakeShaderChannel, ShaderChannelPicture } from "./ShaderChannel.js";
 import { EngineAssets } from "./AssetDepot.js";
 import { ShapeOf } from "./PrimitiveInspector.jsx";
@@ -37,6 +37,9 @@ import StampWorkspace from "./StampWorkspace.jsx";
 import PaintWorkspace from "./PaintWorkspace.jsx";
 import BakeWorkspace from "./BakeWorkspace.jsx";
 import { PatternMaterial, StampMaterial } from "./SurfaceTextures.js";
+import { UvStudio, FractureStudio, NaniteStudio, UnboundStudio } from "./SceneStudios.jsx";
+import { BoundGeometry, ForPreview, LayoutKey } from "./BoundSurface.js";
+import { GeometryKeys } from "./WorkspaceSurface.jsx";
 
 // Follow-up 68: Content Browser drops. A dropped image is shrunk to the embedded preview size; a dropped material lends
 // one channel (its fill, gradient or texture is copied so the preview can draw it).
@@ -770,6 +773,13 @@ export default function MaterialPanel({
   Latest.current = Material;
   LatestValues.current = Values;
   LatestChange.current = Change;
+  // Follow-up 75: a scene primitive (not a library material, not an imported vehicle mesh) is also the object the UV, Fracture, Nanite
+  // and distance-field workspaces edit, and the preview can show it (Bound) in place of a preview shape.
+  const OnPrimitive = ShowSlots && Subject.Component !== "StaticMesh";
+  const Scene = OnPrimitive ? { Subject, Values, Change: (Key, Next) => LatestChange.current(Key, Next) } : null;
+  const BoundKey = OnPrimitive ? JSON.stringify([ShapeOf(Subject), Values.Scale, GeometryKeys.map((Name) => Values[Name]), Values[LayoutKey], Values[LayoutKey] ? Values["UV Layout"] : null]) : "";
+  const Bound = useMemo(() => (OnPrimitive ? { Name: Subject.Name, Key: BoundKey, Unwrapped: !!Values[LayoutKey], Make: () => ForPreview(BoundGeometry(Subject, LatestValues.current)) } : null), [BoundKey, Subject.Name]);
+  const [PreviewShape, ChoosePreviewShape] = useState(OnPrimitive ? BoundShape : "Shader ball");
   const [Selected, Select] = useState(() => Material.Used[0] || "colour"),
     [Adding, ShowAdding] = useState(false),
     [Query, Search] = useState("");
@@ -969,9 +979,9 @@ export default function MaterialPanel({
             );
   if (!Compact)
     return (
-      <ShaderStudios {...{ Studio, ChooseStudio, Subject, Material, Latest, Apply, Slot, ShowSlots }}>
+      <ShaderStudios {...{ Studio, ChooseStudio, Subject, Material, Latest, Apply, Slot, ShowSlots, Scene, Bound, PreviewShape, ChoosePreviewShape }}>
         <ShaderWorkspace
-          {...{ Subject, Material, Slot, Slots, ShowSlots, SlotCard, ChannelAdder, Apply, Assign, Select, Current, Library, SavePreset, ReplaceSlot }}
+          {...{ Subject, Material, Slot, Slots, ShowSlots, SlotCard, ChannelAdder, Apply, Assign, Select, Current, Library, SavePreset, ReplaceSlot, Bound, PreviewShape, ChoosePreviewShape }}
           Expand={Expand}
         />
       </ShaderStudios>
@@ -1413,33 +1423,49 @@ const StudioTabs = [
   // Follow-up 74: Texture paint (a material brush on the live viewport) and Baking (mesh maps and channels into pictures).
   { Id: "paint", Label: "Texture paint", Glyph: "M18.4 3.6a2 2 0 0 1 2.8 2.8L11 16.6 7.4 13zM6.5 14.5l3 3c-.8 2.4-2.6 3.5-6 3.5.5-1.2.4-2.6 1-4 .4-1.1 1-2 2-2.5z" },
   { Id: "bake", Label: "Baking", Glyph: "M12 3c1 3 4 4.5 4 8a4 4 0 0 1-8 0c0-1.6.7-2.7 1.5-3.5.2 1.5 1 2.5 2 2.5 0-2.5-.5-4.5.5-7zM5 21h14" },
+  // Follow-up 75: the object workspaces (ObjectStudios.jsx) — they edit the bound scene object rather than its material.
+  { Id: "uv", Label: "UV", Glyph: "M4 4h16v16H4zM4 12h16M12 4v16M6.5 6.5h3.5v3.5H6.5z", Scene: true },
+  { Id: "fracture", Label: "Fracture", Glyph: "M5.5 6.5 12 3.5l6.5 3v8.5L12 20.5 5.5 15zM12 3.5 10.5 10l4 2.5-2.5 8M10.5 10 5.5 12", Scene: true },
+  { Id: "nanite", Label: "Nanite", Glyph: "M9 3.5h6V8H9zM4 11h6v4H4zM14 11h6v4h-6zM12 8v1.6M7 11V9.6h10V11M3.5 18.5h3M8.5 18.5h3M12.5 18.5h3M17.5 18.5h3", Scene: true },
 ];
-function ShaderStudios({ Studio, ChooseStudio, Subject, Material, Latest, Apply, Slot, ShowSlots, children }) {
+function ShaderStudios({ Studio, ChooseStudio, Subject, Material, Latest, Apply, Slot, ShowSlots, Scene, Bound, PreviewShape, ChoosePreviewShape, children }) {
   const [OwnStudio, ChooseOwnStudio] = useState("material");
-  const Shown = (ChooseStudio ? Studio : OwnStudio) || "material",
+  // "sdf" is the Baking tab opened on its distance field (the inspector's SDF page opens it so).
+  const Asked = (ChooseStudio ? Studio : OwnStudio) || "material",
+    Shown = Asked === "sdf" ? "bake" : StudioTabs.some((Tab) => Tab.Id === Asked) ? Asked : "material",
     Choose = ChooseStudio || ChooseOwnStudio;
+  const [FieldAt, OpenFieldAt] = useState(() => (Asked === "sdf" ? Date.now() : 0));
+  useEffect(() => {
+    if (Asked === "sdf") OpenFieldAt(Date.now());
+  }, [Asked]);
+  const OpenStudio = (Id) => Choose(Id);
+  const Unbound = !Scene && (ShowSlots ? "an imported vehicle mesh, not a primitive" : "a library material, not a scene object");
   const Where = Subject.Name + (ShowSlots ? " · slot " + String(Slot).padStart(2, "0") : "");
   // Texture paint keeps its canvases per object and slot; Baking keeps its maps (Texture paint paints through them). Both share the
   // preview shape, since a bake and its mask must be read through the same UVs.
   const Sessions = useRef(new Map());
   const [Bakes, KeepBakes] = useState({});
-  const [PreviewShape, ChoosePreviewShape] = useState("Shader ball");
   return (
     <div className="shader-studios" data-studio={Shown}>
       <nav className="shader-studio-tabs" role="tablist" aria-label="ShaderEditor workspaces">
         {StudioTabs.map((Tab) => (
-          <button key={Tab.Id} role="tab" aria-selected={Shown === Tab.Id} className="shader-studio-tab" onClick={() => Choose(Tab.Id)}>
+          <button key={Tab.Id} role="tab" aria-selected={Shown === Tab.Id} className={"shader-studio-tab" + (Tab.Scene ? " scene-tab" : "")} title={Tab.Scene ? `${Tab.Label} · edits ${Scene ? Subject.Name : "the bound scene object"}` : undefined} onClick={() => Choose(Tab.Id)}>
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d={Tab.Glyph} />
             </svg>
             {Tab.Label}
           </button>
         ))}
-        {Shown !== "material" && (
-          <span className="shader-studio-owner" title="Pattern, Stamp, Texture paint and Baking write into this material">
-            Writes into <b>{Material.Name}</b> · {Where}
-          </span>
-        )}
+        {Shown !== "material" &&
+          (StudioTabs.find((Tab) => Tab.Id === Shown)?.Scene ? (
+            <span className="shader-studio-owner" title="UV, Fracture and Nanite change the bound object itself">
+              Edits <b>{Subject.Name}</b>
+            </span>
+          ) : (
+            <span className="shader-studio-owner" title="Pattern, Stamp, Texture paint and Baking write into this material">
+              Writes into <b>{Material.Name}</b> · {Where}
+            </span>
+          ))}
       </nav>
       <div className="shader-studio-body" role="tabpanel" aria-label={StudioTabs.find((Tab) => Tab.Id === Shown).Label + " workspace"}>
         {Shown === "pattern" ? (
@@ -1460,7 +1486,14 @@ function ShaderStudios({ Studio, ChooseStudio, Subject, Material, Latest, Apply,
             Bakes={Bakes}
             Shape={PreviewShape}
             ChooseShape={ChoosePreviewShape}
+            Bound={Bound}
           />
+        ) : Shown === "uv" || Shown === "fracture" || Shown === "nanite" ? (
+          Scene ? (
+            React.createElement({ uv: UvStudio, fracture: FractureStudio, nanite: NaniteStudio }[Shown], { ...Scene, Material, OpenStudio })
+          ) : (
+            <UnboundStudio Studio={Shown} Subject={Subject} Reason={Unbound} />
+          )
         ) : Shown === "bake" ? (
           <BakeWorkspace
             Material={Material}
@@ -1471,6 +1504,11 @@ function ShaderStudios({ Studio, ChooseStudio, Subject, Material, Latest, Apply,
             KeepBakes={KeepBakes}
             Shape={PreviewShape}
             ChooseShape={ChoosePreviewShape}
+            Bound={Bound}
+            OpenStudio={OpenStudio}
+            Scene={Scene}
+            Open={Asked === "sdf" ? "sdf" : ""}
+            OpenAt={FieldAt}
           />
         ) : Shown === "stamp" ? (
           <StampWorkspace
@@ -1489,7 +1527,7 @@ function ShaderStudios({ Studio, ChooseStudio, Subject, Material, Latest, Apply,
     </div>
   );
 }
-function ShaderWorkspace({ Subject, Material, Slot, Slots, ShowSlots, SlotCard, ChannelAdder, Apply, Assign, Select, Current, Library, SavePreset, ReplaceSlot }) {
+function ShaderWorkspace({ Subject, Material, Slot, Slots, ShowSlots, SlotCard, ChannelAdder, Apply, Assign, Select, Current, Library, SavePreset, ReplaceSlot, Bound, PreviewShape, ChoosePreviewShape }) {
   const Latest = useRef(Material);
   Latest.current = Material;
   const [LibraryOpen, OpenLibrary] = useState(false),
@@ -1521,6 +1559,9 @@ function ShaderWorkspace({ Subject, Material, Slot, Slots, ShowSlots, SlotCard, 
               Material.Used.map((Id) => MaterialChannels.find((Field) => Field.Id === Id).Label).join(" · ") ||
               "No channels yet · every input uses its default"
             }
+            Shape={PreviewShape}
+            ChooseShape={ChoosePreviewShape}
+            Bound={Bound}
           />
           {LibraryOpen && (
             <MaterialLibrary

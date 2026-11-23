@@ -739,6 +739,32 @@ function App() {
     RemoveShaderTabs();
     FloatShader(true);
   };
+  // Follow-up 75: the ShaderEditor can follow the selection — "Bound to" becomes whichever material owner is selected, so the material
+  // and the object workspaces (UV, Fracture, Nanite) edit the selected object. Choosing an owner in the menu pins it.
+  const [ShaderFollow, FollowSelection] = useState(true);
+  const OwnsMaterial = (Row) => !!Row && (Row.Panel === "geometry" || (Row.Panel === VehiclePanel && Row.Component === "StaticMesh"));
+  const SelectedOwner = OwnsMaterial(Rows.find((Row) => Row.Id === Selected)) ? Selected : null;
+  const SelectedOwnerName = SelectedOwner ? Rows.find((Row) => Row.Id === SelectedOwner).Name : "";
+  useEffect(() => {
+    if (ShaderFollow && SelectedOwner) SelectShaderTarget(SelectedOwner);
+  }, [ShaderFollow, SelectedOwner]);
+  // Opens one ShaderEditor workspace on an object; a docked ShaderEditor stays where it is.
+  const OpenShaderStudio = (Id, Studio) => {
+    ChooseShaderStudio(Studio);
+    const Side = Object.keys(PaneTabs).find((Each) => PaneTabs[Each]?.includes("ShaderEditor"));
+    if (Side) {
+      SelectShaderTarget(Id);
+      Activate((Previous) => ({ ...Previous, [Side]: "ShaderEditor" }));
+    } else OpenShader(Id);
+  };
+  // A library material bound in the ShaderEditor goes onto the selected object as its own copy.
+  const ApplyShaderAsset = () => {
+    if (!ShaderAsset || !SelectedOwner) return;
+    AssignValues((Previous) => ({
+      ...Previous,
+      [SelectedOwner]: { ...Previous[SelectedOwner], Material: { ...structuredClone(ShaderAsset.Material), Name: ShaderAsset.Material?.Name || ShaderAsset.Name } },
+    }));
+  };
   const DockShader = (Side) => {
     FloatShader(false);
     RemoveShaderTabs();
@@ -756,7 +782,10 @@ function App() {
           <select
             aria-label="ShaderEditor target"
             value={ShaderSubject?.Id || ""}
-            onChange={(Event) => SelectShaderTarget(Event.target.value)}
+            onChange={(Event) => {
+              FollowSelection(false);
+              SelectShaderTarget(Event.target.value);
+            }}
           >
             <option value="" disabled>
               Select a material owner
@@ -781,6 +810,32 @@ function App() {
             ))}
           </select>
         </label>
+        <span className="shader-target-actions">
+          <button
+            type="button"
+            className={"shader-follow" + (ShaderFollow ? " on" : "")}
+            aria-pressed={ShaderFollow}
+            title={ShaderFollow ? "The ShaderEditor follows the selected object · press to pin the current one" : "Follow the selected object"}
+            onClick={() => FollowSelection(!ShaderFollow)}
+          >
+            <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+              <circle cx="12" cy="12" r="3" />
+              <path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3" />
+              <circle cx="12" cy="12" r="7" opacity="0.55" />
+            </svg>
+            Follow selection
+          </button>
+          {SelectedOwner && SelectedOwner !== ShaderSubject?.Id && (
+            <button type="button" className="shader-use-selection" onClick={() => SelectShaderTarget(SelectedOwner)} title={`Bind the ShaderEditor to ${SelectedOwnerName}`}>
+              Use selection · {SelectedOwnerName}
+            </button>
+          )}
+          {ShaderAsset && SelectedOwner && (
+            <button type="button" className="shader-apply-selection" onClick={ApplyShaderAsset} title={`Give ${SelectedOwnerName} its own copy of ${ShaderAsset.Name}`}>
+              Apply to {SelectedOwnerName}
+            </button>
+          )}
+        </span>
         {Docked && (
           <button
             aria-label="Undock ShaderEditor"
@@ -2392,6 +2447,7 @@ function App() {
               OpenFracture={() => OpenWorkspace("fracture")}
               Workspace={Workspace}
               OpenWorkspace={OpenWorkspace}
+              OpenStudio={OwnsMaterial(Subject) && Subject.Panel === "geometry" ? (Studio) => OpenShaderStudio(Selected, Studio) : null}
               SetWorkspace={SetWorkspace}
               Scene={{ Rows, SelectRow, AddRows: InsertUnder, PatchRow, OpenComponent, Focus: ComponentFocus, Air: AirOf(Values), Sun: ReaderOf(Values, "sun"), OpenComponentViewer: OpenVehiclePanel, Values, RenderSettings: Subject.Panel === "camera" ? RenderSettingsCard() : null }}
               OpenWind={() => {

@@ -78,24 +78,26 @@ function FilterButton({ Title, Filter, Sift }) {
 
 // Rows: [{ Id, Name, Detail, Picture, Depth, Folder, Folded, Fold(), Chosen, Picked, Hidden, Locked, Pick(Event), Show(), Lock(),
 //          Drag (props for dragging), Below (drawn under the row, indented), Label (accessible name) }]
-export default function ArtworkOutliner({ Title, Detail, Actions, Visible, Hidden, ShowAll, HideAll, Query, Search, Filter, Sift, Label, Rows, Empty, Footer }) {
+// Tallies (Follow-up 75): the two count cards' own captions and actions, [[Caption, Count, Act, Title], [...]], for stacks whose rows
+// are not shown and hidden (UV islands, fracture pieces, cluster levels); without it they are Visible and Hidden.
+export default function ArtworkOutliner({ Title, Detail, Actions, Visible, Hidden, ShowAll, HideAll, Query, Search, Filter, Sift, Label, Rows, Empty, Footer, Tallies = null }) {
   return (
     <div className="ao-outliner">
       <OutlinerHeading Title={Title} Detail={Detail}>
         {Actions}
       </OutlinerHeading>
       <div className="ao-stats">
-        <button type="button" onClick={ShowAll} title={"Show every " + Title.toLowerCase().replace(/s$/, "")}>
+        <button type="button" onClick={Tallies ? Tallies[0][2] : ShowAll} title={Tallies ? Tallies[0][3] : "Show every " + Title.toLowerCase().replace(/s$/, "")}>
           <span className="ao-status-disc">
             <Glyph Name="check" Size={15} />
           </span>
-          <small>Visible</small>
-          <strong>{Visible}</strong>
+          <small>{Tallies ? Tallies[0][0] : "Visible"}</small>
+          <strong>{Tallies ? Tallies[0][1] : Visible}</strong>
         </button>
-        <button type="button" onClick={HideAll} title={"Hide every unlocked " + Title.toLowerCase().replace(/s$/, "")}>
+        <button type="button" onClick={Tallies ? Tallies[1][2] : HideAll} title={Tallies ? Tallies[1][3] : "Hide every unlocked " + Title.toLowerCase().replace(/s$/, "")}>
           <span className="ao-muted-disc">△</span>
-          <small>Hidden</small>
-          <strong>{Hidden}</strong>
+          <small>{Tallies ? Tallies[1][0] : "Hidden"}</small>
+          <strong>{Tallies ? Tallies[1][1] : Hidden}</strong>
         </button>
       </div>
       <div className="ao-search">

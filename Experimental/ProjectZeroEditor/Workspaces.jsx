@@ -54,23 +54,32 @@ const ToolPanels = { uv: UvPanel, sdf: SdfPanel, lod: ClusterPanel, collision: C
 
 
 // The unwrap for the selection, with any island edits stored in Values["UV Layout"] re-applied when the mesh has not changed since.
-export function useUvLayout(Subject, Values) {
+// Follow-up 75: UvLayoutOf is the same without React (the ShaderEditor's UV tab, the bound-object preview and the main viewport read it
+// when Values["UV Layout"].Use is on); the last few unwraps are kept by key.
+const Unwraps = new Map();
+export function UvLayoutOf(Subject, Values) {
   const Shape = ShapeOf(Subject);
   const Scale = Array.isArray(Values.Scale) ? Values.Scale.map((Each) => Math.abs(+Each) || 1) : [1, 1, 1];
   const Stored = Values["UV Layout"] || {};
   const Angle = Clamp(+Stored.Angle || 60, 15, 89);
   const Key = JSON.stringify([Shape, Scale, Angle, GeometryKeys.map((Name) => Values[Name])]);
-  const Base = useMemo(() => {
+  let Base = Unwraps.get(Key);
+  if (!Base) {
     const Read = (Name, Initial) => (Values[Name] === undefined ? Initial : Values[Name]);
     const Mesh = PrimitiveSurface(Shape, Read, Scale);
     const Layout = packCharts(unwrapCharts(Mesh.Positions, Mesh.Indices, { normalLimitDeg: Angle }));
-    return { Mesh, Layout, Packed: Layout.charts.map((Chart) => ({ R: Chart.rotation, M: !!Chart.mirror, C: Chart.center.slice() })) };
-  }, [Key]);
+    Base = { Mesh, Layout, Packed: Layout.charts.map((Chart) => ({ R: Chart.rotation, M: !!Chart.mirror, C: Chart.center.slice() })) };
+    Unwraps.set(Key, Base);
+    while (Unwraps.size > 8) Unwraps.delete(Unwraps.keys().next().value);
+  }
   const Edits = Stored.Key === Key && Array.isArray(Stored.Charts) && Stored.Charts.length === Base.Layout.charts.length ? Stored.Charts : Base.Packed;
-  // Apply edits on a shallow copy so the memoised base stays the packed layout.
+  // Apply edits on a shallow copy so the kept base stays the packed layout.
   const Layout = { ...Base.Layout, charts: Base.Layout.charts.map((Chart, Index) => ({ ...Chart, rotation: Edits[Index].R & 3, mirror: !!Edits[Index].M, center: Edits[Index].C })) };
   const Uvs = cornerUvs(Layout);
   return { Shape, Mesh: Base.Mesh, Layout, Uvs, Key, Edits, Packed: Base.Packed, Angle, Statistics: layoutStatistics(Layout, Uvs) };
+}
+export function useUvLayout(Subject, Values) {
+  return UvLayoutOf(Subject, Values);
 }
 
 function IslandOf(Layout, Uvs, U, V) {
@@ -86,7 +95,8 @@ function IslandOf(Layout, Uvs, U, V) {
   return -1;
 }
 
-function UvView({ Subject, Values, Change, Workspace, SetWorkspace }) {
+// Panes: "both" (object and UV space side by side), "uv" or "object" alone (the ShaderEditor's UV tab picks one).
+export function UvView({ Subject, Values, Change, Workspace, SetWorkspace, Panes = "both" }) {
   const Unwrap = useUvLayout(Subject, Values);
   const { Mesh, Layout, Uvs } = Unwrap;
   const Selection = new Set(Workspace.Selection || []);
@@ -234,19 +244,23 @@ function UvView({ Subject, Values, Change, Workspace, SetWorkspace }) {
   };
   return (
     <div className="ws-view ws-view-uv">
-      <div className="ws-pane">
-        <span className="ws-pane-label">Object · checker through current UVs</span>
-        <Surface Paint={PaintObject} Label={`${Subject.Name} with UV checker`} Handlers={{ ...Orbit, onPointerUp: (Event) => Orbit.End(Event) }} />
-      </div>
-      <div className="ws-pane">
-        <span className="ws-pane-label">UV space · {Layout.charts.length} islands · drag to move</span>
-        <Surface Paint={PaintUv} Label="UV layout" Class="ws-uv" Handlers={UvHandlers} />
-      </div>
+      {Panes !== "uv" && (
+        <div className="ws-pane">
+          <span className="ws-pane-label">Object · checker through current UVs</span>
+          <Surface Paint={PaintObject} Label={`${Subject.Name} with UV checker`} Handlers={{ ...Orbit, onPointerUp: (Event) => Orbit.End(Event) }} />
+        </div>
+      )}
+      {Panes !== "object" && (
+        <div className="ws-pane">
+          <span className="ws-pane-label">UV space · {Layout.charts.length} islands · drag to move</span>
+          <Surface Paint={PaintUv} Label="UV layout" Class="ws-uv" Handlers={UvHandlers} />
+        </div>
+      )}
     </div>
   );
 }
 
-function UvPanel({ Subject, Values, Change, Workspace, SetWorkspace, Kit }) {
+export function UvPanel({ Subject, Values, Change, Workspace, SetWorkspace, Kit }) {
   const { Card, Control, Metric } = Kit;
   const Unwrap = useUvLayout(Subject, Values);
   const { Layout, Uvs, Statistics, Edits } = Unwrap;
@@ -444,7 +458,7 @@ export function PaintFracture(Brush, Width, Height, { Owner, Settings, Result, Y
   return { Drawn, View, Markers };
 }
 
-function FractureView({ Subject, Values, Change, Workspace, SetWorkspace }) {
+export function FractureView({ Subject, Values, Change, Workspace, SetWorkspace }) {
   const { Owner, Settings, Result } = useShatter(Subject, Values);
   const Orbit = useOrbit(Workspace, SetWorkspace);
   const Last = useRef({ Drawn: [], View: null, Markers: [] });
@@ -536,7 +550,7 @@ function FractureView({ Subject, Values, Change, Workspace, SetWorkspace }) {
   );
 }
 
-function FracturePanelBody({ Subject, Values, Change, Workspace, SetWorkspace, Kit }) {
+export function FracturePanelBody({ Subject, Values, Change, Workspace, SetWorkspace, Kit }) {
   const { Card, Control, Metric } = Kit;
   const { Owner, Settings, Result } = useShatter(Subject, Values);
   const Assign = (Patch) => Change("Fracture", { ...Settings, ...Patch, EditedAt: Date.now() });

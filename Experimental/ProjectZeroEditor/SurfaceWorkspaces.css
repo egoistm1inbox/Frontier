@@ -2843,3 +2843,211 @@
   height: 8px;
   border-radius: 4px;
 }
+
+/* ── Follow-up 75: object workspaces (UV, Fracture, Nanite), geometry map icons, the distance field in Baking ───────────────────── */
+/* Eight tabs: tighter, scrolling when the ShaderEditor is narrow; the object tabs sit after a divider. */
+.shader-studio-tabs {
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.shader-studio-tab {
+  flex: none;
+  padding: 0 14px;
+}
+.shader-studio-tab.scene-tab:not(.scene-tab ~ .scene-tab) {
+  margin-left: 10px;
+  border-left: 1px solid #ffffff14;
+}
+.shader-studio-tab.scene-tab[aria-selected="true"]::after {
+  background: #ffb454;
+}
+.surface-workspace .os-centre {
+  position: relative;
+}
+.surface-workspace .os-centre > .ws-view {
+  flex: 1;
+  min-height: 0;
+}
+.surface-workspace .os-centre .ws-pane {
+  background: var(--ws-dock, #121212);
+}
+.surface-workspace .os-pages > .pc-page {
+  padding-bottom: 18px;
+}
+.surface-workspace .os-pages .ws-card {
+  margin: 0;
+}
+.surface-workspace .os-swatch {
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  box-shadow: inset 0 0 0 1px #0004, 0 0 0 1px #ffffff10;
+}
+.surface-workspace .os-bound {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.surface-workspace .os-bound b {
+  color: #ececec;
+  font-size: 13px;
+  font-weight: 500;
+}
+.surface-workspace .os-bound small {
+  color: #7c7c7c;
+  font-size: 9.5px;
+}
+.surface-workspace .os-open button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.surface-workspace .sfw-apply.on {
+  background: #ffb454;
+  border-color: #ffc477;
+  color: #1e1406;
+}
+.surface-workspace .sfw-apply.on:hover:not(:disabled) {
+  background: #ffc477;
+}
+.surface-workspace .os-skin {
+  height: 27px;
+}
+.surface-workspace .sfw-view-actions .os-skin button {
+  padding: 0 10px;
+}
+.surface-workspace.os-unbound {
+  display: grid;
+  place-items: center;
+  flex: 1;
+  background: var(--ws-dock, #121212);
+}
+.surface-workspace .os-unbound-card {
+  max-width: 360px;
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  padding: 28px;
+  border-radius: 20px;
+  background: #1b1b1b;
+  border: 1px solid #ffffff0d;
+  color: #9a9a9a;
+  text-align: center;
+  font-size: 11px;
+}
+.surface-workspace .os-unbound-card b {
+  color: #e6e6e6;
+  font-size: 13px;
+  font-weight: 500;
+}
+.surface-workspace .os-unbound-card svg {
+  color: #ffb454;
+}
+.surface-workspace .os-unbound-card p {
+  margin: 0;
+  line-height: 1.5;
+}
+/* Geometry map icons: a 26 px tile, the stroke in the map's group tone. */
+.gm-icon {
+  width: 26px;
+  height: 26px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  background: #1d1d1d;
+  box-shadow: inset 0 0 0 1px #ffffff12;
+  color: #b9b9b9;
+}
+.gm-icon[data-group="light"] {
+  color: #e9c98a;
+}
+.gm-icon[data-group="shape"] {
+  color: #8ab4e8;
+}
+.gm-icon[data-group="wear"] {
+  color: #a4c98f;
+}
+.gm-icon[data-group="space"] {
+  color: #c7a3f0;
+}
+.gm-icon[data-group="layout"] {
+  color: #d9b26f;
+}
+.gm-icon[data-group="field"] {
+  color: #ffb454;
+}
+.surface-workspace .ao-picture > .gm-icon {
+  max-width: 26px;
+  max-height: 26px;
+}
+.surface-workspace .bw-field {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+.surface-workspace .bw-field > .ws-view {
+  flex: 1;
+}
+.surface-workspace .bw-field .ws-pane {
+  background: var(--ws-dock, #121212);
+}
+/* The dock label naming the object a workspace shows (in place of the preview-shape menu). */
+.sv-dock-model {
+  cursor: default;
+}
+
+/* "Bound to": follow the selection, bind it, or put a library material onto it. */
+.shader-target-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: auto;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+.shader-target .shader-follow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 27px;
+  padding: 0 11px;
+  border-radius: 14px;
+  background: #222;
+  border: 1px solid #ffffff14;
+  color: #9a9a9a;
+}
+.shader-target .shader-follow.on {
+  color: #ffb454;
+  border-color: #ffb45466;
+  background: #ffb45414;
+}
+.shader-target .shader-use-selection,
+.shader-target .shader-apply-selection {
+  height: 27px;
+  padding: 0 11px;
+  border-radius: 14px;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.shader-target .shader-apply-selection {
+  background: #dededb;
+  color: #242424;
+  border-color: #eeeeeb;
+}
+/* Inspector: the dedicated workspace is the main button; the in-viewport one stays beside it, quieter. */
+.ws-actions .ws-open.ws-open-studio {
+  background: #dededb;
+  color: #242424;
+  border-color: #eeeeeb;
+}
+.ws-actions .ws-open.ws-open-studio:hover {
+  background: #fff;
+}
+.ws-actions .ws-open.ws-open-quiet {
+  background: transparent;
+  color: #a9a9a9;
+}

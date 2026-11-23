@@ -36,6 +36,7 @@ const ShapeGlyphs = {
   "Rounded cube": "M7 4h10a3 3 0 0 1 3 3v10a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3V7a3 3 0 0 1 3-3Z",
   "Draped cloth": "M12 4c-3 0-5 2.5-5 5.5 0 2-1.5 5-3 8.5h16c-1.5-3.5-3-6.5-3-8.5C17 6.5 15 4 12 4ZM9 18l1-4M15 18l-1-4",
 };
+ShapeGlyphs["Bound object"] = "M12 3l8 4.5v9L12 21l-8-4.5v-9zM12 12l8-4.5M12 12v9M12 12L4 7.5";
 const Glyph = ({ Name }) => (
   <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
     <path d={ShapeGlyphs[Name]} />
@@ -284,7 +285,11 @@ function DrapedCloth(Steps = 160) {
   Geometry.computeVertexNormals();
   return Geometry;
 }
-export function PreviewGeometry(Name) {
+// Follow-up 75: Bound ({ Name, Make }) is the bound scene object, offered in the shape menu as BoundShape; Make returns its geometry
+// already sized for the plinth (ObjectSurface.js ForPreview).
+export const BoundShape = "Bound object";
+export function PreviewGeometry(Name, Bound = null) {
+  if (Name === BoundShape) return Bound ? Bound.Make() : ShaderBallGeometry();
   if (Name === "Sphere") return new THREE.SphereGeometry(0.55, 128, 64).translate(0, 0.6, 0);
   if (Name === "Rounded cube") return RoundedCube().translate(0, 0.06, 0);
   if (Name === "Draped cloth") return DrapedCloth();
@@ -342,10 +347,17 @@ const UvSpan = (Geometry, Face) => {
   const Flat = Math.abs((Ub[0] - Ua[0]) * (Uc[1] - Ua[1]) - (Uc[0] - Ua[0]) * (Ub[1] - Ua[1])) / 2;
   return Flat > 1e-9 ? Math.sqrt(World / Flat) : 1;
 };
-export default function ShaderViewport({ Material, Eyebrow, Title, Note, Shape: HeldShape, ChooseShape, Live, LiveRevision = 0, Showing = null, ShowingRevision = 0, Painter = null }) {
+// Follow-up 75: the UV, Fracture and Nanite tabs show their own model (Model: a three.js group with its own materials, refitted to the
+// plinth whenever ModelKey changes) in place of the material on a preview shape, and hear clicks that were not drags (Pick(Hit, Event),
+// Hit = { Part: the three.js mesh, Face: its triangle index, Point: in the model's own space }).
+export default function ShaderViewport({ Material, Eyebrow, Title, Note, Shape: HeldShape, ChooseShape, Live, LiveRevision = 0, Showing = null, ShowingRevision = 0, Painter = null, Bound = null, Model = null, ModelKey = "", Pick = null }) {
   const Host = useRef(null), Built = useRef(null);
   const PainterNow = useRef(Painter);
   PainterNow.current = Painter;
+  const PickNow = useRef(Pick);
+  PickNow.current = Pick;
+  const BoundNow = useRef(Bound);
+  BoundNow.current = Bound;
   const LiveNow = useRef(Live);
   LiveNow.current = Live;
   const [OwnShape, ShowOwnShape] = useState("Shader ball"),
@@ -609,9 +621,60 @@ export default function ShaderViewport({ Material, Eyebrow, Title, Note, Shape: 
     const Now = Built.current;
     if (!Now) return;
     const Old = Now.Subject.geometry;
-    Now.Subject.geometry = PreviewGeometry(Shown);
+    Now.Subject.geometry = PreviewGeometry(Shown, BoundNow.current);
     Old.dispose();
-  }, [Shown]);
+  }, [Shown, Shown === BoundShape ? Bound?.Key : ""]);
+  // A workspace's own model, in a holder that sizes it to the plinth.
+  useEffect(() => {
+    const Now = Built.current;
+    if (!Now) return;
+    Now.Subject.visible = !Model;
+    if (Now.Holder) Now.View.content.remove(Now.Holder);
+    Now.Holder = null;
+    if (!Model) return;
+    const Holder = new THREE.Group();
+    Holder.add(Model);
+    const Box = new THREE.Box3().setFromObject(Model), Size = Box.getSize(new THREE.Vector3());
+    const Scale = 1.15 / (Math.max(Size.x, Size.y, Size.z) || 1);
+    Holder.scale.setScalar(Scale);
+    Holder.position.set(-((Box.min.x + Box.max.x) / 2) * Scale, -Box.min.y * Scale, -((Box.min.z + Box.max.z) / 2) * Scale);
+    Now.View.content.add(Holder);
+    Now.Holder = Holder;
+    return () => {
+      Now.View.content?.remove(Holder);
+      Holder.remove(Model);
+    };
+  }, [Model]);
+  useEffect(() => {
+    if (Built.current && ModelKey) Built.current.Fit(true);
+  }, [ModelKey]);
+  // Clicks (a press and release without a drag) for a workspace's picking.
+  useEffect(() => {
+    const Now = Built.current, Box = Host.current;
+    if (!Now || !Box) return;
+    let Press = null;
+    const Down = (Event) => {
+      Press = Event.button === 0 ? { X: Event.clientX, Y: Event.clientY } : null;
+    };
+    const Up = (Event) => {
+      const Started = Press;
+      Press = null;
+      if (!Started || !PickNow.current || Math.hypot(Event.clientX - Started.X, Event.clientY - Started.Y) > 4) return;
+      if (!Now.Holder) return;
+      const Rect = Now.View.canvas.getBoundingClientRect();
+      Now.View.raycaster.setFromCamera(new THREE.Vector2(((Event.clientX - Rect.left) / Rect.width) * 2 - 1, -((Event.clientY - Rect.top) / Rect.height) * 2 + 1), Now.View.camera);
+      const Hit = Now.View.raycaster.intersectObject(Now.Holder, true).find((Each) => !Each.object.userData.debug && Each.object.visible);
+      if (!Hit) return PickNow.current(null, Event);
+      const Model = Now.Holder.children[0];
+      PickNow.current({ Part: Hit.object, Face: Hit.faceIndex, Point: Model.worldToLocal(Hit.point.clone()) }, Event);
+    };
+    Box.addEventListener("pointerdown", Down, true);
+    Box.addEventListener("pointerup", Up, true);
+    return () => {
+      Box.removeEventListener("pointerdown", Down, true);
+      Box.removeEventListener("pointerup", Up, true);
+    };
+  }, []);
   useEffect(() => {
     const Now = Built.current;
     if (!Now) return;
@@ -666,7 +729,7 @@ export default function ShaderViewport({ Material, Eyebrow, Title, Note, Shape: 
       <div className="sv-dock" ref={Dock} role="toolbar" aria-label="Preview controls">
         {Menu === "shape" && (
           <div className="sv-menu sv-shape-menu" role="menu" aria-label="Preview shapes">
-            {PreviewShapes.map((Name) => (
+            {(Bound ? [...PreviewShapes, BoundShape] : PreviewShapes).map((Name) => (
               <button
                 key={Name}
                 role="menuitemradio"
@@ -678,7 +741,7 @@ export default function ShaderViewport({ Material, Eyebrow, Title, Note, Shape: 
                 }}
               >
                 <Glyph Name={Name} />
-                {Name}
+                {Name === BoundShape ? `${Bound.Name} · bound` : Name}
               </button>
             ))}
           </div>
@@ -727,11 +790,18 @@ export default function ShaderViewport({ Material, Eyebrow, Title, Note, Shape: 
             </div>
           </div>
         )}
-        <button className={"sv-dock-button" + (Menu === "shape" ? " open" : "")} aria-label="Preview shape" aria-haspopup="menu" aria-expanded={Menu === "shape"} onClick={() => OpenMenu(Menu === "shape" ? null : "shape")}>
-          <Glyph Name={Shown} />
-          <span>{Shown}</span>
-          <i className="sv-caret" />
-        </button>
+        {Model ? (
+          <span className="sv-dock-button sv-dock-model" title="The bound object">
+            <Glyph Name={BoundShape} />
+            <span>{Bound?.Name || "Bound object"}</span>
+          </span>
+        ) : (
+          <button className={"sv-dock-button" + (Menu === "shape" ? " open" : "")} aria-label="Preview shape" aria-haspopup="menu" aria-expanded={Menu === "shape"} onClick={() => OpenMenu(Menu === "shape" ? null : "shape")}>
+            <Glyph Name={Shown} />
+            <span>{Shown === BoundShape ? Bound?.Name || "Bound object" : Shown}</span>
+            <i className="sv-caret" />
+          </button>
+        )}
         <button className={"sv-dock-button" + (Menu === "light" ? " open" : "")} aria-label="Lighting" aria-haspopup="dialog" aria-expanded={Menu === "light"} onClick={() => OpenMenu(Menu === "light" ? null : "light")}>
           <span className="sv-light-dot" style={StudioLook(Studio, Exposure)} />
           <span>{Studio}</span>
