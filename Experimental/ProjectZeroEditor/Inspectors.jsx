@@ -1267,6 +1267,17 @@ export function Inspector({
     // Follow-up 65: Overview (the old Now and Light pages in one), then Temperature, Sun disc and Dynamic each on their own page, then
     // Baking. Each value shows once: the time in Sun now (and the Daylight cycle), the solved angles in Sun direction.
     for (const Name of ["Manual direction", "Manual azimuth", "Manual elevation", "Cast shadows", "Animate", "Real time"]) Drawn.add(Name);
+    // Steering by hand: Manual direction takes the sun over from its present angles, then the changed angles land.
+    const Steer = (Angles) => {
+      if (!Manual) {
+        AssignProperty("Real time", false);
+        AssignProperty("Animate", false);
+        AssignProperty("Manual azimuth", Math.round(Azimuth * 10) / 10);
+        AssignProperty("Manual elevation", Math.round(Elevation * 10) / 10);
+        AssignProperty("Manual direction", true);
+      }
+      for (const [Name, Angle] of Object.entries(Angles)) AssignProperty(Name, Angle);
+    };
     Content = (
       <>
         {Header("Environment")}
@@ -1319,37 +1330,23 @@ export function Inspector({
         {/* Follow-up 76: the original Sun direction card (follow-up 65) is back: the two angles over the orbit gizmo. With Manual direction on,
             dragging the gizmo's sun steers it like the Manual azimuth / elevation sliders below. */}
         <Card Title="Sun direction" Class="direction-card">
-          <div className="solved-directions">
-            <div>
-              <small>Azimuth</small>
-              <Metric Value={Azimuth.toFixed(1) + "°"} />
-            </div>
-            <div>
-              <small>Elevation</small>
-              <Metric Value={Elevation.toFixed(1) + "°"} />
-            </div>
+          {/* Follow-up 81: Azimuth and Elevation are sliders. They show the solved angles; moving one (or dragging the gizmo's sun) turns
+              Manual direction on from where the sun is now, so it never jumps, and turns Real time and the Day cycle off. */}
+          <div className="direction-sliders">
+            <Control Field={{ ...Sheet.find((Each) => Each.Label === "Manual azimuth"), Label: "Azimuth" }} Value={Math.round(Azimuth * 10) / 10} Change={(Next) => Steer({ "Manual azimuth": Next })} />
+            <Control Field={{ ...Sheet.find((Each) => Each.Label === "Manual elevation"), Label: "Elevation" }} Value={Math.round(Elevation * 10) / 10} Change={(Next) => Steer({ "Manual elevation": Next })} />
           </div>
-          <div className="graphic tall solved-gizmo" title={Manual ? "Manual direction" : "Solved direction. Change the time or date on the Dynamic page."}>
+          <div className="graphic tall solved-gizmo" title={Manual ? "Manual direction · drag the sun" : "Solved direction · drag the sun or a slider to steer it by hand"}>
             <SunGizmo
               azimuth={Azimuth}
               elevation={Elevation}
-              onChange={(NextAzimuth, NextElevation) => {
-                if (!Manual) return;
-                AssignProperty("Manual azimuth", Math.round(NextAzimuth * 10) / 10);
-                AssignProperty("Manual elevation", Math.round(NextElevation * 10) / 10);
-              }}
+              onChange={(NextAzimuth, NextElevation) => Steer({ "Manual azimuth": Math.round(NextAzimuth * 10) / 10, "Manual elevation": Math.round(NextElevation * 10) / 10 })}
             />
           </div>
           <p>
             {Elevation < 0 ? "Below the horizon" : "Above the horizon"} ·{" "}
             {Manual ? "manual direction, the solved angles are overridden" : "solved from the date, time and place"}
           </p>
-          {Manual && (
-            <>
-              {F("Manual azimuth")}
-              {F("Manual elevation")}
-            </>
-          )}
         </Card>
         <Card Title="Sunlight intensity" GraphHandled>
           <Metric Value={Number(V("Intensity")).toFixed(1)} Unit="×" Caption="Sunlight intensity multiplier" />

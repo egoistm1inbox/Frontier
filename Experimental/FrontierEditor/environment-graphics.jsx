@@ -1,6 +1,6 @@
 import React, {useRef, useId} from 'react';
 
-// Solar orbit in a vertical plane above a gridded horizon. Azimuth turns the
+// Solar orbit in a vertical plane above a horizon drawn as a polar grid (rings and spokes). Azimuth turns the
 // orbital plane; elevation moves the sun along it, including below the horizon.
 export function SunGizmo({azimuth,elevation,onChange}) {
  const drag=useRef(null),id=useId().replace(/:/g,''),r=103,cx=180,cy=143;
@@ -13,9 +13,9 @@ export function SunGizmo({azimuth,elevation,onChange}) {
  onPointerDown={e=>{e.currentTarget.setPointerCapture(e.pointerId);drag.current={x:e.clientX,y:e.clientY,a:azimuth,e:elevation}}}
  onPointerMove={move} onPointerUp={()=>drag.current=null} onPointerCancel={()=>drag.current=null}>
  <svg viewBox="0 0 360 280" role="img" aria-label={`Solar orbit: azimuth ${azimuth} degrees, elevation ${elevation} degrees`}>
- <defs><clipPath id={id+'horizon'}><ellipse cx={cx} cy={cy} rx={r} ry="49"/></clipPath><radialGradient id={id+'glow'}><stop stopColor="#ffda87" stopOpacity=".3"/><stop offset="1" stopColor="#ffda87" stopOpacity="0"/></radialGradient></defs>
+ <defs><radialGradient id={id+'glow'}><stop stopColor="#ffda87" stopOpacity=".3"/><stop offset="1" stopColor="#ffda87" stopOpacity="0"/></radialGradient></defs>
  <ellipse cx={cx} cy={cy} rx={r} ry="49" fill="#151515" fillOpacity=".6"/>
- <g clipPath={`url(#${id}horizon)`}>{Array.from({length:17},(_,i)=><path key={i} d={`M${77+i*13} 94 V192 M77 ${94+i*13} H283`} stroke="#ffffff0c" strokeWidth=".65"/>)}</g>
+ <g fill="none" stroke="#ffffff12" strokeWidth=".65">{[.25,.5,.75].map(f=><ellipse key={f} cx={cx} cy={cy} rx={r*f} ry={49*f}/>)}{Array.from({length:12},(_,i)=>{const t=i*Math.PI/6;return <path key={i} d={`M${cx} ${cy} L${(cx+r*Math.cos(t)).toFixed(2)} ${(cy+49*Math.sin(t)).toFixed(2)}`}/>})}</g>
  <ellipse cx={cx} cy={cy} rx={r} ry="49" fill="none" stroke="#707070" strokeOpacity=".65" strokeWidth=".9"/>
  <path d={arc(Math.PI)} fill="none" stroke="#77736b" strokeOpacity=".5" strokeWidth="1" strokeDasharray="2 3"/>
  <path d={arc(0)} fill="none" stroke="#e2ac5b" strokeWidth="1.8" strokeLinecap="round"/>
