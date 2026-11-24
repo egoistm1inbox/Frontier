@@ -52,6 +52,9 @@ svg{display:block}
 /* mode swap */
 .hero-body,.left,.right{transition:opacity .16s,transform .22s var(--ease)}
 .ui.swapping .hero-body,.ui.swapping .left,.ui.swapping .right{opacity:0;transform:translateY(6px)}
+.ui.swapping-next .content{opacity:0;transform:translateX(-48px);transition:opacity .22s var(--ease),transform .28s var(--ease)}
+.ui.swapping-prev .content{opacity:0;transform:translateX(48px);transition:opacity .22s var(--ease),transform .28s var(--ease)}
+.content{transition:opacity .26s var(--ease),transform .32s var(--ease)}
 
 /* ============================================================
    HERO
@@ -83,7 +86,9 @@ svg{display:block}
    CONTENT
    ============================================================ */
 .content{flex:1;min-height:0;display:grid;grid-template-columns:1fr;gap:16px;padding:16px 24px 18px}
-[data-mode="room"] .content{grid-template-columns:1fr 316px}
+[data-mode="room"] .hero{height:auto;padding:12px 24px 14px}
+[data-mode="room"] .hero .nav{margin-bottom:8px}
+[data-mode="room"] .content{grid-template-columns:1fr 316px;padding:14px 20px 18px;gap:12px}
 .left,.right{min-width:0;min-height:0;display:flex;flex-direction:column}
 .right{display:none}
 [data-mode="room"] .right{display:flex}
@@ -408,55 +413,6 @@ svg{display:block}
 .toast.show{opacity:1;transform:translate(-50%,0)}
 .toast i{font-style:normal;color:#666;margin-left:8px;font-size:10.5px}
 
-/* ============================================================
-   FULL-SCREEN ROOM (Play -> full page) + CAROUSEL
-   When a lobby is joined, body.lobby-fullscreen removes the
-   device frame and the room (members / chat / ticket) fills
-   the whole viewport. Panels slide like a carousel.
-   ============================================================ */
-body.lobby-fullscreen{background:var(--bg)}
-body.lobby-fullscreen .stage{padding:0;display:block}
-body.lobby-fullscreen .device{width:100vw;height:100vh;height:100dvh;aspect-ratio:auto;border-radius:0;padding:0;box-shadow:none;background:var(--bg)}
-body.lobby-fullscreen .device::before,body.lobby-fullscreen .device::after{display:none}
-body.lobby-fullscreen .screen{border-radius:0}
-body.lobby-fullscreen .ui{width:100%!important;height:100%!important;transform:none!important}
-body.lobby-fullscreen .hero{height:auto;min-height:64px;padding:12px 20px}
-body.lobby-fullscreen .hero h1{font-size:clamp(28px,4vw,48px)}
-body.lobby-fullscreen .hero h1.sm{font-size:clamp(22px,3vw,36px)}
-body.lobby-fullscreen .content{grid-template-columns:1fr!important;padding:14px 18px 18px;gap:14px}
-body.lobby-fullscreen .right{display:none!important}
-body.lobby-fullscreen .room{gap:10px}
-body.lobby-fullscreen .room-head{flex-wrap:wrap}
-body.lobby-fullscreen .room-stats{flex-wrap:wrap}
-/* carousel bar */
-.carousel-bar{flex:none;display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--panel);border:1px solid var(--stroke);border-radius:16px}
-.carousel-bar .cbtn{height:34px;min-width:34px;padding:0 12px;border-radius:17px;background:var(--inset);border:1px solid var(--stroke);color:#fff;font-size:12px;font-weight:600;display:inline-flex;align-items:center;justify-content:center;gap:6px;transition:background .15s,transform .15s var(--ease)}
-.carousel-bar .cbtn:hover{background:var(--raised)}
-.carousel-bar .cbtn:active{transform:scale(.96)}
-.carousel-bar .cbtn.leave{background:#fff;color:#111;border-color:transparent}
-.carousel-bar .cbtn.leave:hover{background:#e6e6e6}
-.carousel-dots{flex:1;display:flex;align-items:center;justify-content:center;gap:6px;min-width:0}
-.carousel-dots button{height:28px;padding:0 12px;border-radius:14px;font-size:11px;font-weight:600;color:var(--dim);border:1px solid transparent;white-space:nowrap;transition:background .15s,color .15s}
-.carousel-dots button.on{background:#fff;color:#111}
-.carousel-dots button:hover{color:#fff}
-.carousel-dots button.on:hover{color:#111}
-.carousel-hint{font-size:10px;color:var(--faint);white-space:nowrap}
-/* carousel track: members / chat / ticket, one full-page slide each */
-.room-body.carousel{display:flex;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;scroll-behavior:smooth;gap:0;grid-template-columns:none;cursor:grab;scrollbar-width:none}
-.room-body.carousel::-webkit-scrollbar{display:none}
-.room-body.carousel.dragging{cursor:grabbing;scroll-behavior:auto}
-.room-body.carousel>*{flex:0 0 100%;scroll-snap-align:start;scroll-snap-stop:always;min-width:0;min-height:0}
-.room-body.carousel .roster-col,.room-body.carousel .chat,.room-body.carousel .ticket-slide{height:100%}
-.room-body.carousel .ticket-slide{display:flex;flex-direction:column;min-height:0}
-.room-body.carousel .ticket-slide .ticket{flex:1;min-height:0}
-.room-body.carousel .roster{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}
-body.lobby-fullscreen .room-body.carousel .roster{grid-template-columns:repeat(auto-fill,minmax(170px,1fr))}
-/* grid view: all three panels side by side, full page */
-.room-body.grid{display:grid;grid-template-columns:320px minmax(0,1fr) 360px;gap:14px;overflow:visible}
-.room-body.grid>*{min-width:0;min-height:0}
-.room-body.grid .ticket-slide{display:flex;flex-direction:column;min-height:0}
-.room-body.grid .ticket-slide .ticket{flex:1;min-height:0}
-@media (max-width:900px){.room-body.grid{grid-template-columns:1fr;overflow:auto}.carousel-hint{display:none}}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.001s!important;transition-duration:.001s!important}}
 </style>
 </head>
@@ -512,21 +468,7 @@ body.lobby-fullscreen .room-body.carousel .roster{grid-template-columns:repeat(a
             <!-- room -->
             <div class="room" id="room">
               <div class="room-head" id="roomHead"></div>
-              <div class="carousel-bar" id="carouselBar">
-                <button class="cbtn" id="btnBackRoom" type="button" title="Back to lobby list (stay joined)">‹ Back</button>
-                <button class="cbtn leave" id="btnLeaveRoom" type="button" title="Leave lobby">Leave lobby</button>
-                <button class="cbtn" id="btnPrevSlide" type="button" title="Previous panel (←)" aria-label="Previous panel">‹</button>
-                <div class="carousel-dots" id="carouselDots">
-                  <button type="button" data-slide="0" class="on">Members</button>
-                  <button type="button" data-slide="1">Chat</button>
-                  <button type="button" data-slide="2">Ticket</button>
-                </div>
-                <button class="cbtn" id="btnNextSlide" type="button" title="Next panel (→)" aria-label="Next panel">›</button>
-                <button class="cbtn" id="btnViewToggle" type="button" title="Toggle carousel / all panels">Grid</button>
-                <button class="cbtn" id="btnFullscreen" type="button" title="Toggle full screen">⛶ Full screen</button>
-                <span class="carousel-hint">drag / swipe / ← →</span>
-              </div>
-              <div class="room-body carousel" id="roomBody">
+              <div class="room-body">
                 <div class="roster-col"><div class="roster" id="roster"></div><div class="voice" id="voice"></div></div>
                 <div class="chat">
                   <div class="chat-head" id="chatHead"></div>
@@ -537,10 +479,10 @@ body.lobby-fullscreen .room-body.carousel .roster{grid-template-columns:repeat(a
                     <button class="rbtn send" type="submit" id="chatSend" title="Send"><svg class="ic" viewBox="0 0 24 24"><path d="M21 3 3 10l8 3 3 8z"/><path d="M11 13l10-10"/></svg></button>
                   </form>
                 </div>
-                <div class="ticket-slide"><div class="panel ticket" id="ticket"></div></div>
               </div>
             </div>
           </section>
+          <aside class="right"><div class="panel ticket" id="ticket"></div></aside>
         </main>
 
         <!-- create lobby -->
@@ -618,8 +560,8 @@ const IC = {
   wave: '<svg class="ic" viewBox="0 0 24 24"><path d="M3 12h2M7 8v8M11 5v14M15 8v8M19 11v2"/></svg>',
 };
 
-/* scale the 1000×750 canvas to the screen (disabled in full-screen room mode) */
-new ResizeObserver(([e]) => { if (document.body.classList.contains('lobby-fullscreen')) { $('#ui').style.setProperty('--s', '1'); return; } $('#ui').style.setProperty('--s', (e.contentRect.width / 1000).toFixed(4)); }).observe($('#screen'));
+/* scale the 1000×750 canvas to the screen */
+new ResizeObserver(([e]) => $('#ui').style.setProperty('--s', (e.contentRect.width / 1000).toFixed(4))).observe($('#screen'));
 
 /* tabs */
 const ink = t => { const i = $('#tabInk'); i.style.left = t.offsetLeft + 'px'; i.style.width = t.offsetWidth + 'px'; };
@@ -816,14 +758,15 @@ $('#crumb').addEventListener('click', () => setMode('browse'));
 
 async function setMode(mode){
   if (state.mode === mode) return;
-  ui.classList.add('swapping'); await wait(170);
+  const dir = mode === 'room' ? 'swapping-next' : 'swapping-prev';
+  ui.classList.add('swapping', dir); await wait(200);
   state.mode = mode; ui.dataset.mode = mode;
-  document.body.classList.toggle('lobby-fullscreen', mode === 'room');
-  if (mode === 'room') { $('#ui').style.setProperty('--s', '1'); }
-  else { const w = $('#screen').getBoundingClientRect().width; if (w) $('#ui').style.setProperty('--s', (w / 1000).toFixed(4)); }
   renderHero();
-  if (mode === 'room'){ renderRoom(true); renderTicket(); goSlide(0, false); } else renderList();
-  void ui.offsetWidth; ui.classList.remove('swapping');
+  if (mode === 'room'){ renderRoom(true); renderTicket(); } else renderList();
+  ui.classList.remove(dir);
+  ui.classList.add(mode === 'room' ? 'swapping-prev' : 'swapping-next');
+  void ui.offsetWidth;
+  ui.classList.remove('swapping', 'swapping-next', 'swapping-prev');
 }
 
 /* ============================================================
@@ -1271,68 +1214,6 @@ document.addEventListener('keydown', e => {
    TOAST
    ============================================================ */
 function toast(msg, sub){ const t = $('#toast'); t.innerHTML = esc(msg) + (sub ? `<i>${esc(sub)}</i>` : ''); t.classList.add('show'); clearTimeout(t._t); t._t = setTimeout(() => t.classList.remove('show'), 2400); }
-
-/* ============================================================
-   CAROUSEL & FULL-SCREEN ROOM CONTROLS
-   ============================================================ */
-const roomBody = $('#roomBody');
-let currentSlide = 0;
-function goSlide(idx, smooth = true){
-  const n = Math.max(0, Math.min(2, idx));
-  currentSlide = n;
-  if (roomBody.classList.contains('carousel')){
-    roomBody.scrollTo({ left: n * roomBody.clientWidth, behavior: smooth ? 'smooth' : 'auto' });
-  }
-  $$('#carouselDots button').forEach((b, i) => b.classList.toggle('on', i === n));
-}
-$('#carouselDots').addEventListener('click', e => {
-  const b = e.target.closest('button[data-slide]'); if (!b) return;
-  goSlide(+b.dataset.slide);
-});
-$('#btnPrevSlide').addEventListener('click', () => goSlide((currentSlide + 2) % 3));
-$('#btnNextSlide').addEventListener('click', () => goSlide((currentSlide + 1) % 3));
-$('#btnBackRoom').addEventListener('click', () => setMode('browse'));
-$('#btnLeaveRoom').addEventListener('click', () => leave());
-$('#btnViewToggle').addEventListener('click', () => {
-  const isGrid = roomBody.classList.toggle('grid');
-  roomBody.classList.toggle('carousel', !isGrid);
-  $('#btnViewToggle').textContent = isGrid ? 'Carousel' : 'Grid';
-  $('#carouselDots').style.opacity = isGrid ? '.4' : '1';
-  if (!isGrid) goSlide(currentSlide, false);
-});
-$('#btnFullscreen').addEventListener('click', () => {
-  const on = document.body.classList.toggle('lobby-fullscreen');
-  if (on) { $('#ui').style.setProperty('--s', '1'); }
-  else { const w = $('#screen').getBoundingClientRect().width; if (w) $('#ui').style.setProperty('--s', (w / 1000).toFixed(4)); }
-  $('#btnFullscreen').textContent = on ? '⛶ Exit full' : '⛶ Full screen';
-});
-roomBody.addEventListener('scroll', () => {
-  if (!roomBody.classList.contains('carousel') || !roomBody.clientWidth) return;
-  const idx = Math.round(roomBody.scrollLeft / roomBody.clientWidth);
-  if (idx !== currentSlide){
-    currentSlide = idx;
-    $$('#carouselDots button').forEach((b, i) => b.classList.toggle('on', i === idx));
-  }
-}, { passive: true });
-let dragX = null, dragScroll = 0;
-roomBody.addEventListener('pointerdown', e => {
-  if (!roomBody.classList.contains('carousel') || e.target.closest('button,input,textarea,a')) return;
-  dragX = e.clientX; dragScroll = roomBody.scrollLeft; roomBody.classList.add('dragging');
-});
-addEventListener('pointermove', e => {
-  if (dragX === null) return;
-  roomBody.scrollLeft = dragScroll - (e.clientX - dragX);
-});
-addEventListener('pointerup', () => {
-  if (dragX === null) return;
-  dragX = null; roomBody.classList.remove('dragging');
-  if (roomBody.clientWidth) goSlide(Math.round(roomBody.scrollLeft / roomBody.clientWidth));
-});
-document.addEventListener('keydown', e => {
-  if (state.mode !== 'room' || /INPUT|TEXTAREA/.test(document.activeElement?.tagName || '') || modal.classList.contains('open')) return;
-  if (e.key === 'ArrowLeft') { e.preventDefault(); goSlide((currentSlide + 2) % 3); }
-  else if (e.key === 'ArrowRight') { e.preventDefault(); goSlide((currentSlide + 1) % 3); }
-});
 
 /* init */
 renderHero(); renderFilter(); renderChips(); renderList();
