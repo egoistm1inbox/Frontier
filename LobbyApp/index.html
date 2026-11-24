@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FRONTIER · Lobby App</title>
+<style>
+  :root{--blue:#1f5eff;--bg:#0a0a0a;--panel:#121212;--stroke:rgba(255,255,255,.08);--text:#fff;--dim:#8a8a8a}
+  *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;display:grid;place-items:center;min-height:100vh;padding:24px}
+  .card{max-width:640px;width:100%;background:var(--panel);border:1px solid var(--stroke);border-radius:20px;padding:28px}
+  h1{margin:0 0 8px;font-size:28px;letter-spacing:-.02em} p{color:var(--dim);line-height:1.5}
+  a.btn{display:inline-block;margin-top:16px;background:var(--blue);color:#fff;text-decoration:none;padding:12px 20px;border-radius:999px;font-weight:600}
+  code{background:#000;padding:2px 6px;border-radius:6px}
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1>FRONTIER · Lobby</h1>
+    <p>Lobby UI copied from <code>streamlinkinbox/Frontier</code> <code>app/lobby.html</code>
+    (branch <code>arena/01a06c6c-frontier</code>, commit <code>1f212687</code> — branch now deleted upstream).
+    Surviving reference copy: <code>Frontier/Projects/Project-Networking/Reference/Lobby.html</code> in this repo at <code>c79c8d9</code>.</p>
+    <p>Browse lobbies, join a room (roster, voice strip, chat, match panel), or create a lobby.
+    Entry fees are shown in CR credits (Free / 5 CR / 10 CR / 25 CR, held in escrow) — the wallet-like part of this UI.
+    No separate <code>wallet.html</code> was found in any surviving Frontier branch; the wallet/store implementation in this repo is the C++ Xsolla/Nitron client (<code>Frontier/Projects/Project-Networking/Source/XsollaStore.*</code>, <code>Docs/XsollaStorePlan.md</code>).</p>
+    <p>EOS JavaScript in this page is simulated — visual reference only, per <code>Reference/README.md</code>.</p>
+    <a class="btn" href="Lobby.html">Open Lobby →</a>
+  </div>
+</body>
+</html>
