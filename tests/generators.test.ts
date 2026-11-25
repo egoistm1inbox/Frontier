@@ -5,6 +5,13 @@ import { buildSceneRaw, buildSceneResponse } from '../src/generators/buildScene'
 import { applyFlowerPalette } from '../src/generators/flowerParams';
 import { PRESETS } from '../src/generators/presets';
 import { cloneScene } from '../src/generators/types';
+import {
+  SHADOW_DISC_FRAG,
+  SPECIMEN_FRAG,
+  SPECIMEN_VERT,
+  WIRE_FRAG,
+  WIRE_VERT,
+} from '../src/viewer/shaders';
 
 /** Exact CPU mirror of the GLSL isometric 3D Rodrigues wind kernel in `src/viewer/shaders.ts`. */
 function evalWindVertex(
@@ -616,5 +623,47 @@ describe('Frontier Procedural Generators — Welded Trees, Fruiting Palms, Gigan
     const rawHib = buildSceneRaw(hibScene);
     const glb = partsToGLB(rawHib.rawParts, 'colossal_hibiscus');
     expect(glb.byteLength).toBeGreaterThan(10000);
+  });
+
+  it('validates all WebGL GLSL shaders have matching vertex/fragment varyings and zero undeclared v* / u* symbols', () => {
+    const extractDecls = (glsl: string, qual: string): Set<string> => {
+      const out = new Set<string>();
+      const re = new RegExp(`\\b${qual}\\s+\\w+\\s+(\\w+)\\s*;`, 'g');
+      let m: RegExpExecArray | null;
+      while ((m = re.exec(glsl)) !== null) out.add(m[1]);
+      return out;
+    };
+
+    const vertVaryings = extractDecls(SPECIMEN_VERT, 'varying');
+    const fragVaryings = extractDecls(SPECIMEN_FRAG, 'varying');
+    for (const v of fragVaryings) {
+      expect(vertVaryings.has(v), `Fragment varying ${v} declared in SPECIMEN_VERT`).toBe(true);
+    }
+
+    for (const [label, src] of [
+      ['SPECIMEN_VERT', SPECIMEN_VERT],
+      ['SPECIMEN_FRAG', SPECIMEN_FRAG],
+      ['WIRE_VERT', WIRE_VERT],
+      ['WIRE_FRAG', WIRE_FRAG],
+      ['SHADOW_DISC_FRAG', SHADOW_DISC_FRAG],
+    ] as const) {
+      const stripped = src.replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
+      const declaredV = extractDecls(stripped, 'varying');
+      const declaredU = extractDecls(stripped, 'uniform');
+      const declaredA = extractDecls(stripped, 'attribute');
+      const usedV = stripped.match(/\bv[A-Z]\w*\b/g) ?? [];
+      const usedU = stripped.match(/\bu[A-Z]\w*\b/g) ?? [];
+      const usedA = stripped.match(/\ba[A-Z]\w*\b/g) ?? [];
+
+      for (const id of usedV) {
+        expect(declaredV.has(id), `${label}: undeclared varying ${id}`).toBe(true);
+      }
+      for (const id of usedU) {
+        expect(declaredU.has(id), `${label}: undeclared uniform ${id}`).toBe(true);
+      }
+      for (const id of usedA) {
+        expect(declaredA.has(id), `${label}: undeclared attribute ${id}`).toBe(true);
+      }
+    }
   });
 });

@@ -110,8 +110,10 @@ void main() {
   applyProceduralWind(p, n, t);
   vec4 wp = modelMatrix * vec4(p, 1.0);
   vWorldPos = wp.xyz;
-  vNormalW = normalize(mat3(modelMatrix) * n);
-  vTangentW = normalize(mat3(modelMatrix) * t);
+  vec3 nw = mat3(modelMatrix) * n;
+  vNormalW = dot(nw, nw) > 1e-8 ? normalize(nw) : vec3(0.0, 1.0, 0.0);
+  vec3 tw = mat3(modelMatrix) * t;
+  vTangentW = dot(tw, tw) > 1e-8 ? normalize(tw) : vec3(0.0, 1.0, 0.0);
   vColor = color;
   vUv = uv;
   vWind = aWind;
@@ -231,6 +233,9 @@ void main() {
       // Distinct HSL-like lock palette per clump ID
       float h = detailMetric * 6.28318;
       detCol = 0.55 + 0.42 * vec3(cos(h), cos(h + 2.094), cos(h + 4.188));
+    } else if (uProfile == 4) {
+      // Vibrant floral petal venation & nectar-papilla relief heatmap
+      detCol = mix(vec3(0.18, 0.04, 0.14), vec3(1.0, 0.48, 0.78), pow(detailMetric, 0.72));
     } else {
       detCol = mix(vec3(0.06, 0.15, 0.12), vec3(0.55, 0.98, 0.64), pow(detailMetric, 0.75));
     }
@@ -351,7 +356,7 @@ void main() {
     vec3 vividAlbedo = max(mix(vec3(luma), albedo, 1.22), vec3(0.0));
 
     // Anisotropic silk sheen along radiating petal venation tangent T
-    vec3 T = normalize(vTangent);
+    vec3 T = dot(vTangentW, vTangentW) > 1e-6 ? normalize(vTangentW) : vec3(0.0, 1.0, 0.0);
     vec3 H = normalize(Lkey + V);
     float tdoth = clamp(dot(T, H), -1.0, 1.0);
     float sinTH = sqrt(max(0.0, 1.0 - tdoth * tdoth));
