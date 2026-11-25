@@ -10,10 +10,14 @@ import { HairParams } from './hairParams';
 import { HairStats } from './hairMesher';
 import { MossParams } from './mossParams';
 import { MossStats } from './mossMesher';
+import { PalmParams } from './palmParams';
+import { PalmStats } from './palmMesher';
+import { TreeParams } from './treeParams';
+import { TreeStats } from './treeMesher';
 import { TropicalParams } from './tropicalParams';
 import { TropicalStats } from './tropicalMesher';
 
-export type GeneratorKind = 'fern' | 'tropical' | 'moss' | 'hair';
+export type GeneratorKind = 'tree' | 'palm' | 'tropical' | 'fern' | 'moss' | 'hair';
 
 export interface LayerTransform {
   x: number;
@@ -31,6 +35,8 @@ export interface GeneratorLayer {
   visible: boolean;
   locked: boolean;
   transform: LayerTransform;
+  tree?: TreeParams;
+  palm?: PalmParams;
   fern?: FernParams;
   tropical?: TropicalParams;
   moss?: MossParams;
@@ -76,6 +82,8 @@ export interface OutlinerNode {
 export interface LayerRuntimeReport {
   layerId: string;
   kind: GeneratorKind;
+  tree?: TreeStats;
+  palm?: PalmStats;
   fern?: FernStats;
   tropical?: TropicalStats;
   moss?: MossStats;

@@ -39,6 +39,7 @@ import { fbm3, ridged3 } from '../core/noise';
 
 export type SubstrateKind =
   | 'none'
+  | 'wet_basalt_crag'
   | 'forest_carpet'
   | 'humus_mound'
   | 'boulder'
@@ -50,6 +51,7 @@ export type SubstrateKind =
 
 export const SUBSTRATE_NAMES: Record<SubstrateKind, string> = {
   none: 'None (Origin)',
+  wet_basalt_crag: 'Wet Volcanic Basalt Crag',
   forest_carpet: 'Undulating Forest Carpet',
   humus_mound: 'Forest Humus Mound',
   boulder: 'Mossy Forest Boulder',
@@ -105,6 +107,28 @@ export class HostSubstrate {
 
     if (kind === 'none') {
       return { pos: v3((u - 0.5) * S * 0.2, 0, (v - 0.5) * S * 0.2), crevice: 0, emitterMask: 1 };
+    }
+
+    if (kind === 'wet_basalt_crag') {
+      // Organic sloped dark wet volcanic basalt crag outcrop for cascading cloud-forest pillow moss!
+      const ang = Math.atan2(v - 0.5, u - 0.5);
+      const rad = Math.hypot(u - 0.5, v - 0.5) * 2.0;
+      const rockOutline = 0.94 + 0.08 * Math.sin(ang * 3 + 0.7) + 0.05 * Math.cos(ang * 5 - 1.1);
+      const normR = rad / rockOutline;
+      const clampedR = Math.min(1.06, normR);
+      const x = Math.cos(ang) * clampedR * 1.12 * S;
+      const z = Math.sin(ang) * clampedR * 1.12 * S;
+
+      // Natural ~22 deg cascade slope rising toward upper-right + volcanic ledges + wet crag grain
+      const cascadeSlope = ((u - 0.5) * 0.30 - (v - 0.5) * 0.50) * S;
+      const terrace = Math.sin((v * 2.6 - u * 1.2) * Math.PI) * S * 0.032;
+      const crag =
+        ridged3(x * 2.9 / S, 0.6, z * 2.9 / S, this.seed, 3) * roughness * S * 0.052 +
+        fbm3(x * 9.0 / S, 1.7, z * 9.0 / S, this.seed ^ 0x412, 3) * roughness * S * 0.018;
+      const bevel = smoothstep(1.04, 0.78, normR);
+      const y = (0.13 * S + cascadeSlope + terrace + crag) * bevel - (1 - bevel) * 0.05 * S;
+      const crev = saturate(1.0 - crag / Math.max(1e-4, roughness * S * 0.06 + 0.005));
+      return { pos: v3(x, y, z), crevice: crev, emitterMask: smoothstep(0.94, 0.76, normR) };
     }
 
     if (kind === 'forest_carpet') {
@@ -463,7 +487,10 @@ export class HostSubstrate {
           col = mixRgb(col, palette.accent, saturate((1 - s.crevice) * 0.35));
         }
         col = { r: col.r * wetDarken, g: col.g * wetDarken, b: col.b * wetDarken };
-        const rough = clamp(0.92 - s.moisture * 0.32, 0.35, 0.98);
+        const rough =
+          kind === 'wet_basalt_crag'
+            ? clamp(0.46 - s.moisture * 0.24, 0.16, 0.55)
+            : clamp(0.92 - s.moisture * 0.32, 0.35, 0.98);
         row.push(
           mesh.addVertex({
             x: s.pos.x,
@@ -534,6 +561,12 @@ export class HostSubstrate {
 
   private substrateColors(): { base: RGB; crevice: RGB; accent: RGB } {
     switch (this.params.kind) {
+      case 'wet_basalt_crag':
+        return {
+          base: hexToLinearRgb('#191d22'),
+          crevice: hexToLinearRgb('#07090b'),
+          accent: hexToLinearRgb('#303740'),
+        };
       case 'forest_carpet':
         return {
           base: hexToLinearRgb('#26321e'),

@@ -313,24 +313,30 @@ void main() {
                 + rimCol * rim * 0.32;
 
   } else if (uProfile == 1) {
-    // === REAL BRYOPHYTE MOSS: Velvet Cushion Scatter + Hydrated Phyllid Glow ===
-    float wrapKey = clamp((dot(N, Lkey) + 0.45) / 1.45, 0.0, 1.0);
-    float wrapFill = clamp((dot(N, Lfill) + 0.45) / 1.45, 0.0, 1.0);
+    // === REAL BRYOPHYTE & PILLOW MOSS: Deep Crevice Self-Occlusion + Asperity Velvet Rim ===
+    float crevOcc = mix(0.08, 1.04, pow(clamp(detailMetric, 0.0, 1.0), 0.85));
+    float ndlKey = max(dot(N, Lkey), 0.0);
+    float wrapKey = clamp((dot(N, Lkey) + 0.22) / 1.22, 0.0, 1.0);
+    float wrapFill = clamp((dot(N, Lfill) + 0.28) / 1.28, 0.0, 1.0);
 
+    // Gate dew specular & asperity rim onto 3D gametophyte blades (rough < 0.86)
+    // so the underlying sub-canopy cushion core (rough = 0.99) stays deep matte velvet!
+    float bladeMask = 1.0 - smoothstep(0.86, 0.96, rough);
     vec3 H = normalize(Lkey + V);
-    float dewSpec = pow(max(dot(N, H), 0.0), mix(72.0, 16.0, rough)) * 0.22;
+    float dewSpec = pow(max(dot(N, H), 0.0), mix(64.0, 14.0, rough)) * 0.08 * crevOcc * bladeMask;
 
-    // Luminous hydrated phyllid backlight scatter
-    float back = max(dot(-N, Lkey), 0.0) * (0.4 + 0.6 * pow(max(dot(V, -Lkey), 0.0), 2.0));
-    vec3 mossSss = mix(albedo, vec3(0.62, 0.94, 0.22), 0.42) * keyCol * back * translucency * 0.78;
+    // Hydrated chlorophyll dome & phyllid subsurface scatter
+    float back = max(dot(-N, Lkey), 0.0) * (0.42 + 0.58 * pow(max(dot(V, -Lkey), 0.0), 2.0));
+    vec3 mossSss = mix(albedo, vec3(0.55, 0.86, 0.12), 0.38) * keyCol * (back * 0.65 + wrapKey * 0.12) * translucency * crevOcc;
 
-    // Characteristic bryophyte velvet horizon sheen
-    float velvet = pow(1.0 - max(dot(N, V), 0.0), 2.8) * 0.28;
+    // Characteristic bryophyte asperity velvet sheen along sunlit rounded pillow shoulders
+    float graze = pow(1.0 - max(dot(N, V), 0.0), 2.2);
+    float velvet = graze * (0.12 + 0.88 * ndlKey) * crevOcc * 0.46 * bladeMask;
 
-    colorLinear = albedo * (skyAmb * 1.05 + keyCol * wrapKey * 0.92 + fillCol * wrapFill * 0.52)
+    colorLinear = albedo * (skyAmb * 0.52 * crevOcc + keyCol * mix(ndlKey, wrapKey, 0.34) * 1.12 * (0.35 + 0.65 * crevOcc) + fillCol * wrapFill * 0.28 * crevOcc)
                 + mossSss
                 + keyCol * dewSpec
-                + mix(albedo, vec3(0.75, 0.92, 0.62), 0.5) * velvet;
+                + mix(albedo * 1.28, vec3(0.68, 0.88, 0.18), 0.38) * velvet;
 
   } else {
     // === HOST SUBSTRATE: Moist Granite / Furrowed Bark / Satin Bust ===

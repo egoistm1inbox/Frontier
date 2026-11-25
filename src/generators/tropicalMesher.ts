@@ -44,6 +44,13 @@ import {
 import { PartMesh } from '../core/mesh';
 import { fbm3 } from '../core/noise';
 import { Random } from '../core/random';
+import {
+  DEFAULT_WELDED_CONFIG,
+  WeldedMesher,
+  WeldedNode,
+  WeldedStem,
+  validateWeldedManifold,
+} from '../core/weldedManifold';
 import { HostSubstrate } from '../substrates/substrate';
 import { TropicalParams } from './tropicalParams';
 
@@ -53,6 +60,8 @@ export interface TropicalStats {
   ribbons: number;
   fruitsOrFlowers: number;
   height: number;
+  weldedJunctions?: number;
+  closedStemManifold?: boolean;
 }
 
 export interface TropicalBuildResult {
@@ -82,7 +91,14 @@ export class TropicalMesher {
     const p = this.p;
     const tier = clamp(Math.round(p.detailTier), 1, 4);
 
-    const stemMesh = new PartMesh(`${layerId}:pseudostem`, 'Pseudostem & Sheaths', 'botanical', layerId, 'palm', '#7da844');
+    const stemMesh = new PartMesh(
+      `${layerId}:pseudostem`,
+      'Welded Pseudostem, Roots & Petioles',
+      'botanical',
+      layerId,
+      'palm',
+      '#7da844',
+    );
     const cigarMesh = new PartMesh(`${layerId}:cigar`, 'Central Cigar Furl', 'botanical', layerId, 'sprout', '#a3e63d');
     const infloMesh = new PartMesh(
       `${layerId}:inflorescence`,
@@ -101,6 +117,7 @@ export class TropicalMesher {
     const colStem = hexToLinearRgb(p.hueStem);
     const colSheathDry = hexToLinearRgb('#4a311e');
     const colSenescent = hexToLinearRgb('#b88928');
+    const colRoot = hexToLinearRgb('#614930');
 
     const baseSample = this.substrate.sampleSurface(0.5, 0.5);
     const rootOrigin = baseSample.pos;
@@ -108,6 +125,8 @@ export class TropicalMesher {
     const nStems = clamp(Math.round(p.stemCount), 1, 4);
 
     let globalLeafIdx = 0;
+    let nextWeldedId = 1;
+    let totalWeldedJunctions = 0;
 
     for (let stIdx = 0; stIdx < nStems; stIdx++) {
       const sRng = this.rng.fork(0x1200 + stIdx * 97);
@@ -120,32 +139,172 @@ export class TropicalMesher {
       const uOff = clamp(0.5 + (Math.cos(pupAz) * pupDist) / Math.max(0.2, this.substrate.params.size * 2), 0.15, 0.85);
       const vOff = clamp(0.5 + (Math.sin(pupAz) * pupDist) / Math.max(0.2, this.substrate.params.size * 2), 0.15, 0.85);
       const stemSample = isMain ? baseSample : this.substrate.sampleSurface(uOff, vOff);
-      const stemBase = isMain ? rootOrigin : stemSample.pos;
+      // Sink pseudostem base slightly into corm soil so welded basal roots emerge right at ground line!
+      const stemBase = addScaled(isMain ? rootOrigin : stemSample.pos, UP, -Math.max(0.025, p.pseudostemRadius * scaleSt * 0.35));
 
-      const stemH = Math.max(0.18, p.pseudostemHeight * scaleSt);
-      const stemR = Math.max(0.025, p.pseudostemRadius * scaleSt);
+      const nLeaves = isMain ? Math.max(4, Math.round(p.leafCount)) : Math.max(3, Math.round(p.leafCount * 0.45));
+      const isFan = p.architecture === 'travellers_palm' || p.architecture === 'bird_of_paradise';
+      const isElephantEar = p.architecture === 'elephant_ear_alocasia';
+      const isRed = p.architecture === 'red_abyssinian_banana';
+
+      // Ensure pseudostem has sufficient height for clean non-overlapping welded petiole collars!
+      const stemH = Math.max(isElephantEar ? 0.36 : 0.42, p.pseudostemHeight * scaleSt);
+      const stemR = Math.max(0.028, p.pseudostemRadius * scaleSt);
       const stemLean = isMain ? 0.05 : 0.16;
       const leanDir = v3(Math.cos(pupAz), 0, Math.sin(pupAz));
       const stemDir0 = normalize(add(UP, scale(leanDir, stemLean)));
       const stemRight0 = normalize(cross(UP, isMain ? v3(1, 0, 0) : leanDir));
       const stemPhase = sRng.next();
 
-      // 1. Build Clasping Leaf-Sheath Pseudostem
-      const stemCurve = this.buildPseudostem(
-        stemMesh,
-        stemBase,
-        stemDir0,
-        stemRight0,
-        stemH,
-        stemR,
-        colStem,
-        colSheathDry,
-        colMidrib,
-        totalHeightEst,
-        stemPhase,
-        tier,
-        sRng,
-      );
+      // 1. Build Pseudostem Centerline + WeldedStem Root
+      const stemSteps = 22 + tier * 4;
+      const stemCurve = growCurve(stemBase, stemDir0, stemRight0, stemH, stemSteps, (t0, t1) => ({
+        pitch: (t1 - t0) * sRng.vary(0.04, 0.06),
+        yaw: Math.sin(t1 * 2.5) * 0.015,
+      }));
+      const redFlush = hexToLinearRgb('#5c1622');
+      const stemNodes: WeldedNode[] = [];
+      for (let k = 0; k < stemCurve.count; k++) {
+        const fr = stemCurve.frameAtIndex(k);
+        stemNodes.push({ pos: fr.pos, dir: fr.dir, right: fr.right, s: fr.s });
+      }
+
+      const trunkWelded: WeldedStem = {
+        id: nextWeldedId++,
+        level: 0,
+        role: 'shoot',
+        parent: null,
+        attach: 'root',
+        attachS: 0,
+        attachDir: stemDir0,
+        nodes: stemNodes,
+        length: stemCurve.length,
+        children: [],
+        forks: [],
+        dropped: false,
+        radiusDrop: 1.0,
+        ringSpacing: Math.max(0.022, stemH / (28 + tier * 6)),
+        minRing: 24,
+        baseRadiusAt: (s: number) => {
+          const t = clamp(s / Math.max(1e-4, stemCurve.length), 0, 1);
+          const bulb = 1 + (isRed ? 0.34 : 0.18) * Math.exp(-t * 5.2);
+          const crownDome = lerp1(1.0, 0.42, smoothstep(0.93, 1.0, t));
+          const taper = lerp1(1.0, 0.68, Math.pow(t, 0.85)) * crownDome;
+          const sheathStep = 1 + 0.026 * Math.sin(t * 22.0);
+          return stemR * bulb * taper * sheathStep;
+        },
+        profileFactor: (s: number, theta: number) => {
+          const t = clamp(s / Math.max(1e-4, stemCurve.length), 0, 1);
+          return 1 + 0.042 * Math.cos(theta * 3 + t * 7.0) + 0.016 * Math.cos(theta * 9);
+        },
+        styleAt: (s: number, theta: number, pos: V3, _dir: V3, isJunction: boolean) => {
+          const t = clamp(s / Math.max(1e-4, stemCurve.length), 0, 1);
+          let ringCol = mixRgb(colSheathDry, isRed ? mixRgb(colStem, redFlush, 0.65) : colStem, smoothstep(0.05, 0.42, t));
+          ringCol = mixRgb(ringCol, colMidrib, smoothstep(0.75, 1.0, t) * 0.35);
+          const sheathDark = 0.88 + 0.12 * Math.cos(theta * 3 + t * 7.0);
+          return {
+            color: { r: ringCol.r * sheathDark, g: ringCol.g * sheathDark, b: ringCol.b * sheathDark },
+            roughness: 0.38,
+            translucency: 0.14,
+            detailMetric: isJunction ? 0.96 : t,
+            anatomyLevel: 1,
+            wind: [saturate(pos.y / totalHeightEst), Math.pow(t, 1.6) * 0.08 * p.windSail, stemPhase, 0.0],
+            pivot: stemBase,
+          };
+        },
+      };
+
+      // 1b. Attach 5 Welded Basal Adventitious / Prop Roots into the Pseudostem Corm!
+      const nRoots = isMain ? 5 : 3;
+      const subSpan = Math.max(0.25, this.substrate.params.size * 2.0);
+      for (let ri = 0; ri < nRoots; ri++) {
+        const rRng = sRng.fork(0x900 + ri * 31);
+        const rAz = pupAz + (ri / nRoots) * TAU + rRng.vary(0, 0.16);
+        const rHoriz = v3(Math.cos(rAz), 0, Math.sin(rAz));
+        const rAttachS = clamp(stemR * (0.52 + 0.16 * (ri % 2)), 0.018, stemCurve.length * 0.24);
+        const rLen = Math.max(0.14, stemR * 3.4 * rRng.range(0.85, 1.2));
+        const rootR0 = Math.max(0.008, stemR * 0.21);
+
+        const buildRootNodes = (orig: V3, emDir: V3): WeldedNode[] => {
+          const outDir = normalize(add(scale(v3(emDir.x, 0, emDir.z), 0.92), v3(0, -0.22, 0)));
+          const rSteps = 8;
+          const rNodes: WeldedNode[] = [];
+          let cur = orig;
+          let accS = 0;
+          let prev = orig;
+          for (let k = 0; k <= rSteps; k++) {
+            const tr = k / rSteps;
+            const reach = tr * rLen;
+            const wx = orig.x + outDir.x * reach;
+            const wz = orig.z + outDir.z * reach;
+            const su = clamp(0.5 + (wx - rootOrigin.x) / subSpan, 0.04, 0.96);
+            const sv = clamp(0.5 + (wz - rootOrigin.z) / subSpan, 0.04, 0.96);
+            const groundY = this.substrate.sampleSurface(su, sv).pos.y;
+            const archY = lerp1(orig.y, groundY - rootR0 * 0.45, smoothstep(0, 0.68, tr)) - smoothstep(0.75, 1.0, tr) * 0.018;
+            cur = v3(wx, archY, wz);
+            if (k > 0) accS += Math.hypot(cur.x - prev.x, cur.y - prev.y, cur.z - prev.z);
+            prev = cur;
+            rNodes.push({ pos: cur, dir: outDir, right: normalize(cross(outDir, UP)), s: accS });
+          }
+          for (let k = 0; k <= rSteps; k++) {
+            const k0 = Math.max(0, k - 1);
+            const k1 = Math.min(rSteps, k + 1);
+            const d = normalize(v3(
+              rNodes[k1].pos.x - rNodes[k0].pos.x,
+              rNodes[k1].pos.y - rNodes[k0].pos.y,
+              rNodes[k1].pos.z - rNodes[k0].pos.z,
+            ));
+            rNodes[k].dir = d;
+            rNodes[k].right = normalize(cross(d, UP));
+          }
+          return rNodes;
+        };
+
+        const initOrigin = addScaled(stemCurve.atS(rAttachS).pos, rHoriz, stemR * 0.85);
+        const initNodes = buildRootNodes(initOrigin, rHoriz);
+        const rootStem: WeldedStem = {
+          id: nextWeldedId++,
+          level: 1,
+          role: 'root',
+          parent: trunkWelded,
+          attach: 'side',
+          attachS: rAttachS,
+          attachDir: normalize(add(rHoriz, v3(0, -0.25, 0))),
+          nodes: initNodes,
+          length: initNodes[initNodes.length - 1].s,
+          children: [],
+          forks: [],
+          dropped: false,
+          radiusDrop: 1.0,
+          ringSpacing: Math.max(0.018, rLen / 7),
+          minRing: 6,
+          windowCols: 2,
+          baseRadiusAt: (s: number) => {
+            const tr = clamp(s / Math.max(1e-4, rootStem.length), 0, 1);
+            return Math.max(0.0045, rootR0 * lerp1(1.0, 0.30, Math.pow(tr, 0.82)));
+          },
+          styleAt: (s: number, _theta: number, _pos: V3, _dir: V3, isJunction: boolean) => {
+            const tr = clamp(s / Math.max(1e-4, rootStem.length), 0, 1);
+            const c = mixRgb(colSheathDry, colRoot, smoothstep(0.0, 0.55, tr));
+            return {
+              color: c,
+              roughness: 0.72,
+              translucency: 0.04,
+              detailMetric: isJunction ? 0.96 : 0.25,
+              anatomyLevel: 0,
+              wind: [0, 0, stemPhase, 0],
+              pivot: stemBase,
+            };
+          },
+          regrow: (orig: V3, emDir: V3) => {
+            const rebuilt = buildRootNodes(orig, emDir);
+            rootStem.nodes = rebuilt;
+            rootStem.length = rebuilt[rebuilt.length - 1].s;
+          },
+        };
+        trunkWelded.children.push(rootStem);
+      }
+
       this.stats.stems++;
 
       const crownApex = stemCurve.atT(1.0);
@@ -202,13 +361,31 @@ export class TropicalMesher {
         }
       }
 
-      // 4. Build Crown of Giant Wind-Driven Megaphyll Paddles / Elephant Ears
-      const nLeaves = isMain ? Math.max(4, Math.round(p.leafCount)) : Math.max(3, Math.round(p.leafCount * 0.45));
-      const isFan = p.architecture === 'travellers_palm' || p.architecture === 'bird_of_paradise';
+      // 4. Plan Every Leaf's Canaliculate Petiole-Midrib as a Welded Child of `trunkWelded`!
+      interface PendingLeafSpec {
+        welded: WeldedStem;
+        globalIdx: number;
+        age01: number;
+        trunkAttachFlex: number;
+        leafPhase: number;
+        L: number;
+        maxHalfW: number;
+        petioleFrac: number;
+        petioleR0: number;
+        lRng: Random;
+      }
+      const pendingLeaves: PendingLeafSpec[] = [];
+
+      // Size petiole base radius so even dense distichous fans fit cleanly into upper-crown welded windows (`0` drops!)
+      const maxColLeaves = isFan ? Math.ceil(nLeaves / 2) : Math.ceil(nLeaves / 3);
+      const safePetioleMax = (stemH * 0.34) / Math.max(2, maxColLeaves * 3.1);
+      const petioleR0Base = clamp(Math.min(stemR * 0.22, safePetioleMax), 0.0075, stemR * 0.28);
+      const midribCol = isRed ? hexToLinearRgb('#7d1828') : colMidrib;
+      const petBaseCol = mixRgb(colStem, midribCol, 0.5);
 
       for (let li = 0; li < nLeaves; li++) {
         globalLeafIdx++;
-        const age01 = nLeaves <= 1 ? 0.3 : li / (nLeaves - 1); // 0 = youngest erect inner leaf, 1 = oldest outer skirt leaf!
+        const age01 = nLeaves <= 1 ? 0.3 : li / (nLeaves - 1);
         const lRng = sRng.fork(0x400 + li * 53);
 
         let az: number;
@@ -216,56 +393,167 @@ export class TropicalMesher {
         let attachFrac: number;
 
         if (isFan) {
-          // Distichous planar peacock fan (alternating left/right ranks in a single dramatic plane!)
           const sideSign = li % 2 === 0 ? 1 : -1;
           const rankIdx = Math.floor(li / 2);
           const maxRanks = Math.max(1, Math.ceil(nLeaves / 2) - 1);
           const rank01 = rankIdx / maxRanks;
-          az = (sideSign > 0 ? 0 : Math.PI) + pupAz * 0.25 + lRng.vary(0, 0.045);
+          az = (sideSign > 0 ? 0 : Math.PI) + pupAz * 0.25 + lRng.vary(0, 0.035);
           emergeDeg = lerp1(12, Math.min(82, p.crownSplayDeg * 1.65), rank01);
-          attachFrac = lerp1(0.98, 0.72, rank01);
+          attachFrac = lerp1(0.92, 0.62, rank01);
         } else {
-          // Spiral phyllotaxis crown (inner leaves steep, outer leaves arching wide, oldest skirt drooping!)
-          az = li * GOLDEN_ANGLE + pupAz + lRng.vary(0, 0.09);
+          az = li * GOLDEN_ANGLE + pupAz + lRng.vary(0, 0.08);
           const isSenescentSkirt = p.senescence > 0.05 && age01 > 1 - p.senescence * 0.55;
           emergeDeg = isSenescentSkirt
             ? lerp1(72, 108, (age01 - (1 - p.senescence * 0.55)) / Math.max(0.05, p.senescence * 0.55))
             : lerp1(Math.max(12, p.crownSplayDeg * 0.42), Math.min(78, p.crownSplayDeg * 1.45), Math.pow(age01, 0.85));
-          attachFrac = lerp1(0.99, 0.82, age01);
+          attachFrac = lerp1(0.92, 0.66, age01);
         }
 
-        const stemStation = stemCurve.atT(attachFrac);
+        const attachS = attachFrac * stemCurve.length;
+        const stemStation = stemCurve.atS(attachS);
         const trunkAttachFlex = Math.pow(attachFrac, 1.6) * 0.08 * p.windSail;
         const horiz = v3(Math.cos(az), 0, Math.sin(az));
-        const leafOrigin = addScaled(stemStation.pos, horiz, stemR * lerp1(0.55, 0.82, age01) * 0.65);
+        const leafOrigin = addScaled(stemStation.pos, horiz, trunkWelded.baseRadiusAt(attachS) * 0.85);
 
-        const tag = age01 < 0.3 ? 'Inner' : age01 < 0.78 ? 'Canopy' : 'Outer';
+        const L = p.leafLength * scaleSt * lerp1(0.84, 1.08, Math.sin(age01 * Math.PI * 0.85 + 0.2)) * lRng.range(0.94, 1.06);
+        const maxHalfW = p.leafWidth * 0.5 * scaleSt * lRng.range(0.93, 1.07);
+        const petioleFrac = isElephantEar ? Math.max(0.42, p.petioleFraction) : clamp(p.petioleFraction, 0.1, 0.55);
+
+        const tiltRad = emergeDeg * DEG2RAD;
+        const dir0 = normalize(add(scale(UP, Math.cos(tiltRad)), scale(horiz, Math.sin(tiltRad))));
+        const rawRight0 = normalize(cross(dir0, UP));
+        const fixedRight0 = cross(dir0, rawRight0).y >= 0 ? rawRight0 : scale(rawRight0, -1);
+
+        const droopTotal = (p.archDroopDeg * lerp1(0.48, 1.24, age01) + lRng.vary(0, 5)) * DEG2RAD;
+        const spineSteps = 30 + tier * 8;
+        const archAt = (t: number): number => droopTotal * Math.pow(t, isElephantEar ? 1.85 : 1.55);
+        const leafPhase = (((az / TAU) + lRng.vary(0, 0.08)) % 1 + 1) % 1;
+
+        const rawSpine = growCurve(leafOrigin, dir0, fixedRight0, L, spineSteps, (t0, t1) => ({
+          pitch: archAt(t1) - archAt(t0),
+          yaw: Math.sin(t1 * Math.PI * 1.5 + leafPhase * TAU) * 0.014,
+          roll: (t1 - t0) * lRng.vary(0, 0.12),
+        }));
+
+        const lNodes: WeldedNode[] = [];
+        for (let k = 0; k < rawSpine.count; k++) {
+          const fr = rawSpine.frameAtIndex(k);
+          lNodes.push({ pos: fr.pos, dir: fr.dir, right: fr.right, s: fr.s });
+        }
+
+        const petioleR0 = petioleR0Base * lerp1(0.88, 1.04, age01);
+        const leafWelded: WeldedStem = {
+          id: nextWeldedId++,
+          level: 1,
+          role: 'shoot',
+          parent: trunkWelded,
+          attach: 'side',
+          attachS,
+          attachDir: dir0,
+          nodes: lNodes,
+          length: rawSpine.length,
+          children: [],
+          forks: [],
+          dropped: false,
+          radiusDrop: 1.0,
+          ringSpacing: Math.max(0.032, L / (24 + tier * 6)),
+          minRing: 8,
+          baseRadiusAt: (s: number) => {
+            const t = clamp(s / Math.max(1e-4, leafWelded.length), 0, 1);
+            return Math.max(0.0038, lerp1(petioleR0, Math.max(0.0038, petioleR0 * 0.22), Math.pow(t, 0.78)));
+          },
+          profileFactor: (s: number, theta: number) => {
+            // Authentic canaliculate U-shaped adaxial channel (`sin(theta) > 0` = adaxial skyward side!)
+            const t = clamp(s / Math.max(1e-4, leafWelded.length), 0, 1);
+            const sinT = Math.sin(theta);
+            const groove = sinT > 0 ? 1 - 0.34 * sinT * sinT * (1 - t * 0.72) : 1 + 0.14 * (-sinT);
+            const lat = 1 + 0.12 * Math.cos(theta) * Math.cos(theta) * (1 - t * 0.5);
+            return groove * lat;
+          },
+          styleAt: (s: number, _theta: number, pos: V3, _dir: V3, isJunction: boolean) => {
+            const t = clamp(s / Math.max(1e-4, leafWelded.length), 0, 1);
+            const c = mixRgb(petBaseCol, midribCol, smoothstep(0.0, 0.45, t));
+            const h01 = saturate(pos.y / totalHeightEst);
+            const limbFlex = trunkAttachFlex + Math.pow(t, 1.48) * 0.62 * p.windSail;
+            const spinePhase = lerp1(stemPhase, leafPhase, smoothstep(0.0, 0.28, t));
+            return {
+              color: c,
+              roughness: 0.32,
+              translucency: 0.28,
+              detailMetric: isJunction ? 0.96 : 0.90,
+              anatomyLevel: 2,
+              wind: [h01, limbFlex, spinePhase, 0.0],
+              pivot: stemBase,
+            };
+          },
+        };
+
+        trunkWelded.children.push(leafWelded);
+        pendingLeaves.push({
+          welded: leafWelded,
+          globalIdx: globalLeafIdx,
+          age01,
+          trunkAttachFlex,
+          leafPhase,
+          L,
+          maxHalfW,
+          petioleFrac,
+          petioleR0,
+          lRng,
+        });
+      }
+
+      // 5. Mesh the ENTIRE Pseudostem + Basal Roots + All Canaliculate Petiole-Midrib Spines
+      // as ONE Closed 2-Manifold (`V - E + F = 2`, `0` overlapping tubes)!
+      const weldedStats = new WeldedMesher(stemMesh, [trunkWelded], {
+        ...DEFAULT_WELDED_CONFIG,
+        trunkRadialSegments: Math.max(24, 18 + tier * 4),
+        minRadialSegments: 6,
+        collarScale: 1.24,
+        collarLength: 1.05,
+        collarRings: 1,
+        collarFillet: 0.72,
+        collarMitre: 0.52,
+        minRadius: 0.0035,
+        capTips: true,
+      }).build();
+      totalWeldedJunctions += weldedStats.junctions;
+
+      // 6. Emit Giant Megaphyll Laminas directly along each relocated Welded Midrib Spine!
+      for (const spec of pendingLeaves) {
+        if (spec.welded.dropped) continue;
+        const relocatedSpine = new CurveLine();
+        for (const nd of spec.welded.nodes) {
+          relocatedSpine.push(nd.pos, nd.dir, nd.right);
+        }
+
+        const tag = spec.age01 < 0.3 ? 'Inner' : spec.age01 < 0.78 ? 'Canopy' : 'Outer';
         const lMesh = new PartMesh(
-          `${layerId}:leaves:l${String(globalLeafIdx).padStart(2, '0')}`,
-          `Leaf ${String(globalLeafIdx).padStart(2, '0')} · ${tag}`,
+          `${layerId}:leaves:l${String(spec.globalIdx).padStart(2, '0')}`,
+          `Leaf ${String(spec.globalIdx).padStart(2, '0')} · ${tag}`,
           'botanical',
           `${layerId}:leaves`,
           'leaf',
-          age01 < 0.3 ? '#7ee058' : '#34c759',
+          spec.age01 < 0.3 ? '#7ee058' : '#34c759',
         );
 
-        this.buildGiantTropicalLeaf(lMesh, {
-          origin: leafOrigin,
+        this.buildGiantTropicalLeafOnSpine(lMesh, relocatedSpine, {
           stemPivot: stemBase,
           stemPhase,
-          trunkAttachFlex,
-          azimuth: az,
-          emergeDeg,
-          age01,
-          scaleSt,
-          stemR,
+          trunkAttachFlex: spec.trunkAttachFlex,
+          leafPhase: spec.leafPhase,
+          age01: spec.age01,
+          L: spec.L,
+          maxHalfW: spec.maxHalfW,
+          petioleFrac: spec.petioleFrac,
+          petioleR0: spec.petioleR0,
           totalHeightEst,
           colBlade,
           colYoung,
           colMidrib,
           colSenescent,
           tier,
-          rng: lRng,
+          rng: spec.lRng,
         });
 
         lMesh.metaLabel = `${(lMesh.renderedTriangles / 1000).toFixed(1)}k tris`;
@@ -274,7 +562,14 @@ export class TropicalMesher {
       }
     }
 
-    stemMesh.metaLabel = `${this.stats.stems} stem${this.stats.stems > 1 ? 's' : ''}`;
+    const manifoldRep = validateWeldedManifold(stemMesh);
+    this.stats.weldedJunctions = totalWeldedJunctions;
+    this.stats.closedStemManifold =
+      manifoldRep.closed &&
+      manifoldRep.manifold &&
+      manifoldRep.eulerCharacteristic === 2 * manifoldRep.components;
+
+    stemMesh.metaLabel = `${this.stats.stems} welded stem${this.stats.stems > 1 ? 's' : ''}`;
     cigarMesh.metaLabel = 'furl leaf';
     infloMesh.metaLabel = `${this.stats.fruitsOrFlowers} organs`;
     crownGroup.metaLabel = `${leafMeshes.length} paddles`;
@@ -293,89 +588,6 @@ export class TropicalMesher {
     }
     this.stats.height = maxY;
     return { parts, stats: this.stats };
-  }
-
-  // ---------------------------------------------------------------------------
-  // 1. Overlapping Sheath Pseudostem
-  // ---------------------------------------------------------------------------
-
-  private buildPseudostem(
-    mesh: PartMesh,
-    origin: V3,
-    dir0: V3,
-    right0: V3,
-    height: number,
-    baseR: number,
-    colStem: RGB,
-    colDry: RGB,
-    colInner: RGB,
-    totalH: number,
-    phase: number,
-    tier: number,
-    rng: Random,
-  ): CurveLine {
-    const p = this.p;
-    const isRed = p.architecture === 'red_abyssinian_banana';
-    const redFlush = hexToLinearRgb('#5c1622');
-    const steps = 16 + tier * 4;
-    const sides = 14 + tier * 4;
-
-    const curve = growCurve(origin, dir0, right0, height, steps, (t0, t1) => ({
-      pitch: (t1 - t0) * rng.vary(0.04, 0.06),
-      yaw: Math.sin(t1 * 2.5) * 0.015,
-    }));
-
-    const rings: number[][] = [];
-    for (let i = 0; i < curve.count; i++) {
-      const fr = curve.frameAtIndex(i);
-      const t = fr.t;
-      // Bulbous swollen Ensete/Musa base tapering smoothly toward leaf crown, flaring slightly at collar!
-      const bulb = 1 + (isRed ? 0.36 : 0.18) * Math.exp(-t * 5.2);
-      const taper = lerp1(1.0, 0.64, Math.pow(t, 0.85)) * (1 + 0.08 * smoothstep(0.86, 1.0, t));
-      // Subtle clasping sheath steps along trunk
-      const sheathStep = 1 + 0.032 * Math.sin(t * 22.0);
-      const rBase = baseR * bulb * taper * sheathStep;
-
-      let ringCol = mixRgb(colDry, isRed ? mixRgb(colStem, redFlush, 0.65) : colStem, smoothstep(0.05, 0.42, t));
-      ringCol = mixRgb(ringCol, colInner, smoothstep(0.75, 1.0, t) * 0.35);
-
-      const h01 = saturate(fr.pos.y / totalH);
-      const stemFlex = Math.pow(t, 1.6) * 0.08 * p.windSail;
-      const row: number[] = [];
-
-      for (let j = 0; j < sides; j++) {
-        const th = (j / sides) * TAU;
-        // Overlapping spiral leaf-sheath flute ridges!
-        const flute = 1 + 0.045 * Math.cos(th * 3 + t * 7.0) + 0.018 * Math.cos(th * 9);
-        const r = rBase * flute;
-        const pt = add(fr.pos, add(scale(fr.right, Math.cos(th) * r), scale(fr.up, Math.sin(th) * r)));
-        const sheathDark = 0.88 + 0.12 * Math.cos(th * 3 + t * 7.0);
-
-        row.push(
-          mesh.addVertex({
-            x: pt.x, y: pt.y, z: pt.z,
-            tx: fr.dir.x, ty: fr.dir.y, tz: fr.dir.z,
-            u: j / sides, v: t,
-            color: { r: ringCol.r * sheathDark, g: ringCol.g * sheathDark, b: ringCol.b * sheathDark },
-            wind: [h01, stemFlex, phase, 0.0],
-            pivot: origin,
-            roughness: 0.38,
-            translucency: 0.14,
-            detailMetric: t,
-            anatomyLevel: 1,
-          }),
-        );
-      }
-      rings.push(row);
-    }
-
-    for (let i = 0; i < rings.length - 1; i++) {
-      for (let j = 0; j < sides; j++) {
-        const j1 = (j + 1) % sides;
-        mesh.addQuad(rings[i][j], rings[i][j1], rings[i + 1][j1], rings[i + 1][j]);
-      }
-    }
-    return curve;
   }
 
   // ---------------------------------------------------------------------------
@@ -445,21 +657,22 @@ export class TropicalMesher {
   }
 
   // ---------------------------------------------------------------------------
-  // 3. Giant Megaphyll Paddle / Sagittate Blade + Wind-Split Ribbons!
+  // 3. Giant Megaphyll Paddle / Sagittate Blade along Welded Petiole-Midrib Spine!
   // ---------------------------------------------------------------------------
 
-  private buildGiantTropicalLeaf(
+  private buildGiantTropicalLeafOnSpine(
     mesh: PartMesh,
+    spine: CurveLine,
     opts: {
-      origin: V3;
       stemPivot: V3;
       stemPhase: number;
       trunkAttachFlex: number;
-      azimuth: number;
-      emergeDeg: number;
+      leafPhase: number;
       age01: number;
-      scaleSt: number;
-      stemR: number;
+      L: number;
+      maxHalfW: number;
+      petioleFrac: number;
+      petioleR0: number;
       totalHeightEst: number;
       colBlade: RGB;
       colYoung: RGB;
@@ -471,14 +684,15 @@ export class TropicalMesher {
   ): void {
     const p = this.p;
     const {
-      origin,
       stemPivot,
       stemPhase,
       trunkAttachFlex,
-      azimuth,
-      emergeDeg,
+      leafPhase,
       age01,
-      scaleSt,
+      L,
+      maxHalfW,
+      petioleFrac,
+      petioleR0,
       totalHeightEst,
       colBlade,
       colYoung,
@@ -490,47 +704,7 @@ export class TropicalMesher {
 
     const isElephantEar = p.architecture === 'elephant_ear_alocasia';
     const isRedBanana = p.architecture === 'red_abyssinian_banana';
-
-    const L = p.leafLength * scaleSt * lerp1(0.84, 1.08, Math.sin(age01 * Math.PI * 0.85 + 0.2)) * rng.range(0.94, 1.06);
-    const maxHalfW = p.leafWidth * 0.5 * scaleSt * rng.range(0.93, 1.07);
-    const petioleFrac = isElephantEar ? Math.max(0.42, p.petioleFraction) : clamp(p.petioleFraction, 0.1, 0.55);
-
-    const tiltRad = emergeDeg * DEG2RAD;
-    const horiz = v3(Math.cos(azimuth), 0, Math.sin(azimuth));
-    const dir0 = normalize(add(scale(UP, Math.cos(tiltRad)), scale(horiz, Math.sin(tiltRad))));
-    const right0 = normalize(cross(dir0, UP)); // points laterally so `up = cross(dir, right)` is adaxial (+Y)!
-    // Ensure cross(dir0, right0).y > 0 (adaxial upper side faces skyward!)
-    const fixedRight0 = cross(dir0, right0).y >= 0 ? right0 : scale(right0, -1);
-
-    const droopTotal = (p.archDroopDeg * lerp1(0.48, 1.24, age01) + rng.vary(0, 5)) * DEG2RAD;
-    const spineSteps = 34 + tier * 10;
-    const archAt = (t: number): number => droopTotal * Math.pow(t, isElephantEar ? 1.85 : 1.55);
-    const leafPhase = (((azimuth / TAU) + rng.vary(0, 0.08)) % 1 + 1) % 1;
-
-    const spine = growCurve(origin, dir0, fixedRight0, L, spineSteps, (t0, t1) => ({
-      pitch: archAt(t1) - archAt(t0),
-      yaw: Math.sin(t1 * Math.PI * 1.5 + leafPhase * TAU) * 0.014,
-      roll: (t1 - t0) * rng.vary(0, 0.12),
-    }));
-
-    // Mesh stout canaliculate U-grooved petiole + tapering abaxial midrib keel!
-    const petioleR0 = Math.max(0.009, p.pseudostemRadius * scaleSt * 0.24);
     const midribCol = isRedBanana ? hexToLinearRgb('#7d1828') : colMidrib;
-    this.meshCanaliculateMidrib(
-      mesh,
-      spine,
-      petioleR0,
-      petioleR0 * 0.14,
-      8 + tier * 2,
-      mixRgb(hexToLinearRgb(p.hueStem), midribCol, 0.5),
-      midribCol,
-      stemPivot,
-      totalHeightEst,
-      stemPhase,
-      leafPhase,
-      trunkAttachFlex,
-      p.windSail,
-    );
 
     // Leaf age pigmentation (luminous chartreuse young inner leaves -> deep tropical emerald -> golden senescent skirt!)
     let baseLeafCol = mixRgb(colYoung, colBlade, smoothstep(0.0, 0.42, age01));
@@ -1055,66 +1229,8 @@ export class TropicalMesher {
   }
 
   // ---------------------------------------------------------------------------
-  // Canaliculate U-Grooved Petiole / Midrib & Helper Tube
+  // Helper Tube for Inflorescence Peduncle & Flowers
   // ---------------------------------------------------------------------------
-
-  private meshCanaliculateMidrib(
-    mesh: PartMesh,
-    line: CurveLine,
-    r0: number,
-    r1: number,
-    sides: number,
-    col0: RGB,
-    col1: RGB,
-    pivot: V3,
-    totalH: number,
-    stemPhase: number,
-    leafPhase: number,
-    trunkAttachFlex: number,
-    windSail: number,
-  ): void {
-    const K = line.count;
-    const rings: number[][] = [];
-    for (let i = 0; i < K; i++) {
-      const fr = line.frameAtIndex(i);
-      const t = fr.t;
-      const rBase = lerp1(r0, r1, Math.pow(t, 0.85));
-      const col = mixRgb(col0, col1, smoothstep(0.0, 0.45, t));
-      const flex = trunkAttachFlex + Math.pow(t, 1.48) * 0.62 * windSail;
-      const spinePhase = lerp1(stemPhase, leafPhase, smoothstep(0.0, 0.28, t));
-      const row: number[] = [];
-
-      for (let j = 0; j < sides; j++) {
-        const th = (j / sides) * TAU;
-        // Adaxial U-channel groove on top (`sin(th) > 0`), stout rounded structural keel underneath!
-        const topGroove = Math.sin(th) > 0.25 ? 1 - 0.34 * Math.pow(Math.sin(th), 2) * (1 - 0.5 * t) : 1.05;
-        const r = rBase * topGroove;
-        const pt = add(fr.pos, add(scale(fr.right, Math.cos(th) * r), scale(fr.up, Math.sin(th) * r)));
-        row.push(
-          mesh.addVertex({
-            x: pt.x, y: pt.y, z: pt.z,
-            tx: fr.dir.x, ty: fr.dir.y, tz: fr.dir.z,
-            u: j / sides, v: t,
-            color: col,
-            wind: [saturate(pt.y / totalH), flex, spinePhase, 0.0],
-            pivot,
-            roughness: 0.32,
-            translucency: 0.28,
-            detailMetric: 0.9,
-            anatomyLevel: 2,
-          }),
-        );
-      }
-      rings.push(row);
-    }
-
-    for (let i = 0; i < K - 1; i++) {
-      for (let j = 0; j < sides; j++) {
-        const j1 = (j + 1) % sides;
-        mesh.addQuad(rings[i][j], rings[i][j1], rings[i + 1][j1], rings[i + 1][j]);
-      }
-    }
-  }
 
   private meshSimpleTube(
     mesh: PartMesh,

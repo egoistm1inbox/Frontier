@@ -12,6 +12,10 @@ import { DEFAULT_HAIR_PARAMS } from './hairParams';
 import { HairMesher } from './hairMesher';
 import { DEFAULT_MOSS_PARAMS } from './mossParams';
 import { MossMesher } from './mossMesher';
+import { DEFAULT_PALM_PARAMS } from './palmParams';
+import { PalmMesher } from './palmMesher';
+import { DEFAULT_TREE_PARAMS } from './treeParams';
+import { TreeMesher } from './treeMesher';
 import { DEFAULT_TROPICAL_PARAMS } from './tropicalParams';
 import { TropicalMesher } from './tropicalMesher';
 import { LayerRuntimeReport, OutlinerNode, SceneBuildResponse, SceneSpec } from './types';
@@ -33,7 +37,7 @@ export function buildSceneRaw(scene: SceneSpec): BuiltSceneRaw {
   const layerReports: LayerRuntimeReport[] = [];
 
   const rootSeed = scene.layers[0]?.seed ?? 42;
-  const substrate = new HostSubstrate(scene.substrate, rootSeed);
+  const substrate = new HostSubstrate(scene.substrate, rootSeed + 203);
   const subMesh = substrate.buildMesh('substrate:host', 'scene:root');
   if (subMesh) {
     rawParts.push(subMesh);
@@ -46,7 +50,58 @@ export function buildSceneRaw(scene: SceneSpec): BuiltSceneRaw {
     const { x, y, z, yaw, scale } = layer.transform;
     const needsTransform = x !== 0 || y !== 0 || z !== 0 || yaw !== 0 || scale !== 1;
 
-    if (layer.kind === 'fern') {
+    if (layer.kind === 'tree') {
+      const trp = layer.tree ?? { ...DEFAULT_TREE_PARAMS };
+      const built = new TreeMesher(trp, layer.seed, substrate).build(layer.id);
+      let lTris = 0;
+      let lVerts = 0;
+      for (const pm of built.parts) {
+        if (needsTransform) pm.applyTransform(x, y, z, yaw, scale);
+        lTris += pm.renderedTriangles;
+        lVerts += pm.vertexCount;
+        rawParts.push(pm);
+      }
+      layerReports.push({
+        layerId: layer.id,
+        kind: 'tree',
+        tree: built.stats,
+        triangles: lTris,
+        vertices: lVerts,
+      });
+      // Aim macro target onto the main welded bough collar zone!
+      macroTarget = [x, y + trp.height * 0.28, z, Math.max(0.85, trp.height * trp.trunkRatio * 2.8)];
+    } else if (layer.kind === 'palm') {
+      const pp = layer.palm ?? { ...DEFAULT_PALM_PARAMS };
+      const built = new PalmMesher(pp, layer.seed, substrate).build(layer.id);
+      let lTris = 0;
+      let lVerts = 0;
+      for (const pm of built.parts) {
+        if (needsTransform) pm.applyTransform(x, y, z, yaw, scale);
+        lTris += pm.renderedTriangles;
+        lVerts += pm.vertexCount;
+        rawParts.push(pm);
+      }
+      layerReports.push({
+        layerId: layer.id,
+        kind: 'palm',
+        palm: built.stats,
+        triangles: lTris,
+        vertices: lVerts,
+      });
+      // Aim macro target onto the fruiting crown / spadix zone!
+      const fruitMesh = built.parts.find((m) => m.id.endsWith(':fruits') && m.vertexCount > 12);
+      if (fruitMesh) {
+        const mid = Math.floor(fruitMesh.vertexCount * 0.5) * 3;
+        macroTarget = [
+          fruitMesh.positions[mid],
+          fruitMesh.positions[mid + 1],
+          fruitMesh.positions[mid + 2],
+          Math.max(1.1, pp.trunkRadius * 5.0),
+        ];
+      } else {
+        macroTarget = [x, y + pp.trunkHeight * 0.88, z, Math.max(1.2, pp.frondLength * 0.45)];
+      }
+    } else if (layer.kind === 'fern') {
       const fp = layer.fern ?? { ...DEFAULT_FERN_PARAMS };
       const built = new FernMesher(fp, layer.seed, substrate).build(layer.id);
       let lTris = 0;
@@ -124,8 +179,12 @@ export function buildSceneRaw(scene: SceneSpec): BuiltSceneRaw {
       });
       const phyl = built.parts.find((m) => m.id.endsWith(':phyllids') && m.vertexCount > 12);
       if (phyl && scene.layers.length === 1) {
-        const mid = Math.floor(phyl.vertexCount * 0.35) * 3;
-        macroTarget = [phyl.positions[mid], phyl.positions[mid + 1], phyl.positions[mid + 2], Math.max(0.035, mp.shootHeightMm * 0.0018)];
+        if (mp.habit === 'billowing_pillow') {
+          macroTarget = [x - 0.02, y + 0.035, z + 0.01, 0.14];
+        } else {
+          const mid = Math.floor(phyl.vertexCount * 0.35) * 3;
+          macroTarget = [phyl.positions[mid], phyl.positions[mid + 1], phyl.positions[mid + 2], Math.max(0.035, mp.shootHeightMm * 0.0018)];
+        }
       }
     } else if (layer.kind === 'hair') {
       const hp = layer.hair ?? { ...DEFAULT_HAIR_PARAMS };
@@ -218,31 +277,43 @@ function buildOutlinerTree(
     const renderableLayerPartIds = layerParts.filter((p) => p.faceCount > 0 || p.lines.length > 0).map((p) => p.id);
 
     const layerIcon =
-      layer.kind === 'fern'
-        ? 'fern'
-        : layer.kind === 'tropical'
-          ? 'tropical'
-          : layer.kind === 'moss'
-            ? 'moss'
-            : 'fur';
+      layer.kind === 'tree'
+        ? 'tree'
+        : layer.kind === 'palm'
+          ? 'palm'
+          : layer.kind === 'fern'
+            ? 'fern'
+            : layer.kind === 'tropical'
+              ? 'tropical'
+              : layer.kind === 'moss'
+                ? 'moss'
+                : 'fur';
     const layerAccent =
-      layer.kind === 'fern'
-        ? '#34c759'
-        : layer.kind === 'tropical'
-          ? '#7ee058'
-          : layer.kind === 'moss'
-            ? '#4fd89b'
-            : '#ffb454';
+      layer.kind === 'tree'
+        ? '#52d17c'
+        : layer.kind === 'palm'
+          ? '#eab308'
+          : layer.kind === 'fern'
+            ? '#34c759'
+            : layer.kind === 'tropical'
+              ? '#7ee058'
+              : layer.kind === 'moss'
+                ? '#86c232'
+                : '#ffb454';
     const layerMeta =
-      layer.kind === 'fern' && rep?.fern
-        ? `${rep.fern.fronds} fronds · ${rep.fern.leaflets} leaflets`
-        : layer.kind === 'tropical' && rep?.tropical
-          ? `${rep.tropical.leaves} paddles · ${rep.tropical.ribbons} ribbons`
-          : layer.kind === 'moss' && rep?.moss
-            ? `${rep.moss.shoots} shoots · ${rep.moss.sporophytes} caps`
-            : layer.kind === 'hair' && rep?.hair
-              ? `${rep.hair.totalStrands.toLocaleString('en-US')} strands`
-              : '';
+      layer.kind === 'tree' && rep?.tree
+        ? `${rep.tree.weldedJunctions} collars · ${rep.tree.leaves.toLocaleString('en-US')} leaves`
+        : layer.kind === 'palm' && rep?.palm
+          ? `${rep.palm.fronds} fronds · ${rep.palm.fruits} fruits`
+          : layer.kind === 'fern' && rep?.fern
+            ? `${rep.fern.fronds} fronds · ${rep.fern.leaflets} leaflets`
+            : layer.kind === 'tropical' && rep?.tropical
+              ? `${rep.tropical.leaves} paddles · ${rep.tropical.weldedJunctions ?? 0} collars`
+              : layer.kind === 'moss' && rep?.moss
+                ? `${rep.moss.shoots.toLocaleString('en-US')} shoots · ${rep.moss.sporophytes} caps`
+                : layer.kind === 'hair' && rep?.hair
+                  ? `${rep.hair.totalStrands.toLocaleString('en-US')} strands`
+                  : '';
 
     nodes.push({
       id: layer.id,

@@ -4,6 +4,7 @@
  */
 
 export type MossHabit =
+  | 'billowing_pillow'
   | 'velvet_carpet'
   | 'pleurocarp_feather'
   | 'acrocarp_star'
@@ -12,6 +13,7 @@ export type MossHabit =
   | 'rock_tortula';
 
 export const MOSS_HABIT_NAMES: Record<MossHabit, string> = {
+  billowing_pillow: 'Cloud-Forest Pillow Cushions (Leucobryum / Dicranoweisia)',
   velvet_carpet: 'Lush Velvet Carpet (Dicranum / Sheet Moss)',
   pleurocarp_feather: 'Feather Carpet Mat (Hypnum / Hylocomium)',
   acrocarp_star: 'Acrocarp Star Turf (Polytrichum Haircap)',
@@ -69,6 +71,8 @@ export interface MossParams {
   hueTip: string; // luminous fresh chartreuse/crimson shoot apex
   hueBase: string; // humid olive/peat lower shoot & stem
   hueCapsule: string; // amber/russet/crimson sporophyte seta & capsule
+  /** Optional sun-toasted warm golden-ochre dome crest accent [0..0.5] on pillow moss. */
+  pillowToast?: number;
 }
 
 export const DEFAULT_MOSS_PARAMS: MossParams = {

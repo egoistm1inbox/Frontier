@@ -43,7 +43,7 @@ import {
   v3,
 } from '../core/math';
 import { PartMesh } from '../core/mesh';
-import { fbm3, voronoiHummock2 } from '../core/noise';
+import { confluentPillowField2, fbm3, voronoiHummock2 } from '../core/noise';
 import { Random } from '../core/random';
 import { HostSubstrate, SurfaceSample } from '../substrates/substrate';
 import { MossParams } from './mossParams';
@@ -91,6 +91,9 @@ export class MossMesher {
   build(layerId: string): MossBuildResult {
     const p = this.p;
     const tier = clamp(Math.round(p.detailTier), 1, 4);
+    if (p.habit === 'billowing_pillow') {
+      return this.buildBillowingPillowCushions(layerId, tier);
+    }
     const tierMult = tier === 1 ? 0.38 : tier === 2 ? 0.68 : tier === 3 ? 1.0 : 1.48;
 
     const rhizoidMesh = new PartMesh(`${layerId}:rhizoids`, 'Rhizoid & Stolon Mat', 'moss', layerId, 'roots', '#7c5338');
@@ -280,6 +283,508 @@ export class MossMesher {
     capsuleMesh.metaLabel = `${this.stats.sporophytes} capsules`;
 
     const parts = [rhizoidMesh, stemMesh, phyllidMesh, setaMesh, capsuleMesh].filter((m) => m.faceCount > 0);
+    let maxY = 0.04;
+    for (const part of parts) {
+      const pos = part.positions;
+      for (let i = 1; i < pos.length; i += 3) if (pos[i] > maxY) maxY = pos[i];
+    }
+    this.stats.height = maxY;
+    return { parts, stats: this.stats };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Cloud-Forest Confluent 3D Pillow Cushions + Bristly Velvet Star-Tuft Turf
+  // ---------------------------------------------------------------------------
+
+  private buildBillowingPillowCushions(layerId: string, tier: number): MossBuildResult {
+    const p = this.p;
+    const rhizoidMesh = new PartMesh(
+      `${layerId}:rhizoids`,
+      'Overhang Rim Rhizoid Felt',
+      'moss',
+      layerId,
+      'roots',
+      '#2e2112',
+    );
+    const cushionMesh = new PartMesh(
+      `${layerId}:stems`,
+      '3D Confluent Cushion Lobes',
+      'moss',
+      layerId,
+      'grass',
+      '#689112',
+    );
+    const phyllidMesh = new PartMesh(
+      `${layerId}:phyllids`,
+      'Bristly Star-Tuft Velvet Pile',
+      'moss',
+      layerId,
+      'leaf',
+      '#8ab51b',
+    );
+    const setaMesh = new PartMesh(
+      `${layerId}:setae`,
+      'Sporophyte Setae',
+      'moss',
+      layerId,
+      'tussock',
+      '#b86322',
+    );
+    const capsuleMesh = new PartMesh(
+      `${layerId}:capsules`,
+      'Spore Capsules & Opercula',
+      'moss',
+      layerId,
+      'sprout',
+      '#d99d32',
+    );
+
+    const colCanopy = hexToLinearRgb(p.hueCanopy);
+    const colTip = hexToLinearRgb(p.hueTip);
+    const colBase = hexToLinearRgb(p.hueBase);
+    const colCleft = mixRgb(hexToLinearRgb('#020601'), colBase, 0.12);
+    const colToast = hexToLinearRgb('#8a5a0c');
+    const colCapsule = hexToLinearRgb(p.hueCapsule);
+    const colSetaBase = mixRgb(colCapsule, hexToLinearRgb('#571d10'), 0.55);
+
+    const fieldSeed = (this.rng.nextUint32() & 0xfffffff) | 1;
+    const G = tier === 1 ? 96 : tier === 2 ? 136 : tier === 3 ? 176 : 216;
+    const N = G + 1;
+
+    const maxThick = Math.max(0.025, p.cushionHeightMm * 0.001);
+    const lobeScale = Math.max(1.2, p.cushionScale);
+    const toastStrength = clamp(p.pillowToast ?? 0.20, 0, 0.65);
+    const windComp = clamp(p.windCompliance ?? 0.85, 0.1, 2.2);
+
+    // 1. Sample substrate grid + smooth ellipsoidal pillow metaball field across (u, v)
+    const basePx = new Float32Array(N * N);
+    const basePy = new Float32Array(N * N);
+    const basePz = new Float32Array(N * N);
+    const baseNx = new Float32Array(N * N);
+    const baseNy = new Float32Array(N * N);
+    const baseNz = new Float32Array(N * N);
+    const macroArr = new Float32Array(N * N);
+    const rawH = new Float32Array(N * N);
+    const covArr = new Float32Array(N * N);
+    const aoArr = new Float32Array(N * N);
+    const toastArr = new Float32Array(N * N);
+    const microArr = new Float32Array(N * N);
+
+    let coveredCells = 0;
+    for (let j = 0; j < N; j++) {
+      const v = j / G;
+      for (let i = 0; i < N; i++) {
+        const u = i / G;
+        const k = j * N + i;
+        const subSmp = this.substrate.sampleSurface(u, v);
+        basePx[k] = subSmp.pos.x;
+        basePy[k] = subSmp.pos.y;
+        basePz[k] = subSmp.pos.z;
+        baseNx[k] = subSmp.normal.x;
+        baseNy[k] = subSmp.normal.y;
+        baseNz[k] = subSmp.normal.z;
+
+        const pf = confluentPillowField2(
+          u,
+          v,
+          lobeScale,
+          p.colonyCoverage,
+          p.patchiness,
+          fieldSeed,
+        );
+        const rimMask = smoothstep(0.0, 0.35, subSmp.emitterMask);
+        const mask = pf.coverage * rimMask;
+        // Plump rounded cushion termination (`rimMask^0.55`) so outer rock border has rounded moss pillows!
+        const borderDome = rimMask <= 0.001 ? 0 : Math.pow(rimMask, 0.55);
+        macroArr[k] = pf.macroHeight * maxThick * borderDome;
+        rawH[k] = pf.height * maxThick * borderDome;
+        covArr[k] = mask;
+        aoArr[k] = pf.creviceAo * (0.35 + 0.65 * borderDome);
+        toastArr[k] = pf.toast * borderDome;
+        microArr[k] = pf.microTuft;
+        if (mask > 0.04) coveredCells++;
+      }
+    }
+
+    // Enhance creviceAo with multi-radius heightfield horizon / concavity self-occlusion so EVERY
+    // inter-lobe crease, sub-knob fold, and overhanging cheek plunges into deep velvet shadow!
+    const bakedAo = new Float32Array(N * N);
+    for (let j = 0; j < N; j++) {
+      for (let i = 0; i < N; i++) {
+        const k = j * N + i;
+        const h0 = macroArr[k];
+        let maxRise = 0;
+        for (const step of [3, 7, 13]) {
+          const rDist = (step / G) * Math.max(0.15, this.substrate.params.size * 2.25);
+          const dirs: [number, number][] = [
+            [step, 0], [-step, 0], [0, step], [0, -step],
+            [step, step], [-step, step], [step, -step], [-step, -step],
+          ];
+          let sumPos = 0;
+          for (const [di, dj] of dirs) {
+            const hn = macroArr[clamp(j + dj, 0, G) * N + clamp(i + di, 0, G)];
+            if (hn > h0) sumPos += (hn - h0) / Math.max(1e-4, rDist);
+          }
+          maxRise = Math.max(maxRise, sumPos / 8);
+        }
+        const horizonOcc = Math.exp(-maxRise * 2.35);
+        bakedAo[k] = clamp(aoArr[k] * horizonOcc, 0.015, 1.0);
+      }
+    }
+    for (let k = 0; k < N * N; k++) aoArr[k] = bakedAo[k];
+
+    // 2. Real bryophyte cushions bridge smoothly over sharp rock micro-crags!
+    // Smooth the substrate frame over a 5x5 neighborhood for interior cushion lift while keeping
+    // exact rock contact (`exactToSmooth -> 0`) at `hDisp -> 0`, preventing diverging-normal folds!
+    const posX = new Float32Array(N * N);
+    const posY = new Float32Array(N * N);
+    const posZ = new Float32Array(N * N);
+    const vIdxGrid = new Int32Array(N * N);
+    vIdxGrid.fill(-1);
+
+    const subSpan = Math.max(0.15, this.substrate.params.size * 2.25);
+    const inv2World = (G * 0.5) / subSpan;
+
+    for (let j = 0; j < N; j++) {
+      const v = j / G;
+      const jm = Math.max(0, j - 1);
+      const jp = Math.min(G, j + 1);
+      for (let i = 0; i < N; i++) {
+        const u = i / G;
+        const k = j * N + i;
+        const cov = covArr[k];
+        // Include 1-ring collar vertices tucked 3.5 mm beneath bare basalt so EVERY pillow skirt
+        // seals smoothly into the wet volcanic rock with ZERO floating jagged quad teeth!
+        let nearMoss = cov > 0.002;
+        if (!nearMoss) {
+          for (let dj = -1; dj <= 1 && !nearMoss; dj++) {
+            for (let di = -1; di <= 1 && !nearMoss; di++) {
+              if (covArr[clamp(j + dj, 0, G) * N + clamp(i + di, 0, G)] > 0.002) nearMoss = true;
+            }
+          }
+        }
+        if (!nearMoss) continue;
+
+        // 5x5 smoothed rock base & normal so cushion tops are silky-smooth convex domes!
+        let sx = 0, sy = 0, sz = 0, snx = 0, sny = 0, snz = 0, sw = 0;
+        for (let dj = -3; dj <= 3; dj += 3) {
+          const jj = clamp(j + dj, 0, G);
+          for (let di = -3; di <= 3; di += 3) {
+            const ii = clamp(i + di, 0, G);
+            const kk = jj * N + ii;
+            sx += basePx[kk]; sy += basePy[kk]; sz += basePz[kk];
+            snx += baseNx[kk]; sny += baseNy[kk]; snz += baseNz[kk];
+            sw += 1;
+          }
+        }
+        sx /= sw; sy /= sw; sz /= sw;
+        const snl = Math.hypot(snx, sny, snz) || 1;
+        snx /= snl; sny /= snl; snz /= snl;
+
+        const smoothNormal = v3(snx, sny, snz);
+        const smoothTanU = normalize(
+          addScaled(v3(1, 0, 0), smoothNormal, -snx),
+        );
+        const smoothTanV = normalize(cross(smoothNormal, smoothTanU));
+
+        const im = Math.max(0, i - 1);
+        const ip = Math.min(G, i + 1);
+        const dMdu = (macroArr[j * N + ip] - macroArr[j * N + im]) * inv2World;
+        const dMdv = (macroArr[jp * N + i] - macroArr[jm * N + i]) * inv2World;
+
+        const hDisp = rawH[k];
+        const bridge = smoothstep(0.0, 0.22, cov);
+        const rx = lerp1(basePx[k], sx, bridge);
+        const ry = lerp1(basePy[k], sy, bridge);
+        const rz = lerp1(basePz[k], sz, bridge);
+
+        const hFrac = clamp(macroArr[k] / Math.max(1e-4, maxThick), 0, 1.2);
+        // Gentle tucked overhang belly on lower-mid pillow cheeks (`0` at rock contact & crown!)
+        const lipBell = Math.sin(Math.PI * clamp(hFrac, 0, 1)) * (1 - 0.45 * clamp(hFrac, 0, 1));
+        const regDenom = Math.sqrt(dMdu * dMdu + dMdv * dMdv + 0.95 * 0.95);
+        const maxBulge = maxThick * 0.16 * lipBell;
+        const bulgeU = (-dMdu / regDenom) * maxBulge;
+        const bulgeV = (-dMdv / regDenom) * maxBulge;
+
+        // Sink bare-rock skirt 4.2 mm beneath basalt so plunging round pillow cheeks intersect
+        // the wet dark stone cleanly along a smooth curve with zero stair-stepping!
+        const rimSink = (1 - smoothstep(0.0, 0.22, cov)) * 0.0042;
+        const px = rx + snx * (hDisp - rimSink) + smoothTanU.x * bulgeU + smoothTanV.x * bulgeV;
+        const py = ry + sny * (hDisp - rimSink) + smoothTanU.y * bulgeU + smoothTanV.y * bulgeV;
+        const pz = rz + snz * (hDisp - rimSink) + smoothTanU.z * bulgeU + smoothTanV.z * bulgeV;
+
+        posX[k] = px;
+        posY[k] = py;
+        posZ[k] = pz;
+
+        const ao = aoArr[k];
+        const micro = microArr[k];
+
+        // Cushion core is the DARK mossy velvet throat beneath the dense bristly tips!
+        // Keeping the cushion base rich dark-forest green (`colCleft -> colCanopy * 0.58`) creates
+        // realistic micro-shadowing between every single chartreuse gametophyte star-tuft!
+        let domeCol = mixRgb(colCleft, colBase, smoothstep(0.03, 0.36, ao));
+        domeCol = mixRgb(domeCol, colCanopy, smoothstep(0.14, 0.78, ao) * (0.48 + 0.24 * micro));
+
+        vIdxGrid[k] = cushionMesh.addVertex({
+          x: px,
+          y: py,
+          z: pz,
+          tx: smoothTanU.x,
+          ty: smoothTanU.y,
+          tz: smoothTanU.z,
+          u,
+          v,
+          color: domeCol,
+          wind: [0, 0, 0, 0],
+          pivot: { x: px, y: py, z: pz },
+          roughness: 0.99,
+          translucency: 0.14 * ao,
+          detailMetric: clamp(ao * (0.62 + 0.38 * micro), 0.02, 1.0),
+          anatomyLevel: 1,
+        });
+      }
+    }
+
+    // Track exact GPU-split triangles of `cushionMesh` (`dac <= dbd` shorter-diagonal rule)
+    // so every barycentrically sampled tuft sits 0.000 mm ON the rendered triangle plane —
+    // zero buried tufts on curved steep pillow cheeks, and 100% isotropic 3D density per cm²!
+    const triA: number[] = [];
+    const triB: number[] = [];
+    const triC: number[] = [];
+    const triAreaList: number[] = [];
+    let totalTriArea = 0;
+
+    const pushActiveTri = (ka: number, kb: number, kc: number): void => {
+      if (covArr[ka] + covArr[kb] + covArr[kc] <= 0.15) return;
+      const e1x = posX[kb] - posX[ka], e1y = posY[kb] - posY[ka], e1z = posZ[kb] - posZ[ka];
+      const e2x = posX[kc] - posX[ka], e2y = posY[kc] - posY[ka], e2z = posZ[kc] - posZ[ka];
+      const area = 0.5 * Math.hypot(e1y * e2z - e1z * e2y, e1z * e2x - e1x * e2z, e1x * e2y - e1y * e2x);
+      if (area <= 1e-10) return;
+      triA.push(ka);
+      triB.push(kb);
+      triC.push(kc);
+      triAreaList.push(area);
+      totalTriArea += area;
+    };
+
+    for (let j = 0; j < G; j++) {
+      for (let i = 0; i < G; i++) {
+        const k00 = j * N + i;
+        const k10 = j * N + i + 1;
+        const k11 = (j + 1) * N + i + 1;
+        const k01 = (j + 1) * N + i;
+        const a = vIdxGrid[k00];
+        const b = vIdxGrid[k10];
+        const c = vIdxGrid[k11];
+        const d = vIdxGrid[k01];
+        if (a >= 0 && b >= 0 && c >= 0 && d >= 0) {
+          // `addQuad(q0, q1, q2, q3)` with `(q0=a, q1=d, q2=c, q3=b)`:
+          cushionMesh.addQuad(a, d, c, b);
+          const dac =
+            (posX[k11] - posX[k00]) ** 2 + (posY[k11] - posY[k00]) ** 2 + (posZ[k11] - posZ[k00]) ** 2;
+          const dbd =
+            (posX[k10] - posX[k01]) ** 2 + (posY[k10] - posY[k01]) ** 2 + (posZ[k10] - posZ[k01]) ** 2;
+          if (dac <= dbd) {
+            pushActiveTri(k00, k01, k11);
+            pushActiveTri(k00, k11, k10);
+          } else {
+            pushActiveTri(k00, k01, k10);
+            pushActiveTri(k01, k11, k10);
+          }
+        }
+      }
+    }
+    cushionMesh.hasExplicitNormals = false;
+    const cNrm = cushionMesh.computeNormals();
+
+    // 3. Clothe 100% of every cushion dome AND steep overhanging flank in Ultra-Dense
+    // Barycentric Triangle-Surface Bryophyte Star-Tufts!
+    const tuftBudget =
+      tier === 1 ? 22000 : tier === 2 ? 44000 : tier === 3 ? 84000 : 118000;
+    const densityPerM2 = totalTriArea > 1e-8 ? tuftBudget / totalTriArea : 0;
+    const shootLenBase = clamp(p.shootHeightMm * 0.001, 0.0028, 0.0068);
+    const bladeHalfW = Math.max(0.00074, shootLenBase * 0.26);
+
+    const tuftRng = this.rng.fork(0x6123);
+    let areaCarry = tuftRng.next();
+    for (let tIdx = 0; tIdx < triA.length; tIdx++) {
+      const exactCount = triAreaList[tIdx] * densityPerM2 + areaCarry;
+      const nTufts = Math.floor(exactCount);
+      areaCarry = exactCount - nTufts;
+      if (nTufts <= 0) continue;
+
+      const ka = triA[tIdx];
+      const kb = triB[tIdx];
+      const kc = triC[tIdx];
+      const va = vIdxGrid[ka] * 3;
+      const vb = vIdxGrid[kb] * 3;
+      const vc = vIdxGrid[kc] * 3;
+
+      // Exact flat outward normal of this rendered cushion triangle (`(ka -> kb -> kc)` is CCW outward!)
+      const e1x = posX[kb] - posX[ka], e1y = posY[kb] - posY[ka], e1z = posZ[kb] - posZ[ka];
+      const e2x = posX[kc] - posX[ka], e2y = posY[kc] - posY[ka], e2z = posZ[kc] - posZ[ka];
+      let fnx = e1y * e2z - e1z * e2y;
+      let fny = e1z * e2x - e1x * e2z;
+      let fnz = e1x * e2y - e1y * e2x;
+      const fnl = Math.hypot(fnx, fny, fnz) || 1;
+      const triNrm = v3(fnx / fnl, fny / fnl, fnz / fnl);
+      const triT1 = anyPerpendicular(triNrm);
+      const triT2 = normalize(cross(triNrm, triT1));
+
+      for (let ti = 0; ti < nTufts; ti++) {
+        let r1 = tuftRng.next();
+        let r2 = tuftRng.next();
+        if (r1 + r2 > 1.0) {
+          r1 = 1.0 - r1;
+          r2 = 1.0 - r2;
+        }
+        const wA = 1.0 - r1 - r2;
+        const wB = r1;
+        const wC = r2;
+
+        const covAt = wA * covArr[ka] + wB * covArr[kb] + wC * covArr[kc];
+        if (covAt < 0.045) continue;
+
+        const bx = wA * posX[ka] + wB * posX[kb] + wC * posX[kc];
+        const by = wA * posY[ka] + wB * posY[kb] + wC * posY[kc];
+        const bz = wA * posZ[ka] + wB * posZ[kb] + wC * posZ[kc];
+        const ao = wA * aoArr[ka] + wB * aoArr[kb] + wC * aoArr[kc];
+        const toast = wA * toastArr[ka] + wB * toastArr[kb] + wC * toastArr[kc];
+        const micro = wA * microArr[ka] + wB * microArr[kb] + wC * microArr[kc];
+        const hNorm = saturate((wA * rawH[ka] + wB * rawH[kb] + wC * rawH[kc]) / Math.max(1e-4, maxThick));
+
+        let nx = wA * cNrm[va] + wB * cNrm[vb] + wC * cNrm[vc];
+        let ny = wA * cNrm[va + 1] + wB * cNrm[vb + 1] + wC * cNrm[vc + 1];
+        let nz = wA * cNrm[va + 2] + wB * cNrm[vb + 2] + wC * cNrm[vc + 2];
+        const nl = Math.hypot(nx, ny, nz);
+        if (nl < 1e-6) {
+          nx = triNrm.x; ny = triNrm.y; nz = triNrm.z;
+        } else {
+          nx /= nl; ny /= nl; nz /= nl;
+        }
+        const surfNormal = v3(nx, ny, nz);
+        const t1 = triT1;
+        const t2 = triT2;
+
+        const clumpLean = add(
+          scale(t1, tuftRng.vary(0, 0.14)),
+          scale(t2, tuftRng.vary(0, 0.14)),
+        );
+        const shootDir = normalize(add(add(scale(triNrm, 0.52), scale(surfNormal, 0.48)), clumpLean));
+        const sLen = shootLenBase * (0.92 + 0.34 * ao) * (0.86 + 0.28 * micro) * tuftRng.vary(1.0, 0.16);
+
+        const tuftPivot = v3(bx, by, bz);
+        const rawPh = bx * 3.7 + bz * 4.1 + tuftRng.next() * 0.08;
+        const tuftPhase = rawPh - Math.floor(rawPh);
+        const tuftFlex = 0.014 * windComp * (0.35 + 0.65 * ao);
+        const tuftWind: [number, number, number, number] = [tuftFlex, 0, tuftPhase, 0.012];
+
+        // Rich olive-chartreuse sunlit shoot tips over deep woodland moss throats!
+        const underOcc = clamp(0.62 + 0.38 * surfNormal.y, 0.30, 1.0);
+        const effAo = ao * underOcc;
+        let tipPigment = mixRgb(colCleft, colCanopy, smoothstep(0.04, 0.48, effAo));
+        tipPigment = mixRgb(
+          tipPigment,
+          colTip,
+          smoothstep(0.24, 0.88, effAo * (0.48 + 0.52 * hNorm)) * tuftRng.range(0.40, 1.0),
+        );
+        if (toastStrength > 0.005 && toast > 0.04) {
+          tipPigment = mixRgb(tipPigment, colToast, clamp(toast * toastStrength * 2.3, 0, 0.78));
+        }
+        const basePigment = mixRgb(colCleft, colCanopy, smoothstep(0.08, 0.76, effAo) * 0.38);
+
+        const nBlades = tier >= 3 ? 4 : 3;
+        const rot0 = tuftRng.next() * TAU;
+        // Anchor `+0.18 mm` above the exact flat rendered triangle plane (`triNrm`) so
+        // 100.0% of all 4 star-blades clear convex overhanging pillow lips with zero clipping!
+        const baseRoot = addScaled(tuftPivot, triNrm, 0.00018);
+
+        for (let b = 0; b < nBlades; b++) {
+          const ang = rot0 + (b / nBlades) * TAU + tuftRng.vary(0, 0.22);
+          const radOut = add(scale(t1, Math.cos(ang)), scale(t2, Math.sin(ang)));
+          const sideTan = cross(surfNormal, radOut);
+          const bladeAxis = normalize(add(scale(shootDir, 0.82), scale(radOut, 0.52)));
+          const tipPt = addScaled(tuftPivot, bladeAxis, sLen);
+          const facetNrm = normalize(add(scale(surfNormal, 0.68), scale(radOut, 0.36)));
+
+          const vA = phyllidMesh.addVertex({
+            x: baseRoot.x - sideTan.x * bladeHalfW,
+            y: baseRoot.y - sideTan.y * bladeHalfW,
+            z: baseRoot.z - sideTan.z * bladeHalfW,
+            nx: facetNrm.x, ny: facetNrm.y, nz: facetNrm.z,
+            tx: bladeAxis.x, ty: bladeAxis.y, tz: bladeAxis.z,
+            color: basePigment,
+            wind: tuftWind,
+            pivot: tuftPivot,
+            roughness: 0.74,
+            translucency: 0.32 * ao,
+            detailMetric: clamp(ao * 0.68, 0.02, 1.0),
+            anatomyLevel: 2,
+          });
+          const vB = phyllidMesh.addVertex({
+            x: baseRoot.x + sideTan.x * bladeHalfW,
+            y: baseRoot.y + sideTan.y * bladeHalfW,
+            z: baseRoot.z + sideTan.z * bladeHalfW,
+            nx: facetNrm.x, ny: facetNrm.y, nz: facetNrm.z,
+            tx: bladeAxis.x, ty: bladeAxis.y, tz: bladeAxis.z,
+            color: basePigment,
+            wind: tuftWind,
+            pivot: tuftPivot,
+            roughness: 0.74,
+            translucency: 0.32 * ao,
+            detailMetric: clamp(ao * 0.68, 0.02, 1.0),
+            anatomyLevel: 2,
+          });
+          const vC = phyllidMesh.addVertex({
+            x: tipPt.x,
+            y: tipPt.y,
+            z: tipPt.z,
+            nx: surfNormal.x, ny: surfNormal.y, nz: surfNormal.z,
+            tx: bladeAxis.x, ty: bladeAxis.y, tz: bladeAxis.z,
+            color: tipPigment,
+            wind: tuftWind,
+            pivot: tuftPivot,
+            roughness: 0.60,
+            translucency: 0.62 * ao,
+            detailMetric: clamp(ao * 1.02, 0.03, 1.0),
+            anatomyLevel: 2,
+          });
+          phyllidMesh.addTri(vA, vB, vC);
+          this.stats.phyllids++;
+        }
+        this.stats.shoots++;
+
+        if (p.sporophyteDensity > 0.005 && ao > 0.65 && tuftRng.next() < p.sporophyteDensity * 0.012) {
+          this.buildSporophyte(
+            setaMesh,
+            capsuleMesh,
+            tuftPivot,
+            tuftPivot,
+            0.03 * windComp,
+            windComp,
+            shootDir,
+            colSetaBase,
+            colCapsule,
+            colTip,
+            tuftPhase,
+            tuftRng,
+            tier,
+          );
+          this.stats.sporophytes++;
+        }
+      }
+    }
+    phyllidMesh.hasExplicitNormals = true;
+
+    cushionMesh.metaLabel = `${(cushionMesh.renderedTriangles / 1000).toFixed(1)}k tris`;
+    phyllidMesh.metaLabel = `${(this.stats.phyllids / 1000).toFixed(0)}k velvet tips`;
+    setaMesh.metaLabel = `${this.stats.sporophytes} setae`;
+    capsuleMesh.metaLabel = `${this.stats.sporophytes} capsules`;
+
+    const parts = [rhizoidMesh, cushionMesh, phyllidMesh, setaMesh, capsuleMesh].filter(
+      (m) => m.faceCount > 0,
+    );
     let maxY = 0.04;
     for (const part of parts) {
       const pos = part.positions;

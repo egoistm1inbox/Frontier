@@ -19,6 +19,8 @@ import {
 } from './generators/fernParams';
 import { DEFAULT_HAIR_PARAMS, HAIR_FLOW_NAMES, HairFlowMode } from './generators/hairParams';
 import { DEFAULT_MOSS_PARAMS, MOSS_HABIT_NAMES, MossHabit } from './generators/mossParams';
+import { DEFAULT_PALM_PARAMS, PALM_SPECIES_NAMES, PalmSpecies } from './generators/palmParams';
+import { DEFAULT_TREE_PARAMS, TREE_SPECIES_NAMES, TreeSpecies } from './generators/treeParams';
 import {
   DEFAULT_TROPICAL_PARAMS,
   TROPICAL_ARCH_NAMES,
@@ -230,9 +232,11 @@ class FrontierStudio {
       return b;
     };
     addPills.append(
+      mkAdd('Tree', 'tree'),
+      mkAdd('Palm', 'palm'),
+      mkAdd('Moss', 'moss'),
       mkAdd('Tropical', 'tropical'),
       mkAdd('Fern', 'fern'),
-      mkAdd('Moss', 'moss'),
       mkAdd('Hair', 'hair'),
     );
     outSub.append(addPills);
@@ -246,7 +250,7 @@ class FrontierStudio {
     const searchWrap = el('div', 'search');
     searchWrap.append(icon('search'));
     const sInp = el('input');
-    sInp.placeholder = 'Filter banana, carpet moss, ferns, fur…';
+    sInp.placeholder = 'Filter oak, date palm, pillow moss, banana, fur…';
     sInp.addEventListener('input', () => {
       this.presetQuery = sInp.value.trim().toLowerCase();
       this.renderPresetLibrary();
@@ -760,7 +764,29 @@ class FrontierStudio {
     const seed = 10 + idx * 17;
 
     let newLayer: GeneratorLayer;
-    if (kind === 'fern') {
+    if (kind === 'tree') {
+      newLayer = {
+        id,
+        name: `English Oak #${idx}`,
+        kind: 'tree',
+        seed,
+        visible: true,
+        locked: false,
+        transform: { x: 0, y: 0, z: 0, yaw: (idx * 55) % 360, scale: 1 },
+        tree: { ...DEFAULT_TREE_PARAMS },
+      };
+    } else if (kind === 'palm') {
+      newLayer = {
+        id,
+        name: `Date Palm #${idx}`,
+        kind: 'palm',
+        seed,
+        visible: true,
+        locked: false,
+        transform: { x: 0, y: 0, z: 0, yaw: (idx * 50) % 360, scale: 1 },
+        palm: { ...DEFAULT_PALM_PARAMS },
+      };
+    } else if (kind === 'fern') {
       newLayer = {
         id,
         name: `Sword Fern #${idx}`,
@@ -855,15 +881,21 @@ class FrontierStudio {
     let elemCount = 0;
     let elemSub = '';
     for (const rep of b.layerReports) {
-      if (rep.fern) {
+      if (rep.tree) {
+        elemCount += rep.tree.leaves + rep.tree.weldedJunctions;
+        elemSub = `${rep.tree.weldedJunctions} welded collars · ${fmtCompact(rep.tree.leaves)} leaves`;
+      } else if (rep.palm) {
+        elemCount += rep.palm.leaflets + rep.palm.fruits;
+        elemSub = `${rep.palm.fronds} fronds · ${rep.palm.fruits} 3D fruits`;
+      } else if (rep.fern) {
         elemCount += rep.fern.leaflets + rep.fern.soriClusters;
         elemSub = `${rep.fern.fronds} fronds · ${rep.fern.leaflets} leaflets`;
       } else if (rep.tropical) {
         elemCount += rep.tropical.ribbons + rep.tropical.fruitsOrFlowers;
-        elemSub = `${rep.tropical.leaves} paddles · ${rep.tropical.ribbons} wind ribbons`;
+        elemSub = `${rep.tropical.leaves} paddles · ${rep.tropical.weldedJunctions ?? 0} welded collars`;
       } else if (rep.moss) {
         elemCount += rep.moss.phyllids;
-        elemSub = `${rep.moss.shoots} shoots · ${rep.moss.sporophytes} caps`;
+        elemSub = `${fmtCompact(rep.moss.shoots)} shoots · ${rep.moss.sporophytes} caps`;
       } else if (rep.hair) {
         elemCount += rep.hair.totalStrands;
         elemSub = `${rep.hair.guides} guides · 3 coats`;
@@ -913,39 +945,53 @@ class FrontierStudio {
     } else if (layer) {
       this.inspBadge.textContent = `${layer.kind.toUpperCase()} · SEED ${layer.seed}`;
       const acc =
-        layer.kind === 'fern'
-          ? '#34c759'
-          : layer.kind === 'tropical'
-            ? '#7ee058'
-            : layer.kind === 'moss'
-              ? '#4fd89b'
-              : '#ffb454';
+        layer.kind === 'tree'
+          ? '#52d17c'
+          : layer.kind === 'palm'
+            ? '#eab308'
+            : layer.kind === 'fern'
+              ? '#34c759'
+              : layer.kind === 'tropical'
+                ? '#7ee058'
+                : layer.kind === 'moss'
+                  ? '#86c232'
+                  : '#ffb454';
       const icoName =
-        layer.kind === 'fern'
-          ? 'fern'
-          : layer.kind === 'tropical'
-            ? 'tropical'
-            : layer.kind === 'moss'
-              ? 'moss'
-              : 'fur';
+        layer.kind === 'tree'
+          ? 'tree'
+          : layer.kind === 'palm'
+            ? 'palm'
+            : layer.kind === 'fern'
+              ? 'fern'
+              : layer.kind === 'tropical'
+                ? 'tropical'
+                : layer.kind === 'moss'
+                  ? 'moss'
+                  : 'fur';
       this.heroIco.innerHTML = '';
       this.heroIco.style.color = acc;
       this.heroIco.style.background = `color-mix(in srgb, ${acc} 16%, transparent)`;
       this.heroIco.append(icon(icoName));
       this.heroName.textContent = layer.name;
       this.heroSub.textContent =
-        layer.kind === 'fern' && layer.fern
-          ? FERN_ARCH_NAMES[layer.fern.architecture]
-          : layer.kind === 'tropical' && layer.tropical
-            ? TROPICAL_ARCH_NAMES[layer.tropical.architecture]
-            : layer.kind === 'moss' && layer.moss
-              ? MOSS_HABIT_NAMES[layer.moss.habit]
-              : layer.hair
-                ? HAIR_FLOW_NAMES[layer.hair.flowMode]
-                : '';
+        layer.kind === 'tree' && layer.tree
+          ? TREE_SPECIES_NAMES[layer.tree.species]
+          : layer.kind === 'palm' && layer.palm
+            ? PALM_SPECIES_NAMES[layer.palm.species]
+            : layer.kind === 'fern' && layer.fern
+              ? FERN_ARCH_NAMES[layer.fern.architecture]
+              : layer.kind === 'tropical' && layer.tropical
+                ? TROPICAL_ARCH_NAMES[layer.tropical.architecture]
+                : layer.kind === 'moss' && layer.moss
+                  ? MOSS_HABIT_NAMES[layer.moss.habit]
+                  : layer.hair
+                    ? HAIR_FLOW_NAMES[layer.hair.flowMode]
+                    : '';
       this.heroBigVal.textContent = fmtCompact(rep?.triangles ?? top.renderedTriangles);
       this.heroBigUnit.textContent = 'tris';
       this.heroBigLab.textContent = `Tier ${
+        layer.tree?.detailTier ??
+        layer.palm?.detailTier ??
         layer.fern?.detailTier ??
         layer.tropical?.detailTier ??
         layer.moss?.detailTier ??
@@ -957,16 +1003,23 @@ class FrontierStudio {
     this.heroSide1.textContent =
       b.sceneHeight >= 1.5 ? `${b.sceneHeight.toFixed(2)} m tall` : `${(b.sceneHeight * 100).toFixed(0)} cm tall`;
     this.heroSide2.textContent =
-      rep?.fern
-        ? `${rep.fern.leaflets} blades · ${rep.fern.soriClusters} sori`
-        : rep?.tropical
-          ? `${rep.tropical.leaves} paddles · ${rep.tropical.ribbons} ribbons`
-          : rep?.moss
-            ? `${fmtCompact(rep.moss.phyllids)} phyllids`
-            : rep?.hair
-              ? `${fmtCompact(rep.hair.totalStrands)} strands`
-              : `${b.parts.length} parts`;
-    this.heroSide3.textContent = top.nanVertices === 0 ? 'Clean Manifold' : `${top.nanVertices} NaN`;
+      rep?.tree
+        ? `${rep.tree.weldedJunctions} collars · ${rep.tree.rootStems} roots`
+        : rep?.palm
+          ? `${rep.palm.fronds} fronds · ${rep.palm.fruits} fruits`
+          : rep?.fern
+            ? `${rep.fern.leaflets} blades · ${rep.fern.soriClusters} sori`
+            : rep?.tropical
+              ? `${rep.tropical.leaves} paddles · ${rep.tropical.weldedJunctions ?? 0} collars`
+              : rep?.moss
+                ? `${fmtCompact(rep.moss.phyllids)} phyllids`
+                : rep?.hair
+                  ? `${fmtCompact(rep.hair.totalStrands)} strands`
+                  : `${b.parts.length} parts`;
+    const isWeldedClean =
+      top.nanVertices === 0 &&
+      (rep?.tree ? rep.tree.closedManifold : rep?.palm ? rep.palm.closedTrunkManifold : true);
+    this.heroSide3.textContent = isWeldedClean ? 'Closed Manifold' : `${top.nanVertices} NaN`;
 
     this.drawSparkline(layer);
     this.renderPresenceTiles();
@@ -978,17 +1031,25 @@ class FrontierStudio {
 
     const pts: string[] = [];
     const acc =
-      layer.kind === 'fern'
-        ? '#34c759'
-        : layer.kind === 'tropical'
-          ? '#7ee058'
-          : layer.kind === 'moss'
-            ? '#4fd89b'
-            : '#ffb454';
+      layer.kind === 'tree'
+        ? '#52d17c'
+        : layer.kind === 'palm'
+          ? '#eab308'
+          : layer.kind === 'fern'
+            ? '#34c759'
+            : layer.kind === 'tropical'
+              ? '#7ee058'
+              : layer.kind === 'moss'
+                ? '#86c232'
+                : '#ffb454';
     for (let i = 0; i <= 24; i++) {
       const t = i / 24;
       let yNorm = 0.5;
-      if (layer.kind === 'fern' && layer.fern) {
+      if (layer.kind === 'tree' && layer.tree) {
+        yNorm = 0.16 + 0.72 * Math.sin(Math.pow(t, 0.75) * Math.PI) + 0.08 * Math.sin(t * 16.0);
+      } else if (layer.kind === 'palm' && layer.palm) {
+        yNorm = 0.22 + 0.66 * Math.sin(t * Math.PI * 0.92) * (1 - 0.35 * t);
+      } else if (layer.kind === 'fern' && layer.fern) {
         const droop = layer.fern.archDroop / 130;
         yNorm = Math.sin(t * Math.PI * 0.88) * (1 - droop * t * 0.55);
       } else if (layer.kind === 'tropical' && layer.tropical) {
@@ -1040,7 +1101,38 @@ class FrontierStudio {
       }
     };
 
-    if (layer.kind === 'fern' && layer.fern) {
+    if (layer.kind === 'tree' && layer.tree) {
+      const tr = layer.tree;
+      addCell('tree', 'Welded Wood', isPartVis('wood'), () => flipPart('wood'));
+      addCell('leaf', 'Canopy', tr.showLeaves && isPartVis('leaves'), () => {
+        tr.showLeaves = !tr.showLeaves;
+        this.rebuildInspector();
+        this.requestGenerate();
+      });
+      addCell('roots', 'Buttresses', tr.rootCount > 0, () => {
+        tr.rootCount = tr.rootCount > 0 ? 0 : 6;
+        this.rebuildInspector();
+        this.requestGenerate();
+      });
+      addCell('ground', 'Host Base', !this.hiddenPartIds.has('substrate:host') && this.sceneSpec.substrate.kind !== 'none', () => {
+        this.toggleNodeVisibility('substrate:host');
+      });
+    } else if (layer.kind === 'palm' && layer.palm) {
+      const pp = layer.palm;
+      addCell('palm', 'Trunk & Bole', isPartVis('skeleton'), () => flipPart('skeleton'));
+      addCell('leaf', 'Frond Blades', isPartVis('leaflets'), () => {
+        flipPart('rachises');
+        flipPart('leaflets');
+      });
+      addCell('sparkles', '3D Fruits', pp.showFruits && isPartVis('fruits'), () => {
+        pp.showFruits = !pp.showFruits;
+        this.rebuildInspector();
+        this.requestGenerate();
+      });
+      addCell('ground', 'Host Base', !this.hiddenPartIds.has('substrate:host') && this.sceneSpec.substrate.kind !== 'none', () => {
+        this.toggleNodeVisibility('substrate:host');
+      });
+    } else if (layer.kind === 'fern' && layer.fern) {
       const fp = layer.fern;
       addCell('sprout', 'Crosiers', fp.crosierCount > 0 && isPartVis('crosiers'), () => {
         if (fp.crosierCount === 0) {
@@ -1122,12 +1214,16 @@ class FrontierStudio {
     const trigger = () => this.requestGenerate(false);
 
     if (this.activeTab === 'shape') {
-      if (layer?.kind === 'fern' && layer.fern) this.buildFernShapeTab(layer.fern, trigger);
+      if (layer?.kind === 'tree' && layer.tree) this.buildTreeShapeTab(layer.tree, trigger);
+      else if (layer?.kind === 'palm' && layer.palm) this.buildPalmShapeTab(layer.palm, trigger);
+      else if (layer?.kind === 'fern' && layer.fern) this.buildFernShapeTab(layer.fern, trigger);
       else if (layer?.kind === 'tropical' && layer.tropical) this.buildTropicalShapeTab(layer.tropical, trigger);
       else if (layer?.kind === 'moss' && layer.moss) this.buildMossShapeTab(layer.moss, trigger);
       else if (layer?.kind === 'hair' && layer.hair) this.buildHairShapeTab(layer.hair, trigger);
     } else if (this.activeTab === 'detail') {
-      if (layer?.kind === 'fern' && layer.fern) this.buildFernDetailTab(layer.fern, trigger);
+      if (layer?.kind === 'tree' && layer.tree) this.buildTreeDetailTab(layer.tree, trigger);
+      else if (layer?.kind === 'palm' && layer.palm) this.buildPalmDetailTab(layer.palm, trigger);
+      else if (layer?.kind === 'fern' && layer.fern) this.buildFernDetailTab(layer.fern, trigger);
       else if (layer?.kind === 'tropical' && layer.tropical) this.buildTropicalDetailTab(layer.tropical, trigger);
       else if (layer?.kind === 'moss' && layer.moss) this.buildMossDetailTab(layer.moss, trigger);
       else if (layer?.kind === 'hair' && layer.hair) this.buildHairDetailTab(layer.hair, trigger);
@@ -1138,6 +1234,125 @@ class FrontierStudio {
     } else if (this.activeTab === 'scene') {
       this.buildSceneTab();
     }
+  }
+
+  // --- WELDED WOODY TREE TABS ---
+  private buildTreeShapeTab(tr: NonNullable<GeneratorLayer['tree']>, onChange: () => void): void {
+    const sSp = section('Welded Tree Architecture', this.inspBody, { hint: 'V - E + F = 2' });
+    select<TreeSpecies>(
+      sSp,
+      'Tree Species',
+      (Object.keys(TREE_SPECIES_NAMES) as TreeSpecies[]).map((k) => ({
+        value: k,
+        label: TREE_SPECIES_NAMES[k],
+      })),
+      () => tr.species,
+      (v) => (tr.species = v),
+      onChange,
+    );
+    select<number>(
+      sSp,
+      'Mesh Detail Tier',
+      [
+        { value: 1, label: '1 · Light Crown' },
+        { value: 2, label: '2 · Standard Manifold' },
+        { value: 3, label: '3 · High-Poly Welded' },
+        { value: 4, label: '4 · Cinema Specimen' },
+      ],
+      () => tr.detailTier,
+      (v) => (tr.detailTier = v),
+      onChange,
+    );
+    slider(sSp, 'Tree Height', () => tr.height, (v) => (tr.height = v), { min: 4, max: 24, step: 0.25, unit: 'm' }, onChange);
+    slider(sSp, 'Trunk Girth Ratio', () => tr.trunkRatio, (v) => (tr.trunkRatio = v), { min: 0.015, max: 0.095, step: 0.002 }, onChange);
+    slider(sSp, 'Basal Trunk Flare', () => tr.basalFlare, (v) => (tr.basalFlare = v), { min: 0, max: 1.8, step: 0.05 }, onChange);
+
+    const sCrown = section('Welded Limbs, Forks & Crown', this.inspBody, { hint: 'Weber-Penn' });
+    stepper(sCrown, 'Branch Recursion', () => tr.branchLevels, (v) => (tr.branchLevels = v), { min: 2, max: 4, integer: true }, onChange);
+    slider(sCrown, 'Scaffold Limbs', () => tr.limbCount, (v) => (tr.limbCount = Math.round(v)), { min: 5, max: 28, step: 1 }, onChange);
+    slider(sCrown, 'Emergence Angle', () => tr.branchAngleDeg, (v) => (tr.branchAngleDeg = v), { min: 25, max: 82, step: 1, unit: '°' }, onChange);
+    slider(sCrown, 'Y-Fork Tendency', () => tr.forkTendency, (v) => (tr.forkTendency = v), { min: 0, max: 0.85, step: 0.03 }, onChange);
+    slider(sCrown, 'Canopy Spread', () => tr.canopyFlatten, (v) => (tr.canopyFlatten = v), { min: 0, max: 1, step: 0.03 }, onChange);
+
+    const sRoot = section('Terrain-Welded Buttress Roots', this.inspBody, { hint: 'manifold' });
+    slider(sRoot, 'Primary Surface Roots', () => tr.rootCount, (v) => (tr.rootCount = Math.round(v)), { min: 0, max: 9, step: 1 }, onChange);
+    slider(sRoot, 'Root Radial Reach', () => tr.rootReach, (v) => (tr.rootReach = v), { min: 0.1, max: 0.42, step: 0.01 }, onChange);
+    slider(sRoot, 'Buttress Lobe Flutes', () => tr.buttressRelief, (v) => (tr.buttressRelief = v), { min: 0, max: 0.75, step: 0.03 }, onChange);
+
+    this.appendLiveWindMiniSection();
+  }
+
+  private buildTreeDetailTab(tr: NonNullable<GeneratorLayer['tree']>, onChange: () => void): void {
+    const sCollar = section('Bezier Branch Collars & Pipe Law', this.inspBody, { hint: 'quad weld' });
+    slider(sCollar, 'Collar Fillet Curve', () => tr.collarFillet, (v) => (tr.collarFillet = v), { min: 0.25, max: 0.98, step: 0.02 }, onChange);
+    slider(sCollar, 'Da Vinci Pipe Law', () => tr.pipeConservation, (v) => (tr.pipeConservation = v), { min: 0, max: 1, step: 0.04 }, onChange);
+    slider(sCollar, 'Lateral Rootlets', () => tr.rootLaterals, (v) => (tr.rootLaterals = Math.round(v)), { min: 0, max: 4, step: 1 }, onChange);
+    slider(sCollar, 'Wind Sway Flex', () => tr.windCompliance, (v) => (tr.windCompliance = v), { min: 0.2, max: 2.0, step: 0.05 }, onChange);
+
+    const sLeaf = section('3D Sculpted Canopy Foliage', this.inspBody, { hint: 'rigid SO(3)' });
+    check(sLeaf, 'Show Canopy Leaves', () => tr.showLeaves, (v) => (tr.showLeaves = v), onChange);
+    slider(sLeaf, 'Foliage Density', () => tr.leafDensity, (v) => (tr.leafDensity = v), { min: 0.25, max: 1.8, step: 0.05 }, onChange);
+    slider(sLeaf, 'Leaf Blade Length', () => tr.leafSize, (v) => (tr.leafSize = v), { min: 0.08, max: 0.28, step: 0.01, unit: 'm' }, onChange);
+  }
+
+  // --- FRUITING & DICHOTOMOUS PALM TABS ---
+  private buildPalmShapeTab(pp: NonNullable<GeneratorLayer['palm']>, onChange: () => void): void {
+    const sSp = section('Palm Species & Trunk Architecture', this.inspBody, { hint: 'Arecaceae' });
+    select<PalmSpecies>(
+      sSp,
+      'Palm Species',
+      (Object.keys(PALM_SPECIES_NAMES) as PalmSpecies[]).map((k) => ({
+        value: k,
+        label: PALM_SPECIES_NAMES[k],
+      })),
+      () => pp.species,
+      (v) => (pp.species = v),
+      onChange,
+    );
+    select<number>(
+      sSp,
+      'Mesh Detail Tier',
+      [
+        { value: 1, label: '1 · Light Palm' },
+        { value: 2, label: '2 · Standard Crown' },
+        { value: 3, label: '3 · High-Poly Fruiting' },
+        { value: 4, label: '4 · Cinema Botanical' },
+      ],
+      () => pp.detailTier,
+      (v) => (pp.detailTier = v),
+      onChange,
+    );
+    slider(sSp, 'Trunk Height', () => pp.trunkHeight, (v) => (pp.trunkHeight = v), { min: 3, max: 16, step: 0.2, unit: 'm' }, onChange);
+    slider(sSp, 'Trunk Radius', () => pp.trunkRadius, (v) => (pp.trunkRadius = v), { min: 0.12, max: 0.45, step: 0.01, unit: 'm' }, onChange);
+    slider(sSp, 'Trade-Wind Lean', () => pp.trunkLeanDeg, (v) => (pp.trunkLeanDeg = v), { min: 0, max: 32, step: 1, unit: '°' }, onChange);
+    slider(sSp, 'Phototropic Sweep', () => pp.trunkCurveDeg, (v) => (pp.trunkCurveDeg = v), { min: 0, max: 42, step: 1, unit: '°' }, onChange);
+    stepper(sSp, 'Aerial Y-Fork Levels', () => pp.forkLevels, (v) => (pp.forkLevels = v), { min: 0, max: 2, integer: true }, onChange);
+
+    const sCr = section('Phyllotactic Frond Crown', this.inspBody, { hint: '137.5° spiral' });
+    slider(sCr, 'Fronds per Crown', () => pp.frondCount, (v) => (pp.frondCount = Math.round(v)), { min: 10, max: 56, step: 1 }, onChange);
+    slider(sCr, 'Frond Length', () => pp.frondLength, (v) => (pp.frondLength = v), { min: 1.4, max: 5.2, step: 0.1, unit: 'm' }, onChange);
+    slider(sCr, 'Frond Span Width', () => pp.frondWidth, (v) => (pp.frondWidth = v), { min: 0.6, max: 1.8, step: 0.04, unit: 'm' }, onChange);
+    slider(sCr, 'Rachis Arch Droop', () => pp.frondArchDeg, (v) => (pp.frondArchDeg = v), { min: 20, max: 115, step: 2, unit: '°' }, onChange);
+    slider(sCr, 'Dry Petticoat Skirt', () => pp.skirtFraction, (v) => (pp.skirtFraction = v), { min: 0, max: 0.48, step: 0.02 }, onChange);
+
+    this.appendLiveWindMiniSection();
+  }
+
+  private buildPalmDetailTab(pp: NonNullable<GeneratorLayer['palm']>, onChange: () => void): void {
+    const sFr = section('3D Infructescence & Fruit Clusters', this.inspBody, { hint: 'spadix' });
+    check(sFr, 'Show Fruiting Bunches', () => pp.showFruits, (v) => (pp.showFruits = v), onChange);
+    slider(sFr, 'Axil / Spadix Bunches', () => pp.fruitBunches, (v) => (pp.fruitBunches = Math.round(v)), { min: 0, max: 12, step: 1 }, onChange);
+    slider(sFr, 'Fruit Abundance', () => pp.fruitAbundance, (v) => (pp.fruitAbundance = v), { min: 0.3, max: 1.6, step: 0.05 }, onChange);
+    slider(sFr, 'Fruit Ripeness', () => pp.fruitRipeness, (v) => (pp.fruitRipeness = v), { min: 0, max: 1, step: 0.03 }, onChange);
+
+    const sAn = section('Pinnae, Crownshaft & Bole Relief', this.inspBody, { hint: 'anatomy' });
+    slider(sAn, 'Pinna Pairs / Pleats', () => pp.leafletPairs, (v) => (pp.leafletPairs = Math.round(v)), { min: 18, max: 60, step: 2 }, onChange);
+    slider(sAn, 'Plumose Multi-Plane', () => pp.plumoseSplay, (v) => (pp.plumoseSplay = v), { min: 0, max: 1, step: 0.03 }, onChange);
+    slider(sAn, 'Crownshaft Ratio', () => pp.crownshaftRatio, (v) => (pp.crownshaftRatio = v), { min: 0, max: 0.28, step: 0.01 }, onChange);
+    slider(sAn, 'Basal Root Bole', () => pp.basalBole, (v) => (pp.basalBole = v), { min: 0, max: 0.9, step: 0.03 }, onChange);
+    slider(sAn, 'Welded Root Spurs', () => pp.rootButtresses, (v) => (pp.rootButtresses = Math.round(v)), { min: 0, max: 8, step: 1 }, onChange);
+    slider(sAn, 'Boot / Ring Relief', () => pp.trunkRelief, (v) => (pp.trunkRelief = v), { min: 0, max: 1, step: 0.03 }, onChange);
+    slider(sAn, 'Trade-Wind Sway', () => pp.windSway, (v) => (pp.windSway = v), { min: 0.2, max: 2.0, step: 0.05 }, onChange);
   }
 
   // --- FERN / PLANT TABS ---
@@ -1375,11 +1590,14 @@ class FrontierStudio {
     slider(sCol, 'Carpet Nap Sweep', () => mp.carpetSweep, (v) => (mp.carpetSweep = v), { min: 0, max: 1, step: 0.03 }, onChange);
     slider(sCol, 'Wind Ripple Flex', () => mp.windCompliance, (v) => (mp.windCompliance = v), { min: 0.2, max: 2.0, step: 0.05 }, onChange);
     slider(sCol, 'Crevice Affinity', () => mp.creviceAffinity, (v) => (mp.creviceAffinity = v), { min: 0, max: 1, step: 0.03 }, onChange);
-    slider(sCol, 'Undulation / Pillow H', () => mp.cushionHeightMm, (v) => (mp.cushionHeightMm = v), { min: 2, max: 40, step: 1, unit: 'mm' }, onChange);
-    slider(sCol, 'Undulation Freq', () => mp.cushionScale, (v) => (mp.cushionScale = v), { min: 1.5, max: 10, step: 0.2 }, onChange);
+    slider(sCol, 'Undulation / Pillow H', () => mp.cushionHeightMm, (v) => (mp.cushionHeightMm = v), { min: 2, max: 140, step: 1, unit: 'mm' }, onChange);
+    slider(sCol, 'Undulation Freq', () => mp.cushionScale, (v) => (mp.cushionScale = v), { min: 1.5, max: 10, step: 0.15 }, onChange);
+    if (mp.habit === 'billowing_pillow') {
+      slider(sCol, 'Sun-Toasted Crests', () => mp.pillowToast ?? 0.2, (v) => (mp.pillowToast = v), { min: 0, max: 0.55, step: 0.02 }, onChange);
+    }
 
     const sSt = section('Gametophyte Stems & Branching', this.inspBody);
-    slider(sSt, 'Shoot Height', () => mp.shootHeightMm, (v) => (mp.shootHeightMm = v), { min: 8, max: 75, step: 1, unit: 'mm' }, onChange);
+    slider(sSt, 'Shoot / Velvet Height', () => mp.shootHeightMm, (v) => (mp.shootHeightMm = v), { min: 2.5, max: 75, step: 0.2, unit: 'mm' }, onChange);
     slider(sSt, 'Lateral Branching', () => mp.branching, (v) => (mp.branching = v), { min: 0, max: 8, step: 1 }, onChange);
     slider(sSt, 'Basal Rhizoid Felt', () => mp.rhizoidDensity, (v) => (mp.rhizoidDensity = v), { min: 0, max: 1, step: 0.05 }, onChange);
 
@@ -1477,7 +1695,21 @@ class FrontierStudio {
 
   // --- SURFACE, PIGMENTATION & HOST SUBSTRATE TAB ---
   private buildSurfaceTab(layer: GeneratorLayer, onChange: () => void): void {
-    if (layer.kind === 'fern' && layer.fern) {
+    if (layer.kind === 'tree' && layer.tree) {
+      const tr = layer.tree;
+      const sCol = section('Bark, Buttress & Canopy Pigments', this.inspBody, { hint: 'SSS' });
+      colorField(sCol, 'Heartwood & Bark', () => tr.hueBark, (c) => (tr.hueBark = c), onChange);
+      colorField(sCol, 'Inner Canopy Leaf', () => tr.hueLeaf, (c) => (tr.hueLeaf = c), onChange);
+      colorField(sCol, 'Sunlit Crown Tips', () => tr.hueLeafTip, (c) => (tr.hueLeafTip = c), onChange);
+    } else if (layer.kind === 'palm' && layer.palm) {
+      const pp = layer.palm;
+      const sCol = section('Trunk, Frond & Infructescence Pigments', this.inspBody, { hint: 'SSS' });
+      colorField(sCol, 'Trunk & Leaf-Boots', () => pp.hueTrunk, (c) => (pp.hueTrunk = c), onChange);
+      colorField(sCol, 'Mature Frond Blade', () => pp.hueFrond, (c) => (pp.hueFrond = c), onChange);
+      colorField(sCol, 'Sunlit Spear & Tips', () => pp.hueFrondTip, (c) => (pp.hueFrondTip = c), onChange);
+      colorField(sCol, 'Ripe Dates / Coconuts', () => pp.hueFruit, (c) => (pp.hueFruit = c), onChange);
+      colorField(sCol, 'Spadix & Strands', () => pp.hueSpadix, (c) => (pp.hueSpadix = c), onChange);
+    } else if (layer.kind === 'fern' && layer.fern) {
       const fp = layer.fern;
       const sCol = section('Chlorophyll, Cuticle & Senescence', this.inspBody, { hint: 'SSS' });
       colorField(sCol, 'Mature Mesophyll', () => fp.hueBase, (c) => (fp.hueBase = c), onChange);
@@ -1524,10 +1756,10 @@ class FrontierStudio {
       (v) => (sub.kind = v),
       () => this.requestGenerate(true),
     );
-    slider(sSub, 'Host Scale / Radius', () => sub.size, (v) => (sub.size = v), { min: 0.1, max: 1.1, step: 0.02, unit: 'm' }, onChange);
+    slider(sSub, 'Host Scale / Radius', () => sub.size, (v) => (sub.size = v), { min: 0.1, max: 5.5, step: 0.02, unit: 'm' }, onChange);
     slider(sSub, 'Micro-Relief Crags', () => sub.roughness, (v) => (sub.roughness = v), { min: 0, max: 1, step: 0.03 }, onChange);
     slider(sSub, 'Surface Moisture', () => sub.moisture, (v) => (sub.moisture = v), { min: 0, max: 1, step: 0.03 }, onChange);
-    slider(sSub, 'Host Grid Resolution', () => sub.resolution, (v) => (sub.resolution = v), { min: 24, max: 88, step: 4 }, onChange);
+    slider(sSub, 'Host Grid Resolution', () => sub.resolution, (v) => (sub.resolution = v), { min: 24, max: 120, step: 4 }, onChange);
   }
 
   // --- OUTLINER NODE & LAYER TRANSFORM INSPECTOR TAB ---
@@ -1777,7 +2009,7 @@ class FrontierStudio {
 
     if (cmd === 'help' || cmd === '?') {
       const msg =
-        'preset <name> · tier <1-4> · seed <n> · add <tropical|fern|moss|hair> · mode <shaded|clay|wire|anatomy|detail|wind> · wind <0-1.5> · macro · frame · export <glb|obj>';
+        'preset <name> · tier <1-4> · seed <n> · add <tree|palm|tropical|fern|moss|hair> · mode <shaded|clay|wire|anatomy|detail|wind> · wind <0-1.5> · macro · frame · export <glb|obj>';
       this.toast(msg);
       return msg;
     }
@@ -1793,6 +2025,8 @@ class FrontierStudio {
     if (cmd === 'tier') {
       const t = Math.max(1, Math.min(4, parseInt(rest, 10) || 3));
       const l = this.getActiveLayer();
+      if (l?.tree) l.tree.detailTier = t;
+      if (l?.palm) l.palm.detailTier = t;
       if (l?.fern) l.fern.detailTier = t;
       if (l?.tropical) l.tropical.detailTier = t;
       if (l?.moss) l.moss.detailTier = t;
@@ -1814,7 +2048,7 @@ class FrontierStudio {
     }
     if (cmd === 'add') {
       const k = rest.toLowerCase();
-      if (k === 'tropical' || k === 'fern' || k === 'moss' || k === 'hair') {
+      if (k === 'tree' || k === 'palm' || k === 'tropical' || k === 'fern' || k === 'moss' || k === 'hair') {
         this.addLayer(k);
         return `added ${k}`;
       }

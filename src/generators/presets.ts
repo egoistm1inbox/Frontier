@@ -6,11 +6,51 @@
 import { DEFAULT_FERN_PARAMS, FernParams } from './fernParams';
 import { DEFAULT_HAIR_PARAMS, HairParams } from './hairParams';
 import { DEFAULT_MOSS_PARAMS, MossParams } from './mossParams';
+import { DEFAULT_PALM_PARAMS, PalmParams } from './palmParams';
+import { DEFAULT_TREE_PARAMS, TreeParams } from './treeParams';
 import { DEFAULT_TROPICAL_PARAMS, TropicalParams } from './tropicalParams';
 import { GeneratorLayer, LayerTransform, PresetDefinition } from './types';
 import { SubstrateParams } from '../substrates/substrate';
 
 const IDENT_XFORM: LayerTransform = { x: 0, y: 0, z: 0, yaw: 0, scale: 1 };
+
+function treeLayer(
+  id: string,
+  name: string,
+  seed: number,
+  overrides: Partial<TreeParams>,
+  xform: Partial<LayerTransform> = {},
+): GeneratorLayer {
+  return {
+    id,
+    name,
+    kind: 'tree',
+    seed,
+    visible: true,
+    locked: false,
+    transform: { ...IDENT_XFORM, ...xform },
+    tree: { ...DEFAULT_TREE_PARAMS, ...overrides },
+  };
+}
+
+function palmLayer(
+  id: string,
+  name: string,
+  seed: number,
+  overrides: Partial<PalmParams>,
+  xform: Partial<LayerTransform> = {},
+): GeneratorLayer {
+  return {
+    id,
+    name,
+    kind: 'palm',
+    seed,
+    visible: true,
+    locked: false,
+    transform: { ...IDENT_XFORM, ...xform },
+    palm: { ...DEFAULT_PALM_PARAMS, ...overrides },
+  };
+}
 
 function fernLayer(id: string, name: string, seed: number, overrides: Partial<FernParams>, xform: Partial<LayerTransform> = {}): GeneratorLayer {
   return {
@@ -79,8 +119,10 @@ const sub = (kind: SubstrateParams['kind'], size: number, roughness = 0.45, mois
 });
 
 export const PRESET_GROUPS: { label: string; icon: string; accent: string }[] = [
+  { label: 'Trees · Welded Manifold', icon: 'tree', accent: '#52d17c' },
+  { label: 'Palms · Fruiting & Branching', icon: 'palm', accent: '#eab308' },
+  { label: 'Real Moss · Bryophytes', icon: 'moss', accent: '#86c232' },
   { label: 'Giant Tropical · Megaphylls', icon: 'tropical', accent: '#7ee058' },
-  { label: 'Real Moss · Bryophytes', icon: 'moss', accent: '#4fd89b' },
   { label: 'Ferns · Woodland & Tropical', icon: 'fern', accent: '#34c759' },
   { label: 'Plants · Sculpted Broadleaf', icon: 'leaf', accent: '#7cd957' },
   { label: 'Fur & Hair · Studio Grooms', icon: 'fur', accent: '#ffb454' },
@@ -88,6 +130,302 @@ export const PRESET_GROUPS: { label: string; icon: string; accent: string }[] = 
 ];
 
 export const PRESETS: PresetDefinition[] = [
+  // ---------------------------------------------------------------------------
+  // A. TREES · WELDED ROOTS, COLLARS & CANOPY (CLOSED 2-MANIFOLD `V - E + F = 2`)
+  // ---------------------------------------------------------------------------
+  {
+    name: 'Ancient English Oak',
+    group: 'Trees · Welded Manifold',
+    subtitle: 'Quercus robur · welded buttress roots, Bezier collars & Y-crotches',
+    accent: '#52d17c',
+    icon: 'tree',
+    scene: {
+      presetName: 'Ancient English Oak',
+      groupLabel: 'Trees · Welded Manifold',
+      substrate: sub('forest_carpet', 4.2, 0.45, 0.55, 64),
+      substrateVisible: true,
+      layers: [
+        treeLayer('layer-1', 'Ancient English Oak', 101, {
+          species: 'english_oak',
+          detailTier: 3,
+        }),
+      ],
+    },
+  },
+  {
+    name: 'Tropical Buttress Banyan',
+    group: 'Trees · Welded Manifold',
+    subtitle: 'Ficus / Samanea · fluted buttress flanges & wide umbrella crown',
+    accent: '#3fd48a',
+    icon: 'tree',
+    scene: {
+      presetName: 'Tropical Buttress Banyan',
+      groupLabel: 'Trees · Welded Manifold',
+      substrate: sub('forest_carpet', 4.6, 0.48, 0.68, 64),
+      substrateVisible: true,
+      layers: [
+        treeLayer('layer-1', 'Tropical Buttress Banyan', 202, {
+          species: 'tropical_banyan',
+          detailTier: 3,
+          height: 14.5,
+          trunkRatio: 0.032,
+          basalFlare: 1.35,
+          buttressRelief: 0.62,
+          rootCount: 7,
+          rootReach: 0.28,
+          canopyFlatten: 0.62,
+          limbCount: 15,
+          hueBark: '#4f4336',
+          hueLeaf: '#22591b',
+          hueLeafTip: '#64b82e',
+        }),
+      ],
+    },
+  },
+  {
+    name: 'Sculpted Japanese Maple',
+    group: 'Trees · Welded Manifold',
+    subtitle: 'Acer palmatum · sinuous welded tiers & crimson palmate canopy',
+    accent: '#e0483e',
+    icon: 'tree',
+    scene: {
+      presetName: 'Sculpted Japanese Maple',
+      groupLabel: 'Trees · Welded Manifold',
+      substrate: sub('forest_carpet', 2.8, 0.42, 0.62, 60),
+      substrateVisible: true,
+      layers: [
+        treeLayer('layer-1', 'Sculpted Japanese Maple', 303, {
+          species: 'japanese_maple',
+          detailTier: 3,
+          height: 7.5,
+          trunkRatio: 0.026,
+          basalFlare: 0.85,
+          buttressRelief: 0.28,
+          rootCount: 5,
+          rootReach: 0.24,
+          canopyFlatten: 0.48,
+          limbCount: 12,
+          leafSize: 0.16,
+          leafDensity: 1.15,
+          hueBark: '#483b36',
+          hueLeaf: '#8c161e',
+          hueLeafTip: '#e03528',
+        }),
+      ],
+    },
+  },
+  {
+    name: 'Monumental African Baobab',
+    group: 'Trees · Welded Manifold',
+    subtitle: 'Adansonia digitata · swollen pachycaul bottle bole & welded forks',
+    accent: '#c98a55',
+    icon: 'tree',
+    scene: {
+      presetName: 'Monumental African Baobab',
+      groupLabel: 'Trees · Welded Manifold',
+      substrate: sub('humus_mound', 4.4, 0.52, 0.28, 60),
+      substrateVisible: true,
+      layers: [
+        treeLayer('layer-1', 'Monumental African Baobab', 404, {
+          species: 'african_baobab',
+          detailTier: 3,
+          height: 14.0,
+          trunkRatio: 0.072,
+          basalFlare: 0.65,
+          buttressRelief: 0.34,
+          rootCount: 6,
+          rootReach: 0.22,
+          canopyFlatten: 0.42,
+          limbCount: 11,
+          forkTendency: 0.55,
+          leafSize: 0.22,
+          leafDensity: 0.95,
+          hueBark: '#735b4c',
+          hueLeaf: '#3b6e22',
+          hueLeafTip: '#7dc238',
+        }),
+      ],
+    },
+  },
+
+  // ---------------------------------------------------------------------------
+  // B. PALMS · ANATOMICALLY ACCURATE FRUITING & DICHOTOMOUS BRANCHING PALMS
+  // ---------------------------------------------------------------------------
+  {
+    name: 'Medjool Date Palm',
+    group: 'Palms · Fruiting & Branching',
+    subtitle: 'Phoenix dactylifera · diamond leaf-boots, V-pinnae & 8 golden date bunches',
+    accent: '#eab308',
+    icon: 'palm',
+    scene: {
+      presetName: 'Medjool Date Palm',
+      groupLabel: 'Palms · Fruiting & Branching',
+      substrate: sub('humus_mound', 2.2, 0.40, 0.38, 56),
+      substrateVisible: true,
+      layers: [
+        palmLayer('layer-1', 'Medjool Date Palm', 101, {
+          species: 'date_palm',
+          detailTier: 3,
+        }),
+      ],
+    },
+  },
+  {
+    name: 'Coastal Coconut Palm',
+    group: 'Palms · Fruiting & Branching',
+    subtitle: 'Cocos nucifera · trade-wind lean, swollen bole & 3-angled husked coconuts',
+    accent: '#84cc16',
+    icon: 'palm',
+    scene: {
+      presetName: 'Coastal Coconut Palm',
+      groupLabel: 'Palms · Fruiting & Branching',
+      substrate: sub('humus_mound', 2.4, 0.34, 0.46, 56),
+      substrateVisible: true,
+      layers: [
+        palmLayer('layer-1', 'Coastal Coconut Palm', 202, {
+          species: 'coconut_palm',
+          detailTier: 3,
+          trunkHeight: 8.8,
+          trunkRadius: 0.21,
+          trunkLeanDeg: 18,
+          trunkCurveDeg: 28,
+          basalBole: 0.52,
+          rootButtresses: 6,
+          trunkRelief: 0.65,
+          frondCount: 28,
+          frondLength: 4.1,
+          frondWidth: 1.18,
+          frondArchDeg: 88,
+          leafletPairs: 46,
+          plumoseSplay: 0.08,
+          skirtFraction: 0.0,
+          fruitBunches: 5,
+          fruitAbundance: 1.1,
+          fruitRipeness: 0.55,
+          hueTrunk: '#8c7e6c',
+          hueFrond: '#2c7822',
+          hueFrondTip: '#84cf32',
+          hueFruit: '#7d5224',
+          hueSpadix: '#9c8a44',
+        }),
+      ],
+    },
+  },
+  {
+    name: 'Cuban Royal Palm',
+    group: 'Palms · Fruiting & Branching',
+    subtitle: 'Roystonea regia · marble-grey column, emerald crownshaft & plumose fronds',
+    accent: '#34d399',
+    icon: 'palm',
+    scene: {
+      presetName: 'Cuban Royal Palm',
+      groupLabel: 'Palms · Fruiting & Branching',
+      substrate: sub('forest_carpet', 2.4, 0.36, 0.62, 56),
+      substrateVisible: true,
+      layers: [
+        palmLayer('layer-1', 'Cuban Royal Palm', 303, {
+          species: 'royal_palm',
+          detailTier: 3,
+          trunkHeight: 9.6,
+          trunkRadius: 0.26,
+          trunkLeanDeg: 1,
+          trunkCurveDeg: 2,
+          basalBole: 0.22,
+          trunkRelief: 0.35,
+          crownshaftRatio: 0.18,
+          frondCount: 22,
+          frondLength: 3.8,
+          frondWidth: 1.08,
+          frondArchDeg: 78,
+          leafletPairs: 48,
+          plumoseSplay: 0.85,
+          skirtFraction: 0.0,
+          fruitBunches: 4,
+          hueTrunk: '#aba79e',
+          hueFrond: '#297024',
+          hueFrondTip: '#6ec438',
+          hueFruit: '#4a1234',
+          hueSpadix: '#e3d6b8',
+        }),
+      ],
+    },
+  },
+  {
+    name: 'Desert Oasis Fan Palm',
+    group: 'Palms · Fruiting & Branching',
+    subtitle: 'Washingtonia filifera · accordion costapalmate fans, shag skirt & berries',
+    accent: '#d99b38',
+    icon: 'palm',
+    scene: {
+      presetName: 'Desert Oasis Fan Palm',
+      groupLabel: 'Palms · Fruiting & Branching',
+      substrate: sub('humus_mound', 2.2, 0.46, 0.32, 56),
+      substrateVisible: true,
+      layers: [
+        palmLayer('layer-1', 'Desert Oasis Fan Palm', 404, {
+          species: 'fan_palm',
+          detailTier: 3,
+          trunkHeight: 7.4,
+          trunkRadius: 0.32,
+          trunkLeanDeg: 3,
+          trunkCurveDeg: 5,
+          basalBole: 0.32,
+          trunkRelief: 0.68,
+          frondCount: 30,
+          frondLength: 2.6,
+          frondWidth: 1.38,
+          frondArchDeg: 52,
+          leafletPairs: 38,
+          skirtFraction: 0.34,
+          fruitBunches: 5,
+          hueTrunk: '#755e49',
+          hueFrond: '#3f753c',
+          hueFrondTip: '#7db359',
+          hueFruit: '#1f1610',
+          hueSpadix: '#d9c38c',
+        }),
+      ],
+    },
+  },
+  {
+    name: 'Branching Doum Palm',
+    group: 'Palms · Fruiting & Branching',
+    subtitle: 'Hyphaene thebaica · welded dichotomous Y-forks (4 crowns) & Doum fruits',
+    accent: '#c27838',
+    icon: 'palm',
+    scene: {
+      presetName: 'Branching Doum Palm',
+      groupLabel: 'Palms · Fruiting & Branching',
+      substrate: sub('humus_mound', 2.4, 0.44, 0.34, 56),
+      substrateVisible: true,
+      layers: [
+        palmLayer('layer-1', 'Branching Doum Palm', 505, {
+          species: 'doum_palm',
+          detailTier: 3,
+          trunkHeight: 8.8,
+          trunkRadius: 0.27,
+          trunkLeanDeg: 3,
+          trunkCurveDeg: 6,
+          basalBole: 0.36,
+          forkLevels: 2,
+          trunkRelief: 0.72,
+          frondCount: 22,
+          frondLength: 2.1,
+          frondWidth: 1.15,
+          frondArchDeg: 48,
+          leafletPairs: 32,
+          skirtFraction: 0.08,
+          fruitBunches: 4,
+          hueTrunk: '#594739',
+          hueFrond: '#3c7349',
+          hueFrondTip: '#7bb564',
+          hueFruit: '#7a3b12',
+          hueSpadix: '#a87032',
+        }),
+      ],
+    },
+  },
+
   // ---------------------------------------------------------------------------
   // 0. GIANT TROPICAL · WIND-DRIVEN MEGAPHYLL PLANTS
   // ---------------------------------------------------------------------------
@@ -704,8 +1042,39 @@ export const PRESETS: PresetDefinition[] = [
   },
 
   // ---------------------------------------------------------------------------
-  // 3. REAL MOSS · BRYOPHYTES & VELVET CARPETS
+  // 3. REAL MOSS · BRYOPHYTES, CLOUD-FOREST PILLOWS & VELVET CARPETS
   // ---------------------------------------------------------------------------
+  {
+    name: 'Cloud-Forest Pillow Moss',
+    group: 'Real Moss · Bryophytes',
+    subtitle: 'Leucobryum / Dicranoweisia · cascading velvet cushions on wet basalt crag',
+    accent: '#85b318',
+    icon: 'moss',
+    scene: {
+      presetName: 'Cloud-Forest Pillow Moss',
+      groupLabel: 'Real Moss · Bryophytes',
+      substrate: sub('wet_basalt_crag', 0.24, 0.76, 0.95, 108),
+      substrateVisible: true,
+      layers: [
+        mossLayer('layer-1', 'Cloud-Forest Pillow Cushions', 309, {
+          habit: 'billowing_pillow',
+          detailTier: 3,
+          colonyCoverage: 0.68,
+          patchiness: 0.52,
+          cushionHeightMm: 66,
+          cushionScale: 2.75,
+          shootHeightMm: 3.6,
+          sporophyteDensity: 0.0,
+          windCompliance: 0.85,
+          hueCanopy: '#285206',
+          hueTip: '#759e12',
+          hueBase: '#081702',
+          hueCapsule: '#b86220',
+          pillowToast: 0.22,
+        }),
+      ],
+    },
+  },
   {
     name: 'Lush Velvet Carpet Moss',
     group: 'Real Moss · Bryophytes',

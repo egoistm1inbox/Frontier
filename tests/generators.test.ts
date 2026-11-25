@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { partsToGLB, partsToOBJ } from '../src/core/mesh';
+import { validateWeldedManifold } from '../src/core/weldedManifold';
 import { buildSceneRaw, buildSceneResponse } from '../src/generators/buildScene';
 import { PRESETS } from '../src/generators/presets';
 import { cloneScene } from '../src/generators/types';
@@ -86,14 +87,16 @@ function evalWindVertex(
   return [piv[0] + rel[0], piv[1] + rel[1], piv[2] + rel[2]];
 }
 
-describe('Frontier Procedural Generators — Giant Tropicals, Carpet Moss, Ferns & Fur/Hair', () => {
-  it('exposes all 29 curated presets across all 6 studio families', () => {
-    expect(PRESETS.length).toBe(29);
+describe('Frontier Procedural Generators — Welded Trees, Fruiting Palms, Pillow Moss, Giant Tropicals, Ferns & Fur', () => {
+  it('exposes all 39 curated presets across all 8 studio groups', () => {
+    expect(PRESETS.length).toBe(39);
     const groups = new Set(PRESETS.map((p) => p.group));
+    expect(groups.has('Trees · Welded Manifold')).toBe(true);
+    expect(groups.has('Palms · Fruiting & Branching')).toBe(true);
+    expect(groups.has('Real Moss · Bryophytes')).toBe(true);
     expect(groups.has('Giant Tropical · Megaphylls')).toBe(true);
     expect(groups.has('Ferns · Woodland & Tropical')).toBe(true);
     expect(groups.has('Plants · Sculpted Broadleaf')).toBe(true);
-    expect(groups.has('Real Moss · Bryophytes')).toBe(true);
     expect(groups.has('Fur & Hair · Studio Grooms')).toBe(true);
     expect(groups.has('Ecosystems · Multi-Layer')).toBe(true);
   });
@@ -102,6 +105,8 @@ describe('Frontier Procedural Generators — Giant Tropicals, Carpet Moss, Ferns
     for (const preset of PRESETS) {
       const scene = cloneScene(preset.scene);
       for (const l of scene.layers) {
+        if (l.tree) l.tree.detailTier = 1;
+        if (l.palm) l.palm.detailTier = 1;
         if (l.fern) l.fern.detailTier = 1;
         if (l.tropical) l.tropical.detailTier = 1;
         if (l.moss) l.moss.detailTier = 1;
@@ -121,6 +126,182 @@ describe('Frontier Procedural Generators — Giant Tropicals, Carpet Moss, Ferns
         expect(ids.has(l.id), `${preset.name} layer ${l.id} in Outliner`).toBe(true);
       }
     }
+  });
+
+  it('proves watertight closed 2-manifold Euler topology (V - E + F = 2C, 0 boundary/non-manifold edges) across all Welded Trees, Palms & Tropicals', () => {
+    const weldedPresets = [
+      'Ancient English Oak',
+      'Tropical Buttress Banyan',
+      'Sculpted Japanese Maple',
+      'Monumental African Baobab',
+      'Medjool Date Palm',
+      'Coastal Coconut Palm',
+      'Cuban Royal Palm',
+      'Desert Oasis Fan Palm',
+      'Branching Doum Palm',
+      'Giant Banana Plant',
+      'Red Abyssinian Banana',
+      "Traveller's Palm",
+      'Colossal Elephant Ear',
+      'Giant Bird of Paradise',
+    ];
+
+    for (const name of weldedPresets) {
+      const preset = PRESETS.find((p) => p.name === name)!;
+      expect(preset, `Preset ${name} exists`).toBeDefined();
+      const scene = cloneScene(preset.scene);
+      for (const l of scene.layers) {
+        if (l.tree) l.tree.detailTier = 2;
+        if (l.palm) l.palm.detailTier = 2;
+        if (l.tropical) l.tropical.detailTier = 2;
+      }
+      const raw = buildSceneRaw(scene);
+      const skeletonMesh = raw.rawParts.find(
+        (m) =>
+          m.id.endsWith(':wood') ||
+          m.id.endsWith(':skeleton') ||
+          m.id.endsWith(':pseudostem'),
+      )!;
+      expect(skeletonMesh, `${name} welded skeleton mesh`).toBeDefined();
+
+      const rep = validateWeldedManifold(skeletonMesh);
+      expect(rep.boundaryEdges, `${name} boundaryEdges`).toBe(0);
+      expect(rep.nonManifoldEdges, `${name} nonManifoldEdges`).toBe(0);
+      expect(rep.inconsistentEdges, `${name} inconsistentEdges`).toBe(0);
+      expect(rep.degenerateFaces, `${name} degenerateFaces`).toBe(0);
+      expect(rep.closed, `${name} closed`).toBe(true);
+      expect(rep.manifold, `${name} manifold`).toBe(true);
+      expect(rep.eulerCharacteristic, `${name} Euler V-E+F=2C`).toBe(2 * rep.components);
+      expect(rep.quadRatio, `${name} quad dominance`).toBeGreaterThan(0.99);
+    }
+  });
+
+  it('synthesizes anatomically accurate Fruiting & Branching Palms (Date spadices, 3-angled Coconuts, Doum 4-crown Y-forks) with zero wind scaling', () => {
+    const datePreset = PRESETS.find((p) => p.name === 'Medjool Date Palm')!;
+    const dateRes = buildSceneResponse(cloneScene(datePreset.scene));
+    const dStats = dateRes.layerReports[0].palm!;
+    expect(dStats.closedTrunkManifold).toBe(true);
+    expect(dStats.fronds).toBeGreaterThanOrEqual(40);
+    expect(dStats.fruitBunches).toBe(8);
+    expect(dStats.fruits).toBeGreaterThan(1500);
+
+    const cocoPreset = PRESETS.find((p) => p.name === 'Coastal Coconut Palm')!;
+    const cocoRes = buildSceneResponse(cloneScene(cocoPreset.scene));
+    const cStats = cocoRes.layerReports[0].palm!;
+    expect(cStats.closedTrunkManifold).toBe(true);
+    expect(cStats.fruitBunches).toBe(5);
+    expect(cStats.fruits).toBeGreaterThanOrEqual(35);
+
+    const doumPreset = PRESETS.find((p) => p.name === 'Branching Doum Palm')!;
+    const doumRes = buildSceneResponse(cloneScene(doumPreset.scene));
+    const dmStats = doumRes.layerReports[0].palm!;
+    expect(dmStats.closedTrunkManifold).toBe(true);
+    expect(dmStats.crowns).toBe(4);
+    expect(dmStats.weldedForks).toBe(3);
+    expect(dmStats.fruits).toBeGreaterThan(300);
+
+    // Verify 3D coconut drupes deform under strong trade winds with zero radial pivot stretch!
+    const fruitsPkt = cocoRes.parts.find((p) => p.id === 'layer-1:fruits')!;
+    let maxDrift = 0;
+    for (let i = 0; i < fruitsPkt.position.length / 3; i++) {
+      const p0: [number, number, number] = [
+        fruitsPkt.position[i * 3],
+        fruitsPkt.position[i * 3 + 1],
+        fruitsPkt.position[i * 3 + 2],
+      ];
+      const t0: [number, number, number] = [
+        fruitsPkt.tangent[i * 3],
+        fruitsPkt.tangent[i * 3 + 1],
+        fruitsPkt.tangent[i * 3 + 2],
+      ];
+      const w0: [number, number, number, number] = [
+        fruitsPkt.wind[i * 4],
+        fruitsPkt.wind[i * 4 + 1],
+        fruitsPkt.wind[i * 4 + 2],
+        fruitsPkt.wind[i * 4 + 3],
+      ];
+      const pv: [number, number, number] = [
+        fruitsPkt.pivot[i * 3],
+        fruitsPkt.pivot[i * 3 + 1],
+        fruitsPkt.pivot[i * 3 + 2],
+      ];
+      const pW = evalWindVertex(p0, t0, w0, pv, 2.1, 1.2);
+      const r0 = Math.hypot(p0[0] - pv[0], p0[1] - pv[1], p0[2] - pv[2]);
+      const rW = Math.hypot(pW[0] - pv[0], pW[1] - pv[1], pW[2] - pv[2]);
+      maxDrift = Math.max(maxDrift, Math.abs(rW - r0));
+    }
+    expect(maxDrift).toBeLessThan(1e-5);
+  });
+
+  it('synthesizes Cloud-Forest Pillow Moss on Wet Volcanic Basalt Crag with anchored cushion lobes and rigid SO(3) star-tuft velvet', () => {
+    const preset = PRESETS.find((p) => p.name === 'Cloud-Forest Pillow Moss')!;
+    const scene = cloneScene(preset.scene);
+    scene.layers[0].moss!.detailTier = 2;
+    const res = buildSceneResponse(scene);
+
+    expect(res.topology.nanVertices).toBe(0);
+    expect(res.topology.degenerateFaces).toBe(0);
+    const mStats = res.layerReports[0].moss!;
+    expect(mStats.shoots).toBeGreaterThan(25000);
+    expect(mStats.phyllids).toBeGreaterThan(75000);
+    expect(mStats.sporophytes).toBe(0);
+
+    const cushions = res.parts.find((p) => p.id === 'layer-1:stems')!;
+    const velvet = res.parts.find((p) => p.id === 'layer-1:phyllids')!;
+    expect(cushions).toBeDefined();
+    expect(velvet).toBeDefined();
+
+    // Cushion lobes stay 100% anchored to wet basalt rock (0.000 mm wind bounce/stretch)
+    let maxCushionMove = 0;
+    for (let i = 0; i < cushions.position.length / 3; i += 17) {
+      const p0: [number, number, number] = [
+        cushions.position[i * 3],
+        cushions.position[i * 3 + 1],
+        cushions.position[i * 3 + 2],
+      ];
+      const pW = evalWindVertex(
+        p0,
+        [cushions.tangent[i * 3], cushions.tangent[i * 3 + 1], cushions.tangent[i * 3 + 2]],
+        [cushions.wind[i * 4], cushions.wind[i * 4 + 1], cushions.wind[i * 4 + 2], cushions.wind[i * 4 + 3]],
+        [cushions.pivot[i * 3], cushions.pivot[i * 3 + 1], cushions.pivot[i * 3 + 2]],
+        1.75,
+        1.4,
+      );
+      maxCushionMove = Math.max(
+        maxCushionMove,
+        Math.hypot(pW[0] - p0[0], pW[1] - p0[1], pW[2] - p0[2]),
+      );
+    }
+    expect(maxCushionMove).toBe(0);
+
+    // Every 3D star-tuft triangle preserves 100.000% exact edge length under storm wind!
+    let maxEdgeScaleErr = 0;
+    for (let f = 0; f < Math.min(velvet.index.length, 9000); f += 3) {
+      const ia = velvet.index[f];
+      const ib = velvet.index[f + 2];
+      const getRest = (k: number): [number, number, number] => [
+        velvet.position[k * 3],
+        velvet.position[k * 3 + 1],
+        velvet.position[k * 3 + 2],
+      ];
+      const getDef = (k: number) =>
+        evalWindVertex(
+          getRest(k),
+          [velvet.tangent[k * 3], velvet.tangent[k * 3 + 1], velvet.tangent[k * 3 + 2]],
+          [velvet.wind[k * 4], velvet.wind[k * 4 + 1], velvet.wind[k * 4 + 2], velvet.wind[k * 4 + 3]],
+          [velvet.pivot[k * 3], velvet.pivot[k * 3 + 1], velvet.pivot[k * 3 + 2]],
+          1.75,
+          1.4,
+        );
+      const a0 = getRest(ia);
+      const b0 = getRest(ib);
+      const aW = getDef(ia);
+      const bW = getDef(ib);
+      const d0 = Math.hypot(b0[0] - a0[0], b0[1] - a0[1], b0[2] - a0[2]);
+      const dW = Math.hypot(bW[0] - aW[0], bW[1] - aW[1], bW[2] - aW[2]);
+      if (d0 > 1e-6) maxEdgeScaleErr = Math.max(maxEdgeScaleErr, Math.abs(dW / d0 - 1));
+    }
+    expect(maxEdgeScaleErr).toBeLessThan(1e-6);
   });
 
   it('synthesizes continuous Lush Velvet Carpet Moss across an undulating forest carpet with zero wind scaling', () => {
@@ -330,7 +511,7 @@ describe('Frontier Procedural Generators — Giant Tropicals, Carpet Moss, Ferns
     const raw = buildSceneRaw(scene);
 
     const obj = partsToOBJ(raw.rawParts, 'banana_moss_test');
-    expect(obj).toContain('o Pseudostem_Sheaths');
+    expect(obj).toContain('o Welded_Pseudostem_Roots_Petioles');
     expect(obj).toContain('o Undulating_Forest_Carpet');
     expect(obj).toContain('\nv ');
     expect(obj).toContain('\nvn ');

@@ -310,6 +310,8 @@ kbd {
 }
 .pane-subhead .add-pills {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 3px;
 }
 .mini-pill {
