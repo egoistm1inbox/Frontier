@@ -6,7 +6,7 @@
 
 import { RGB, V3, clamp, rotateAxis } from './math';
 
-export type ShadingProfile = 'botanical' | 'hair' | 'moss' | 'substrate';
+export type ShadingProfile = 'botanical' | 'hair' | 'moss' | 'substrate' | 'flower';
 
 export interface VertexInput {
   x: number;

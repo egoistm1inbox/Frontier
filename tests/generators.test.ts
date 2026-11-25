@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { partsToGLB, partsToOBJ } from '../src/core/mesh';
 import { validateWeldedManifold } from '../src/core/weldedManifold';
 import { buildSceneRaw, buildSceneResponse } from '../src/generators/buildScene';
+import { applyFlowerPalette } from '../src/generators/flowerParams';
 import { PRESETS } from '../src/generators/presets';
 import { cloneScene } from '../src/generators/types';
 
@@ -87,12 +88,13 @@ function evalWindVertex(
   return [piv[0] + rel[0], piv[1] + rel[1], piv[2] + rel[2]];
 }
 
-describe('Frontier Procedural Generators — Welded Trees, Fruiting Palms, Pillow Moss, Giant Tropicals, Ferns & Fur', () => {
-  it('exposes all 39 curated presets across all 8 studio groups', () => {
-    expect(PRESETS.length).toBe(39);
+describe('Frontier Procedural Generators — Welded Trees, Fruiting Palms, Gigantic Flowers, Pillow Moss, Giant Tropicals, Ferns & Fur', () => {
+  it('exposes all 48 curated presets across all 9 studio groups', () => {
+    expect(PRESETS.length).toBe(48);
     const groups = new Set(PRESETS.map((p) => p.group));
     expect(groups.has('Trees · Welded Manifold')).toBe(true);
     expect(groups.has('Palms · Fruiting & Branching')).toBe(true);
+    expect(groups.has('Flowers · Gigantic 3D Blooms')).toBe(true);
     expect(groups.has('Real Moss · Bryophytes')).toBe(true);
     expect(groups.has('Giant Tropical · Megaphylls')).toBe(true);
     expect(groups.has('Ferns · Woodland & Tropical')).toBe(true);
@@ -107,6 +109,7 @@ describe('Frontier Procedural Generators — Welded Trees, Fruiting Palms, Pillo
       for (const l of scene.layers) {
         if (l.tree) l.tree.detailTier = 1;
         if (l.palm) l.palm.detailTier = 1;
+        if (l.flower) l.flower.detailTier = 1;
         if (l.fern) l.fern.detailTier = 1;
         if (l.tropical) l.tropical.detailTier = 1;
         if (l.moss) l.moss.detailTier = 1;
@@ -524,5 +527,94 @@ describe('Frontier Procedural Generators — Welded Trees, Fruiting Palms, Pillo
     expect(dv.getUint32(0, true)).toBe(0x46546c67); // 'glTF'
     expect(dv.getUint32(4, true)).toBe(2); // version 2
     expect(dv.getUint32(8, true)).toBe(glb.byteLength);
+  });
+
+  it('synthesizes Gigantic 3D Sculpted Flowers across all 6 species with closed 2-manifold welded stems, vibrant colorways, and SO(3) wind', () => {
+    const flowerPresets = PRESETS.filter((p) => p.group === 'Flowers · Gigantic 3D Blooms');
+    expect(flowerPresets.length).toBe(8);
+
+    for (const preset of flowerPresets) {
+      const scene = cloneScene(preset.scene);
+      scene.layers[0].flower!.detailTier = 2;
+      const raw = buildSceneRaw(scene);
+
+      const stemMesh = raw.rawParts.find((m) => m.id === 'layer-1:stem')!;
+      expect(stemMesh, `${preset.name} welded stem mesh`).toBeDefined();
+      const val = validateWeldedManifold(stemMesh);
+      expect(val.closed, `${preset.name} closed stem manifold`).toBe(true);
+      expect(val.manifold, `${preset.name} 2-manifold edges`).toBe(true);
+      expect(val.boundaryEdges, `${preset.name} 0 boundary edges`).toBe(0);
+      expect(val.nonManifoldEdges, `${preset.name} 0 non-manifold edges`).toBe(0);
+      expect(val.inconsistentEdges, `${preset.name} consistent winding`).toBe(0);
+      expect(val.eulerCharacteristic, `${preset.name} Euler V - E + F = 2 * C`).toBe(2 * val.components);
+
+      const corollaMesh = raw.rawParts.find((m) => m.id === 'layer-1:corolla')!;
+      const reproMesh = raw.rawParts.find((m) => m.id === 'layer-1:reproductive')!;
+      expect(corollaMesh.shading).toBe('flower');
+      expect(corollaMesh.renderedTriangles).toBeGreaterThan(2000);
+      expect(reproMesh.renderedTriangles).toBeGreaterThan(300);
+
+      // Verify vibrant high-chroma petal colors (non-NaN, high channel saturation)
+      let maxChroma = 0;
+      for (let i = 0; i < corollaMesh.vertexCount; i++) {
+        const r = corollaMesh.colors[i * 3];
+        const g = corollaMesh.colors[i * 3 + 1];
+        const b = corollaMesh.colors[i * 3 + 2];
+        expect(Number.isFinite(r + g + b)).toBe(true);
+        const hi = Math.max(r, g, b);
+        const lo = Math.min(r, g, b);
+        maxChroma = Math.max(maxChroma, hi - lo);
+      }
+      expect(maxChroma, `${preset.name} vibrant petal chroma`).toBeGreaterThan(0.5);
+    }
+
+    // Verify colorway switching + zero-scaling SO(3) Rodrigues petal wind + OBJ/GLB export
+    const hibScene = cloneScene(flowerPresets[0].scene);
+    applyFlowerPalette(hibScene.layers[0].flower!, 'bioluminescent_aurora');
+    const res = buildSceneResponse(hibScene);
+    expect(res.topology.nanVertices).toBe(0);
+    expect(res.sceneHeight).toBeGreaterThan(3.0);
+
+    const corollaPkt = res.parts.find((p) => p.id === 'layer-1:corolla')!;
+    let maxDrift = 0;
+    let maxPetalSway = 0;
+    const vCount = corollaPkt.position.length / 3;
+    for (let i = 0; i < vCount; i += 7) {
+      const p0: [number, number, number] = [
+        corollaPkt.position[i * 3],
+        corollaPkt.position[i * 3 + 1],
+        corollaPkt.position[i * 3 + 2],
+      ];
+      const t0: [number, number, number] = [
+        corollaPkt.tangent[i * 3],
+        corollaPkt.tangent[i * 3 + 1],
+        corollaPkt.tangent[i * 3 + 2],
+      ];
+      const w0: [number, number, number, number] = [
+        corollaPkt.wind[i * 4],
+        corollaPkt.wind[i * 4 + 1],
+        corollaPkt.wind[i * 4 + 2],
+        corollaPkt.wind[i * 4 + 3],
+      ];
+      const pv: [number, number, number] = [
+        corollaPkt.pivot[i * 3],
+        corollaPkt.pivot[i * 3 + 1],
+        corollaPkt.pivot[i * 3 + 2],
+      ];
+      const pW = evalWindVertex(p0, t0, w0, pv, 2.1, 0.9);
+      const r0 = Math.hypot(p0[0] - pv[0], p0[1] - pv[1], p0[2] - pv[2]);
+      const rW = Math.hypot(pW[0] - pv[0], pW[1] - pv[1], pW[2] - pv[2]);
+      maxDrift = Math.max(maxDrift, Math.abs(rW - r0));
+      maxPetalSway = Math.max(
+        maxPetalSway,
+        Math.hypot(pW[0] - p0[0], pW[1] - p0[1], pW[2] - p0[2]),
+      );
+    }
+    expect(maxDrift).toBeLessThan(1e-5);
+    expect(maxPetalSway).toBeGreaterThan(0.02);
+
+    const rawHib = buildSceneRaw(hibScene);
+    const glb = partsToGLB(rawHib.rawParts, 'colossal_hibiscus');
+    expect(glb.byteLength).toBeGreaterThan(10000);
   });
 });

@@ -4,6 +4,13 @@
  */
 
 import { DEFAULT_FERN_PARAMS, FernParams } from './fernParams';
+import {
+  applyFlowerPalette,
+  DEFAULT_FLOWER_PARAMS,
+  FlowerColorPalette,
+  FlowerParams,
+  FlowerSpecies,
+} from './flowerParams';
 import { DEFAULT_HAIR_PARAMS, HairParams } from './hairParams';
 import { DEFAULT_MOSS_PARAMS, MossParams } from './mossParams';
 import { DEFAULT_PALM_PARAMS, PalmParams } from './palmParams';
@@ -49,6 +56,30 @@ function palmLayer(
     locked: false,
     transform: { ...IDENT_XFORM, ...xform },
     palm: { ...DEFAULT_PALM_PARAMS, ...overrides },
+  };
+}
+
+function flowerLayer(
+  id: string,
+  name: string,
+  seed: number,
+  species: FlowerSpecies,
+  palette: FlowerColorPalette,
+  overrides: Partial<FlowerParams> = {},
+  xform: Partial<LayerTransform> = {},
+): GeneratorLayer {
+  const fp: FlowerParams = { ...DEFAULT_FLOWER_PARAMS, species };
+  applyFlowerPalette(fp, palette);
+  Object.assign(fp, overrides);
+  return {
+    id,
+    name,
+    kind: 'flower',
+    seed,
+    visible: true,
+    locked: false,
+    transform: { ...IDENT_XFORM, ...xform },
+    flower: fp,
   };
 }
 
@@ -121,6 +152,7 @@ const sub = (kind: SubstrateParams['kind'], size: number, roughness = 0.45, mois
 export const PRESET_GROUPS: { label: string; icon: string; accent: string }[] = [
   { label: 'Trees · Welded Manifold', icon: 'tree', accent: '#52d17c' },
   { label: 'Palms · Fruiting & Branching', icon: 'palm', accent: '#eab308' },
+  { label: 'Flowers · Gigantic 3D Blooms', icon: 'flower', accent: '#ff2a78' },
   { label: 'Real Moss · Bryophytes', icon: 'moss', accent: '#86c232' },
   { label: 'Giant Tropical · Megaphylls', icon: 'tropical', accent: '#7ee058' },
   { label: 'Ferns · Woodland & Tropical', icon: 'fern', accent: '#34c759' },
@@ -421,6 +453,202 @@ export const PRESETS: PresetDefinition[] = [
           hueFrondTip: '#7bb564',
           hueFruit: '#7a3b12',
           hueSpadix: '#a87032',
+        }),
+      ],
+    },
+  },
+
+  // ---------------------------------------------------------------------------
+  // C. FLOWERS · GIGANTIC HIGH-DETAIL 3D SCULPTED BLOOMS & VIBRANT COLORWAYS
+  // ---------------------------------------------------------------------------
+  {
+    name: 'Colossal Scarlet Hibiscus',
+    group: 'Flowers · Gigantic 3D Blooms',
+    subtitle: 'Hibiscus rosa-sinensis · 3.8 m welded shrub, 1.15 m pinwheel petals & 60-anther column',
+    accent: '#ff1452',
+    icon: 'flower',
+    scene: {
+      presetName: 'Colossal Scarlet Hibiscus',
+      groupLabel: 'Flowers · Gigantic 3D Blooms',
+      substrate: sub('forest_carpet', 1.45, 0.44, 0.72, 56),
+      substrateVisible: true,
+      layers: [
+        flowerLayer('layer-1', 'Colossal Scarlet Hibiscus', 701, 'tropical_hibiscus', 'species_signature', {
+          detailTier: 3,
+          plantHeight: 3.8,
+          bloomDiameter: 1.15,
+          bloomCount: 3,
+          budCount: 2,
+          petalRuffle: 0.92,
+          throatSize: 0.32,
+          vibrancy: 1.35,
+        }),
+      ],
+    },
+  },
+  {
+    name: 'Cerulean Sapphire Hibiscus',
+    group: 'Flowers · Gigantic 3D Blooms',
+    subtitle: 'Hibiscus · Electric Cerulean Sapphire, Pearl Eye & Cobalt Venation',
+    accent: '#0096ff',
+    icon: 'flower',
+    scene: {
+      presetName: 'Cerulean Sapphire Hibiscus',
+      groupLabel: 'Flowers · Gigantic 3D Blooms',
+      substrate: sub('forest_carpet', 1.45, 0.42, 0.70, 56),
+      substrateVisible: true,
+      layers: [
+        flowerLayer('layer-1', 'Cerulean Sapphire Hibiscus', 718, 'tropical_hibiscus', 'cerulean_sapphire', {
+          detailTier: 3,
+          plantHeight: 3.6,
+          bloomDiameter: 1.12,
+          bloomCount: 3,
+          budCount: 2,
+          petalRuffle: 0.96,
+          throatSize: 0.34,
+          vibrancy: 1.38,
+        }),
+      ],
+    },
+  },
+  {
+    name: 'Giant Stargazer Lily',
+    group: 'Flowers · Gigantic 3D Blooms',
+    subtitle: 'Lilium orientalis · raised 3D ruby papillae, chartreuse star & T-hinged anthers',
+    accent: '#f50a7c',
+    icon: 'flower',
+    scene: {
+      presetName: 'Giant Stargazer Lily',
+      groupLabel: 'Flowers · Gigantic 3D Blooms',
+      substrate: sub('forest_carpet', 1.35, 0.40, 0.74, 56),
+      substrateVisible: true,
+      layers: [
+        flowerLayer('layer-1', 'Giant Stargazer Lily', 702, 'oriental_lily', 'species_signature', {
+          detailTier: 3,
+          plantHeight: 3.6,
+          bloomDiameter: 1.08,
+          bloomCount: 3,
+          budCount: 2,
+          petalCurl: 0.55,
+          petalRuffle: 0.85,
+          vibrancy: 1.36,
+        }),
+      ],
+    },
+  },
+  {
+    name: 'Sacred Imperial Lotus',
+    group: 'Flowers · Gigantic 3D Blooms',
+    subtitle: 'Nelumbo nucifera · 24 glowing boat petals, 112 golden stamens, seed torus & peltate pads',
+    accent: '#ff3688',
+    icon: 'flower',
+    scene: {
+      presetName: 'Sacred Imperial Lotus',
+      groupLabel: 'Flowers · Gigantic 3D Blooms',
+      substrate: sub('humus_mound', 1.55, 0.36, 0.88, 56),
+      substrateVisible: true,
+      layers: [
+        flowerLayer('layer-1', 'Sacred Imperial Lotus', 703, 'sacred_lotus', 'species_signature', {
+          detailTier: 3,
+          plantHeight: 3.8,
+          bloomDiameter: 1.14,
+          bloomCount: 3,
+          budCount: 2,
+          vibrancy: 1.34,
+        }),
+      ],
+    },
+  },
+  {
+    name: 'Imperial Crimson Tree Peony',
+    group: 'Flowers · Gigantic 3D Blooms',
+    subtitle: 'Paeonia suffruticosa · 36 ruffled silk petals, 116 golden stamens & 5 velvet carpels',
+    accent: '#f21b65',
+    icon: 'flower',
+    scene: {
+      presetName: 'Imperial Crimson Tree Peony',
+      groupLabel: 'Flowers · Gigantic 3D Blooms',
+      substrate: sub('forest_carpet', 1.45, 0.46, 0.68, 56),
+      substrateVisible: true,
+      layers: [
+        flowerLayer('layer-1', 'Imperial Tree Peony', 704, 'tree_peony', 'species_signature', {
+          detailTier: 3,
+          plantHeight: 3.5,
+          bloomDiameter: 1.12,
+          bloomCount: 3,
+          budCount: 2,
+          petalRuffle: 0.95,
+          vibrancy: 1.34,
+        }),
+      ],
+    },
+  },
+  {
+    name: 'Coral Sunset Tree Peony',
+    group: 'Flowers · Gigantic 3D Blooms',
+    subtitle: 'Paeonia · Imperial Coral, Tangerine & Rose silk ruffles around golden heart',
+    accent: '#ff6d00',
+    icon: 'flower',
+    scene: {
+      presetName: 'Coral Sunset Tree Peony',
+      groupLabel: 'Flowers · Gigantic 3D Blooms',
+      substrate: sub('forest_carpet', 1.45, 0.44, 0.68, 56),
+      substrateVisible: true,
+      layers: [
+        flowerLayer('layer-1', 'Coral Sunset Tree Peony', 724, 'tree_peony', 'imperial_coral_sunset', {
+          detailTier: 3,
+          plantHeight: 3.5,
+          bloomDiameter: 1.14,
+          bloomCount: 3,
+          budCount: 2,
+          petalRuffle: 1.0,
+          vibrancy: 1.38,
+        }),
+      ],
+    },
+  },
+  {
+    name: 'Crown Passionflower',
+    group: 'Flowers · Gigantic 3D Blooms',
+    subtitle: 'Passiflora caerulea · 10-part star perianth, 84-filament banded corona & T-anthers',
+    accent: '#9c5cff',
+    icon: 'flower',
+    scene: {
+      presetName: 'Crown Passionflower',
+      groupLabel: 'Flowers · Gigantic 3D Blooms',
+      substrate: sub('forest_carpet', 1.35, 0.44, 0.74, 56),
+      substrateVisible: true,
+      layers: [
+        flowerLayer('layer-1', 'Crown Passionflower', 705, 'passion_orchid', 'species_signature', {
+          detailTier: 3,
+          plantHeight: 3.4,
+          bloomDiameter: 1.05,
+          bloomCount: 3,
+          budCount: 2,
+          vibrancy: 1.34,
+        }),
+      ],
+    },
+  },
+  {
+    name: 'Titan Royal Sunflower',
+    group: 'Flowers · Gigantic 3D Blooms',
+    subtitle: 'Helianthus · 4.4 m ribbed stalk, twin-grooved golden rays & 420-floret Vogel spiral',
+    accent: '#ffb703',
+    icon: 'flower',
+    scene: {
+      presetName: 'Titan Royal Sunflower',
+      groupLabel: 'Flowers · Gigantic 3D Blooms',
+      substrate: sub('humus_mound', 1.55, 0.44, 0.58, 56),
+      substrateVisible: true,
+      layers: [
+        flowerLayer('layer-1', 'Titan Royal Sunflower', 706, 'titan_sunflower', 'species_signature', {
+          detailTier: 3,
+          plantHeight: 4.4,
+          bloomDiameter: 1.24,
+          bloomCount: 3,
+          budCount: 2,
+          vibrancy: 1.35,
         }),
       ],
     },
@@ -1742,6 +1970,48 @@ export const PRESETS: PresetDefinition[] = [
           pinnaPairs: 20,
           pinnulePairs: 10,
           crosierCount: 4,
+        }),
+      ],
+    },
+  },
+  {
+    name: 'Colossal Floral Sanctuary',
+    group: 'Ecosystems · Multi-Layer',
+    subtitle: 'Giant Scarlet Hibiscus + Cloud-Forest Pillow Moss + Sword Fern undergrowth',
+    accent: '#ff2a78',
+    icon: 'layers',
+    scene: {
+      presetName: 'Colossal Floral Sanctuary',
+      groupLabel: 'Ecosystems · Multi-Layer',
+      substrate: sub('forest_carpet', 1.65, 0.52, 0.78, 64),
+      substrateVisible: true,
+      layers: [
+        mossLayer('layer-1', 'Cloud-Forest Pillow Moss', 88, {
+          habit: 'billowing_pillow',
+          detailTier: 2,
+          colonyCoverage: 0.88,
+          shootCount: 420,
+          sporophyteDensity: 0.14,
+        }),
+        fernLayer(
+          'layer-2',
+          'Understory Sword Fern',
+          31,
+          {
+            architecture: 'pinnate_sword',
+            detailTier: 2,
+            frondCount: 14,
+            frondLength: 0.95,
+            frondWidth: 0.22,
+          },
+          { x: -0.58, y: 0, z: 0.34, yaw: 24, scale: 1.15 },
+        ),
+        flowerLayer('layer-3', 'Colossal Scarlet Hibiscus', 701, 'tropical_hibiscus', 'species_signature', {
+          detailTier: 3,
+          plantHeight: 3.8,
+          bloomDiameter: 1.15,
+          bloomCount: 3,
+          budCount: 2,
         }),
       ],
     },

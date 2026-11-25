@@ -6,6 +6,8 @@ import { PartPacket, ShadingProfile, TopologySummary } from '../core/mesh';
 import { SubstrateParams } from '../substrates/substrate';
 import { FernParams } from './fernParams';
 import { FernStats } from './fernMesher';
+import { FlowerParams } from './flowerParams';
+import { FlowerStats } from './flowerMesher';
 import { HairParams } from './hairParams';
 import { HairStats } from './hairMesher';
 import { MossParams } from './mossParams';
@@ -17,7 +19,7 @@ import { TreeStats } from './treeMesher';
 import { TropicalParams } from './tropicalParams';
 import { TropicalStats } from './tropicalMesher';
 
-export type GeneratorKind = 'tree' | 'palm' | 'tropical' | 'fern' | 'moss' | 'hair';
+export type GeneratorKind = 'tree' | 'palm' | 'flower' | 'tropical' | 'fern' | 'moss' | 'hair';
 
 export interface LayerTransform {
   x: number;
@@ -37,6 +39,7 @@ export interface GeneratorLayer {
   transform: LayerTransform;
   tree?: TreeParams;
   palm?: PalmParams;
+  flower?: FlowerParams;
   fern?: FernParams;
   tropical?: TropicalParams;
   moss?: MossParams;
@@ -84,6 +87,7 @@ export interface LayerRuntimeReport {
   kind: GeneratorKind;
   tree?: TreeStats;
   palm?: PalmStats;
+  flower?: FlowerStats;
   fern?: FernStats;
   tropical?: TropicalStats;
   moss?: MossStats;

@@ -17,6 +17,17 @@ import {
   FERN_ARCH_NAMES,
   FernArchitecture,
 } from './generators/fernParams';
+import {
+  applyFlowerPalette,
+  DEFAULT_FLOWER_PARAMS,
+  FLOWER_PALETTE_NAMES,
+  FLOWER_SPECIES_NAMES,
+  FlowerColorPalette,
+  FlowerParams,
+  FlowerSpecies,
+  SPECIES_SIGNATURE_PIGMENTS,
+  VIBRANT_PALETTE_SWATCHES,
+} from './generators/flowerParams';
 import { DEFAULT_HAIR_PARAMS, HAIR_FLOW_NAMES, HairFlowMode } from './generators/hairParams';
 import { DEFAULT_MOSS_PARAMS, MOSS_HABIT_NAMES, MossHabit } from './generators/mossParams';
 import { DEFAULT_PALM_PARAMS, PALM_SPECIES_NAMES, PalmSpecies } from './generators/palmParams';
@@ -786,6 +797,17 @@ class FrontierStudio {
         transform: { x: 0, y: 0, z: 0, yaw: (idx * 50) % 360, scale: 1 },
         palm: { ...DEFAULT_PALM_PARAMS },
       };
+    } else if (kind === 'flower') {
+      newLayer = {
+        id,
+        name: `Colossal Hibiscus #${idx}`,
+        kind: 'flower',
+        seed,
+        visible: true,
+        locked: false,
+        transform: { x: 0, y: 0, z: 0, yaw: (idx * 45) % 360, scale: 1 },
+        flower: { ...DEFAULT_FLOWER_PARAMS },
+      };
     } else if (kind === 'fern') {
       newLayer = {
         id,
@@ -1035,13 +1057,15 @@ class FrontierStudio {
         ? '#52d17c'
         : layer.kind === 'palm'
           ? '#eab308'
-          : layer.kind === 'fern'
-            ? '#34c759'
-            : layer.kind === 'tropical'
-              ? '#7ee058'
-              : layer.kind === 'moss'
-                ? '#86c232'
-                : '#ffb454';
+          : layer.kind === 'flower'
+            ? (layer.flower?.huePrimary ?? '#ff2a78')
+            : layer.kind === 'fern'
+              ? '#34c759'
+              : layer.kind === 'tropical'
+                ? '#7ee058'
+                : layer.kind === 'moss'
+                  ? '#86c232'
+                  : '#ffb454';
     for (let i = 0; i <= 24; i++) {
       const t = i / 24;
       let yNorm = 0.5;
@@ -1049,6 +1073,8 @@ class FrontierStudio {
         yNorm = 0.16 + 0.72 * Math.sin(Math.pow(t, 0.75) * Math.PI) + 0.08 * Math.sin(t * 16.0);
       } else if (layer.kind === 'palm' && layer.palm) {
         yNorm = 0.22 + 0.66 * Math.sin(t * Math.PI * 0.92) * (1 - 0.35 * t);
+      } else if (layer.kind === 'flower' && layer.flower) {
+        yNorm = 0.24 + 0.58 * Math.sin(t * Math.PI) + 0.14 * Math.abs(Math.sin(t * Math.PI * 5.0));
       } else if (layer.kind === 'fern' && layer.fern) {
         const droop = layer.fern.archDroop / 130;
         yNorm = Math.sin(t * Math.PI * 0.88) * (1 - droop * t * 0.55);
@@ -1132,6 +1158,11 @@ class FrontierStudio {
       addCell('ground', 'Host Base', !this.hiddenPartIds.has('substrate:host') && this.sceneSpec.substrate.kind !== 'none', () => {
         this.toggleNodeVisibility('substrate:host');
       });
+    } else if (layer.kind === 'flower' && layer.flower) {
+      addCell('flower', '3D Corolla', isPartVis('corolla'), () => flipPart('corolla'));
+      addCell('sparkles', 'Stamens', isPartVis('reproductive'), () => flipPart('reproductive'));
+      addCell('leaf', 'Foliage', isPartVis('foliage'), () => flipPart('foliage'));
+      addCell('roots', 'Welded Stems', isPartVis('stem'), () => flipPart('stem'));
     } else if (layer.kind === 'fern' && layer.fern) {
       const fp = layer.fern;
       addCell('sprout', 'Crosiers', fp.crosierCount > 0 && isPartVis('crosiers'), () => {
@@ -1216,6 +1247,7 @@ class FrontierStudio {
     if (this.activeTab === 'shape') {
       if (layer?.kind === 'tree' && layer.tree) this.buildTreeShapeTab(layer.tree, trigger);
       else if (layer?.kind === 'palm' && layer.palm) this.buildPalmShapeTab(layer.palm, trigger);
+      else if (layer?.kind === 'flower' && layer.flower) this.buildFlowerShapeTab(layer.flower, trigger);
       else if (layer?.kind === 'fern' && layer.fern) this.buildFernShapeTab(layer.fern, trigger);
       else if (layer?.kind === 'tropical' && layer.tropical) this.buildTropicalShapeTab(layer.tropical, trigger);
       else if (layer?.kind === 'moss' && layer.moss) this.buildMossShapeTab(layer.moss, trigger);
@@ -1223,6 +1255,7 @@ class FrontierStudio {
     } else if (this.activeTab === 'detail') {
       if (layer?.kind === 'tree' && layer.tree) this.buildTreeDetailTab(layer.tree, trigger);
       else if (layer?.kind === 'palm' && layer.palm) this.buildPalmDetailTab(layer.palm, trigger);
+      else if (layer?.kind === 'flower' && layer.flower) this.buildFlowerDetailTab(layer.flower, trigger);
       else if (layer?.kind === 'fern' && layer.fern) this.buildFernDetailTab(layer.fern, trigger);
       else if (layer?.kind === 'tropical' && layer.tropical) this.buildTropicalDetailTab(layer.tropical, trigger);
       else if (layer?.kind === 'moss' && layer.moss) this.buildMossDetailTab(layer.moss, trigger);
@@ -1353,6 +1386,115 @@ class FrontierStudio {
     slider(sAn, 'Welded Root Spurs', () => pp.rootButtresses, (v) => (pp.rootButtresses = Math.round(v)), { min: 0, max: 8, step: 1 }, onChange);
     slider(sAn, 'Boot / Ring Relief', () => pp.trunkRelief, (v) => (pp.trunkRelief = v), { min: 0, max: 1, step: 0.03 }, onChange);
     slider(sAn, 'Trade-Wind Sway', () => pp.windSway, (v) => (pp.windSway = v), { min: 0.2, max: 2.0, step: 0.05 }, onChange);
+  }
+
+  // --- GIGANTIC VIBRANT FLOWER TABS ---
+  private appendFlowerColorwaySwatches(parent: HTMLElement, flp: FlowerParams, onChange: () => void): void {
+    select<FlowerColorPalette>(
+      parent,
+      'Colorway Palette',
+      (Object.keys(FLOWER_PALETTE_NAMES) as FlowerColorPalette[]).map((k) => ({
+        value: k,
+        label: FLOWER_PALETTE_NAMES[k],
+      })),
+      () => flp.colorPalette,
+      (v) => {
+        applyFlowerPalette(flp, v);
+        this.rebuildInspector();
+      },
+      onChange,
+    );
+
+    const swatchOrder: { id: Exclude<FlowerColorPalette, 'custom'>; short: string }[] = [
+      { id: 'species_signature', short: 'Signature' },
+      { id: 'electric_magenta_gold', short: 'Magenta' },
+      { id: 'crimson_velvet_ruby', short: 'Crimson' },
+      { id: 'solar_tangerine_flame', short: 'Tangerine' },
+      { id: 'ultraviolet_orchid', short: 'UV Orchid' },
+      { id: 'cerulean_sapphire', short: 'Sapphire' },
+      { id: 'imperial_coral_sunset', short: 'Coral' },
+      { id: 'bioluminescent_aurora', short: 'Aurora' },
+      { id: 'royal_amethyst_rose', short: 'Amethyst' },
+    ];
+    const grid = el('div', 'swatch-grid');
+    for (const item of swatchOrder) {
+      const set =
+        item.id === 'species_signature'
+          ? SPECIES_SIGNATURE_PIGMENTS[flp.species]
+          : VIBRANT_PALETTE_SWATCHES[item.id];
+      const chip = el('button', 'swatch-chip' + (flp.colorPalette === item.id ? ' on' : ''));
+      chip.type = 'button';
+      chip.title = FLOWER_PALETTE_NAMES[item.id];
+      const orb = el('i', 'sw-orb');
+      orb.style.background = `radial-gradient(circle at 32% 32%, ${set.hueSecondary}, ${set.huePrimary} 62%, ${set.hueThroat})`;
+      chip.append(orb, el('span', '', item.short));
+      chip.addEventListener('click', () => {
+        applyFlowerPalette(flp, item.id);
+        this.rebuildInspector();
+        onChange();
+      });
+      grid.append(chip);
+    }
+    parent.append(grid);
+    slider(parent, 'Chromatic Vibrancy', () => flp.vibrancy, (v) => (flp.vibrancy = v), { min: 0.65, max: 1.75, step: 0.03 }, onChange);
+  }
+
+  private buildFlowerShapeTab(flp: FlowerParams, onChange: () => void): void {
+    const sSp = section('Gigantic Floral Species & Stature', this.inspBody, { hint: 'V - E + F = 2' });
+    select<FlowerSpecies>(
+      sSp,
+      'Floral Species',
+      (Object.keys(FLOWER_SPECIES_NAMES) as FlowerSpecies[]).map((k) => ({
+        value: k,
+        label: FLOWER_SPECIES_NAMES[k],
+      })),
+      () => flp.species,
+      (v) => {
+        flp.species = v;
+        if (flp.colorPalette === 'species_signature') {
+          applyFlowerPalette(flp, 'species_signature');
+        }
+        this.rebuildInspector();
+      },
+      onChange,
+    );
+    select<number>(
+      sSp,
+      'Mesh Detail Tier',
+      [
+        { value: 1, label: '1 · Light Floral' },
+        { value: 2, label: '2 · Standard 3D Petals' },
+        { value: 3, label: '3 · High-Poly Sculpted' },
+        { value: 4, label: '4 · Cinema Botanical' },
+      ],
+      () => flp.detailTier,
+      (v) => (flp.detailTier = v),
+      onChange,
+    );
+    slider(sSp, 'Giant Plant Height', () => flp.plantHeight, (v) => (flp.plantHeight = v), { min: 0.8, max: 7.5, step: 0.1, unit: 'm' }, onChange);
+    slider(sSp, 'Hero Bloom Diameter', () => flp.bloomDiameter, (v) => (flp.bloomDiameter = v), { min: 0.3, max: 2.2, step: 0.04, unit: 'm' }, onChange);
+    stepper(sSp, 'Open Hero Blooms', () => flp.bloomCount, (v) => (flp.bloomCount = v), { min: 1, max: 7, integer: true }, onChange);
+    stepper(sSp, 'Sculpted Buds', () => flp.budCount, (v) => (flp.budCount = v), { min: 0, max: 6, integer: true }, onChange);
+
+    const sCol = section('Vibrant Colorways & Chroma', this.inspBody, { hint: '1-click' });
+    this.appendFlowerColorwaySwatches(sCol, flp, onChange);
+
+    this.appendLiveWindMiniSection();
+  }
+
+  private buildFlowerDetailTab(flp: FlowerParams, onChange: () => void): void {
+    const sPet = section('3D Sculpted Petals & Venation', this.inspBody, { hint: 'corolla' });
+    slider(sPet, 'Petal Count Scale', () => flp.petalCountScale, (v) => (flp.petalCountScale = v), { min: 0.6, max: 1.8, step: 0.05 }, onChange);
+    slider(sPet, 'Corolla Openness', () => flp.corollaOpenness, (v) => (flp.corollaOpenness = v), { min: 0.35, max: 1.25, step: 0.03 }, onChange);
+    slider(sPet, '3D Margin Ruffle', () => flp.petalRuffle, (v) => (flp.petalRuffle = v), { min: 0, max: 1.6, step: 0.04 }, onChange);
+    slider(sPet, 'Distal Curl / Reflex', () => flp.petalCurl, (v) => (flp.petalCurl = v), { min: -0.6, max: 1.2, step: 0.04 }, onChange);
+    slider(sPet, '3D Vein & Plisse Relief', () => flp.veinRelief, (v) => (flp.veinRelief = v), { min: 0, max: 1.6, step: 0.04 }, onChange);
+
+    const sRep = section('3D Stamens, Corona & Welded Stems', this.inspBody, { hint: 'organs' });
+    slider(sRep, 'Stamen / Floret Lushness', () => flp.stamenLushness, (v) => (flp.stamenLushness = v), { min: 0.4, max: 1.6, step: 0.05 }, onChange);
+    slider(sRep, '3D Foliage Density', () => flp.foliageDensity, (v) => (flp.foliageDensity = v), { min: 0, max: 1.6, step: 0.05 }, onChange);
+    stepper(sRep, 'Welded Buttress Roots', () => flp.rootCount, (v) => (flp.rootCount = v), { min: 0, max: 8, integer: true }, onChange);
+    slider(sRep, 'Breeze Compliance', () => flp.windCompliance, (v) => (flp.windCompliance = v), { min: 0.2, max: 1.8, step: 0.05 }, onChange);
   }
 
   // --- FERN / PLANT TABS ---
@@ -1709,6 +1851,26 @@ class FrontierStudio {
       colorField(sCol, 'Sunlit Spear & Tips', () => pp.hueFrondTip, (c) => (pp.hueFrondTip = c), onChange);
       colorField(sCol, 'Ripe Dates / Coconuts', () => pp.hueFruit, (c) => (pp.hueFruit = c), onChange);
       colorField(sCol, 'Spadix & Strands', () => pp.hueSpadix, (c) => (pp.hueSpadix = c), onChange);
+    } else if (layer.kind === 'flower' && layer.flower) {
+      const flp = layer.flower;
+      const sPal = section('Curated Vibrant Colorways', this.inspBody, { hint: 'swatches' });
+      this.appendFlowerColorwaySwatches(sPal, flp, onChange);
+
+      const sPig = section('Custom 6-Zone Floral Pigments', this.inspBody, { hint: 'floral SSS' });
+      const markCustom = (fn: (c: string) => void) => (c: string) => {
+        flp.colorPalette = 'custom';
+        fn(c);
+      };
+      colorField(sPig, 'Primary Petal Corolla', () => flp.huePrimary, markCustom((c) => (flp.huePrimary = c)), onChange);
+      colorField(sPig, 'Margin / Tip / Picotee', () => flp.hueSecondary, markCustom((c) => (flp.hueSecondary = c)), onChange);
+      colorField(sPig, 'Velvet Throat / Eye', () => flp.hueThroat, markCustom((c) => (flp.hueThroat = c)), onChange);
+      colorField(sPig, '3D Veins & Papillae', () => flp.hueVein, markCustom((c) => (flp.hueVein = c)), onChange);
+      colorField(sPig, 'Pollen / Anther / Disc', () => flp.huePollen, markCustom((c) => (flp.huePollen = c)), onChange);
+      colorField(sPig, 'Stems, Sepals & Leaves', () => flp.hueStemLeaf, markCustom((c) => (flp.hueStemLeaf = c)), onChange);
+
+      slider(sPig, 'Margin / Tip Blend', () => flp.edgeBlend, (v) => (flp.edgeBlend = v), { min: 0, max: 1, step: 0.03 }, onChange);
+      slider(sPig, 'Velvet Throat Size', () => flp.throatSize, (v) => (flp.throatSize = v), { min: 0, max: 0.65, step: 0.02 }, onChange);
+      slider(sPig, 'Vein Guide Contrast', () => flp.veinContrast, (v) => (flp.veinContrast = v), { min: 0, max: 1, step: 0.03 }, onChange);
     } else if (layer.kind === 'fern' && layer.fern) {
       const fp = layer.fern;
       const sCol = section('Chlorophyll, Cuticle & Senescence', this.inspBody, { hint: 'SSS' });
@@ -2027,6 +2189,7 @@ class FrontierStudio {
       const l = this.getActiveLayer();
       if (l?.tree) l.tree.detailTier = t;
       if (l?.palm) l.palm.detailTier = t;
+      if (l?.flower) l.flower.detailTier = t;
       if (l?.fern) l.fern.detailTier = t;
       if (l?.tropical) l.tropical.detailTier = t;
       if (l?.moss) l.moss.detailTier = t;
@@ -2048,7 +2211,7 @@ class FrontierStudio {
     }
     if (cmd === 'add') {
       const k = rest.toLowerCase();
-      if (k === 'tree' || k === 'palm' || k === 'tropical' || k === 'fern' || k === 'moss' || k === 'hair') {
+      if (k === 'tree' || k === 'palm' || k === 'flower' || k === 'tropical' || k === 'fern' || k === 'moss' || k === 'hair') {
         this.addLayer(k);
         return `added ${k}`;
       }

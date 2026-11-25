@@ -28,6 +28,7 @@ const PROFILE_INDEX: Record<ShadingProfile, number> = {
   moss: 1,
   hair: 2,
   substrate: 3,
+  flower: 4,
 };
 
 interface RenderedPart {

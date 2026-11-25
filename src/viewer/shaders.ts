@@ -338,6 +338,43 @@ void main() {
                 + keyCol * dewSpec
                 + mix(albedo * 1.28, vec3(0.68, 0.88, 0.18), 0.38) * velvet;
 
+  } else if (uProfile == 4) {
+    // === VIBRANT FLORAL COROLLA: Conical Epidermal Papillae, Silk Plisse & Chromatic Translucency ===
+    // Real flower petals trap incident light inside conical epidermal cells, deepening pigment
+    // chroma while transmitting pure anthocyanin/carotenoid glow (zero green chlorophyll shift!).
+    float ndlKey = max(dot(N, Lkey), 0.0);
+    float wrapKey = clamp((dot(N, Lkey) + 0.38) / 1.38, 0.0, 1.0);
+    float wrapFill = clamp((dot(N, Lfill) + 0.34) / 1.34, 0.0, 1.0);
+
+    // Preserve deep rich saturation in corolla throats while keeping sunlit limbs luminous
+    float luma = dot(albedo, vec3(0.2126, 0.7152, 0.0722));
+    vec3 vividAlbedo = max(mix(vec3(luma), albedo, 1.22), vec3(0.0));
+
+    // Anisotropic silk sheen along radiating petal venation tangent T
+    vec3 T = normalize(vTangent);
+    vec3 H = normalize(Lkey + V);
+    float tdoth = clamp(dot(T, H), -1.0, 1.0);
+    float sinTH = sqrt(max(0.0, 1.0 - tdoth * tdoth));
+    float silkSpec = pow(sinTH, mix(42.0, 10.0, rough)) * ndlKey * mix(0.26, 0.04, rough);
+    float microSpec = pow(max(dot(N, H), 0.0), mix(72.0, 14.0, rough)) * mix(0.22, 0.03, rough);
+
+    // Pure chromatic subsurface glow through delicate petal lamina (attenuated along thick veins)
+    float backFacing = max(dot(-N, Lkey), 0.0);
+    float viewForward = 0.38 + 0.62 * pow(max(dot(V, -Lkey), 0.0), 2.0);
+    vec3 petalGlowTint = vividAlbedo * 1.32 + pow(max(vividAlbedo, vec3(0.001)), vec3(0.72)) * 0.22;
+    vec3 sss = petalGlowTint * keyCol * (backFacing * viewForward * 0.92 + wrapKey * 0.18) * translucency;
+
+    // Conical-papillae velvet rim highlight tinted by the petal's own vibrant chroma
+    // (scaled by albedo intensity so deep-burgundy/indigo velvet throats stay dark & plush!)
+    float darkGuard = clamp(max(vividAlbedo.r, max(vividAlbedo.g, vividAlbedo.b)) * 4.5, 0.06, 1.0);
+    float velvetRim = pow(1.0 - max(dot(N, V), 0.0), 2.5) * (0.25 + 0.75 * max(dot(N, Lrim), wrapKey)) * darkGuard;
+    vec3 rimTint = mix(vividAlbedo * 1.35 + vec3(0.04) * darkGuard, rimCol, 0.22);
+
+    colorLinear = vividAlbedo * (skyAmb * 0.88 + keyCol * mix(ndlKey, wrapKey, 0.52) * 1.06 + fillCol * wrapFill * 0.48)
+                + sss
+                + keyCol * (silkSpec + microSpec)
+                + rimTint * velvetRim * 0.34;
+
   } else {
     // === HOST SUBSTRATE: Moist Granite / Furrowed Bark / Satin Bust ===
     float ndlKey = max(dot(N, Lkey), 0.0);

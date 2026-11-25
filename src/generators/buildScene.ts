@@ -8,6 +8,8 @@ import { PartMesh, PartPacket, auditParts } from '../core/mesh';
 import { HostSubstrate, SUBSTRATE_NAMES } from '../substrates/substrate';
 import { DEFAULT_FERN_PARAMS } from './fernParams';
 import { FernMesher } from './fernMesher';
+import { DEFAULT_FLOWER_PARAMS } from './flowerParams';
+import { FlowerMesher } from './flowerMesher';
 import { DEFAULT_HAIR_PARAMS } from './hairParams';
 import { HairMesher } from './hairMesher';
 import { DEFAULT_MOSS_PARAMS } from './mossParams';
@@ -100,6 +102,43 @@ export function buildSceneRaw(scene: SceneSpec): BuiltSceneRaw {
         ];
       } else {
         macroTarget = [x, y + pp.trunkHeight * 0.88, z, Math.max(1.2, pp.frondLength * 0.45)];
+      }
+    } else if (layer.kind === 'flower') {
+      const flp = layer.flower ?? { ...DEFAULT_FLOWER_PARAMS };
+      const built = new FlowerMesher(flp, layer.seed, substrate).build(layer.id);
+      let lTris = 0;
+      let lVerts = 0;
+      for (const pm of built.parts) {
+        if (needsTransform) pm.applyTransform(x, y, z, yaw, scale);
+        lTris += pm.renderedTriangles;
+        lVerts += pm.vertexCount;
+        rawParts.push(pm);
+      }
+      layerReports.push({
+        layerId: layer.id,
+        kind: 'flower',
+        flower: built.stats,
+        triangles: lTris,
+        vertices: lVerts,
+      });
+      // Aim macro target directly onto the primary Hero Bloom reproductive heart!
+      const repro = built.parts.find((m) => m.id.endsWith(':reproductive') && m.vertexCount > 12);
+      if (repro) {
+        let sx = 0, sy = 0, sz = 0;
+        const nSample = Math.min(80, repro.vertexCount);
+        for (let k = 0; k < nSample; k++) {
+          sx += repro.positions[k * 3];
+          sy += repro.positions[k * 3 + 1];
+          sz += repro.positions[k * 3 + 2];
+        }
+        macroTarget = [
+          sx / nSample,
+          sy / nSample,
+          sz / nSample,
+          Math.max(0.32, flp.bloomDiameter * 0.65 * scale),
+        ];
+      } else {
+        macroTarget = [x, y + flp.plantHeight * 0.78 * scale, z, Math.max(0.4, flp.bloomDiameter * 0.7)];
       }
     } else if (layer.kind === 'fern') {
       const fp = layer.fern ?? { ...DEFAULT_FERN_PARAMS };
@@ -281,39 +320,45 @@ function buildOutlinerTree(
         ? 'tree'
         : layer.kind === 'palm'
           ? 'palm'
-          : layer.kind === 'fern'
-            ? 'fern'
-            : layer.kind === 'tropical'
-              ? 'tropical'
-              : layer.kind === 'moss'
-                ? 'moss'
-                : 'fur';
+          : layer.kind === 'flower'
+            ? 'flower'
+            : layer.kind === 'fern'
+              ? 'fern'
+              : layer.kind === 'tropical'
+                ? 'tropical'
+                : layer.kind === 'moss'
+                  ? 'moss'
+                  : 'fur';
     const layerAccent =
       layer.kind === 'tree'
         ? '#52d17c'
         : layer.kind === 'palm'
           ? '#eab308'
-          : layer.kind === 'fern'
-            ? '#34c759'
-            : layer.kind === 'tropical'
-              ? '#7ee058'
-              : layer.kind === 'moss'
-                ? '#86c232'
-                : '#ffb454';
+          : layer.kind === 'flower'
+            ? (layer.flower?.huePrimary ?? '#ff2a78')
+            : layer.kind === 'fern'
+              ? '#34c759'
+              : layer.kind === 'tropical'
+                ? '#7ee058'
+                : layer.kind === 'moss'
+                  ? '#86c232'
+                  : '#ffb454';
     const layerMeta =
       layer.kind === 'tree' && rep?.tree
         ? `${rep.tree.weldedJunctions} collars · ${rep.tree.leaves.toLocaleString('en-US')} leaves`
         : layer.kind === 'palm' && rep?.palm
           ? `${rep.palm.fronds} fronds · ${rep.palm.fruits} fruits`
-          : layer.kind === 'fern' && rep?.fern
-            ? `${rep.fern.fronds} fronds · ${rep.fern.leaflets} leaflets`
-            : layer.kind === 'tropical' && rep?.tropical
-              ? `${rep.tropical.leaves} paddles · ${rep.tropical.weldedJunctions ?? 0} collars`
-              : layer.kind === 'moss' && rep?.moss
-                ? `${rep.moss.shoots.toLocaleString('en-US')} shoots · ${rep.moss.sporophytes} caps`
-                : layer.kind === 'hair' && rep?.hair
-                  ? `${rep.hair.totalStrands.toLocaleString('en-US')} strands`
-                  : '';
+          : layer.kind === 'flower' && rep?.flower
+            ? `${rep.flower.blooms} blooms · ${rep.flower.petals} 3D petals · ${rep.flower.weldedJunctions} collars`
+            : layer.kind === 'fern' && rep?.fern
+              ? `${rep.fern.fronds} fronds · ${rep.fern.leaflets} leaflets`
+              : layer.kind === 'tropical' && rep?.tropical
+                ? `${rep.tropical.leaves} paddles · ${rep.tropical.weldedJunctions ?? 0} collars`
+                : layer.kind === 'moss' && rep?.moss
+                  ? `${rep.moss.shoots.toLocaleString('en-US')} shoots · ${rep.moss.sporophytes} caps`
+                  : layer.kind === 'hair' && rep?.hair
+                    ? `${rep.hair.totalStrands.toLocaleString('en-US')} strands`
+                    : '';
 
     nodes.push({
       id: layer.id,
