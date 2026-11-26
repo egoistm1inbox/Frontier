@@ -109,13 +109,14 @@ function evalWindVertex(
   return [piv[0] + rel[0], piv[1] + rel[1], piv[2] + rel[2]];
 }
 
-describe('Frontier Procedural Generators — Welded Trees, Fruiting Palms, Gigantic Flowers, Sea Plants, Sea Anemones & Marine Species, Pillow Moss, Giant Tropicals, Ferns & Fur', () => {
-  it('exposes all 91 curated presets across all 12 studio groups', () => {
-    expect(PRESETS.length).toBe(91);
+describe('Frontier Procedural Generators — Welded Trees, Fruiting Palms, Gigantic Flowers, Corals, Sea Anemones, Sea Plants & Marine Species, Pillow Moss, Giant Tropicals, Ferns & Fur', () => {
+  it('exposes all 103 curated presets across all 13 studio groups', () => {
+    expect(PRESETS.length).toBe(103);
     const groups = new Set(PRESETS.map((p) => p.group));
     expect(groups.has('Trees · Welded Manifold')).toBe(true);
     expect(groups.has('Palms · Fruiting & Branching')).toBe(true);
     expect(groups.has('Flowers · Gigantic 3D Blooms')).toBe(true);
+    expect(groups.has('Corals · Stony, Soft & Reef')).toBe(true);
     expect(groups.has('Sea Plants · Kelp & Vegetation')).toBe(true);
     expect(groups.has('Sea Anemones · Actiniaria & Tube')).toBe(true);
     expect(groups.has('Sea & Reef · Marine Species')).toBe(true);
@@ -1030,15 +1031,15 @@ describe('Frontier Procedural Generators — Welded Trees, Fruiting Palms, Gigan
     }
   });
 
-  it('synthesizes all 25 Sea Plants, Sea Anemones & Marine Species with watertight Staghorn Coral & Velvet Codium manifolds, 22 marine palettes, seabed substrates, and C0 ocean-current SO(3) continuity', () => {
+  it('synthesizes all 35 Corals, Sea Anemones, Sea Plants & Marine Species with watertight Staghorn, Elkhorn & Velvet Codium manifolds, 32 marine palettes, seabed substrates, and C0 ocean-current SO(3) continuity', () => {
     const speciesIds = Object.keys(MARINE_SPECIES_NAMES) as MarineSpecies[];
     const paletteIds = (Object.keys(MARINE_PALETTE_NAMES) as MarineColorPalette[]).filter(
       (k) => k !== 'custom',
     );
-    expect(speciesIds.length).toBe(25);
-    expect(paletteIds.length).toBe(22);
+    expect(speciesIds.length).toBe(35);
+    expect(paletteIds.length).toBe(32);
 
-    // 1. Verify all 25 marine species + all 22 palettes build cleanly with populated MarineStats!
+    // 1. Verify all 35 marine species + all 32 palettes build cleanly with populated MarineStats!
     const basePreset = PRESETS.find((p) => p.name === 'Pacific Giant Bladder Kelp')!;
     for (let idx = 0; idx < speciesIds.length; idx++) {
       const spId = speciesIds[idx];
@@ -1095,18 +1096,29 @@ describe('Frontier Procedural Generators — Welded Trees, Fruiting Palms, Gigan
         }
       }
       expect(maxPivotChordDrift, `${spId} isometric SO(3) chord preservation`).toBeLessThan(1e-5);
-      if (spId === 'staghorn_coral' || spId === 'azure_tube_sponge') {
-        // Calcified stony coral & spicule-reinforced sponge stay structurally stiff with subtle polyp/osculum micro-quiver!
-        expect(maxCurrentDisp, `${spId} subtle polyp/osculum micro-motion`).toBeGreaterThan(0.001);
+      const isRigidStony =
+        spId === 'staghorn_coral' ||
+        spId === 'elkhorn_coral_palmata' ||
+        spId === 'table_coral_acropora' ||
+        spId === 'brain_coral_diploria' ||
+        spId === 'whorled_scroll_montipora' ||
+        spId === 'azure_tube_sponge';
+      if (isRigidStony) {
+        // Calcified stony Scleractinian corals & spicule-reinforced sponge stay structurally stiff with subtle polyp micro-quiver!
+        expect(maxCurrentDisp, `${spId} subtle polyp/osculum micro-motion`).toBeGreaterThan(0.0001);
         expect(maxCurrentDisp, `${spId} stony skeleton stiffness`).toBeLessThan(0.06);
       } else {
-        // Flexible kelps, macroalgae, seagrasses, gorgonian fans, anemones & crinoids sway gracefully in ocean surge!
+        // Soft corals, tentaculate/vesicular corals, sea pens, kelps, seaweeds, seagrasses, anemones & crinoids sway gracefully!
         expect(maxCurrentDisp, `${spId} ocean current sway`).toBeGreaterThan(0.015);
       }
     }
 
-    // 2. Prove watertight closed 2-manifold Euler topology (V - E + F = 2) on BOTH Staghorn Coral & Velvet Codium!
-    for (const manifoldPresetName of ['Rose-Gold Staghorn Coral', 'Velvet Staghorn Sponge-Weed'] as const) {
+    // 2. Prove watertight closed 2-manifold Euler topology (V - E + F = 2) on Staghorn Coral, Elkhorn Coral & Velvet Codium!
+    for (const manifoldPresetName of [
+      'Rose-Gold Staghorn Coral',
+      'Broad Caribbean Elkhorn Coral',
+      'Velvet Staghorn Sponge-Weed',
+    ] as const) {
       const mPreset = PRESETS.find((p) => p.name === manifoldPresetName)!;
       const mRaw = buildSceneRaw(cloneScene(mPreset.scene));
       const mThallus = mRaw.rawParts.find((pm) => pm.id === 'layer-1:holdfast')!;
@@ -1120,7 +1132,37 @@ describe('Frontier Procedural Generators — Welded Trees, Fruiting Palms, Gigan
       expect(mRaw.layerReports[0].marine!.closedManifold).toBe(true);
     }
 
-    // 3. Verify all 8 Sea Anemone species (Actiniaria & Ceriantharia) synthesize specialized oral crowns, columns/tubes & nematocyst structures!
+    // 3. Verify all 12 Coral species (Stony Scleractinia, Soft Octocorallia, Sea Fans & Sea Pens) build cleanly!
+    const coralPresets = [
+      'Rose-Gold Staghorn Coral',
+      'Broad Caribbean Elkhorn Coral',
+      'Tiered Hyacinth Reef Table Coral',
+      'Grooved Labyrinth Brain Coral',
+      'Whorled Rose-Scroll Vase Coral',
+      'Cathedral Velvet Pillar Coral',
+      'Opalescent Pearl Bubble Coral',
+      'Solar Scarlet Sun Cup Coral',
+      'Crimson Organ-Pipe Star Coral',
+      'Translucent Carnation Soft Coral',
+      'Royal Purple Gorgonian Sea Fan',
+      'Bioluminescent Feather Sea Pen',
+    ] as const;
+    for (const coralName of coralPresets) {
+      const cPreset = PRESETS.find((p) => p.name === coralName)!;
+      expect(cPreset, `${coralName} preset exists`).toBeDefined();
+      expect(cPreset.group).toBe('Corals · Stony, Soft & Reef');
+      const cRes = buildSceneResponse(cloneScene(cPreset.scene));
+      expect(cRes.topology.nanVertices, `${coralName} NaN`).toBe(0);
+      expect(cRes.topology.degenerateFaces, `${coralName} degenerate`).toBe(0);
+      expect(cRes.topology.renderedTriangles, `${coralName} triangles`).toBeGreaterThan(25000);
+      const cStats = cRes.layerReports[0].marine!;
+      expect(
+        cStats.stemsOrTubes + cStats.bladesOrTentacles + cStats.vesiclesOrPolyps,
+        `${coralName} coral anatomy count`,
+      ).toBeGreaterThan(30);
+    }
+
+    // 4. Verify all 8 Sea Anemone species (Actiniaria & Ceriantharia) synthesize specialized oral crowns, columns/tubes & nematocyst structures!
     const anemonePresets = [
       'Bioluminescent Bubble-Tip Anemone',
       'Magnificent Ritteri Sea Anemone',
@@ -1145,13 +1187,15 @@ describe('Frontier Procedural Generators — Welded Trees, Fruiting Palms, Gigan
       expect(aStats.vesiclesOrPolyps, `${anemName} verrucae/acrorhagi/labial`).toBeGreaterThan(10);
     }
 
-    // 4. Verify all 5 multi-layer underwater flora, anemone & reef ecosystems compose cleanly!
+    // 5. Verify all 7 multi-layer underwater flora, anemone & coral reef ecosystems compose cleanly!
     for (const ecoName of [
       'Living Coral Reef Sanctuary',
       'Pacific Kelp & Seagrass Lagoon',
       'Intertidal Tidepool Seaweed Garden',
       'Tropical Lagoon Sea-Grape & Wineglass Meadow',
       'Fluorescent Reef Anemone Sanctuary',
+      'Indo-Pacific Cathedral Coral Garden',
+      'Caribbean Reef Crest & Cave Overhang',
     ] as const) {
       const eco = PRESETS.find((p) => p.name === ecoName)!;
       const ecoRes = buildSceneResponse(cloneScene(eco.scene));

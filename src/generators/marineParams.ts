@@ -51,7 +51,17 @@ export type MarineSpecies =
   | 'plumose_frilled_anemone'
   | 'strawberry_beadlet_anemone'
   | 'staghorn_coral'
+  | 'elkhorn_coral_palmata'
+  | 'table_coral_acropora'
+  | 'brain_coral_diploria'
+  | 'whorled_scroll_montipora'
+  | 'pillar_coral_dendrogyra'
+  | 'bubble_coral_plerogyra'
+  | 'sun_cup_tubastraea'
+  | 'organ_pipe_tubipora'
+  | 'carnation_tree_dendronephthya'
   | 'gorgonian_sea_fan'
+  | 'biolum_sea_pen_pennatula'
   | 'azure_tube_sponge'
   | 'feather_star_crinoid';
 
@@ -78,7 +88,17 @@ export const MARINE_SPECIES_NAMES: Record<MarineSpecies, string> = {
   plumose_frilled_anemone: 'Giant Plumose Anemone (Metridium)',
   strawberry_beadlet_anemone: 'Strawberry Beadlet Anemone (Actinia)',
   staghorn_coral: 'Branching Staghorn Coral (Acropora)',
+  elkhorn_coral_palmata: 'Broad Elkhorn Coral (Acropora palmata)',
+  table_coral_acropora: 'Tiered Reef Table Coral (Acropora hyacinthus)',
+  brain_coral_diploria: 'Grooved Labyrinth Brain Coral (Diploria)',
+  whorled_scroll_montipora: 'Whorled Rose-Scroll Coral (Montipora)',
+  pillar_coral_dendrogyra: 'Cathedral Pillar Coral (Dendrogyra)',
+  bubble_coral_plerogyra: 'Opalescent Pearl Bubble Coral (Plerogyra)',
+  sun_cup_tubastraea: 'Orange Sun Cup Coral (Tubastraea)',
+  organ_pipe_tubipora: 'Crimson Organ-Pipe Coral (Tubipora musica)',
+  carnation_tree_dendronephthya: 'Carnation Soft Coral Tree (Dendronephthya)',
   gorgonian_sea_fan: 'Reticulate Gorgonian Sea Fan',
+  biolum_sea_pen_pennatula: 'Bioluminescent Feather Sea Pen (Pennatula)',
   azure_tube_sponge: 'Organ-Pipe Azure Tube Sponge',
   feather_star_crinoid: 'Reef Crinoid Feather Star',
 };
@@ -101,7 +121,17 @@ export type MarineColorPalette =
   | 'plumose_sunset_alabaster'
   | 'strawberry_sapphire_actinia'
   | 'acropora_rose_gold'
+  | 'elkhorn_golden_surf'
+  | 'table_hyacinth_violet'
+  | 'brain_emerald_labyrinth'
+  | 'montipora_rose_chalice'
+  | 'dendrogyra_velvet_spire'
+  | 'plerogyra_pearl_jade'
+  | 'tubastraea_solar_cup'
+  | 'tubipora_crimson_star'
+  | 'carnation_sunset_tree'
   | 'royal_purple_gorgonian'
+  | 'pennatula_biolum_quill'
   | 'caribbean_azure_sponge'
   | 'crimson_gold_crinoid'
   | 'abyssal_neon_reef'
@@ -126,7 +156,17 @@ export const MARINE_PALETTE_NAMES: Record<MarineColorPalette, string> = {
   plumose_sunset_alabaster: 'Metridium Salmon-Peach & Alabaster',
   strawberry_sapphire_actinia: 'Strawberry Crimson & Sapphire Beads',
   acropora_rose_gold: 'Rose-Gold Staghorn Reef',
+  elkhorn_golden_surf: 'Elkhorn Golden Ochre & White Rim',
+  table_hyacinth_violet: 'Hyacinth Table Mint & Electric Violet',
+  brain_emerald_labyrinth: 'Diploria Bronze & Neon Emerald Valleys',
+  montipora_rose_chalice: 'Montipora Wine-Rose & Cyan Scroll Rim',
+  dendrogyra_velvet_spire: 'Dendrogyra Honey-Gold Velvet Spires',
+  plerogyra_pearl_jade: 'Plerogyra Mint-Pearl Translucent Vesicles',
+  tubastraea_solar_cup: 'Tubastraea Scarlet Cups & Canary Gold',
+  tubipora_crimson_star: 'Tubipora Ruby Pipes & Snow-White Stars',
+  carnation_sunset_tree: 'Dendronephthya Translucent & Hot Pink',
   royal_purple_gorgonian: 'Royal Violet & Gold Sea Fan',
+  pennatula_biolum_quill: 'Pennatula Rose Quill & Biolum Cyan',
   caribbean_azure_sponge: 'Caribbean Cerulean & Turquoise',
   crimson_gold_crinoid: 'Imperial Crimson & Saffron',
   abyssal_neon_reef: 'Abyssal Ultraviolet Biolum',
@@ -268,6 +308,76 @@ export const MARINE_PALETTES: Record<Exclude<MarineColorPalette, 'custom'>, Mari
     hueAccent: '#ff6b80',
     hueHoldfast: '#8f0b1e',
     huePolyp: '#14b5ff',
+  },
+  elkhorn_golden_surf: {
+    huePrimary: '#b8761d',
+    hueSecondary: '#dea034',
+    hueAccent: '#fff9ed',
+    hueHoldfast: '#784814',
+    huePolyp: '#ffe082',
+  },
+  table_hyacinth_violet: {
+    huePrimary: '#368f78',
+    hueSecondary: '#73d6a8',
+    hueAccent: '#b042ff',
+    hueHoldfast: '#2d524c',
+    huePolyp: '#7df7ff',
+  },
+  brain_emerald_labyrinth: {
+    huePrimary: '#7d6326',
+    hueSecondary: '#b8963d',
+    hueAccent: '#14f09c',
+    hueHoldfast: '#4a3918',
+    huePolyp: '#6bffd8',
+  },
+  montipora_rose_chalice: {
+    huePrimary: '#9e1952',
+    hueSecondary: '#db3276',
+    hueAccent: '#2ef2ff',
+    hueHoldfast: '#590f31',
+    huePolyp: '#ffd84d',
+  },
+  dendrogyra_velvet_spire: {
+    huePrimary: '#8c5c26',
+    hueSecondary: '#cfa152',
+    hueAccent: '#f7dfa6',
+    hueHoldfast: '#543618',
+    huePolyp: '#fff2c2',
+  },
+  plerogyra_pearl_jade: {
+    huePrimary: '#2f9e85',
+    hueSecondary: '#9cf5d6',
+    hueAccent: '#f0fff9',
+    hueHoldfast: '#304742',
+    huePolyp: '#c7ffea',
+  },
+  tubastraea_solar_cup: {
+    huePrimary: '#e02814',
+    hueSecondary: '#ff621f',
+    hueAccent: '#ffd414',
+    hueHoldfast: '#9e160b',
+    huePolyp: '#fff04d',
+  },
+  tubipora_crimson_star: {
+    huePrimary: '#b80f28',
+    hueSecondary: '#e6223f',
+    hueAccent: '#f2fff9',
+    hueHoldfast: '#7d081a',
+    huePolyp: '#a8ffdf',
+  },
+  carnation_sunset_tree: {
+    huePrimary: '#ffd1b8',
+    hueSecondary: '#fff0e6',
+    hueAccent: '#ff147a',
+    hueHoldfast: '#e08963',
+    huePolyp: '#ff7b1c',
+  },
+  pennatula_biolum_quill: {
+    huePrimary: '#c92a6a',
+    hueSecondary: '#ff669e',
+    hueAccent: '#2bf5ff',
+    hueHoldfast: '#d99a79',
+    huePolyp: '#b0fffa',
   },
   caribbean_azure_sponge: {
     huePrimary: '#2452bd',
@@ -584,6 +694,150 @@ export const MARINE_SPECIES_PROFILES: Record<MarineSpecies, Partial<MarineParams
     translucency: 0.28,
     ...MARINE_PALETTES.acropora_rose_gold,
   },
+  elkhorn_coral_palmata: {
+    colorPalette: 'elkhorn_golden_surf',
+    colonyHeight: 1.16,
+    colonyCount: 5,
+    canopySpread: 1.38,
+    organLength: 0.56,
+    organWidth: 0.44,
+    organDensity: 1.1,
+    ruffleWave: 0.58,
+    vesicleAbundance: 1.05,
+    branchOrder: 3,
+    currentLeanDeg: 6,
+    currentSway: 0.08,
+    translucency: 0.22,
+    ...MARINE_PALETTES.elkhorn_golden_surf,
+  },
+  table_coral_acropora: {
+    colorPalette: 'table_hyacinth_violet',
+    colonyHeight: 0.78,
+    colonyCount: 3,
+    canopySpread: 1.36,
+    organLength: 0.58,
+    organWidth: 0.24,
+    organDensity: 1.2,
+    ruffleWave: 0.62,
+    vesicleAbundance: 1.15,
+    branchOrder: 3,
+    currentLeanDeg: 2,
+    currentSway: 0.08,
+    translucency: 0.26,
+    ...MARINE_PALETTES.table_hyacinth_violet,
+  },
+  brain_coral_diploria: {
+    colorPalette: 'brain_emerald_labyrinth',
+    colonyHeight: 0.68,
+    colonyCount: 1,
+    canopySpread: 1.22,
+    organLength: 0.52,
+    organWidth: 0.45,
+    organDensity: 1.15,
+    ruffleWave: 0.85,
+    vesicleAbundance: 1.0,
+    branchOrder: 2,
+    currentLeanDeg: 0,
+    currentSway: 0.06,
+    translucency: 0.24,
+    ...MARINE_PALETTES.brain_emerald_labyrinth,
+  },
+  whorled_scroll_montipora: {
+    colorPalette: 'montipora_rose_chalice',
+    colonyHeight: 0.74,
+    colonyCount: 9,
+    canopySpread: 1.28,
+    organLength: 0.44,
+    organWidth: 0.35,
+    organDensity: 1.15,
+    ruffleWave: 0.78,
+    vesicleAbundance: 1.15,
+    branchOrder: 2,
+    currentLeanDeg: 3,
+    currentSway: 0.10,
+    translucency: 0.34,
+    ...MARINE_PALETTES.montipora_rose_chalice,
+  },
+  pillar_coral_dendrogyra: {
+    colorPalette: 'dendrogyra_velvet_spire',
+    colonyHeight: 1.28,
+    colonyCount: 7,
+    canopySpread: 0.92,
+    organLength: 0.075,
+    organWidth: 0.26,
+    organDensity: 1.25,
+    ruffleWave: 0.48,
+    vesicleAbundance: 1.2,
+    branchOrder: 2,
+    currentLeanDeg: 3,
+    currentSway: 0.78,
+    translucency: 0.54,
+    ...MARINE_PALETTES.dendrogyra_velvet_spire,
+  },
+  bubble_coral_plerogyra: {
+    colorPalette: 'plerogyra_pearl_jade',
+    colonyHeight: 0.54,
+    colonyCount: 12,
+    canopySpread: 1.18,
+    organLength: 0.11,
+    organWidth: 0.48,
+    organDensity: 1.2,
+    ruffleWave: 0.72,
+    vesicleAbundance: 1.15,
+    branchOrder: 2,
+    currentLeanDeg: 4,
+    currentSway: 0.65,
+    translucency: 0.86,
+    ...MARINE_PALETTES.plerogyra_pearl_jade,
+  },
+  sun_cup_tubastraea: {
+    colorPalette: 'tubastraea_solar_cup',
+    colonyHeight: 0.48,
+    colonyCount: 22,
+    canopySpread: 1.14,
+    organLength: 0.14,
+    organWidth: 0.24,
+    organDensity: 1.2,
+    ruffleWave: 0.56,
+    vesicleAbundance: 1.15,
+    branchOrder: 2,
+    currentLeanDeg: 6,
+    currentSway: 0.92,
+    translucency: 0.74,
+    ...MARINE_PALETTES.tubastraea_solar_cup,
+  },
+  organ_pipe_tubipora: {
+    colorPalette: 'tubipora_crimson_star',
+    colonyHeight: 0.64,
+    colonyCount: 38,
+    canopySpread: 1.12,
+    organLength: 0.09,
+    organWidth: 0.22,
+    organDensity: 1.2,
+    ruffleWave: 0.44,
+    vesicleAbundance: 1.15,
+    branchOrder: 3,
+    currentLeanDeg: 4,
+    currentSway: 0.72,
+    translucency: 0.52,
+    ...MARINE_PALETTES.tubipora_crimson_star,
+  },
+  carnation_tree_dendronephthya: {
+    colorPalette: 'carnation_sunset_tree',
+    colonyHeight: 1.06,
+    colonyCount: 6,
+    canopySpread: 1.18,
+    organLength: 0.34,
+    organWidth: 0.32,
+    organDensity: 1.25,
+    ruffleWave: 0.74,
+    vesicleAbundance: 1.2,
+    branchOrder: 3,
+    currentLeanDeg: 10,
+    currentSway: 0.96,
+    translucency: 0.84,
+    ...MARINE_PALETTES.carnation_sunset_tree,
+  },
   gorgonian_sea_fan: {
     colorPalette: 'royal_purple_gorgonian',
     colonyHeight: 1.38,
@@ -599,6 +853,22 @@ export const MARINE_SPECIES_PROFILES: Record<MarineSpecies, Partial<MarineParams
     currentSway: 0.62,
     translucency: 0.34,
     ...MARINE_PALETTES.royal_purple_gorgonian,
+  },
+  biolum_sea_pen_pennatula: {
+    colorPalette: 'pennatula_biolum_quill',
+    colonyHeight: 0.92,
+    colonyCount: 3,
+    canopySpread: 1.08,
+    organLength: 0.26,
+    organWidth: 0.32,
+    organDensity: 1.2,
+    ruffleWave: 0.66,
+    vesicleAbundance: 1.15,
+    branchOrder: 2,
+    currentLeanDeg: 12,
+    currentSway: 1.05,
+    translucency: 0.76,
+    ...MARINE_PALETTES.pennatula_biolum_quill,
   },
   sea_anemone: {
     colorPalette: 'biolum_bubble_anemone',

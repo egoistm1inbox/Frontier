@@ -1585,8 +1585,18 @@ class FrontierStudio {
       { id: 'rock_flower_ultra_rainbow', short: 'RockFlower' },
       { id: 'plumose_sunset_alabaster', short: 'Plumose' },
       { id: 'strawberry_sapphire_actinia', short: 'Strawberry' },
-      { id: 'acropora_rose_gold', short: 'Rose Reef' },
+      { id: 'acropora_rose_gold', short: 'Staghorn' },
+      { id: 'elkhorn_golden_surf', short: 'Elkhorn' },
+      { id: 'table_hyacinth_violet', short: 'Table' },
+      { id: 'brain_emerald_labyrinth', short: 'Brain' },
+      { id: 'montipora_rose_chalice', short: 'Scroll' },
+      { id: 'dendrogyra_velvet_spire', short: 'Pillar' },
+      { id: 'plerogyra_pearl_jade', short: 'Bubble' },
+      { id: 'tubastraea_solar_cup', short: 'Sun Cup' },
+      { id: 'tubipora_crimson_star', short: 'OrganPipe' },
+      { id: 'carnation_sunset_tree', short: 'Carnation' },
       { id: 'royal_purple_gorgonian', short: 'Sea Fan' },
+      { id: 'pennatula_biolum_quill', short: 'Sea Pen' },
       { id: 'caribbean_azure_sponge', short: 'Azure' },
       { id: 'crimson_gold_crinoid', short: 'Crimson' },
       { id: 'abyssal_neon_reef', short: 'Abyss UV' },
@@ -2373,6 +2383,7 @@ class FrontierStudio {
       if (l?.tree) l.tree.detailTier = t;
       if (l?.palm) l.palm.detailTier = t;
       if (l?.flower) l.flower.detailTier = t;
+      if (l?.marine) l.marine.detailTier = t;
       if (l?.fern) l.fern.detailTier = t;
       if (l?.tropical) l.tropical.detailTier = t;
       if (l?.moss) l.moss.detailTier = t;
@@ -2415,7 +2426,19 @@ class FrontierStudio {
         k === 'hair'
       ) {
         this.addLayer(k);
-        return `added ${k}`;
+        const added = this.sceneSpec.layers[this.sceneSpec.layers.length - 1];
+        if (added?.marine && rawK === 'coral') {
+          applyMarineSpeciesDefaults(added.marine, 'table_coral_acropora');
+          added.name = `Table Coral #${this.sceneSpec.layers.length}`;
+          this.rebuildInspector();
+          this.requestGenerate(false);
+        } else if (added?.marine && rawK === 'anemone') {
+          applyMarineSpeciesDefaults(added.marine, 'sea_anemone');
+          added.name = `Bubble-Tip Anemone #${this.sceneSpec.layers.length}`;
+          this.rebuildInspector();
+          this.requestGenerate(false);
+        }
+        return `added ${rawK}`;
       }
     }
     if (cmd === 'mode') {
