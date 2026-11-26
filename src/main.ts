@@ -1415,6 +1415,10 @@ class FrontierStudio {
       { id: 'imperial_coral_sunset', short: 'Coral' },
       { id: 'bioluminescent_aurora', short: 'Aurora' },
       { id: 'royal_amethyst_rose', short: 'Amethyst' },
+      { id: 'neon_cyber_lotus', short: 'Neon Cyber' },
+      { id: 'golden_saffron_emperor', short: 'Saffron' },
+      { id: 'velvet_midnight_noir', short: 'Noir Ruby' },
+      { id: 'pastel_sakura_pearl', short: 'Sakura' },
     ];
     const grid = el('div', 'swatch-grid');
     for (const item of swatchOrder) {

@@ -13,7 +13,13 @@ export type FlowerSpecies =
   | 'sacred_lotus'
   | 'tree_peony'
   | 'passion_orchid'
-  | 'titan_sunflower';
+  | 'titan_sunflower'
+  | 'king_protea'
+  | 'honeycomb_dahlia'
+  | 'bearded_iris'
+  | 'phalaenopsis_orchid'
+  | 'imperial_crown_bell'
+  | 'bird_of_paradise';
 
 export const FLOWER_SPECIES_NAMES: Record<FlowerSpecies, string> = {
   tropical_hibiscus: 'Colossal Tropical Hibiscus (Hibiscus)',
@@ -22,6 +28,12 @@ export const FLOWER_SPECIES_NAMES: Record<FlowerSpecies, string> = {
   tree_peony: 'Imperial Giant Tree Peony (Paeonia)',
   passion_orchid: 'Colossal Crown Passionflower (Passiflora)',
   titan_sunflower: 'Giant Royal Sunflower (Helianthus)',
+  king_protea: 'Giant King Protea (Protea cynaroides)',
+  honeycomb_dahlia: 'Colossal Honeycomb Dahlia (Dahlia pinnata)',
+  bearded_iris: 'Giant Cathedral Bearded Iris (Iris germanica)',
+  phalaenopsis_orchid: 'Exotic Moth Orchid Spray (Phalaenopsis)',
+  imperial_crown_bell: 'Imperial Pagoda Crown Bell (Fritillaria)',
+  bird_of_paradise: 'Royal Crane Flower (Strelitzia reginae)',
 };
 
 export type FlowerColorPalette =
@@ -34,6 +46,10 @@ export type FlowerColorPalette =
   | 'imperial_coral_sunset'
   | 'bioluminescent_aurora'
   | 'royal_amethyst_rose'
+  | 'neon_cyber_lotus'
+  | 'golden_saffron_emperor'
+  | 'velvet_midnight_noir'
+  | 'pastel_sakura_pearl'
   | 'custom';
 
 export const FLOWER_PALETTE_NAMES: Record<FlowerColorPalette, string> = {
@@ -46,6 +62,10 @@ export const FLOWER_PALETTE_NAMES: Record<FlowerColorPalette, string> = {
   imperial_coral_sunset: 'Imperial Coral, Peach & Rose',
   bioluminescent_aurora: 'Bioluminescent Cyan & Violet',
   royal_amethyst_rose: 'Royal Amethyst, Fuchsia & Saffron',
+  neon_cyber_lotus: 'Neon Cyber Fuchsia & Electric Cyan',
+  golden_saffron_emperor: 'Golden Saffron & Imperial Vermilion',
+  velvet_midnight_noir: 'Midnight Velvet Plum & Rose-Gold',
+  pastel_sakura_pearl: 'Luminous Sakura Blush & Ivory Pearl',
   custom: 'Custom Sculpted Pigments',
 };
 
@@ -106,6 +126,54 @@ export const SPECIES_SIGNATURE_PIGMENTS: Record<FlowerSpecies, FlowerPigmentSet>
     hueVein: '#d95307',
     huePollen: '#3b1c08',
     hueStemLeaf: '#286319',
+  },
+  king_protea: {
+    huePrimary: '#e81c62',
+    hueSecondary: '#ffd9e8',
+    hueThroat: '#4a031d',
+    hueVein: '#9e0b3f',
+    huePollen: '#fff5f8',
+    hueStemLeaf: '#2b5938',
+  },
+  honeycomb_dahlia: {
+    huePrimary: '#ff0a6c',
+    hueSecondary: '#ff9e1b',
+    hueThroat: '#520238',
+    hueVein: '#b50952',
+    huePollen: '#ffcb14',
+    hueStemLeaf: '#1d5c21',
+  },
+  bearded_iris: {
+    huePrimary: '#6d3bff',
+    hueSecondary: '#b89eff',
+    hueThroat: '#210563',
+    hueVein: '#f7ecff',
+    huePollen: '#ff6d00',
+    hueStemLeaf: '#296652',
+  },
+  phalaenopsis_orchid: {
+    huePrimary: '#ffe8f7',
+    hueSecondary: '#f51686',
+    hueThroat: '#ffbe0b',
+    hueVein: '#a80054',
+    huePollen: '#fff7fc',
+    hueStemLeaf: '#1b5726',
+  },
+  imperial_crown_bell: {
+    huePrimary: '#ff3c00',
+    hueSecondary: '#ffaa00',
+    hueThroat: '#420210',
+    hueVein: '#a81200',
+    huePollen: '#fff2b2',
+    hueStemLeaf: '#1f6622',
+  },
+  bird_of_paradise: {
+    huePrimary: '#ff5e00',
+    hueSecondary: '#0b3dff',
+    hueThroat: '#d9043d',
+    hueVein: '#ff9500',
+    huePollen: '#fff9f0',
+    hueStemLeaf: '#215c44',
   },
 };
 
@@ -176,6 +244,38 @@ export const VIBRANT_PALETTE_SWATCHES: Record<
     hueVein: '#560bad',
     huePollen: '#ffd000',
     hueStemLeaf: '#1f5924',
+  },
+  neon_cyber_lotus: {
+    huePrimary: '#ff007f',
+    hueSecondary: '#00f5ff',
+    hueThroat: '#1b004b',
+    hueVein: '#ff4da6',
+    huePollen: '#f4ff1a',
+    hueStemLeaf: '#134e3a',
+  },
+  golden_saffron_emperor: {
+    huePrimary: '#ffb700',
+    hueSecondary: '#ff4800',
+    hueThroat: '#6b0504',
+    hueVein: '#d93800',
+    huePollen: '#fff05a',
+    hueStemLeaf: '#245c1d',
+  },
+  velvet_midnight_noir: {
+    huePrimary: '#3d041d',
+    hueSecondary: '#940b36',
+    hueThroat: '#140109',
+    hueVein: '#d91656',
+    huePollen: '#ffd12b',
+    hueStemLeaf: '#1a4728',
+  },
+  pastel_sakura_pearl: {
+    huePrimary: '#ff85b3',
+    hueSecondary: '#fff7fb',
+    hueThroat: '#e62e6b',
+    hueVein: '#ff4d8d',
+    huePollen: '#ffd43b',
+    hueStemLeaf: '#286634',
   },
 };
 

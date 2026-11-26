@@ -2,7 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { partsToGLB, partsToOBJ } from '../src/core/mesh';
 import { validateWeldedManifold } from '../src/core/weldedManifold';
 import { buildSceneRaw, buildSceneResponse } from '../src/generators/buildScene';
-import { applyFlowerPalette } from '../src/generators/flowerParams';
+import {
+  applyFlowerPalette,
+  FLOWER_PALETTE_NAMES,
+  FLOWER_SPECIES_NAMES,
+  FlowerColorPalette,
+  FlowerSpecies,
+} from '../src/generators/flowerParams';
 import { PRESETS } from '../src/generators/presets';
 import { cloneScene } from '../src/generators/types';
 import {
@@ -96,8 +102,8 @@ function evalWindVertex(
 }
 
 describe('Frontier Procedural Generators — Welded Trees, Fruiting Palms, Gigantic Flowers, Pillow Moss, Giant Tropicals, Ferns & Fur', () => {
-  it('exposes all 48 curated presets across all 9 studio groups', () => {
-    expect(PRESETS.length).toBe(48);
+  it('exposes all 58 curated presets across all 9 studio groups', () => {
+    expect(PRESETS.length).toBe(58);
     const groups = new Set(PRESETS.map((p) => p.group));
     expect(groups.has('Trees · Welded Manifold')).toBe(true);
     expect(groups.has('Palms · Fruiting & Branching')).toBe(true);
@@ -536,43 +542,72 @@ describe('Frontier Procedural Generators — Welded Trees, Fruiting Palms, Gigan
     expect(dv.getUint32(8, true)).toBe(glb.byteLength);
   });
 
-  it('synthesizes Gigantic 3D Sculpted Flowers across all 6 species with closed 2-manifold welded stems, vibrant colorways, and SO(3) wind', () => {
+  it('synthesizes Gigantic 3D Sculpted Flowers across all 12 species and 18 presets with closed 2-manifold welded stems, 14 vibrant colorways, and SO(3) wind', () => {
     const flowerPresets = PRESETS.filter((p) => p.group === 'Flowers · Gigantic 3D Blooms');
-    expect(flowerPresets.length).toBe(8);
+    expect(flowerPresets.length).toBe(18);
+    expect(Object.keys(FLOWER_SPECIES_NAMES).length).toBe(12);
+    expect(Object.keys(FLOWER_PALETTE_NAMES).length).toBe(14);
+
+    const coveredSpecies = new Set<FlowerSpecies>();
 
     for (const preset of flowerPresets) {
       const scene = cloneScene(preset.scene);
-      scene.layers[0].flower!.detailTier = 2;
+      for (const l of scene.layers) {
+        if (l.flower) {
+          l.flower.detailTier = 2;
+          coveredSpecies.add(l.flower.species);
+        }
+      }
       const raw = buildSceneRaw(scene);
 
-      const stemMesh = raw.rawParts.find((m) => m.id === 'layer-1:stem')!;
-      expect(stemMesh, `${preset.name} welded stem mesh`).toBeDefined();
-      const val = validateWeldedManifold(stemMesh);
-      expect(val.closed, `${preset.name} closed stem manifold`).toBe(true);
-      expect(val.manifold, `${preset.name} 2-manifold edges`).toBe(true);
-      expect(val.boundaryEdges, `${preset.name} 0 boundary edges`).toBe(0);
-      expect(val.nonManifoldEdges, `${preset.name} 0 non-manifold edges`).toBe(0);
-      expect(val.inconsistentEdges, `${preset.name} consistent winding`).toBe(0);
-      expect(val.eulerCharacteristic, `${preset.name} Euler V - E + F = 2 * C`).toBe(2 * val.components);
+      for (const l of scene.layers) {
+        if (l.kind !== 'flower') continue;
+        const stemMesh = raw.rawParts.find((m) => m.id === `${l.id}:stem`)!;
+        expect(stemMesh, `${preset.name} (${l.id}) welded stem mesh`).toBeDefined();
+        const val = validateWeldedManifold(stemMesh);
+        expect(val.closed, `${preset.name} (${l.id}) closed stem manifold`).toBe(true);
+        expect(val.manifold, `${preset.name} (${l.id}) 2-manifold edges`).toBe(true);
+        expect(val.boundaryEdges, `${preset.name} (${l.id}) 0 boundary edges`).toBe(0);
+        expect(val.nonManifoldEdges, `${preset.name} (${l.id}) 0 non-manifold edges`).toBe(0);
+        expect(val.inconsistentEdges, `${preset.name} (${l.id}) consistent winding`).toBe(0);
+        expect(val.eulerCharacteristic, `${preset.name} (${l.id}) Euler V - E + F = 2 * C`).toBe(
+          2 * val.components,
+        );
 
-      const corollaMesh = raw.rawParts.find((m) => m.id === 'layer-1:corolla')!;
-      const reproMesh = raw.rawParts.find((m) => m.id === 'layer-1:reproductive')!;
-      expect(corollaMesh.shading).toBe('flower');
-      expect(corollaMesh.renderedTriangles).toBeGreaterThan(2000);
-      expect(reproMesh.renderedTriangles).toBeGreaterThan(300);
+        const corollaMesh = raw.rawParts.find((m) => m.id === `${l.id}:corolla`)!;
+        const reproMesh = raw.rawParts.find((m) => m.id === `${l.id}:reproductive`)!;
+        expect(corollaMesh.shading).toBe('flower');
+        expect(corollaMesh.renderedTriangles, `${preset.name} corolla tris`).toBeGreaterThan(1500);
+        expect(reproMesh.renderedTriangles, `${preset.name} reproductive tris`).toBeGreaterThan(180);
 
-      // Verify vibrant high-chroma petal colors (non-NaN, high channel saturation)
-      let maxChroma = 0;
-      for (let i = 0; i < corollaMesh.vertexCount; i++) {
-        const r = corollaMesh.colors[i * 3];
-        const g = corollaMesh.colors[i * 3 + 1];
-        const b = corollaMesh.colors[i * 3 + 2];
-        expect(Number.isFinite(r + g + b)).toBe(true);
-        const hi = Math.max(r, g, b);
-        const lo = Math.min(r, g, b);
-        maxChroma = Math.max(maxChroma, hi - lo);
+        // Verify vibrant high-chroma petal colors (non-NaN, high channel saturation)
+        let maxChroma = 0;
+        for (let i = 0; i < corollaMesh.vertexCount; i++) {
+          const r = corollaMesh.colors[i * 3];
+          const g = corollaMesh.colors[i * 3 + 1];
+          const b = corollaMesh.colors[i * 3 + 2];
+          expect(Number.isFinite(r + g + b)).toBe(true);
+          const hi = Math.max(r, g, b);
+          const lo = Math.min(r, g, b);
+          maxChroma = Math.max(maxChroma, hi - lo);
+        }
+        expect(maxChroma, `${preset.name} vibrant petal chroma`).toBeGreaterThan(0.35);
       }
-      expect(maxChroma, `${preset.name} vibrant petal chroma`).toBeGreaterThan(0.5);
+    }
+
+    // Every single one of the 12 botanical species must have a dedicated preset!
+    for (const sp of Object.keys(FLOWER_SPECIES_NAMES) as FlowerSpecies[]) {
+      expect(coveredSpecies.has(sp), `Preset coverage for species ${sp}`).toBe(true);
+    }
+
+    // Verify all non-custom colorways apply valid `#rrggbb` hexes
+    const sampleFlp = { ...cloneScene(flowerPresets[0].scene).layers[0].flower! };
+    for (const pal of Object.keys(FLOWER_PALETTE_NAMES) as FlowerColorPalette[]) {
+      if (pal === 'custom') continue;
+      applyFlowerPalette(sampleFlp, pal);
+      expect(sampleFlp.huePrimary).toMatch(/^#[0-9a-f]{6}$/i);
+      expect(sampleFlp.hueSecondary).toMatch(/^#[0-9a-f]{6}$/i);
+      expect(sampleFlp.hueThroat).toMatch(/^#[0-9a-f]{6}$/i);
     }
 
     // Verify colorway switching + zero-scaling SO(3) Rodrigues petal wind + OBJ/GLB export

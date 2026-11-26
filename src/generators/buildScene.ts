@@ -106,10 +106,14 @@ export function buildSceneRaw(scene: SceneSpec): BuiltSceneRaw {
     } else if (layer.kind === 'flower') {
       const flp = layer.flower ?? { ...DEFAULT_FLOWER_PARAMS };
       const built = new FlowerMesher(flp, layer.seed, substrate).build(layer.id);
+      const terrainDy =
+        x !== 0 || z !== 0
+          ? substrate.sampleSurface(x, z).pos.y - substrate.sampleSurface(0, 0).pos.y
+          : 0;
       let lTris = 0;
       let lVerts = 0;
       for (const pm of built.parts) {
-        if (needsTransform) pm.applyTransform(x, y, z, yaw, scale);
+        if (needsTransform || terrainDy !== 0) pm.applyTransform(x, y + terrainDy, z, yaw, scale);
         lTris += pm.renderedTriangles;
         lVerts += pm.vertexCount;
         rawParts.push(pm);

@@ -126,6 +126,10 @@ interface PetalSpec {
   hasPapillae: boolean;
   /** Sunflower 2-channel ray plication? */
   isRayFloret: boolean;
+  /** Optional explicit petal planform override. */
+  planform?: 'obovate' | 'pointed_boat' | 'acute_bract' | 'involute_quill' | 'orchid_wing' | 'bell_tepal';
+  /** Optional custom pigment evaluator `(u, absS, veinRidge, isAbaxial) => RGB`. */
+  colorOverride?: (u: number, absS: number, veinRidge: number, isAbaxial: boolean) => RGB;
   seedPhase: number;
 }
 
@@ -393,21 +397,29 @@ export class FlowerMesher {
           : clamp(H * 0.017 + bloomD * 0.020, 0.014, 0.15);
 
     const stalkH =
-      p.species === 'sacred_lotus'
-        ? H * 0.88
-        : p.species === 'titan_sunflower'
-          ? H * 0.86
-          : H * 0.74;
+      p.species === 'imperial_crown_bell'
+        ? H * 0.94
+        : p.species === 'sacred_lotus'
+          ? H * 0.88
+          : p.species === 'titan_sunflower'
+            ? H * 0.86
+            : p.species === 'phalaenopsis_orchid'
+              ? H * 0.82
+              : H * 0.74;
 
     // Build graceful organic primary stalk centerline
     const nStalkPts = 14;
-    const leanAz = this.rng.range(-0.35, 0.35);
+    const leanAz = p.species === 'phalaenopsis_orchid' ? 0.18 : this.rng.range(-0.35, 0.35);
     const leanAmp =
-      p.species === 'titan_sunflower'
-        ? H * 0.035
-        : p.species === 'sacred_lotus'
-          ? H * 0.045
-          : H * 0.065;
+      p.species === 'imperial_crown_bell'
+        ? H * 0.020
+        : p.species === 'titan_sunflower'
+          ? H * 0.035
+          : p.species === 'phalaenopsis_orchid'
+            ? H * 0.14
+            : p.species === 'sacred_lotus'
+              ? H * 0.045
+              : H * 0.065;
     const stalkPts: V3[] = [];
     const sinkBase = baseStalkR * 0.55;
     for (let i = 0; i <= nStalkPts; i++) {
@@ -499,28 +511,43 @@ export class FlowerMesher {
       },
     };
 
-    // Terminal Hero Bloom #0 sits right on `mainStem` apex!
+    // Terminal Hero Bloom #0 sits right on `mainStem` apex (except `imperial_crown_bell`,
+    // whose main stalk apex carries the signature Pineapple Foliar Topknot while all pagoda
+    // bells hang in a nodding chandelier whorl right beneath it!).
+    const isPagodaBell = p.species === 'imperial_crown_bell';
     const heroForwardTilt =
       p.species === 'sacred_lotus'
         ? 14
-        : p.species === 'oriental_lily'
-          ? 38
-          : p.species === 'tree_peony'
-            ? 30
-            : p.species === 'tropical_hibiscus'
-              ? 38
-              : p.species === 'passion_orchid'
-                ? 50
-                : 54; // titan_sunflower faces toward sunlit viewer!
+        : p.species === 'king_protea'
+          ? 24
+          : p.species === 'bearded_iris'
+            ? 20
+            : p.species === 'tree_peony'
+              ? 30
+              : p.species === 'oriental_lily' || p.species === 'tropical_hibiscus'
+                ? 38
+                : p.species === 'honeycomb_dahlia'
+                  ? 44
+                  : p.species === 'passion_orchid'
+                    ? 50
+                    : p.species === 'titan_sunflower'
+                      ? 54
+                      : p.species === 'bird_of_paradise'
+                        ? 22
+                        : p.species === 'phalaenopsis_orchid'
+                          ? 74
+                          : 146; // imperial_crown_bell pendent nodding bell!
 
-    bloomMounts.push({
-      stem: mainStem,
-      isBud: false,
-      scaleMul: 1.0,
-      index: 0,
-      preferForwardTiltDeg: heroForwardTilt,
-      yawHint: 0.12,
-    });
+    if (!isPagodaBell) {
+      bloomMounts.push({
+        stem: mainStem,
+        isBud: false,
+        scaleMul: 1.0,
+        index: 0,
+        preferForwardTiltDeg: heroForwardTilt,
+        yawHint: 0.12,
+      });
+    }
 
     // 1B. Welded Terrain-Hugging Buttress / Rhizome Surface Roots
     const rootAttachBase = Math.min(stalkLen * 0.08, Math.max(0.04, baseStalkR * 1.4));
@@ -595,34 +622,44 @@ export class FlowerMesher {
     }
 
     // 1C. Welded Lateral Bloom Peduncles / Pedicels + Unopened Bud Pedicels
-    const totalSideFloral = (nBlooms - 1) + nBuds;
+    const sideOpenCount = isPagodaBell ? Math.max(4, nBlooms + 2) : nBlooms - 1;
+    const totalSideFloral = sideOpenCount + nBuds;
     for (let bi = 0; bi < totalSideFloral; bi++) {
-      const isBud = bi >= nBlooms - 1;
+      const isBud = bi >= sideOpenCount;
       // Space attachment stations cleanly down upper stalk (`0.46 .. 0.86`) so `planHoles`
       // cuts non-overlapping collar windows with zero drops!
-      const fracSpan =
-        p.species === 'sacred_lotus'
+      const fracSpan = isPagodaBell
+        ? lerp1(0.84, 0.72, bi / Math.max(1, totalSideFloral - 1))
+        : p.species === 'sacred_lotus'
           ? lerp1(0.38, 0.16, bi / Math.max(1, totalSideFloral - 1))
           : totalSideFloral <= 1
             ? 0.72
             : lerp1(0.84, 0.46, bi / Math.max(1, totalSideFloral - 1));
-      const attachS = stalkLen * clamp(fracSpan, 0.14, 0.87);
+      const attachS = stalkLen * clamp(fracSpan, 0.14, 0.88);
       const pNode = this.evalNodeAtS(stalkNodes, attachS);
 
-      // Spread blooms in a scenic 3D bouquet crown with front-hemisphere showcase bias
+      // Spread blooms in a scenic 3D bouquet crown (or symmetric chandelier ring for Pagoda Bell!)
       const rawAz = (bi + 1) * GOLDEN_ANGLE + 0.45;
-      const az =
-        bi === 0
+      const az = isPagodaBell
+        ? (bi / Math.max(1, totalSideFloral)) * TAU + 0.32
+        : bi === 0
           ? 0.88
           : bi === 1
             ? -0.92
             : rawAz;
-      const spreadOut = p.species === 'sacred_lotus' ? 0.36 : isBud ? 0.56 : 0.68;
+      const spreadOut = isPagodaBell
+        ? 0.86
+        : p.species === 'sacred_lotus'
+          ? 0.36
+          : isBud
+            ? 0.56
+            : 0.68;
       const emergeDir = normalize(
-        v3(Math.sin(az) * spreadOut, 0.76, Math.cos(az) * spreadOut),
+        v3(Math.sin(az) * spreadOut, isPagodaBell ? 0.42 : 0.76, Math.cos(az) * spreadOut),
       );
-      const pedLen =
-        p.species === 'sacred_lotus'
+      const pedLen = isPagodaBell
+        ? clamp(bloomD * 0.56 * this.rng.range(0.94, 1.06), 0.18, H * 0.28)
+        : p.species === 'sacred_lotus'
           ? H * (isBud ? 0.44 : 0.54) * this.rng.range(0.9, 1.08)
           : clamp(
               H * (isBud ? 0.19 : 0.27) * this.rng.range(0.88, 1.14),
@@ -637,16 +674,23 @@ export class FlowerMesher {
       const outHoriz = normalize(v3(Math.sin(az), 0, Math.cos(az)));
       for (let k = 0; k <= nP; k++) {
         const u = k / nP;
-        // Sweep gracefully outward then curve upward into the floral receptacle!
-        const rOut = pedLen * (0.72 * Math.sin(u * Math.PI * 0.56) + 0.18 * u);
-        const riseY = pedLen * (0.42 * u + 0.46 * Math.pow(u, 1.65));
-        pts.push(
-          v3(
-            pNode.pos.x + outHoriz.x * rOut,
-            pNode.pos.y + riseY,
-            pNode.pos.z + outHoriz.z * rOut,
-          ),
-        );
+        if (isPagodaBell) {
+          // Graceful hook-arch sweeping outward and nodding downward (`148°`) for pendent bells!
+          const rOut = pedLen * (0.88 * Math.sin(u * Math.PI * 0.58) + 0.12 * u);
+          const archY = pedLen * (0.24 * Math.sin(u * Math.PI * 0.75) - 0.52 * u * u);
+          pts.push(v3(pNode.pos.x + outHoriz.x * rOut, pNode.pos.y + archY, pNode.pos.z + outHoriz.z * rOut));
+        } else {
+          // Sweep gracefully outward then curve upward into the floral receptacle!
+          const rOut = pedLen * (0.72 * Math.sin(u * Math.PI * 0.56) + 0.18 * u);
+          const riseY = pedLen * (0.42 * u + 0.46 * Math.pow(u, 1.65));
+          pts.push(
+            v3(
+              pNode.pos.x + outHoriz.x * rOut,
+              pNode.pos.y + riseY,
+              pNode.pos.z + outHoriz.z * rOut,
+            ),
+          );
+        }
       }
       const builtPed = buildPolylineNodes(pts);
       const pedPhase = ((bi + 1) * 0.27) % 1;
@@ -693,33 +737,54 @@ export class FlowerMesher {
       bloomMounts.push({
         stem: pedStem,
         isBud,
-        scaleMul: isBud ? this.rng.range(0.55, 0.78) : this.rng.range(0.76, 0.92),
+        scaleMul: isPagodaBell
+          ? isBud
+            ? 0.62
+            : this.rng.range(0.88, 0.98)
+          : isBud
+            ? this.rng.range(0.55, 0.78)
+            : this.rng.range(0.76, 0.92),
         index: bi + 1,
-        preferForwardTiltDeg: heroForwardTilt + 10,
+        preferForwardTiltDeg: isPagodaBell ? 148 : heroForwardTilt + 10,
         yawHint: az,
       });
     }
 
     // 1D. Welded Cauline Leaves OR Emergent Sacred Lotus Peltate Umbrella Stalks!
     const baseLeafTarget =
-      p.species === 'oriental_lily'
+      p.species === 'oriental_lily' || p.species === 'king_protea'
         ? 14
         : p.species === 'sacred_lotus'
           ? 5
-          : p.species === 'titan_sunflower'
-            ? 9
-            : 10;
+          : p.species === 'phalaenopsis_orchid'
+            ? 6
+            : p.species === 'bearded_iris' || p.species === 'bird_of_paradise'
+              ? 8
+              : p.species === 'imperial_crown_bell'
+                ? 12
+                : p.species === 'titan_sunflower'
+                  ? 9
+                  : 10;
     const nLeaves = Math.round(baseLeafTarget * clamp(p.foliageDensity, 0, 1.6));
 
     for (let li = 0; li < nLeaves; li++) {
       const tLeaf = nLeaves <= 1 ? 0.35 : li / (nLeaves - 1);
       const isLotusPad = p.species === 'sacred_lotus';
+      const isBasalRosette =
+        p.species === 'phalaenopsis_orchid' ||
+        p.species === 'bearded_iris' ||
+        p.species === 'bird_of_paradise';
+      const isTopknotLeaf = p.species === 'imperial_crown_bell' && li >= Math.floor(nLeaves * 0.45);
 
-      // For Lotus, peltate pad stalks emerge near the rhizome base (`0.06..0.24`);
-      // for cauline plants, leaves spiral from `0.15` up to `0.78`!
       const attachFrac = isLotusPad
         ? lerp1(0.07, 0.24, tLeaf)
-        : lerp1(0.15, 0.76, tLeaf);
+        : isBasalRosette
+          ? lerp1(0.06, 0.30, tLeaf)
+          : isTopknotLeaf
+            ? lerp1(0.90, 0.985, (li - Math.floor(nLeaves * 0.45)) / Math.max(1, nLeaves - Math.floor(nLeaves * 0.45) - 1))
+            : p.species === 'imperial_crown_bell'
+              ? lerp1(0.14, 0.56, tLeaf / 0.45)
+              : lerp1(0.15, 0.76, tLeaf);
       const attachS = stalkLen * attachFrac;
       const pNode = this.evalNodeAtS(stalkNodes, attachS);
       const az = li * GOLDEN_ANGLE + 1.15;
@@ -783,35 +848,60 @@ export class FlowerMesher {
       } else {
         // Welded Petiole-to-Midrib Spine arching gracefully outward!
         const sizeBell = Math.sin(Math.PI * clamp(0.18 + 0.72 * (1 - tLeaf * 0.65), 0.15, 0.95));
-        const totalSpineLen =
-          p.species === 'oriental_lily'
-            ? clamp(H * 0.22 * (0.65 + 0.45 * sizeBell), 0.16, 1.45)
-            : p.species === 'titan_sunflower'
-              ? clamp(H * 0.28 * (0.65 + 0.50 * sizeBell), 0.22, 1.85)
-              : clamp(H * 0.24 * (0.65 + 0.45 * sizeBell), 0.18, 1.55);
+        const isSwordLeaf = p.species === 'bearded_iris' || p.species === 'bird_of_paradise';
+        const totalSpineLen = isTopknotLeaf
+          ? clamp(bloomD * 0.68 * this.rng.range(0.88, 1.12), 0.16, 0.85)
+          : isSwordLeaf
+            ? clamp(H * 0.44 * (0.75 + 0.30 * sizeBell), 0.28, 2.2)
+            : p.species === 'phalaenopsis_orchid'
+              ? clamp(H * 0.26 * (0.80 + 0.25 * sizeBell), 0.20, 1.25)
+              : p.species === 'oriental_lily' || p.species === 'king_protea'
+                ? clamp(H * 0.20 * (0.65 + 0.45 * sizeBell), 0.16, 1.35)
+                : p.species === 'titan_sunflower'
+                  ? clamp(H * 0.28 * (0.65 + 0.50 * sizeBell), 0.22, 1.85)
+                  : clamp(H * 0.24 * (0.65 + 0.45 * sizeBell), 0.18, 1.55);
 
-        const bladeW =
-          p.species === 'oriental_lily'
-            ? totalSpineLen * 0.22
-            : p.species === 'titan_sunflower'
-              ? totalSpineLen * 0.74
-              : p.species === 'passion_orchid'
-                ? totalSpineLen * 0.78
-                : totalSpineLen * 0.58;
+        const bladeW = isSwordLeaf
+          ? totalSpineLen * (p.species === 'bearded_iris' ? 0.14 : 0.24)
+          : p.species === 'phalaenopsis_orchid'
+            ? totalSpineLen * 0.46
+            : isTopknotLeaf || p.species === 'oriental_lily' || p.species === 'imperial_crown_bell'
+              ? totalSpineLen * 0.22
+              : p.species === 'king_protea'
+                ? totalSpineLen * 0.34
+                : p.species === 'titan_sunflower'
+                  ? totalSpineLen * 0.74
+                  : p.species === 'passion_orchid'
+                    ? totalSpineLen * 0.78
+                    : totalSpineLen * 0.58;
 
         const pts: V3[] = [];
-        const nL = 11;
-        const risePitch = lerp1(0.32, 0.62, tLeaf);
-        const droop = p.species === 'oriental_lily' ? 0.42 : 0.34;
+        const nL = isSwordLeaf ? 16 : 12;
+        const risePitch = isTopknotLeaf
+          ? 0.88
+          : isSwordLeaf
+            ? lerp1(1.12, 1.42, tLeaf)
+            : p.species === 'phalaenopsis_orchid'
+              ? 0.28
+              : lerp1(0.32, 0.62, tLeaf);
+        const droop = isSwordLeaf
+          ? 0.06
+          : isTopknotLeaf
+            ? 0.24
+            : p.species === 'oriental_lily'
+              ? 0.42
+              : 0.34;
+        const horizShrink = isSwordLeaf ? 0.38 : isTopknotLeaf ? 0.68 : 0.94;
         for (let k = 0; k <= nL; k++) {
           const u = k / nL;
-          const r = totalSpineLen * (0.94 * u);
+          const r = totalSpineLen * (horizShrink * Math.pow(u, isSwordLeaf ? 1.25 : 1.0));
           const y =
             pNode.pos.y +
-            totalSpineLen * (risePitch * Math.sin(u * Math.PI * 0.62) - droop * u * u);
+            totalSpineLen * (risePitch * Math.sin(u * Math.PI * (isSwordLeaf ? 0.45 : 0.58)) - droop * u * u);
           pts.push(v3(pNode.pos.x + outH.x * r, y, pNode.pos.z + outH.z * r));
         }
-        const built = buildPolylineNodes(pts);
+        const leafRight0 = length(cross(UP, outH)) > 1e-4 ? normalize(cross(UP, outH)) : v3(1, 0, 0);
+        const built = buildPolylineNodes(pts, leafRight0);
         const petR0 = Math.max(0.0032, baseStalkR * 0.26);
 
         const lStem: WeldedStem = {
@@ -964,6 +1054,42 @@ export class FlowerMesher {
         break;
       case 'titan_sunflower':
         this.buildTitanSunflowerBloom(
+          calyxMesh, corollaMesh, reproMesh, origin, flowerAxis, fRight, fFwd,
+          bloomRadius, openness, bloomPivot, bloomPhase, tier,
+        );
+        break;
+      case 'king_protea':
+        this.buildKingProteaBloom(
+          calyxMesh, corollaMesh, reproMesh, origin, flowerAxis, fRight, fFwd,
+          bloomRadius, openness, bloomPivot, bloomPhase, tier,
+        );
+        break;
+      case 'honeycomb_dahlia':
+        this.buildHoneycombDahliaBloom(
+          calyxMesh, corollaMesh, reproMesh, origin, flowerAxis, fRight, fFwd,
+          bloomRadius, openness, bloomPivot, bloomPhase, tier,
+        );
+        break;
+      case 'bearded_iris':
+        this.buildBeardedIrisBloom(
+          calyxMesh, corollaMesh, reproMesh, origin, flowerAxis, fRight, fFwd,
+          bloomRadius, openness, bloomPivot, bloomPhase, tier,
+        );
+        break;
+      case 'phalaenopsis_orchid':
+        this.buildPhalaenopsisOrchidBloom(
+          calyxMesh, corollaMesh, reproMesh, origin, flowerAxis, fRight, fFwd,
+          bloomRadius, openness, bloomPivot, bloomPhase, tier,
+        );
+        break;
+      case 'imperial_crown_bell':
+        this.buildImperialCrownBellBloom(
+          calyxMesh, corollaMesh, reproMesh, origin, flowerAxis, fRight, fFwd,
+          bloomRadius, openness, bloomPivot, bloomPhase, tier,
+        );
+        break;
+      case 'bird_of_paradise':
+        this.buildBirdOfParadiseBloom(
           calyxMesh, corollaMesh, reproMesh, origin, flowerAxis, fRight, fFwd,
           bloomRadius, openness, bloomPivot, bloomPhase, tier,
         );
@@ -1741,6 +1867,1095 @@ export class FlowerMesher {
     );
   }
 
+  // ---------------------------------------------------------------------------
+  // 7. GIANT KING PROTEA (Protea cynaroides — South African Royal Goblet Crown)
+  // ---------------------------------------------------------------------------
+  private buildKingProteaBloom(
+    calyxMesh: PartMesh,
+    corollaMesh: PartMesh,
+    reproMesh: PartMesh,
+    origin: V3,
+    fAxis: V3,
+    fRight: V3,
+    fFwd: V3,
+    R: number,
+    openness: number,
+    bloomPivot: V3,
+    phase: number,
+    tier: number,
+  ): void {
+    const p = this.p;
+    // A. Basal Woody Imbricate Scaly Involucral Cup (2 staggered rings of short ruby-olive scales)
+    for (let w = 0; w < 2; w++) {
+      const nScales = 12 + w * 2;
+      for (let i = 0; i < nScales; i++) {
+        const az = (i / nScales) * TAU + w * 0.24;
+        this.buildCalyxSepal(
+          calyxMesh,
+          origin,
+          fAxis,
+          fRight,
+          fFwd,
+          az,
+          R * (0.18 + 0.04 * w),
+          R * (-0.02 + 0.03 * w),
+          R * (0.28 + 0.08 * w),
+          R * 0.11,
+          (66 - w * 12) * DEG2RAD,
+          -6 * DEG2RAD,
+          bloomPivot,
+          phase,
+          tier,
+        );
+      }
+    }
+
+    // B. 3 Royal Concentric Crowns of Pointed Velvet-Rimmed Carmine Involucral Bracts (~42 bracts)!
+    const uSegs = tier === 1 ? 12 : tier === 2 ? 16 : tier === 3 ? 22 : 28;
+    const vSegs = tier === 1 ? 8 : tier === 2 ? 10 : tier === 3 ? 14 : 18;
+    const rings = [
+      { n: Math.round(13 * p.petalCountScale), rB: 0.24, zB: 0.04, len: 0.72, hw: 0.19, p0: 48, pM: 68 * openness, curl: -6, w01: 0.0 },
+      { n: Math.round(15 * p.petalCountScale), rB: 0.28, zB: 0.07, len: 0.94, hw: 0.21, p0: 36, pM: 52 * openness, curl: -8, w01: 0.45 },
+      { n: Math.round(14 * p.petalCountScale), rB: 0.30, zB: 0.10, len: 1.04, hw: 0.18, p0: 26, pM: 38 * openness, curl: -10, w01: 0.90 },
+    ];
+
+    for (let ri = 0; ri < rings.length; ri++) {
+      const rg = rings[ri];
+      for (let i = 0; i < rg.n; i++) {
+        const az = (i / Math.max(1, rg.n)) * TAU + ri * 0.21 + this.rng.vary(0, 0.02);
+        this.buildSculptedPetal(
+          corollaMesh,
+          origin,
+          fAxis,
+          fRight,
+          fFwd,
+          {
+            azimuthRad: az,
+            rBase: R * rg.rB,
+            zBase: R * rg.zB,
+            length: R * rg.len * this.rng.range(0.96, 1.04),
+            maxHalfWidth: R * rg.hw,
+            clawRatio: 0.10,
+            polarStartRad: rg.p0 * DEG2RAD,
+            polarMidRad: rg.pM * DEG2RAD,
+            curlDeltaRad: (rg.curl + p.petalCurl * 10) * DEG2RAD,
+            rollRad: 3.0 * DEG2RAD,
+            cupRatio: 0.28,
+            ruffleAmp: R * 0.004 * p.petalRuffle,
+            ruffleFreq: 10.0,
+            apicalNotch: 0.0,
+            veinCount: 7,
+            baseThickness: R * 0.012,
+            whorl01: rg.w01,
+            hasPapillae: false,
+            isRayFloret: false,
+            planform: 'acute_bract',
+            colorOverride: (u, absS, veinRidge, isAbax) => {
+              // Signature King Protea: rich carmine-rose body, deep ruby base, and frosted silvery-blush velvet margin!
+              let c = mixRgb(this.colThroat, this.colPrimary, smoothstep(0.05, 0.45, u));
+              const frostedMargin = smoothstep(0.68, 0.97, absS) * (0.55 + 0.45 * p.edgeBlend);
+              const tipFrost = smoothstep(0.76, 0.99, u) * 0.65 * p.edgeBlend;
+              c = mixRgb(c, this.colSecondary, clamp(frostedMargin + tipFrost, 0, 1));
+              c = mixRgb(c, this.colVein, veinRidge * 0.35 * p.veinContrast);
+              return isAbax ? mulRgb(c, 0.88) : c;
+            },
+            seedPhase: this.rng.next() * TAU,
+          },
+          uSegs,
+          vSegs,
+          bloomPivot,
+          phase,
+        );
+        this.stats.petals++;
+      }
+    }
+
+    // C. Colossal Plush Snowy-Blush Central Dome Cushion of ~240 Curved Silky Plumose Style Florets!
+    const domeR = R * 0.36;
+    const domeH = R * 0.34;
+    this.buildVelvetStigmaPad(
+      reproMesh,
+      addScaled(origin, fAxis, R * 0.16),
+      fAxis,
+      domeR * 0.92,
+      mixRgb(this.colPollen, this.colSecondary, 0.35),
+      bloomPivot,
+      phase,
+    );
+
+    const nStyles = Math.round((tier === 1 ? 110 : tier === 2 ? 170 : 250) * clamp(p.stamenLushness, 0.45, 1.5));
+    const shaftSnow = mixRgb(this.colPollen, rgb(1.0, 0.97, 0.98), 0.65);
+    const tipRuby = mixRgb(this.colPrimary, this.colSecondary, 0.25);
+
+    for (let i = 0; i < nStyles; i++) {
+      const rNorm = Math.sqrt((i + 0.5) / nStyles);
+      const az = i * GOLDEN_ANGLE;
+      const rad = add(scale(fRight, Math.cos(az)), scale(fFwd, Math.sin(az)));
+      const rBase = domeR * 0.92 * rNorm;
+      const zBase = R * 0.10 + domeH * 0.35 * (1 - rNorm * rNorm);
+      const sLen = R * lerp1(0.46, 0.36, rNorm) * this.rng.range(0.93, 1.06);
+
+      // Curve gracefully upward then inward so all 250 silky styles dome into a plush royal cushion!
+      const b0 = add(addScaled(origin, fAxis, zBase), scale(rad, rBase));
+      const b1 = add(addScaled(b0, fAxis, sLen * 0.56), scale(rad, sLen * 0.08 * (1 - rNorm)));
+      const b2 = add(addScaled(b0, fAxis, sLen), scale(rad, -sLen * 0.26 * rNorm));
+
+      this.buildCurvedFilament(reproMesh, [b0, b1, b2], R * 0.0078, shaftSnow, bloomPivot, phase);
+      this.buildVelvetStigmaPad(
+        reproMesh,
+        b2,
+        normalize(sub(b2, b1)),
+        R * 0.016,
+        tipRuby,
+        bloomPivot,
+        phase,
+      );
+      this.stats.stamensAndFlorets++;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // 8. COLOSSAL HONEYCOMB POMPON / DECORATIVE DAHLIA (Dahlia pinnata)
+  // ---------------------------------------------------------------------------
+  private buildHoneycombDahliaBloom(
+    calyxMesh: PartMesh,
+    corollaMesh: PartMesh,
+    reproMesh: PartMesh,
+    origin: V3,
+    fAxis: V3,
+    fRight: V3,
+    fFwd: V3,
+    R: number,
+    openness: number,
+    bloomPivot: V3,
+    phase: number,
+    tier: number,
+  ): void {
+    const p = this.p;
+    // 8 Leafy Green Outer Involucral Bracts beneath sphere
+    for (let i = 0; i < 8; i++) {
+      const az = (i / 8) * TAU + 0.2;
+      this.buildCalyxSepal(
+        calyxMesh, origin, fAxis, fRight, fFwd, az,
+        R * 0.12, -R * 0.03, R * 0.34, R * 0.10,
+        96 * DEG2RAD, 18 * DEG2RAD, bloomPivot, phase, tier,
+      );
+    }
+
+    // Geometric Fibonacci Parastichy Sphere/Dome of ~108 3D Involute Quilled Scoop-Florets!
+    const totalQuills = Math.max(48, Math.round((tier === 1 ? 68 : tier === 2 ? 88 : 112) * p.petalCountScale));
+    const uSegs = tier === 1 ? 10 : tier === 2 ? 12 : tier === 3 ? 16 : 20;
+    const vSegs = tier === 1 ? 8 : tier === 2 ? 10 : tier === 3 ? 12 : 16;
+
+    for (let i = 0; i < totalQuills; i++) {
+      // `t = 0` = outermost reflexed quills, `t = 1` = tight glowing central bud-eye!
+      const t = i / Math.max(1, totalQuills - 1);
+      const rNorm = Math.sqrt(1 - t); // Vogel uniform dome packing!
+      const az = i * GOLDEN_ANGLE;
+
+      const domeZ = R * 0.26 * (1 - rNorm * rNorm);
+      const rAttach = R * 0.24 * rNorm;
+      const pLen = R * lerp1(0.22, 0.78, Math.pow(rNorm, 0.72)) * this.rng.range(0.95, 1.05);
+      const pHW = pLen * lerp1(0.32, 0.26, rNorm);
+      const polarMid = lerp1(14, 98 * openness, Math.pow(rNorm, 0.86));
+
+      this.buildSculptedPetal(
+        corollaMesh,
+        origin,
+        fAxis,
+        fRight,
+        fFwd,
+        {
+          azimuthRad: az,
+          rBase: rAttach,
+          zBase: domeZ,
+          length: pLen,
+          maxHalfWidth: pHW,
+          clawRatio: 0.12,
+          polarStartRad: Math.max(8, polarMid * 0.62) * DEG2RAD,
+          polarMidRad: polarMid * DEG2RAD,
+          curlDeltaRad: (lerp1(-18, 16, rNorm) + p.petalCurl * 14) * DEG2RAD,
+          rollRad: 2.0 * DEG2RAD,
+          cupRatio: lerp1(0.88, 0.62, rNorm), // Deep 3D involute honeycomb quill scroll!
+          ruffleAmp: R * 0.005 * p.petalRuffle,
+          ruffleFreq: 10.0,
+          apicalNotch: 0.0,
+          veinCount: 5,
+          baseThickness: R * 0.0052,
+          whorl01: t,
+          hasPapillae: false,
+          isRayFloret: false,
+          planform: 'involute_quill',
+          colorOverride: (u, absS, veinRidge, isAbax) => {
+            // Dramatic radial Dahlia ombre: deep velvet heart (`t -> 1`) sweeping into blazing primary & glowing secondary tips!
+            const heartGlow = smoothstep(0.45, 0.98, t);
+            let c = mixRgb(this.colPrimary, this.colThroat, heartGlow * 0.78);
+            const tipFlame = smoothstep(0.42, 0.96, u) * p.edgeBlend * (1 - 0.55 * heartGlow);
+            c = mixRgb(c, this.colSecondary, tipFlame + 0.18 * absS * p.edgeBlend);
+            c = mixRgb(c, this.colVein, veinRidge * 0.35 * p.veinContrast);
+            return isAbax ? mixRgb(c, this.colSecondary, 0.28) : c;
+          },
+          seedPhase: (i * 0.618) * TAU,
+        },
+        uSegs,
+        vSegs,
+        bloomPivot,
+        phase,
+      );
+      this.stats.petals++;
+    }
+
+    // Tight Golden Micro-Floret Eye right at the Dahlia apex!
+    const eyeOrigin = addScaled(origin, fAxis, R * 0.28);
+    for (let k = 0; k < 24; k++) {
+      const rk = R * 0.055 * Math.sqrt((k + 0.5) / 24);
+      const az = k * GOLDEN_ANGLE;
+      const rad = add(scale(fRight, Math.cos(az)), scale(fFwd, Math.sin(az)));
+      const pt = add(eyeOrigin, scale(rad, rk));
+      this.buildVelvetStigmaPad(reproMesh, pt, fAxis, R * 0.012, this.colPollen, bloomPivot, phase);
+      this.stats.stamensAndFlorets++;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // 9. GIANT CATHEDRAL BEARDED IRIS (Iris germanica)
+  // ---------------------------------------------------------------------------
+  private buildBeardedIrisBloom(
+    calyxMesh: PartMesh,
+    corollaMesh: PartMesh,
+    reproMesh: PartMesh,
+    origin: V3,
+    fAxis: V3,
+    fRight: V3,
+    fFwd: V3,
+    R: number,
+    openness: number,
+    bloomPivot: V3,
+    phase: number,
+    tier: number,
+  ): void {
+    const p = this.p;
+    // Papery green-violet spathe bract valves cradling the perianth tube
+    for (let i = 0; i < 2; i++) {
+      this.buildCalyxSepal(
+        calyxMesh, origin, fAxis, fRight, fFwd, i * Math.PI + 0.4,
+        R * 0.08, -R * 0.06, R * 0.38, R * 0.13,
+        24 * DEG2RAD, -6 * DEG2RAD, bloomPivot, phase, tier,
+      );
+    }
+
+    const uSegs = tier === 1 ? 16 : tier === 2 ? 22 : tier === 3 ? 28 : 36;
+    const vSegs = tier === 1 ? 10 : tier === 2 ? 14 : tier === 3 ? 18 : 24;
+    const symmetryCount = Math.max(3, Math.round(3 * p.petalCountScale));
+
+    // A. 3 Towering Incurved Ruffled Silk "Standards" (forming the vaulted upper cathedral dome!)
+    for (let i = 0; i < symmetryCount; i++) {
+      const az = (i / symmetryCount) * TAU + Math.PI / 6;
+      this.buildSculptedPetal(
+        corollaMesh,
+        origin,
+        fAxis,
+        fRight,
+        fFwd,
+        {
+          azimuthRad: az,
+          rBase: R * 0.06,
+          zBase: R * 0.08,
+          length: R * 0.96,
+          maxHalfWidth: R * 0.44,
+          clawRatio: 0.18,
+          polarStartRad: 48 * DEG2RAD,
+          polarMidRad: 36 * DEG2RAD,
+          curlDeltaRad: -54 * DEG2RAD, // Sweeps inward at the summit so the 3 Standards kiss overhead!
+          rollRad: 6.0 * DEG2RAD,
+          cupRatio: 0.26,
+          ruffleAmp: R * 0.056 * (0.4 + 0.85 * p.petalRuffle),
+          ruffleFreq: 16.0,
+          apicalNotch: 0.04,
+          veinCount: 9,
+          baseThickness: R * 0.0075,
+          whorl01: 0.0,
+          hasPapillae: false,
+          isRayFloret: false,
+          planform: 'obovate',
+          colorOverride: (u, absS, veinRidge) => {
+            let c = mixRgb(this.colPrimary, this.colSecondary, smoothstep(0.25, 0.95, u * 0.65 + absS * 0.45) * (0.45 + 0.55 * p.edgeBlend));
+            c = mixRgb(c, this.colVein, veinRidge * 0.28 * p.veinContrast * (1 - 0.5 * u));
+            return c;
+          },
+          seedPhase: this.rng.next() * TAU,
+        },
+        uSegs,
+        vSegs,
+        bloomPivot,
+        phase,
+      );
+      this.stats.petals++;
+    }
+
+    // B. 3 Cascading Velvet "Falls" + White-Striated Haft + Plush 3D Fuzzy Tangerine "Caterpillar Beards" + 3 Bifid Style Arms!
+    for (let i = 0; i < symmetryCount; i++) {
+      const az = (i / symmetryCount) * TAU + Math.PI / 6 + Math.PI / symmetryCount;
+      const rad = add(scale(fRight, Math.cos(az)), scale(fFwd, Math.sin(az)));
+      const tan = add(scale(fRight, -Math.sin(az)), scale(fFwd, Math.cos(az)));
+
+      const fallLen = R * 1.06;
+      const fallPolarStart = 64 * DEG2RAD;
+      const fallPolarMid = (114 * clamp(openness, 0.65, 1.18)) * DEG2RAD;
+      const fallCurl = (22 + p.petalCurl * 16) * DEG2RAD;
+
+      this.buildSculptedPetal(
+        corollaMesh,
+        origin,
+        fAxis,
+        fRight,
+        fFwd,
+        {
+          azimuthRad: az,
+          rBase: R * 0.07,
+          zBase: R * 0.04,
+          length: fallLen,
+          maxHalfWidth: R * 0.46,
+          clawRatio: 0.24,
+          polarStartRad: fallPolarStart,
+          polarMidRad: fallPolarMid,
+          curlDeltaRad: fallCurl,
+          rollRad: 0.0,
+          cupRatio: -0.14, // Convex cascading waterfall tongue!
+          ruffleAmp: R * 0.052 * (0.4 + 0.85 * p.petalRuffle),
+          ruffleFreq: 15.0,
+          apicalNotch: 0.03,
+          veinCount: 11,
+          baseThickness: R * 0.0085,
+          whorl01: 0.6,
+          hasPapillae: false,
+          isRayFloret: false,
+          planform: 'obovate',
+          colorOverride: (u, absS, veinRidge, isAbax) => {
+            // Deep royal-indigo velvet Fall skirt (`colThroat`), pale lavender rim (`colSecondary`),
+            // and crisp white/ivory haft tiger-striations (`colVein`) around the tangerine beard!
+            let c = mixRgb(this.colThroat, this.colPrimary, smoothstep(0.68, 0.98, absS) * p.edgeBlend);
+            c = mixRgb(c, this.colSecondary, smoothstep(0.82, 0.99, absS) * 0.65 * p.edgeBlend);
+            if (u < 0.46) {
+              const haftZone = 1 - smoothstep(0.24, 0.46, u);
+              const haftBase = mixRgb(this.colVein, rgb(1, 0.98, 0.94), 0.55);
+              const tigerStripe = smoothstep(0.35, 0.85, veinRidge);
+              const haftCol = mixRgb(haftBase, this.colThroat, tigerStripe * 0.78);
+              c = mixRgb(c, haftCol, haftZone * 0.92);
+            }
+            return isAbax ? mixRgb(c, this.colPrimary, 0.35) : c;
+          },
+          seedPhase: this.rng.next() * TAU,
+        },
+        uSegs,
+        vSegs,
+        bloomPivot,
+        phase,
+      );
+      this.stats.petals++;
+
+      // Overarching Petaloid Style Arm with Upturned Bifid Crest right above the Beard!
+      this.buildSculptedPetal(
+        corollaMesh,
+        origin,
+        fAxis,
+        fRight,
+        fFwd,
+        {
+          azimuthRad: az,
+          rBase: R * 0.04,
+          zBase: R * 0.10,
+          length: R * 0.48,
+          maxHalfWidth: R * 0.11,
+          clawRatio: 0.10,
+          polarStartRad: 44 * DEG2RAD,
+          polarMidRad: 68 * DEG2RAD,
+          curlDeltaRad: -34 * DEG2RAD,
+          rollRad: 0,
+          cupRatio: -0.22,
+          ruffleAmp: R * 0.012,
+          ruffleFreq: 12.0,
+          apicalNotch: 0.22, // Bifid 2-lobed style crest!
+          veinCount: 5,
+          baseThickness: R * 0.006,
+          whorl01: 0.3,
+          hasPapillae: false,
+          isRayFloret: false,
+          planform: 'obovate',
+          colorOverride: () => mixRgb(this.colSecondary, this.colVein, 0.35),
+          seedPhase: i * 1.7,
+        },
+        12,
+        10,
+        bloomPivot,
+        phase,
+      );
+      this.stats.petals++;
+
+      // Iconic 3D Plush Fuzzy Tangerine "Caterpillar Beard" (~88 upright 3D filaments along Fall midrib!)
+      const nBeardHairs = Math.round((tier === 1 ? 45 : 88) * clamp(p.stamenLushness, 0.5, 1.6));
+      let spineCur = add(addScaled(origin, rad, R * 0.07), scale(fAxis, R * 0.04));
+      const beardSteps = 16;
+      const fallSpinePts: V3[] = [spineCur];
+      const fallSpineNrms: V3[] = [];
+      for (let ks = 0; ks <= beardSteps; ks++) {
+        const u = ks / beardSteps;
+        const pol = lerp1(fallPolarStart, fallPolarMid, smoothstep(0.0, 0.58, u)) + fallCurl * Math.pow(u, 1.85);
+        const T = add(scale(fAxis, Math.cos(pol)), scale(rad, Math.sin(pol)));
+        const N = add(scale(fAxis, Math.sin(pol)), scale(rad, -Math.cos(pol)));
+        fallSpineNrms.push(N);
+        if (ks < beardSteps) {
+          spineCur = addScaled(spineCur, T, (fallLen * 0.48) / beardSteps);
+          fallSpinePts.push(spineCur);
+        }
+      }
+
+      for (let bh = 0; bh < nBeardHairs; bh++) {
+        const uB = bh / Math.max(1, nBeardHairs - 1); // [0..1] along beard strip (`u = 0.06..0.46` of Fall)
+        const sIdx = Math.min(beardSteps, Math.floor(uB * beardSteps));
+        const spP = fallSpinePts[sIdx];
+        const spN = fallSpineNrms[sIdx];
+        const latSpread = (this.rng.next() * 2 - 1) * R * 0.042 * Math.sin(Math.PI * (0.15 + 0.75 * uB));
+        const bBase = add(addScaled(spP, tan, latSpread), scale(spN, R * 0.006));
+        const hLen = R * 0.068 * Math.sin(Math.PI * (0.18 + 0.72 * uB)) * this.rng.range(0.82, 1.18);
+        const hDir = normalize(add(spN, scale(tan, (this.rng.next() - 0.5) * 0.35)));
+        const bMid = addScaled(bBase, hDir, hLen * 0.55);
+        const bTip = addScaled(bBase, hDir, hLen);
+        this.buildCurvedFilament(
+          reproMesh,
+          [bBase, bMid, bTip],
+          R * 0.0046,
+          mixRgb(rgb(1.0, 0.88, 0.35), this.colPollen, 0.65),
+          bloomPivot,
+          phase,
+        );
+        this.buildVelvetStigmaPad(reproMesh, bTip, hDir, R * 0.0095, this.colPollen, bloomPivot, phase);
+        this.stats.stamensAndFlorets++;
+      }
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // 10. EXOTIC MOTH ORCHID SPRAY (Phalaenopsis grandiflora — Bilateral Zygomorphic Jewel)
+  // ---------------------------------------------------------------------------
+  private buildPhalaenopsisOrchidBloom(
+    _calyxMesh: PartMesh,
+    corollaMesh: PartMesh,
+    reproMesh: PartMesh,
+    origin: V3,
+    fAxis: V3,
+    fRight: V3,
+    _fFwd: V3,
+    R: number,
+    openness: number,
+    bloomPivot: V3,
+    phase: number,
+    tier: number,
+  ): void {
+    const p = this.p;
+    // Construct gravity-referenced bilateral orchid frame so Dorsal Sepal is always at 12 o'clock
+    // and the sculpted Trilobed Labellum (Lip) sits at 6 o'clock!
+    const upProj = projectOnPlane(UP, fAxis);
+    const oUp = length(upProj) > 1e-3 ? normalize(upProj) : normalize(cross(fRight, fAxis));
+    const oRight = normalize(cross(oUp, fAxis));
+    // Note: in `buildSculptedPetal(..., fAxis, B1, B2)`, `az = 0` points along `B1` (`oUp` = 12 o'clock)
+    // and `az = +PI/2` points along `B2` (`oRight` = 3 o'clock), `az = PI` = `-oUp` (6 o'clock Lip)!
+
+    const uSegs = tier === 1 ? 14 : tier === 2 ? 20 : tier === 3 ? 26 : 34;
+    const vSegs = tier === 1 ? 10 : tier === 2 ? 14 : tier === 3 ? 18 : 24;
+
+    // A. 3 Sculpted Sepals (1 Upright Dorsal Sepal at `0°` + 2 Angled Keeled Lateral Sepals at `±136°`)
+    const sepalAzimuths = [0, 136 * DEG2RAD, -136 * DEG2RAD];
+    for (let si = 0; si < 3; si++) {
+      const isDorsal = si === 0;
+      this.buildSculptedPetal(
+        corollaMesh,
+        origin,
+        fAxis,
+        oUp,
+        oRight,
+        {
+          azimuthRad: sepalAzimuths[si],
+          rBase: R * 0.05,
+          zBase: -R * 0.015,
+          length: R * (isDorsal ? 0.94 : 0.90),
+          maxHalfWidth: R * (isDorsal ? 0.34 : 0.29),
+          clawRatio: 0.12,
+          polarStartRad: 72 * DEG2RAD,
+          polarMidRad: (86 * openness) * DEG2RAD,
+          curlDeltaRad: (8 * p.petalCurl) * DEG2RAD,
+          rollRad: si === 1 ? 4 * DEG2RAD : si === 2 ? -4 * DEG2RAD : 0,
+          cupRatio: 0.14,
+          ruffleAmp: R * 0.008 * p.petalRuffle,
+          ruffleFreq: 10.0,
+          apicalNotch: 0.0,
+          veinCount: 7,
+          baseThickness: R * 0.010,
+          whorl01: 0.15,
+          hasPapillae: false,
+          isRayFloret: false,
+          planform: 'pointed_boat',
+          colorOverride: (u, absS, veinRidge, isAbax) => {
+            const flush = (1 - smoothstep(0.0, 0.72, u)) * p.edgeBlend * 0.55;
+            let c = mixRgb(this.colPrimary, this.colSecondary, flush);
+            c = mixRgb(c, this.colVein, veinRidge * 0.42 * p.veinContrast * (1 - 0.35 * u));
+            return isAbax ? mixRgb(c, this.colSepal, 0.22) : c;
+          },
+          seedPhase: si * 1.1,
+        },
+        uSegs,
+        vSegs,
+        bloomPivot,
+        phase,
+      );
+      this.stats.petals++;
+    }
+
+    // B. 2 Huge Plush Diamond-Round Lateral "Moth Wing" Petals (`±74°`)!
+    for (const sign of [-1, 1]) {
+      this.buildSculptedPetal(
+        corollaMesh,
+        origin,
+        fAxis,
+        oUp,
+        oRight,
+        {
+          azimuthRad: sign * 74 * DEG2RAD,
+          rBase: R * 0.05,
+          zBase: R * 0.012,
+          length: R * 1.02,
+          maxHalfWidth: R * 0.56,
+          clawRatio: 0.14,
+          polarStartRad: 66 * DEG2RAD,
+          polarMidRad: (80 * openness) * DEG2RAD,
+          curlDeltaRad: (-8 + p.petalCurl * 10) * DEG2RAD,
+          rollRad: sign * -3.5 * DEG2RAD,
+          cupRatio: 0.16,
+          ruffleAmp: R * 0.018 * p.petalRuffle,
+          ruffleFreq: 12.0,
+          apicalNotch: 0.02,
+          veinCount: 9,
+          baseThickness: R * 0.0095,
+          whorl01: 0.0,
+          hasPapillae: false,
+          isRayFloret: false,
+          planform: 'orchid_wing',
+          colorOverride: (u, absS, veinRidge) => {
+            // Radiant fuchsia nectar-flush radiating from center into luminous pearl-blush moth wings!
+            const centerFlush = (1 - smoothstep(0.08, 0.68, u * 0.85 + absS * 0.35)) * (0.45 + 0.55 * p.edgeBlend);
+            let c = mixRgb(this.colPrimary, this.colSecondary, centerFlush);
+            c = mixRgb(c, this.colVein, veinRidge * 0.52 * p.veinContrast * (1 - 0.3 * u));
+            return c;
+          },
+          seedPhase: sign * 2.1,
+        },
+        uSegs,
+        vSegs,
+        bloomPivot,
+        phase,
+      );
+      this.stats.petals++;
+    }
+
+    // C. Intricate 3D Trilobed Labellum (Lip) at 6 o'clock (`az = PI`):
+    //    - 2 Upturned Tiger-Spotted Lateral Side-Lobes cradling the Gynostemium Column
+    //    - 1 Vivid Ruby-Magenta Hastate Mid-Lobe + 2 Curling 3D Apical Cirrhi Whiskers!
+    for (const sign of [-1, 1]) {
+      this.buildSculptedPetal(
+        corollaMesh,
+        origin,
+        fAxis,
+        oUp,
+        oRight,
+        {
+          azimuthRad: Math.PI + sign * 0.52,
+          rBase: R * 0.04,
+          zBase: R * 0.04,
+          length: R * 0.42,
+          maxHalfWidth: R * 0.16,
+          clawRatio: 0.14,
+          polarStartRad: 56 * DEG2RAD,
+          polarMidRad: 34 * DEG2RAD,
+          curlDeltaRad: -38 * DEG2RAD, // Curves upward like twin protective wings around the column!
+          rollRad: sign * 18 * DEG2RAD,
+          cupRatio: 0.34,
+          ruffleAmp: R * 0.008,
+          ruffleFreq: 10.0,
+          apicalNotch: 0.0,
+          veinCount: 5,
+          baseThickness: R * 0.008,
+          whorl01: 0.8,
+          hasPapillae: true, // Raised crimson-leopard spots inside the golden side-lobes!
+          isRayFloret: false,
+          planform: 'obovate',
+          colorOverride: (u, _absS, veinRidge) => {
+            const goldZone = 1 - smoothstep(0.15, 0.72, u);
+            let c = mixRgb(this.colSecondary, this.colThroat, goldZone);
+            c = mixRgb(c, this.colVein, veinRidge * 0.65);
+            return c;
+          },
+          seedPhase: sign * 0.9,
+        },
+        16,
+        12,
+        bloomPivot,
+        phase,
+      );
+      this.stats.petals++;
+    }
+
+    // Central Projecting Mid-Lobe of Labellum (`6 o'clock`)
+    this.buildSculptedPetal(
+      corollaMesh,
+      origin,
+      fAxis,
+      oUp,
+      oRight,
+      {
+        azimuthRad: Math.PI,
+        rBase: R * 0.05,
+        zBase: R * 0.03,
+        length: R * 0.56,
+        maxHalfWidth: R * 0.22,
+        clawRatio: 0.22,
+        polarStartRad: 42 * DEG2RAD,
+        polarMidRad: 58 * DEG2RAD,
+        curlDeltaRad: -16 * DEG2RAD,
+        rollRad: 0,
+        cupRatio: 0.24,
+        ruffleAmp: R * 0.010,
+        ruffleFreq: 12.0,
+        apicalNotch: 0.0,
+        veinCount: 7,
+        baseThickness: R * 0.009,
+        whorl01: 1.0,
+        hasPapillae: false,
+        isRayFloret: false,
+        planform: 'acute_bract',
+        colorOverride: (u, _absS, veinRidge) => {
+          let c = mixRgb(this.colThroat, this.colSecondary, smoothstep(0.08, 0.42, u));
+          c = mixRgb(c, this.colVein, smoothstep(0.35, 0.88, u) * 0.65 + veinRidge * 0.35);
+          return c;
+        },
+        seedPhase: 3.14,
+      },
+      18,
+      14,
+      bloomPivot,
+      phase,
+    );
+    this.stats.petals++;
+
+    // Twin Curling 3D Apical Cirrhi (Orchid Lip Whisker Tendrils!) + Speckled Golden Callus + Ivory Gynostemium Column!
+    const lipTipBase = add(addScaled(origin, fAxis, R * 0.34), scale(oUp, -R * 0.44));
+    for (const sign of [-1, 1]) {
+      const cPts: V3[] = [];
+      for (let k = 0; k <= 8; k++) {
+        const u = k / 8;
+        cPts.push(
+          add(
+            addScaled(lipTipBase, fAxis, R * 0.20 * Math.sin(u * Math.PI * 0.85)),
+            add(
+              scale(oRight, sign * R * (0.02 + 0.12 * Math.sin(u * Math.PI * 0.75))),
+              scale(oUp, R * (-0.06 * u + 0.16 * u * u)),
+            ),
+          ),
+        );
+      }
+      this.buildCurvedFilament(
+        reproMesh,
+        cPts,
+        R * 0.0085,
+        mixRgb(this.colSecondary, rgb(1, 0.95, 0.98), 0.45),
+        bloomPivot,
+        phase,
+      );
+      this.stats.stamensAndFlorets++;
+    }
+
+    // Raised Bilobed Golden Callus Pad in Lip Throat
+    for (const sign of [-1, 1]) {
+      const calPos = add(
+        addScaled(origin, fAxis, R * 0.12),
+        add(scale(oUp, -R * 0.085), scale(oRight, sign * R * 0.028)),
+      );
+      this.buildVelvetStigmaPad(reproMesh, calPos, fAxis, R * 0.042, this.colThroat, bloomPivot, phase);
+      this.stats.stamensAndFlorets++;
+    }
+
+    // Fleshy Arching Ivory Gynostemium Column + Beaked Anther Cap at Center!
+    const colNodes = buildPolylineNodes(
+      [
+        addScaled(origin, oUp, R * 0.02),
+        add(addScaled(origin, fAxis, R * 0.11), scale(oUp, R * 0.035)),
+        add(addScaled(origin, fAxis, R * 0.21), scale(oUp, R * 0.015)),
+      ],
+      oRight,
+    ).nodes;
+    this.buildSmoothOrganTube(
+      reproMesh,
+      colNodes,
+      (u) => R * (0.048 + 0.012 * Math.sin(u * Math.PI)),
+      () => this.colPollen,
+      10,
+      bloomPivot,
+      phase,
+      0.08 * p.windCompliance,
+    );
+    this.buildVelvetStigmaPad(
+      reproMesh,
+      add(addScaled(origin, fAxis, R * 0.22), scale(oUp, R * 0.01)),
+      fAxis,
+      R * 0.046,
+      mixRgb(this.colPollen, this.colThroat, 0.25),
+      bloomPivot,
+      phase,
+    );
+    this.stats.stamensAndFlorets++;
+  }
+
+  // ---------------------------------------------------------------------------
+  // 11. IMPERIAL PAGODA CROWN BELL (Fritillaria imperialis — Nodding Bell Chandelier)
+  // ---------------------------------------------------------------------------
+  private buildImperialCrownBellBloom(
+    calyxMesh: PartMesh,
+    corollaMesh: PartMesh,
+    reproMesh: PartMesh,
+    origin: V3,
+    fAxis: V3,
+    fRight: V3,
+    fFwd: V3,
+    R: number,
+    openness: number,
+    bloomPivot: V3,
+    phase: number,
+    tier: number,
+  ): void {
+    const p = this.p;
+    const uSegs = tier === 1 ? 14 : tier === 2 ? 20 : tier === 3 ? 26 : 34;
+    const vSegs = tier === 1 ? 10 : tier === 2 ? 12 : tier === 3 ? 16 : 22;
+
+    // Seamless bronze-burgundy perianth shoulder dome bridging the green pedicel into the 6 bell tepals!
+    this.buildVelvetStigmaPad(
+      calyxMesh,
+      addScaled(origin, fAxis, R * 0.02),
+      scale(fAxis, -1),
+      R * 0.16,
+      mixRgb(this.colThroat, this.colPrimary, 0.45),
+      bloomPivot,
+      phase,
+    );
+
+    // A. 6 Deeply Cupped, Strongly Ribbed Campanulate Bell Tepals (3 outer + 3 inner interlocking lantern walls!)
+    const nTepals = Math.max(6, Math.round(6 * p.petalCountScale));
+    const bellLen = R * 1.18;
+    for (let i = 0; i < nTepals; i++) {
+      const isInner = i % 2 === 1;
+      const az = (i / nTepals) * TAU;
+      this.buildSculptedPetal(
+        corollaMesh,
+        origin,
+        fAxis,
+        fRight,
+        fFwd,
+        {
+          azimuthRad: az,
+          rBase: R * (isInner ? 0.068 : 0.082),
+          zBase: R * (isInner ? 0.008 : 0.0),
+          length: bellLen,
+          maxHalfWidth: R * (isInner ? 0.38 : 0.40),
+          clawRatio: 0.12,
+          // Rounded shoulder swelling out from pedicel, hanging down as a deep royal lantern, then flaring at rim!
+          polarStartRad: 40 * DEG2RAD,
+          polarMidRad: (19 * clamp(openness, 0.55, 1.25)) * DEG2RAD,
+          curlDeltaRad: (18 + p.petalCurl * 14) * DEG2RAD,
+          rollRad: (isInner ? 2.0 : -2.0) * DEG2RAD,
+          cupRatio: 0.34,
+          ruffleAmp: R * 0.012 * p.petalRuffle,
+          ruffleFreq: 12.0,
+          apicalNotch: 0.0,
+          veinCount: 9,
+          baseThickness: R * 0.010,
+          whorl01: isInner ? 0.4 : 0.0,
+          hasPapillae: false,
+          isRayFloret: false,
+          planform: 'bell_tepal',
+          colorOverride: (u, _absS, veinRidge, isAbax) => {
+            let c = mixRgb(this.colPrimary, this.colSecondary, smoothstep(0.45, 0.98, u) * p.edgeBlend);
+            const maroonShoulder = 1 - smoothstep(0.05, 0.28, u);
+            c = mixRgb(c, this.colThroat, maroonShoulder * 0.85);
+            c = mixRgb(c, this.colVein, veinRidge * 0.58 * p.veinContrast);
+            return isAbax ? c : mixRgb(c, this.colSecondary, 0.25);
+          },
+          seedPhase: i * 0.9,
+        },
+        uSegs,
+        vSegs,
+        bloomPivot,
+        phase,
+      );
+      this.stats.petals++;
+
+      // B. Iconic Glistening Spherical Mother-of-Pearl Nectary Droplet at the interior base of EVERY tepal!
+      const rad = add(scale(fRight, Math.cos(az)), scale(fFwd, Math.sin(az)));
+      const pearlPos = add(addScaled(origin, fAxis, R * 0.14), scale(rad, R * 0.14));
+      this.buildVelvetStigmaPad(
+        reproMesh,
+        pearlPos,
+        scale(rad, -1),
+        R * 0.044,
+        rgb(1.0, 0.99, 0.96),
+        bloomPivot,
+        phase,
+      );
+      this.stats.stamensAndFlorets++;
+    }
+
+    // C. 6 Long Pendulous Cream Filaments + Golden Anthers + Central 3-Cleft Style hanging out past the bell mouth!
+    const nStam = Math.max(6, Math.round(6 * p.stamenLushness));
+    for (let i = 0; i < nStam; i++) {
+      const az = (i / nStam) * TAU + Math.PI / 6;
+      const rad = add(scale(fRight, Math.cos(az)), scale(fFwd, Math.sin(az)));
+      const sLen = bellLen * 1.08;
+      const b0 = add(addScaled(origin, fAxis, R * 0.08), scale(rad, R * 0.06));
+      const b1 = add(addScaled(origin, fAxis, sLen * 0.58), scale(rad, R * 0.14));
+      const b2 = add(addScaled(origin, fAxis, sLen), scale(rad, R * 0.18));
+      this.buildCurvedFilament(reproMesh, [b0, b1, b2], R * 0.0095, this.colPollen, bloomPivot, phase);
+      this.build3DBilobedAnther(
+        reproMesh,
+        b2,
+        fAxis,
+        rad,
+        R * 0.068,
+        mixRgb(this.colPollen, this.colSecondary, 0.45),
+        bloomPivot,
+        phase,
+        tier,
+      );
+      this.stats.stamensAndFlorets++;
+    }
+
+    // Longer Exserted Central Clapper Style + 3 Spreading Stigma Lobes!
+    const clapperTip = addScaled(origin, fAxis, bellLen * 1.20);
+    this.buildCurvedFilament(
+      reproMesh,
+      [origin, addScaled(origin, fAxis, bellLen * 0.6), clapperTip],
+      R * 0.014,
+      this.colPollen,
+      bloomPivot,
+      phase,
+    );
+    for (let k = 0; k < 3; k++) {
+      const a = (k / 3) * TAU;
+      const rVec = add(scale(fRight, Math.cos(a)), scale(fFwd, Math.sin(a)));
+      const stP = add(addScaled(clapperTip, fAxis, R * 0.03), scale(rVec, R * 0.032));
+      this.buildVelvetStigmaPad(reproMesh, stP, fAxis, R * 0.022, this.colSecondary, bloomPivot, phase);
+    }
+    this.stats.stamensAndFlorets++;
+  }
+
+  // ---------------------------------------------------------------------------
+  // 12. ROYAL CRANE FLOWER / BIRD-OF-PARADISE (Strelitzia reginae)
+  // ---------------------------------------------------------------------------
+  private buildBirdOfParadiseBloom(
+    calyxMesh: PartMesh,
+    corollaMesh: PartMesh,
+    reproMesh: PartMesh,
+    origin: V3,
+    fAxis: V3,
+    fRight: V3,
+    _fFwd: V3,
+    R: number,
+    openness: number,
+    bloomPivot: V3,
+    phase: number,
+    tier: number,
+  ): void {
+    const p = this.p;
+    // Construct crisp profile plane: `beakDir` points horizontally forward-right like a poised crane's head,
+    // `crestUp` points skyward perpendicular to the beak!
+    const horiz = length(v3(fRight.x, 0, fRight.z)) > 1e-3 ? normalize(v3(fRight.x, 0, fRight.z)) : v3(0.88, 0, 0.47);
+    const beakDir = normalize(add(scale(horiz, 0.94), scale(UP, 0.22)));
+    const crestUp = normalize(projectOnPlane(UP, beakDir));
+    const beakSide = normalize(cross(crestUp, beakDir));
+    const beakBase = addScaled(origin, beakDir, -R * 0.28);
+
+    // A. Iconic Sculpted Boat-Keel Spathe ("Crane Beak", length `1.55 * R`) with Glowing Crimson Lip!
+    const beakLen = R * 1.58;
+    const uB = tier >= 3 ? 26 : 18;
+    const vB = tier >= 3 ? 12 : 8;
+    const nVB = vB + 1;
+    const bOut: number[] = [];
+    const bIn: number[] = [];
+
+    for (let iu = 0; iu <= uB; iu++) {
+      const u = iu / uB;
+      const archY = R * 0.06 * Math.sin(u * Math.PI) - R * 0.08 * Math.pow(u, 2.2);
+      const spineP = add(addScaled(beakBase, beakDir, beakLen * u), scale(crestUp, archY));
+      const hProfile = R * 0.24 * Math.pow(Math.sin(Math.PI * Math.pow(u, 0.52)), 0.72);
+      const wProfile = R * 0.11 * Math.sin(Math.PI * Math.pow(u, 0.56));
+
+      for (let iv = 0; iv <= vB; iv++) {
+        // `s` sweeps from `-1` (left upper lip) through `0` (bottom boat keel) to `+1` (right upper lip)!
+        const s = (iv / vB) * 2 - 1;
+        const absS = Math.abs(s);
+        const yOff = hProfile * (absS * 0.55 - (1 - absS) * 0.65);
+        const xOff = s * wProfile;
+        const pt = add(addScaled(spineP, crestUp, yOff), scale(beakSide, xOff));
+        const outN = normalize(add(scale(beakSide, s * 0.85), scale(crestUp, -0.55)));
+        const pO = addScaled(pt, outN, R * 0.006);
+        const pI = addScaled(pt, outN, -R * 0.004);
+
+        // Glaucous jade-slate boat body melting into a vivid crimson-magenta glowing upper slit lip (`absS > 0.68`)!
+        const lipGlow = smoothstep(0.62, 0.96, absS);
+        const baseJade = mixRgb(this.colLeaf, rgb(0.14, 0.38, 0.34), 0.45);
+        const col = mixRgb(baseJade, this.colThroat, lipGlow * 0.92);
+        const w4: [number, number, number, number] = [0.6, 0.10 * p.windCompliance * u, phase, 0.01];
+        bOut.push(
+          calyxMesh.addVertex({
+            x: pO.x, y: pO.y, z: pO.z,
+            tx: beakDir.x, ty: beakDir.y, tz: beakDir.z,
+            color: col, wind: w4, pivot: bloomPivot, roughness: 0.36, translucency: 0.22, detailMetric: 0.6 + 0.35 * lipGlow, anatomyLevel: 2,
+          }),
+        );
+        bIn.push(
+          calyxMesh.addVertex({
+            x: pI.x, y: pI.y, z: pI.z,
+            tx: beakDir.x, ty: beakDir.y, tz: beakDir.z,
+            color: mulRgb(col, 0.72), wind: w4, pivot: bloomPivot, roughness: 0.48, translucency: 0.18, detailMetric: 0.5, anatomyLevel: 2,
+          }),
+        );
+      }
+    }
+    for (let iu = 0; iu < uB; iu++) {
+      for (let iv = 0; iv < vB; iv++) {
+        const a = iu * nVB + iv, b = (iu + 1) * nVB + iv, c = (iu + 1) * nVB + iv + 1, d = iu * nVB + iv + 1;
+        calyxMesh.addQuad(bOut[a], bOut[b], bOut[c], bOut[d]);
+        calyxMesh.addQuad(bIn[a], bIn[d], bIn[c], bIn[b]);
+      }
+    }
+
+    // B. Erupting Fan Crest of 5–7 Blazing Flame-Orange 3D Keeled Sepals!
+    const nCrest = Math.max(4, Math.round(5 * p.petalCountScale));
+    const uSegs = tier === 1 ? 14 : tier === 2 ? 18 : tier === 3 ? 24 : 30;
+    const vSegs = tier === 1 ? 8 : tier === 2 ? 10 : tier === 3 ? 14 : 18;
+
+    for (let i = 0; i < nCrest; i++) {
+      const t = i / Math.max(1, nCrest - 1);
+      const emergeSlot = addScaled(beakBase, beakDir, beakLen * lerp1(0.28, 0.56, t));
+      // `fAxis = crestUp`, `fRight = beakDir`: `polar` angles forward from `crestUp` (`16° .. 64°`)!
+      const fanPolar = lerp1(14, 62 * openness, t);
+      const fanSideCant = ((i % 2 === 0 ? 1 : -1) * (4 + i * 2.5)) * DEG2RAD;
+
+      this.buildSculptedPetal(
+        corollaMesh,
+        emergeSlot,
+        crestUp,
+        beakDir,
+        beakSide,
+        {
+          azimuthRad: fanSideCant,
+          rBase: 0,
+          zBase: R * 0.02,
+          length: R * lerp1(1.16, 0.94, t),
+          maxHalfWidth: R * 0.15,
+          clawRatio: 0.14,
+          polarStartRad: (fanPolar * 0.55) * DEG2RAD,
+          polarMidRad: fanPolar * DEG2RAD,
+          curlDeltaRad: (-8 + p.petalCurl * 12) * DEG2RAD,
+          rollRad: fanSideCant * 0.6,
+          cupRatio: -0.36, // Crisp sculptural longitudinal crane-plume keel!
+          ruffleAmp: R * 0.006 * p.petalRuffle,
+          ruffleFreq: 10.0,
+          apicalNotch: 0.0,
+          veinCount: 7,
+          baseThickness: R * 0.0095,
+          whorl01: t,
+          hasPapillae: false,
+          isRayFloret: false,
+          planform: 'acute_bract',
+          colorOverride: (u, _absS, veinRidge) => {
+            let c = mixRgb(this.colPrimary, this.colVein, smoothstep(0.55, 0.98, u) * p.edgeBlend);
+            c = mixRgb(c, rgb(1.0, 0.92, 0.35), (1 - smoothstep(0.0, 0.22, u)) * 0.45);
+            c = mixRgb(c, this.colVein, veinRidge * 0.28);
+            return c;
+          },
+          seedPhase: i * 0.8,
+        },
+        uSegs,
+        vSegs,
+        bloomPivot,
+        phase,
+      );
+      this.stats.petals++;
+    }
+
+    // C. 2 Electric Cobalt-Blue Fused Arrow-Shaped Hastate Nectar Tongues + Glistening White Stigma Tip!
+    for (let ti = 0; ti < 2; ti++) {
+      const emergeP = addScaled(beakBase, beakDir, beakLen * (0.44 + ti * 0.10));
+      const tonguePitch = (58 + ti * 9) * DEG2RAD;
+      const tongueLen = R * (0.98 - ti * 0.12);
+
+      this.buildSculptedPetal(
+        reproMesh,
+        emergeP,
+        crestUp,
+        beakDir,
+        beakSide,
+        {
+          azimuthRad: (ti === 0 ? 2 : -2) * DEG2RAD,
+          rBase: 0,
+          zBase: R * 0.015,
+          length: tongueLen,
+          maxHalfWidth: R * 0.13,
+          clawRatio: 0.28,
+          polarStartRad: tonguePitch * 0.85,
+          polarMidRad: tonguePitch,
+          curlDeltaRad: 6 * DEG2RAD,
+          rollRad: 0,
+          cupRatio: 0.38, // Central pollen-enclosing nectar channel!
+          ruffleAmp: 0,
+          ruffleFreq: 8.0,
+          apicalNotch: 0.0,
+          veinCount: 5,
+          baseThickness: R * 0.0085,
+          whorl01: 0,
+          hasPapillae: false,
+          isRayFloret: false,
+          planform: 'acute_bract',
+          // `colSecondary` = Electric Cobalt-Sapphire `#0b3dff`!
+          colorOverride: (u) =>
+            u > 0.88
+              ? mixRgb(this.colSecondary, this.colPollen, smoothstep(0.88, 0.99, u))
+              : this.colSecondary,
+          seedPhase: ti * 1.5,
+        },
+        20,
+        12,
+        bloomPivot,
+        phase,
+      );
+      this.stats.stamensAndFlorets++;
+
+      // Glistening Ivory-White Exserted Stigma Tip jutting out of the primary arrow tongue!
+      if (ti === 0) {
+        const tDir = add(scale(crestUp, Math.cos(tonguePitch)), scale(beakDir, Math.sin(tonguePitch)));
+        const stBase = addScaled(emergeP, tDir, tongueLen * 0.92);
+        const stTip = addScaled(emergeP, tDir, tongueLen * 1.12);
+        this.buildCurvedFilament(
+          reproMesh,
+          [stBase, lerp(stBase, stTip, 0.5), stTip],
+          R * 0.011,
+          this.colPollen,
+          bloomPivot,
+          phase,
+        );
+        this.stats.stamensAndFlorets++;
+      }
+    }
+    void fAxis;
+  }
+
   // ===========================================================================
   // Master Double-Sided 3D Sculpted Petal Surface Builder
   // ===========================================================================
@@ -1814,22 +3029,45 @@ export class FlowerMesher {
 
       // Species-authentic planform half-width envelope (`isObovateFan` keeps a wide semicircular
       // distal fan at `u = 1` instead of pinching to a point — zero pleats or jagged teeth!)
-      const isObovateFan =
-        !spec.isRayFloret && p.species !== 'oriental_lily' && p.species !== 'sacred_lotus';
+      const plan =
+        spec.planform ??
+        (spec.isRayFloret
+          ? 'pointed_boat'
+          : p.species === 'oriental_lily' || p.species === 'sacred_lotus'
+            ? 'pointed_boat'
+            : 'obovate');
+      const isObovateFan = plan === 'obovate' && p.species !== 'passion_orchid';
+
       let env = 0;
       if (spec.isRayFloret) {
         env = Math.pow(Math.sin(Math.PI * Math.pow(u, 0.68)), 0.62) * (0.22 + 0.78 * smoothstep(0, 0.14, u));
+      } else if (plan === 'acute_bract') {
+        // Crisp pointed diamond-lanceolate bract / crane plume (`King Protea`, `Bird of Paradise`)
+        env = Math.pow(Math.sin(Math.PI * Math.pow(u, 0.48)), 0.80) * (0.34 + 0.66 * smoothstep(0, spec.clawRatio, u));
+      } else if (plan === 'involute_quill') {
+        // Rolled tubular Dahlia scoop-floret — plump rounded-pointed spoon!
+        env = Math.pow(Math.sin(Math.PI * Math.pow(u, 0.56)), 0.52) * (0.30 + 0.70 * smoothstep(0, 0.14, u));
+      } else if (plan === 'orchid_wing') {
+        // Narrow claw exploding into a huge rounded-rhomboid Phalaenopsis moth wing!
+        const claw = 0.14 + 0.86 * smoothstep(0.02, 0.24, u);
+        env = claw * Math.pow(Math.sin(Math.PI * Math.pow(u, 0.60)), 0.46);
+      } else if (plan === 'bell_tepal') {
+        // Overlapping campanulate lantern wall (`Imperial Crown Bell`)
+        env = Math.pow(Math.sin(Math.PI * Math.pow(u, 0.52)), 0.48) * (0.42 + 0.58 * smoothstep(0, 0.18, u));
       } else if (p.species === 'oriental_lily') {
         env = Math.pow(Math.sin(Math.PI * Math.pow(u, 0.58)), 0.86) * (0.24 + 0.76 * smoothstep(0, spec.clawRatio, u));
       } else if (p.species === 'sacred_lotus') {
         // Plump sacred boat spoon — broad upper belly tapering cleanly to a soft mucronate tip!
         env = Math.pow(Math.sin(Math.PI * Math.pow(u, 0.54)), 0.70) * (0.28 + 0.72 * smoothstep(0, spec.clawRatio, u));
+      } else if (plan === 'pointed_boat') {
+        // Smooth ovate-elliptic pointed sepal / bud petal (`Phalaenopsis Orchid`, `Bearded Iris` style arms, floral buds)
+        env = Math.pow(Math.sin(Math.PI * Math.pow(u, 0.54)), 0.66) * (0.28 + 0.72 * smoothstep(0, spec.clawRatio, u));
       } else if (p.species === 'passion_orchid') {
         // Smooth rounded-oblong star tepal
         env = Math.pow(Math.sin(Math.PI * Math.pow(u, 0.56)), 0.58) * (0.38 + 0.62 * smoothstep(0, 0.12, u));
       } else {
-        // Broad obovate silk fan (`Hibiscus` & `Tree Peony`) — stays plushly wide at `u = 1`
-        // while `uRoundArc` curves the outer margin into a smooth semicircular scalloped arc!
+        // Broad obovate silk fan (`Hibiscus`, `Tree Peony`, `Bearded Iris`) — stays plushly wide at `u = 1`
+        // while `arcDrop` curves the outer margin into a smooth semicircular scalloped arc!
         const clawRamp = 0.16 + 0.84 * smoothstep(0.0, spec.clawRatio + 0.24, u);
         env = clawRamp * (1.0 - 0.14 * Math.pow(u, 3.0));
       }
@@ -1899,12 +3137,21 @@ export class FlowerMesher {
           papillaH = spec.baseThickness * 3.2 * papillaSpot;
         }
 
-        // Transverse boat/spoon cupping + harmonic margin ruffle
-        const cupZ =
+        // Transverse boat/spoon cupping OR true 3D cylindrical involute quill scroll (`Honeycomb Dahlia`)!
+        let latOffsetW = s * halfW;
+        let cupZ =
           spec.maxHalfWidth *
           spec.cupRatio *
           (1 - Math.cos(s * Math.PI * 0.5)) *
           Math.sin(Math.PI * Math.pow(u, 0.72));
+        if (plan === 'involute_quill') {
+          const rollMax = clamp(spec.cupRatio * 2.15, 0.35, 2.25) * Math.sin(Math.PI * Math.pow(u, 0.62));
+          if (rollMax > 0.05) {
+            latOffsetW = halfW * (Math.sin(s * rollMax) / rollMax);
+            cupZ = halfW * ((1 - Math.cos(s * rollMax)) / rollMax) * 0.92;
+          }
+        }
+
         const edgeMask = Math.pow(absS, 2.0) * smoothstep(0.14, 0.56, u);
         const ruffleZ =
           spec.ruffleAmp *
@@ -1922,13 +3169,17 @@ export class FlowerMesher {
         const zAdax = zCenter + halfThick - halfThick * 0.55 * veinDepthScale * veinRidge + papillaH;
         const zAbax = zCenter - halfThick - spec.baseThickness * 1.05 * veinDepthScale * veinRidge;
 
-        const basePt = add(addScaled(P0, T, -uRetract), scale(W, s * halfW));
+        const basePt = add(addScaled(P0, T, -uRetract), scale(W, latOffsetW));
         const pAdax = addScaled(basePt, N, zAdax);
         const pAbax = addScaled(basePt, N, zAbax);
 
         // Vibrant Multi-Zone Floral Pigmentation!
-        const adaxCol = this.evalPetalPigment(u, absS, veinRidge, papillaSpot, spec.whorl01, false);
-        const abaxCol = this.evalPetalPigment(u, absS, veinRidge, 0, spec.whorl01, true);
+        const adaxCol = spec.colorOverride
+          ? spec.colorOverride(u, absS, veinRidge, false)
+          : this.evalPetalPigment(u, absS, veinRidge, papillaSpot, spec.whorl01, false);
+        const abaxCol = spec.colorOverride
+          ? spec.colorOverride(u, absS, veinRidge, true)
+          : this.evalPetalPigment(u, absS, veinRidge, 0, spec.whorl01, true);
 
         const veinTan = normalize(add(scale(T, 0.86), scale(W, s * 0.38)));
         // Attenuate translucency inside thick fleshy nectar throat so dark velvet eyes stay deep & rich!
@@ -2154,20 +3405,164 @@ export class FlowerMesher {
     const origin = addScaled(tipNode.pos, fAxis, -R * 0.05);
     const pivot = bm.stem.nodes[0]?.pos ?? origin;
     const phase = ((bm.index * 0.41) + 0.19) % 1;
+    const uSegs = tier >= 3 ? 14 : 10;
+    const vSegs = tier >= 3 ? 10 : 6;
 
-    // 4 Clasping Calyx Sepals cradling the lower half of the swollen bud
-    for (let i = 0; i < 4; i++) {
-      const az = (i / 4) * TAU;
-      this.buildCalyxSepal(
-        calyxMesh, origin, fAxis, fRight, fFwd, az,
-        R * 0.22, 0, R * 0.86, R * 0.26,
-        24 * DEG2RAD, -22 * DEG2RAD, pivot, phase, tier,
+    if (this.p.species === 'bird_of_paradise') {
+      // Unopened Strelitzia bud: sleek angled jade-and-crimson closed beak spathe + 1 peeping flame-orange spear tip!
+      const horiz = length(v3(fRight.x, 0, fRight.z)) > 1e-3 ? normalize(v3(fRight.x, 0, fRight.z)) : v3(0.88, 0, 0.47);
+      const beakDir = normalize(add(scale(horiz, 0.72), scale(UP, 0.69)));
+      const crestUp = normalize(projectOnPlane(UP, beakDir));
+      const beakSide = normalize(cross(crestUp, beakDir));
+      const baseJade = mixRgb(this.colLeaf, rgb(0.14, 0.38, 0.34), 0.45);
+
+      for (const side of [-1, 1]) {
+        this.buildSculptedPetal(
+          calyxMesh,
+          origin,
+          beakDir,
+          crestUp,
+          beakSide,
+          {
+            azimuthRad: side * 0.5 * Math.PI,
+            rBase: R * 0.04,
+            zBase: -R * 0.10,
+            length: R * 2.15,
+            maxHalfWidth: R * 0.26,
+            clawRatio: 0.10,
+            polarStartRad: 12 * DEG2RAD,
+            polarMidRad: 6 * DEG2RAD,
+            curlDeltaRad: -10 * DEG2RAD,
+            rollRad: 0,
+            cupRatio: 0.52,
+            ruffleAmp: 0,
+            ruffleFreq: 8,
+            apicalNotch: 0,
+            veinCount: 5,
+            baseThickness: R * 0.012,
+            whorl01: 0,
+            hasPapillae: false,
+            isRayFloret: false,
+            planform: 'acute_bract',
+            colorOverride: (_u, absS) => mixRgb(baseJade, this.colThroat, smoothstep(0.62, 0.96, absS) * 0.92),
+            seedPhase: side,
+          },
+          uSegs,
+          vSegs,
+          pivot,
+          phase,
+        );
+      }
+      // Single emerging flame-orange crest spear tip peeking out of the upper beak slit!
+      this.buildSculptedPetal(
+        corollaMesh,
+        addScaled(origin, beakDir, R * 0.55),
+        beakDir,
+        crestUp,
+        beakSide,
+        {
+          azimuthRad: 0,
+          rBase: 0,
+          zBase: 0,
+          length: R * 1.45,
+          maxHalfWidth: R * 0.16,
+          clawRatio: 0.12,
+          polarStartRad: 16 * DEG2RAD,
+          polarMidRad: 22 * DEG2RAD,
+          curlDeltaRad: -8 * DEG2RAD,
+          rollRad: 0,
+          cupRatio: -0.32,
+          ruffleAmp: 0,
+          ruffleFreq: 8,
+          apicalNotch: 0,
+          veinCount: 5,
+          baseThickness: R * 0.009,
+          whorl01: 0,
+          hasPapillae: false,
+          isRayFloret: false,
+          planform: 'acute_bract',
+          colorOverride: (u) => mixRgb(this.colPrimary, this.colVein, smoothstep(0.5, 1.0, u)),
+          seedPhase: 0.4,
+        },
+        uSegs,
+        vSegs,
+        pivot,
+        phase,
       );
+      this.stats.petals += 3;
+      return;
     }
 
-    // 5 Tightly Spiraled / Convolute Vibrant Bud Petals Swelling to a Pointed Tip!
-    for (let i = 0; i < 5; i++) {
-      const az = (i / 5) * TAU + 0.35;
+    if (this.p.species === 'king_protea') {
+      // Conical artichoke bud of 9 overlapping frosted-margin crimson bracts!
+      for (let i = 0; i < 6; i++) {
+        this.buildCalyxSepal(
+          calyxMesh, origin, fAxis, fRight, fFwd, (i / 6) * TAU,
+          R * 0.24, 0, R * 0.62, R * 0.22,
+          32 * DEG2RAD, -16 * DEG2RAD, pivot, phase, tier,
+        );
+      }
+      for (let i = 0; i < 9; i++) {
+        const az = i * GOLDEN_ANGLE;
+        this.buildSculptedPetal(
+          corollaMesh,
+          origin,
+          fAxis,
+          fRight,
+          fFwd,
+          {
+            azimuthRad: az,
+            rBase: R * 0.20,
+            zBase: R * 0.05 * (i / 9),
+            length: R * 1.28,
+            maxHalfWidth: R * 0.30,
+            clawRatio: 0.10,
+            polarStartRad: 24 * DEG2RAD,
+            polarMidRad: 14 * DEG2RAD,
+            curlDeltaRad: -22 * DEG2RAD,
+            rollRad: 6 * DEG2RAD,
+            cupRatio: 0.34,
+            ruffleAmp: 0,
+            ruffleFreq: 8,
+            apicalNotch: 0,
+            veinCount: 7,
+            baseThickness: R * 0.014,
+            whorl01: i / 9,
+            hasPapillae: false,
+            isRayFloret: false,
+            planform: 'acute_bract',
+            colorOverride: (u, absS) => {
+              const body = mixRgb(this.colThroat, this.colPrimary, smoothstep(0.05, 0.45, u));
+              return mixRgb(body, this.colSecondary, smoothstep(0.66, 0.98, absS) * 0.85);
+            },
+            seedPhase: i * 0.8,
+          },
+          uSegs,
+          vSegs,
+          pivot,
+          phase,
+        );
+        this.stats.petals++;
+      }
+      return;
+    }
+
+    // Clasping Calyx Sepals (omitted on naked-perianth Orchid & Crown Imperial buds)
+    if (this.p.species !== 'phalaenopsis_orchid' && this.p.species !== 'imperial_crown_bell') {
+      for (let i = 0; i < 4; i++) {
+        const az = (i / 4) * TAU;
+        this.buildCalyxSepal(
+          calyxMesh, origin, fAxis, fRight, fFwd, az,
+          R * 0.22, 0, R * 0.86, R * 0.26,
+          24 * DEG2RAD, -22 * DEG2RAD, pivot, phase, tier,
+        );
+      }
+    }
+
+    // Tightly Spiraled / Convolute Vibrant Pointed Bud Petals!
+    const nBudPetals = this.p.species === 'phalaenopsis_orchid' ? 3 : this.p.species === 'imperial_crown_bell' ? 6 : 5;
+    for (let i = 0; i < nBudPetals; i++) {
+      const az = (i / nBudPetals) * TAU + 0.35;
       this.buildSculptedPetal(
         corollaMesh,
         origin,
@@ -2176,28 +3571,33 @@ export class FlowerMesher {
         fFwd,
         {
           azimuthRad: az,
-          rBase: R * 0.18,
-          zBase: R * 0.08,
+          rBase: R * 0.16,
+          zBase: R * 0.06,
           length: R * 1.18,
-          maxHalfWidth: R * 0.34,
+          maxHalfWidth: R * 0.36,
           clawRatio: 0.12,
           polarStartRad: 26 * DEG2RAD,
           polarMidRad: 14 * DEG2RAD,
           curlDeltaRad: -28 * DEG2RAD, // Closes inward into a pointed spiraled tear-drop bud!
-          rollRad: 18 * DEG2RAD,
+          rollRad: this.p.species === 'phalaenopsis_orchid' ? 4 * DEG2RAD : 16 * DEG2RAD,
           cupRatio: 0.42,
-          ruffleAmp: R * 0.008,
+          ruffleAmp: R * 0.004,
           ruffleFreq: 10.0,
           apicalNotch: 0,
           veinCount: 7,
           baseThickness: R * 0.014,
-          whorl01: 0.2,
+          whorl01: 0.15,
           hasPapillae: false,
           isRayFloret: false,
+          planform: this.p.species === 'imperial_crown_bell' ? 'bell_tepal' : 'pointed_boat',
+          colorOverride:
+            this.p.species === 'phalaenopsis_orchid'
+              ? (u) => mixRgb(this.colPrimary, this.colSecondary, (1 - u) * 0.25)
+              : undefined,
           seedPhase: i * 1.1,
         },
-        tier >= 3 ? 14 : 10,
-        tier >= 3 ? 10 : 6,
+        uSegs,
+        vSegs,
         pivot,
         phase,
       );
@@ -2607,7 +4007,13 @@ export class FlowerMesher {
 
   private buildCaulineLeafOnSpine(mesh: PartMesh, lm: LeafMount, tier: number): void {
     const nodes = lm.stem.nodes;
-    const petioleFrac = this.p.species === 'oriental_lily' ? 0.06 : 0.26;
+    const isEntireSessile =
+      this.p.species === 'oriental_lily' ||
+      this.p.species === 'bearded_iris' ||
+      this.p.species === 'phalaenopsis_orchid' ||
+      this.p.species === 'imperial_crown_bell' ||
+      this.p.species === 'king_protea';
+    const petioleFrac = isEntireSessile ? 0.05 : 0.24;
     const startIdx = Math.min(nodes.length - 2, Math.max(1, Math.floor(nodes.length * petioleFrac)));
     const uSegs = nodes.length - 1 - startIdx;
     if (uSegs < 2) return;
@@ -2620,22 +4026,31 @@ export class FlowerMesher {
     const topIdx: number[] = [];
     const botIdx: number[] = [];
 
+    // Anchor leaf-blade width frame once at `startIdx` and parallel-transport smoothly along `nd.right`
+    // so upright sword/paddle leaves never suffer a `180°` `cross(UP, T)` gimbal flip when arching across `+Y`!
+    const nd0 = nodes[startIdx];
+    const T0 = nd0.dir;
+    const B0 = normalize(cross(T0, nd0.right));
+    let W0 = projectOnPlane(cross(UP, T0), T0);
+    W0 = length(W0) > 1e-3 ? normalize(W0) : nd0.right;
+    const cR = dot(W0, nd0.right);
+    const cB = dot(W0, B0);
+
     for (let iu = 0; iu <= uSegs; iu++) {
       const nd = nodes[startIdx + iu];
       const u = iu / uSegs;
       const T = nd.dir;
-      // Keep leaf blade facing broadly upward toward sky (`+Y`)
-      let W = projectOnPlane(cross(UP, T), T);
-      W = length(W) > 1e-3 ? normalize(W) : nd.right;
+      const B = normalize(cross(T, nd.right));
+      const W = normalize(add(scale(nd.right, cR), scale(B, cB)));
       const N = normalize(cross(T, W));
 
-      // Species leaf silhouette: 3-lobed palmate on Passiflora, cordate on Sunflower, serrated ovate on Hibiscus/Peony, lanceolate on Lily!
-      let wEnv = Math.sin(Math.PI * Math.pow(u, 0.58));
+      // Species leaf silhouette: 3-lobed palmate on Passiflora, cordate on Sunflower, serrated ovate on Hibiscus/Peony/Dahlia, entire sword/elliptic on Iris/Orchid/Protea/Lily!
+      let wEnv = Math.sin(Math.PI * Math.pow(u, this.p.species === 'phalaenopsis_orchid' ? 0.50 : 0.58));
       if (this.p.species === 'titan_sunflower' && u < 0.25) {
         wEnv = Math.max(wEnv, smoothstep(0.0, 0.16, u) * 0.92);
       }
       const serrate =
-        this.p.species === 'oriental_lily'
+        isEntireSessile || this.p.species === 'bird_of_paradise'
           ? 1.0
           : 1.0 + 0.065 * Math.sin(u * Math.PI * 18.0) * smoothstep(0.1, 0.9, u);
       const hw = Math.max(maxHW * 0.02 * (1 - u), maxHW * wEnv * serrate);
