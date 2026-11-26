@@ -84,6 +84,8 @@ interface BloomMount {
   index: number;
   preferForwardTiltDeg: number;
   yawHint: number;
+  /** Continuous `limbFlex` at the exact tip of `stem` (around `rootPivot`) so blooms & buds move 100% locked to their stem! */
+  baseFlex: number;
 }
 
 interface LeafMount {
@@ -92,6 +94,10 @@ interface LeafMount {
   bladeLen: number;
   bladeWidth: number;
   index: number;
+  /** Continuous `limbFlex` at `stem` attachment collar on `mainStem`. */
+  baseFlex: number;
+  /** Additional `limbFlex` gained along `stem` from `u = 0` to `u = 1`. */
+  extraFlex: number;
 }
 
 interface PetalSpec {
@@ -213,11 +219,19 @@ export class FlowerMesher {
   private colLeafTip!: RGB;
   private colSepal!: RGB;
 
+  // Unified whole-plant wind anchor, coherent wind phase, and active bloom tip flex
+  private rootPivot: V3 = v3(0, 0, 0);
+  private plantPhase = 0.1;
+  private activeBloomFlex = 0.08;
+
   constructor(params: FlowerParams, seed: number, substrate: HostSubstrate) {
     this.p = params;
     this.seed = seed;
     this.rng = new Random(seed + 4177);
     this.sub = substrate;
+    // Keep plantPhase in a tight coherent band `[0.08..0.13]` so every organ of a plant shares
+    // exact zero phase skew AND neighboring plants in multi-layer scenes sway together with the wind wave!
+    this.plantPhase = 0.08 + (((seed * 0.6180339887) % 1 + 1) % 1) * 0.05;
 
     const vib = clamp(params.vibrancy, 0.55, 1.85);
     this.colPrimary = boostVibrancy(hexToLinearRgb(params.huePrimary), vib);
@@ -234,7 +248,9 @@ export class FlowerMesher {
         ? mixRgb(baseGreen, rgb(0.18, 0.10, 0.06), 0.68)
         : params.species === 'tropical_hibiscus'
           ? mixRgb(baseGreen, rgb(0.16, 0.12, 0.07), 0.42)
-          : mixRgb(baseGreen, rgb(0.14, 0.34, 0.08), 0.28);
+          : params.species === 'phalaenopsis_orchid'
+            ? mixRgb(baseGreen, rgb(0.15, 0.19, 0.08), 0.46)
+            : mixRgb(baseGreen, rgb(0.14, 0.34, 0.08), 0.28);
     this.colSepal = mixRgb(baseGreen, this.colLeafTip, 0.25);
   }
 
@@ -330,6 +346,7 @@ export class FlowerMesher {
     // -------------------------------------------------------------------------
     for (const bm of bloomMounts) {
       if (bm.stem.dropped || bm.stem.nodes.length < 2) continue;
+      this.activeBloomFlex = bm.baseFlex;
       if (bm.isBud) {
         this.buildSculptedFloralBud(calyxMesh, corollaMesh, bm, tier);
         this.stats.buds++;
@@ -385,64 +402,94 @@ export class FlowerMesher {
 
     const groundY = this.sub.sampleSurface(0, 0).pos.y;
     const rootPivot = v3(0, groundY, 0);
+    this.rootPivot = rootPivot;
+    const plantPhase = this.plantPhase;
     const windComp = clamp(p.windCompliance, 0.15, 2.2);
     const trunkRadSegs = tier === 1 ? 16 : tier === 2 ? 20 : tier === 3 ? 24 : 28;
+    const isOrchid = p.species === 'phalaenopsis_orchid';
+    const isPagodaBell = p.species === 'imperial_crown_bell';
 
-    // Trunk / Primary Stalk radius scaled proportionally to gigantic stature & heavy blooms!
-    const baseStalkR =
-      p.species === 'titan_sunflower'
-        ? clamp(H * 0.026 + bloomD * 0.032, 0.022, 0.24)
+    // Slender, botanically proportional primary stalk radii (graceful herbaceous scapes & wiry orchid spikes!)
+    const baseStalkR = isOrchid
+      ? clamp(H * 0.0048 + bloomD * 0.0042, 0.007, 0.028)
+      : p.species === 'titan_sunflower'
+        ? clamp(H * 0.0092 + bloomD * 0.0092, 0.012, 0.074)
         : p.species === 'tree_peony' || p.species === 'tropical_hibiscus'
-          ? clamp(H * 0.023 + bloomD * 0.022, 0.018, 0.20)
-          : clamp(H * 0.017 + bloomD * 0.020, 0.014, 0.15);
+          ? clamp(H * 0.0086 + bloomD * 0.0082, 0.010, 0.068)
+          : p.species === 'sacred_lotus' ||
+              p.species === 'passion_orchid' ||
+              p.species === 'bearded_iris' ||
+              p.species === 'bird_of_paradise' ||
+              p.species === 'oriental_lily'
+            ? clamp(H * 0.0066 + bloomD * 0.0068, 0.008, 0.048)
+            : clamp(H * 0.0078 + bloomD * 0.0078, 0.009, 0.058);
 
-    const stalkH =
-      p.species === 'imperial_crown_bell'
-        ? H * 0.94
-        : p.species === 'sacred_lotus'
-          ? H * 0.88
-          : p.species === 'titan_sunflower'
-            ? H * 0.86
-            : p.species === 'phalaenopsis_orchid'
-              ? H * 0.82
-              : H * 0.74;
-
-    // Build graceful organic primary stalk centerline
-    const nStalkPts = 14;
-    const leanAz = p.species === 'phalaenopsis_orchid' ? 0.18 : this.rng.range(-0.35, 0.35);
-    const leanAmp =
-      p.species === 'imperial_crown_bell'
-        ? H * 0.020
+    const stalkH = isPagodaBell
+      ? H * 0.94
+      : p.species === 'sacred_lotus'
+        ? H * 0.88
         : p.species === 'titan_sunflower'
-          ? H * 0.035
-          : p.species === 'phalaenopsis_orchid'
-            ? H * 0.14
-            : p.species === 'sacred_lotus'
-              ? H * 0.045
-              : H * 0.065;
+          ? H * 0.86
+          : H * 0.74;
+
+    // Build graceful organic primary stalk centerline (with sweeping weeping raceme bow for Phalaenopsis Orchid!)
+    const nStalkPts = isOrchid ? 22 : 15;
+    const leanAz = isOrchid ? 0.28 : this.rng.range(-0.35, 0.35);
+    const leanAmp = isPagodaBell
+      ? H * 0.018
+      : p.species === 'titan_sunflower'
+        ? H * 0.030
+        : p.species === 'sacred_lotus'
+          ? H * 0.042
+          : H * 0.060;
     const stalkPts: V3[] = [];
-    const sinkBase = baseStalkR * 0.55;
+    const sinkBase = baseStalkR * 0.65;
     for (let i = 0; i <= nStalkPts; i++) {
       const t = i / nStalkPts;
-      const y = groundY - sinkBase * (1 - smoothstep(0, 0.14, t)) + stalkH * t;
-      const curve = Math.sin(t * Math.PI * 0.85) * leanAmp;
-      const sCurve = Math.sin(t * Math.PI * 1.65 + 0.5) * leanAmp * 0.28;
-      stalkPts.push(
-        v3(
-          Math.cos(leanAz) * curve - Math.sin(leanAz) * sCurve,
-          y,
-          Math.sin(leanAz) * curve + Math.cos(leanAz) * sCurve,
-        ),
-      );
+      if (isOrchid) {
+        // Monopodial Phalaenopsis flower spike: rises cleanly out of the low basal rosette (`t < 0.35`),
+        // then sweeps forward-and-over in a lush catenary waterfall arch (`t = 0.35 .. 1.0`)!
+        const y =
+          groundY -
+          sinkBase * (1 - smoothstep(0, 0.08, t)) +
+          H * (0.93 * Math.sin(t * Math.PI * 0.66));
+        const reach = H * 0.56 * Math.pow(t, 1.58);
+        const gentleS = Math.sin(t * Math.PI * 1.2) * H * 0.025;
+        stalkPts.push(
+          v3(
+            Math.sin(leanAz) * reach + Math.cos(leanAz) * gentleS,
+            y,
+            Math.cos(leanAz) * reach - Math.sin(leanAz) * gentleS,
+          ),
+        );
+      } else {
+        const y = groundY - sinkBase * (1 - smoothstep(0, 0.14, t)) + stalkH * t;
+        const curve = Math.sin(t * Math.PI * 0.85) * leanAmp;
+        const sCurve = Math.sin(t * Math.PI * 1.65 + 0.5) * leanAmp * 0.28;
+        stalkPts.push(
+          v3(
+            Math.cos(leanAz) * curve - Math.sin(leanAz) * sCurve,
+            y,
+            Math.sin(leanAz) * curve + Math.cos(leanAz) * sCurve,
+          ),
+        );
+      }
     }
 
-    // If single-bloom OR terminal-dominant architecture, tip of main stalk can flare into
-    // the primary Hero Receptacle Torus; lateral blooms branch via welded pedicels!
     const nBlooms = clamp(Math.round(p.bloomCount), 1, 8);
     const nBuds = clamp(Math.round(p.budCount), 0, 6);
-    const torusR = clamp(bloomD * 0.068, 0.016, 0.16);
+    const torusR = isOrchid
+      ? baseStalkR * 0.42
+      : clamp(bloomD * 0.036, 0.008, 0.082);
 
     const { nodes: stalkNodes, length: stalkLen } = buildPolylineNodes(stalkPts);
+
+    // Continuous whole-plant main-stalk flex curve (`0` at ground/roots -> `stalkBaseFlex` at apex)
+    const stalkBaseFlex = (isOrchid ? 0.25 : 0.22) * windComp;
+    const stalkFlexAt = (s: number): number => {
+      const t = clamp(s / Math.max(1e-4, stalkLen), 0, 1);
+      return stalkBaseFlex * Math.pow(t, 1.45);
+    };
 
     const rootCount = clamp(Math.round(p.rootCount), 0, 8);
     const rootAzimuths: number[] = [];
@@ -464,57 +511,59 @@ export class FlowerMesher {
       forks: [],
       dropped: false,
       radiusDrop: 1,
-      ringSpacing: Math.max(0.035, stalkLen / (tier >= 3 ? 34 : 24)),
+      ringSpacing: Math.max(isOrchid ? 0.016 : 0.024, stalkLen / (isOrchid ? (tier >= 3 ? 64 : 48) : (tier >= 3 ? 40 : 28))),
       minRing: trunkRadSegs,
       baseRadiusAt: (s: number) => {
         const t = clamp(s / Math.max(1e-4, stalkLen), 0, 1);
-        const basalFlare = 1 + 0.52 * Math.pow(1 - smoothstep(0, 0.20, t), 2.0);
-        // Terminal receptacle torus swell at the very top (`t > 0.90`)!
-        const tipTorus = smoothstep(0.90, 0.985, t) * (1 - 0.18 * smoothstep(0.985, 1.0, t));
-        const taper = lerp1(1.0, 0.56, Math.pow(t, 0.82)) * basalFlare;
-        return Math.max(0.004, lerp1(baseStalkR * taper, torusR, tipTorus));
+        if (isOrchid) {
+          // Slender tapering flower spike with subtle internodal bract rings and delicate distal tip
+          const basal = 1 + 0.16 * Math.pow(1 - smoothstep(0, 0.12, t), 2.0);
+          const nodal = 1 + 0.06 * Math.pow(Math.max(0, Math.cos(t * Math.PI * 14)), 10);
+          return Math.max(0.0032, baseStalkR * lerp1(1.0, 0.36, Math.pow(t, 0.86)) * basal * nodal);
+        }
+        const basalFlare = 1 + 0.22 * Math.pow(1 - smoothstep(0, 0.16, t), 2.0);
+        const tipTorus = isPagodaBell
+          ? 0
+          : smoothstep(0.92, 0.988, t) * (1 - 0.16 * smoothstep(0.988, 1.0, t));
+        const taper = lerp1(1.0, 0.58, Math.pow(t, 0.82)) * basalFlare;
+        return Math.max(0.0035, lerp1(baseStalkR * taper, torusR, tipTorus));
       },
       profileFactor: (s: number, theta: number) => {
         const t = clamp(s / Math.max(1e-4, stalkLen), 0, 1);
-        // Buttress root flutes near ground + subtle vascular stem ribs higher up
         let flute = 0;
-        if (t < 0.24 && rootAzimuths.length > 0) {
-          const w = Math.pow(1 - t / 0.24, 1.8);
+        if (!isOrchid && t < 0.18 && rootAzimuths.length > 0) {
+          const w = Math.pow(1 - t / 0.18, 1.8);
           for (const raz of rootAzimuths) {
             const d = Math.cos(theta - raz);
-            if (d > 0) flute += 0.24 * w * Math.pow(d, 3);
+            if (d > 0) flute += 0.10 * w * Math.pow(d, 3);
           }
         }
         const ribs =
           p.species === 'titan_sunflower'
-            ? 0.045 * Math.cos(theta * 8) * (1 - smoothstep(0.86, 0.96, t))
-            : 0.018 * Math.cos(theta * 6) * (1 - smoothstep(0.86, 0.96, t));
+            ? 0.038 * Math.cos(theta * 8) * (1 - smoothstep(0.86, 0.96, t))
+            : isOrchid
+              ? 0.008 * Math.cos(theta * 4)
+              : 0.015 * Math.cos(theta * 6) * (1 - smoothstep(0.86, 0.96, t));
         return 1 + flute + ribs;
       },
       styleAt: (s: number, _theta: number, _pos: V3, _dir: V3, isJunc: boolean) => {
         const t = clamp(s / Math.max(1e-4, stalkLen), 0, 1);
-        const col = mixRgb(
-          this.colStem,
-          this.colSepal,
-          smoothstep(0.35, 0.96, t),
-        );
-        const flex = 0.11 * windComp * Math.pow(t, 1.45);
+        const col = isOrchid
+          ? mixRgb(this.colStem, this.colSepal, smoothstep(0.55, 1.0, t) * 0.45)
+          : mixRgb(this.colStem, this.colSepal, smoothstep(0.35, 0.96, t));
+        const flex = stalkFlexAt(s);
         return {
           color: col,
-          roughness: p.species === 'tree_peony' ? 0.84 : 0.58,
-          translucency: 0.12 * smoothstep(0.4, 1.0, t),
+          roughness: p.species === 'tree_peony' ? 0.84 : isOrchid ? 0.34 : 0.56,
+          translucency: 0.14 * smoothstep(0.4, 1.0, t),
           detailMetric: isJunc ? 0.95 : clamp(0.25 + 0.65 * t, 0, 1),
           anatomyLevel: 0,
-          wind: [t, flex, 0.13, 0],
+          wind: [t, flex, plantPhase, 0],
           pivot: rootPivot,
         };
       },
     };
 
-    // Terminal Hero Bloom #0 sits right on `mainStem` apex (except `imperial_crown_bell`,
-    // whose main stalk apex carries the signature Pineapple Foliar Topknot while all pagoda
-    // bells hang in a nodding chandelier whorl right beneath it!).
-    const isPagodaBell = p.species === 'imperial_crown_bell';
     const heroForwardTilt =
       p.species === 'sacred_lotus'
         ? 14
@@ -534,11 +583,26 @@ export class FlowerMesher {
                       ? 54
                       : p.species === 'bird_of_paradise'
                         ? 22
-                        : p.species === 'phalaenopsis_orchid'
-                          ? 74
+                        : isOrchid
+                          ? 84
                           : 146; // imperial_crown_bell pendent nodding bell!
 
-    if (!isPagodaBell) {
+    // Terminal mount on `mainStem` apex:
+    // - `imperial_crown_bell`: NO terminal bloom (pineapple foliar topknot sits at apex!)
+    // - `phalaenopsis_orchid`: terminal apex of the weeping raceme carries the smallest distal unopened pearl bud
+    //   (or smallest distal flower when `nBuds === 0`) — authentic indeterminate raceme phyllotaxy!
+    // - All other species: primary Hero Bloom #0 sits at `mainStem` apex!
+    if (isOrchid) {
+      bloomMounts.push({
+        stem: mainStem,
+        isBud: nBuds >= 1,
+        scaleMul: nBuds >= 1 ? 0.42 : 0.72,
+        index: 0,
+        preferForwardTiltDeg: 95,
+        yawHint: leanAz,
+        baseFlex: stalkFlexAt(stalkLen),
+      });
+    } else if (!isPagodaBell) {
       bloomMounts.push({
         stem: mainStem,
         isBud: false,
@@ -546,38 +610,47 @@ export class FlowerMesher {
         index: 0,
         preferForwardTiltDeg: heroForwardTilt,
         yawHint: 0.12,
+        baseFlex: stalkFlexAt(stalkLen),
       });
     }
 
-    // 1B. Welded Terrain-Hugging Buttress / Rhizome Surface Roots
-    const rootAttachBase = Math.min(stalkLen * 0.08, Math.max(0.04, baseStalkR * 1.4));
+    // 1B. Welded Terrain-Hugging Buttress / Rhizome / Silvery Orchid Velamen Roots
+    const rootAttachBase = isOrchid
+      ? stalkLen * 0.014
+      : Math.min(stalkLen * 0.065, Math.max(0.025, baseStalkR * 1.4));
     for (let r = 0; r < rootCount; r++) {
       const raz = rootAzimuths[r];
-      const rootLen = clamp(H * 0.19 * this.rng.range(0.82, 1.22), 0.14, 1.45);
-      const r0 = baseStalkR * 0.42;
+      const rootLen = isOrchid
+        ? clamp(H * 0.22 * this.rng.range(0.85, 1.25), 0.22, 1.15)
+        : clamp(H * 0.17 * this.rng.range(0.82, 1.20), 0.12, 1.25);
+      const r0 = isOrchid ? Math.max(0.0085, baseStalkR * 0.62) : baseStalkR * 0.40;
 
       const buildRootPolyline = (origin: V3, emergeDir: V3): { nodes: WeldedNode[]; length: number } => {
         const horiz = normalize(v3(emergeDir.x, 0, emergeDir.z));
         const side = v3(-horiz.z, 0, horiz.x);
         const pts: V3[] = [origin];
-        const nSeg = 9;
+        const nSeg = 10;
         const wigPh = this.rng.next() * TAU;
         for (let k = 1; k <= nSeg; k++) {
           const u = k / nSeg;
           const radDist = rootLen * u;
-          const wig = Math.sin(u * Math.PI * 1.8 + wigPh) * rootLen * 0.09 * u;
+          const wig = Math.sin(u * Math.PI * (isOrchid ? 2.4 : 1.8) + wigPh) * rootLen * (isOrchid ? 0.15 : 0.09) * u;
           const wx = origin.x + horiz.x * radDist + side.x * wig;
           const wz = origin.z + horiz.z * radDist + side.z * wig;
           const surfY = this.sub.sampleSurface(wx, wz).pos.y;
-          const sink = smoothstep(0.68, 1.0, u) * r0 * 0.85;
-          const archY = lerp1(origin.y, surfY + r0 * (1 - u) * 0.35 - sink, smoothstep(0, 0.34, u));
+          const sink = isOrchid ? 0 : smoothstep(0.68, 1.0, u) * r0 * 0.85;
+          const archY = lerp1(
+            origin.y,
+            surfY + (isOrchid ? r0 * 1.55 + 0.024 * Math.sin(u * Math.PI * 0.92) : r0 * (1 - u) * 0.35) - sink,
+            smoothstep(0, 0.24, u),
+          );
           pts.push(v3(wx, archY, wz));
         }
         return buildPolylineNodes(pts);
       };
 
       const initOrigin = addScaled(stalkNodes[0].pos, UP, rootAttachBase);
-      const initDir = normalize(v3(Math.cos(raz), -0.28, Math.sin(raz)));
+      const initDir = normalize(v3(Math.cos(raz), -0.24, Math.sin(raz)));
       const builtR = buildRootPolyline(initOrigin, initDir);
 
       const rStem: WeldedStem = {
@@ -586,7 +659,7 @@ export class FlowerMesher {
         role: 'root',
         parent: mainStem,
         attach: 'side',
-        attachS: rootAttachBase + (r % 2) * baseStalkR * 0.18,
+        attachS: rootAttachBase + (r % 2) * baseStalkR * 0.25,
         attachDir: initDir,
         nodes: builtR.nodes,
         length: builtR.length,
@@ -594,11 +667,14 @@ export class FlowerMesher {
         forks: [],
         dropped: false,
         radiusDrop: 1,
-        ringSpacing: Math.max(0.025, rootLen / 10),
+        ringSpacing: Math.max(0.020, rootLen / 10),
         minRing: 8,
         baseRadiusAt: (s: number) => {
           const u = clamp(s / Math.max(1e-4, rStem.length), 0, 1);
-          return Math.max(0.0025, r0 * Math.pow(1 - u * 0.88, 0.95));
+          // Orchid velamen aerial roots stay plump & cylindrical all the way to their rounded green root-cap tip!
+          return isOrchid
+            ? Math.max(0.0038, r0 * (1 - 0.18 * u * u))
+            : Math.max(0.0022, r0 * Math.pow(1 - u * 0.88, 0.95));
         },
         regrow: (origin: V3, emergeDir: V3) => {
           const reg = buildRootPolyline(origin, emergeDir);
@@ -607,13 +683,28 @@ export class FlowerMesher {
         },
         styleAt: (s: number, _th: number, _pos: V3, _dir: V3, isJunc: boolean) => {
           const u = clamp(s / Math.max(1e-4, rStem.length), 0, 1);
+          if (isOrchid) {
+            // Iconic Phalaenopsis silvery-celadon spongy velamen root with glossy apple-green active growing tip!
+            const velamen = rgb(0.54, 0.64, 0.52);
+            const greenTip = mixRgb(this.colLeafTip, rgb(0.22, 0.64, 0.16), 0.55);
+            const col = mixRgb(velamen, greenTip, smoothstep(0.78, 0.96, u));
+            return {
+              color: col,
+              roughness: lerp1(0.62, 0.24, smoothstep(0.78, 0.96, u)),
+              translucency: 0.15 * smoothstep(0.78, 1.0, u),
+              detailMetric: isJunc ? 0.94 : 0.35,
+              anatomyLevel: 0,
+              wind: [0, 0, plantPhase, 0],
+              pivot: rootPivot,
+            };
+          }
           return {
             color: mixRgb(this.colStem, rgb(0.11, 0.08, 0.05), 0.55 + 0.35 * u),
             roughness: 0.88,
             translucency: 0.0,
             detailMetric: isJunc ? 0.94 : 0.22,
             anatomyLevel: 0,
-            wind: [0, 0, 0, 0],
+            wind: [0, 0, plantPhase, 0],
             pivot: rootPivot,
           };
         },
@@ -622,65 +713,89 @@ export class FlowerMesher {
     }
 
     // 1C. Welded Lateral Bloom Peduncles / Pedicels + Unopened Bud Pedicels
-    const sideOpenCount = isPagodaBell ? Math.max(4, nBlooms + 2) : nBlooms - 1;
-    const totalSideFloral = sideOpenCount + nBuds;
+    const sideOpenCount = isOrchid
+      ? Math.max(3, nBlooms) - (nBuds === 0 ? 1 : 0)
+      : isPagodaBell
+        ? Math.max(4, nBlooms + 2)
+        : nBlooms - 1;
+    const sideBudCount = isOrchid ? Math.max(0, nBuds - 1) : nBuds;
+    const totalSideFloral = sideOpenCount + sideBudCount;
+
     for (let bi = 0; bi < totalSideFloral; bi++) {
       const isBud = bi >= sideOpenCount;
-      // Space attachment stations cleanly down upper stalk (`0.46 .. 0.86`) so `planHoles`
-      // cuts non-overlapping collar windows with zero drops!
-      const fracSpan = isPagodaBell
-        ? lerp1(0.84, 0.72, bi / Math.max(1, totalSideFloral - 1))
-        : p.species === 'sacred_lotus'
-          ? lerp1(0.38, 0.16, bi / Math.max(1, totalSideFloral - 1))
-          : totalSideFloral <= 1
-            ? 0.72
-            : lerp1(0.84, 0.46, bi / Math.max(1, totalSideFloral - 1));
-      const attachS = stalkLen * clamp(fracSpan, 0.14, 0.88);
+      // Note: On `phalaenopsis_orchid` (indeterminate raceme), proximal lower-arch nodes open FIRST (`sFrac = 0.44..0.86`)
+      // and unopened buds sit near the drooping distal tip (`sFrac = 0.92..0.94`)!
+      const fracSpan = isOrchid
+        ? lerp1(0.44, 0.92, bi / Math.max(1, totalSideFloral - 1))
+        : isPagodaBell
+          ? lerp1(0.84, 0.72, bi / Math.max(1, totalSideFloral - 1))
+          : p.species === 'sacred_lotus'
+            ? lerp1(0.38, 0.16, bi / Math.max(1, totalSideFloral - 1))
+            : totalSideFloral <= 1
+              ? 0.72
+              : lerp1(0.84, 0.46, bi / Math.max(1, totalSideFloral - 1));
+      const attachS = stalkLen * clamp(fracSpan, 0.14, 0.93);
       const pNode = this.evalNodeAtS(stalkNodes, attachS);
 
-      // Spread blooms in a scenic 3D bouquet crown (or symmetric chandelier ring for Pagoda Bell!)
+      // Two-ranked distichous cascade for Orchid; chandelier ring for Pagoda Bell; 3D bouquet for others
       const rawAz = (bi + 1) * GOLDEN_ANGLE + 0.45;
-      const az = isPagodaBell
-        ? (bi / Math.max(1, totalSideFloral)) * TAU + 0.32
-        : bi === 0
-          ? 0.88
-          : bi === 1
-            ? -0.92
-            : rawAz;
-      const spreadOut = isPagodaBell
-        ? 0.86
-        : p.species === 'sacred_lotus'
-          ? 0.36
-          : isBud
-            ? 0.56
-            : 0.68;
+      const rankSide = bi % 2 === 0 ? 1 : -1;
+      const az = isOrchid
+        ? leanAz + rankSide * 0.62
+        : isPagodaBell
+          ? (bi / Math.max(1, totalSideFloral)) * TAU + 0.32
+          : bi === 0
+            ? 0.88
+            : bi === 1
+              ? -0.92
+              : rawAz;
+      const spreadOut = isOrchid
+        ? 0.92
+        : isPagodaBell
+          ? 0.86
+          : p.species === 'sacred_lotus'
+            ? 0.36
+            : isBud
+              ? 0.56
+              : 0.68;
       const emergeDir = normalize(
-        v3(Math.sin(az) * spreadOut, isPagodaBell ? 0.42 : 0.76, Math.cos(az) * spreadOut),
+        v3(Math.sin(az) * spreadOut, isOrchid ? 0.16 : isPagodaBell ? 0.42 : 0.76, Math.cos(az) * spreadOut),
       );
-      const pedLen = isPagodaBell
-        ? clamp(bloomD * 0.56 * this.rng.range(0.94, 1.06), 0.18, H * 0.28)
-        : p.species === 'sacred_lotus'
-          ? H * (isBud ? 0.44 : 0.54) * this.rng.range(0.9, 1.08)
-          : clamp(
-              H * (isBud ? 0.19 : 0.27) * this.rng.range(0.88, 1.14),
-              bloomD * 0.34,
-              H * 0.44,
-            );
-      const pedBaseR = Math.max(0.005, baseStalkR * (isBud ? 0.34 : 0.44));
-      const pedTorusR = isBud ? torusR * 0.55 : torusR * 0.84;
+      const pedLen = isOrchid
+        ? clamp(bloomD * (isBud ? 0.15 : 0.23) * this.rng.range(0.92, 1.08), 0.07, 0.28)
+        : isPagodaBell
+          ? clamp(bloomD * 0.56 * this.rng.range(0.94, 1.06), 0.18, H * 0.28)
+          : p.species === 'sacred_lotus'
+            ? H * (isBud ? 0.44 : 0.54) * this.rng.range(0.9, 1.08)
+            : clamp(
+                H * (isBud ? 0.19 : 0.27) * this.rng.range(0.88, 1.14),
+                bloomD * 0.34,
+                H * 0.44,
+              );
+      const pedBaseR = isOrchid
+        ? Math.max(0.0028, baseStalkR * (isBud ? 0.26 : 0.32))
+        : Math.max(0.0034, baseStalkR * (isBud ? 0.34 : 0.42));
+      const pedTorusR = isOrchid
+        ? pedBaseR * 0.95
+        : isBud
+          ? torusR * 0.55
+          : torusR * 0.84;
 
       const pts: V3[] = [];
       const nP = 9;
       const outHoriz = normalize(v3(Math.sin(az), 0, Math.cos(az)));
       for (let k = 0; k <= nP; k++) {
         const u = k / nP;
-        if (isPagodaBell) {
-          // Graceful hook-arch sweeping outward and nodding downward (`148°`) for pendent bells!
+        if (isOrchid) {
+          // Slender resupinate orchid pedicel-ovary arching outward-and-forward from the cascading spike!
+          const rOut = pedLen * u;
+          const archY = pedLen * (0.18 * Math.sin(u * Math.PI * 0.72) - 0.08 * u * u);
+          pts.push(v3(pNode.pos.x + outHoriz.x * rOut, pNode.pos.y + archY, pNode.pos.z + outHoriz.z * rOut));
+        } else if (isPagodaBell) {
           const rOut = pedLen * (0.88 * Math.sin(u * Math.PI * 0.58) + 0.12 * u);
           const archY = pedLen * (0.24 * Math.sin(u * Math.PI * 0.75) - 0.52 * u * u);
           pts.push(v3(pNode.pos.x + outHoriz.x * rOut, pNode.pos.y + archY, pNode.pos.z + outHoriz.z * rOut));
         } else {
-          // Sweep gracefully outward then curve upward into the floral receptacle!
           const rOut = pedLen * (0.72 * Math.sin(u * Math.PI * 0.56) + 0.18 * u);
           const riseY = pedLen * (0.42 * u + 0.46 * Math.pow(u, 1.65));
           pts.push(
@@ -693,7 +808,11 @@ export class FlowerMesher {
         }
       }
       const builtPed = buildPolylineNodes(pts);
-      const pedPhase = ((bi + 1) * 0.27) % 1;
+
+      // Continuous whole-plant wind flex from `mainStem` collar (`u = 0`) to pedicel tip (`u = 1`)!
+      const pedAttachFlex = stalkFlexAt(attachS);
+      const pedExtraFlex = (isOrchid ? 0.042 : 0.068) * windComp;
+      const pedFlexAt = (u: number): number => pedAttachFlex + pedExtraFlex * Math.pow(u, 1.35);
 
       const pedStem: WeldedStem = {
         id: this.nextStemId++,
@@ -709,58 +828,67 @@ export class FlowerMesher {
         forks: [],
         dropped: false,
         radiusDrop: 0.97,
-        ringSpacing: Math.max(0.022, builtPed.length / 12),
+        ringSpacing: Math.max(0.016, builtPed.length / 12),
         minRing: tier >= 3 ? 10 : 8,
         baseRadiusAt: (s: number) => {
           const u = clamp(s / Math.max(1e-4, pedStem.length), 0, 1);
-          const shaft = lerp1(pedBaseR, pedBaseR * 0.68, u);
+          const shaft = lerp1(pedBaseR, pedBaseR * 0.72, u);
           const tipSwell = smoothstep(0.84, 0.98, u);
-          return Math.max(0.003, lerp1(shaft, pedTorusR, tipSwell));
+          return Math.max(0.0024, lerp1(shaft, pedTorusR, tipSwell));
         },
         styleAt: (s: number, _th: number, _pos: V3, _dir: V3, isJunc: boolean) => {
           const u = clamp(s / Math.max(1e-4, pedStem.length), 0, 1);
-          const col = mixRgb(this.colStem, this.colSepal, 0.35 + 0.65 * u);
+          // Orchid resupinate pedicel-ovaries flush from olive-green stem into pale pearl-blush near the bloom!
+          const col = isOrchid
+            ? mixRgb(this.colStem, this.colPrimary, smoothstep(0.35, 1.0, u) * 0.72)
+            : mixRgb(this.colStem, this.colSepal, 0.35 + 0.65 * u);
           const h01 = clamp((attachS + s) / Math.max(1e-4, H), 0, 1);
           return {
             color: col,
-            roughness: 0.54,
-            translucency: 0.18 * u,
+            roughness: isOrchid ? 0.34 : 0.54,
+            translucency: 0.22 * u,
             detailMetric: isJunc ? 0.95 : 0.45 + 0.4 * u,
             anatomyLevel: 1,
-            wind: [h01, 0.16 * windComp * (0.4 + 0.6 * u), pedPhase, 0.02 * u],
-            pivot: pedStem.nodes[0]?.pos ?? pNode.pos,
+            wind: [h01, pedFlexAt(u), plantPhase, 0],
+            pivot: rootPivot,
           };
         },
       };
       mainStem.children.push(pedStem);
 
+      const orchidFrac = bi / Math.max(1, totalSideFloral - 1);
       bloomMounts.push({
         stem: pedStem,
         isBud,
-        scaleMul: isPagodaBell
+        scaleMul: isOrchid
           ? isBud
-            ? 0.62
-            : this.rng.range(0.88, 0.98)
-          : isBud
-            ? this.rng.range(0.55, 0.78)
-            : this.rng.range(0.76, 0.92),
+            ? 0.52
+            : lerp1(0.92, 0.72, orchidFrac)
+          : isPagodaBell
+            ? isBud
+              ? 0.62
+              : this.rng.range(0.88, 0.98)
+            : isBud
+              ? this.rng.range(0.55, 0.78)
+              : this.rng.range(0.76, 0.92),
         index: bi + 1,
-        preferForwardTiltDeg: isPagodaBell ? 148 : heroForwardTilt + 10,
+        preferForwardTiltDeg: isOrchid ? 82 : isPagodaBell ? 148 : heroForwardTilt + 10,
         yawHint: az,
+        baseFlex: pedFlexAt(1.0),
       });
     }
 
-    // 1D. Welded Cauline Leaves OR Emergent Sacred Lotus Peltate Umbrella Stalks!
+    // 1D. Welded Cauline Leaves, Monopodial Orchid Rosette, OR Emergent Sacred Lotus Peltate Pads!
     const baseLeafTarget =
       p.species === 'oriental_lily' || p.species === 'king_protea'
         ? 14
         : p.species === 'sacred_lotus'
           ? 5
-          : p.species === 'phalaenopsis_orchid'
-            ? 6
+          : isOrchid
+            ? 5
             : p.species === 'bearded_iris' || p.species === 'bird_of_paradise'
               ? 8
-              : p.species === 'imperial_crown_bell'
+              : isPagodaBell
                 ? 12
                 : p.species === 'titan_sunflower'
                   ? 9
@@ -771,27 +899,33 @@ export class FlowerMesher {
       const tLeaf = nLeaves <= 1 ? 0.35 : li / (nLeaves - 1);
       const isLotusPad = p.species === 'sacred_lotus';
       const isBasalRosette =
-        p.species === 'phalaenopsis_orchid' ||
-        p.species === 'bearded_iris' ||
-        p.species === 'bird_of_paradise';
-      const isTopknotLeaf = p.species === 'imperial_crown_bell' && li >= Math.floor(nLeaves * 0.45);
+        p.species === 'bearded_iris' || p.species === 'bird_of_paradise';
+      const isTopknotLeaf = isPagodaBell && li >= Math.floor(nLeaves * 0.45);
 
-      const attachFrac = isLotusPad
-        ? lerp1(0.07, 0.24, tLeaf)
-        : isBasalRosette
-          ? lerp1(0.06, 0.30, tLeaf)
-          : isTopknotLeaf
-            ? lerp1(0.90, 0.985, (li - Math.floor(nLeaves * 0.45)) / Math.max(1, nLeaves - Math.floor(nLeaves * 0.45) - 1))
-            : p.species === 'imperial_crown_bell'
-              ? lerp1(0.14, 0.56, tLeaf / 0.45)
-              : lerp1(0.15, 0.76, tLeaf);
+      const attachFrac = isOrchid
+        ? lerp1(0.022, 0.068, tLeaf)
+        : isLotusPad
+          ? lerp1(0.07, 0.24, tLeaf)
+          : isBasalRosette
+            ? lerp1(0.06, 0.30, tLeaf)
+            : isTopknotLeaf
+              ? lerp1(0.90, 0.985, (li - Math.floor(nLeaves * 0.45)) / Math.max(1, nLeaves - Math.floor(nLeaves * 0.45) - 1))
+              : isPagodaBell
+                ? lerp1(0.14, 0.56, tLeaf / 0.45)
+                : lerp1(0.15, 0.76, tLeaf);
       const attachS = stalkLen * attachFrac;
       const pNode = this.evalNodeAtS(stalkNodes, attachS);
-      const az = li * GOLDEN_ANGLE + 1.15;
-      const outH = v3(Math.cos(az), 0, Math.sin(az));
+      // Orchid leaves grow in a low monopodial 2-ranked distichous fan perpendicular to the flower spike!
+      const az = isOrchid
+        ? leanAz + (li % 2 === 0 ? 1 : -1) * (Math.PI * 0.5) + ((Math.floor(li / 2) - 1) * 0.28)
+        : li * GOLDEN_ANGLE + 1.15;
+      const outH = v3(Math.sin(az), 0, Math.cos(az));
+
+      const leafAttachFlex = stalkFlexAt(attachS);
+      const leafExtraFlex = (isOrchid ? 0.030 : isLotusPad ? 0.095 : 0.075) * windComp;
+      const leafFlexAt = (u: number): number => leafAttachFlex + leafExtraFlex * Math.pow(u, 1.35);
 
       if (isLotusPad) {
-        // Tall emergent lotus petiole rising to a cupped circular peltate umbrella pad!
         const padH = H * lerp1(0.36, 0.66, (li * 0.618) % 1) * this.rng.range(0.9, 1.08);
         const spreadR = clamp(H * 0.24 * this.rng.range(0.75, 1.25), 0.22, 1.4);
         const pts: V3[] = [];
@@ -802,7 +936,7 @@ export class FlowerMesher {
           pts.push(v3(pNode.pos.x + outH.x * r, y, pNode.pos.z + outH.z * r));
         }
         const built = buildPolylineNodes(pts);
-        const padR0 = Math.max(0.005, baseStalkR * 0.42);
+        const padR0 = Math.max(0.004, baseStalkR * 0.40);
         const lStem: WeldedStem = {
           id: this.nextStemId++,
           level: 1,
@@ -817,11 +951,11 @@ export class FlowerMesher {
           forks: [],
           dropped: false,
           radiusDrop: 1,
-          ringSpacing: Math.max(0.03, built.length / 12),
+          ringSpacing: Math.max(0.024, built.length / 12),
           minRing: 8,
           baseRadiusAt: (s: number) => {
             const u = clamp(s / Math.max(1e-4, lStem.length), 0, 1);
-            return Math.max(0.003, padR0 * lerp1(1.0, 0.62, u));
+            return Math.max(0.0025, padR0 * lerp1(1.0, 0.62, u));
           },
           styleAt: (s: number, _th: number, _pos: V3, _dir: V3, isJunc: boolean) => {
             const u = clamp(s / Math.max(1e-4, lStem.length), 0, 1);
@@ -831,8 +965,8 @@ export class FlowerMesher {
               translucency: 0.16,
               detailMetric: isJunc ? 0.94 : 0.4,
               anatomyLevel: 1,
-              wind: [u * 0.65, 0.15 * windComp * u, (li * 0.31) % 1, 0.02],
-              pivot: lStem.nodes[0]?.pos ?? pNode.pos,
+              wind: [u * 0.65, leafFlexAt(u), plantPhase, 0],
+              pivot: rootPivot,
             };
           },
         };
@@ -844,17 +978,18 @@ export class FlowerMesher {
           bladeLen: padDiam,
           bladeWidth: padDiam,
           index: li,
+          baseFlex: leafAttachFlex,
+          extraFlex: leafExtraFlex,
         });
       } else {
-        // Welded Petiole-to-Midrib Spine arching gracefully outward!
         const sizeBell = Math.sin(Math.PI * clamp(0.18 + 0.72 * (1 - tLeaf * 0.65), 0.15, 0.95));
         const isSwordLeaf = p.species === 'bearded_iris' || p.species === 'bird_of_paradise';
         const totalSpineLen = isTopknotLeaf
           ? clamp(bloomD * 0.68 * this.rng.range(0.88, 1.12), 0.16, 0.85)
           : isSwordLeaf
             ? clamp(H * 0.44 * (0.75 + 0.30 * sizeBell), 0.28, 2.2)
-            : p.species === 'phalaenopsis_orchid'
-              ? clamp(H * 0.26 * (0.80 + 0.25 * sizeBell), 0.20, 1.25)
+            : isOrchid
+              ? clamp(H * 0.28 * (0.85 + 0.20 * sizeBell), 0.28, 1.25)
               : p.species === 'oriental_lily' || p.species === 'king_protea'
                 ? clamp(H * 0.20 * (0.65 + 0.45 * sizeBell), 0.16, 1.35)
                 : p.species === 'titan_sunflower'
@@ -863,9 +998,9 @@ export class FlowerMesher {
 
         const bladeW = isSwordLeaf
           ? totalSpineLen * (p.species === 'bearded_iris' ? 0.14 : 0.24)
-          : p.species === 'phalaenopsis_orchid'
-            ? totalSpineLen * 0.46
-            : isTopknotLeaf || p.species === 'oriental_lily' || p.species === 'imperial_crown_bell'
+          : isOrchid
+            ? totalSpineLen * 0.52
+            : isTopknotLeaf || p.species === 'oriental_lily' || isPagodaBell
               ? totalSpineLen * 0.22
               : p.species === 'king_protea'
                 ? totalSpineLen * 0.34
@@ -876,21 +1011,23 @@ export class FlowerMesher {
                     : totalSpineLen * 0.58;
 
         const pts: V3[] = [];
-        const nL = isSwordLeaf ? 16 : 12;
+        const nL = isSwordLeaf || isOrchid ? 16 : 12;
         const risePitch = isTopknotLeaf
           ? 0.88
           : isSwordLeaf
             ? lerp1(1.12, 1.42, tLeaf)
-            : p.species === 'phalaenopsis_orchid'
-              ? 0.28
+            : isOrchid
+              ? lerp1(0.18, 0.32, tLeaf)
               : lerp1(0.32, 0.62, tLeaf);
         const droop = isSwordLeaf
           ? 0.06
           : isTopknotLeaf
             ? 0.24
-            : p.species === 'oriental_lily'
-              ? 0.42
-              : 0.34;
+            : isOrchid
+              ? 0.24
+              : p.species === 'oriental_lily'
+                ? 0.42
+                : 0.34;
         const horizShrink = isSwordLeaf ? 0.38 : isTopknotLeaf ? 0.68 : 0.94;
         for (let k = 0; k <= nL; k++) {
           const u = k / nL;
@@ -902,7 +1039,7 @@ export class FlowerMesher {
         }
         const leafRight0 = length(cross(UP, outH)) > 1e-4 ? normalize(cross(UP, outH)) : v3(1, 0, 0);
         const built = buildPolylineNodes(pts, leafRight0);
-        const petR0 = Math.max(0.0032, baseStalkR * 0.26);
+        const petR0 = Math.max(0.0022, baseStalkR * 0.25);
 
         const lStem: WeldedStem = {
           id: this.nextStemId++,
@@ -918,14 +1055,13 @@ export class FlowerMesher {
           forks: [],
           dropped: false,
           radiusDrop: 1,
-          ringSpacing: Math.max(0.022, built.length / 11),
+          ringSpacing: Math.max(0.018, built.length / 12),
           minRing: 6,
           baseRadiusAt: (s: number) => {
             const u = clamp(s / Math.max(1e-4, lStem.length), 0, 1);
-            return Math.max(0.0018, petR0 * Math.pow(1 - u * 0.82, 0.85));
+            return Math.max(0.0014, petR0 * Math.pow(1 - u * 0.82, 0.85));
           },
           profileFactor: (_s: number, theta: number) => {
-            // Adaxial U-groove along upper petiole/midrib
             const upDot = Math.sin(theta);
             return upDot > 0.2 ? 1 - 0.18 * Math.pow((upDot - 0.2) / 0.8, 2) : 1 + 0.08 * Math.max(0, -upDot);
           },
@@ -934,12 +1070,12 @@ export class FlowerMesher {
             const h01 = clamp((attachS + s * 0.4) / Math.max(1e-4, H), 0, 1);
             return {
               color: mixRgb(this.colStem, this.colLeaf, 0.35 + 0.65 * u),
-              roughness: 0.48,
+              roughness: isOrchid ? 0.26 : 0.48,
               translucency: 0.28 * u,
               detailMetric: isJunc ? 0.94 : 0.35 + 0.45 * u,
               anatomyLevel: 1,
-              wind: [h01, 0.18 * windComp * Math.pow(u, 1.2), (li * 0.23) % 1, 0.05 * u],
-              pivot: lStem.nodes[0]?.pos ?? pNode.pos,
+              wind: [h01, leafFlexAt(u), plantPhase, 0],
+              pivot: rootPivot,
             };
           },
         };
@@ -950,6 +1086,8 @@ export class FlowerMesher {
           bladeLen: totalSpineLen,
           bladeWidth: bladeW,
           index: li,
+          baseFlex: leafAttachFlex,
+          extraFlex: leafExtraFlex,
         });
       }
     }
@@ -998,7 +1136,7 @@ export class FlowerMesher {
         ? normalize(v3(tipNode.pos.x, 0, tipNode.pos.z))
         : v3(Math.sin(bm.yawHint), 0, Math.cos(bm.yawHint));
     const horizOut =
-      bm.index === 0
+      bm.index === 0 || p.species === 'phalaenopsis_orchid'
         ? normalize(v3(Math.sin(bm.yawHint), 0, Math.cos(bm.yawHint)))
         : normalize(lerp(radialHoriz, v3(0, 0, 1), 0.42));
 
@@ -1006,7 +1144,9 @@ export class FlowerMesher {
     const desiredAxis = normalize(
       add(scale(UP, Math.cos(tiltRad)), scale(horizOut, Math.sin(tiltRad))),
     );
-    const flowerAxis = normalize(lerp(tipNode.dir, desiredAxis, 0.78));
+    const flowerAxis = normalize(
+      lerp(tipNode.dir, desiredAxis, p.species === 'phalaenopsis_orchid' ? 0.68 : 0.78),
+    );
     const fRight = normalize(
       length(projectOnPlane(horizOut, flowerAxis)) > 1e-3
         ? projectOnPlane(horizOut, flowerAxis)
@@ -1017,8 +1157,8 @@ export class FlowerMesher {
     // Place floral origin slightly forward of `tipNode.pos` so the green stalk cap stays
     // 100% enclosed inside the calyx/receptacle base and never pokes into the corolla heart!
     const origin = addScaled(tipNode.pos, flowerAxis, bloomRadius * 0.015);
-    const bloomPivot = bm.stem.nodes[0]?.pos ?? origin;
-    const bloomPhase = ((bm.index * 0.37) + 0.11) % 1;
+    const bloomPivot = this.rootPivot;
+    const bloomPhase = this.plantPhase;
     const openness = clamp(p.corollaOpenness, 0.30, 1.25);
 
     switch (p.species) {
@@ -2810,7 +2950,12 @@ export class FlowerMesher {
         const lipGlow = smoothstep(0.62, 0.96, absS);
         const baseJade = mixRgb(this.colLeaf, rgb(0.14, 0.38, 0.34), 0.45);
         const col = mixRgb(baseJade, this.colThroat, lipGlow * 0.92);
-        const w4: [number, number, number, number] = [0.6, 0.10 * p.windCompliance * u, phase, 0.01];
+        const w4: [number, number, number, number] = [
+          0.7,
+          this.activeBloomFlex + 0.006 * p.windCompliance * u * u,
+          phase,
+          0.0,
+        ];
         bOut.push(
           calyxMesh.addVertex({
             x: pO.x, y: pO.y, z: pO.z,
@@ -3011,7 +3156,6 @@ export class FlowerMesher {
       }
     }
 
-    const clawAnchor = spinePos[0];
     const nU = uSegs + 1;
     const nV = vSegs + 1;
     const adaxIdx = new Int32Array(nU * nV);
@@ -3073,18 +3217,27 @@ export class FlowerMesher {
       }
       const halfW = Math.max(spec.maxHalfWidth * 0.03 * (1 - u * 0.85), spec.maxHalfWidth * env);
 
-      const windFlex = 0.09 * p.windCompliance * Math.pow(u, 1.35);
-      const flutter = 0.08 * p.windCompliance * Math.pow(u, 1.6);
-      const pWind: [number, number, number, number] = [
-        clamp(0.45 + 0.55 * u, 0, 1),
-        windFlex,
-        (bloomPhase + spec.seedPhase * 0.08) % 1,
-        flutter,
-      ];
+      // Continuous whole-plant wind: at `u = 0` (claw attachment to receptacle / sunflower disc),
+      // `windFlex === this.activeBloomFlex` and `flutter === 0` with identical `bloomPivot` (`rootPivot`)
+      // and `bloomPhase` (`plantPhase`), so petals NEVER detach from the seed disc or stem!
+      const isWaxyStiffPerianth =
+        p.species === 'king_protea' ||
+        p.species === 'phalaenopsis_orchid' ||
+        p.species === 'bird_of_paradise' ||
+        p.species === 'imperial_crown_bell' ||
+        p.species === 'sacred_lotus';
+      const windFlex = this.activeBloomFlex + 0.026 * p.windCompliance * Math.pow(u, 1.85);
+      const baseFlutter = (isWaxyStiffPerianth ? 0.0 : 0.012) * p.windCompliance * Math.pow(u, 1.85);
 
       for (let iv = 0; iv <= vSegs; iv++) {
         const s = (iv / vSegs) * 2 - 1; // [-1 .. +1]
         const absS = Math.abs(s);
+        const pWind: [number, number, number, number] = [
+          clamp(0.55 + 0.45 * u, 0, 1),
+          windFlex,
+          bloomPhase,
+          baseFlutter * absS,
+        ];
 
         // Smooth semicircular obovate tip arc + gentle organic silk scallops (`Peony` / `Hibiscus`)
         let uRetract = 0;
@@ -3181,7 +3334,6 @@ export class FlowerMesher {
           ? spec.colorOverride(u, absS, veinRidge, true)
           : this.evalPetalPigment(u, absS, veinRidge, 0, spec.whorl01, true);
 
-        const veinTan = normalize(add(scale(T, 0.86), scale(W, s * 0.38)));
         // Attenuate translucency inside thick fleshy nectar throat so dark velvet eyes stay deep & rich!
         const throatMask = smoothstep(p.throatSize * 0.4, p.throatSize * 1.3 + 0.08, u);
         const translucency = clamp((0.60 - 0.36 * veinRidge) * (0.12 + 0.88 * throatMask) * (0.45 + 0.55 * u), 0.04, 0.74);
@@ -3192,14 +3344,14 @@ export class FlowerMesher {
           x: pAdax.x,
           y: pAdax.y,
           z: pAdax.z,
-          tx: veinTan.x,
-          ty: veinTan.y,
-          tz: veinTan.z,
+          tx: T.x,
+          ty: T.y,
+          tz: T.z,
           u,
           v: iv / vSegs,
           color: adaxCol,
           wind: pWind,
-          pivot: clawAnchor,
+          pivot: bloomPivot,
           roughness: 0.44 - 0.08 * veinRidge,
           translucency,
           detailMetric: detailVal,
@@ -3210,14 +3362,14 @@ export class FlowerMesher {
           x: pAbax.x,
           y: pAbax.y,
           z: pAbax.z,
-          tx: veinTan.x,
-          ty: veinTan.y,
-          tz: veinTan.z,
+          tx: T.x,
+          ty: T.y,
+          tz: T.z,
           u,
           v: iv / vSegs,
           color: abaxCol,
           wind: pWind,
-          pivot: clawAnchor,
+          pivot: bloomPivot,
           roughness: 0.52,
           translucency: translucency * 0.92,
           detailMetric: detailVal,
@@ -3364,7 +3516,12 @@ export class FlowerMesher {
         const base = add(cur, scale(tan, s * hw));
         const pTop = addScaled(base, N, cup + thick);
         const pBot = addScaled(base, N, cup - thick);
-        const w4: [number, number, number, number] = [0.5, 0.05 * this.p.windCompliance * u, phase, 0.02 * u];
+        const w4: [number, number, number, number] = [
+          0.5,
+          this.activeBloomFlex + 0.005 * this.p.windCompliance * u * u,
+          phase,
+          0.015 * u * this.p.windCompliance,
+        ];
         topIdx.push(
           mesh.addVertex({
             x: pTop.x, y: pTop.y, z: pTop.z,
@@ -3403,10 +3560,55 @@ export class FlowerMesher {
     const fRight = tipNode.right;
     const fFwd = normalize(cross(fAxis, fRight));
     const origin = addScaled(tipNode.pos, fAxis, -R * 0.05);
-    const pivot = bm.stem.nodes[0]?.pos ?? origin;
-    const phase = ((bm.index * 0.41) + 0.19) % 1;
+    const pivot = this.rootPivot;
+    const phase = this.plantPhase;
     const uSegs = tier >= 3 ? 14 : 10;
     const vSegs = tier >= 3 ? 10 : 6;
+
+    if (this.p.species === 'phalaenopsis_orchid') {
+      // Smooth, plump, glossy 3-valvate rounded-obovoid Phalaenopsis bud!
+      const nLat = tier >= 3 ? 10 : 7;
+      const nLon = tier >= 3 ? 18 : 12;
+      const budLen = R * 1.45;
+      const budRad = R * 0.62;
+      const w4: [number, number, number, number] = [0.78, this.activeBloomFlex, phase, 0.0];
+      const rings: number[][] = [];
+      for (let i = 0; i <= nLat; i++) {
+        const u = i / nLat;
+        // Rounded obovoid profile: narrow pedicel neck -> plump rounded-triangular pearl orb!
+        const rBase = Math.max(R * 0.03, budRad * Math.sin(Math.PI * Math.pow(u, 0.64)));
+        const z = budLen * u;
+        const baseFlush = mixRgb(this.colSepal, this.colPrimary, smoothstep(0.0, 0.42, u));
+        const col = mixRgb(baseFlush, this.colSecondary, smoothstep(0.35, 0.92, u) * 0.35);
+        const ring: number[] = [];
+        for (let j = 0; j < nLon; j++) {
+          const th = (j / nLon) * TAU;
+          // Subtle 3-lobed orchid sepal valvate seam ribs!
+          const triLobe = 1 + 0.07 * Math.cos(th * 3) * Math.sin(u * Math.PI);
+          const rr = rBase * triLobe;
+          const pt = add(
+            addScaled(origin, fAxis, z),
+            add(scale(fRight, Math.cos(th) * rr), scale(fFwd, Math.sin(th) * rr)),
+          );
+          ring.push(
+            corollaMesh.addVertex({
+              x: pt.x, y: pt.y, z: pt.z,
+              tx: fAxis.x, ty: fAxis.y, tz: fAxis.z,
+              color: col, wind: w4, pivot, roughness: 0.26, translucency: 0.42, detailMetric: 0.55, anatomyLevel: 3,
+            }),
+          );
+        }
+        rings.push(ring);
+      }
+      for (let i = 0; i < nLat; i++) {
+        for (let j = 0; j < nLon; j++) {
+          const jn = (j + 1) % nLon;
+          corollaMesh.addQuad(rings[i][j], rings[i][jn], rings[i + 1][jn], rings[i + 1][j]);
+        }
+      }
+      this.stats.petals += 3;
+      return;
+    }
 
     if (this.p.species === 'bird_of_paradise') {
       // Unopened Strelitzia bud: sleek angled jade-and-crimson closed beak spathe + 1 peeping flame-orange spear tip!
@@ -3547,8 +3749,8 @@ export class FlowerMesher {
       return;
     }
 
-    // Clasping Calyx Sepals (omitted on naked-perianth Orchid & Crown Imperial buds)
-    if (this.p.species !== 'phalaenopsis_orchid' && this.p.species !== 'imperial_crown_bell') {
+    // Clasping Calyx Sepals (omitted on naked-perianth Crown Imperial buds)
+    if (this.p.species !== 'imperial_crown_bell') {
       for (let i = 0; i < 4; i++) {
         const az = (i / 4) * TAU;
         this.buildCalyxSepal(
@@ -3560,7 +3762,7 @@ export class FlowerMesher {
     }
 
     // Tightly Spiraled / Convolute Vibrant Pointed Bud Petals!
-    const nBudPetals = this.p.species === 'phalaenopsis_orchid' ? 3 : this.p.species === 'imperial_crown_bell' ? 6 : 5;
+    const nBudPetals = this.p.species === 'imperial_crown_bell' ? 6 : 5;
     for (let i = 0; i < nBudPetals; i++) {
       const az = (i / nBudPetals) * TAU + 0.35;
       this.buildSculptedPetal(
@@ -3579,7 +3781,7 @@ export class FlowerMesher {
           polarStartRad: 26 * DEG2RAD,
           polarMidRad: 14 * DEG2RAD,
           curlDeltaRad: -28 * DEG2RAD, // Closes inward into a pointed spiraled tear-drop bud!
-          rollRad: this.p.species === 'phalaenopsis_orchid' ? 4 * DEG2RAD : 16 * DEG2RAD,
+          rollRad: 16 * DEG2RAD,
           cupRatio: 0.42,
           ruffleAmp: R * 0.004,
           ruffleFreq: 10.0,
@@ -3590,10 +3792,6 @@ export class FlowerMesher {
           hasPapillae: false,
           isRayFloret: false,
           planform: this.p.species === 'imperial_crown_bell' ? 'bell_tepal' : 'pointed_boat',
-          colorOverride:
-            this.p.species === 'phalaenopsis_orchid'
-              ? (u) => mixRgb(this.colPrimary, this.colSecondary, (1 - u) * 0.25)
-              : undefined,
           seedPhase: i * 1.1,
         },
         uSegs,
@@ -3613,7 +3811,7 @@ export class FlowerMesher {
     radSegs: number,
     pivot: V3,
     phase: number,
-    flexScale: number,
+    _flexScale: number,
   ): void {
     const rings: number[][] = [];
     for (let i = 0; i < nodes.length; i++) {
@@ -3622,7 +3820,7 @@ export class FlowerMesher {
       const perp = cross(nd.dir, nd.right);
       const r = Math.max(0.0005, radiusFn(u));
       const c = colorFn(u);
-      const w4: [number, number, number, number] = [0.6 + 0.4 * u, flexScale * u * u, phase, 0.02 * u];
+      const w4: [number, number, number, number] = [0.6 + 0.4 * u, this.activeBloomFlex, phase, 0.012 * u];
       const ring: number[] = [];
       for (let j = 0; j < radSegs; j++) {
         const th = (j / radSegs) * TAU;
@@ -3650,7 +3848,7 @@ export class FlowerMesher {
     const tipCenter = mesh.addVertex({
       x: tipNd.pos.x, y: tipNd.pos.y, z: tipNd.pos.z,
       tx: tipNd.dir.x, ty: tipNd.dir.y, tz: tipNd.dir.z,
-      color: colorFn(1), wind: [1, flexScale, phase, 0.02], pivot, roughness: 0.45, translucency: 0.3, detailMetric: 0.7, anatomyLevel: 4,
+      color: colorFn(1), wind: [1, this.activeBloomFlex, phase, 0.012], pivot, roughness: 0.45, translucency: 0.3, detailMetric: 0.7, anatomyLevel: 4,
     });
     for (let j = 0; j < radSegs; j++) {
       mesh.addTri(last[j], last[(j + 1) % radSegs], tipCenter);
@@ -3722,7 +3920,7 @@ export class FlowerMesher {
     const S = normalize(cross(L, U));
     const uSegs = tier >= 3 ? 6 : 4;
     const rSegs = tier >= 3 ? 8 : 6;
-    const w4: [number, number, number, number] = [0.85, 0.14 * this.p.windCompliance, phase, 0.04];
+    const w4: [number, number, number, number] = [0.85, this.activeBloomFlex, phase, 0.012];
 
     const rings: number[][] = [];
     for (let i = 0; i <= uSegs; i++) {
@@ -3773,7 +3971,7 @@ export class FlowerMesher {
     const rings: number[][] = [];
     const nLat = 4;
     const nLon = 8;
-    const w4: [number, number, number, number] = [0.9, 0.15 * this.p.windCompliance, phase, 0.03];
+    const w4: [number, number, number, number] = [0.9, this.activeBloomFlex, phase, 0.01];
 
     for (let i = 0; i <= nLat; i++) {
       const v = i / nLat;
@@ -3821,7 +4019,7 @@ export class FlowerMesher {
   ): void {
     const nRad = tier >= 3 ? 24 : 16;
     const podGold = mixRgb(this.colPollen, rgb(0.58, 0.72, 0.14), 0.32);
-    const w4: [number, number, number, number] = [0.75, 0.08 * this.p.windCompliance, phase, 0.0];
+    const w4: [number, number, number, number] = [0.75, this.activeBloomFlex, phase, 0.0];
 
     // Cone wall + beveled lip + flat top disc
     const prof = [
@@ -3887,7 +4085,7 @@ export class FlowerMesher {
     // 1. Underlying Fleshy Domed Receptacle Cushion
     const nRings = 6;
     const nSeg = 24;
-    const w4: [number, number, number, number] = [0.72, 0.08 * this.p.windCompliance, phase, 0.0];
+    const w4: [number, number, number, number] = [0.72, this.activeBloomFlex, phase, 0.0];
     const dRings: number[][] = [];
     const baseDark = mulRgb(this.colPollen, 0.38);
 
@@ -4007,13 +4205,14 @@ export class FlowerMesher {
 
   private buildCaulineLeafOnSpine(mesh: PartMesh, lm: LeafMount, tier: number): void {
     const nodes = lm.stem.nodes;
+    const isOrchid = this.p.species === 'phalaenopsis_orchid';
     const isEntireSessile =
+      isOrchid ||
       this.p.species === 'oriental_lily' ||
       this.p.species === 'bearded_iris' ||
-      this.p.species === 'phalaenopsis_orchid' ||
       this.p.species === 'imperial_crown_bell' ||
       this.p.species === 'king_protea';
-    const petioleFrac = isEntireSessile ? 0.05 : 0.24;
+    const petioleFrac = isOrchid ? 0.03 : isEntireSessile ? 0.05 : 0.24;
     const startIdx = Math.min(nodes.length - 2, Math.max(1, Math.floor(nodes.length * petioleFrac)));
     const uSegs = nodes.length - 1 - startIdx;
     if (uSegs < 2) return;
@@ -4021,8 +4220,8 @@ export class FlowerMesher {
     const vSegs = tier >= 3 ? 12 : 8; // [-1 .. +1] across midrib!
     const nV = vSegs + 1;
     const maxHW = lm.bladeWidth * 0.5;
-    const pivot = nodes[0].pos;
-    const phase = ((lm.index * 0.29) + 0.07) % 1;
+    const pivot = this.rootPivot;
+    const phase = this.plantPhase;
     const topIdx: number[] = [];
     const botIdx: number[] = [];
 
@@ -4037,15 +4236,20 @@ export class FlowerMesher {
     const cB = dot(W0, B0);
 
     for (let iu = 0; iu <= uSegs; iu++) {
-      const nd = nodes[startIdx + iu];
+      const idx = startIdx + iu;
+      const nd = nodes[idx];
       const u = iu / uSegs;
+      const uSpine = idx / Math.max(1, nodes.length - 1);
       const T = nd.dir;
       const B = normalize(cross(T, nd.right));
       const W = normalize(add(scale(nd.right, cR), scale(B, cB)));
       const N = normalize(cross(T, W));
 
-      // Species leaf silhouette: 3-lobed palmate on Passiflora, cordate on Sunflower, serrated ovate on Hibiscus/Peony/Dahlia, entire sword/elliptic on Iris/Orchid/Protea/Lily!
-      let wEnv = Math.sin(Math.PI * Math.pow(u, this.p.species === 'phalaenopsis_orchid' ? 0.50 : 0.58));
+      // Species leaf silhouette: broad rounded-obtuse fleshy strap leaf on Phalaenopsis, 3-lobed palmate on Passiflora,
+      // cordate on Sunflower, serrated ovate on Hibiscus/Peony/Dahlia, entire sword/elliptic on Iris/Protea/Lily!
+      let wEnv = isOrchid
+        ? (0.44 + 0.56 * smoothstep(0.0, 0.16, u)) * Math.sqrt(Math.max(0.015, 1 - Math.pow(Math.max(0, (u - 0.58) / 0.42), 2.1)))
+        : Math.sin(Math.PI * Math.pow(u, 0.58));
       if (this.p.species === 'titan_sunflower' && u < 0.25) {
         wEnv = Math.max(wEnv, smoothstep(0.0, 0.16, u) * 0.92);
       }
@@ -4054,6 +4258,7 @@ export class FlowerMesher {
           ? 1.0
           : 1.0 + 0.065 * Math.sin(u * Math.PI * 18.0) * smoothstep(0.1, 0.9, u);
       const hw = Math.max(maxHW * 0.02 * (1 - u), maxHW * wEnv * serrate);
+      const spineFlex = lm.baseFlex + lm.extraFlex * Math.pow(uSpine, 1.35);
 
       for (let iv = 0; iv <= vSegs; iv++) {
         const s = (iv / vSegs) * 2 - 1;
@@ -4061,48 +4266,60 @@ export class FlowerMesher {
 
         let lobeScale = 1.0;
         if (this.p.species === 'passion_orchid') {
-          // 3-lobed palmate cleft around u = 0.42!
           const cleft = Math.exp(-((u - 0.46) ** 2) / 0.028) * smoothstep(0.35, 0.95, absS);
           lobeScale = 1 - 0.46 * cleft;
         }
 
-        // 3D pinnate lateral veins herringbone-angling out from midrib!
+        // 3D pinnate lateral veins (or smooth succulent parallel-keeled lamina on Phalaenopsis!)
         const veinCoord = (u - absS * 0.34) * 9.0;
-        const latVein = Math.pow(Math.max(0, Math.cos(veinCoord * Math.PI)), 8) * (1 - absS * 0.3);
-        const bullation = Math.sin(veinCoord * Math.PI) * hw * 0.045 * absS * (1 - absS * 0.5);
-        const vFold = hw * 0.14 * absS;
-        const thick = Math.max(0.00025, 0.0016 * (1 - 0.7 * absS));
+        const latVein = isOrchid
+          ? Math.pow(Math.max(0, Math.cos(absS * Math.PI * 4.0)), 6) * 0.35
+          : Math.pow(Math.max(0, Math.cos(veinCoord * Math.PI)), 8) * (1 - absS * 0.3);
+        const bullation = isOrchid
+          ? 0
+          : Math.sin(veinCoord * Math.PI) * hw * 0.045 * absS * (1 - absS * 0.5);
+        const vFold = isOrchid ? hw * 0.09 * absS * absS : hw * 0.14 * absS;
+        const thick = isOrchid
+          ? Math.max(0.0006, 0.0028 * (1 - 0.55 * absS))
+          : Math.max(0.00025, 0.0016 * (1 - 0.7 * absS));
 
         const pt = add(
           addScaled(nd.pos, W, s * hw * lobeScale),
           scale(N, vFold + bullation),
         );
         const pTop = addScaled(pt, N, thick);
-        const pBot = addScaled(pt, N, -thick - 0.0018 * latVein);
+        const pBot = addScaled(pt, N, -thick - (isOrchid ? 0.0005 : 0.0018) * latVein);
 
-        const col = mixRgb(
-          this.colLeaf,
-          this.colLeafTip,
-          clamp(0.22 * u + 0.38 * latVein + 0.25 * absS, 0, 1),
-        );
+        const col = isOrchid
+          ? mixRgb(
+              mixRgb(this.colLeaf, rgb(0.06, 0.26, 0.10), 0.38),
+              this.colLeafTip,
+              clamp(0.14 * u + 0.18 * latVein, 0, 1),
+            )
+          : mixRgb(
+              this.colLeaf,
+              this.colLeafTip,
+              clamp(0.22 * u + 0.38 * latVein + 0.25 * absS, 0, 1),
+            );
         const w4: [number, number, number, number] = [
-          0.5,
-          0.18 * this.p.windCompliance * Math.pow(0.25 + 0.75 * u, 1.2),
+          clamp(0.35 + 0.65 * uSpine, 0, 1),
+          spineFlex,
           phase,
-          0.06 * absS * this.p.windCompliance,
+          (isOrchid ? 0.004 : 0.014) * absS * u * this.p.windCompliance,
         ];
         topIdx.push(
           mesh.addVertex({
             x: pTop.x, y: pTop.y, z: pTop.z,
             tx: T.x, ty: T.y, tz: T.z,
-            color: col, wind: w4, pivot, roughness: 0.40, translucency: 0.46, detailMetric: 0.3 + 0.6 * latVein, anatomyLevel: 2,
+            color: col, wind: w4, pivot, roughness: isOrchid ? 0.22 : 0.40, translucency: isOrchid ? 0.26 : 0.46, detailMetric: 0.3 + 0.6 * latVein, anatomyLevel: 2,
           }),
         );
         botIdx.push(
           mesh.addVertex({
             x: pBot.x, y: pBot.y, z: pBot.z,
             tx: T.x, ty: T.y, tz: T.z,
-            color: mixRgb(col, rgb(0.35, 0.52, 0.25), 0.25), wind: w4, pivot, roughness: 0.54, translucency: 0.42, detailMetric: 0.3 + 0.6 * latVein, anatomyLevel: 2,
+            color: isOrchid ? mixRgb(col, rgb(0.22, 0.12, 0.20), 0.22) : mixRgb(col, rgb(0.35, 0.52, 0.25), 0.25),
+            wind: w4, pivot, roughness: isOrchid ? 0.34 : 0.54, translucency: isOrchid ? 0.22 : 0.42, detailMetric: 0.3 + 0.6 * latVein, anatomyLevel: 2,
           }),
         );
       }
@@ -4123,8 +4340,9 @@ export class FlowerMesher {
     const padR = lm.bladeLen * 0.5;
     const nRad = tier >= 3 ? 40 : 28;
     const nRings = tier >= 3 ? 10 : 7;
-    const pivot = lm.stem.nodes[0].pos;
-    const phase = ((lm.index * 0.33) + 0.14) % 1;
+    const pivot = this.rootPivot;
+    const phase = this.plantPhase;
+    const padTipFlex = lm.baseFlex + lm.extraFlex;
 
     const upAxis = normalize(lerp(tip.dir, UP, 0.72));
     const p1 = anyPerpendicular(upAxis);
@@ -4161,9 +4379,9 @@ export class FlowerMesher {
         );
         const w4: [number, number, number, number] = [
           0.6,
-          0.15 * this.p.windCompliance * (0.4 + 0.6 * u),
+          padTipFlex + 0.012 * this.p.windCompliance * Math.pow(u, 1.6),
           phase,
-          0.04 * u * this.p.windCompliance,
+          0.03 * u * u * this.p.windCompliance,
         ];
         topRIdx.push(
           mesh.addVertex({

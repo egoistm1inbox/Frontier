@@ -61,23 +61,23 @@ void applyProceduralWind(inout vec3 pos, inout vec3 nrm, inout vec3 tanV) {
   vec3 pitchAxis = vec3(wDir.z, 0.0, -wDir.x);
   vec3 rollAxis = wDir;
 
-  // Spatial breeze wave travelling downwind across the moss carpet & tropical canopy
-  float downWave = dot(aPivot.xz, wDir.xz) * 3.6;
-  float crossWave = dot(aPivot.xz, pitchAxis.xz) * 2.4;
+  // Coherent garden-scale breeze wavelength (~14 m) so multi-plant gardens & multi-stem clumps sway TOGETHER
+  float downWave = dot(aPivot.xz, wDir.xz) * 0.45;
+  float crossWave = dot(aPivot.xz, pitchAxis.xz) * 0.35;
 
   // Multi-scale turbulent gust envelope + steady carrier breeze
   float gustA = 0.5 + 0.5 * sin(uTime * 0.92 - downWave + crossWave * 0.35);
-  float gustB = 0.5 + 0.5 * sin(uTime * 1.68 - downWave * 1.45 + phase * 0.35);
+  float gustB = 0.5 + 0.5 * sin(uTime * 1.68 - downWave * 1.45 + phase * 0.18);
   float gustEnv = mix(1.0, 0.36 + 0.96 * (gustA * 0.65 + gustB * 0.35), clamp(uWindGust, 0.0, 1.0));
   float W = uWindStrength * gustEnv;
 
-  // Mode 1: Isometric 3D Rodrigues cantilever pitch sway around aPivot (zero scaling or stretching)
-  float oscMain = 0.56 + 0.44 * sin(uTime * 2.15 - downWave * 1.2 + phase);
-  float oscSub  = 0.14 * sin(uTime * 4.35 - downWave * 1.9 + phase * 1.7);
+  // Mode 1: Isometric 3D Rodrigues cantilever pitch sway around aPivot (coherent phase so stems & plants move together!)
+  float oscMain = 0.56 + 0.44 * sin(uTime * 2.15 - downWave * 1.1 + phase * 0.22);
+  float oscSub  = 0.12 * sin(uTime * 4.35 - downWave * 1.8 + phase * 0.55);
   float pitchAngle = softLimit(limbFlex * W * (oscMain + oscSub) * 0.54, 0.88);
 
   // Mode 2: Coupled lateral cross-eddy roll for natural elliptical 3D sway trajectories
-  float rollAngle = softLimit(limbFlex * W * 0.14 * sin(uTime * 1.62 - crossWave + phase * 1.3 + 1.1), 0.38);
+  float rollAngle = softLimit(limbFlex * W * 0.14 * sin(uTime * 1.62 - crossWave + phase * 0.28 + 1.1), 0.38);
 
   rel  = rotAxisAngle(rel, pitchAxis, pitchAngle);
   nrm  = rotAxisAngle(nrm, pitchAxis, pitchAngle);

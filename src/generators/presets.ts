@@ -726,7 +726,7 @@ export const PRESETS: PresetDefinition[] = [
   {
     name: 'Grand Moth Orchid',
     group: 'Flowers · Gigantic 3D Blooms',
-    subtitle: 'Phalaenopsis · arching raceme, broad satin wings, trilobed spotted lip & curling cirrhi',
+    subtitle: 'Phalaenopsis · arching raceme, broad satin wings, trilobed spotted lip & velamen roots',
     accent: '#f56cb8',
     icon: 'flower',
     scene: {
@@ -737,9 +737,9 @@ export const PRESETS: PresetDefinition[] = [
       layers: [
         flowerLayer('layer-1', 'Grand Moth Orchid', 804, 'phalaenopsis_orchid', 'species_signature', {
           detailTier: 3,
-          plantHeight: 3.4,
-          bloomDiameter: 1.04,
-          bloomCount: 3,
+          plantHeight: 3.5,
+          bloomDiameter: 0.84,
+          bloomCount: 4,
           budCount: 2,
           vibrancy: 1.32,
         }),
@@ -914,9 +914,9 @@ export const PRESETS: PresetDefinition[] = [
           'pastel_sakura_pearl',
           {
             detailTier: 3,
-            plantHeight: 3.2,
-            bloomDiameter: 0.98,
-            bloomCount: 3,
+            plantHeight: 3.3,
+            bloomDiameter: 0.78,
+            bloomCount: 4,
             budCount: 2,
             vibrancy: 1.34,
           },

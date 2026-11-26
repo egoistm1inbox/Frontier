@@ -64,19 +64,19 @@ function evalWindVertex(
   const pitchAxis: [number, number, number] = [wz, 0, -wx];
   const rollAxis: [number, number, number] = [wx, 0, wz];
 
-  const downWave = (piv[0] * wx + piv[2] * wz) * 3.6;
-  const crossWave = (piv[0] * pitchAxis[0] + piv[2] * pitchAxis[2]) * 2.4;
+  const downWave = (piv[0] * wx + piv[2] * wz) * 0.45;
+  const crossWave = (piv[0] * pitchAxis[0] + piv[2] * pitchAxis[2]) * 0.35;
 
   const gustA = 0.5 + 0.5 * Math.sin(uTime * 0.92 - downWave + crossWave * 0.35);
-  const gustB = 0.5 + 0.5 * Math.sin(uTime * 1.68 - downWave * 1.45 + phase * 0.35);
+  const gustB = 0.5 + 0.5 * Math.sin(uTime * 1.68 - downWave * 1.45 + phase * 0.18);
   const gustEnv = 1 + (0.36 + 0.96 * (gustA * 0.65 + gustB * 0.35) - 1) * uWindGust;
   const W = uWindStrength * gustEnv;
 
-  const oscMain = 0.56 + 0.44 * Math.sin(uTime * 2.15 - downWave * 1.2 + phase);
-  const oscSub = 0.14 * Math.sin(uTime * 4.35 - downWave * 1.9 + phase * 1.7);
+  const oscMain = 0.56 + 0.44 * Math.sin(uTime * 2.15 - downWave * 1.1 + phase * 0.22);
+  const oscSub = 0.12 * Math.sin(uTime * 4.35 - downWave * 1.8 + phase * 0.55);
   const pitchAngle = softLimit(limbFlex * W * (oscMain + oscSub) * 0.54, 0.88);
   const rollAngle = softLimit(
-    limbFlex * W * 0.14 * Math.sin(uTime * 1.62 - crossWave + phase * 1.3 + 1.1),
+    limbFlex * W * 0.14 * Math.sin(uTime * 1.62 - crossWave + phase * 0.28 + 1.1),
     0.38,
   );
 
@@ -94,8 +94,11 @@ function evalWindVertex(
     const hiWave =
       Math.sin(uTime * 6.8 - downWave * 2.3 + phase * 4.7) +
       0.45 * Math.sin(uTime * 11.4 - crossWave * 2.1 + phase * 8.3);
-    const flapAngle = softLimit(flutter * W * hiWave * 0.135, 0.36);
-    rel = rot(rel, safeTan, flapAngle);
+    const flapAngle = softLimit(flutter * W * hiWave * 0.24, 0.42);
+    const perp = rel[0] * safeTan[0] + rel[1] * safeTan[1] + rel[2] * safeTan[2];
+    const sp: [number, number, number] = [safeTan[0] * perp, safeTan[1] * perp, safeTan[2] * perp];
+    const wing = rot([rel[0] - sp[0], rel[1] - sp[1], rel[2] - sp[2]], safeTan, flapAngle);
+    rel = [sp[0] + wing[0], sp[1] + wing[1], sp[2] + wing[2]];
   }
 
   return [piv[0] + rel[0], piv[1] + rel[1], piv[2] + rel[2]];
@@ -658,6 +661,126 @@ describe('Frontier Procedural Generators — Welded Trees, Fruiting Palms, Gigan
     const rawHib = buildSceneRaw(hibScene);
     const glb = partsToGLB(rawHib.rawParts, 'colossal_hibiscus');
     expect(glb.byteLength).toBeGreaterThan(10000);
+  });
+
+  it('proves unified whole-plant & multi-plant kinematic wind synchronization, slender stems, and monopodial Moth Orchid habit', () => {
+    const wLen = Math.hypot(0.82, 0.57);
+    const wx = 0.82 / wLen;
+    const wz = 0.57 / wLen;
+
+    // 1. Titan Royal Sunflower: stem, branches, leaves, seed disc & yellow ray petals share 1 rootPivot/phase and sway together!
+    const sunPreset = PRESETS.find((p) => p.name === 'Titan Royal Sunflower')!;
+    const sunScene = cloneScene(sunPreset.scene);
+    sunScene.layers[0].flower!.detailTier = 2;
+    const sunRes = buildSceneResponse(sunScene);
+    const sunPackets = sunRes.parts.filter((p) => p.id.startsWith('layer-1:'));
+    expect(sunPackets.length).toBe(5);
+
+    const refPiv: [number, number, number] = [
+      sunPackets[0].pivot[0],
+      sunPackets[0].pivot[1],
+      sunPackets[0].pivot[2],
+    ];
+    const refPhase = sunPackets[0].wind[2];
+
+    const partWindDisplacement = new Map<string, number>();
+    for (const pkt of sunPackets) {
+      const vc = pkt.position.length / 3;
+      let sumDownwind = 0;
+      let counted = 0;
+      for (let i = 0; i < vc; i += 5) {
+        expect(Math.abs(pkt.pivot[i * 3] - refPiv[0])).toBeLessThan(1e-5);
+        expect(Math.abs(pkt.pivot[i * 3 + 1] - refPiv[1])).toBeLessThan(1e-5);
+        expect(Math.abs(pkt.pivot[i * 3 + 2] - refPiv[2])).toBeLessThan(1e-5);
+        expect(Math.abs(pkt.wind[i * 4 + 2] - refPhase)).toBeLessThan(1e-5);
+
+        const p0: [number, number, number] = [
+          pkt.position[i * 3],
+          pkt.position[i * 3 + 1],
+          pkt.position[i * 3 + 2],
+        ];
+        if (p0[1] < refPiv[1] + 1.8) continue; // upper plant crown (main stalk top, branches, buds, petals, seed disc)
+        const t0: [number, number, number] = [
+          pkt.tangent[i * 3],
+          pkt.tangent[i * 3 + 1],
+          pkt.tangent[i * 3 + 2],
+        ];
+        const w0: [number, number, number, number] = [
+          pkt.wind[i * 4],
+          pkt.wind[i * 4 + 1],
+          pkt.wind[i * 4 + 2],
+          pkt.wind[i * 4 + 3],
+        ];
+        const pW = evalWindVertex(p0, t0, w0, refPiv, 0.75, 1.35);
+        sumDownwind += (pW[0] - p0[0]) * wx + (pW[2] - p0[2]) * wz;
+        counted++;
+      }
+      if (counted > 0) {
+        partWindDisplacement.set(pkt.id, sumDownwind / counted);
+      }
+    }
+
+    // Upper stem/branches, calyx, yellow ray petals (corolla), Fibonacci seed disc (reproductive), and upper leaves ALL sway downwind together!
+    for (const partId of [
+      'layer-1:stem',
+      'layer-1:calyx',
+      'layer-1:corolla',
+      'layer-1:reproductive',
+      'layer-1:foliage',
+    ]) {
+      expect(partWindDisplacement.get(partId) ?? 0, `${partId} sways with plant`).toBeGreaterThan(0.05);
+    }
+    // Yellow ray petals (`corolla`) and Fibonacci seed disc (`reproductive`) move by nearly identical downwind displacement!
+    const corollaDisp = partWindDisplacement.get('layer-1:corolla')!;
+    const seedDisp = partWindDisplacement.get('layer-1:reproductive')!;
+    expect(Math.abs(corollaDisp - seedDisp)).toBeLessThan(0.035);
+
+    // 2. Grand Moth Orchid: low monopodial basal rosette, overarching raceme, and slender stem
+    const orchidPreset = PRESETS.find((p) => p.name === 'Grand Moth Orchid')!;
+    const orchidScene = cloneScene(orchidPreset.scene);
+    orchidScene.layers[0].flower!.detailTier = 2;
+    const orchidRes = buildSceneResponse(orchidScene);
+    const orchidStem = orchidRes.parts.find((p) => p.id === 'layer-1:stem')!;
+    const orchidFoliage = orchidRes.parts.find((p) => p.id === 'layer-1:foliage')!;
+    const orchidCorolla = orchidRes.parts.find((p) => p.id === 'layer-1:corolla')!;
+
+    const baseY = orchidStem.pivot[1];
+    let maxFoliageY = -Infinity;
+    for (let i = 0; i < orchidFoliage.position.length / 3; i++) {
+      maxFoliageY = Math.max(maxFoliageY, orchidFoliage.position[i * 3 + 1]);
+    }
+    // Basal Phalaenopsis strap leaves stay nestled low in the monopodial crown (< 26% of plant height)
+    expect(maxFoliageY - baseY).toBeLessThan(orchidScene.layers[0].flower!.plantHeight * 0.26);
+
+    let maxCorollaReach = 0;
+    for (let i = 0; i < orchidCorolla.position.length / 3; i++) {
+      const dx = orchidCorolla.position[i * 3] - orchidStem.pivot[0];
+      const dz = orchidCorolla.position[i * 3 + 2] - orchidStem.pivot[2];
+      maxCorollaReach = Math.max(maxCorollaReach, Math.hypot(dx, dz));
+    }
+    // Cascading raceme sweeps gracefully outward horizontally (> 42% of plant height)
+    expect(maxCorollaReach).toBeGreaterThan(orchidScene.layers[0].flower!.plantHeight * 0.42);
+
+    // 3. Exotic Conservatory Trio: all 3 neighboring flower plants sway coherently in the SAME wind direction!
+    const trioPreset = PRESETS.find((p) => p.name === 'Exotic Conservatory Trio')!;
+    const trioScene = cloneScene(trioPreset.scene);
+    for (const l of trioScene.layers) if (l.flower) l.flower.detailTier = 1;
+    const trioRes = buildSceneResponse(trioScene);
+
+    for (const layerId of ['layer-1', 'layer-2', 'layer-3']) {
+      const cor = trioRes.parts.find((p) => p.id === `${layerId}:corolla`)!;
+      let sumDown = 0;
+      const n = cor.position.length / 3;
+      for (let i = 0; i < n; i += 9) {
+        const p0: [number, number, number] = [cor.position[i * 3], cor.position[i * 3 + 1], cor.position[i * 3 + 2]];
+        const t0: [number, number, number] = [cor.tangent[i * 3], cor.tangent[i * 3 + 1], cor.tangent[i * 3 + 2]];
+        const w0: [number, number, number, number] = [cor.wind[i * 4], cor.wind[i * 4 + 1], cor.wind[i * 4 + 2], cor.wind[i * 4 + 3]];
+        const pv: [number, number, number] = [cor.pivot[i * 3], cor.pivot[i * 3 + 1], cor.pivot[i * 3 + 2]];
+        const pW = evalWindVertex(p0, t0, w0, pv, 0.75, 1.25);
+        sumDown += (pW[0] - p0[0]) * wx + (pW[2] - p0[2]) * wz;
+      }
+      expect(sumDown / Math.ceil(n / 9), `${layerId} sways positively with shared garden breeze`).toBeGreaterThan(0.06);
+    }
   });
 
   it('validates all WebGL GLSL shaders have matching vertex/fragment varyings and zero undeclared v* / u* symbols', () => {
