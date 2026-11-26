@@ -114,12 +114,16 @@ export class FernMesher {
   private readonly p: FernParams;
   private readonly rng: Random;
   private readonly substrate: HostSubstrate | null;
+  private readonly plantPhase: number;
+  private crownPivot: V3 = v3(0, 0, 0);
+  private caudexTopFlex = 0.03;
   private stats: FernStats = { fronds: 0, crosiers: 0, leaflets: 0, soriClusters: 0, scales: 0, height: 0.5 };
 
   constructor(params: FernParams, seed: number, substrate: HostSubstrate | null = null) {
     this.p = params;
     this.rng = new Random((seed ^ 0x4f3ea913) >>> 0);
     this.substrate = substrate;
+    this.plantPhase = 0.08 + (((seed >>> 0) % 997) / 997) * 0.05;
   }
 
   build(layerId: string): FernBuildResult {
@@ -140,6 +144,8 @@ export class FernMesher {
       const topSample = this.findSubstrateCrownPoint();
       crownBase = addScaled(topSample.pos, topSample.normal, -0.008);
     }
+    this.crownPivot = crownBase;
+    this.caudexTopFlex = p.architecture === 'tree_fern' ? 0.14 : 0.025;
 
     const tier = clamp(Math.round(p.detailTier), 1, 4);
     const plantHeightEst = Math.max(0.18, p.caudexHeight + p.frondLength * 0.85);
@@ -369,7 +375,7 @@ export class FernMesher {
             u: j / sides,
             v: t,
             color: col,
-            wind: [saturate(y / plantH), 0.04 * t, 0.1, 0],
+            wind: [saturate(y / plantH), this.caudexTopFlex * t * t, this.plantPhase, 0],
             pivot: base,
             roughness: 0.9,
             translucency: 0.04,
@@ -396,7 +402,7 @@ export class FernMesher {
       u: 0.5,
       v: 1,
       color: colStipe,
-      wind: [saturate(apex.y / plantH), 0.04, 0.1, 0],
+      wind: [saturate(apex.y / plantH), this.caudexTopFlex, this.plantPhase, 0],
       pivot: base,
       roughness: 0.92,
       translucency: 0.02,
@@ -420,7 +426,19 @@ export class FernMesher {
       const rAxis = normalize(cross(UP, d));
       const sLen = (p.architecture === 'tree_fern' ? 0.028 : 0.016) * rng.range(0.7, 1.35);
       const sWid = sLen * 0.26;
-      this.addScaleStrip(mesh, pos, d, rAxis, sLen, sWid, mixRgb(colScale, hexToLinearRgb('#9c6938'), rng.range(0, 0.55)), base, plantH);
+      this.addScaleStrip(
+        mesh,
+        pos,
+        d,
+        rAxis,
+        sLen,
+        sWid,
+        mixRgb(colScale, hexToLinearRgb('#9c6938'), rng.range(0, 0.55)),
+        base,
+        plantH,
+        this.caudexTopFlex * t * t,
+        this.plantPhase,
+      );
       this.stats.scales++;
     }
 
@@ -437,6 +455,8 @@ export class FernMesher {
     col: RGB,
     pivot: V3,
     plantH: number,
+    baseFlex = 0.04,
+    phase = 0.1,
   ): void {
     const up = normalize(cross(dir, right));
     const segs = 3;
@@ -446,11 +466,12 @@ export class FernMesher {
       const w = halfWid * (1 - t * t) * (1 - 0.25 * t);
       const curl = t * t * len * 0.28;
       const cPos = add(addScaled(origin, dir, t * len), scale(up, curl));
+      const flex = baseFlex + 0.015 * t * t;
       if (i === segs) {
         const tip = mesh.addVertex({
           x: cPos.x, y: cPos.y, z: cPos.z,
           u: 0.5, v: 1, color: mixRgb(col, hexToLinearRgb('#c9935b'), 0.35),
-          wind: [saturate(cPos.y / plantH), 0.08, 0.3, 0.15 * t],
+          wind: [saturate(cPos.y / plantH), flex, phase, 0.06 * t * t],
           pivot, roughness: 0.72, translucency: 0.35, detailMetric: t, anatomyLevel: 0,
         });
         rows.push([tip]);
@@ -458,13 +479,13 @@ export class FernMesher {
         const l = mesh.addVertex({
           x: cPos.x - right.x * w, y: cPos.y - right.y * w, z: cPos.z - right.z * w,
           u: 0, v: t, color: col,
-          wind: [saturate(cPos.y / plantH), 0.06, 0.3, 0.1 * t],
+          wind: [saturate(cPos.y / plantH), flex, phase, 0.04 * t * t],
           pivot, roughness: 0.75, translucency: 0.3, detailMetric: t, anatomyLevel: 0,
         });
         const r = mesh.addVertex({
           x: cPos.x + right.x * w, y: cPos.y + right.y * w, z: cPos.z + right.z * w,
           u: 1, v: t, color: col,
-          wind: [saturate(cPos.y / plantH), 0.06, 0.3, 0.1 * t],
+          wind: [saturate(cPos.y / plantH), flex, phase, 0.04 * t * t],
           pivot, roughness: 0.75, translucency: 0.3, detailMetric: t, anatomyLevel: 0,
         });
         rows.push([l, r]);
@@ -517,7 +538,9 @@ export class FernMesher {
       }));
 
       const rBase = p.stipeRadius * 0.92;
-      this.meshGroovedRachis(mesh, line, rBase, rBase * 0.22, 8 + tier * 2, colStipe, colYoung, origin, plantH, 0.25 + c * 0.19, 3);
+      const cPhase = (this.plantPhase + c * 0.015) % 1;
+      const cPivot = this.crownPivot;
+      this.meshGroovedRachis(mesh, line, rBase, rBase * 0.22, 8 + tier * 2, colStipe, colYoung, cPivot, plantH, cPhase, 3, this.caudexTopFlex, 0.36);
 
       // Add tiny folded embryonic pinna buds & golden ramenta along the coiled head!
       const budCount = 16 + tier * 6;
@@ -535,8 +558,10 @@ export class FernMesher {
           bLen,
           bLen * 0.38,
           mixRgb(colYoung, colScale, 0.28 * (1 - tb)),
-          origin,
+          cPivot,
           plantH,
+          this.caudexTopFlex + Math.pow(tb, 1.45) * 0.36,
+          cPhase,
         );
       }
       this.stats.crosiers++;
@@ -569,24 +594,36 @@ export class FernMesher {
         gravity: (t1 - t0) * 0.18,
         yaw: Math.sin(t1 * 7 + k) * 0.008,
       }));
-      this.meshGroovedRachis(mesh, line, p.stipeRadius * 0.85, p.stipeRadius * 0.25, 8, colStipe, colSori, origin, plantH, k * 0.23, 4);
+      const plumePhase = (this.plantPhase + k * 0.015) % 1;
+      const cPivot = this.crownPivot;
+      this.meshGroovedRachis(mesh, line, p.stipeRadius * 0.85, p.stipeRadius * 0.25, 8, colStipe, colSori, cPivot, plantH, plumePhase, 4, this.caudexTopFlex, 0.42);
       // Erect beaded spore-bearing pinnae tightly ascending along upper 60% of plume
       const pairs = 22 + tier * 4;
       for (let i = 0; i < pairs; i++) {
         const u = 0.35 + 0.63 * (i / pairs);
         const env = Math.sin(Math.pow((u - 0.35) / 0.65, 0.75) * Math.PI);
+        const attachFlex = this.caudexTopFlex + Math.pow(u, 1.45) * 0.42;
         for (const side of [-1, 1]) {
           const fr = line.atT(u);
           const pDir = normalize(add(scale(fr.dir, 0.84), addScaled(scale(fr.right, side * 0.48), fr.up, 0.22)));
           const pLen = p.frondWidth * 0.36 * (0.25 + 0.75 * env);
           const subLine = growCurve(fr.pos, pDir, fr.up, pLen, 6, (a0, a1) => ({ pitch: (a1 - a0) * 0.22 }));
-          this.meshBeadedSporePinna(mesh, subLine, p.stipeRadius * 0.55, colSori, origin, plantH);
+          this.meshBeadedSporePinna(mesh, subLine, p.stipeRadius * 0.55, colSori, cPivot, plantH, attachFlex, plumePhase);
         }
       }
     }
   }
 
-  private meshBeadedSporePinna(mesh: PartMesh, line: CurveLine, r0: number, col: RGB, pivot: V3, plantH: number): void {
+  private meshBeadedSporePinna(
+    mesh: PartMesh,
+    line: CurveLine,
+    r0: number,
+    col: RGB,
+    pivot: V3,
+    plantH: number,
+    baseFlex = 0.2,
+    phase = 0.1,
+  ): void {
     const sides = 6;
     const steps = 7;
     const rings: number[][] = [];
@@ -605,7 +642,7 @@ export class FernMesher {
             x: pt.x, y: pt.y, z: pt.z,
             u: j / sides, v: t,
             color: mixRgb(col, hexToLinearRgb('#3d1c0a'), 0.35 * (1 - bead * 0.5)),
-            wind: [saturate(pt.y / plantH), t * 0.35, 0.4, 0.18 * t],
+            wind: [saturate(pt.y / plantH), baseFlex + 0.10 * Math.pow(t, 1.45), phase, 0.08 * t * t],
             pivot, roughness: 0.68, translucency: 0.08, detailMetric: bead * 0.5, anatomyLevel: 4,
           }),
         );
@@ -655,7 +692,12 @@ export class FernMesher {
     const droopRad = (p.archDroop * lerp1(0.58, 1.24, age01) + rng.vary(0, 7)) * DEG2RAD;
     const twistRad = rng.vary(0, p.rachisTwist) * DEG2RAD;
     const waveRad = p.rachisWave * DEG2RAD;
-    const phase = rng.next();
+    const waveSeed = rng.next();
+    const phase = (this.plantPhase + (((az / TAU) % 1 + 1) % 1) * 0.06) % 1;
+    const fPivot = this.crownPivot;
+    const fBaseFlex = this.caudexTopFlex;
+    const rachisFlexSpan = 0.62;
+    const evalRachisFlex = (t: number): number => fBaseFlex + Math.pow(t, 1.45) * rachisFlexSpan;
 
     const rachisSteps = 32 + tier * 8;
     const archAt = (t: number): number => droopRad * Math.pow(t, p.archPower);
@@ -666,7 +708,7 @@ export class FernMesher {
       if (curP.y < 0.04 && t0 > 0.4) extraPitch *= 0.35;
       return {
         pitch: extraPitch,
-        yaw: (Math.sin(t1 * Math.PI * 2.2 + phase * TAU) - Math.sin(t0 * Math.PI * 2.2 + phase * TAU)) * waveRad,
+        yaw: (Math.sin(t1 * Math.PI * 2.2 + waveSeed * TAU) - Math.sin(t0 * Math.PI * 2.2 + waveSeed * TAU)) * waveRad,
         roll: (t1 - t0) * twistRad,
       };
     });
@@ -674,7 +716,7 @@ export class FernMesher {
     // Mesh grooved stipe + rachis with adaxial sulcus!
     const stipeR = p.stipeRadius * lerp1(0.82, 1.1, age01);
     const rachisColTop = mixRgb(colYoung, colBase, saturate(age01 * 0.75));
-    this.meshGroovedRachis(mesh, rachis, stipeR, stipeR * 0.16, 8 + tier * 2, colStipe, rachisColTop, origin, plantH, phase, 1);
+    this.meshGroovedRachis(mesh, rachis, stipeR, stipeR * 0.16, 8 + tier * 2, colStipe, rachisColTop, fPivot, plantH, phase, 1, fBaseFlex, rachisFlexSpan);
 
     // Chaffy ramenta scales along the lower stipe!
     const stipeScales = Math.round(p.ramentaDensity * 18);
@@ -685,7 +727,19 @@ export class FernMesher {
       const radDir = normalize(add(scale(fr.right, Math.cos(th)), scale(fr.up, Math.sin(th))));
       const scDir = normalize(add(scale(fr.dir, 0.75), scale(radDir, 0.65)));
       const sLen = stipeR * rng.range(2.2, 4.2) * (1 - ts);
-      this.addScaleStrip(mesh, addScaled(fr.pos, radDir, stipeR * 0.9), scDir, normalize(cross(fr.dir, radDir)), sLen, sLen * 0.28, colScale, origin, plantH);
+      this.addScaleStrip(
+        mesh,
+        addScaled(fr.pos, radDir, stipeR * 0.9),
+        scDir,
+        normalize(cross(fr.dir, radDir)),
+        sLen,
+        sLen * 0.28,
+        colScale,
+        fPivot,
+        plantH,
+        evalRachisFlex(ts),
+        phase,
+      );
       this.stats.scales++;
     }
 
@@ -754,8 +808,8 @@ export class FernMesher {
             yaw: side * (a1 - a0) * -0.14, // subtle forward falcate sweep of pinna!
           }));
           const costaR = Math.max(0.00045, rHere * 0.42);
-          const rachisFlexHere = tRachis * tRachis * 0.85;
-          this.meshGroovedRachis(mesh, costa, costaR, costaR * 0.22, 6, rachisColTop, colYoung, origin, plantH, phase, 1, rachisFlexHere, 0.16);
+          const rachisFlexHere = evalRachisFlex(tRachis);
+          this.meshGroovedRachis(mesh, costa, costaR, costaR * 0.22, 6, rachisColTop, colYoung, fPivot, plantH, phase, 1, rachisFlexHere, 0.14);
 
           const subPairs = Math.max(4, Math.round(p.pinnulePairs * (0.45 + 0.65 * env) * (tier === 1 ? 0.7 : 1)));
           for (let sp = 0; sp < subPairs; sp++) {
@@ -801,8 +855,8 @@ export class FernMesher {
                 calatheaMode: false,
                 ageFactor: saturate(age01 * 0.8 + uLeaf * 0.2),
                 phase,
-                pivot: origin,
-                baseFlex: rachisFlexHere + uSub * uSub * 0.16,
+                pivot: fPivot,
+                baseFlex: rachisFlexHere + Math.pow(uSub, 1.45) * 0.14,
                 flexSpan: 0.05,
                 plantHeightEst: plantH,
                 colBase,
@@ -850,9 +904,9 @@ export class FernMesher {
             calatheaMode: false,
             ageFactor: age01 * 0.6,
             phase,
-            pivot: origin,
-            baseFlex: rachisFlexHere + 0.15,
-            flexSpan: 0.06,
+            pivot: fPivot,
+            baseFlex: rachisFlexHere + Math.pow(0.96, 1.45) * 0.14,
+            flexSpan: 0.05,
             plantHeightEst: plantH,
             colBase,
             colYoung,
@@ -868,7 +922,7 @@ export class FernMesher {
         } else {
           // 1-Pinnate Sword / Boston / Ostrich Pinna: High-Poly Thick 3D Sculpted Pinna with Auricle & Sori!
           const pHalfW = Math.max(0.0025, (L * (1 - s0) / nPairs) * (shuttlecock ? 0.66 : 0.72) * (0.45 + 0.55 * env));
-          const rachisFlexHere = tRachis * tRachis * 0.85;
+          const rachisFlexHere = evalRachisFlex(tRachis);
           this.meshVeinedLamina(mesh, {
             origin: attachPos,
             dir: pinnaDir,
@@ -899,9 +953,9 @@ export class FernMesher {
             calatheaMode: false,
             ageFactor: saturate(age01 * 0.8 + uLeaf * 0.2),
             phase,
-            pivot: origin,
+            pivot: fPivot,
             baseFlex: rachisFlexHere,
-            flexSpan: 0.14,
+            flexSpan: 0.12,
             plantHeightEst: plantH,
             colBase,
             colYoung,
@@ -918,7 +972,7 @@ export class FernMesher {
       }
     }
 
-    // Terminal apical pinna at tip of rachis
+    // Terminal apical pinna at tip of rachis — shares `fPivot` + `evalRachisFlex(0.985)` so frond tips whip fluidly!
     const tipF = rachis.atT(0.985);
     this.meshVeinedLamina(mesh, {
       origin: tipF.pos,
@@ -950,7 +1004,9 @@ export class FernMesher {
       calatheaMode: false,
       ageFactor: age01 * 0.45,
       phase,
-      pivot: tipF.pos,
+      pivot: fPivot,
+      baseFlex: evalRachisFlex(0.985),
+      flexSpan: 0.12,
       plantHeightEst: plantH,
       colBase,
       colYoung,
@@ -992,14 +1048,17 @@ export class FernMesher {
     const dir0 = normalize(add(scale(UP, Math.cos(tilt)), scale(out, Math.sin(tilt))));
     const L = p.frondLength * lerp1(0.72, 1.08, age01) * (1 + rng.vary(0, p.frondLengthVar));
     const droop = p.archDroop * DEG2RAD * lerp1(0.7, 1.2, age01);
-    const phase = rng.next();
+    const phase = (this.plantPhase + (((az / TAU) % 1 + 1) % 1) * 0.06) % 1;
+    const fPivot = this.crownPivot;
+    const fBaseFlex = this.caudexTopFlex;
+    const mainFlexSpan = 0.58;
 
     // Wiry zig-zagging glossy ebony rachis
     const rachis = growCurve(origin, dir0, right0, L, 28 + tier * 6, (t0, t1) => ({
       pitch: droop * (Math.pow(t1, p.archPower) - Math.pow(t0, p.archPower)),
       yaw: Math.sin(t1 * Math.PI * 9) * 0.045,
     }));
-    this.meshGroovedRachis(mesh, rachis, p.stipeRadius * 0.72, p.stipeRadius * 0.15, 6 + tier * 2, colStipe, colStipe, origin, plantH, phase, 1);
+    this.meshGroovedRachis(mesh, rachis, p.stipeRadius * 0.72, p.stipeRadius * 0.15, 6 + tier * 2, colStipe, colStipe, fPivot, plantH, phase, 1, fBaseFlex, mainFlexSpan);
 
     const s0 = clamp(p.stipeFraction, 0.2, 0.55);
     const branches = Math.max(5, Math.round(p.pinnaPairs * 0.45));
@@ -1012,7 +1071,7 @@ export class FernMesher {
         const u = clamp((b + (side > 0 ? 0.25 : 0.75)) / branches, 0.04, 0.96);
         const tMain = s0 + (1 - s0) * u;
         const fr = rachis.atT(tMain);
-        const mainFlexHere = tMain * tMain * 0.85;
+        const mainFlexHere = fBaseFlex + Math.pow(tMain, 1.45) * mainFlexSpan;
         const env = Math.sin(Math.pow(u, 0.65) * Math.PI);
         const brLen = p.frondWidth * 0.58 * (0.3 + 0.7 * env);
         const brDir = normalize(add(scale(fr.dir, 0.62), scale(fr.right, side * 0.78)));
@@ -1021,12 +1080,13 @@ export class FernMesher {
           gravity: (a1 - a0) * 0.35,
           yaw: Math.sin(a1 * 12 + b) * 0.06,
         }));
-        this.meshGroovedRachis(mesh, brLine, p.stipeRadius * 0.35, p.stipeRadius * 0.12, 6, colStipe, colStipe, origin, plantH, phase, 1, mainFlexHere, 0.16);
+        this.meshGroovedRachis(mesh, brLine, p.stipeRadius * 0.35, p.stipeRadius * 0.12, 6, colStipe, colStipe, fPivot, plantH, phase, 1, mainFlexHere, 0.14);
 
         const fans = Math.max(3, Math.round(p.pinnulePairs * 0.65 * (0.4 + 0.6 * env)));
         for (let k = 0; k <= fans; k++) {
           const uf = k / fans;
-          const bf = brLine.atT(0.16 + 0.84 * uf);
+          const tBr = 0.16 + 0.84 * uf;
+          const bf = brLine.atT(tBr);
           const fSide = k === fans ? 0 : k % 2 === 0 ? 1 : -1;
           const petDir =
             fSide === 0
@@ -1070,9 +1130,9 @@ export class FernMesher {
             calatheaMode: false,
             ageFactor: age01,
             phase,
-            pivot: origin,
-            baseFlex: mainFlexHere + Math.pow(0.16 + 0.84 * uf, 2) * 0.16,
-            flexSpan: 0.08,
+            pivot: fPivot,
+            baseFlex: mainFlexHere + Math.pow(tBr, 1.45) * 0.14,
+            flexSpan: 0.07,
             plantHeightEst: plantH,
             colBase,
             colYoung,
@@ -1115,14 +1175,18 @@ export class FernMesher {
     const dir0 = normalize(add(scale(UP, Math.cos(tilt)), scale(out, Math.sin(tilt))));
     const petioleL = p.frondLength * p.stipeFraction * lerp1(0.68, 1.15, age01);
     const bladeL = p.frondLength * (1 - p.stipeFraction) * lerp1(0.75, 1.08, age01) * (1 + rng.vary(0, p.frondLengthVar));
-    const phase = rng.next();
+    const waveSeed = rng.next();
+    const phase = (this.plantPhase + (((az / TAU) % 1 + 1) % 1) * 0.05) % 1;
+    const fPivot = this.crownPivot;
+    const petFlexStart = this.caudexTopFlex;
+    const petFlexRange = 0.34;
 
     const petiole = growCurve(origin, dir0, right0, Math.max(0.04, petioleL), 18, (t0, t1) => ({
       pitch: (t1 - t0) * p.archDroop * 0.45 * DEG2RAD,
-      yaw: Math.sin(t1 * 4 + phase * TAU) * 0.02,
+      yaw: Math.sin(t1 * 4 + waveSeed * TAU) * 0.02,
     }));
     const rPet = p.stipeRadius * 1.45;
-    this.meshGroovedRachis(mesh, petiole, rPet, rPet * 0.65, 10 + tier * 2, colStipe, mixRgb(colBase, colYoung, 0.45), origin, plantH, phase, 1, 0.0, 0.45);
+    this.meshGroovedRachis(mesh, petiole, rPet, rPet * 0.65, 10 + tier * 2, colStipe, mixRgb(colBase, colYoung, 0.45), fPivot, plantH, phase, 1, petFlexStart, petFlexRange);
 
     const tip = petiole.atT(1.0);
     // Geniculum bend where petiole meets leaf lamina!
@@ -1167,9 +1231,9 @@ export class FernMesher {
       calatheaMode,
       ageFactor: age01,
       phase,
-      pivot: origin,
-      baseFlex: 0.45,
-      flexSpan: 0.48,
+      pivot: fPivot,
+      baseFlex: petFlexStart + petFlexRange,
+      flexSpan: 0.28,
       plantHeightEst: plantH,
       colBase,
       colYoung,
@@ -1237,7 +1301,7 @@ export class FernMesher {
             u: j / N,
             v: t,
             color: groove > 0.05 ? mixRgb(col, colTop, 0.25) : col,
-            wind: [saturate(pt.y / plantH), flexStart + t * t * flexRange, phase, 0.0],
+            wind: [saturate(pt.y / plantH), flexStart + Math.pow(t, 1.45) * flexRange, phase, 0.0],
             pivot,
             roughness: lerp1(0.42, 0.58, t),
             translucency: 0.14 + 0.18 * t,
@@ -1490,9 +1554,9 @@ export class FernMesher {
         const pTop = addScaled(basePt, fr.up, zTop);
 
         const baseFlex = s.baseFlex ?? 0.25;
-        const flexSpan = s.flexSpan ?? 0.65;
-        const localFlex = clamp(baseFlex + flexSpan * v * (0.65 + 0.35 * v), 0, 1.35);
-        const aeroRoll = clamp(absU * (0.28 + 0.55 * v) * smoothstep(0.04, 0.22, v), 0, 0.85);
+        const flexSpan = s.flexSpan ?? 0.35;
+        const localFlex = clamp(baseFlex + flexSpan * Math.pow(v, 1.45), 0, 1.35);
+        const aeroRoll = clamp(0.24 * v * v * (0.35 + 0.65 * absU), 0, 0.45);
         const windData: [number, number, number, number] = [
           saturate(pTop.y / s.plantHeightEst),
           localFlex,
@@ -1604,8 +1668,9 @@ export class FernMesher {
             scale(fr.up, (s.thick ? rel.zBot : rel.zTop) - s.soriRadius * 0.12),
           );
           const rad = s.soriRadius * lerp1(1.05, 0.65, vs) * s.rng.range(0.85, 1.15);
-          const sorusFlex = clamp((s.baseFlex ?? 0.25) + (s.flexSpan ?? 0.65) * vs * (0.65 + 0.35 * vs), 0, 1.35);
-          this.addSorusDome(s.soriMesh, center, scale(fr.up, -1), fr.right, rad, s.soriColor, s.pivot, s.plantHeightEst, sorusFlex, s.phase);
+          const sorusFlex = clamp((s.baseFlex ?? 0.25) + (s.flexSpan ?? 0.35) * Math.pow(vs, 1.45), 0, 1.35);
+          const sorusRoll = clamp(0.24 * vs * vs * (0.35 + 0.65 * Math.abs(uPos)), 0, 0.45);
+          this.addSorusDome(s.soriMesh, center, scale(fr.up, -1), fr.right, rad, s.soriColor, s.pivot, s.plantHeightEst, sorusFlex, s.phase, sorusRoll);
           this.stats.soriClusters++;
         }
       }
@@ -1624,12 +1689,13 @@ export class FernMesher {
     plantH: number,
     sorusFlex: number,
     phase: number,
+    sorusRoll = 0.0,
   ): void {
     const fwdAxis = normalize(cross(rightAxis, downNormal));
     const sides = 6;
     const baseRing: number[] = [];
     const midRing: number[] = [];
-    const wind: [number, number, number, number] = [saturate(center.y / plantH), sorusFlex, phase, 0.0];
+    const wind: [number, number, number, number] = [saturate(center.y / plantH), sorusFlex, phase, sorusRoll];
     const rimCol = mixRgb(col, hexToLinearRgb('#a86c34'), 0.38);
 
     for (let j = 0; j < sides; j++) {

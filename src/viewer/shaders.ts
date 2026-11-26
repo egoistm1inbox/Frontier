@@ -87,14 +87,21 @@ void applyProceduralWind(inout vec3 pos, inout vec3 nrm, inout vec3 tanV) {
   nrm  = rotAxisAngle(nrm, rollAxis, rollAngle);
   tanV = rotAxisAngle(tanV, rollAxis, rollAngle);
 
-  // Mode 3: Isometric torsional ribbon sail-flap & phyllid/pinna roll around bent spine tangent
+  // Mode 3: Lever-normalized isometric SO(3) distal tip & leaflet flutter around pitch/roll axes
+  // (Preserves exact |rel'| == |rel| invariance with zero left/right pinna scissoring or stem detachment!)
   if (flutter > 0.0001) {
-    vec3 safeTan = dot(tanV, tanV) > 1e-6 ? normalize(tanV) : vec3(0.0, 1.0, 0.0);
-    float hiWave = sin(uTime * 6.8 - downWave * 2.3 + phase * 4.7)
-                 + 0.45 * sin(uTime * 11.4 - crossWave * 2.1 + phase * 8.3);
-    float flapAngle = softLimit(flutter * W * hiWave * 0.135, 0.36);
-    rel = rotAxisAngle(rel, safeTan, flapAngle);
-    nrm = rotAxisAngle(nrm, safeTan, flapAngle);
+    float rLen = max(0.20, length(rel));
+    float hiWave = sin(uTime * 5.2 - downWave * 1.9 + phase * 3.1)
+                 + 0.42 * sin(uTime * 8.4 - crossWave * 1.7 + phase * 5.3);
+    float disp = softLimit(flutter * W * hiWave * 0.026, 0.045);
+    float fPitch = disp / rLen;
+    float fRoll  = (disp * 0.38) / rLen;
+    rel  = rotAxisAngle(rel, pitchAxis, fPitch);
+    nrm  = rotAxisAngle(nrm, pitchAxis, fPitch);
+    tanV = rotAxisAngle(tanV, pitchAxis, fPitch);
+    rel  = rotAxisAngle(rel, rollAxis, fRoll);
+    nrm  = rotAxisAngle(nrm, rollAxis, fRoll);
+    tanV = rotAxisAngle(tanV, rollAxis, fRoll);
   }
 
   pos = aPivot + rel;

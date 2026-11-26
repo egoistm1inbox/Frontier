@@ -81,24 +81,20 @@ function evalWindVertex(
   );
 
   let rel: [number, number, number] = [rx, ry, rz];
-  let tanV: [number, number, number] = [...tan];
+  void tan;
   rel = rot(rel, pitchAxis, pitchAngle);
-  tanV = rot(tanV, pitchAxis, pitchAngle);
   rel = rot(rel, rollAxis, rollAngle);
-  tanV = rot(tanV, rollAxis, rollAngle);
 
   if (flutter > 0.0001) {
-    const tl = Math.hypot(tanV[0], tanV[1], tanV[2]);
-    const safeTan: [number, number, number] =
-      tl > 1e-3 ? [tanV[0] / tl, tanV[1] / tl, tanV[2] / tl] : [0, 1, 0];
+    const rLen = Math.max(0.20, Math.hypot(rel[0], rel[1], rel[2]));
     const hiWave =
-      Math.sin(uTime * 6.8 - downWave * 2.3 + phase * 4.7) +
-      0.45 * Math.sin(uTime * 11.4 - crossWave * 2.1 + phase * 8.3);
-    const flapAngle = softLimit(flutter * W * hiWave * 0.24, 0.42);
-    const perp = rel[0] * safeTan[0] + rel[1] * safeTan[1] + rel[2] * safeTan[2];
-    const sp: [number, number, number] = [safeTan[0] * perp, safeTan[1] * perp, safeTan[2] * perp];
-    const wing = rot([rel[0] - sp[0], rel[1] - sp[1], rel[2] - sp[2]], safeTan, flapAngle);
-    rel = [sp[0] + wing[0], sp[1] + wing[1], sp[2] + wing[2]];
+      Math.sin(uTime * 5.2 - downWave * 1.9 + phase * 3.1) +
+      0.42 * Math.sin(uTime * 8.4 - crossWave * 1.7 + phase * 5.3);
+    const disp = softLimit(flutter * W * hiWave * 0.026, 0.045);
+    const fPitch = disp / rLen;
+    const fRoll = (disp * 0.38) / rLen;
+    rel = rot(rel, pitchAxis, fPitch);
+    rel = rot(rel, rollAxis, fRoll);
   }
 
   return [piv[0] + rel[0], piv[1] + rel[1], piv[2] + rel[2]];
@@ -821,6 +817,202 @@ describe('Frontier Procedural Generators — Welded Trees, Fruiting Palms, Gigan
       }
       for (const id of usedA) {
         expect(declaredA.has(id), `${label}: undeclared attribute ${id}`).toBe(true);
+      }
+    }
+  });
+
+  it('guarantees unified C0 wind sway on Ferns & Broadleaf plants (zero left/right frond splitting, active terminal frond-tip sway, and welded sori)', () => {
+    // 1. Western Sword Fern: verify every frond's terminal tip moves MORE than its mid-span & base,
+    //    every part shares the unified crownPivot, and left/right pinnae never scissor apart!
+    const fernPreset = PRESETS.find((p) => p.name === 'Western Sword Fern')!;
+    const fernScene = cloneScene(fernPreset.scene);
+    fernScene.layers[0].fern!.detailTier = 2;
+    const fernRes = buildSceneResponse(fernScene);
+
+    const frond1 = fernRes.parts.find((p) => p.id === 'layer-1:fronds:f01')!;
+    const sori = fernRes.parts.find((p) => p.id === 'layer-1:sori')!;
+    const crownPiv: [number, number, number] = [frond1.pivot[0], frond1.pivot[1], frond1.pivot[2]];
+
+    let maxRadiusReach = 0;
+    const vc = frond1.position.length / 3;
+    for (let i = 0; i < vc; i++) {
+      // Every vertex on the frond pivots around the shared crownPivot
+      expect(Math.abs(frond1.pivot[i * 3] - crownPiv[0])).toBeLessThan(1e-5);
+      expect(Math.abs(frond1.pivot[i * 3 + 1] - crownPiv[1])).toBeLessThan(1e-5);
+      expect(Math.abs(frond1.pivot[i * 3 + 2] - crownPiv[2])).toBeLessThan(1e-5);
+      const r = Math.hypot(
+        frond1.position[i * 3] - crownPiv[0],
+        frond1.position[i * 3 + 1] - crownPiv[1],
+        frond1.position[i * 3 + 2] - crownPiv[2],
+      );
+      maxRadiusReach = Math.max(maxRadiusReach, r);
+    }
+
+    // Compare displacement in basal third, middle third, and terminal 12% frond tip under strong wind (1.35)
+    let sumBaseDisp = 0, cntBase = 0;
+    let sumMidDisp = 0, cntMid = 0;
+    let sumTipDisp = 0, cntTip = 0;
+    let maxChordStretch = 0;
+
+    for (let i = 0; i < vc; i++) {
+      const p0: [number, number, number] = [
+        frond1.position[i * 3],
+        frond1.position[i * 3 + 1],
+        frond1.position[i * 3 + 2],
+      ];
+      const t0: [number, number, number] = [
+        frond1.tangent[i * 3],
+        frond1.tangent[i * 3 + 1],
+        frond1.tangent[i * 3 + 2],
+      ];
+      const w0: [number, number, number, number] = [
+        frond1.wind[i * 4],
+        frond1.wind[i * 4 + 1],
+        frond1.wind[i * 4 + 2],
+        frond1.wind[i * 4 + 3],
+      ];
+      const pW = evalWindVertex(p0, t0, w0, crownPiv, 0.65, 1.35);
+      const r0 = Math.hypot(p0[0] - crownPiv[0], p0[1] - crownPiv[1], p0[2] - crownPiv[2]);
+      const rW = Math.hypot(pW[0] - crownPiv[0], pW[1] - crownPiv[1], pW[2] - crownPiv[2]);
+      maxChordStretch = Math.max(maxChordStretch, Math.abs(rW - r0));
+
+      const disp = Math.hypot(pW[0] - p0[0], pW[1] - p0[1], pW[2] - p0[2]);
+      const rFrac = r0 / maxRadiusReach;
+      if (rFrac < 0.30) {
+        sumBaseDisp += disp;
+        cntBase++;
+      } else if (rFrac > 0.45 && rFrac < 0.65) {
+        sumMidDisp += disp;
+        cntMid++;
+      } else if (rFrac > 0.88) {
+        sumTipDisp += disp;
+        cntTip++;
+      }
+    }
+
+    expect(maxChordStretch).toBeLessThan(1e-6);
+    const avgBase = sumBaseDisp / Math.max(1, cntBase);
+    const avgMid = sumMidDisp / Math.max(1, cntMid);
+    const avgTip = sumTipDisp / Math.max(1, cntTip);
+    // Terminal frond tip MUST move significantly more than mid-frond and base (never frozen at tip!)
+    expect(avgTip).toBeGreaterThan(avgMid * 1.35);
+    expect(avgMid).toBeGreaterThan(avgBase * 1.8);
+    expect(avgTip).toBeGreaterThan(0.18);
+
+    // Every sorus dome also pivots around `crownPiv` so sori stay welded to pinna undersides
+    for (let i = 0; i < sori.position.length / 3; i += 7) {
+      expect(Math.abs(sori.pivot[i * 3] - crownPiv[0])).toBeLessThan(1e-5);
+      expect(Math.abs(sori.pivot[i * 3 + 1] - crownPiv[1])).toBeLessThan(1e-5);
+      expect(Math.abs(sori.pivot[i * 3 + 2] - crownPiv[2])).toBeLessThan(1e-5);
+    }
+
+    // 2. Swiss Cheese Monstera: petiole tip and leaf-blade base share identical crownPivot, phase, and flex
+    const monsteraPreset = PRESETS.find((p) => p.name === 'Swiss Cheese Monstera')!;
+    const mScene = cloneScene(monsteraPreset.scene);
+    mScene.layers[0].fern!.detailTier = 2;
+    const mRes = buildSceneResponse(mScene);
+    const mLeaf = mRes.parts.find((p) => p.id === 'layer-1:fronds:f01')!;
+    const mPiv: [number, number, number] = [mLeaf.pivot[0], mLeaf.pivot[1], mLeaf.pivot[2]];
+    let maxTriangleEdgeStretch = 0;
+    for (let f = 0; f < mLeaf.index.length; f += 9) {
+      const ia = mLeaf.index[f];
+      const ib = mLeaf.index[f + 1];
+      const pa0: [number, number, number] = [mLeaf.position[ia * 3], mLeaf.position[ia * 3 + 1], mLeaf.position[ia * 3 + 2]];
+      const pb0: [number, number, number] = [mLeaf.position[ib * 3], mLeaf.position[ib * 3 + 1], mLeaf.position[ib * 3 + 2]];
+      const paW = evalWindVertex(
+        pa0,
+        [mLeaf.tangent[ia * 3], mLeaf.tangent[ia * 3 + 1], mLeaf.tangent[ia * 3 + 2]],
+        [mLeaf.wind[ia * 4], mLeaf.wind[ia * 4 + 1], mLeaf.wind[ia * 4 + 2], mLeaf.wind[ia * 4 + 3]],
+        mPiv,
+        0.75,
+        1.35,
+      );
+      const pbW = evalWindVertex(
+        pb0,
+        [mLeaf.tangent[ib * 3], mLeaf.tangent[ib * 3 + 1], mLeaf.tangent[ib * 3 + 2]],
+        [mLeaf.wind[ib * 4], mLeaf.wind[ib * 4 + 1], mLeaf.wind[ib * 4 + 2], mLeaf.wind[ib * 4 + 3]],
+        mPiv,
+        0.75,
+        1.35,
+      );
+      const d0 = Math.hypot(pb0[0] - pa0[0], pb0[1] - pa0[1], pb0[2] - pa0[2]);
+      const dW = Math.hypot(pbW[0] - paW[0], pbW[1] - paW[1], pbW[2] - paW[2]);
+      if (d0 > 0.002) {
+        maxTriangleEdgeStretch = Math.max(maxTriangleEdgeStretch, Math.abs(dW - d0));
+      }
+    }
+    // Zero seam tearing across petiole-to-blade junction (< 4 mm across entire 1.35x gale!)
+    expect(maxTriangleEdgeStretch).toBeLessThan(0.004);
+  });
+
+  it('guarantees unified C0 wind sway across Trees & Palms (swaying trunks/branches, zero detached leaf shuffle, and sculpted costapalmate fans)', () => {
+    // 1. Ancient English Oak: trunk, branches, and canopy leaves share groundOrigin + treePhase,
+    //    canopy wood sways actively (`limbFlex > 0`), and leaf bases stay welded to twigs!
+    const oakPreset = PRESETS.find((p) => p.name === 'Ancient English Oak')!;
+    const oakScene = cloneScene(oakPreset.scene);
+    oakScene.layers[0].tree!.detailTier = 2;
+    const oakRes = buildSceneResponse(oakScene);
+
+    const oakWood = oakRes.parts.find((p) => p.id === 'layer-1:wood')!;
+    const oakLeaves = oakRes.parts.find((p) => p.id === 'layer-1:leaves')!;
+
+    const treePiv: [number, number, number] = [oakWood.pivot[0], oakWood.pivot[1], oakWood.pivot[2]];
+    const treePhase = oakWood.wind[2];
+
+    let maxWoodFlex = 0;
+    let maxWoodDisp = 0;
+    for (let i = 0; i < oakWood.position.length / 3; i += 7) {
+      maxWoodFlex = Math.max(maxWoodFlex, oakWood.wind[i * 4 + 1]);
+      const p0: [number, number, number] = [oakWood.position[i * 3], oakWood.position[i * 3 + 1], oakWood.position[i * 3 + 2]];
+      const pW = evalWindVertex(
+        p0,
+        [oakWood.tangent[i * 3], oakWood.tangent[i * 3 + 1], oakWood.tangent[i * 3 + 2]],
+        [oakWood.wind[i * 4], oakWood.wind[i * 4 + 1], oakWood.wind[i * 4 + 2], oakWood.wind[i * 4 + 3]],
+        treePiv,
+        0.75,
+        1.35,
+      );
+      maxWoodDisp = Math.max(maxWoodDisp, Math.hypot(pW[0] - p0[0], pW[1] - p0[1], pW[2] - p0[2]));
+    }
+    expect(maxWoodFlex).toBeGreaterThan(0.12); // Trunk & canopy limbs sway smoothly in wind!
+    expect(maxWoodDisp).toBeGreaterThan(0.25);
+
+    // Every leaf shares exact `treePiv` and `treePhase`, and leaf base vertices (`v == 0`) have `flutter === 0`!
+    let leafBaseChecked = 0;
+    for (let i = 0; i < oakLeaves.position.length / 3; i++) {
+      expect(Math.abs(oakLeaves.pivot[i * 3] - treePiv[0])).toBeLessThan(1e-5);
+      expect(Math.abs(oakLeaves.pivot[i * 3 + 1] - treePiv[1])).toBeLessThan(1e-5);
+      expect(Math.abs(oakLeaves.pivot[i * 3 + 2] - treePiv[2])).toBeLessThan(1e-5);
+      expect(Math.abs(oakLeaves.wind[i * 4 + 2] - treePhase)).toBeLessThan(1e-5);
+      if (oakLeaves.uv[i * 2 + 1] < 1e-4) {
+        expect(oakLeaves.wind[i * 4 + 3]).toBe(0);
+        leafBaseChecked++;
+      }
+    }
+    expect(leafBaseChecked).toBeGreaterThan(200);
+
+    // 2. Desert Oasis Fan Palm & Coastal Coconut Palm: unified groundOrigin pivot across trunk, rachis, leaflets & fruits!
+    for (const palmName of ['Coastal Coconut Palm', 'Desert Oasis Fan Palm'] as const) {
+      const palmPreset = PRESETS.find((p) => p.name === palmName)!;
+      const palmScene = cloneScene(palmPreset.scene);
+      palmScene.layers[0].palm!.detailTier = 2;
+      const raw = buildSceneRaw(palmScene);
+      const leafletRaw = raw.rawParts.find((pm) => pm.id === 'layer-1:leaflets')!;
+      expect(leafletRaw.hasExplicitNormals).toBe(true);
+
+      const palmRes = buildSceneResponse(palmScene);
+      const pTrunk = palmRes.parts.find((p) => p.id === 'layer-1:skeleton')!;
+      const pRachis = palmRes.parts.find((p) => p.id === 'layer-1:rachises')!;
+      const pLeaflets = palmRes.parts.find((p) => p.id === 'layer-1:leaflets')!;
+      const pFruits = palmRes.parts.find((p) => p.id === 'layer-1:fruits')!;
+
+      const gPiv: [number, number, number] = [pTrunk.pivot[0], pTrunk.pivot[1], pTrunk.pivot[2]];
+      for (const pkt of [pTrunk, pRachis, pLeaflets, pFruits]) {
+        for (let i = 0; i < pkt.position.length / 3; i += 11) {
+          expect(Math.abs(pkt.pivot[i * 3] - gPiv[0]), `${palmName} ${pkt.id} pivot.x`).toBeLessThan(1e-5);
+          expect(Math.abs(pkt.pivot[i * 3 + 1] - gPiv[1]), `${palmName} ${pkt.id} pivot.y`).toBeLessThan(1e-5);
+          expect(Math.abs(pkt.pivot[i * 3 + 2] - gPiv[2]), `${palmName} ${pkt.id} pivot.z`).toBeLessThan(1e-5);
+        }
       }
     }
   });

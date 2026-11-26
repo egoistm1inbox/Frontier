@@ -154,7 +154,7 @@ export class TropicalMesher {
       const leanDir = v3(Math.cos(pupAz), 0, Math.sin(pupAz));
       const stemDir0 = normalize(add(UP, scale(leanDir, stemLean)));
       const stemRight0 = normalize(cross(UP, isMain ? v3(1, 0, 0) : leanDir));
-      const stemPhase = sRng.next();
+      const stemPhase = 0.08 + sRng.next() * 0.05;
 
       // 1. Build Pseudostem Centerline + WeldedStem Root
       const stemSteps = 22 + tier * 4;
@@ -427,7 +427,7 @@ export class TropicalMesher {
         const droopTotal = (p.archDroopDeg * lerp1(0.48, 1.24, age01) + lRng.vary(0, 5)) * DEG2RAD;
         const spineSteps = 30 + tier * 8;
         const archAt = (t: number): number => droopTotal * Math.pow(t, isElephantEar ? 1.85 : 1.55);
-        const leafPhase = (((az / TAU) + lRng.vary(0, 0.08)) % 1 + 1) % 1;
+        const leafPhase = (stemPhase + (((az / TAU) % 1 + 1) % 1) * 0.05) % 1;
 
         const rawSpine = growCurve(leafOrigin, dir0, fixedRight0, L, spineSteps, (t0, t1) => ({
           pitch: archAt(t1) - archAt(t0),
@@ -474,7 +474,7 @@ export class TropicalMesher {
             const t = clamp(s / Math.max(1e-4, leafWelded.length), 0, 1);
             const c = mixRgb(petBaseCol, midribCol, smoothstep(0.0, 0.45, t));
             const h01 = saturate(pos.y / totalHeightEst);
-            const limbFlex = trunkAttachFlex + Math.pow(t, 1.48) * 0.62 * p.windSail;
+            const limbFlex = trunkAttachFlex + Math.pow(t, 1.48) * 0.42 * p.windSail;
             const spinePhase = lerp1(stemPhase, leafPhase, smoothstep(0.0, 0.28, t));
             return {
               color: c,
@@ -884,9 +884,9 @@ export class TropicalMesher {
             //   wind.w = lateral ribbon flap weight (0 at midrib -> high on free torn margin!)
             const h01 = saturate(pt.y / totalH);
             const spinePhase = lerp1(stemPhase, leafPhase, smoothstep(0.0, 0.28, tSpine));
-            const effPhase = lerp1(spinePhase, ribbonPhase, smoothstep(0.08, 0.58, sLat));
-            const petioleFlex = trunkAttachFlex + Math.pow(tSpine, 1.48) * 0.62 * p.windSail;
-            const ribbonFlap = Math.pow(sLat, 1.35) * (0.45 + 0.65 * freeRibbon) * p.windSail;
+            const effPhase = lerp1(spinePhase, (leafPhase + rIdx * 0.02 + (side > 0 ? 0.01 : 0)) % 1, smoothstep(0.08, 0.58, sLat));
+            const petioleFlex = trunkAttachFlex + Math.pow(tSpine, 1.48) * 0.42 * p.windSail;
+            const ribbonFlap = Math.pow(sLat, 1.5) * (0.18 + 0.26 * freeRibbon) * p.windSail;
 
             rowIndices.push(
               mesh.addVertex({
@@ -1030,9 +1030,9 @@ export class TropicalMesher {
             color: col,
             wind: [
               saturate(pt.y / totalH),
-              trunkAttachFlex + tFlex * 0.62 * p.windSail,
+              trunkAttachFlex + tFlex * 0.42 * p.windSail,
               spinePhase,
-              Math.pow(effS, 1.4) * 0.62 * p.windSail,
+              Math.pow(effS, 1.5) * 0.24 * p.windSail,
             ],
             pivot: stemPivot,
             roughness: 0.22,

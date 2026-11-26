@@ -286,6 +286,8 @@ export class TreeMesher {
   private leafPlacements: LeafPlacement[] = [];
   private splitError = [0, 0, 0, 0, 0];
   private lobePhase = 0;
+  private treePhase = 0.08;
+  private groundOrigin: V3 = { x: 0, y: 0, z: 0 };
   private lobes = 5;
   private treeHeightEst = 12;
   private colBark: RGB;
@@ -300,6 +302,7 @@ export class TreeMesher {
     this.leafRng = new Random((seed ^ 0x1eafc0de) >>> 0);
     this.substrate = substrate;
     this.lobePhase = ((seed % 360) * Math.PI) / 180;
+    this.treePhase = 0.08 + (((seed >>> 0) % 997) / 997) * 0.05;
     this.lobes = Math.max(3, Math.round(params.rootCount > 0 ? params.rootCount : 5));
     this.treeHeightEst = Math.max(2.5, params.height);
     this.colBark = hexToLinearRgb(params.hueBark);
@@ -345,6 +348,7 @@ export class TreeMesher {
 
     const groundSample = this.substrate.sampleSurface(0.5, 0.5);
     const groundOrigin = groundSample.pos;
+    this.groundOrigin = groundOrigin;
 
     // 1. Build Weber-Penn shoot hierarchy (trunk + limbs + branches + twigs + forks)
     const turtle: Turtle = {
@@ -461,25 +465,16 @@ export class TreeMesher {
             );
         const colBase = mixRgb(this.colBarkDeep, this.colBark, furrow);
         const col = mixRgb(colBase, this.colBarkUpper, clamp(stem.level * 0.25, 0, 0.72));
-        const h01 = clamp(pos.y / this.treeHeightEst, 0, 1);
-        const trunkFlex = Math.pow(h01, 1.65) * 0.09 * p.windCompliance;
-        const limbFlex =
-          stem.level === 0
-            ? 0
-            : Math.pow(clamp((m.distFromLimb + s) / m.limbReach, 0, 1), 1.45) *
-              0.24 *
-              p.windCompliance;
-        const pivot =
-          stem.level === 0 ? { x: 0, y: 0, z: 0 } : m.limbRoot.nodes[0]?.pos ?? { x: 0, y: 0, z: 0 };
-        const rootPhase = this.meta.get(m.limbRoot.id)?.phase ?? m.phase;
+        const h01 = clamp((pos.y - this.groundOrigin.y) / this.treeHeightEst, 0, 1);
+        const woodFlex = this.evalWoodFlex(stem, s, pos);
         return {
           color: col,
           roughness: lerp1(0.84, 0.66, clamp(stem.level * 0.3, 0, 1)),
           translucency: 0.04,
           detailMetric: isJunc ? 0.98 : clamp(0.25 + stem.level * 0.2, 0, 0.85),
           anatomyLevel: Math.min(4, stem.level + 1),
-          wind: [trunkFlex, limbFlex, rootPhase, 0],
-          pivot,
+          wind: [h01, woodFlex, this.treePhase, 0],
+          pivot: this.groundOrigin,
         };
       },
     };
@@ -1110,12 +1105,31 @@ export class TreeMesher {
           detailMetric: isJunc ? 0.98 : 0.35,
           anatomyLevel: 0,
           // Roots are anchored solidly into the earth: zero wind sway/scaling!
-          wind: [0, 0, 0, 0],
-          pivot: { x: 0, y: 0, z: 0 },
+          wind: [0, 0, this.treePhase, 0],
+          pivot: this.groundOrigin,
         };
       },
     };
     return stem;
+  }
+
+  /**
+   * Continuous C^0 whole-tree cantilever flex: 0 at buttress roots -> progressive trunk bend ->
+   * primary limb bend -> outer twig whip, all around a single `this.groundOrigin` + `this.treePhase`!
+   */
+  private evalWoodFlex(stem: WeldedStem, s: number, posHint?: V3): number {
+    const m = this.meta.get(stem.id);
+    const trunkY =
+      stem.level === 0
+        ? (posHint ?? sampleWeldedStem(stem, s).pos).y
+        : (m?.limbRoot.nodes[0]?.pos.y ?? (posHint ?? sampleWeldedStem(stem, s).pos).y);
+    const h01 = clamp((trunkY - this.groundOrigin.y) / this.treeHeightEst, 0, 1);
+    const rootAnchor = smoothstep(0.06, 0.20, h01);
+    const trunkFlex = rootAnchor * Math.pow(h01, 1.48) * 0.14 * this.p.windCompliance;
+    if (stem.level === 0 || !m) return trunkFlex;
+    const limbFrac = clamp((m.distFromLimb + s) / Math.max(1e-4, m.limbReach), 0, 1);
+    const extraLimbFlex = Math.pow(limbFrac, 1.38) * 0.20 * this.p.windCompliance;
+    return trunkFlex + extraLimbFlex;
   }
 
   private sampleGroundHeightAt(x: number, z: number, fallbackY: number): number {
@@ -1304,18 +1318,10 @@ export class TreeMesher {
       leafRight = normalize(leafRight);
       const normal = normalize(cross(dir, leafRight));
 
-      // Evaluate exact parent limb wind at attachment so every vertex on this leaf
-      // rotates rigidly around the same limbRoot pivot (0.00% isometric wind scaling!)
-      const m = this.meta.get(lp.stem.id)!;
-      const h01 = clamp(basePos.y / this.treeHeightEst, 0, 1);
-      const trunkFlex = Math.pow(h01, 1.65) * 0.09 * this.p.windCompliance;
-      const limbFlex =
-        Math.pow(clamp((m.distFromLimb + s) / m.limbReach, 0, 1), 1.45) *
-        0.24 *
-        this.p.windCompliance;
-      const rootPhase = this.meta.get(m.limbRoot.id)?.phase ?? m.phase;
-      const pivot = m.limbRoot.nodes[0]?.pos ?? basePos;
-      const leafWind: [number, number, number, number] = [trunkFlex, limbFlex, rootPhase, 0.22];
+      // Evaluate exact parent wood flex at attachment (`u = 0` matches the twig vertex with 0.000 mm drift!)
+      const h01 = clamp((basePos.y - this.groundOrigin.y) / this.treeHeightEst, 0, 1);
+      const attachFlex = this.evalWoodFlex(lp.stem, s, smp.pos);
+      const pivot = this.groundOrigin;
 
       const L = lp.leafScale;
       const W = L * aspect * 0.5;
@@ -1325,6 +1331,9 @@ export class TreeMesher {
       const grid: number[][] = [];
       for (let i = 0; i <= uRows; i++) {
         const u = i / uRows;
+        const rowFlex = attachFlex + 0.028 * u * u * this.p.windCompliance;
+        const rowFlutter = 0.20 * u * u * this.p.windCompliance;
+        const leafWind: [number, number, number, number] = [h01, rowFlex, this.treePhase, rowFlutter];
         const arch = -Math.pow(u, 1.65) * L * 0.16;
         const spinePt = add(addScaled(basePos, dir, u * L), scale(normal, arch));
         let wProfile = Math.sin(Math.PI * Math.pow(u, 0.72));

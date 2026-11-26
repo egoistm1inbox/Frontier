@@ -103,12 +103,14 @@ export class PalmMesher {
   };
   private nextId = 0;
   private lobePhase = 0;
+  private palmPhase = 0.08;
 
   constructor(params: PalmParams, seed: number, substrate: HostSubstrate) {
     this.p = params;
     this.rng = new Random((seed ^ 0x9a1b5eed) >>> 0);
     this.substrate = substrate;
     this.lobePhase = ((seed % 360) * Math.PI) / 180;
+    this.palmPhase = 0.08 + (((seed >>> 0) % 997) / 997) * 0.05;
   }
 
   build(layerId: string): PalmBuildResult {
@@ -168,7 +170,7 @@ export class PalmMesher {
     this.stats.crowns = crownTips.length;
 
     // 2. Build spiral crown rosettes + 3D fruits on each terminal crown!
-    const palmPhase = this.rng.next();
+    const palmPhase = this.palmPhase;
     for (let cIdx = 0; cIdx < crownTips.length; cIdx++) {
       const tip = crownTips[cIdx];
       const cRng = this.rng.fork(0x4400 + cIdx * 131);
@@ -231,8 +233,9 @@ export class PalmMesher {
     const colBark = hexToLinearRgb(p.hueTrunk);
     const colBarkDark = mixRgb(colBark, hexToLinearRgb('#1c140d'), 0.52);
     const colBarkWeathered = mixRgb(colBark, hexToLinearRgb('#a89f91'), 0.38);
-    const colCrownshaft = hexToLinearRgb('#348c31');
-    const colCrownshaftHi = hexToLinearRgb('#5ec447');
+    const colSoilRoot = hexToLinearRgb('#524437');
+    const colCrownshaft = hexToLinearRgb('#1f6120');
+    const colCrownshaftHi = hexToLinearRgb('#3d852c');
 
     const forkLevels = clamp(Math.round(p.forkLevels), 0, 2);
     const baseLen = forkLevels === 0 ? p.trunkHeight : p.trunkHeight * (forkLevels === 1 ? 0.54 : 0.42);
@@ -241,7 +244,7 @@ export class PalmMesher {
     const leanRad = p.trunkLeanDeg * DEG2RAD;
     const dir0 = normalize(add(scale(UP, Math.cos(leanRad)), scale(leanHoriz, Math.sin(leanRad))));
     const right0 = normalize(cross(UP, leanHoriz));
-    const palmPhase = this.rng.next();
+    const palmPhase = this.palmPhase;
     const totalEstH = Math.max(2.5, p.trunkHeight + p.frondLength * 0.65);
 
     const crownTips: CrownTip[] = [];
@@ -315,7 +318,7 @@ export class PalmMesher {
         forks: [],
         dropped: false,
         radiusDrop: 1,
-        ringSpacing: clamp(baseR * 0.34, 0.045, 0.14),
+        ringSpacing: clamp(baseR * 0.22, 0.028, 0.068),
         baseRadiusAt: (sVal: number) => {
           const tLoc = clamp(sVal / Math.max(1e-5, s), 0, 1);
           const z = lerp1(zGlobal0, zGlobal1, tLoc);
@@ -351,17 +354,23 @@ export class PalmMesher {
           }
 
           const relief = clamp(p.trunkRelief, 0, 1);
+          const barkWarp = fbm3(Math.cos(th) * 1.8, z * p.trunkHeight * 2.4, Math.sin(th) * 1.8, 311, 2);
           if (p.species === 'date_palm' || p.species === 'fan_palm') {
-            // Authentic Fibonacci 8 & 13 spiral diamond leaf-base boots!
-            const s1 = Math.sin(8 * th + z * p.trunkHeight * 11.5);
-            const s2 = Math.sin(5 * th - z * p.trunkHeight * 11.5);
-            const diamond = Math.max(0, s1 * s2);
-            mult *= 1 + relief * 0.115 * Math.pow(diamond, 0.65);
+            // Imbricate phyllotactic 8 & 13 spiral diamond leaf-base boots with crisp cleft crevices!
+            const uA = (8 * th) / TAU + z * p.trunkHeight * 2.65 + barkWarp * 0.12;
+            const uB = (-5 * th) / TAU + z * p.trunkHeight * 2.65 - barkWarp * 0.12;
+            const dA = Math.abs(uA - Math.floor(uA) - 0.5) * 2.0;
+            const dB = Math.abs(uB - Math.floor(uB) - 0.5) * 2.0;
+            const boot = clamp(1.0 - Math.max(dA, dB), 0, 1);
+            const bootRidge = Math.pow(boot, 0.58);
+            mult *= 1 + relief * 0.11 * bootRidge;
           } else {
-            // Crisp horizontal annular leaf-scar rings (Coconut, Royal, Doum)
-            const ringFreq = p.species === 'royal_palm' ? 14.0 : 18.5;
-            const ring = 0.5 + 0.5 * Math.cos(z * p.trunkHeight * ringFreq + Math.sin(th * 2) * 0.15);
-            mult *= 1 + relief * (p.species === 'royal_palm' ? 0.025 : 0.055) * Math.pow(ring, 2.2);
+            // Fine irregular 6-9 cm fibrous annular leaf-scar rings + vertical vascular striations (no wide candy stripes!)
+            const ringDensity = p.species === 'royal_palm' ? 42.0 : 56.0;
+            const ringPhase = z * p.trunkHeight * ringDensity + barkWarp * 2.6 + Math.sin(th * 3) * 0.35;
+            const scar = Math.pow(0.5 + 0.5 * Math.cos(ringPhase), 3.2);
+            const vertFibers = 0.5 + 0.5 * Math.cos(th * 28 + barkWarp * 5.0);
+            mult *= 1 + relief * (p.species === 'royal_palm' ? 0.016 : 0.036) * scar + relief * 0.009 * vertFibers;
           }
           return mult;
         },
@@ -369,42 +378,52 @@ export class PalmMesher {
           const tLoc = clamp(sVal / Math.max(1e-5, s), 0, 1);
           const z = lerp1(zGlobal0, zGlobal1, tLoc);
           const h01 = saturate((pos.y - groundOrigin.y) / totalEstH);
-          const flex = Math.pow(h01, 1.75) * 0.11 * p.windSway;
+          const rootAnchor = smoothstep(0.025, 0.12, h01);
+          const trunkFlex = rootAnchor * Math.pow(h01, 1.55) * 0.15 * p.windSway;
 
           if (csRatio > 0.02 && z >= csStartZ) {
             const csT = saturate((z - csStartZ) / Math.max(0.01, csRatio));
             const sheen = 0.5 + 0.5 * Math.cos(th * 2 + csT * 3.0);
             return {
-              color: mixRgb(colCrownshaft, colCrownshaftHi, sheen * 0.45 + csT * 0.2),
+              color: mixRgb(colCrownshaft, colCrownshaftHi, sheen * 0.38 + csT * 0.18),
               roughness: 0.24,
               translucency: 0.18,
               detailMetric: isJunc ? 0.96 : 0.72,
               anatomyLevel: 2,
-              wind: [flex, 0, palmPhase, 0],
+              wind: [h01, trunkFlex, palmPhase, 0],
               pivot: groundOrigin,
             };
           }
 
+          const barkWarp = fbm3(Math.cos(th) * 1.8, z * p.trunkHeight * 2.4, Math.sin(th) * 1.8, 311, 3);
+          const mottle = saturate(0.5 + 0.5 * fbm3(pos.x * 2.1, pos.y * 0.9, pos.z * 2.1, 709, 3));
+          const vertFibers = 0.5 + 0.5 * Math.cos(th * 32 + barkWarp * 6.0);
           let barkCol: RGB;
           if (p.species === 'date_palm' || p.species === 'fan_palm') {
-            const s1 = Math.sin(8 * th + z * p.trunkHeight * 11.5);
-            const s2 = Math.sin(5 * th - z * p.trunkHeight * 11.5);
-            const diamond = Math.max(0, s1 * s2);
-            barkCol = mixRgb(colBarkDark, mixRgb(colBark, colBarkWeathered, z * 0.45), Math.pow(diamond, 0.45));
+            const uA = (8 * th) / TAU + z * p.trunkHeight * 2.65 + barkWarp * 0.12;
+            const uB = (-5 * th) / TAU + z * p.trunkHeight * 2.65 - barkWarp * 0.12;
+            const dA = Math.abs(uA - Math.floor(uA) - 0.5) * 2.0;
+            const dB = Math.abs(uB - Math.floor(uB) - 0.5) * 2.0;
+            const boot = clamp(1.0 - Math.max(dA, dB), 0, 1);
+            const body = mixRgb(colBark, colBarkWeathered, saturate(z * 0.35 + mottle * 0.32));
+            barkCol = mixRgb(colBarkDark, body, smoothstep(0.06, 0.78, boot) * (0.82 + 0.18 * vertFibers));
           } else {
-            const ringFreq = p.species === 'royal_palm' ? 14.0 : 18.5;
-            const scar = Math.pow(0.5 + 0.5 * Math.cos(z * p.trunkHeight * ringFreq), 2.4);
-            barkCol = mixRgb(colBark, colBarkWeathered, scar * 0.65);
-            barkCol = mixRgb(colBarkDark, barkCol, smoothstep(0.0, 0.14, Math.max(0, z)) * 0.65 + 0.35);
+            const ringDensity = p.species === 'royal_palm' ? 42.0 : 56.0;
+            const ringPhase = z * p.trunkHeight * ringDensity + barkWarp * 2.6 + Math.sin(th * 3) * 0.35;
+            const scar = Math.pow(0.5 + 0.5 * Math.cos(ringPhase), 3.4);
+            const fiberTone = mixRgb(colBark, colBarkDark, (1 - vertFibers) * 0.28 + (1 - mottle) * 0.22);
+            barkCol = mixRgb(fiberTone, colBarkWeathered, scar * 0.42 + mottle * 0.22);
+            const rootCollar = mixRgb(colBarkDark, colSoilRoot, 0.55);
+            barkCol = mixRgb(rootCollar, barkCol, smoothstep(0.0, 0.12, Math.max(0, z)));
           }
 
           return {
             color: barkCol,
-            roughness: p.species === 'royal_palm' ? 0.58 : 0.82,
+            roughness: p.species === 'royal_palm' ? 0.58 : 0.84,
             translucency: 0.03,
-            detailMetric: isJunc ? 0.98 : 0.38,
+            detailMetric: isJunc ? 0.98 : 0.35 + 0.3 * vertFibers,
             anatomyLevel: 1,
-            wind: [flex, 0, palmPhase, 0],
+            wind: [h01, trunkFlex, palmPhase, 0],
             pivot: groundOrigin,
           };
         },
@@ -539,15 +558,19 @@ export class PalmMesher {
           const z = clamp(sVal / Math.max(1e-4, rootLen), 0, 1);
           return Math.max(cfg.minRadius, r0 * Math.pow(Math.max(0, 1 - z), 0.75));
         },
-        styleAt: (_sVal: number, _th: number, _pos: V3, _dir: V3, isJunc: boolean) => ({
-          color: mixRgb(colDark, colBark, 0.45),
-          roughness: 0.88,
-          translucency: 0.02,
-          detailMetric: isJunc ? 0.98 : 0.32,
-          anatomyLevel: 0,
-          wind: [0, 0, 0, 0],
-          pivot: groundOrigin,
-        }),
+        styleAt: (sVal: number, _th: number, _pos: V3, _dir: V3, isJunc: boolean) => {
+          const z = clamp(sVal / Math.max(1e-4, rootLen), 0, 1);
+          const rootBase = mixRgb(colDark, hexToLinearRgb('#524437'), 0.62);
+          return {
+            color: mixRgb(rootBase, hexToLinearRgb('#3b2f24'), z * 0.55),
+            roughness: 0.88,
+            translucency: 0.02,
+            detailMetric: isJunc ? 0.98 : 0.32,
+            anatomyLevel: 0,
+            wind: [0, 0, this.palmPhase, 0],
+            pivot: groundOrigin,
+          };
+        },
       };
 
       const grow = (o: V3, d: V3): void => {
@@ -617,44 +640,45 @@ export class PalmMesher {
 
     const totalEstH = Math.max(2.5, p.trunkHeight + p.frondLength * 0.65);
     const crownH01 = saturate((crownApex.y - groundOrigin.y) / totalEstH);
-    const trunkTopFlex = Math.pow(crownH01, 1.75) * 0.11 * p.windSway;
+    const trunkTopFlex = smoothstep(0.025, 0.12, crownH01) * Math.pow(crownH01, 1.55) * 0.15 * p.windSway;
 
-    const colFrond = hexToLinearRgb(p.hueFrond);
-    const colTip = hexToLinearRgb(p.hueFrondTip);
-    const colYoung = mixRgb(colTip, hexToLinearRgb('#b7e645'), 0.42);
-    const colDrySkirt = hexToLinearRgb('#8f6f3e');
+    // Rich botanical chlorophyll palette (avoids harsh neon-chartreuse highlights!)
+    const colFrond = mixRgb(hexToLinearRgb(p.hueFrond), hexToLinearRgb('#144218'), 0.24);
+    const colTip = mixRgb(hexToLinearRgb(p.hueFrondTip), hexToLinearRgb('#2f6e28'), 0.30);
+    const colYoung = mixRgb(colTip, hexToLinearRgb('#63a832'), 0.28);
+    const colDrySkirt = hexToLinearRgb('#785f3c');
     const colSheathBurlap =
       p.species === 'royal_palm'
-        ? hexToLinearRgb('#3b9c36')
-        : mixRgb(hexToLinearRgb(p.hueTrunk), hexToLinearRgb('#593e22'), 0.48);
+        ? hexToLinearRgb('#348c31')
+        : mixRgb(hexToLinearRgb(p.hueTrunk), hexToLinearRgb('#4a331c'), 0.52);
 
     const isPalmate = p.species === 'fan_palm' || p.species === 'doum_palm';
-    const nGreen = Math.max(8, Math.round(p.frondCount * (tip.scale < 0.9 ? 0.62 : 1.0)));
+    const nGreen = Math.max(10, Math.round(p.frondCount * (tip.scale < 0.9 ? 0.68 : 1.08)));
     const nSkirt = Math.round(nGreen * clamp(p.skirtFraction, 0, 0.5));
     const nTotal = nGreen + nSkirt;
 
-    // A. Central Unopened Vertical Apical Spear Fronds (2..3 upright spears in crown heart!)
-    const nSpears = isPalmate ? 2 : 3;
+    // A. Central Fibrous Crown Heart + Unopened Plicate Spear Leaves (fills the crown center lushly!)
+    const nSpears = isPalmate ? 4 : 5;
     for (let sp = 0; sp < nSpears; sp++) {
       const spAz = sp * GOLDEN_ANGLE + crownIdx * 1.1;
       const radDir = add(scale(crownRight, Math.cos(spAz)), scale(crownUp, Math.sin(spAz)));
-      const spDir = normalize(add(scale(crownAxis, 0.96), scale(radDir, 0.18 + sp * 0.06)));
-      const spLen = p.frondLength * sc * lerp1(0.48, 0.68, sp / nSpears);
-      const spBase = addScaled(crownApex, crownAxis, -crownR * 0.15);
-      const spCurve = growCurve(spBase, spDir, normalize(cross(crownAxis, radDir)), spLen, 8, (t0, t1) => ({
-        pitch: (t1 - t0) * 8 * DEG2RAD,
+      const spDir = normalize(add(scale(crownAxis, 0.95), scale(radDir, 0.12 + sp * 0.065)));
+      const spLen = p.frondLength * sc * lerp1(0.42, 0.66, sp / nSpears);
+      const spBase = addScaled(crownApex, crownAxis, -crownR * 0.12);
+      const spCurve = growCurve(spBase, spDir, normalize(cross(crownAxis, radDir)), spLen, 9, (t0, t1) => ({
+        pitch: (t1 - t0) * 10 * DEG2RAD,
       }));
       this.emitTaperedTube(
         rachisMesh,
         spCurve,
-        crownR * 0.13,
-        0.005,
+        crownR * 0.16,
+        0.004,
         6,
         colSheathBurlap,
         colYoung,
         groundOrigin,
         trunkTopFlex,
-        0.18 * p.windSway,
+        0.16 * p.windSway,
         palmPhase,
       );
     }
@@ -716,7 +740,8 @@ export class PalmMesher {
         ? mixRgb(colDrySkirt, hexToLinearRgb('#5e4624'), 0.4)
         : mixRgb(colYoung, colTip, smoothstep(0.0, 0.5, age01));
 
-      const frondPhase = (((az / TAU) % 1) + 1) % 1;
+      // Coherent crown wind phase locked tightly to `palmPhase` so trunk & all fronds sway TOGETHER!
+      const frondPhase = (palmPhase + (((az / TAU) % 1 + 1) % 1) * 0.04) % 1;
 
       if (isPalmate) {
         this.buildCostapalmateFrond(
@@ -835,6 +860,7 @@ export class PalmMesher {
     // Emit clasping triangular leaf-sheath boot -> keeled petiole -> tapering rachis
     const baseR = Math.max(0.016, crownR * 0.22);
     const sides = tier >= 3 ? 8 : 6;
+    const rachisExtraFlex = 0.22 * p.windSway;
     const rings: number[][] = [];
     for (let i = 0; i < rachis.count; i++) {
       const fr = rachis.frameAtIndex(i);
@@ -842,8 +868,8 @@ export class PalmMesher {
       // Wide clasping boot at t in [0..0.10] tapering into triangular keeled rachis
       const bootWide = 1 + 1.55 * Math.exp(-t * 24.0);
       const r = Math.max(0.0035, baseR * Math.pow(1 - t * 0.93, 0.82));
-      const limbFlex = Math.pow(t, 1.55) * 0.34 * p.windSway;
-      const ringCol = mixRgb(colSheath, mixRgb(colBase, colTip, t * 0.65), smoothstep(0.02, 0.18, t));
+      const limbFlex = trunkTopFlex + Math.pow(t, 1.45) * rachisExtraFlex;
+      const ringCol = mixRgb(colSheath, mixRgb(colBase, colTip, t * 0.55), smoothstep(0.02, 0.18, t));
       const row: number[] = [];
 
       for (let j = 0; j < sides; j++) {
@@ -863,8 +889,8 @@ export class PalmMesher {
             u: j / sides,
             v: t,
             color: ringCol,
-            wind: [trunkTopFlex, limbFlex, frondPhase, 0],
-            pivot: bootOrigin,
+            wind: [clamp(trunkTopFlex * 2.5, 0, 1), limbFlex, frondPhase, 0],
+            pivot: groundOrigin,
             roughness: t < 0.1 ? 0.78 : 0.46,
             translucency: 0.14,
             detailMetric: 1 - t * 0.5,
@@ -887,10 +913,10 @@ export class PalmMesher {
     }
 
     // Emit 3D V-folded / Inverted-V Pinnate Leaflets (Pinnae) along rachis!
-    const tierScale = tier === 1 ? 0.55 : tier === 2 ? 0.8 : tier === 3 ? 1.0 : 1.22;
-    const nPairs = Math.max(14, Math.round(p.leafletPairs * tierScale));
-    const petioleEnd = p.species === 'date_palm' ? 0.13 : 0.17;
-    const maxPinnaLen = bladeW * 0.56;
+    const tierScale = tier === 1 ? 0.62 : tier === 2 ? 0.88 : tier === 3 ? 1.12 : 1.32;
+    const nPairs = Math.max(18, Math.round(p.leafletPairs * tierScale));
+    const petioleEnd = p.species === 'date_palm' ? 0.12 : 0.15;
+    const maxPinnaLen = bladeW * 0.58;
     const uSegs = tier >= 3 ? 4 : 3;
     const isDate = p.species === 'date_palm';
     const isCoconut = p.species === 'coconut_palm';
@@ -898,20 +924,21 @@ export class PalmMesher {
 
     for (let k = 0; k < nPairs; k++) {
       const uFrac = k / Math.max(1, nPairs - 1);
-      const tRachis = lerp1(petioleEnd, 0.985, uFrac);
+      const tRachis = lerp1(petioleEnd, 0.988, uFrac);
       const fr = rachis.atT(tRachis);
       const rachisR = Math.max(0.003, baseR * Math.pow(1 - tRachis * 0.93, 0.82));
-      const limbFlex = Math.pow(tRachis, 1.55) * 0.34 * p.windSway;
+      const rachisAttachFlex = trunkTopFlex + Math.pow(tRachis, 1.45) * rachisExtraFlex;
 
-      // Date palms bear short sharp stiff acanthophyll spines on the lowest 12% of the blade!
+      // Date palms bear short sharp stiff acanthophyll spines on the lowest 11% of the blade!
       const isBasalSpine = isDate && uFrac < 0.11;
       const env = isBasalSpine
         ? lerp1(0.18, 0.42, uFrac / 0.11)
         : Math.sin(Math.PI * Math.pow(clamp((uFrac + 0.08) / 1.08, 0.04, 0.98), 0.72));
-      const pinnaL = Math.max(0.07, maxPinnaLen * (0.22 + 0.84 * env));
+      const pinnaL = Math.max(0.07, maxPinnaLen * (0.24 + 0.84 * env));
+      // Lush tropical ribbon width (fills out crown silhouette naturally without sparse fishbone gaps!)
       const pinnaHalfW = isBasalSpine
-        ? 0.0055
-        : pinnaL * (isCoconut ? 0.042 : isDate ? 0.048 : 0.052);
+        ? 0.006
+        : pinnaL * (isCoconut ? 0.074 : isDate ? 0.062 : 0.068);
 
       for (const side of [-1, 1] as const) {
         // Forward sweep angle along rachis (stiff ~42° near apex, ~64° mid-blade)
@@ -953,13 +980,6 @@ export class PalmMesher {
 
         // V-fold cross section: +1 induplicate trough (Date), -1 reduplicate ridge (Coconut/Royal)
         const vFoldSign = isDate ? 1 : -1;
-        // Share exact parent rachis rotor on every vertex of this pinna -> 0.000% wind scaling!
-        const pinnaWind: [number, number, number, number] = [
-          trunkTopFlex,
-          limbFlex,
-          frondPhase,
-          isBasalSpine ? 0.02 : 0.16,
-        ];
 
         const grid: number[][] = [];
         let curPos = clone(basePt);
@@ -978,13 +998,23 @@ export class PalmMesher {
           const locUp = normalize(cross(curDir, locRight));
 
           // Sword-lanceolate width taper to a crisp 1.5 mm apex point!
-          const wProf = Math.sin(Math.PI * Math.pow(clamp(v01 * 0.88 + 0.06, 0.02, 0.99), 0.68)) * (1 - Math.pow(v01, 2.6));
-          const hw = Math.max(0.0008, pinnaHalfW * wProf);
+          const wProf = Math.sin(Math.PI * Math.pow(clamp(v01 * 0.84 + 0.08, 0.02, 0.99), 0.62)) * (1 - Math.pow(v01, 2.8));
+          const hw = Math.max(0.001, pinnaHalfW * wProf);
           const foldH = hw * 0.36 * vFoldSign;
 
           const colV = isBasalSpine
-            ? mixRgb(hexToLinearRgb('#d4a838'), colBase, 0.35)
-            : mixRgb(colBase, colTip, smoothstep(0.05, 0.92, uFrac * 0.45 + v01 * 0.65));
+            ? mixRgb(hexToLinearRgb('#c99a34'), colBase, 0.35)
+            : mixRgb(colBase, colTip, smoothstep(0.08, 0.96, uFrac * 0.38 + v01 * 0.62));
+
+          // At `v01 = 0`, `pinnaFlex === rachisAttachFlex` and `flutter === 0` -> 0.000 mm seam separation!
+          const pinnaFlex = rachisAttachFlex + (isBasalSpine ? 0.004 : 0.036) * v01 * v01 * p.windSway;
+          const pinnaFlutter = (isBasalSpine ? 0.0 : 0.22) * v01 * v01 * p.windSway;
+          const pinnaWind: [number, number, number, number] = [
+            clamp(trunkTopFlex * 2.5, 0, 1),
+            pinnaFlex,
+            frondPhase,
+            pinnaFlutter,
+          ];
 
           const row: number[] = [];
           for (const cSide of [-1, 0, 1]) {
@@ -1006,11 +1036,11 @@ export class PalmMesher {
                 tz: curDir.z,
                 u: cSide * 0.5 + 0.5,
                 v: v01,
-                color: cSide === 0 ? mixRgb(colV, colTip, 0.16) : colV,
+                color: cSide === 0 ? mixRgb(colV, colTip, 0.14) : colV,
                 wind: pinnaWind,
-                pivot: bootOrigin,
-                roughness: isCoconut ? 0.30 : 0.40,
-                translucency: isSkirt ? 0.22 : 0.58,
+                pivot: groundOrigin,
+                roughness: isCoconut ? 0.28 : 0.38,
+                translucency: isSkirt ? 0.20 : 0.48,
                 detailMetric: cSide === 0 ? 0.92 : 0.42,
                 anatomyLevel: 4,
               }),
@@ -1049,98 +1079,117 @@ export class PalmMesher {
     colBase: RGB,
     colTip: RGB,
     isSkirt: boolean,
-    _groundOrigin: V3,
+    groundOrigin: V3,
     trunkTopFlex: number,
     frondPhase: number,
     tier: number,
     rng: Random,
   ): void {
     const p = this.p;
-    const petioleLen = frondLen * 0.56;
-    const fanRadius = Math.max(0.38, fanDiameter * 0.54);
-    const bootOrigin = addScaled(attachCenter, radDir, crownR * 0.78);
-    const archRad = archDeg * DEG2RAD * 0.68;
+    // Shorter armed petiole (`0.38`) so the crown heart stays lushly clothed instead of bare sticks!
+    const petioleLen = frondLen * 0.38;
+    const fanRadius = Math.max(0.44, fanDiameter * 0.58);
+    const bootOrigin = addScaled(attachCenter, radDir, crownR * 0.72);
+    const archRad = archDeg * DEG2RAD * 0.72;
 
     const petiole = growCurve(bootOrigin, emergeDir, right0, petioleLen, tier >= 3 ? 14 : 10, (t0, t1) => ({
       pitch: (t1 - t0) * archRad,
     }));
 
-    const baseR = Math.max(0.015, crownR * 0.19);
-    const petCol = isSkirt ? colBase : mixRgb(colBase, hexToLinearRgb('#c9872b'), 0.35);
+    const baseR = Math.max(0.016, crownR * 0.21);
+    const petCol = isSkirt ? colBase : mixRgb(colBase, hexToLinearRgb('#a8742a'), 0.38);
+    const petExtraFlex = 0.16 * p.windSway;
     this.emitTaperedTube(
       rachisMesh,
       petiole,
       baseR,
-      baseR * 0.45,
+      baseR * 0.44,
       6,
       colSheath,
       petCol,
-      bootOrigin,
+      groundOrigin,
       trunkTopFlex,
-      0.26 * p.windSway,
+      petExtraFlex,
       frondPhase,
     );
 
-    // Hastula origin at petiole tip + short arching costa rib into fan blade
+    // Hastula origin at petiole tip (`t = 1.0`) — exact `hastulaFlex === trunkTopFlex + petExtraFlex`!
     const hastula = petiole.atT(1.0);
-    const limbFlex = 0.26 * p.windSway;
-    const fanWind: [number, number, number, number] = [trunkTopFlex, limbFlex, frondPhase, 0.14];
+    const hastulaFlex = trunkTopFlex + petExtraFlex;
 
-    const nRays = Math.max(20, Math.round(p.leafletPairs * (tier >= 3 ? 0.95 : 0.7)));
-    const fanArcRad = 242 * DEG2RAD;
-    const splitFrac = 0.56; // Continuous pleated accordion palm disk up to 56%, then free pointed fingers!
-    const radRings = 3; // hastula -> mid-disk -> split-circle
+    const nRays = Math.max(24, Math.round(p.leafletPairs * (tier >= 3 ? 1.05 : 0.8)));
+    const fanArcRad = 236 * DEG2RAD;
+    const splitFrac = 0.36; // Deep costapalmate palmate clefts (36% fused pleated palm disk -> 64% arching fingers!)
+    const radRings = 4;
 
-    // Part 1: Continuous 3D Accordion-Pleated Inner Fan Disk (welded radial V-folds!)
+    // Part 1: Continuous 3D Accordion-Pleated Inner Fan Disk with crisp V-fold normals!
     const diskCols = nRays * 2 + 1;
     const diskGrid: number[][] = [];
     for (let rIdx = 0; rIdx <= radRings; rIdx++) {
       const rFrac = (rIdx / radRings) * splitFrac;
+      const diskFlex = hastulaFlex + 0.055 * Math.pow(rFrac, 1.45) * p.windSway;
+      const diskFlutter = 0.18 * rFrac * rFrac * p.windSway;
+      const diskWind: [number, number, number, number] = [
+        clamp(trunkTopFlex * 2.5, 0, 1),
+        diskFlex,
+        frondPhase,
+        diskFlutter,
+      ];
       const row: number[] = [];
       for (let c = 0; c < diskCols; c++) {
         const u = c / (diskCols - 1) - 0.5; // -0.5 .. +0.5
         const ang = u * fanArcRad;
         // Costapalmate extension along central costa!
-        const costaExt = 1 + 0.18 * Math.cos(ang);
-        const rDist = Math.max(0.018, fanRadius * rFrac * costaExt);
+        const costaExt = 1 + 0.24 * Math.cos(ang);
+        const rDist = Math.max(0.014, fanRadius * rFrac * costaExt);
 
         let rayDir = add(
           scale(hastula.dir, Math.cos(ang)),
           scale(hastula.right, Math.sin(ang)),
         );
-        // Gentle cupped dish + outward shag drape when dry skirt
-        const cupLift = isSkirt
-          ? 0.08 * Math.cos(ang)
-          : 0.14 * (1 - Math.cos(ang)) - 0.22 * rFrac * rFrac;
-        rayDir = normalize(add(rayDir, scale(hastula.up, cupLift)));
+        if (isSkirt) {
+          // Thatched shag-skirt fans hang downward under gravity with slight outward flare (never curling inward into a ball!)
+          rayDir = normalize(add(rayDir, add(v3(0, -0.35 * rFrac, 0), scale(radDir, 0.18 * rFrac))));
+        } else {
+          const cupLift = 0.16 * (1 - Math.cos(ang)) - 0.26 * rFrac * rFrac;
+          rayDir = normalize(add(rayDir, scale(hastula.up, cupLift)));
+        }
+        const tang = normalize(cross(hastula.up, rayDir));
 
-        // Alternating ridge/valley accordion pleats!
+        // Crisp alternating ridge/valley accordion pleats!
         const isRidge = c % 2 === 1;
-        const pleatAmp = fanRadius * 0.032 * Math.sin(Math.PI * clamp(rFrac / splitFrac, 0, 1));
-        const pleatOff = (isRidge ? 1 : -1) * pleatAmp;
+        const pleatAmp = fanRadius * 0.044 * Math.sin(Math.PI * clamp((rFrac / splitFrac) * 0.85, 0, 1));
+        const pleatOff = rIdx === 0 ? 0 : (isRidge ? 1 : -1) * pleatAmp;
         const pt = add(addScaled(hastula.pos, rayDir, rDist), scale(hastula.up, pleatOff));
+
+        // Explicit accordion V-pleat facet shading normal so sun-catching ribs pop in 3D!
+        const tiltSide = c === 0 ? -0.45 : c === diskCols - 1 ? 0.45 : isRidge ? 0.0 : ((c % 4 === 0 ? 1 : -1) * 0.52);
+        const nrm = normalize(add(hastula.up, add(scale(tang, tiltSide), scale(rayDir, -0.18 * rFrac))));
 
         const col =
           rIdx === 0
-            ? mixRgb(petCol, colTip, 0.35) // pale hastula crest
-            : mixRgb(colBase, colTip, rFrac * 0.8 + (isRidge ? 0.14 : 0));
+            ? mixRgb(petCol, colBase, 0.55)
+            : mixRgb(colBase, colTip, rFrac * 0.65 + (isRidge ? 0.18 : -0.06));
 
         row.push(
           leafletMesh.addVertex({
             x: pt.x,
             y: pt.y,
             z: pt.z,
+            nx: nrm.x,
+            ny: nrm.y,
+            nz: nrm.z,
             tx: rayDir.x,
             ty: rayDir.y,
             tz: rayDir.z,
             u: u + 0.5,
             v: rFrac,
             color: col,
-            wind: fanWind,
-            pivot: bootOrigin,
-            roughness: 0.42,
-            translucency: isSkirt ? 0.22 : 0.55,
-            detailMetric: isRidge ? 0.88 : 0.35,
+            wind: diskWind,
+            pivot: groundOrigin,
+            roughness: isSkirt ? 0.72 : 0.36,
+            translucency: isSkirt ? 0.16 : 0.44,
+            detailMetric: isRidge ? 0.90 : 0.32,
             anatomyLevel: 4,
           }),
         );
@@ -1159,66 +1208,112 @@ export class PalmMesher {
       }
     }
 
-    // Part 2: Free Pointed Outer Fan Segments radiating cleanly from the `splitFrac` rim!
+    // Part 2: Multi-segment gracefully arching & drooping costapalmate ribbon fingers (`splitFrac .. 1.0`)!
     const splitRow = diskGrid[radRings];
+    const fingerSegs = 3;
     for (let k = 0; k < nRays; k++) {
       const cLeft = k * 2;
       const cMid = k * 2 + 1;
       const cRight = k * 2 + 2;
       const uMid = cMid / (diskCols - 1) - 0.5;
       const ang = uMid * fanArcRad;
-      const costaExt = 1 + 0.18 * Math.cos(ang);
-      const rTip = fanRadius * costaExt * rng.vary(1.0, 0.035);
-      const rMid = fanRadius * lerp1(splitFrac, 1.0, 0.52) * costaExt;
+      const costaExt = 1 + 0.24 * Math.cos(ang);
+      const rTip = fanRadius * costaExt * rng.vary(1.0, 0.045);
 
-      let rayDir = normalize(add(scale(hastula.dir, Math.cos(ang)), scale(hastula.right, Math.sin(ang))));
-      const segDroop = isSkirt ? -0.10 : 0.28 + 0.16 * Math.abs(uMid);
-      const midDir = normalize(add(rayDir, scale(hastula.up, -segDroop * 0.45)));
-      const tipDir = normalize(add(rayDir, scale(hastula.up, -segDroop)));
+      const rayDir0 = normalize(add(scale(hastula.dir, Math.cos(ang)), scale(hastula.right, Math.sin(ang))));
+      const tang = normalize(cross(hastula.up, rayDir0));
+      const baseDroop = isSkirt ? 0.52 : 0.36 + 0.24 * Math.abs(uMid);
 
-      const halfSegW = ((fanArcRad / nRays) * rMid) * 0.32;
-      const tang = normalize(cross(hastula.up, rayDir));
-      const midCenter = addScaled(hastula.pos, midDir, rMid);
-      const tipPt = addScaled(hastula.pos, tipDir, rTip);
+      let prevL = splitRow[cLeft];
+      let prevM = splitRow[cMid];
+      let prevR = splitRow[cRight];
 
-      const colMid = mixRgb(colBase, colTip, 0.72);
-      const vL = leafletMesh.addVertex({
-        x: midCenter.x - tang.x * halfSegW,
-        y: midCenter.y - tang.y * halfSegW,
-        z: midCenter.z - tang.z * halfSegW,
-        tx: midDir.x, ty: midDir.y, tz: midDir.z,
-        color: colMid, wind: fanWind, pivot: bootOrigin,
-        roughness: 0.42, translucency: 0.58, detailMetric: 0.35, anatomyLevel: 4,
-      });
-      const vM = leafletMesh.addVertex({
-        x: midCenter.x + hastula.up.x * halfSegW * 0.35,
-        y: midCenter.y + hastula.up.y * halfSegW * 0.35,
-        z: midCenter.z + hastula.up.z * halfSegW * 0.35,
-        tx: midDir.x, ty: midDir.y, tz: midDir.z,
-        color: mixRgb(colMid, colTip, 0.25), wind: fanWind, pivot: bootOrigin,
-        roughness: 0.42, translucency: 0.58, detailMetric: 0.88, anatomyLevel: 4,
-      });
-      const vR = leafletMesh.addVertex({
-        x: midCenter.x + tang.x * halfSegW,
-        y: midCenter.y + tang.y * halfSegW,
-        z: midCenter.z + tang.z * halfSegW,
-        tx: midDir.x, ty: midDir.y, tz: midDir.z,
-        color: colMid, wind: fanWind, pivot: bootOrigin,
-        roughness: 0.42, translucency: 0.58, detailMetric: 0.35, anatomyLevel: 4,
-      });
-      const vTip = leafletMesh.addVertex({
-        x: tipPt.x, y: tipPt.y, z: tipPt.z,
-        tx: tipDir.x, ty: tipDir.y, tz: tipDir.z,
-        color: colTip, wind: fanWind, pivot: bootOrigin,
-        roughness: 0.42, translucency: 0.62, detailMetric: 0.9, anatomyLevel: 4,
-      });
+      for (let s = 1; s <= fingerSegs; s++) {
+        const sf = s / fingerSegs; // 0 -> 1 along free finger
+        const rFrac = lerp1(splitFrac, 1.0, sf);
+        const rHere = lerp1(fanRadius * splitFrac * costaExt, rTip, sf);
+        let segDir: V3;
+        if (isSkirt) {
+          segDir = normalize(
+            add(
+              rayDir0,
+              add(v3(0, -0.35 * splitFrac - 0.62 * Math.pow(sf, 1.35), 0), scale(radDir, 0.18 * rFrac)),
+            ),
+          );
+        } else {
+          const curDroop =
+            0.16 * (1 - Math.cos(ang)) * (1 - sf * 0.6) -
+            0.26 * splitFrac * splitFrac -
+            baseDroop * Math.pow(sf, 1.55);
+          segDir = normalize(add(rayDir0, scale(hastula.up, curDroop)));
+        }
+        const center = addScaled(hastula.pos, segDir, rHere);
 
-      leafletMesh.addQuad(splitRow[cLeft], splitRow[cMid], vM, vL);
-      leafletMesh.addQuad(splitRow[cMid], splitRow[cRight], vR, vM);
-      leafletMesh.addTri(vL, vM, vTip);
-      leafletMesh.addTri(vM, vR, vTip);
+        const fFlex = hastulaFlex + 0.055 * Math.pow(rFrac, 1.45) * p.windSway;
+        const fFlut = 0.20 * rFrac * rFrac * p.windSway;
+        const fWind: [number, number, number, number] = [
+          clamp(trunkTopFlex * 2.5, 0, 1),
+          fFlex,
+          frondPhase,
+          fFlut,
+        ];
+        const segCol = mixRgb(colBase, colTip, clamp(0.32 + 0.68 * rFrac, 0, 1));
+
+        if (s === fingerSegs) {
+          const nTip = normalize(add(hastula.up, scale(segDir, 0.35)));
+          const vTip = leafletMesh.addVertex({
+            x: center.x, y: center.y, z: center.z,
+            nx: nTip.x, ny: nTip.y, nz: nTip.z,
+            tx: segDir.x, ty: segDir.y, tz: segDir.z,
+            color: colTip, wind: fWind, pivot: groundOrigin,
+            roughness: isSkirt ? 0.74 : 0.38, translucency: isSkirt ? 0.18 : 0.50, detailMetric: 0.92, anatomyLevel: 4,
+          });
+          leafletMesh.addTri(prevL, prevM, vTip);
+          leafletMesh.addTri(prevM, prevR, vTip);
+        } else {
+          const halfSegW = ((fanArcRad / nRays) * rHere) * 0.46 * (1 - 0.58 * Math.pow(sf, 1.35));
+          const foldH = halfSegW * 0.48;
+          const nL = normalize(add(hastula.up, scale(tang, -0.52)));
+          const nM = normalize(hastula.up);
+          const nR = normalize(add(hastula.up, scale(tang, 0.52)));
+
+          const vL = leafletMesh.addVertex({
+            x: center.x - tang.x * halfSegW - hastula.up.x * foldH * 0.35,
+            y: center.y - tang.y * halfSegW - hastula.up.y * foldH * 0.35,
+            z: center.z - tang.z * halfSegW - hastula.up.z * foldH * 0.35,
+            nx: nL.x, ny: nL.y, nz: nL.z,
+            tx: segDir.x, ty: segDir.y, tz: segDir.z,
+            color: segCol, wind: fWind, pivot: groundOrigin,
+            roughness: isSkirt ? 0.72 : 0.36, translucency: isSkirt ? 0.16 : 0.46, detailMetric: 0.35, anatomyLevel: 4,
+          });
+          const vM = leafletMesh.addVertex({
+            x: center.x + hastula.up.x * foldH * 0.65,
+            y: center.y + hastula.up.y * foldH * 0.65,
+            z: center.z + hastula.up.z * foldH * 0.65,
+            nx: nM.x, ny: nM.y, nz: nM.z,
+            tx: segDir.x, ty: segDir.y, tz: segDir.z,
+            color: mixRgb(segCol, colTip, 0.22), wind: fWind, pivot: groundOrigin,
+            roughness: isSkirt ? 0.72 : 0.36, translucency: isSkirt ? 0.16 : 0.46, detailMetric: 0.90, anatomyLevel: 4,
+          });
+          const vR = leafletMesh.addVertex({
+            x: center.x + tang.x * halfSegW - hastula.up.x * foldH * 0.35,
+            y: center.y + tang.y * halfSegW - hastula.up.y * foldH * 0.35,
+            z: center.z + tang.z * halfSegW - hastula.up.z * foldH * 0.35,
+            nx: nR.x, ny: nR.y, nz: nR.z,
+            tx: segDir.x, ty: segDir.y, tz: segDir.z,
+            color: segCol, wind: fWind, pivot: groundOrigin,
+            roughness: isSkirt ? 0.72 : 0.36, translucency: isSkirt ? 0.16 : 0.46, detailMetric: 0.35, anatomyLevel: 4,
+          });
+          leafletMesh.addQuad(prevL, prevM, vM, vL);
+          leafletMesh.addQuad(prevM, prevR, vR, vM);
+          prevL = vL;
+          prevM = vM;
+          prevR = vR;
+        }
+      }
       this.stats.leaflets++;
     }
+    leafletMesh.hasExplicitNormals = true;
   }
 
   // ---------------------------------------------------------------------------
@@ -1251,7 +1346,7 @@ export class PalmMesher {
       const radDir = normalize(add(scale(crownRight, Math.cos(az)), scale(crownUp, Math.sin(az))));
       const right0 = normalize(cross(crownAxis, radDir));
       const bunchAge = b / Math.max(1, nBunches - 1); // 0 = youngest upper bunch, 1 = ripest lower bunch
-      const bPhase = (((az / TAU) % 1) + 1) % 1;
+      const bPhase = (palmPhase + (((az / TAU) % 1 + 1) % 1) * 0.03) % 1;
       this.stats.fruitBunches++;
 
       if (p.species === 'coconut_palm') {
@@ -1265,6 +1360,7 @@ export class PalmMesher {
         const stalk = growCurve(axilOrigin, stalkDir, right0, stalkLen, 6, (t0, t1) => ({
           gravity: (t1 - t0) * 0.48,
         }));
+        const stalkExtraFlex = 0.045 * p.windSway;
         this.emitTaperedTube(
           fruitMesh,
           stalk,
@@ -1275,7 +1371,7 @@ export class PalmMesher {
           colSpadix,
           groundOrigin,
           trunkTopFlex,
-          0.06 * p.windSway,
+          stalkExtraFlex,
           bPhase,
         );
 
@@ -1292,9 +1388,10 @@ export class PalmMesher {
             : mixRgb(colKingNut, colMatureNut, (localRipe - 0.5) * 2);
         const calyxCol = hexToLinearRgb('#3d2914');
 
+        // Rigid SO(3) rotor around `groundOrigin` (`flutter = 0.0` -> 0.000000% radial stretch!)
         const nutWind: [number, number, number, number] = [
-          trunkTopFlex,
-          0.07 * p.windSway,
+          clamp(trunkTopFlex * 2.5, 0, 1),
+          trunkTopFlex + Math.pow(0.88, 1.45) * stalkExtraFlex,
           bPhase,
           0.0,
         ];
@@ -1335,7 +1432,7 @@ export class PalmMesher {
             0.46 + localRipe * 0.28,
             0.08,
             nutWind,
-            axilOrigin,
+            groundOrigin,
           );
           this.stats.fruits++;
         }
@@ -1351,6 +1448,7 @@ export class PalmMesher {
           gravity: (t1 - t0) * 1.45 * (0.35 + t1),
         }));
         const goldenOrange = mixRgb(colSpadix, hexToLinearRgb('#eb8c15'), 0.55);
+        const pedExtraFlex = 0.08 * p.windSway;
         this.emitTaperedTube(
           fruitMesh,
           peduncle,
@@ -1361,11 +1459,13 @@ export class PalmMesher {
           goldenOrange,
           groundOrigin,
           trunkTopFlex,
-          0.14 * p.windSway,
+          pedExtraFlex,
           bPhase,
         );
 
         const broomTip = peduncle.atT(0.95);
+        const broomFlex = trunkTopFlex + Math.pow(0.95, 1.45) * pedExtraFlex;
+        const strandExtraFlex = 0.05 * p.windSway;
         const nStrands = Math.max(8, Math.round((tier >= 3 ? 18 : 11) * p.fruitAbundance));
         const datesPerStrand = Math.max(6, Math.round((tier >= 3 ? 11 : 7) * p.fruitAbundance));
 
@@ -1404,18 +1504,11 @@ export class PalmMesher {
             4,
             goldenOrange,
             capCol,
-            axilOrigin,
-            trunkTopFlex,
-            0.18 * p.windSway,
+            groundOrigin,
+            broomFlex,
+            strandExtraFlex,
             bPhase,
           );
-
-          const dateWind: [number, number, number, number] = [
-            trunkTopFlex,
-            0.18 * p.windSway,
-            bPhase,
-            0.04,
-          ];
 
           for (let d = 0; d < datesPerStrand; d++) {
             const tS = lerp1(0.16, 0.97, d / Math.max(1, datesPerStrand - 1));
@@ -1427,6 +1520,12 @@ export class PalmMesher {
             const dateLen = 0.048 * sc * bRng.vary(1.0, 0.09);
             const dateRad = dateLen * 0.31;
             const dCol = mixRgb(colBarhiGold, dateCol, clamp(0.45 + 0.55 * bRng.next(), 0, 1));
+            const dateWind: [number, number, number, number] = [
+              clamp(trunkTopFlex * 2.5, 0, 1),
+              broomFlex + Math.pow(tS, 1.45) * strandExtraFlex,
+              bPhase,
+              0.0,
+            ];
 
             this.emitSculptedFruitOvoid(
               fruitMesh,
@@ -1442,7 +1541,7 @@ export class PalmMesher {
               0.28, // Glossy translucent Medjool date skin!
               0.32,
               dateWind,
-              axilOrigin,
+              groundOrigin,
             );
             this.stats.fruits++;
           }
@@ -1465,6 +1564,7 @@ export class PalmMesher {
         const peduncle = growCurve(axilOrigin, pedDir, right0, pedLen, 8, (t0, t1) => ({
           gravity: (t1 - t0) * (isRoyal ? 0.55 : 1.35),
         }));
+        const pedExtraFlex = 0.08 * p.windSway;
         this.emitTaperedTube(
           fruitMesh,
           peduncle,
@@ -1475,22 +1575,18 @@ export class PalmMesher {
           mixRgb(colSpadix, hexToLinearRgb('#f0e2b6'), 0.35),
           groundOrigin,
           trunkTopFlex,
-          0.14 * p.windSway,
+          pedExtraFlex,
           bPhase,
         );
 
         const nRachi = isDoum ? 6 : 12;
         const perRachi = Math.max(4, Math.round((isDoum ? 5 : 9) * p.fruitAbundance));
-        const drupeWind: [number, number, number, number] = [
-          trunkTopFlex,
-          0.15 * p.windSway,
-          bPhase,
-          0.03,
-        ];
+        const subExtraFlex = 0.04 * p.windSway;
 
         for (let r = 0; r < nRachi; r++) {
           const tP = lerp1(0.38, 0.96, r / Math.max(1, nRachi - 1));
           const frP = peduncle.atT(tP);
+          const rAttachFlex = trunkTopFlex + Math.pow(tP, 1.45) * pedExtraFlex;
           const rAz = r * GOLDEN_ANGLE;
           const rDir = normalize(
             add(
@@ -1510,14 +1606,15 @@ export class PalmMesher {
             4,
             colSpadix,
             colSpadix,
-            axilOrigin,
-            trunkTopFlex,
-            0.15 * p.windSway,
+            groundOrigin,
+            rAttachFlex,
+            subExtraFlex,
             bPhase,
           );
 
           for (let f = 0; f < perRachi; f++) {
-            const frF = subStrand.atT(lerp1(0.22, 0.96, f / Math.max(1, perRachi - 1)));
+            const tF = lerp1(0.22, 0.96, f / Math.max(1, perRachi - 1));
+            const frF = subStrand.atT(tF);
             const fAz = f * GOLDEN_ANGLE + r;
             const fOut = add(scale(frF.right, Math.cos(fAz)), scale(frF.up, Math.sin(fAz)));
             const fLen = (isDoum ? 0.076 : 0.022) * sc * bRng.vary(1.0, 0.08);
@@ -1527,6 +1624,12 @@ export class PalmMesher {
               : isRoyal
                 ? mixRgb(hexToLinearRgb('#a82846'), hexToLinearRgb('#2e0b24'), ripeness)
                 : mixRgb(hexToLinearRgb('#594122'), hexToLinearRgb('#17110c'), ripeness);
+            const drupeWind: [number, number, number, number] = [
+              clamp(trunkTopFlex * 2.5, 0, 1),
+              rAttachFlex + Math.pow(tF, 1.45) * subExtraFlex,
+              bPhase,
+              0.0,
+            ];
 
             this.emitSculptedFruitOvoid(
               fruitMesh,
@@ -1542,7 +1645,7 @@ export class PalmMesher {
               isDoum ? 0.26 : 0.32,
               0.16,
               drupeWind,
-              axilOrigin,
+              groundOrigin,
             );
             this.stats.fruits++;
           }
@@ -1564,8 +1667,8 @@ export class PalmMesher {
     col0: RGB,
     col1: RGB,
     pivot: V3,
-    trunkFlex: number,
-    tipLimbFlex: number,
+    baseLimbFlex: number,
+    extraLimbFlex: number,
     phase: number,
   ): void {
     const rings: number[][] = [];
@@ -1574,7 +1677,7 @@ export class PalmMesher {
       const t = fr.t;
       const r = lerp1(r0, r1, Math.pow(t, 0.85));
       const col = mixRgb(col0, col1, t);
-      const limb = Math.pow(t, 1.5) * tipLimbFlex;
+      const limb = baseLimbFlex + Math.pow(t, 1.45) * extraLimbFlex;
       const row: number[] = [];
       for (let j = 0; j < sides; j++) {
         const th = (j / sides) * TAU;
@@ -1585,7 +1688,7 @@ export class PalmMesher {
             tx: fr.dir.x, ty: fr.dir.y, tz: fr.dir.z,
             u: j / sides, v: t,
             color: col,
-            wind: [trunkFlex, limb, phase, 0],
+            wind: [clamp(baseLimbFlex * 2.5, 0, 1), limb, phase, 0],
             pivot,
             roughness: 0.46,
             translucency: 0.14,
