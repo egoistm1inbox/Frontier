@@ -187,6 +187,7 @@ export const PRESET_GROUPS: { label: string; icon: string; accent: string }[] = 
   { label: 'Palms · Fruiting & Branching', icon: 'palm', accent: '#eab308' },
   { label: 'Flowers · Gigantic 3D Blooms', icon: 'flower', accent: '#ff2a78' },
   { label: 'Sea Plants · Kelp & Vegetation', icon: 'marine', accent: '#29b84a' },
+  { label: 'Sea Anemones · Actiniaria & Tube', icon: 'marine', accent: '#ff2e93' },
   { label: 'Sea & Reef · Marine Species', icon: 'marine', accent: '#00e5ff' },
   { label: 'Real Moss · Bryophytes', icon: 'moss', accent: '#86c232' },
   { label: 'Giant Tropical · Megaphylls', icon: 'tropical', accent: '#7ee058' },
@@ -1244,7 +1245,221 @@ export const PRESETS: PresetDefinition[] = [
   },
 
   // ---------------------------------------------------------------------------
-  // SEA & REEF · BENTHIC CORALS, SEA FANS, ANEMONES, SPONGES & CRINOIDS
+  // SEA ANEMONES · ACTINIARIA, CARPET, ROCK FLOWER & TUBE ANEMONES (10 PRESETS)
+  // ---------------------------------------------------------------------------
+  {
+    name: 'Bioluminescent Bubble-Tip Anemone',
+    group: 'Sea Anemones · Actiniaria & Tube',
+    subtitle: 'Entacmaea quadricolor · verrucose column, oral disc & glowing bubble-tip tentacles',
+    accent: '#ff2e93',
+    icon: 'marine',
+    scene: {
+      presetName: 'Bioluminescent Bubble-Tip Anemone',
+      groupLabel: 'Sea Anemones · Actiniaria & Tube',
+      substrate: sub('coral_reef_ledge', 0.55, 0.62, 0.88, 60),
+      substrateVisible: true,
+      layers: [
+        marineLayer('layer-1', 'Bubble-Tip Sea Anemone', 908, 'sea_anemone', 'biolum_bubble_anemone', {
+          detailTier: 3,
+          colonyHeight: 0.68,
+          organLength: 0.40,
+          ruffleWave: 0.86,
+        }),
+      ],
+    },
+  },
+  {
+    name: 'Magnificent Ritteri Sea Anemone',
+    group: 'Sea Anemones · Actiniaria & Tube',
+    subtitle: 'Radianthus magnifica · flared magenta verrucose column & gold-tipped digitiform crown',
+    accent: '#ffd426',
+    icon: 'marine',
+    scene: {
+      presetName: 'Magnificent Ritteri Sea Anemone',
+      groupLabel: 'Sea Anemones · Actiniaria & Tube',
+      substrate: sub('coral_reef_ledge', 0.62, 0.62, 0.88, 60),
+      substrateVisible: true,
+      layers: [
+        marineLayer('layer-1', 'Magnificent Ritteri Anemone', 961, 'magnificent_ritteri_anemone', 'ritteri_magenta_gold', {
+          detailTier: 3,
+          colonyHeight: 0.80,
+          colonyCount: 6,
+          organLength: 0.35,
+          organDensity: 1.25,
+        }),
+      ],
+    },
+  },
+  {
+    name: 'Electric Cobalt Giant Carpet Anemone',
+    group: 'Sea Anemones · Actiniaria & Tube',
+    subtitle: 'Stichodactyla gigantea · hyperbolic saddle-folded oral disc & 950+ velvet capitate beads',
+    accent: '#1fd6e8',
+    icon: 'marine',
+    scene: {
+      presetName: 'Electric Cobalt Giant Carpet Anemone',
+      groupLabel: 'Sea Anemones · Actiniaria & Tube',
+      substrate: sub('coral_reef_ledge', 0.66, 0.58, 0.86, 64),
+      substrateVisible: true,
+      layers: [
+        marineLayer('layer-1', 'Giant Folded Carpet Anemone', 962, 'giant_carpet_anemone', 'carpet_cobalt_turquoise', {
+          detailTier: 3,
+          organLength: 0.46,
+          ruffleWave: 0.90,
+          organDensity: 1.2,
+        }),
+      ],
+    },
+  },
+  {
+    name: 'Firework Tube-Dwelling Anemone',
+    group: 'Sea Anemones · Actiniaria & Tube',
+    subtitle: 'Cerianthus membranaceus · parchment sand-tube, cascading violet fountain & tangerine tuft',
+    accent: '#e82ca8',
+    icon: 'marine',
+    scene: {
+      presetName: 'Firework Tube-Dwelling Anemone',
+      groupLabel: 'Sea Anemones · Actiniaria & Tube',
+      substrate: sub('rippled_seabed_sand', 0.78, 0.48, 0.76, 64),
+      substrateVisible: true,
+      layers: [
+        marineLayer('layer-1', 'Cerianthus Tube Anemone', 963, 'tube_dwelling_cerianthus', 'cerianthus_firework_violet', {
+          detailTier: 3,
+          colonyHeight: 0.98,
+          colonyCount: 3,
+          organLength: 0.60,
+        }),
+      ],
+    },
+  },
+  {
+    name: 'Spiral Corkscrew Reef Anemone',
+    group: 'Sea Anemones · Actiniaria & Tube',
+    subtitle: 'Bartholomea annulata · star-striped disc, 3D helical spiral coils & opalescent rings',
+    accent: '#6de8c1',
+    icon: 'marine',
+    scene: {
+      presetName: 'Spiral Corkscrew Reef Anemone',
+      groupLabel: 'Sea Anemones · Actiniaria & Tube',
+      substrate: sub('coral_reef_ledge', 0.58, 0.62, 0.88, 60),
+      substrateVisible: true,
+      layers: [
+        marineLayer('layer-1', 'Spiral Corkscrew Anemone', 964, 'corkscrew_anemone', undefined, {
+          detailTier: 3,
+          colonyHeight: 0.68,
+          organLength: 0.45,
+          ruffleWave: 0.88,
+        }),
+      ],
+    },
+  },
+  {
+    name: 'Caribbean Ultra Rock Flower Anemone',
+    group: 'Sea Anemones · Actiniaria & Tube',
+    subtitle: 'Phymanthus crucifer · clustered rainbow zebra-striped flower discs & beaded petal skirts',
+    accent: '#ffd014',
+    icon: 'marine',
+    scene: {
+      presetName: 'Caribbean Ultra Rock Flower Anemone',
+      groupLabel: 'Sea Anemones · Actiniaria & Tube',
+      substrate: sub('coral_reef_ledge', 0.66, 0.60, 0.88, 64),
+      substrateVisible: true,
+      layers: [
+        marineLayer('layer-1', 'Rock Flower Anemone Colony', 965, 'rock_flower_anemone', 'rock_flower_ultra_rainbow', {
+          detailTier: 3,
+          colonyCount: 5,
+          organLength: 0.16,
+          vesicleAbundance: 1.2,
+        }),
+      ],
+    },
+  },
+  {
+    name: 'Giant Plumose Cauliflower Anemone',
+    group: 'Sea Anemones · Actiniaria & Tube',
+    subtitle: 'Metridium farcimen · tall translucent salmon-alabaster trunks & feathery cauliflower clouds',
+    accent: '#f7bfa0',
+    icon: 'marine',
+    scene: {
+      presetName: 'Giant Plumose Cauliflower Anemone',
+      groupLabel: 'Sea Anemones · Actiniaria & Tube',
+      substrate: sub('wet_basalt_crag', 0.68, 0.62, 0.92, 60),
+      substrateVisible: true,
+      layers: [
+        marineLayer('layer-1', 'Giant Plumose Metridium', 966, 'plumose_frilled_anemone', 'plumose_sunset_alabaster', {
+          detailTier: 3,
+          colonyHeight: 1.06,
+          colonyCount: 3,
+          organDensity: 1.2,
+        }),
+      ],
+    },
+  },
+  {
+    name: 'Strawberry Sapphire Beadlet Anemone',
+    group: 'Sea Anemones · Actiniaria & Tube',
+    subtitle: 'Actinia fragacea · golden-spotted crimson barrels & ring of 24 sapphire acrorhagi pearls',
+    accent: '#14b5ff',
+    icon: 'marine',
+    scene: {
+      presetName: 'Strawberry Sapphire Beadlet Anemone',
+      groupLabel: 'Sea Anemones · Actiniaria & Tube',
+      substrate: sub('wet_basalt_crag', 0.62, 0.64, 0.94, 60),
+      substrateVisible: true,
+      layers: [
+        marineLayer('layer-1', 'Strawberry Beadlet Colony', 967, 'strawberry_beadlet_anemone', 'strawberry_sapphire_actinia', {
+          detailTier: 3,
+          colonyHeight: 0.44,
+          colonyCount: 4,
+          vesicleAbundance: 1.2,
+        }),
+      ],
+    },
+  },
+  {
+    name: 'Emerald Haddoni Carpet Anemone',
+    group: 'Sea Anemones · Actiniaria & Tube',
+    subtitle: 'Fluorescent neon-emerald & magenta Stichodactyla haddoni saddle-folded reef carpet',
+    accent: '#38ef7d',
+    icon: 'marine',
+    scene: {
+      presetName: 'Emerald Haddoni Carpet Anemone',
+      groupLabel: 'Sea Anemones · Actiniaria & Tube',
+      substrate: sub('rippled_seabed_sand', 0.68, 0.48, 0.78, 64),
+      substrateVisible: true,
+      layers: [
+        marineLayer('layer-1', 'Emerald Haddoni Carpet', 968, 'giant_carpet_anemone', 'biolum_bubble_anemone', {
+          detailTier: 3,
+          organLength: 0.48,
+          ruffleWave: 0.92,
+        }),
+      ],
+    },
+  },
+  {
+    name: 'Ultraviolet Reef Sea Anemone',
+    group: 'Sea Anemones · Actiniaria & Tube',
+    subtitle: 'Fluorescent deep-reef Entacmaea with electric cyan tentacles & neon magenta tips',
+    accent: '#ff2bd6',
+    icon: 'marine',
+    scene: {
+      presetName: 'Ultraviolet Reef Sea Anemone',
+      groupLabel: 'Sea Anemones · Actiniaria & Tube',
+      substrate: sub('coral_reef_ledge', 0.55, 0.64, 0.90, 60),
+      substrateVisible: true,
+      layers: [
+        marineLayer('layer-1', 'Ultraviolet Bubble-Tip Anemone', 912, 'sea_anemone', 'abyssal_neon_reef', {
+          detailTier: 3,
+          colonyHeight: 0.70,
+          organLength: 0.42,
+          ruffleWave: 0.88,
+        }),
+      ],
+    },
+  },
+
+  // ---------------------------------------------------------------------------
+  // SEA & REEF · BENTHIC CORALS, SEA FANS, SPONGES & CRINOIDS
   // ---------------------------------------------------------------------------
   {
     name: 'Rose-Gold Staghorn Coral',
@@ -1283,27 +1498,6 @@ export const PRESETS: PresetDefinition[] = [
           detailTier: 3,
           colonyHeight: 1.42,
           colonyCount: 2,
-        }),
-      ],
-    },
-  },
-  {
-    name: 'Bioluminescent Bubble-Tip Anemone',
-    group: 'Sea & Reef · Marine Species',
-    subtitle: 'Entacmaea quadricolor · verrucose column, oral disc & glowing bubble-tip tentacles',
-    accent: '#ff2e93',
-    icon: 'marine',
-    scene: {
-      presetName: 'Bioluminescent Bubble-Tip Anemone',
-      groupLabel: 'Sea & Reef · Marine Species',
-      substrate: sub('coral_reef_ledge', 0.55, 0.62, 0.88, 60),
-      substrateVisible: true,
-      layers: [
-        marineLayer('layer-1', 'Bubble-Tip Sea Anemone', 908, 'sea_anemone', 'biolum_bubble_anemone', {
-          detailTier: 3,
-          colonyHeight: 0.68,
-          organLength: 0.40,
-          ruffleWave: 0.86,
         }),
       ],
     },
@@ -1366,27 +1560,6 @@ export const PRESETS: PresetDefinition[] = [
           colonyHeight: 1.25,
           colonyCount: 3,
           branchOrder: 3,
-        }),
-      ],
-    },
-  },
-  {
-    name: 'Ultraviolet Reef Sea Anemone',
-    group: 'Sea & Reef · Marine Species',
-    subtitle: 'Fluorescent deep-reef Entacmaea with electric cyan tentacles & neon magenta tips',
-    accent: '#ff2bd6',
-    icon: 'marine',
-    scene: {
-      presetName: 'Ultraviolet Reef Sea Anemone',
-      groupLabel: 'Sea & Reef · Marine Species',
-      substrate: sub('coral_reef_ledge', 0.55, 0.64, 0.90, 60),
-      substrateVisible: true,
-      layers: [
-        marineLayer('layer-1', 'Ultraviolet Bubble-Tip Anemone', 912, 'sea_anemone', 'abyssal_neon_reef', {
-          detailTier: 3,
-          colonyHeight: 0.70,
-          organLength: 0.42,
-          ruffleWave: 0.88,
         }),
       ],
     },
@@ -2972,6 +3145,66 @@ export const PRESETS: PresetDefinition[] = [
           'jade_tidepool',
           { detailTier: 2, colonyCount: 10, organLength: 0.46 },
           { x: 0.38, z: -0.12, yaw: 40, scale: 0.95 },
+        ),
+      ],
+    },
+  },
+  {
+    name: 'Fluorescent Reef Anemone Sanctuary',
+    group: 'Ecosystems · Multi-Layer',
+    subtitle: 'Magnificent Ritteri + Cobalt Carpet + Firework Cerianthus + Rock Flower + Plumose Metridium',
+    accent: '#ff2e93',
+    icon: 'layers',
+    scene: {
+      presetName: 'Fluorescent Reef Anemone Sanctuary',
+      groupLabel: 'Ecosystems · Multi-Layer',
+      substrate: sub('coral_reef_ledge', 1.88, 0.60, 0.88, 68),
+      substrateVisible: true,
+      layers: [
+        marineLayer(
+          'layer-1',
+          'Giant Plumose Metridium',
+          971,
+          'plumose_frilled_anemone',
+          'plumose_sunset_alabaster',
+          { detailTier: 2, colonyHeight: 1.08, colonyCount: 2 },
+          { x: -0.48, z: -0.48, yaw: 12, scale: 1.0 },
+        ),
+        marineLayer(
+          'layer-2',
+          'Firework Tube Anemone',
+          972,
+          'tube_dwelling_cerianthus',
+          'cerianthus_firework_violet',
+          { detailTier: 2, colonyHeight: 0.96, colonyCount: 2, organLength: 0.56 },
+          { x: 0.54, z: -0.44, yaw: -24, scale: 0.98 },
+        ),
+        marineLayer(
+          'layer-3',
+          'Magnificent Ritteri Anemone',
+          973,
+          'magnificent_ritteri_anemone',
+          'ritteri_magenta_gold',
+          { detailTier: 2, colonyHeight: 0.74, colonyCount: 5, organLength: 0.32 },
+          { x: -0.58, z: 0.26, yaw: 30, scale: 0.92 },
+        ),
+        marineLayer(
+          'layer-4',
+          'Electric Cobalt Carpet Anemone',
+          974,
+          'giant_carpet_anemone',
+          'carpet_cobalt_turquoise',
+          { detailTier: 2, organLength: 0.36, ruffleWave: 0.88 },
+          { x: 0.48, z: 0.26, yaw: -16, scale: 0.88 },
+        ),
+        marineLayer(
+          'layer-5',
+          'Ultra Rock Flower Colony',
+          975,
+          'rock_flower_anemone',
+          'rock_flower_ultra_rainbow',
+          { detailTier: 2, colonyCount: 4, organLength: 0.14 },
+          { x: -0.04, z: 0.46, y: 0.03, yaw: 8, scale: 0.90 },
         ),
       ],
     },

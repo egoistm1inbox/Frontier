@@ -102,7 +102,15 @@ export class MarineMesher {
     const isCoral = p.species === 'staghorn_coral';
     const isCodium = p.species === 'codium_dead_mans_fingers';
     const isFan = p.species === 'gorgonian_sea_fan';
-    const isAnemone = p.species === 'sea_anemone';
+    const isAnyAnemone =
+      p.species === 'sea_anemone' ||
+      p.species === 'magnificent_ritteri_anemone' ||
+      p.species === 'giant_carpet_anemone' ||
+      p.species === 'tube_dwelling_cerianthus' ||
+      p.species === 'corkscrew_anemone' ||
+      p.species === 'rock_flower_anemone' ||
+      p.species === 'plumose_frilled_anemone' ||
+      p.species === 'strawberry_beadlet_anemone';
     const isSponge = p.species === 'azure_tube_sponge';
     const isCrinoid = p.species === 'feather_star_crinoid';
 
@@ -112,45 +120,71 @@ export class MarineMesher {
         ? 'Welded Dichotomous Velvet Thallus'
         : isSponge
           ? 'Hollow Organ-Pipe Chimney Walls'
-          : isAnemone
-            ? 'Verrucose Column & Oral Disc'
-            : isCrinoid
-              ? 'Pentagonal Calyx & Grasping Cirri'
-              : p.species === 'neptune_seagrass' || p.species === 'eelgrass_zostera'
-                ? 'Creeping Rhizomes & Basal Sheaths'
-                : p.species === 'sea_grapes_caulerpa'
-                  ? 'Creeping Emerald Stolons & Rhizoids'
-                  : 'Haptera Holdfast & Basal Foot';
+          : p.species === 'tube_dwelling_cerianthus'
+            ? 'Parchment Mucous-Sand Dwelling Tubes'
+            : p.species === 'giant_carpet_anemone'
+              ? 'Saddle-Folded Oral Carpet & Pedal Foot'
+              : p.species === 'rock_flower_anemone'
+                ? 'Radially Striped Rainbow Oral Discs'
+                : p.species === 'strawberry_beadlet_anemone'
+                  ? 'Spotted Strawberry Barrel Columns'
+                  : isAnyAnemone
+                    ? 'Muscular Pedal Column & Oral Disc'
+                    : isCrinoid
+                      ? 'Pentagonal Calyx & Grasping Cirri'
+                      : p.species === 'neptune_seagrass' || p.species === 'eelgrass_zostera'
+                        ? 'Creeping Rhizomes & Basal Sheaths'
+                        : p.species === 'sea_grapes_caulerpa'
+                          ? 'Creeping Emerald Stolons & Rhizoids'
+                          : 'Haptera Holdfast & Basal Foot';
 
     const stipeName = isFan
       ? 'Flabellate Ribs & Reticulate Lattice'
       : isCrinoid
         ? 'Segmented Brachial Arms'
-        : p.species === 'sea_palm_postelsia'
-          ? 'Fluted Rubbery Sea-Palm Trunks'
-          : p.species === 'mermaid_wineglass_acetabularia'
-            ? 'Calcified Hair-Slender Stalks'
-            : p.species === 'eelgrass_zostera'
-              ? 'Fertile Flowering Spathe Shoots'
-              : 'Buoyant Stipes & Thallus Axes';
+        : p.species === 'plumose_frilled_anemone'
+          ? 'Ruffled Cauliflower Oral Crown Lobes'
+          : isAnyAnemone
+            ? 'Pleated Actinopharynx Oral Cone'
+            : p.species === 'sea_palm_postelsia'
+              ? 'Fluted Rubbery Sea-Palm Trunks'
+              : p.species === 'mermaid_wineglass_acetabularia'
+                ? 'Calcified Hair-Slender Stalks'
+                : p.species === 'eelgrass_zostera'
+                  ? 'Fertile Flowering Spathe Shoots'
+                  : 'Buoyant Stipes & Thallus Axes';
 
-    const frondsName = isAnemone
+    const frondsName = p.species === 'sea_anemone'
       ? '3D Bubble-Tip Tentacles'
-      : isCrinoid
-        ? 'Feathery Sensory Pinnules'
-        : p.species === 'neptune_seagrass' || p.species === 'eelgrass_zostera'
-          ? 'Multi-Veined Seagrass Ribbons'
-          : p.species === 'sea_lettuce_ulva'
-            ? 'Hyperbolic-Ruffled Thallus Lobes'
-            : p.species === 'peacock_tail_padina'
-              ? 'Concentric Calcified Fan Blades'
-              : p.species === 'red_dulse_palmaria'
-                ? 'Palmate Crimson-Ruby Lobes'
-                : p.species === 'mermaid_wineglass_acetabularia'
-                  ? 'Radially Pleated Wineglass Parasols'
-                  : p.species === 'sea_grapes_caulerpa'
-                    ? 'Constricted Grape Pedicel Stalks'
-                    : 'Corrugated Marine Blades';
+      : p.species === 'magnificent_ritteri_anemone'
+        ? 'Digitiform Gold-Tipped Tentacles'
+        : p.species === 'giant_carpet_anemone'
+          ? 'Velvet Capitate Carpet Micro-Tentacles'
+          : p.species === 'tube_dwelling_cerianthus'
+            ? 'Cascading Firework Marginal Tentacles'
+            : p.species === 'corkscrew_anemone'
+              ? '3D Helical Corkscrew Tentacles'
+              : p.species === 'rock_flower_anemone'
+                ? 'Beaded Perimeter Fringe Skirt'
+                : p.species === 'plumose_frilled_anemone'
+                  ? 'Feathery Plumose Cloud Filaments'
+                  : p.species === 'strawberry_beadlet_anemone'
+                    ? 'Glossy Ruby Tapered Tentacles'
+                    : isCrinoid
+                      ? 'Feathery Sensory Pinnules'
+                      : p.species === 'neptune_seagrass' || p.species === 'eelgrass_zostera'
+                        ? 'Multi-Veined Seagrass Ribbons'
+                        : p.species === 'sea_lettuce_ulva'
+                          ? 'Hyperbolic-Ruffled Thallus Lobes'
+                          : p.species === 'peacock_tail_padina'
+                            ? 'Concentric Calcified Fan Blades'
+                            : p.species === 'red_dulse_palmaria'
+                              ? 'Palmate Crimson-Ruby Lobes'
+                              : p.species === 'mermaid_wineglass_acetabularia'
+                                ? 'Radially Pleated Wineglass Parasols'
+                                : p.species === 'sea_grapes_caulerpa'
+                                  ? 'Constricted Grape Pedicel Stalks'
+                                  : 'Corrugated Marine Blades';
 
     const vesiclesName = isCoral || isFan
       ? '3D Corallite Cups & Reef Polyps'
@@ -158,19 +192,27 @@ export class MarineMesher {
         ? 'Frosty Translucent Utricle Velvet'
         : isSponge
           ? 'Thorny Spicule Conules'
-          : p.species === 'neptune_seagrass'
-            ? 'Crustose Coralline Epiphytes'
-            : p.species === 'eelgrass_zostera'
-              ? 'Underwater Spadix Flowers & Seeds'
-              : p.species === 'sea_grapes_caulerpa'
-                ? 'Translucent Emerald Caviar Grapes'
-                : p.species === 'knotted_wrack_ascophyllum'
-                  ? 'Inline Air Bladders & Saffron Receptacles'
-                  : p.species === 'red_dulse_palmaria'
-                    ? 'Marginal Baby Bladelet Proliferations'
-                    : p.species === 'mermaid_wineglass_acetabularia'
-                      ? 'Superior Corona Rings'
-                      : 'Pneumatocyst Gas Bladders';
+          : p.species === 'tube_dwelling_cerianthus'
+            ? 'Central Labial Tentacle Tuft'
+            : p.species === 'strawberry_beadlet_anemone'
+              ? 'Sapphire Acrorhagi Fighting Beads'
+              : p.species === 'rock_flower_anemone'
+                ? 'Discal Beaded Flower Papillae'
+                : isAnyAnemone
+                  ? 'Column Verrucae & Nematocyst Rings'
+                  : p.species === 'neptune_seagrass'
+                    ? 'Crustose Coralline Epiphytes'
+                    : p.species === 'eelgrass_zostera'
+                      ? 'Underwater Spadix Flowers & Seeds'
+                      : p.species === 'sea_grapes_caulerpa'
+                        ? 'Translucent Emerald Caviar Grapes'
+                        : p.species === 'knotted_wrack_ascophyllum'
+                          ? 'Inline Air Bladders & Saffron Receptacles'
+                          : p.species === 'red_dulse_palmaria'
+                            ? 'Marginal Baby Bladelet Proliferations'
+                            : p.species === 'mermaid_wineglass_acetabularia'
+                              ? 'Superior Corona Rings'
+                              : 'Pneumatocyst Gas Bladders';
 
     const holdfastMesh = new PartMesh(
       `${layerId}:holdfast`,
@@ -256,6 +298,27 @@ export class MarineMesher {
         break;
       case 'sea_anemone':
         this.buildSeaAnemone(tier, holdfastMesh, frondsMesh);
+        break;
+      case 'magnificent_ritteri_anemone':
+        this.buildMagnificentRitteriAnemone(tier, holdfastMesh, stipeMesh, frondsMesh, vesiclesMesh);
+        break;
+      case 'giant_carpet_anemone':
+        this.buildGiantCarpetAnemone(tier, holdfastMesh, stipeMesh, frondsMesh, vesiclesMesh);
+        break;
+      case 'tube_dwelling_cerianthus':
+        this.buildTubeDwellingCerianthus(tier, holdfastMesh, stipeMesh, frondsMesh, vesiclesMesh);
+        break;
+      case 'corkscrew_anemone':
+        this.buildCorkscrewAnemone(tier, holdfastMesh, stipeMesh, frondsMesh, vesiclesMesh);
+        break;
+      case 'rock_flower_anemone':
+        this.buildRockFlowerAnemone(tier, holdfastMesh, stipeMesh, frondsMesh, vesiclesMesh);
+        break;
+      case 'plumose_frilled_anemone':
+        this.buildPlumoseFrilledAnemone(tier, holdfastMesh, stipeMesh, frondsMesh, vesiclesMesh);
+        break;
+      case 'strawberry_beadlet_anemone':
+        this.buildStrawberryBeadletAnemone(tier, holdfastMesh, stipeMesh, frondsMesh, vesiclesMesh);
         break;
       case 'azure_tube_sponge':
         this.buildAzureTubeSponge(tier, holdfastMesh, vesiclesMesh);
@@ -1805,6 +1868,7 @@ export class MarineMesher {
       }
 
       this.stats.bladesOrTentacles++;
+      this.stats.vesiclesOrPolyps++;
     }
     tentaclesMesh.hasExplicitNormals = true;
   }
@@ -4065,6 +4129,1520 @@ export class MarineMesher {
       for (let c = 0; c < vCols; c++) {
         mesh.addQuad(idxGrid[i][c], idxGrid[i][c + 1], idxGrid[i + 1][c + 1], idxGrid[i + 1][c]);
       }
+    }
+  }
+
+  // ===========================================================================
+  // 19. MAGNIFICENT RITTERI SEA ANEMONE (Radianthus / Heteractis magnifica)
+  // ===========================================================================
+  private buildMagnificentRitteriAnemone(
+    tier: number,
+    columnMesh: PartMesh,
+    mouthMesh: PartMesh,
+    tentaclesMesh: PartMesh,
+    verrucaeMesh: PartMesh,
+  ): void {
+    const p = this.p;
+    const colColumn = hexToLinearRgb(p.hueHoldfast); // Vivid magenta-violet column!
+    const colTentBase = hexToLinearRgb(p.huePrimary);
+    const colTentShaft = hexToLinearRgb(p.hueSecondary);
+    const colGoldTip = hexToLinearRgb(p.hueAccent); // Glowing chartreuse/gold blunt tips!
+    const colVerrucae = hexToLinearRgb(p.huePolyp);
+
+    const H = Math.max(0.28, p.colonyHeight);
+    const colH = H * 0.52;
+    const discR = Math.max(0.16, H * 0.44 * p.canopySpread);
+    const discFlex = 0.09 * p.currentSway;
+
+    // 1. Tall Showpiece Flared Magenta Column + Undulating Lobed Oral Disc!
+    const uCols = tier >= 3 ? 44 : 30;
+    const vRows = tier >= 3 ? 22 : 15;
+    const posGrid: V3[][] = [];
+    const colGrid: RGB[][] = [];
+    const windGrid: [number, number, number, number][][] = [];
+
+    for (let r = 0; r <= vRows; r++) {
+      const v = r / vRows;
+      const rowFlex = v <= 0.68 ? Math.pow(v / 0.68, 1.4) * discFlex : discFlex;
+      const pRow: V3[] = [];
+      const cRow: RGB[] = [];
+      const wRow: [number, number, number, number][] = [];
+
+      for (let c = 0; c <= uCols; c++) {
+        const th = (c / uCols) * TAU;
+        const lobeWave = (Math.sin(th * 6 + 0.5) * 0.14 + Math.cos(th * 11 - 0.8) * 0.05) * p.ruffleWave;
+        let rad: number;
+        let y: number;
+        let col: RGB;
+
+        if (v <= 0.68) {
+          const tC = v / 0.68;
+          // Muscular chalice trunk narrow at waist, flaring dramatically to show off the magenta column!
+          const chalice = 0.44 - 0.06 * Math.sin(tC * Math.PI) + 0.62 * Math.pow(tC, 2.0);
+          const flute = 1 + 0.028 * Math.cos(th * 24) * smoothstep(0.15, 0.95, tC);
+          rad = discR * chalice * flute * (1 + lobeWave * smoothstep(0.42, 1.0, tC));
+          y = colH * tC + discR * lobeWave * 0.28 * smoothstep(0.5, 1.0, tC);
+          col = mixRgb(
+            mixRgb(colColumn, hexToLinearRgb('#2b0824'), 0.35),
+            colColumn,
+            smoothstep(0.08, 0.72, tC),
+          );
+          if (tC > 0.88) col = mixRgb(col, colTentBase, smoothstep(0.88, 1.0, tC) * 0.45);
+        } else {
+          const tD = (v - 0.68) / 0.32;
+          rad = lerp1(discR * (1 + lobeWave), discR * 0.08, Math.pow(tD, 0.9));
+          y = colH + discR * lobeWave * 0.28 * (1 - tD) - colH * 0.06 * tD;
+          col = mixRgb(colTentBase, colColumn, 0.32 * (1 - tD));
+        }
+
+        pRow.push(add(this.groundOrigin, v3(Math.cos(th) * rad, Math.max(0, y), Math.sin(th) * rad)));
+        cRow.push(col);
+        wRow.push([v, rowFlex, this.colonyPhase, 0]);
+      }
+      posGrid.push(pRow);
+      colGrid.push(cRow);
+      windGrid.push(wRow);
+    }
+
+    this.emitSurfaceGrid(columnMesh, posGrid, colGrid, windGrid, 0.26, p.translucency * 0.55);
+    this.stats.stemsOrTubes = 1;
+
+    // Raised pleated central actinopharynx oral cone (`stipeMesh`)
+    this.emitPleatedOralCone(
+      mouthMesh,
+      add(this.groundOrigin, v3(0, colH - colH * 0.05, 0)),
+      discR * 0.11,
+      colH * 0.08,
+      mixRgb(colColumn, colGoldTip, 0.45),
+      colVerrucae,
+      discFlex,
+      this.colonyPhase,
+    );
+
+    // Longitudinal rows of pearly pink adhesive verrucae dotting the upper magenta column!
+    if (p.vesicleAbundance > 0.15) {
+      const nColsV = 24;
+      for (let vc = 0; vc < nColsV; vc++) {
+        const th = (vc / nColsV) * TAU;
+        const lobeWave = (Math.sin(th * 6 + 0.5) * 0.14 + Math.cos(th * 11 - 0.8) * 0.05) * p.ruffleWave;
+        for (let vr = 0; vr < 5; vr++) {
+          const tC = lerp1(0.46, 0.92, vr / 4);
+          const chalice = 0.44 - 0.06 * Math.sin(tC * Math.PI) + 0.62 * Math.pow(tC, 2.0);
+          const rad = discR * chalice * (1 + lobeWave * smoothstep(0.42, 1.0, tC));
+          const y = colH * tC + discR * lobeWave * 0.28 * smoothstep(0.5, 1.0, tC);
+          const normOut = normalize(v3(Math.cos(th), 0.25, Math.sin(th)));
+          const pt = add(this.groundOrigin, v3(Math.cos(th) * rad, y, Math.sin(th) * rad));
+          const flexV = Math.pow(tC, 1.4) * discFlex;
+          this.emitClosedOvoid(
+            verrucaeMesh,
+            addScaled(pt, normOut, -0.002),
+            normOut,
+            discR * 0.028,
+            discR * 0.018,
+            5,
+            4,
+            colColumn,
+            colVerrucae,
+            0.22,
+            0.65,
+            [tC, flexV, this.colonyPhase, 0],
+          );
+          this.stats.vesiclesOrPolyps++;
+        }
+      }
+    }
+
+    // 2. Dense Crown of Uniform Digitiform (Finger-Shaped) Gold-Tipped Tentacles!
+    const nRings = clamp(Math.round(p.colonyCount), 3, 9);
+    const totalTent = Math.max(64, Math.round((tier >= 3 ? 168 : 96) * p.organDensity * (nRings / 6)));
+    const currentDir = normalize(v3(0.84, 0, 0.54));
+    const leanSin = Math.sin(p.currentLeanDeg * DEG2RAD);
+
+    for (let tIdx = 0; tIdx < totalTent; tIdx++) {
+      const tRng = this.rng.fork(0xe100 + tIdx * 71);
+      const frac = (tIdx + 0.5) / totalTent;
+      const rDiscFrac = lerp1(0.16, 0.92, Math.sqrt(frac));
+      const az = tIdx * GOLDEN_ANGLE + tRng.range(-0.06, 0.06);
+      const lobeWave = (Math.sin(az * 6 + 0.5) * 0.14 + Math.cos(az * 11 - 0.8) * 0.05) * p.ruffleWave;
+
+      const radDir = v3(Math.cos(az), 0, Math.sin(az));
+      const attachR = discR * rDiscFrac * (1 + lobeWave * rDiscFrac);
+      const attachY = colH + discR * lobeWave * 0.28 * rDiscFrac - colH * 0.04 * (1 - rDiscFrac);
+      const basePos = add(this.groundOrigin, addScaled(v3(0, attachY, 0), radDir, attachR));
+
+      const tentLen = p.organLength * (0.76 + 0.34 * Math.sin(Math.PI * (0.2 + 0.65 * frac))) * tRng.vary(1.0, 0.1);
+      const fingerR = Math.max(0.0055, tentLen * clamp(p.organWidth, 0.06, 0.35) * 0.16);
+      const elev = lerp1(84, 34, frac) * DEG2RAD + tRng.range(-0.08, 0.08);
+      const emergeDir = normalize(
+        add(scale(radDir, Math.cos(elev)), add(scale(UP, Math.sin(elev)), scale(currentDir, leanSin * 0.42))),
+      );
+
+      const waveBend = tRng.range(-0.28, 0.36);
+      const swirl = tRng.range(-0.32, 0.32);
+      const tentCurve = growCurve(basePos, emergeDir, anyPerpendicular(emergeDir), tentLen, tier >= 3 ? 12 : 8, (t0, t1) => {
+        const dt = t1 - t0;
+        return {
+          pitch: (waveBend + Math.sin(t1 * Math.PI * 1.4) * 0.24) * dt,
+          yaw: swirl * Math.cos(t1 * Math.PI) * dt,
+        };
+      });
+
+      const tentPhase = (this.colonyPhase + ((az / TAU) % 1) * 0.02) % 1;
+      this.emitCappedTentacleTube(
+        tentaclesMesh,
+        tentCurve,
+        tier >= 3 ? 7 : 5,
+        (u) => {
+          // Uniform sleek cylindrical finger tapering only at the rounded blunt apex (`u > 0.86`)!
+          const shaft = 1 - 0.16 * u;
+          const dome = u > 0.86 ? Math.cos(((u - 0.86) / 0.14) * (Math.PI * 0.44)) : 1.0;
+          return Math.max(0.0012, fingerR * shaft * dome);
+        },
+        (u) => {
+          const shaftCol = mixRgb(colTentBase, colTentShaft, smoothstep(0.12, 0.78, u));
+          return mixRgb(shaftCol, colGoldTip, smoothstep(0.80, 0.96, u));
+        },
+        discFlex,
+        0.22 * p.currentSway,
+        0.24 * p.currentSway,
+        tentPhase,
+        0.15,
+        p.translucency,
+      );
+      this.stats.bladesOrTentacles++;
+    }
+    columnMesh.hasExplicitNormals = true;
+    tentaclesMesh.hasExplicitNormals = true;
+  }
+
+  // ===========================================================================
+  // 20. GIANT SADDLE-FOLDED CARPET ANEMONE (Stichodactyla gigantea / haddoni)
+  // ===========================================================================
+  private buildGiantCarpetAnemone(
+    tier: number,
+    carpetMesh: PartMesh,
+    mouthMesh: PartMesh,
+    microTentMesh: PartMesh,
+    verrucaeMesh: PartMesh,
+  ): void {
+    const p = this.p;
+    const colFoot = hexToLinearRgb(p.hueHoldfast);
+    const colDiscDeep = hexToLinearRgb(p.huePrimary);
+    const colCapitate = hexToLinearRgb(p.hueSecondary);
+    const colNeonTip = hexToLinearRgb(p.hueAccent);
+    const colMouth = hexToLinearRgb(p.huePolyp);
+
+    const H = Math.max(0.24, p.colonyHeight);
+    const stalkH = H * 0.34;
+    const carpetR = Math.max(0.28, p.organLength * 1.05 * p.canopySpread);
+    const maxDiscFlex = 0.11 * p.currentSway;
+
+    // Shared analytical saddle-fold field so disc & 1,000+ velvet micro-tentacles match to 0.000 mm!
+    const evalCarpetFold = (rFrac: number, th: number): { rad: number; y: number; flex: number } => {
+      const saddle =
+        (Math.sin(th * 5 + 0.3) * 0.24 + Math.cos(th * 9 - 0.9) * 0.11 + Math.sin(th * 13 + 1.7) * 0.05) *
+        p.ruffleWave;
+      const radLobe = 1 + (Math.cos(th * 5 + 0.3) * 0.14 + Math.sin(th * 7) * 0.06) * p.ruffleWave * smoothstep(0.25, 1.0, rFrac);
+      const rad = carpetR * rFrac * radLobe;
+      const dish = -carpetR * 0.12 * (1 - rFrac * rFrac);
+      const foldY = carpetR * saddle * Math.pow(rFrac, 1.55);
+      const y = Math.max(0.015, stalkH + dish + foldY);
+      const flex = (0.02 + 0.88 * Math.pow(rFrac, 1.5)) * maxDiscFlex;
+      return { rad, y, flex };
+    };
+
+    // 1. Short flared pedal column + expansive hyperbolic saddle-folded oral carpet!
+    const uCols = tier >= 3 ? 96 : 56;
+    const vRows = tier >= 3 ? 28 : 18;
+    const posGrid: V3[][] = [];
+    const colGrid: RGB[][] = [];
+    const windGrid: [number, number, number, number][][] = [];
+
+    for (let r = 0; r <= vRows; r++) {
+      const v = r / vRows;
+      const pRow: V3[] = [];
+      const cRow: RGB[] = [];
+      const wRow: [number, number, number, number][] = [];
+
+      for (let c = 0; c <= uCols; c++) {
+        const th = (c / uCols) * TAU;
+        if (v < 0.28) {
+          // Short hidden muscular column supporting the broad saddle-folded oral disc
+          const tC = v / 0.28;
+          const rim = evalCarpetFold(1.0, th);
+          const rad = lerp1(carpetR * 0.32, rim.rad, Math.pow(tC, 1.65));
+          const y = lerp1(0, rim.y, tC);
+          const flex = lerp1(0, rim.flex, tC);
+          pRow.push(add(this.groundOrigin, v3(Math.cos(th) * rad, y, Math.sin(th) * rad)));
+          cRow.push(mixRgb(colFoot, colDiscDeep, smoothstep(0.2, 1.0, tC)));
+          wRow.push([v, flex, this.colonyPhase, 0]);
+        } else {
+          // Oral disc surface from outer curtain rim (`v = 0.28 -> rFrac = 1`) inward to central mouth (`v = 1 -> rFrac = 0.04`)!
+          const rFrac = lerp1(1.0, 0.04, (v - 0.28) / 0.72);
+          const smp = evalCarpetFold(rFrac, th);
+          const radStripe = 0.5 + 0.5 * Math.cos(th * 36);
+          let col = mixRgb(colDiscDeep, colCapitate, 0.25 * radStripe);
+          if (rFrac < 0.22) {
+            col = mixRgb(col, colMouth, smoothstep(0.22, 0.05, rFrac) * 0.85);
+          }
+          pRow.push(add(this.groundOrigin, v3(Math.cos(th) * smp.rad, smp.y, Math.sin(th) * smp.rad)));
+          cRow.push(col);
+          wRow.push([rFrac, smp.flex, this.colonyPhase, 0]);
+        }
+      }
+      posGrid.push(pRow);
+      colGrid.push(cRow);
+      windGrid.push(wRow);
+    }
+
+    this.emitSurfaceGrid(carpetMesh, posGrid, colGrid, windGrid, 0.30, p.translucency * 0.5);
+    this.stats.stemsOrTubes = 1;
+
+    // Bare pleated central mouth slit (`stipeMesh`)
+    const centerSmp = evalCarpetFold(0.05, 0);
+    this.emitPleatedOralCone(
+      mouthMesh,
+      add(this.groundOrigin, v3(0, centerSmp.y - 0.005, 0)),
+      carpetR * 0.14,
+      carpetR * 0.045,
+      colDiscDeep,
+      colMouth,
+      centerSmp.flex,
+      this.colonyPhase,
+    );
+
+    // 2. Dense Velvet Carpet of 1,000-1,400 Stubby Capitate Micro-Tentacles across every saddle fold!
+    const nCarpetTent = Math.max(340, Math.round((tier >= 3 ? 1180 : 560) * p.organDensity));
+    const beadLen = clamp(carpetR * 0.064 * (0.75 + 0.35 * (p.organWidth / 0.28)), 0.014, 0.040);
+    const beadRad = beadLen * 0.37;
+
+    for (let k = 0; k < nCarpetTent; k++) {
+      const kRng = this.rng.fork(0xe500 + k * 41);
+      const frac = (k + 0.5) / nCarpetTent;
+      const rFrac = lerp1(0.20, 0.97, Math.sqrt(frac));
+      const th = k * GOLDEN_ANGLE + kRng.range(-0.025, 0.025);
+
+      const s0 = evalCarpetFold(rFrac, th);
+      const sR = evalCarpetFold(Math.min(1, rFrac + 0.02), th);
+      const sT = evalCarpetFold(rFrac, th + 0.03);
+      const p0 = add(this.groundOrigin, v3(Math.cos(th) * s0.rad, s0.y, Math.sin(th) * s0.rad));
+      const pR = add(this.groundOrigin, v3(Math.cos(th) * sR.rad, sR.y, Math.sin(th) * sR.rad));
+      const pT = add(this.groundOrigin, v3(Math.cos(th + 0.03) * sT.rad, sT.y, Math.sin(th + 0.03) * sT.rad));
+
+      let surfNrm = cross(sub(pT, p0), sub(pR, p0));
+      surfNrm = lengthSq(surfNrm) > 1e-12 ? normalize(surfNrm) : UP;
+      if (surfNrm.y < 0) surfNrm = scale(surfNrm, -1);
+      const dir = normalize(add(scale(surfNrm, 0.85), scale(UP, 0.25)));
+
+      const localLen = beadLen * kRng.vary(1.0, 0.14);
+      const tipCol = k % 5 === 0 ? colNeonTip : mixRgb(colCapitate, colNeonTip, smoothstep(0.4, 0.98, rFrac) * 0.58);
+      this.emitClosedOvoid(
+        microTentMesh,
+        addScaled(p0, dir, -localLen * 0.15),
+        dir,
+        localLen,
+        beadRad * kRng.vary(1.0, 0.12),
+        tier >= 3 ? 6 : 5,
+        tier >= 3 ? 5 : 4,
+        colDiscDeep,
+        tipCol,
+        0.18,
+        p.translucency,
+        [rFrac, s0.flex, this.colonyPhase, 0.04 * p.currentSway * rFrac],
+      );
+      this.stats.bladesOrTentacles++;
+    }
+
+    // Underside column verrucae warts along outer curtain folds (`vesiclesMesh`)
+    if (p.vesicleAbundance > 0.2) {
+      for (let m = 0; m < 32; m++) {
+        const th = (m / 32) * TAU;
+        const rim = evalCarpetFold(0.92, th);
+        const pt = add(this.groundOrigin, v3(Math.cos(th) * rim.rad * 0.86, rim.y * 0.65, Math.sin(th) * rim.rad * 0.86));
+        const out = normalize(v3(Math.cos(th), -0.25, Math.sin(th)));
+        this.emitClosedOvoid(
+          verrucaeMesh,
+          pt,
+          out,
+          0.014,
+          0.008,
+          5,
+          4,
+          colFoot,
+          colNeonTip,
+          0.4,
+          0.45,
+          [0.65, rim.flex * 0.65, this.colonyPhase, 0],
+        );
+        this.stats.vesiclesOrPolyps++;
+      }
+    }
+    carpetMesh.hasExplicitNormals = true;
+  }
+
+  // ===========================================================================
+  // 21. SPIRAL TUBE-DWELLING FIREWORK ANEMONE (Cerianthus membranaceus)
+  // ===========================================================================
+  private buildTubeDwellingCerianthus(
+    tier: number,
+    tubeMesh: PartMesh,
+    oralConeMesh: PartMesh,
+    marginalMesh: PartMesh,
+    labialMesh: PartMesh,
+  ): void {
+    const p = this.p;
+    const colTubeBase = hexToLinearRgb(p.hueHoldfast);
+    const colTubeRim = mixRgb(colTubeBase, hexToLinearRgb('#7a6258'), 0.48);
+    const colOuterBase = hexToLinearRgb(p.huePrimary);
+    const colOuterMid = hexToLinearRgb(p.hueSecondary);
+    const colOuterTip = hexToLinearRgb(p.hueAccent);
+    const colLabial = hexToLinearRgb(p.huePolyp);
+
+    const nTubes = clamp(Math.round(p.colonyCount), 1, 6);
+    const currentDir = normalize(v3(0.84, 0, 0.54));
+    const leanRad = p.currentLeanDeg * DEG2RAD;
+    const patchR = nTubes === 1 ? 0 : Math.min(0.40, 0.15 + 0.05 * nTubes) * p.canopySpread;
+
+    for (let idx = 0; idx < nTubes; idx++) {
+      const cRng = this.rng.fork(0xe900 + idx * 113);
+      const az = idx * GOLDEN_ANGLE + cRng.range(-0.2, 0.2);
+      const dist = idx === 0 ? 0 : patchR * Math.sqrt((idx + 0.3) / nTubes);
+      const u = clamp(0.5 + Math.cos(az) * dist * 0.45, 0.12, 0.88);
+      const v = clamp(0.5 + Math.sin(az) * dist * 0.45, 0.12, 0.88);
+      const surf = this.substrate.sampleSurface(u, v).pos;
+
+      const scaleH = idx === 0 ? 1.05 : lerp1(0.92, 0.68, idx / Math.max(1, nTubes - 1));
+      const tubeH = Math.max(0.24, p.colonyHeight * 0.52 * scaleH);
+      const tubeR = Math.max(0.028, tubeH * 0.11);
+      const phase = (this.colonyPhase + idx * 0.006) % 1;
+
+      // 1. Curved Felted Parchment Mucous-Sand Dwelling Tube emerging from seabed!
+      const outVec = idx === 0 ? currentDir : v3(Math.cos(az), 0, Math.sin(az));
+      const tubeInit = normalize(
+        add(scale(UP, 0.90), add(scale(outVec, 0.24), scale(currentDir, Math.sin(leanRad) * 0.35))),
+      );
+      const tubeCurve = growCurve(
+        add(surf, v3(0, -0.02, 0)),
+        tubeInit,
+        anyPerpendicular(tubeInit),
+        tubeH,
+        tier >= 3 ? 16 : 11,
+        (t0, t1) => ({
+          pitch: (leanRad * 0.38 + Math.sin(t1 * Math.PI) * 0.16) * (t1 - t0),
+          yaw: cRng.range(-0.15, 0.15) * (t1 - t0),
+        }),
+      );
+
+      const tubeTopFlex = 0.08 * p.currentSway;
+      const tubeSides = tier >= 3 ? 18 : 12;
+      const tRings: number[][] = [];
+      for (let i = 0; i < tubeCurve.count; i++) {
+        const fr = tubeCurve.frameAtIndex(i);
+        const t = fr.t;
+        // Annulated felted parchment wrinkles + gracefully flared top collar!
+        const flare = lerp1(1.14, 0.86, t) + 0.32 * smoothstep(0.82, 1.0, t);
+        const annuli = 1 + 0.055 * Math.sin(t * 42.0);
+        const rHere = tubeR * flare * annuli;
+        const flex = Math.pow(t, 1.6) * tubeTopFlex;
+        const row: number[] = [];
+        for (let j = 0; j < tubeSides; j++) {
+          const th = (j / tubeSides) * TAU;
+          const rad = add(scale(fr.right, Math.cos(th)), scale(fr.up, Math.sin(th)));
+          const pt = addScaled(fr.pos, rad, rHere);
+          row.push(
+            tubeMesh.addVertex({
+              x: pt.x, y: pt.y, z: pt.z,
+              nx: rad.x, ny: rad.y, nz: rad.z,
+              tx: fr.dir.x, ty: fr.dir.y, tz: fr.dir.z,
+              u: j / tubeSides, v: t,
+              color: mixRgb(colTubeBase, colTubeRim, smoothstep(0.15, 0.95, t)),
+              wind: [t, flex, phase, 0],
+              pivot: this.groundOrigin,
+              roughness: 0.78, // Felted sand-mucus parchment texture!
+              translucency: 0.12,
+              detailMetric: 0.4,
+              anatomyLevel: 1,
+            }),
+          );
+        }
+        tRings.push(row);
+      }
+      for (let i = 0; i < tRings.length - 1; i++) {
+        for (let j = 0; j < tubeSides; j++) {
+          const j1 = (j + 1) % tubeSides;
+          tubeMesh.addQuad(tRings[i][j], tRings[i][j1], tRings[i + 1][j1], tRings[i + 1][j]);
+        }
+      }
+      this.stats.stemsOrTubes++;
+
+      const rimFr = tubeCurve.atT(1.0);
+      this.emitPleatedOralCone(
+        oralConeMesh,
+        rimFr.pos,
+        tubeR * 0.82,
+        tubeR * 0.35,
+        colOuterBase,
+        colLabial,
+        tubeTopFlex,
+        phase,
+      );
+
+      // 2. Cascading "Underwater Fireworks" Fountain of Long Slender Marginal Tentacles (`frondsMesh`)!
+      const nMarginal = Math.max(36, Math.round((tier >= 3 ? 68 : 44) * p.organDensity));
+      const baseSpan = p.organLength * scaleH * p.canopySpread;
+      for (let m = 0; m < nMarginal; m++) {
+        const mRng = cRng.fork(0x300 + m * 59);
+        const tierF = m / Math.max(1, nMarginal - 1); // 0 = high fountain arch -> 1 = wide weeping cascade!
+        const mAz = m * GOLDEN_ANGLE + mRng.range(-0.07, 0.07);
+        const radH = normalize(add(scale(rimFr.right, Math.cos(mAz)), scale(rimFr.up, Math.sin(mAz))));
+        const startPt = addScaled(rimFr.pos, radH, tubeR * lerp1(0.76, 1.05, tierF));
+
+        const launchElev = lerp1(76, 26, tierF) * DEG2RAD;
+        const launchDir = normalize(
+          add(
+            scale(radH, Math.cos(launchElev)),
+            add(scale(rimFr.dir, Math.sin(launchElev)), scale(currentDir, Math.sin(leanRad) * 0.32)),
+          ),
+        );
+        const mLen = baseSpan * lerp1(0.84, 1.18, Math.sin(Math.PI * (0.2 + 0.65 * tierF))) * mRng.vary(1.0, 0.12);
+        const mBaseR = Math.max(0.0032, mLen * clamp(p.organWidth, 0.04, 0.22) * 0.095);
+        const swirlSign = m % 2 === 0 ? 1 : -1;
+
+        const mCurve = growCurve(startPt, launchDir, anyPerpendicular(launchDir), mLen, tier >= 3 ? 18 : 11, (t0, t1) => {
+          const dt = t1 - t0;
+          // Parabolic firework fountain arch weeping into sinuous S-curls at the filament tips!
+          const fountainDroop = (-(1.35 + 0.65 * tierF) + Math.sin(t1 * TAU * 1.15) * 0.42 * p.ruffleWave) * dt;
+          const spiralCurl = swirlSign * (0.28 + 0.65 * t1 * p.ruffleWave) * dt;
+          return { pitch: fountainDroop, yaw: spiralCurl };
+        });
+
+        this.emitCappedTentacleTube(
+          marginalMesh,
+          mCurve,
+          tier >= 3 ? 6 : 5,
+          (u) => Math.max(0.0007, mBaseR * Math.pow(1 - u * 0.88, 0.78)),
+          (u) => {
+            // Bioluminescent banded Cerianthus firework filament!
+            const band = 0.5 + 0.5 * Math.sin(u * 26.0);
+            let col = mixRgb(colOuterBase, colOuterMid, smoothstep(0.12, 0.68, u));
+            col = mixRgb(col, colOuterTip, smoothstep(0.62, 0.98, u) * (0.68 + 0.32 * band));
+            return col;
+          },
+          tubeTopFlex,
+          0.28 * p.currentSway,
+          0.30 * p.currentSway,
+          phase,
+          0.14,
+          p.translucency,
+        );
+        this.stats.bladesOrTentacles++;
+      }
+
+      // 3. Contrasting Dense Central Bouquet of Short Curling Labial Tentacles (`vesiclesMesh`)!
+      if (p.vesicleAbundance > 0.15) {
+        const nLabial = Math.max(16, Math.round((tier >= 3 ? 32 : 20) * p.vesicleAbundance));
+        for (let l = 0; l < nLabial; l++) {
+          const lRng = cRng.fork(0x900 + l * 37);
+          const lAz = l * GOLDEN_ANGLE;
+          const radH = normalize(add(scale(rimFr.right, Math.cos(lAz)), scale(rimFr.up, Math.sin(lAz))));
+          const lStart = add(addScaled(rimFr.pos, rimFr.dir, tubeR * 0.16), scale(radH, tubeR * 0.36 * Math.sqrt((l + 0.5) / nLabial)));
+          const lDir = normalize(add(scale(rimFr.dir, 0.88), scale(radH, 0.45)));
+          const lLen = baseSpan * 0.24 * lRng.vary(1.0, 0.15);
+          const lCurve = growCurve(lStart, lDir, anyPerpendicular(lDir), lLen, 8, (t0, t1) => ({
+            pitch: 0.85 * (t1 - t0),
+            yaw: lRng.range(-0.6, 0.6) * (t1 - t0),
+          }));
+          this.emitCappedTentacleTube(
+            labialMesh,
+            lCurve,
+            5,
+            (u) => Math.max(0.0008, mBaseRadius(tubeR) * (1 - 0.72 * u)),
+            (u) => mixRgb(colOuterMid, colLabial, smoothstep(0.15, 0.9, u)),
+            tubeTopFlex,
+            0.12 * p.currentSway,
+            0.16 * p.currentSway,
+            phase,
+            0.18,
+            p.translucency,
+          );
+          this.stats.vesiclesOrPolyps++;
+        }
+      }
+    }
+    tubeMesh.hasExplicitNormals = true;
+    marginalMesh.hasExplicitNormals = true;
+    labialMesh.hasExplicitNormals = true;
+
+    function mBaseRadius(tr: number): number {
+      return Math.max(0.0022, tr * 0.085);
+    }
+  }
+
+  // ===========================================================================
+  // 22. SPIRAL CORKSCREW ANEMONE (Bartholomea annulata / Macrodactyla)
+  // ===========================================================================
+  private buildCorkscrewAnemone(
+    tier: number,
+    columnMesh: PartMesh,
+    mouthMesh: PartMesh,
+    corkscrewMesh: PartMesh,
+    ringsMesh: PartMesh,
+  ): void {
+    const p = this.p;
+    const colColumn = hexToLinearRgb(p.hueHoldfast);
+    const colDiscA = hexToLinearRgb(p.huePrimary);
+    const colHelix = hexToLinearRgb(p.hueSecondary);
+    const colTip = hexToLinearRgb(p.hueAccent);
+    const colRingBand = hexToLinearRgb(p.huePolyp);
+
+    const H = Math.max(0.24, p.colonyHeight);
+    const colH = H * 0.36;
+    const discR = Math.max(0.15, H * 0.44 * p.canopySpread);
+    const discFlex = 0.08 * p.currentSway;
+
+    // 1. Radially Star-Striped Oral Disc & Spotted Crevice Column!
+    const uCols = tier >= 3 ? 44 : 30;
+    const vRows = tier >= 3 ? 18 : 13;
+    const posGrid: V3[][] = [];
+    const colGrid: RGB[][] = [];
+    const windGrid: [number, number, number, number][][] = [];
+
+    for (let r = 0; r <= vRows; r++) {
+      const v = r / vRows;
+      const rowFlex = v <= 0.58 ? Math.pow(v / 0.58, 1.45) * discFlex : discFlex;
+      const pRow: V3[] = [];
+      const cRow: RGB[] = [];
+      const wRow: [number, number, number, number][] = [];
+
+      for (let c = 0; c <= uCols; c++) {
+        const th = (c / uCols) * TAU;
+        const wave = Math.sin(th * 6 + 0.3) * 0.09 * p.ruffleWave;
+        if (v <= 0.58) {
+          const tC = v / 0.58;
+          const rad = discR * lerp1(0.48, 1.0 + wave, Math.pow(tC, 1.7));
+          const y = colH * tC + discR * wave * 0.25 * tC;
+          pRow.push(add(this.groundOrigin, v3(Math.cos(th) * rad, y, Math.sin(th) * rad)));
+          cRow.push(mixRgb(colColumn, colDiscA, smoothstep(0.2, 0.95, tC)));
+          wRow.push([v, rowFlex, this.colonyPhase, 0]);
+        } else {
+          const tD = (v - 0.58) / 0.42;
+          const rad = lerp1(discR * (1 + wave), discR * 0.06, tD);
+          const y = colH + discR * wave * 0.25 * (1 - tD) - colH * 0.10 * tD;
+          // 12-rayed star pattern radiating across oral disc!
+          const star = Math.pow(0.5 + 0.5 * Math.cos(th * 12), 2.4);
+          let col = mixRgb(colDiscA, colRingBand, star * 0.48 * (1 - 0.4 * tD));
+          col = mixRgb(col, colTip, smoothstep(0.7, 1.0, tD) * 0.65);
+          pRow.push(add(this.groundOrigin, v3(Math.cos(th) * rad, y, Math.sin(th) * rad)));
+          cRow.push(col);
+          wRow.push([v, rowFlex, this.colonyPhase, 0]);
+        }
+      }
+      posGrid.push(pRow);
+      colGrid.push(cRow);
+      windGrid.push(wRow);
+    }
+    this.emitSurfaceGrid(columnMesh, posGrid, colGrid, windGrid, 0.24, p.translucency * 0.55);
+    this.stats.stemsOrTubes = 1;
+
+    this.emitPleatedOralCone(
+      mouthMesh,
+      add(this.groundOrigin, v3(0, colH - colH * 0.08, 0)),
+      discR * 0.11,
+      colH * 0.08,
+      colDiscA,
+      colRingBand,
+      discFlex,
+      this.colonyPhase,
+    );
+
+    // 2. True 3D Helical Spiral-Coil Corkscrew Tentacles + Opalescent Nematocyst Rings!
+    const nRings = clamp(Math.round(p.colonyCount), 3, 8);
+    const nTent = Math.max(38, Math.round((tier >= 3 ? 72 : 46) * p.organDensity * (nRings / 5)));
+    const currentDir = normalize(v3(0.84, 0, 0.54));
+    const leanSin = Math.sin(p.currentLeanDeg * DEG2RAD);
+    const uSegs = tier >= 3 ? 48 : 28; // High axial resolution (~10 stations/turn) for silky-smooth 3D corkscrew coils!
+
+    for (let k = 0; k < nTent; k++) {
+      const tRng = this.rng.fork(0xed00 + k * 79);
+      const frac = (k + 0.5) / nTent;
+      const rDiscFrac = lerp1(0.24, 0.94, Math.sqrt(frac));
+      const az = k * GOLDEN_ANGLE + tRng.range(-0.07, 0.07);
+      const wave = Math.sin(az * 6 + 0.3) * 0.09 * p.ruffleWave;
+
+      const radDir = v3(Math.cos(az), 0, Math.sin(az));
+      const attachR = discR * rDiscFrac * (1 + wave * rDiscFrac);
+      const attachY = colH + discR * wave * 0.25 * rDiscFrac - colH * 0.08 * (1 - rDiscFrac);
+      const basePos = add(this.groundOrigin, addScaled(v3(0, attachY, 0), radDir, attachR));
+
+      const tentLen = p.organLength * (0.74 + 0.40 * Math.sin(Math.PI * (0.2 + 0.68 * frac))) * tRng.vary(1.0, 0.12);
+      const baseR = Math.max(0.0065, tentLen * clamp(p.organWidth, 0.08, 0.36) * 0.16);
+      const elev = lerp1(78, 24, frac) * DEG2RAD;
+      const emergeDir = normalize(
+        add(scale(radDir, Math.cos(elev)), add(scale(UP, Math.sin(elev)), scale(currentDir, leanSin * 0.36))),
+      );
+
+      // Smooth guide axis onto which we superimpose a true 3D helical corkscrew coil!
+      const guide = growCurve(basePos, emergeDir, anyPerpendicular(emergeDir), tentLen, uSegs, (t0, t1) => ({
+        pitch: (-0.32 - 0.25 * frac) * (t1 - t0),
+        yaw: tRng.range(-0.25, 0.25) * (t1 - t0),
+      }));
+
+      const helixTurns = (2.8 + 2.4 * p.ruffleWave) * (k % 2 === 0 ? 1 : -1);
+      const helixPhase0 = tRng.range(0, TAU);
+      const helixPts: V3[] = [];
+      for (let i = 0; i < guide.count; i++) {
+        const fr = guide.frameAtIndex(i);
+        const u = fr.t;
+        // Zero helix offset at `u = 0` so attachment to the oral disc is 100% seamless!
+        const coilAmp = baseR * (0.4 + 1.85 * p.ruffleWave) * smoothstep(0.0, 0.22, u) * (1 - 0.45 * u);
+        const ang = u * helixTurns * TAU + helixPhase0;
+        const coilOff = add(scale(fr.right, Math.cos(ang) * coilAmp), scale(fr.up, Math.sin(ang) * coilAmp));
+        helixPts.push(add(fr.pos, coilOff));
+      }
+      const corkscrewCurve = this.curveFromPoints(helixPts);
+      const tentPhase = (this.colonyPhase + ((az / TAU) % 1) * 0.025) % 1;
+
+      this.emitCappedTentacleTube(
+        corkscrewMesh,
+        corkscrewCurve,
+        tier >= 3 ? 7 : 5,
+        (u) => {
+          // Raised opalescent nematocyst ring ridges (`annuli`) along the corkscrew spiral!
+          const ringBump = 1 + 0.18 * p.vesicleAbundance * Math.pow(0.5 + 0.5 * Math.cos(u * 38.0), 4.0);
+          return Math.max(0.001, baseR * Math.pow(1 - u * 0.78, 0.78) * ringBump);
+        },
+        (u) => {
+          const ringMask = Math.pow(0.5 + 0.5 * Math.cos(u * 38.0), 5.0) * clamp(p.vesicleAbundance, 0, 1.3);
+          let col = mixRgb(colDiscA, colHelix, smoothstep(0.1, 0.72, u));
+          col = mixRgb(col, colRingBand, clamp(ringMask * 0.78, 0, 0.9));
+          col = mixRgb(col, colTip, smoothstep(0.84, 0.99, u));
+          return col;
+        },
+        discFlex,
+        0.22 * p.currentSway,
+        0.25 * p.currentSway,
+        tentPhase,
+        0.14,
+        p.translucency,
+      );
+      this.stats.bladesOrTentacles++;
+
+      // Sculpted 3D nematocyst collar beads on outer corkscrew turns (`vesiclesMesh`)
+      if (p.vesicleAbundance > 0.35 && k % 2 === 0) {
+        for (const uBand of [0.45, 0.72]) {
+          const bFr = corkscrewCurve.atT(uBand);
+          const bFlex = discFlex + Math.pow(uBand, 1.45) * 0.22 * p.currentSway;
+          const bFlut = 0.25 * p.currentSway * uBand * uBand;
+          const rBand = baseR * Math.pow(1 - uBand * 0.78, 0.78) * 1.28;
+          this.emitClosedOvoid(
+            ringsMesh,
+            addScaled(bFr.pos, bFr.dir, -rBand * 0.6),
+            bFr.dir,
+            rBand * 1.2,
+            rBand,
+            6,
+            4,
+            colHelix,
+            colRingBand,
+            0.2,
+            0.7,
+            [uBand, bFlex, tentPhase, bFlut],
+          );
+          this.stats.vesiclesOrPolyps++;
+        }
+      }
+    }
+    columnMesh.hasExplicitNormals = true;
+    corkscrewMesh.hasExplicitNormals = true;
+  }
+
+  // ===========================================================================
+  // 23. CARIBBEAN ULTRA ROCK FLOWER ANEMONE (Phymanthus crucifer)
+  // ===========================================================================
+  private buildRockFlowerAnemone(
+    tier: number,
+    discMesh: PartMesh,
+    mouthMesh: PartMesh,
+    skirtMesh: PartMesh,
+    papillaeMesh: PartMesh,
+  ): void {
+    const p = this.p;
+    const colFoot = hexToLinearRgb(p.hueHoldfast);
+    const colWedgeA = hexToLinearRgb(p.huePrimary); // Fiery scarlet-orange radial wedges!
+    const colWedgeB = hexToLinearRgb(p.hueSecondary); // Electric emerald-jade radial wedges!
+    const colGold = hexToLinearRgb(p.hueAccent); // Golden beaded papillae & rings!
+    const colPinkMouth = hexToLinearRgb(p.huePolyp); // Neon magenta mouth & skirt tips!
+
+    const nFlowers = clamp(Math.round(p.colonyCount), 1, 9);
+    const clusterR = nFlowers === 1 ? 0 : Math.min(0.46, 0.22 + 0.045 * nFlowers) * p.canopySpread;
+    const uvScale = 0.52 / Math.max(0.45, this.substrate.params.size);
+    const uCols = tier >= 3 ? 52 : 34;
+    const vRows = tier >= 3 ? 16 : 11;
+
+    for (let f = 0; f < nFlowers; f++) {
+      const fRng = this.rng.fork(0xf100 + f * 83);
+      const az = f * GOLDEN_ANGLE + fRng.range(-0.14, 0.14);
+      const dist = f === 0 ? 0 : clusterR * lerp1(0.68, 1.04, (f - 1) / Math.max(1, nFlowers - 2));
+      const u = clamp(0.5 + Math.cos(az) * dist * uvScale, 0.12, 0.88);
+      const v = clamp(0.5 + Math.sin(az) * dist * uvScale, 0.12, 0.88);
+      const surf = this.substrate.sampleSurface(u, v);
+
+      const scaleF = f === 0 ? 0.98 : lerp1(0.78, 0.56, f / Math.max(1, nFlowers - 1)) * fRng.vary(1.0, 0.08);
+      const discR = Math.max(0.095, p.colonyHeight * 0.48 * scaleF * p.canopySpread);
+      const cupH = discR * 0.30;
+      const phase = (this.colonyPhase + f * 0.005) % 1;
+      const discFlex = 0.06 * p.currentSway;
+
+      // Slight natural reef-crevice tilt outward so the ornate radial flower disc faces the viewer!
+      const tiltDir = f === 0 ? v3(0.2, 0, 0.2) : v3(Math.cos(az) * 0.28, 0, Math.sin(az) * 0.28);
+      const discUp = normalize(add(UP, scale(surf.normal, 0.35)));
+      const axisUp = normalize(add(discUp, tiltDir));
+      const axisRight = anyPerpendicular(axisUp);
+      const axisFwd = normalize(cross(axisUp, axisRight));
+      const centerBase = add(surf.pos, scale(axisUp, 0.032));
+
+      // 1. Wide-Open Radially Zebra-Striped Rainbow Flower Oral Disc (`0..84%` completely open to view!)
+      const posGrid: V3[][] = [];
+      const colGrid: RGB[][] = [];
+      const windGrid: [number, number, number, number][][] = [];
+      const nSectors = 12; // 12 alternating high-contrast radial flower sectors!
+
+      const evalFlowerDisc = (rFrac: number, th: number): { pos: V3; flex: number } => {
+        const ruffle = (Math.sin(th * 8 + f) * 0.11 + Math.cos(th * 14 - f) * 0.04) * p.ruffleWave;
+        const rad = discR * rFrac * (1 + 0.08 * ruffle * rFrac);
+        const saucer = cupH * (0.35 + 0.65 * Math.pow(rFrac, 1.6) + ruffle * rFrac * 0.55);
+        const radialVec = add(scale(axisRight, Math.cos(th)), scale(axisFwd, Math.sin(th)));
+        return {
+          pos: add(addScaled(centerBase, radialVec, rad), scale(axisUp, saucer)),
+          flex: discFlex * Math.pow(rFrac, 1.4),
+        };
+      };
+
+      for (let r = 0; r <= vRows; r++) {
+        const rv = r / vRows;
+        const pRow: V3[] = [];
+        const cRow: RGB[] = [];
+        const wRow: [number, number, number, number][] = [];
+
+        for (let c = 0; c <= uCols; c++) {
+          const th = (c / uCols) * TAU;
+          if (rv < 0.25) {
+            const tC = rv / 0.25;
+            const rim = evalFlowerDisc(1.0, th);
+            const footPt = add(
+              centerBase,
+              add(scale(axisRight, Math.cos(th) * discR * 0.36), scale(axisFwd, Math.sin(th) * discR * 0.36)),
+            );
+            pRow.push(lerpV3(footPt, rim.pos, tC));
+            cRow.push(mixRgb(colFoot, colWedgeA, tC * 0.5));
+            wRow.push([rv, rim.flex * tC, phase, 0]);
+          } else {
+            const rFrac = lerp1(1.0, 0.05, (rv - 0.25) / 0.75);
+            const smp = evalFlowerDisc(rFrac, th);
+            // Crisp alternating radial zebra wedges + concentric ripple rings of Phymanthus crucifer!
+            const sectorWave = 0.5 + 0.5 * Math.cos(th * nSectors);
+            const concRipple = 0.5 + 0.5 * Math.sin(rFrac * 28.0);
+            let col = mixRgb(colWedgeA, colWedgeB, smoothstep(0.28, 0.72, sectorWave));
+            col = mixRgb(col, colGold, concRipple * 0.26 * smoothstep(0.18, 0.88, rFrac));
+            col = mixRgb(col, colPinkMouth, smoothstep(0.24, 0.05, rFrac) * 0.85);
+            pRow.push(smp.pos);
+            cRow.push(col);
+            wRow.push([rFrac, smp.flex, phase, 0]);
+          }
+        }
+        posGrid.push(pRow);
+        colGrid.push(cRow);
+        windGrid.push(wRow);
+      }
+
+      this.emitSurfaceGrid(discMesh, posGrid, colGrid, windGrid, 0.22, p.translucency * 0.6);
+      this.stats.stemsOrTubes++;
+
+      const mouthCenter = evalFlowerDisc(0.06, 0);
+      this.emitPleatedOralCone(
+        mouthMesh,
+        mouthCenter.pos,
+        discR * 0.13,
+        discR * 0.06,
+        colWedgeA,
+        colPinkMouth,
+        mouthCenter.flex,
+        phase,
+      );
+
+      // Radial rows of golden beaded discal papillae across the striped flower face (`vesiclesMesh`)!
+      if (p.vesicleAbundance > 0.2) {
+        for (let s = 0; s < nSectors * 2; s++) {
+          const th = (s / (nSectors * 2)) * TAU;
+          for (const rf of [0.34, 0.52, 0.70]) {
+            const smp = evalFlowerDisc(rf, th);
+            const papR = discR * 0.024 * clamp(p.vesicleAbundance, 0.6, 1.35);
+            this.emitClosedOvoid(
+              papillaeMesh,
+              addScaled(smp.pos, axisUp, -papR * 0.3),
+              axisUp,
+              papR * 1.6,
+              papR,
+              5,
+              4,
+              colWedgeB,
+              colGold,
+              0.18,
+              0.72,
+              [rf, smp.flex, phase, 0],
+            );
+            this.stats.vesiclesOrPolyps++;
+          }
+        }
+      }
+
+      // 2. Beaded / Papillose Conical Perimeter Tentacle Fringe Skirt (`rFrac = 0.86..0.98`)!
+      const nSkirt = Math.max(28, Math.round((tier >= 3 ? 46 : 32) * p.organDensity));
+      for (let t = 0; t < nSkirt; t++) {
+        const tRng = fRng.fork(0x500 + t * 43);
+        const rFrac = t % 2 === 0 ? 0.96 : 0.88;
+        const th = (t / nSkirt) * TAU + tRng.range(-0.04, 0.04);
+        const smp = evalFlowerDisc(rFrac, th);
+        const radOut = normalize(add(scale(axisRight, Math.cos(th)), scale(axisFwd, Math.sin(th))));
+        const launch = normalize(add(scale(radOut, 0.86), scale(axisUp, t % 2 === 0 ? 0.28 : 0.52)));
+        const tLen = p.organLength * scaleF * tRng.vary(1.0, 0.12);
+        const tBaseR = Math.max(0.0048, tLen * clamp(p.organWidth, 0.12, 0.45) * 0.24);
+
+        const skirtCurve = growCurve(smp.pos, launch, anyPerpendicular(launch), tLen, tier >= 3 ? 12 : 8, (t0, t1) => ({
+          pitch: 0.35 * (t1 - t0),
+          yaw: tRng.range(-0.2, 0.2) * (t1 - t0),
+        }));
+
+        this.emitCappedTentacleTube(
+          skirtMesh,
+          skirtCurve,
+          tier >= 3 ? 7 : 5,
+          (uTent) => {
+            // Signature beaded/papillose Phymanthus tentacle swellings!
+            const beads = 1 + 0.36 * p.ruffleWave * Math.pow(Math.sin(uTent * Math.PI * 5.0), 2.0);
+            return Math.max(0.001, tBaseR * (1 - 0.72 * uTent) * beads);
+          },
+          (uTent) => {
+            const beadHi = Math.pow(Math.sin(uTent * Math.PI * 5.0), 2.0);
+            let col = mixRgb(t % 2 === 0 ? colWedgeA : colWedgeB, colGold, beadHi * 0.68);
+            col = mixRgb(col, colPinkMouth, smoothstep(0.75, 0.98, uTent));
+            return col;
+          },
+          smp.flex,
+          0.12 * p.currentSway,
+          0.16 * p.currentSway,
+          phase,
+          0.16,
+          p.translucency,
+        );
+        this.stats.bladesOrTentacles++;
+      }
+    }
+    discMesh.hasExplicitNormals = true;
+    skirtMesh.hasExplicitNormals = true;
+  }
+
+  // ===========================================================================
+  // 24. GIANT PLUMOSE / FRILLED CAULIFLOWER ANEMONE (Metridium farcimen)
+  // ===========================================================================
+  private buildPlumoseFrilledAnemone(
+    tier: number,
+    columnMesh: PartMesh,
+    lobesMesh: PartMesh,
+    plumeMesh: PartMesh,
+    cinclidesMesh: PartMesh,
+  ): void {
+    const p = this.p;
+    const colBase = hexToLinearRgb(p.hueHoldfast); // Terracotta-salmon base
+    const colTrunk = hexToLinearRgb(p.huePrimary); // Translucent warm salmon-peach column
+    const colLobe = hexToLinearRgb(p.hueSecondary); // Soft peach-ivory ruffled cauliflower lobes
+    const colPlume = hexToLinearRgb(p.hueAccent); // Luminous alabaster-white feathery cloud!
+    const colCollar = hexToLinearRgb(p.huePolyp);
+
+    const nStalks = clamp(Math.round(p.colonyCount), 1, 6);
+    const currentDir = normalize(v3(0.84, 0, 0.54));
+    const leanRad = p.currentLeanDeg * DEG2RAD;
+    const groupR = nStalks === 1 ? 0 : Math.min(0.38, 0.14 + 0.055 * nStalks) * p.canopySpread;
+
+    for (let s = 0; s < nStalks; s++) {
+      const sRng = this.rng.fork(0xf500 + s * 101);
+      const az = s * GOLDEN_ANGLE + sRng.range(-0.2, 0.2);
+      const dist = s === 0 ? 0 : groupR * Math.sqrt((s + 0.3) / nStalks);
+      const u = clamp(0.5 + Math.cos(az) * dist * 0.45, 0.12, 0.88);
+      const v = clamp(0.5 + Math.sin(az) * dist * 0.45, 0.12, 0.88);
+      const surf = this.substrate.sampleSurface(u, v).pos;
+
+      const scaleH = s === 0 ? 1.06 : lerp1(0.88, 0.58, s / Math.max(1, nStalks - 1));
+      const stalkH = Math.max(0.28, p.colonyHeight * 0.68 * scaleH);
+      const stalkR = Math.max(0.042, stalkH * 0.13);
+      const phase = (this.colonyPhase + s * 0.005) % 1;
+
+      // 1. Towering Smooth Translucent Cylindrical Trunk Column with Parapet Collar Ring!
+      const outVec = s === 0 ? currentDir : v3(Math.cos(az), 0, Math.sin(az));
+      const initDir = normalize(
+        add(scale(UP, 0.92), add(scale(outVec, 0.18), scale(currentDir, Math.sin(leanRad) * 0.35))),
+      );
+      const colCurve = growCurve(
+        add(surf, v3(0, -0.015, 0)),
+        initDir,
+        anyPerpendicular(initDir),
+        stalkH,
+        tier >= 3 ? 20 : 14,
+        (t0, t1) => ({
+          pitch: (leanRad * 0.32 + Math.sin(t1 * Math.PI * 0.9) * 0.12) * (t1 - t0),
+          yaw: sRng.range(-0.12, 0.12) * (t1 - t0),
+        }),
+      );
+
+      const topFlex = 0.16 * p.currentSway;
+      const sides = tier >= 3 ? 26 : 18;
+      const cRings: number[][] = [];
+      for (let i = 0; i < colCurve.count; i++) {
+        const fr = colCurve.frameAtIndex(i);
+        const t = fr.t;
+        // Pedal basal flare -> smooth stately column -> sharp parapet collar ring (`t ~ 0.86`) -> flaring capitulum!
+        const baseFlare = 1.34 * Math.exp(-t * 6.0);
+        const parapetRing = 0.20 * Math.exp(-Math.pow((t - 0.86) / 0.035, 2.0));
+        const capFlare = 0.48 * smoothstep(0.88, 1.0, t);
+        const rHere = stalkR * (0.82 + baseFlare + parapetRing + capFlare);
+        const flex = Math.pow(t, 1.5) * topFlex;
+        const row: number[] = [];
+
+        for (let j = 0; j < sides; j++) {
+          const th = (j / sides) * TAU;
+          const rad = add(scale(fr.right, Math.cos(th)), scale(fr.up, Math.sin(th)));
+          const pt = addScaled(fr.pos, rad, rHere);
+          let col = mixRgb(colBase, colTrunk, smoothstep(0.05, 0.55, t));
+          col = mixRgb(col, colLobe, smoothstep(0.68, 1.0, t));
+          if (parapetRing > 0.06) col = mixRgb(col, colCollar, parapetRing * 2.5);
+          row.push(
+            columnMesh.addVertex({
+              x: pt.x, y: pt.y, z: pt.z,
+              nx: rad.x, ny: rad.y, nz: rad.z,
+              tx: fr.dir.x, ty: fr.dir.y, tz: fr.dir.z,
+              u: j / sides, v: t,
+              color: col,
+              wind: [t, flex, phase, 0],
+              pivot: this.groundOrigin,
+              roughness: 0.20,
+              translucency: Math.max(0.65, p.translucency), // Luminous translucent Metridium column!
+              detailMetric: parapetRing > 0.05 ? 0.9 : 0.4,
+              anatomyLevel: 1,
+            }),
+          );
+        }
+        cRings.push(row);
+      }
+      for (let i = 0; i < cRings.length - 1; i++) {
+        for (let j = 0; j < sides; j++) {
+          const j1 = (j + 1) % sides;
+          columnMesh.addQuad(cRings[i][j], cRings[i][j1], cRings[i + 1][j1], cRings[i + 1][j]);
+        }
+      }
+      this.stats.stemsOrTubes++;
+
+      // Tiny scattered cinclides (acontia pore bumps) on column (`vesiclesMesh`)
+      if (p.vesicleAbundance > 0.25) {
+        for (let k = 0; k < 14; k++) {
+          const z = lerp1(0.22, 0.78, k / 13);
+          const fr = colCurve.atT(z);
+          const th = k * GOLDEN_ANGLE;
+          const rad = add(scale(fr.right, Math.cos(th)), scale(fr.up, Math.sin(th)));
+          const rCol = stalkR * 0.84;
+          this.emitClosedOvoid(
+            cinclidesMesh,
+            addScaled(fr.pos, rad, rCol * 0.92),
+            rad,
+            0.007,
+            0.0045,
+            5,
+            4,
+            colTrunk,
+            colCollar,
+            0.25,
+            0.75,
+            [z, Math.pow(z, 1.5) * topFlex, phase, 0],
+          );
+          this.stats.vesiclesOrPolyps++;
+        }
+      }
+
+      // 2. Billowing Multi-Lobed Ruffled Cauliflower Oral Crown (`stipeMesh`) + Fluffy Cloud of Plumose Filaments (`frondsMesh`)!
+      const apex = colCurve.atT(1.0);
+      const nLobes = clamp(Math.round(p.branchOrder) + 4, 6, 8);
+      const crownR = stalkR * 2.15 * p.canopySpread;
+      const lobeRings = tier >= 3 ? 9 : 6;
+      const lobeCols = tier >= 3 ? 22 : 14;
+
+      for (let l = 0; l < nLobes; l++) {
+        const lAz = (l / nLobes) * TAU + sRng.range(-0.08, 0.08);
+        const radH = normalize(add(scale(apex.right, Math.cos(lAz)), scale(apex.up, Math.sin(lAz))));
+        const tangH = normalize(cross(apex.dir, radH));
+        // Wide billowing cauliflower lobes overhanging the parapet collar!
+        const lobeDir = normalize(add(scale(radH, 0.90), scale(apex.dir, 0.44)));
+        const lobeNrm = normalize(cross(tangH, lobeDir));
+        const lobeOrigin = add(addScaled(apex.pos, radH, stalkR * 0.38), scale(apex.dir, stalkR * 0.08));
+        const lobeLen = crownR * 0.96 * sRng.vary(1.0, 0.07);
+
+        const posG: V3[][] = [];
+        const colG: RGB[][] = [];
+        const windG: [number, number, number, number][][] = [];
+
+        for (let r = 0; r <= lobeRings; r++) {
+          const rf = r / lobeRings;
+          const lFlex = topFlex + 0.06 * p.currentSway * rf;
+          const pR: V3[] = [];
+          const cR: RGB[] = [];
+          const wR: [number, number, number, number][] = [];
+
+          for (let c = 0; c <= lobeCols; c++) {
+            const vf = c / lobeCols - 0.5;
+            const theta = vf * 2.35 * smoothstep(0.0, 0.42, rf);
+            const round = Math.pow(Math.max(0.12, Math.cos(vf * Math.PI * 0.90)), 0.32);
+            const dirInLobe = normalize(add(scale(lobeDir, Math.cos(theta)), scale(tangH, Math.sin(theta))));
+            // Deep multi-harmonic cauliflower frilling along every oral lobe!
+            const frill =
+              (Math.sin(theta * 6.0 + l) + 0.65 * Math.cos(theta * 13.0 - l * 1.7)) *
+              lobeLen *
+              0.26 *
+              p.ruffleWave *
+              Math.pow(rf, 1.4) *
+              round;
+            const domeArch = Math.sin(rf * Math.PI * 0.85) * lobeLen * 0.22;
+            const pt = add(addScaled(lobeOrigin, dirInLobe, lobeLen * rf * round), scale(lobeNrm, frill + domeArch));
+            pR.push(pt);
+            cR.push(mixRgb(colLobe, colPlume, smoothstep(0.32, 0.96, rf) * 0.78));
+            wR.push([rf, lFlex, phase, 0.05 * p.currentSway * rf * rf]);
+
+            // Lush domed puffball cloud of fine feathery alabaster micro-tentacles clothing every cauliflower fold!
+            if (r >= 2 && (c + r) % (tier >= 3 ? 1 : 2) === 0) {
+              const filLen = p.organLength * scaleH * lerp1(0.24, 0.36, rf) * sRng.vary(1.0, 0.22);
+              const filR = Math.max(0.0019, filLen * clamp(p.organWidth, 0.05, 0.25) * 0.20);
+              const filDir = normalize(
+                add(
+                  scale(apex.dir, lerp1(0.92, 0.48, rf)),
+                  add(
+                    scale(dirInLobe, lerp1(0.22, 0.72, rf)),
+                    add(scale(lobeNrm, 0.35 + sRng.range(-0.22, 0.22)), scale(tangH, sRng.range(-0.28, 0.28))),
+                  ),
+                ),
+              );
+              const filCurve = growCurve(pt, filDir, anyPerpendicular(filDir), filLen, 4, (t0, t1) => ({
+                pitch: (-0.42 + sRng.range(-0.32, 0.32)) * (t1 - t0),
+                yaw: sRng.range(-0.45, 0.45) * (t1 - t0),
+              }));
+              this.emitCappedTentacleTube(
+                plumeMesh,
+                filCurve,
+                4,
+                (uF) => Math.max(0.0005, filR * (1 - 0.62 * uF)),
+                (uF) => mixRgb(colLobe, colPlume, smoothstep(0.08, 0.75, uF)),
+                lFlex,
+                0.07 * p.currentSway,
+                0.16 * p.currentSway,
+                phase,
+                0.24,
+                Math.max(0.78, p.translucency),
+              );
+              this.stats.bladesOrTentacles++;
+            }
+          }
+          posG.push(pR);
+          colG.push(cR);
+          windG.push(wR);
+        }
+        this.emitSurfaceGrid(lobesMesh, posG, colG, windG, 0.24, p.translucency);
+      }
+    }
+    columnMesh.hasExplicitNormals = true;
+    lobesMesh.hasExplicitNormals = true;
+    plumeMesh.hasExplicitNormals = true;
+  }
+
+  // ===========================================================================
+  // 25. STRAWBERRY BEADLET ANEMONE (Actinia fragacea)
+  // ===========================================================================
+  private buildStrawberryBeadletAnemone(
+    tier: number,
+    barrelMesh: PartMesh,
+    mouthMesh: PartMesh,
+    tentaclesMesh: PartMesh,
+    acrorhagiMesh: PartMesh,
+  ): void {
+    const p = this.p;
+    const colCrimsonDeep = hexToLinearRgb(p.hueHoldfast);
+    const colCrimsonBody = hexToLinearRgb(p.huePrimary);
+    const colRubyTent = hexToLinearRgb(p.hueSecondary);
+    const colRoseTip = hexToLinearRgb(p.hueAccent);
+    const colSapphireBead = hexToLinearRgb(p.huePolyp); // Vivid electric sapphire-blue acrorhagi pearls!
+    const colGoldSeed = hexToLinearRgb('#d9e838'); // Golden-chartreuse strawberry spots!
+
+    const nColony = clamp(Math.round(p.colonyCount), 1, 8);
+    const clusterR = nColony === 1 ? 0 : Math.min(0.46, 0.22 + 0.045 * nColony) * p.canopySpread;
+    const currentDir = normalize(v3(0.84, 0, 0.54));
+    const leanSin = Math.sin(p.currentLeanDeg * DEG2RAD);
+
+    for (let idx = 0; idx < nColony; idx++) {
+      const aRng = this.rng.fork(0xf900 + idx * 97);
+      const az = idx * GOLDEN_ANGLE + aRng.range(-0.14, 0.14);
+      const dist = idx === 0 ? 0 : clusterR * lerp1(0.72, 1.05, (idx - 1) / Math.max(1, nColony - 2));
+      const u = clamp(0.5 + Math.cos(az) * dist * 0.80, 0.12, 0.88);
+      const v = clamp(0.5 + Math.sin(az) * dist * 0.80, 0.12, 0.88);
+      const baseOrigin = this.substrate.sampleSurface(u, v).pos;
+
+      const scaleA = idx === 0 ? 1.04 : lerp1(0.80, 0.56, idx / Math.max(1, nColony - 1)) * aRng.vary(1.0, 0.08);
+      const H = Math.max(0.18, p.colonyHeight * scaleA);
+      const barrelH = H * 0.58;
+      const barrelR = Math.max(0.075, H * 0.44 * p.canopySpread);
+      const topFlex = 0.06 * p.currentSway;
+      const phase = (this.colonyPhase + idx * 0.005) % 1;
+
+      const evalBarrelRad = (tB: number): number =>
+        barrelR * (0.82 + 0.28 * Math.sin(tB * Math.PI * 0.92) - 0.18 * Math.pow(tB, 3.0));
+
+      // 1. Plump Glossy Crimson Dome-Barrel Column Polka-Dotted with Golden "Strawberry Seeds"!
+      const uCols = tier >= 3 ? 48 : 32;
+      const vRows = tier >= 3 ? 24 : 16;
+      const posGrid: V3[][] = [];
+      const colGrid: RGB[][] = [];
+      const windGrid: [number, number, number, number][][] = [];
+
+      for (let r = 0; r <= vRows; r++) {
+        const rv = r / vRows;
+        const pRow: V3[] = [];
+        const cRow: RGB[] = [];
+        const wRow: [number, number, number, number][] = [];
+
+        for (let c = 0; c <= uCols; c++) {
+          const th = (c / uCols) * TAU;
+          if (rv <= 0.72) {
+            const tB = rv / 0.72;
+            const rad = evalBarrelRad(tB);
+            const y = barrelH * tB;
+            const flex = Math.pow(tB, 1.4) * topFlex;
+            const col = mixRgb(colCrimsonDeep, colCrimsonBody, smoothstep(0.05, 0.68, tB));
+            pRow.push(add(baseOrigin, v3(Math.cos(th) * rad, y, Math.sin(th) * rad)));
+            cRow.push(col);
+            wRow.push([rv, flex, phase, 0]);
+          } else {
+            // Parapet fosse groove + smooth ruby oral disc!
+            const tD = (rv - 0.72) / 0.28;
+            const rad = lerp1(barrelR * 0.86, barrelR * 0.08, tD);
+            const fosseDip = -barrelH * 0.05 * Math.sin(tD * Math.PI);
+            const y = barrelH + fosseDip;
+            pRow.push(add(baseOrigin, v3(Math.cos(th) * rad, y, Math.sin(th) * rad)));
+            cRow.push(mixRgb(colCrimsonBody, colRubyTent, tD * 0.65));
+            wRow.push([rv, topFlex, phase, 0]);
+          }
+        }
+        posGrid.push(pRow);
+        colGrid.push(cRow);
+        windGrid.push(wRow);
+      }
+
+      // Glossy wet intertidal cuticle (`roughness = 0.12`)!
+      this.emitSurfaceGrid(barrelMesh, posGrid, colGrid, windGrid, 0.12, p.translucency * 0.55);
+      this.stats.stemsOrTubes++;
+
+      // Crisp 3D Golden-Chartreuse "Strawberry Seed" Speckles across the glossy crimson barrel!
+      const nSeeds = tier >= 3 ? 84 : 48;
+      for (let sIdx = 0; sIdx < nSeeds; sIdx++) {
+        const tB = lerp1(0.10, 0.88, (sIdx + 0.5) / nSeeds);
+        const sTh = sIdx * GOLDEN_ANGLE + idx * 0.7;
+        const rad = evalBarrelRad(tB);
+        const y = barrelH * tB;
+        const nOut = normalize(v3(Math.cos(sTh), 0.14 * Math.cos(tB * Math.PI), Math.sin(sTh)));
+        const seedR = barrelR * 0.026;
+        const seedPt = add(baseOrigin, v3(Math.cos(sTh) * rad, y, Math.sin(sTh) * rad));
+        this.emitClosedOvoid(
+          acrorhagiMesh,
+          addScaled(seedPt, nOut, -seedR * 0.55),
+          nOut,
+          seedR * 1.15,
+          seedR,
+          5,
+          4,
+          colGoldSeed,
+          colGoldSeed,
+          0.14,
+          0.45,
+          [tB * 0.72, Math.pow(tB, 1.4) * topFlex, phase, 0],
+        );
+        this.stats.vesiclesOrPolyps++;
+      }
+
+      this.emitPleatedOralCone(
+        mouthMesh,
+        add(baseOrigin, v3(0, barrelH - 0.004, 0)),
+        barrelR * 0.14,
+        barrelH * 0.08,
+        colCrimsonBody,
+        colRoseTip,
+        topFlex,
+        phase,
+      );
+
+      // 2. Necklace Ring of 24 Vivid Sapphire-Blue Spherical Acrorhagi ("Fighting Beads") on the Parapet Collar!
+      if (p.vesicleAbundance > 0.15) {
+        const nBeads = Math.max(16, Math.round(24 * clamp(p.vesicleAbundance, 0.6, 1.35)));
+        const beadR = barrelR * 0.068;
+        for (let b = 0; b < nBeads; b++) {
+          const bTh = (b / nBeads) * TAU;
+          const radH = v3(Math.cos(bTh), 0, Math.sin(bTh));
+          const beadPos = add(baseOrigin, addScaled(v3(0, barrelH - beadR * 0.15, 0), radH, barrelR * 0.85));
+          const beadDir = normalize(add(scale(radH, 0.62), scale(UP, 0.78)));
+          this.emitClosedOvoid(
+            acrorhagiMesh,
+            addScaled(beadPos, beadDir, -beadR * 0.3),
+            beadDir,
+            beadR * 1.95,
+            beadR,
+            tier >= 3 ? 8 : 6,
+            tier >= 3 ? 6 : 4,
+            mixRgb(colCrimsonBody, colSapphireBead, 0.55),
+            colSapphireBead,
+            0.08, // Gleaming wet sapphire jewel sheen!
+            0.78,
+            [0.72, topFlex, phase, 0],
+          );
+          this.stats.vesiclesOrPolyps++;
+        }
+      }
+
+      // 3. Crown of Glossy Ruby-Crimson to Rose-Pink Tapered Tentacles!
+      const nTent = Math.max(36, Math.round((tier >= 3 ? 68 : 44) * p.organDensity));
+      for (let t = 0; t < nTent; t++) {
+        const tRng = aRng.fork(0x600 + t * 53);
+        const frac = (t + 0.5) / nTent;
+        const rFrac = lerp1(0.24, 0.76, Math.sqrt(frac));
+        const tAz = t * GOLDEN_ANGLE + tRng.range(-0.06, 0.06);
+        const radH = v3(Math.cos(tAz), 0, Math.sin(tAz));
+        const startPt = add(baseOrigin, addScaled(v3(0, barrelH, 0), radH, barrelR * rFrac));
+
+        const elev = lerp1(80, 32, frac) * DEG2RAD;
+        const emergeDir = normalize(
+          add(scale(radH, Math.cos(elev)), add(scale(UP, Math.sin(elev)), scale(currentDir, leanSin * 0.32))),
+        );
+        const tLen = p.organLength * scaleA * lerp1(0.78, 1.08, Math.sin(Math.PI * (0.25 + 0.6 * frac))) * tRng.vary(1.0, 0.1);
+        const tBaseR = Math.max(0.005, tLen * clamp(p.organWidth, 0.08, 0.38) * 0.18);
+
+        const tCurve = growCurve(startPt, emergeDir, anyPerpendicular(emergeDir), tLen, tier >= 3 ? 11 : 7, (t0, t1) => ({
+          pitch: (-0.52 - 0.34 * frac + tRng.range(-0.18, 0.18)) * (t1 - t0),
+          yaw: tRng.range(-0.25, 0.25) * (t1 - t0),
+        }));
+        this.emitCappedTentacleTube(
+          tentaclesMesh,
+          tCurve,
+          tier >= 3 ? 7 : 5,
+          (uT) => Math.max(0.001, tBaseR * Math.pow(1 - uT * 0.78, 0.76)),
+          (uT) => mixRgb(colRubyTent, colRoseTip, smoothstep(0.35, 0.96, uT)),
+          topFlex,
+          0.16 * p.currentSway,
+          0.18 * p.currentSway,
+          phase,
+          0.11,
+          p.translucency,
+        );
+        this.stats.bladesOrTentacles++;
+      }
+    }
+    barrelMesh.hasExplicitNormals = true;
+    tentaclesMesh.hasExplicitNormals = true;
+  }
+
+  // ===========================================================================
+  // Shared Anemone Surface, Oral Cone & Capped Tentacle Helpers
+  // ===========================================================================
+
+  private emitSurfaceGrid(
+    mesh: PartMesh,
+    posGrid: V3[][],
+    colGrid: RGB[][],
+    windGrid: [number, number, number, number][][],
+    roughness: number,
+    translucency: number,
+  ): void {
+    const rows = posGrid.length - 1;
+    const cols = posGrid[0].length - 1;
+    const idxGrid: number[][] = [];
+
+    for (let r = 0; r <= rows; r++) {
+      const rowIds: number[] = [];
+      for (let c = 0; c <= cols; c++) {
+        const pU0 = posGrid[Math.max(0, r - 1)][c];
+        const pU1 = posGrid[Math.min(rows, r + 1)][c];
+        const pV0 = posGrid[r][Math.max(0, c - 1)];
+        const pV1 = posGrid[r][Math.min(cols, c + 1)];
+        let nrm = cross(sub(pU1, pU0), sub(pV1, pV0));
+        nrm = lengthSq(nrm) > 1e-12 ? normalize(nrm) : UP;
+        const tang = lengthSq(sub(pV1, pV0)) > 1e-12 ? normalize(sub(pV1, pV0)) : v3(1, 0, 0);
+        const pt = posGrid[r][c];
+
+        rowIds.push(
+          mesh.addVertex({
+            x: pt.x, y: pt.y, z: pt.z,
+            nx: nrm.x, ny: nrm.y, nz: nrm.z,
+            tx: tang.x, ty: tang.y, tz: tang.z,
+            u: c / cols, v: r / rows,
+            color: colGrid[r][c],
+            wind: windGrid[r][c],
+            pivot: this.groundOrigin,
+            roughness,
+            translucency,
+            detailMetric: r / rows,
+            anatomyLevel: 1,
+          }),
+        );
+      }
+      idxGrid.push(rowIds);
+    }
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        mesh.addQuad(idxGrid[r][c], idxGrid[r + 1][c], idxGrid[r + 1][c + 1], idxGrid[r][c + 1]);
+      }
+    }
+  }
+
+  private emitPleatedOralCone(
+    mesh: PartMesh,
+    center: V3,
+    radius: number,
+    height: number,
+    colOuter: RGB,
+    colLip: RGB,
+    flex: number,
+    phase: number,
+  ): void {
+    const cols = 20;
+    const rows = 4;
+    const rings: number[][] = [];
+    for (let r = 0; r <= rows; r++) {
+      const t = r / rows;
+      const row: number[] = [];
+      for (let c = 0; c < cols; c++) {
+        const th = (c / cols) * TAU;
+        // Oval siphonoglyph actinopharynx slit with radial mesentery pleats!
+        const ovalX = 1 + 0.38 * smoothstep(0.3, 1.0, t) * Math.cos(th * 2);
+        const pleat = 1 + 0.08 * Math.cos(th * 10);
+        const rad = lerp1(radius, radius * 0.14, t) * ovalX * pleat;
+        const y = Math.sin(t * Math.PI * 0.85) * height;
+        const pt = add(center, v3(Math.cos(th) * rad, y, Math.sin(th) * rad));
+        row.push(
+          mesh.addVertex({
+            x: pt.x, y: pt.y, z: pt.z,
+            tx: -Math.sin(th), ty: 0, tz: Math.cos(th),
+            u: c / cols, v: t,
+            color: mixRgb(colOuter, colLip, smoothstep(0.25, 0.95, t)),
+            wind: [0.8, flex, phase, 0],
+            pivot: this.groundOrigin,
+            roughness: 0.22,
+            translucency: 0.65,
+            detailMetric: 0.9,
+            anatomyLevel: 2,
+          }),
+        );
+      }
+      rings.push(row);
+    }
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const c1 = (c + 1) % cols;
+        mesh.addQuad(rings[r][c], rings[r + 1][c], rings[r + 1][c1], rings[r][c1]);
+      }
+    }
+    const throat = mesh.addVertex({
+      x: center.x, y: center.y - height * 0.35, z: center.z,
+      tx: 1, ty: 0, tz: 0,
+      u: 0.5, v: 1,
+      color: mixRgb(colLip, hexToLinearRgb('#140814'), 0.55),
+      wind: [1, flex, phase, 0],
+      pivot: this.groundOrigin,
+      roughness: 0.3,
+      translucency: 0.4,
+      detailMetric: 0.95,
+      anatomyLevel: 2,
+    });
+    const inner = rings[rows];
+    for (let c = 0; c < cols; c++) {
+      mesh.addTri(inner[c], throat, inner[(c + 1) % cols]);
+    }
+  }
+
+  private emitCappedTentacleTube(
+    mesh: PartMesh,
+    curve: CurveLine,
+    sides: number,
+    radiusAt: (u: number) => number,
+    colorAt: (u: number) => RGB,
+    attachFlex: number,
+    extraFlex: number,
+    maxFlutter: number,
+    phase: number,
+    roughness: number,
+    translucency: number,
+  ): void {
+    const rings: number[][] = [];
+    for (let i = 0; i < curve.count; i++) {
+      const fr = curve.frameAtIndex(i);
+      const u = fr.t;
+      const r = radiusAt(u);
+      const col = colorAt(u);
+      const flex = attachFlex + Math.pow(u, 1.45) * extraFlex;
+      const flut = maxFlutter * u * u; // Strictly 0 at oral-disc attachment (`u = 0`)!
+      const wVec: [number, number, number, number] = [u, flex, phase, flut];
+
+      const row: number[] = [];
+      for (let j = 0; j < sides; j++) {
+        const th = (j / sides) * TAU;
+        const rad = add(scale(fr.right, Math.cos(th)), scale(fr.up, Math.sin(th)));
+        const pt = addScaled(fr.pos, rad, r);
+        const nrm = normalize(add(rad, scale(fr.dir, u > 0.85 ? 0.38 : 0.06)));
+        row.push(
+          mesh.addVertex({
+            x: pt.x, y: pt.y, z: pt.z,
+            nx: nrm.x, ny: nrm.y, nz: nrm.z,
+            tx: fr.dir.x, ty: fr.dir.y, tz: fr.dir.z,
+            u: j / sides, v: u,
+            color: col,
+            wind: wVec,
+            pivot: this.groundOrigin,
+            roughness,
+            translucency,
+            detailMetric: smoothstep(0.6, 1.0, u),
+            anatomyLevel: 3,
+          }),
+        );
+      }
+      rings.push(row);
+    }
+
+    for (let i = 0; i < rings.length - 1; i++) {
+      for (let j = 0; j < sides; j++) {
+        const j1 = (j + 1) % sides;
+        mesh.addQuad(rings[i][j], rings[i][j1], rings[i + 1][j1], rings[i + 1][j]);
+      }
+    }
+
+    // Closed hemispherical acrosphere dome tip!
+    const fEnd = curve.atT(1.0);
+    const rEnd = radiusAt(1.0);
+    const tipPt = addScaled(fEnd.pos, fEnd.dir, rEnd * 0.65);
+    const vCap = mesh.addVertex({
+      x: tipPt.x, y: tipPt.y, z: tipPt.z,
+      nx: fEnd.dir.x, ny: fEnd.dir.y, nz: fEnd.dir.z,
+      tx: fEnd.right.x, ty: fEnd.right.y, tz: fEnd.right.z,
+      u: 0.5, v: 1.0,
+      color: colorAt(1.0),
+      wind: [1.0, attachFlex + extraFlex, phase, maxFlutter],
+      pivot: this.groundOrigin,
+      roughness,
+      translucency,
+      detailMetric: 1.0,
+      anatomyLevel: 3,
+    });
+    const last = rings[rings.length - 1];
+    for (let j = 0; j < sides; j++) {
+      mesh.addTri(last[j], last[(j + 1) % sides], vCap);
     }
   }
 

@@ -42,9 +42,16 @@ export type MarineSpecies =
   | 'sea_lettuce_ulva'
   | 'neptune_seagrass'
   | 'eelgrass_zostera'
+  | 'sea_anemone'
+  | 'magnificent_ritteri_anemone'
+  | 'giant_carpet_anemone'
+  | 'tube_dwelling_cerianthus'
+  | 'corkscrew_anemone'
+  | 'rock_flower_anemone'
+  | 'plumose_frilled_anemone'
+  | 'strawberry_beadlet_anemone'
   | 'staghorn_coral'
   | 'gorgonian_sea_fan'
-  | 'sea_anemone'
   | 'azure_tube_sponge'
   | 'feather_star_crinoid';
 
@@ -62,9 +69,16 @@ export const MARINE_SPECIES_NAMES: Record<MarineSpecies, string> = {
   sea_lettuce_ulva: 'Ruffled Sea Lettuce (Ulva)',
   neptune_seagrass: 'Neptune Seagrass (Posidonia)',
   eelgrass_zostera: 'Flowering Eelgrass Meadow (Zostera)',
+  sea_anemone: 'Bubble-Tip Sea Anemone (Entacmaea)',
+  magnificent_ritteri_anemone: 'Magnificent Ritteri Anemone (Radianthus)',
+  giant_carpet_anemone: 'Giant Folded Carpet Anemone (Stichodactyla)',
+  tube_dwelling_cerianthus: 'Firework Tube Anemone (Cerianthus)',
+  corkscrew_anemone: 'Spiral Corkscrew Anemone (Bartholomea)',
+  rock_flower_anemone: 'Caribbean Rock Flower Anemone (Phymanthus)',
+  plumose_frilled_anemone: 'Giant Plumose Anemone (Metridium)',
+  strawberry_beadlet_anemone: 'Strawberry Beadlet Anemone (Actinia)',
   staghorn_coral: 'Branching Staghorn Coral (Acropora)',
   gorgonian_sea_fan: 'Reticulate Gorgonian Sea Fan',
-  sea_anemone: 'Bubble-Tip Sea Anemone (Entacmaea)',
   azure_tube_sponge: 'Organ-Pipe Azure Tube Sponge',
   feather_star_crinoid: 'Reef Crinoid Feather Star',
 };
@@ -79,9 +93,15 @@ export type MarineColorPalette =
   | 'acetabularia_mint_parasol'
   | 'padina_peacock_chalk'
   | 'crimson_dulse_rhodo'
+  | 'biolum_bubble_anemone'
+  | 'ritteri_magenta_gold'
+  | 'carpet_cobalt_turquoise'
+  | 'cerianthus_firework_violet'
+  | 'rock_flower_ultra_rainbow'
+  | 'plumose_sunset_alabaster'
+  | 'strawberry_sapphire_actinia'
   | 'acropora_rose_gold'
   | 'royal_purple_gorgonian'
-  | 'biolum_bubble_anemone'
   | 'caribbean_azure_sponge'
   | 'crimson_gold_crinoid'
   | 'abyssal_neon_reef'
@@ -98,9 +118,15 @@ export const MARINE_PALETTE_NAMES: Record<MarineColorPalette, string> = {
   acetabularia_mint_parasol: 'Calcified Mint & Aquamarine',
   padina_peacock_chalk: 'Peacock Chalk & Iridescent Teal',
   crimson_dulse_rhodo: 'Crimson-Burgundy Rhodophyta',
+  biolum_bubble_anemone: 'Bioluminescent Cyan-Magenta',
+  ritteri_magenta_gold: 'Ritteri Magenta Column & Gold Tips',
+  carpet_cobalt_turquoise: 'Electric Cobalt & Turquoise Carpet',
+  cerianthus_firework_violet: 'Cerianthus Ultraviolet & Tangerine',
+  rock_flower_ultra_rainbow: 'Caribbean Ultra Rock-Flower Rainbow',
+  plumose_sunset_alabaster: 'Metridium Salmon-Peach & Alabaster',
+  strawberry_sapphire_actinia: 'Strawberry Crimson & Sapphire Beads',
   acropora_rose_gold: 'Rose-Gold Staghorn Reef',
   royal_purple_gorgonian: 'Royal Violet & Gold Sea Fan',
-  biolum_bubble_anemone: 'Bioluminescent Cyan-Magenta',
   caribbean_azure_sponge: 'Caribbean Cerulean & Turquoise',
   crimson_gold_crinoid: 'Imperial Crimson & Saffron',
   abyssal_neon_reef: 'Abyssal Ultraviolet Biolum',
@@ -200,6 +226,48 @@ export const MARINE_PALETTES: Record<Exclude<MarineColorPalette, 'custom'>, Mari
     hueAccent: '#ff2e93',
     hueHoldfast: '#5c2d6e',
     huePolyp: '#ffe66d',
+  },
+  ritteri_magenta_gold: {
+    huePrimary: '#4d9e2a',
+    hueSecondary: '#8ee846',
+    hueAccent: '#ffd426',
+    hueHoldfast: '#b81d78',
+    huePolyp: '#f779c2',
+  },
+  carpet_cobalt_turquoise: {
+    huePrimary: '#1638b8',
+    hueSecondary: '#1fd6e8',
+    hueAccent: '#69ff9c',
+    hueHoldfast: '#301b70',
+    huePolyp: '#ff8a5c',
+  },
+  cerianthus_firework_violet: {
+    huePrimary: '#5e17c4',
+    hueSecondary: '#e82ca8',
+    hueAccent: '#4df5ff',
+    hueHoldfast: '#2e222e',
+    huePolyp: '#ff9626',
+  },
+  rock_flower_ultra_rainbow: {
+    huePrimary: '#e63517',
+    hueSecondary: '#17cc6c',
+    hueAccent: '#ffd014',
+    hueHoldfast: '#6b1839',
+    huePolyp: '#ff42b0',
+  },
+  plumose_sunset_alabaster: {
+    huePrimary: '#e87846',
+    hueSecondary: '#f7bfa0',
+    hueAccent: '#fff6ed',
+    hueHoldfast: '#c9532b',
+    huePolyp: '#ffd6ba',
+  },
+  strawberry_sapphire_actinia: {
+    huePrimary: '#b8122a',
+    hueSecondary: '#eb2f4b',
+    hueAccent: '#ff6b80',
+    hueHoldfast: '#8f0b1e',
+    huePolyp: '#14b5ff',
   },
   caribbean_azure_sponge: {
     huePrimary: '#2452bd',
@@ -547,6 +615,122 @@ export const MARINE_SPECIES_PROFILES: Record<MarineSpecies, Partial<MarineParams
     currentSway: 0.95,
     translucency: 0.74,
     ...MARINE_PALETTES.biolum_bubble_anemone,
+  },
+  magnificent_ritteri_anemone: {
+    colorPalette: 'ritteri_magenta_gold',
+    colonyHeight: 0.78,
+    colonyCount: 6,
+    canopySpread: 1.22,
+    organLength: 0.34,
+    organWidth: 0.16,
+    organDensity: 1.25,
+    ruffleWave: 0.62,
+    vesicleAbundance: 1.0,
+    branchOrder: 2,
+    currentLeanDeg: 10,
+    currentSway: 1.08,
+    translucency: 0.72,
+    ...MARINE_PALETTES.ritteri_magenta_gold,
+  },
+  giant_carpet_anemone: {
+    colorPalette: 'carpet_cobalt_turquoise',
+    colonyHeight: 0.48,
+    colonyCount: 16,
+    canopySpread: 1.25,
+    organLength: 0.46,
+    organWidth: 0.28,
+    organDensity: 1.2,
+    ruffleWave: 0.88,
+    vesicleAbundance: 1.1,
+    branchOrder: 2,
+    currentLeanDeg: 4,
+    currentSway: 0.65,
+    translucency: 0.68,
+    ...MARINE_PALETTES.carpet_cobalt_turquoise,
+  },
+  tube_dwelling_cerianthus: {
+    colorPalette: 'cerianthus_firework_violet',
+    colonyHeight: 0.96,
+    colonyCount: 3,
+    canopySpread: 1.24,
+    organLength: 0.58,
+    organWidth: 0.08,
+    organDensity: 1.15,
+    ruffleWave: 0.68,
+    vesicleAbundance: 1.05,
+    branchOrder: 2,
+    currentLeanDeg: 14,
+    currentSway: 1.15,
+    translucency: 0.78,
+    ...MARINE_PALETTES.cerianthus_firework_violet,
+  },
+  corkscrew_anemone: {
+    colorPalette: 'biolum_bubble_anemone',
+    colonyHeight: 0.66,
+    colonyCount: 5,
+    canopySpread: 1.18,
+    organLength: 0.44,
+    organWidth: 0.16,
+    organDensity: 1.1,
+    ruffleWave: 0.86,
+    vesicleAbundance: 1.15,
+    branchOrder: 2,
+    currentLeanDeg: 8,
+    currentSway: 1.05,
+    translucency: 0.76,
+    huePrimary: '#246b5c',
+    hueSecondary: '#6de8c1',
+    hueAccent: '#ff52b6',
+    hueHoldfast: '#59342b',
+    huePolyp: '#fff3a1',
+  },
+  rock_flower_anemone: {
+    colorPalette: 'rock_flower_ultra_rainbow',
+    colonyHeight: 0.34,
+    colonyCount: 5,
+    canopySpread: 1.18,
+    organLength: 0.16,
+    organWidth: 0.26,
+    organDensity: 1.15,
+    ruffleWave: 0.74,
+    vesicleAbundance: 1.15,
+    branchOrder: 2,
+    currentLeanDeg: 4,
+    currentSway: 0.72,
+    translucency: 0.66,
+    ...MARINE_PALETTES.rock_flower_ultra_rainbow,
+  },
+  plumose_frilled_anemone: {
+    colorPalette: 'plumose_sunset_alabaster',
+    colonyHeight: 1.04,
+    colonyCount: 3,
+    canopySpread: 1.12,
+    organLength: 0.22,
+    organWidth: 0.12,
+    organDensity: 1.2,
+    ruffleWave: 0.85,
+    vesicleAbundance: 1.0,
+    branchOrder: 3,
+    currentLeanDeg: 8,
+    currentSway: 0.88,
+    translucency: 0.80,
+    ...MARINE_PALETTES.plumose_sunset_alabaster,
+  },
+  strawberry_beadlet_anemone: {
+    colorPalette: 'strawberry_sapphire_actinia',
+    colonyHeight: 0.42,
+    colonyCount: 4,
+    canopySpread: 1.10,
+    organLength: 0.22,
+    organWidth: 0.20,
+    organDensity: 1.15,
+    ruffleWave: 0.55,
+    vesicleAbundance: 1.15,
+    branchOrder: 2,
+    currentLeanDeg: 6,
+    currentSway: 0.85,
+    translucency: 0.68,
+    ...MARINE_PALETTES.strawberry_sapphire_actinia,
   },
   azure_tube_sponge: {
     colorPalette: 'caribbean_azure_sponge',

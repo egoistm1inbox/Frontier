@@ -1578,9 +1578,15 @@ class FrontierStudio {
       { id: 'acetabularia_mint_parasol', short: 'Wineglass' },
       { id: 'padina_peacock_chalk', short: 'Peacock' },
       { id: 'crimson_dulse_rhodo', short: 'Red Dulse' },
+      { id: 'biolum_bubble_anemone', short: 'Biolum' },
+      { id: 'ritteri_magenta_gold', short: 'Ritteri' },
+      { id: 'carpet_cobalt_turquoise', short: 'Carpet' },
+      { id: 'cerianthus_firework_violet', short: 'Firework' },
+      { id: 'rock_flower_ultra_rainbow', short: 'RockFlower' },
+      { id: 'plumose_sunset_alabaster', short: 'Plumose' },
+      { id: 'strawberry_sapphire_actinia', short: 'Strawberry' },
       { id: 'acropora_rose_gold', short: 'Rose Reef' },
       { id: 'royal_purple_gorgonian', short: 'Sea Fan' },
-      { id: 'biolum_bubble_anemone', short: 'Biolum' },
       { id: 'caribbean_azure_sponge', short: 'Azure' },
       { id: 'crimson_gold_crinoid', short: 'Crimson' },
       { id: 'abyssal_neon_reef', short: 'Abyss UV' },
@@ -2394,6 +2400,7 @@ class FrontierStudio {
         rawK === 'seaweed' ||
         rawK === 'seagrass' ||
         rawK === 'algae' ||
+        rawK === 'anemone' ||
         rawK === 'coral'
           ? 'marine'
           : rawK;

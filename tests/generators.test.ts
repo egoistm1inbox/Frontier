@@ -109,14 +109,15 @@ function evalWindVertex(
   return [piv[0] + rel[0], piv[1] + rel[1], piv[2] + rel[2]];
 }
 
-describe('Frontier Procedural Generators — Welded Trees, Fruiting Palms, Gigantic Flowers, Sea Plants & Marine Species, Pillow Moss, Giant Tropicals, Ferns & Fur', () => {
-  it('exposes all 82 curated presets across all 11 studio groups', () => {
-    expect(PRESETS.length).toBe(82);
+describe('Frontier Procedural Generators — Welded Trees, Fruiting Palms, Gigantic Flowers, Sea Plants, Sea Anemones & Marine Species, Pillow Moss, Giant Tropicals, Ferns & Fur', () => {
+  it('exposes all 91 curated presets across all 12 studio groups', () => {
+    expect(PRESETS.length).toBe(91);
     const groups = new Set(PRESETS.map((p) => p.group));
     expect(groups.has('Trees · Welded Manifold')).toBe(true);
     expect(groups.has('Palms · Fruiting & Branching')).toBe(true);
     expect(groups.has('Flowers · Gigantic 3D Blooms')).toBe(true);
     expect(groups.has('Sea Plants · Kelp & Vegetation')).toBe(true);
+    expect(groups.has('Sea Anemones · Actiniaria & Tube')).toBe(true);
     expect(groups.has('Sea & Reef · Marine Species')).toBe(true);
     expect(groups.has('Real Moss · Bryophytes')).toBe(true);
     expect(groups.has('Giant Tropical · Megaphylls')).toBe(true);
@@ -1029,15 +1030,15 @@ describe('Frontier Procedural Generators — Welded Trees, Fruiting Palms, Gigan
     }
   });
 
-  it('synthesizes all 18 Sea Plants, Sea Vegetation & Marine Species with watertight Staghorn Coral & Velvet Codium manifolds, 16 marine palettes, seabed substrates, and C0 ocean-current SO(3) continuity', () => {
+  it('synthesizes all 25 Sea Plants, Sea Anemones & Marine Species with watertight Staghorn Coral & Velvet Codium manifolds, 22 marine palettes, seabed substrates, and C0 ocean-current SO(3) continuity', () => {
     const speciesIds = Object.keys(MARINE_SPECIES_NAMES) as MarineSpecies[];
     const paletteIds = (Object.keys(MARINE_PALETTE_NAMES) as MarineColorPalette[]).filter(
       (k) => k !== 'custom',
     );
-    expect(speciesIds.length).toBe(18);
-    expect(paletteIds.length).toBe(16);
+    expect(speciesIds.length).toBe(25);
+    expect(paletteIds.length).toBe(22);
 
-    // 1. Verify all 18 marine species + all 16 palettes build cleanly with populated MarineStats!
+    // 1. Verify all 25 marine species + all 22 palettes build cleanly with populated MarineStats!
     const basePreset = PRESETS.find((p) => p.name === 'Pacific Giant Bladder Kelp')!;
     for (let idx = 0; idx < speciesIds.length; idx++) {
       const spId = speciesIds[idx];
@@ -1119,12 +1120,38 @@ describe('Frontier Procedural Generators — Welded Trees, Fruiting Palms, Gigan
       expect(mRaw.layerReports[0].marine!.closedManifold).toBe(true);
     }
 
-    // 3. Verify all 4 multi-layer underwater flora & reef ecosystems compose cleanly!
+    // 3. Verify all 8 Sea Anemone species (Actiniaria & Ceriantharia) synthesize specialized oral crowns, columns/tubes & nematocyst structures!
+    const anemonePresets = [
+      'Bioluminescent Bubble-Tip Anemone',
+      'Magnificent Ritteri Sea Anemone',
+      'Electric Cobalt Giant Carpet Anemone',
+      'Firework Tube-Dwelling Anemone',
+      'Spiral Corkscrew Reef Anemone',
+      'Caribbean Ultra Rock Flower Anemone',
+      'Giant Plumose Cauliflower Anemone',
+      'Strawberry Sapphire Beadlet Anemone',
+    ] as const;
+    for (const anemName of anemonePresets) {
+      const aPreset = PRESETS.find((p) => p.name === anemName)!;
+      expect(aPreset, `${anemName} preset exists`).toBeDefined();
+      expect(aPreset.group).toBe('Sea Anemones · Actiniaria & Tube');
+      const aRes = buildSceneResponse(cloneScene(aPreset.scene));
+      expect(aRes.topology.nanVertices, `${anemName} NaN`).toBe(0);
+      expect(aRes.topology.degenerateFaces, `${anemName} degenerate`).toBe(0);
+      expect(aRes.topology.renderedTriangles, `${anemName} triangles`).toBeGreaterThan(35000);
+      const aStats = aRes.layerReports[0].marine!;
+      expect(aStats.stemsOrTubes, `${anemName} columns/tubes`).toBeGreaterThanOrEqual(1);
+      expect(aStats.bladesOrTentacles, `${anemName} tentacles`).toBeGreaterThanOrEqual(30);
+      expect(aStats.vesiclesOrPolyps, `${anemName} verrucae/acrorhagi/labial`).toBeGreaterThan(10);
+    }
+
+    // 4. Verify all 5 multi-layer underwater flora, anemone & reef ecosystems compose cleanly!
     for (const ecoName of [
       'Living Coral Reef Sanctuary',
       'Pacific Kelp & Seagrass Lagoon',
       'Intertidal Tidepool Seaweed Garden',
       'Tropical Lagoon Sea-Grape & Wineglass Meadow',
+      'Fluorescent Reef Anemone Sanctuary',
     ] as const) {
       const eco = PRESETS.find((p) => p.name === ecoName)!;
       const ecoRes = buildSceneResponse(cloneScene(eco.scene));
