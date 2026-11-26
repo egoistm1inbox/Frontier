@@ -10,6 +10,8 @@ import { FlowerParams } from './flowerParams';
 import { FlowerStats } from './flowerMesher';
 import { HairParams } from './hairParams';
 import { HairStats } from './hairMesher';
+import { MarineParams } from './marineParams';
+import { MarineStats } from './marineMesher';
 import { MossParams } from './mossParams';
 import { MossStats } from './mossMesher';
 import { PalmParams } from './palmParams';
@@ -19,7 +21,7 @@ import { TreeStats } from './treeMesher';
 import { TropicalParams } from './tropicalParams';
 import { TropicalStats } from './tropicalMesher';
 
-export type GeneratorKind = 'tree' | 'palm' | 'flower' | 'tropical' | 'fern' | 'moss' | 'hair';
+export type GeneratorKind = 'tree' | 'palm' | 'flower' | 'marine' | 'tropical' | 'fern' | 'moss' | 'hair';
 
 export interface LayerTransform {
   x: number;
@@ -40,6 +42,7 @@ export interface GeneratorLayer {
   tree?: TreeParams;
   palm?: PalmParams;
   flower?: FlowerParams;
+  marine?: MarineParams;
   fern?: FernParams;
   tropical?: TropicalParams;
   moss?: MossParams;
@@ -88,6 +91,7 @@ export interface LayerRuntimeReport {
   tree?: TreeStats;
   palm?: PalmStats;
   flower?: FlowerStats;
+  marine?: MarineStats;
   fern?: FernStats;
   tropical?: TropicalStats;
   moss?: MossStats;

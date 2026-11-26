@@ -12,6 +12,14 @@ import {
   FlowerSpecies,
 } from './flowerParams';
 import { DEFAULT_HAIR_PARAMS, HairParams } from './hairParams';
+import {
+  applyMarinePalette,
+  applyMarineSpeciesDefaults,
+  DEFAULT_MARINE_PARAMS,
+  MarineColorPalette,
+  MarineParams,
+  MarineSpecies,
+} from './marineParams';
 import { DEFAULT_MOSS_PARAMS, MossParams } from './mossParams';
 import { DEFAULT_PALM_PARAMS, PalmParams } from './palmParams';
 import { DEFAULT_TREE_PARAMS, TreeParams } from './treeParams';
@@ -80,6 +88,31 @@ function flowerLayer(
     locked: false,
     transform: { ...IDENT_XFORM, ...xform },
     flower: fp,
+  };
+}
+
+function marineLayer(
+  id: string,
+  name: string,
+  seed: number,
+  species: MarineSpecies,
+  palette?: MarineColorPalette,
+  overrides: Partial<MarineParams> = {},
+  xform: Partial<LayerTransform> = {},
+): GeneratorLayer {
+  const mp: MarineParams = { ...DEFAULT_MARINE_PARAMS };
+  applyMarineSpeciesDefaults(mp, species);
+  if (palette) applyMarinePalette(mp, palette);
+  Object.assign(mp, overrides);
+  return {
+    id,
+    name,
+    kind: 'marine',
+    seed,
+    visible: true,
+    locked: false,
+    transform: { ...IDENT_XFORM, ...xform },
+    marine: mp,
   };
 }
 
@@ -153,6 +186,7 @@ export const PRESET_GROUPS: { label: string; icon: string; accent: string }[] = 
   { label: 'Trees · Welded Manifold', icon: 'tree', accent: '#52d17c' },
   { label: 'Palms · Fruiting & Branching', icon: 'palm', accent: '#eab308' },
   { label: 'Flowers · Gigantic 3D Blooms', icon: 'flower', accent: '#ff2a78' },
+  { label: 'Sea & Reef · Marine Species', icon: 'marine', accent: '#00e5ff' },
   { label: 'Real Moss · Bryophytes', icon: 'moss', accent: '#86c232' },
   { label: 'Giant Tropical · Megaphylls', icon: 'tropical', accent: '#7ee058' },
   { label: 'Ferns · Woodland & Tropical', icon: 'fern', accent: '#34c759' },
@@ -922,6 +956,260 @@ export const PRESETS: PresetDefinition[] = [
           },
           { x: 0.80, z: 0.26, yaw: 18, scale: 0.94 },
         ),
+      ],
+    },
+  },
+
+  // ---------------------------------------------------------------------------
+  // SEA & REEF · MARINE PLANTS & BENTHIC REEF SPECIES
+  // ---------------------------------------------------------------------------
+  {
+    name: 'Pacific Giant Bladder Kelp',
+    group: 'Sea & Reef · Marine Species',
+    subtitle: 'Macrocystis pyrifera · haptera holdfast, gas pneumatocysts & corrugated blades',
+    accent: '#e0b42b',
+    icon: 'marine',
+    scene: {
+      presetName: 'Pacific Giant Bladder Kelp',
+      groupLabel: 'Sea & Reef · Marine Species',
+      substrate: sub('coral_reef_ledge', 0.88, 0.58, 0.88, 60),
+      substrateVisible: true,
+      layers: [
+        marineLayer('layer-1', 'Giant Bladder Kelp', 901, 'giant_kelp', 'pacific_amber_kelp', {
+          detailTier: 3,
+          colonyHeight: 3.5,
+          colonyCount: 5,
+          organLength: 0.76,
+          ruffleWave: 0.76,
+        }),
+      ],
+    },
+  },
+  {
+    name: 'Floating Bull Whip Kelp',
+    group: 'Sea & Reef · Marine Species',
+    subtitle: 'Nereocystis luetkeana · slender whip stipe, floating bulb & streaming ribbons',
+    accent: '#c79b22',
+    icon: 'marine',
+    scene: {
+      presetName: 'Floating Bull Whip Kelp',
+      groupLabel: 'Sea & Reef · Marine Species',
+      substrate: sub('wet_basalt_crag', 0.78, 0.62, 0.92, 60),
+      substrateVisible: true,
+      layers: [
+        marineLayer('layer-1', 'Pacific Bull Whip Kelp', 902, 'bull_kelp', 'pacific_amber_kelp', {
+          detailTier: 3,
+          colonyHeight: 3.2,
+          colonyCount: 3,
+          organLength: 1.38,
+        }),
+      ],
+    },
+  },
+  {
+    name: 'Mediterranean Neptune Seagrass',
+    group: 'Sea & Reef · Marine Species',
+    subtitle: 'Posidonia oceanica · creeping scaly rhizomes, fibrous sheaths & meadow straps',
+    accent: '#3da854',
+    icon: 'marine',
+    scene: {
+      presetName: 'Mediterranean Neptune Seagrass',
+      groupLabel: 'Sea & Reef · Marine Species',
+      substrate: sub('rippled_seabed_sand', 0.82, 0.48, 0.72, 64),
+      substrateVisible: true,
+      layers: [
+        marineLayer('layer-1', 'Neptune Seagrass Meadow', 903, 'neptune_seagrass', 'emerald_seagrass', {
+          detailTier: 3,
+          colonyCount: 18,
+          organLength: 0.92,
+        }),
+      ],
+    },
+  },
+  {
+    name: 'Golden Berry Sargassum',
+    group: 'Sea & Reef · Marine Species',
+    subtitle: 'Sargassum horneri · zigzag thallus, serrated blades & stalked berry vesicles',
+    accent: '#d99e1e',
+    icon: 'marine',
+    scene: {
+      presetName: 'Golden Berry Sargassum',
+      groupLabel: 'Sea & Reef · Marine Species',
+      substrate: sub('coral_reef_ledge', 0.62, 0.56, 0.86, 56),
+      substrateVisible: true,
+      layers: [
+        marineLayer('layer-1', 'Golden Berry Sargassum', 904, 'sargassum_weed', 'pacific_amber_kelp', {
+          detailTier: 3,
+          colonyHeight: 1.68,
+          colonyCount: 6,
+          vesicleAbundance: 1.3,
+        }),
+      ],
+    },
+  },
+  {
+    name: 'Ruffled Jade Sea Lettuce',
+    group: 'Sea & Reef · Marine Species',
+    subtitle: 'Ulva lactuca · hyperbolic-ruffled translucent jade foliose rosette sheets',
+    accent: '#5cd669',
+    icon: 'marine',
+    scene: {
+      presetName: 'Ruffled Jade Sea Lettuce',
+      groupLabel: 'Sea & Reef · Marine Species',
+      substrate: sub('wet_basalt_crag', 0.52, 0.58, 0.92, 60),
+      substrateVisible: true,
+      layers: [
+        marineLayer('layer-1', 'Ruffled Sea Lettuce', 905, 'sea_lettuce_ulva', 'jade_tidepool', {
+          detailTier: 3,
+          colonyCount: 12,
+          organLength: 0.50,
+          ruffleWave: 0.92,
+        }),
+      ],
+    },
+  },
+  {
+    name: 'Rose-Gold Staghorn Coral',
+    group: 'Sea & Reef · Marine Species',
+    subtitle: 'Acropora cervicornis · watertight 2-manifold antler colony, corallites & axial tips',
+    accent: '#f2a29b',
+    icon: 'marine',
+    scene: {
+      presetName: 'Rose-Gold Staghorn Coral',
+      groupLabel: 'Sea & Reef · Marine Species',
+      substrate: sub('coral_reef_ledge', 0.68, 0.62, 0.84, 64),
+      substrateVisible: true,
+      layers: [
+        marineLayer('layer-1', 'Staghorn Acropora Colony', 906, 'staghorn_coral', 'acropora_rose_gold', {
+          detailTier: 3,
+          colonyHeight: 1.22,
+          colonyCount: 3,
+          branchOrder: 3,
+        }),
+      ],
+    },
+  },
+  {
+    name: 'Royal Purple Gorgonian Sea Fan',
+    group: 'Sea & Reef · Marine Species',
+    subtitle: 'Gorgonia ventalina · planar reticulate sea-fan lattice & golden octocoral polyps',
+    accent: '#a844e6',
+    icon: 'marine',
+    scene: {
+      presetName: 'Royal Purple Gorgonian Sea Fan',
+      groupLabel: 'Sea & Reef · Marine Species',
+      substrate: sub('coral_reef_ledge', 0.68, 0.58, 0.84, 60),
+      substrateVisible: true,
+      layers: [
+        marineLayer('layer-1', 'Reticulate Gorgonian Fan', 907, 'gorgonian_sea_fan', 'royal_purple_gorgonian', {
+          detailTier: 3,
+          colonyHeight: 1.42,
+          colonyCount: 2,
+        }),
+      ],
+    },
+  },
+  {
+    name: 'Bioluminescent Bubble-Tip Anemone',
+    group: 'Sea & Reef · Marine Species',
+    subtitle: 'Entacmaea quadricolor · verrucose column, oral disc & glowing bubble-tip tentacles',
+    accent: '#ff2e93',
+    icon: 'marine',
+    scene: {
+      presetName: 'Bioluminescent Bubble-Tip Anemone',
+      groupLabel: 'Sea & Reef · Marine Species',
+      substrate: sub('coral_reef_ledge', 0.55, 0.62, 0.88, 60),
+      substrateVisible: true,
+      layers: [
+        marineLayer('layer-1', 'Bubble-Tip Sea Anemone', 908, 'sea_anemone', 'biolum_bubble_anemone', {
+          detailTier: 3,
+          colonyHeight: 0.68,
+          organLength: 0.40,
+          ruffleWave: 0.86,
+        }),
+      ],
+    },
+  },
+  {
+    name: 'Caribbean Azure Tube Sponge',
+    group: 'Sea & Reef · Marine Species',
+    subtitle: 'Callyspongia vaginalis · double-walled hollow chimneys, spicule conules & oscula',
+    accent: '#2cb5e8',
+    icon: 'marine',
+    scene: {
+      presetName: 'Caribbean Azure Tube Sponge',
+      groupLabel: 'Sea & Reef · Marine Species',
+      substrate: sub('coral_reef_ledge', 0.62, 0.56, 0.82, 60),
+      substrateVisible: true,
+      layers: [
+        marineLayer('layer-1', 'Azure Organ-Pipe Sponge', 909, 'azure_tube_sponge', 'caribbean_azure_sponge', {
+          detailTier: 3,
+          colonyHeight: 1.15,
+          colonyCount: 8,
+        }),
+      ],
+    },
+  },
+  {
+    name: 'Crimson Reef Feather Star',
+    group: 'Sea & Reef · Marine Species',
+    subtitle: 'Comanthina schlegeli · grasping cirri, calyx & saffron-tipped pinnate crinoid arms',
+    accent: '#eb3b5a',
+    icon: 'marine',
+    scene: {
+      presetName: 'Crimson Reef Feather Star',
+      groupLabel: 'Sea & Reef · Marine Species',
+      substrate: sub('coral_reef_ledge', 0.58, 0.64, 0.86, 60),
+      substrateVisible: true,
+      layers: [
+        marineLayer('layer-1', 'Reef Crinoid Feather Star', 910, 'feather_star_crinoid', 'crimson_gold_crinoid', {
+          detailTier: 3,
+          colonyHeight: 0.88,
+          colonyCount: 20,
+          organLength: 0.70,
+        }),
+      ],
+    },
+  },
+  {
+    name: 'Abyssal Neon Staghorn Coral',
+    group: 'Sea & Reef · Marine Species',
+    subtitle: 'Deep-reef bioluminescent Acropora colony with electric cyan & magenta axial tips',
+    accent: '#00f0ff',
+    icon: 'marine',
+    scene: {
+      presetName: 'Abyssal Neon Staghorn Coral',
+      groupLabel: 'Sea & Reef · Marine Species',
+      substrate: sub('coral_reef_ledge', 0.68, 0.65, 0.88, 64),
+      substrateVisible: true,
+      layers: [
+        marineLayer('layer-1', 'Abyssal Neon Acropora', 911, 'staghorn_coral', 'abyssal_neon_reef', {
+          detailTier: 3,
+          colonyHeight: 1.25,
+          colonyCount: 3,
+          branchOrder: 3,
+        }),
+      ],
+    },
+  },
+  {
+    name: 'Ultraviolet Reef Sea Anemone',
+    group: 'Sea & Reef · Marine Species',
+    subtitle: 'Fluorescent deep-reef Entacmaea with electric cyan tentacles & neon magenta tips',
+    accent: '#ff2bd6',
+    icon: 'marine',
+    scene: {
+      presetName: 'Ultraviolet Reef Sea Anemone',
+      groupLabel: 'Sea & Reef · Marine Species',
+      substrate: sub('coral_reef_ledge', 0.55, 0.64, 0.90, 60),
+      substrateVisible: true,
+      layers: [
+        marineLayer('layer-1', 'Ultraviolet Bubble-Tip Anemone', 912, 'sea_anemone', 'abyssal_neon_reef', {
+          detailTier: 3,
+          colonyHeight: 0.70,
+          organLength: 0.42,
+          ruffleWave: 0.88,
+        }),
       ],
     },
   },
@@ -2285,6 +2573,117 @@ export const PRESETS: PresetDefinition[] = [
           bloomCount: 3,
           budCount: 2,
         }),
+      ],
+    },
+  },
+  {
+    name: 'Living Coral Reef Sanctuary',
+    group: 'Ecosystems · Multi-Layer',
+    subtitle: 'Staghorn Coral + Purple Sea Fan + Bubble-Tip Anemone + Tube Sponge + Feather Star',
+    accent: '#00f0ff',
+    icon: 'layers',
+    scene: {
+      presetName: 'Living Coral Reef Sanctuary',
+      groupLabel: 'Ecosystems · Multi-Layer',
+      substrate: sub('coral_reef_ledge', 1.45, 0.64, 0.88, 72),
+      substrateVisible: true,
+      layers: [
+        marineLayer(
+          'layer-1',
+          'Rose-Gold Staghorn Coral',
+          921,
+          'staghorn_coral',
+          'acropora_rose_gold',
+          { detailTier: 2, colonyHeight: 1.25, colonyCount: 3, branchOrder: 3 },
+          { x: -0.46, z: -0.22, yaw: 18, scale: 1.0 },
+        ),
+        marineLayer(
+          'layer-2',
+          'Royal Gorgonian Sea Fan',
+          922,
+          'gorgonian_sea_fan',
+          'royal_purple_gorgonian',
+          { detailTier: 2, colonyHeight: 1.48, colonyCount: 2 },
+          { x: 0.48, z: -0.34, yaw: -24, scale: 1.0 },
+        ),
+        marineLayer(
+          'layer-3',
+          'Bioluminescent Sea Anemone',
+          923,
+          'sea_anemone',
+          'biolum_bubble_anemone',
+          { detailTier: 2, colonyHeight: 0.66, organLength: 0.38 },
+          { x: 0.24, z: 0.42, yaw: 35, scale: 0.95 },
+        ),
+        marineLayer(
+          'layer-4',
+          'Azure Organ-Pipe Sponge',
+          924,
+          'azure_tube_sponge',
+          'caribbean_azure_sponge',
+          { detailTier: 2, colonyHeight: 1.08, colonyCount: 7 },
+          { x: -0.52, z: 0.38, yaw: -40, scale: 0.92 },
+        ),
+        marineLayer(
+          'layer-5',
+          'Crimson Reef Feather Star',
+          925,
+          'feather_star_crinoid',
+          'crimson_gold_crinoid',
+          { detailTier: 2, colonyHeight: 0.82, colonyCount: 16, organLength: 0.62 },
+          { x: 0.04, z: -0.02, yaw: 12, scale: 0.85 },
+        ),
+      ],
+    },
+  },
+  {
+    name: 'Pacific Kelp & Seagrass Lagoon',
+    group: 'Ecosystems · Multi-Layer',
+    subtitle: 'Giant Bladder Kelp + Bull Whip Kelp + Neptune Seagrass + Ruffled Sea Lettuce',
+    accent: '#38ef7d',
+    icon: 'layers',
+    scene: {
+      presetName: 'Pacific Kelp & Seagrass Lagoon',
+      groupLabel: 'Ecosystems · Multi-Layer',
+      substrate: sub('rippled_seabed_sand', 1.55, 0.52, 0.82, 68),
+      substrateVisible: true,
+      layers: [
+        marineLayer(
+          'layer-1',
+          'Giant Bladder Kelp',
+          931,
+          'giant_kelp',
+          'pacific_amber_kelp',
+          { detailTier: 2, colonyHeight: 3.4, colonyCount: 4, organLength: 0.74 },
+          { x: -0.45, z: -0.28, yaw: 10, scale: 1.0 },
+        ),
+        marineLayer(
+          'layer-2',
+          'Pacific Bull Whip Kelp',
+          932,
+          'bull_kelp',
+          'pacific_amber_kelp',
+          { detailTier: 2, colonyHeight: 3.1, colonyCount: 2, organLength: 1.28 },
+          { x: 0.52, z: -0.25, yaw: -16, scale: 0.98 },
+        ),
+        marineLayer(
+          'layer-3',
+          'Neptune Seagrass Meadow',
+          933,
+          'neptune_seagrass',
+          'emerald_seagrass',
+          { detailTier: 2, colonyCount: 18, organLength: 0.92, canopySpread: 1.25 },
+          { x: 0.05, z: 0.28, yaw: 0, scale: 1.05 },
+        ),
+        marineLayer(
+          'layer-4',
+          'Ruffled Tidepool Sea Lettuce',
+          934,
+          'sea_lettuce_ulva',
+          'jade_tidepool',
+          { detailTier: 2, colonyCount: 10, organLength: 0.48 },
+          { x: -0.52, z: 0.45, yaw: 32, scale: 1.0 },
+        ),
       ],
     },
   },

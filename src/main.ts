@@ -29,6 +29,17 @@ import {
   VIBRANT_PALETTE_SWATCHES,
 } from './generators/flowerParams';
 import { DEFAULT_HAIR_PARAMS, HAIR_FLOW_NAMES, HairFlowMode } from './generators/hairParams';
+import {
+  applyMarinePalette,
+  applyMarineSpeciesDefaults,
+  DEFAULT_MARINE_PARAMS,
+  MARINE_PALETTE_NAMES,
+  MARINE_PALETTES,
+  MARINE_SPECIES_NAMES,
+  MarineColorPalette,
+  MarineParams,
+  MarineSpecies,
+} from './generators/marineParams';
 import { DEFAULT_MOSS_PARAMS, MOSS_HABIT_NAMES, MossHabit } from './generators/mossParams';
 import { DEFAULT_PALM_PARAMS, PALM_SPECIES_NAMES, PalmSpecies } from './generators/palmParams';
 import { DEFAULT_TREE_PARAMS, TREE_SPECIES_NAMES, TreeSpecies } from './generators/treeParams';
@@ -245,6 +256,8 @@ class FrontierStudio {
     addPills.append(
       mkAdd('Tree', 'tree'),
       mkAdd('Palm', 'palm'),
+      mkAdd('Flower', 'flower'),
+      mkAdd('Sea', 'marine'),
       mkAdd('Moss', 'moss'),
       mkAdd('Tropical', 'tropical'),
       mkAdd('Fern', 'fern'),
@@ -261,7 +274,7 @@ class FrontierStudio {
     const searchWrap = el('div', 'search');
     searchWrap.append(icon('search'));
     const sInp = el('input');
-    sInp.placeholder = 'Filter oak, date palm, pillow moss, banana, fur…';
+    sInp.placeholder = 'Filter kelp, coral, anemone, oak, palm, flower, moss…';
     sInp.addEventListener('input', () => {
       this.presetQuery = sInp.value.trim().toLowerCase();
       this.renderPresetLibrary();
@@ -808,6 +821,17 @@ class FrontierStudio {
         transform: { x: 0, y: 0, z: 0, yaw: (idx * 45) % 360, scale: 1 },
         flower: { ...DEFAULT_FLOWER_PARAMS },
       };
+    } else if (kind === 'marine') {
+      newLayer = {
+        id,
+        name: `Giant Kelp / Reef #${idx}`,
+        kind: 'marine',
+        seed,
+        visible: true,
+        locked: false,
+        transform: { x: 0, y: 0, z: 0, yaw: (idx * 40) % 360, scale: 1 },
+        marine: { ...DEFAULT_MARINE_PARAMS },
+      };
     } else if (kind === 'fern') {
       newLayer = {
         id,
@@ -909,6 +933,12 @@ class FrontierStudio {
       } else if (rep.palm) {
         elemCount += rep.palm.leaflets + rep.palm.fruits;
         elemSub = `${rep.palm.fronds} fronds · ${rep.palm.fruits} 3D fruits`;
+      } else if (rep.flower) {
+        elemCount += rep.flower.petals + rep.flower.stamensAndFlorets;
+        elemSub = `${rep.flower.blooms} blooms · ${rep.flower.petals} 3D petals`;
+      } else if (rep.marine) {
+        elemCount += rep.marine.bladesOrTentacles + rep.marine.vesiclesOrPolyps;
+        elemSub = `${rep.marine.stemsOrTubes} axes · ${fmtCompact(rep.marine.bladesOrTentacles)} marine organs`;
       } else if (rep.fern) {
         elemCount += rep.fern.leaflets + rep.fern.soriClusters;
         elemSub = `${rep.fern.fronds} fronds · ${rep.fern.leaflets} leaflets`;
@@ -971,25 +1001,33 @@ class FrontierStudio {
           ? '#52d17c'
           : layer.kind === 'palm'
             ? '#eab308'
-            : layer.kind === 'fern'
-              ? '#34c759'
-              : layer.kind === 'tropical'
-                ? '#7ee058'
-                : layer.kind === 'moss'
-                  ? '#86c232'
-                  : '#ffb454';
+            : layer.kind === 'flower'
+              ? (layer.flower?.huePrimary ?? '#ff2a78')
+              : layer.kind === 'marine'
+                ? (layer.marine?.hueSecondary ?? '#00e5ff')
+                : layer.kind === 'fern'
+                  ? '#34c759'
+                  : layer.kind === 'tropical'
+                    ? '#7ee058'
+                    : layer.kind === 'moss'
+                      ? '#86c232'
+                      : '#ffb454';
       const icoName =
         layer.kind === 'tree'
           ? 'tree'
           : layer.kind === 'palm'
             ? 'palm'
-            : layer.kind === 'fern'
-              ? 'fern'
-              : layer.kind === 'tropical'
-                ? 'tropical'
-                : layer.kind === 'moss'
-                  ? 'moss'
-                  : 'fur';
+            : layer.kind === 'flower'
+              ? 'flower'
+              : layer.kind === 'marine'
+                ? 'marine'
+                : layer.kind === 'fern'
+                  ? 'fern'
+                  : layer.kind === 'tropical'
+                    ? 'tropical'
+                    : layer.kind === 'moss'
+                      ? 'moss'
+                      : 'fur';
       this.heroIco.innerHTML = '';
       this.heroIco.style.color = acc;
       this.heroIco.style.background = `color-mix(in srgb, ${acc} 16%, transparent)`;
@@ -1000,20 +1038,26 @@ class FrontierStudio {
           ? TREE_SPECIES_NAMES[layer.tree.species]
           : layer.kind === 'palm' && layer.palm
             ? PALM_SPECIES_NAMES[layer.palm.species]
-            : layer.kind === 'fern' && layer.fern
-              ? FERN_ARCH_NAMES[layer.fern.architecture]
-              : layer.kind === 'tropical' && layer.tropical
-                ? TROPICAL_ARCH_NAMES[layer.tropical.architecture]
-                : layer.kind === 'moss' && layer.moss
-                  ? MOSS_HABIT_NAMES[layer.moss.habit]
-                  : layer.hair
-                    ? HAIR_FLOW_NAMES[layer.hair.flowMode]
-                    : '';
+            : layer.kind === 'flower' && layer.flower
+              ? FLOWER_SPECIES_NAMES[layer.flower.species]
+              : layer.kind === 'marine' && layer.marine
+                ? MARINE_SPECIES_NAMES[layer.marine.species]
+                : layer.kind === 'fern' && layer.fern
+                  ? FERN_ARCH_NAMES[layer.fern.architecture]
+                  : layer.kind === 'tropical' && layer.tropical
+                    ? TROPICAL_ARCH_NAMES[layer.tropical.architecture]
+                    : layer.kind === 'moss' && layer.moss
+                      ? MOSS_HABIT_NAMES[layer.moss.habit]
+                      : layer.hair
+                        ? HAIR_FLOW_NAMES[layer.hair.flowMode]
+                        : '';
       this.heroBigVal.textContent = fmtCompact(rep?.triangles ?? top.renderedTriangles);
       this.heroBigUnit.textContent = 'tris';
       this.heroBigLab.textContent = `Tier ${
         layer.tree?.detailTier ??
         layer.palm?.detailTier ??
+        layer.flower?.detailTier ??
+        layer.marine?.detailTier ??
         layer.fern?.detailTier ??
         layer.tropical?.detailTier ??
         layer.moss?.detailTier ??
@@ -1029,18 +1073,28 @@ class FrontierStudio {
         ? `${rep.tree.weldedJunctions} collars · ${rep.tree.rootStems} roots`
         : rep?.palm
           ? `${rep.palm.fronds} fronds · ${rep.palm.fruits} fruits`
-          : rep?.fern
-            ? `${rep.fern.leaflets} blades · ${rep.fern.soriClusters} sori`
-            : rep?.tropical
-              ? `${rep.tropical.leaves} paddles · ${rep.tropical.weldedJunctions ?? 0} collars`
-              : rep?.moss
-                ? `${fmtCompact(rep.moss.phyllids)} phyllids`
-                : rep?.hair
-                  ? `${fmtCompact(rep.hair.totalStrands)} strands`
-                  : `${b.parts.length} parts`;
+          : rep?.flower
+            ? `${rep.flower.blooms} blooms · ${rep.flower.petals} petals`
+            : rep?.marine
+              ? `${rep.marine.bladesOrTentacles} organs · ${rep.marine.vesiclesOrPolyps} bodies`
+              : rep?.fern
+                ? `${rep.fern.leaflets} blades · ${rep.fern.soriClusters} sori`
+                : rep?.tropical
+                  ? `${rep.tropical.leaves} paddles · ${rep.tropical.weldedJunctions ?? 0} collars`
+                  : rep?.moss
+                    ? `${fmtCompact(rep.moss.phyllids)} phyllids`
+                    : rep?.hair
+                      ? `${fmtCompact(rep.hair.totalStrands)} strands`
+                      : `${b.parts.length} parts`;
     const isWeldedClean =
       top.nanVertices === 0 &&
-      (rep?.tree ? rep.tree.closedManifold : rep?.palm ? rep.palm.closedTrunkManifold : true);
+      (rep?.tree
+        ? rep.tree.closedManifold
+        : rep?.palm
+          ? rep.palm.closedTrunkManifold
+          : rep?.marine
+            ? rep.marine.closedManifold
+            : true);
     this.heroSide3.textContent = isWeldedClean ? 'Closed Manifold' : `${top.nanVertices} NaN`;
 
     this.drawSparkline(layer);
@@ -1059,7 +1113,9 @@ class FrontierStudio {
           ? '#eab308'
           : layer.kind === 'flower'
             ? (layer.flower?.huePrimary ?? '#ff2a78')
-            : layer.kind === 'fern'
+            : layer.kind === 'marine'
+              ? (layer.marine?.hueSecondary ?? '#00e5ff')
+              : layer.kind === 'fern'
               ? '#34c759'
               : layer.kind === 'tropical'
                 ? '#7ee058'
@@ -1075,6 +1131,8 @@ class FrontierStudio {
         yNorm = 0.22 + 0.66 * Math.sin(t * Math.PI * 0.92) * (1 - 0.35 * t);
       } else if (layer.kind === 'flower' && layer.flower) {
         yNorm = 0.24 + 0.58 * Math.sin(t * Math.PI) + 0.14 * Math.abs(Math.sin(t * Math.PI * 5.0));
+      } else if (layer.kind === 'marine' && layer.marine) {
+        yNorm = 0.30 + 0.48 * Math.sin(t * Math.PI * 1.1) + 0.16 * Math.sin(t * 14.0) * layer.marine.ruffleWave;
       } else if (layer.kind === 'fern' && layer.fern) {
         const droop = layer.fern.archDroop / 130;
         yNorm = Math.sin(t * Math.PI * 0.88) * (1 - droop * t * 0.55);
@@ -1163,6 +1221,11 @@ class FrontierStudio {
       addCell('sparkles', 'Stamens', isPartVis('reproductive'), () => flipPart('reproductive'));
       addCell('leaf', 'Foliage', isPartVis('foliage'), () => flipPart('foliage'));
       addCell('roots', 'Welded Stems', isPartVis('stem'), () => flipPart('stem'));
+    } else if (layer.kind === 'marine' && layer.marine) {
+      addCell('roots', 'Holdfast / Base', isPartVis('holdfast'), () => flipPart('holdfast'));
+      addCell('tussock', 'Stipes / Lattice', isPartVis('stipe'), () => flipPart('stipe'));
+      addCell('leaf', 'Blades / Tentacles', isPartVis('fronds'), () => flipPart('fronds'));
+      addCell('sparkles', 'Bladders / Polyps', isPartVis('vesicles'), () => flipPart('vesicles'));
     } else if (layer.kind === 'fern' && layer.fern) {
       const fp = layer.fern;
       addCell('sprout', 'Crosiers', fp.crosierCount > 0 && isPartVis('crosiers'), () => {
@@ -1248,6 +1311,7 @@ class FrontierStudio {
       if (layer?.kind === 'tree' && layer.tree) this.buildTreeShapeTab(layer.tree, trigger);
       else if (layer?.kind === 'palm' && layer.palm) this.buildPalmShapeTab(layer.palm, trigger);
       else if (layer?.kind === 'flower' && layer.flower) this.buildFlowerShapeTab(layer.flower, trigger);
+      else if (layer?.kind === 'marine' && layer.marine) this.buildMarineShapeTab(layer.marine, trigger);
       else if (layer?.kind === 'fern' && layer.fern) this.buildFernShapeTab(layer.fern, trigger);
       else if (layer?.kind === 'tropical' && layer.tropical) this.buildTropicalShapeTab(layer.tropical, trigger);
       else if (layer?.kind === 'moss' && layer.moss) this.buildMossShapeTab(layer.moss, trigger);
@@ -1256,6 +1320,7 @@ class FrontierStudio {
       if (layer?.kind === 'tree' && layer.tree) this.buildTreeDetailTab(layer.tree, trigger);
       else if (layer?.kind === 'palm' && layer.palm) this.buildPalmDetailTab(layer.palm, trigger);
       else if (layer?.kind === 'flower' && layer.flower) this.buildFlowerDetailTab(layer.flower, trigger);
+      else if (layer?.kind === 'marine' && layer.marine) this.buildMarineDetailTab(layer.marine, trigger);
       else if (layer?.kind === 'fern' && layer.fern) this.buildFernDetailTab(layer.fern, trigger);
       else if (layer?.kind === 'tropical' && layer.tropical) this.buildTropicalDetailTab(layer.tropical, trigger);
       else if (layer?.kind === 'moss' && layer.moss) this.buildMossDetailTab(layer.moss, trigger);
@@ -1499,6 +1564,92 @@ class FrontierStudio {
     slider(sRep, '3D Foliage Density', () => flp.foliageDensity, (v) => (flp.foliageDensity = v), { min: 0, max: 1.6, step: 0.05 }, onChange);
     stepper(sRep, 'Welded Buttress Roots', () => flp.rootCount, (v) => (flp.rootCount = v), { min: 0, max: 8, integer: true }, onChange);
     slider(sRep, 'Breeze Compliance', () => flp.windCompliance, (v) => (flp.windCompliance = v), { min: 0.2, max: 1.8, step: 0.05 }, onChange);
+  }
+
+  // --- SEA PLANTS & MARINE REEF SPECIES TABS ---
+  private appendMarineColorwaySwatches(parent: HTMLElement, mrp: MarineParams, onChange: () => void): void {
+    const swatchOrder: Array<{ id: Exclude<MarineColorPalette, 'custom'>; short: string }> = [
+      { id: 'pacific_amber_kelp', short: 'Amber Kelp' },
+      { id: 'emerald_seagrass', short: 'Seagrass' },
+      { id: 'jade_tidepool', short: 'Jade Ulva' },
+      { id: 'acropora_rose_gold', short: 'Rose Reef' },
+      { id: 'royal_purple_gorgonian', short: 'Sea Fan' },
+      { id: 'biolum_bubble_anemone', short: 'Biolum' },
+      { id: 'caribbean_azure_sponge', short: 'Azure' },
+      { id: 'crimson_gold_crinoid', short: 'Crimson' },
+      { id: 'abyssal_neon_reef', short: 'Abyss UV' },
+      { id: 'bleached_ivory_reef', short: 'Ivory Reef' },
+    ];
+    const grid = el('div', 'swatch-grid');
+    for (const item of swatchOrder) {
+      const set = MARINE_PALETTES[item.id];
+      const chip = el('button', 'swatch-chip' + (mrp.colorPalette === item.id ? ' on' : ''));
+      chip.type = 'button';
+      chip.title = MARINE_PALETTE_NAMES[item.id];
+      const orb = el('i', 'sw-orb');
+      orb.style.background = `radial-gradient(circle at 32% 32%, ${set.hueAccent}, ${set.hueSecondary} 55%, ${set.huePrimary})`;
+      chip.append(orb, el('span', '', item.short));
+      chip.addEventListener('click', () => {
+        applyMarinePalette(mrp, item.id);
+        this.rebuildInspector();
+        onChange();
+      });
+      grid.append(chip);
+    }
+    parent.append(grid);
+  }
+
+  private buildMarineShapeTab(mrp: MarineParams, onChange: () => void): void {
+    const sSp = section('Sea Plant & Marine Reef Species', this.inspBody, { hint: 'benthic 3D' });
+    select<MarineSpecies>(
+      sSp,
+      'Marine Species',
+      (Object.keys(MARINE_SPECIES_NAMES) as MarineSpecies[]).map((k) => ({
+        value: k,
+        label: MARINE_SPECIES_NAMES[k],
+      })),
+      () => mrp.species,
+      (v) => {
+        applyMarineSpeciesDefaults(mrp, v);
+        this.rebuildInspector();
+      },
+      onChange,
+    );
+    select<number>(
+      sSp,
+      'Mesh Detail Tier',
+      [
+        { value: 1, label: '1 · Light Benthic Preview' },
+        { value: 2, label: '2 · Standard Reef Mesh' },
+        { value: 3, label: '3 · High-Poly Sculpted' },
+        { value: 4, label: '4 · Cinema Ocean Macro' },
+      ],
+      () => mrp.detailTier,
+      (v) => (mrp.detailTier = v),
+      onChange,
+    );
+    slider(sSp, 'Colony Height / Span', () => mrp.colonyHeight, (v) => (mrp.colonyHeight = v), { min: 0.25, max: 6.0, step: 0.05, unit: 'm' }, onChange);
+    stepper(sSp, 'Stipes / Tubes / Arms', () => mrp.colonyCount, (v) => (mrp.colonyCount = v), { min: 1, max: 32, integer: true }, onChange);
+    slider(sSp, 'Crown / Meadow Spread', () => mrp.canopySpread, (v) => (mrp.canopySpread = v), { min: 0.35, max: 1.85, step: 0.04 }, onChange);
+    slider(sSp, 'Blade / Tentacle Length', () => mrp.organLength, (v) => (mrp.organLength = v), { min: 0.10, max: 2.2, step: 0.03, unit: 'm' }, onChange);
+
+    const sCol = section('Reef & Bioluminescent Colorways', this.inspBody, { hint: '1-click' });
+    this.appendMarineColorwaySwatches(sCol, mrp, onChange);
+
+    this.appendLiveWindMiniSection();
+  }
+
+  private buildMarineDetailTab(mrp: MarineParams, onChange: () => void): void {
+    const sOrg = section('Thallus, Corallite & Tentacle Sculpt', this.inspBody, { hint: 'anatomy' });
+    slider(sOrg, 'Organ Width / Gauge', () => mrp.organWidth, (v) => (mrp.organWidth = v), { min: 0.04, max: 0.75, step: 0.02 }, onChange);
+    slider(sOrg, 'Organ / Lattice Density', () => mrp.organDensity, (v) => (mrp.organDensity = v), { min: 0.4, max: 1.8, step: 0.05 }, onChange);
+    slider(sOrg, 'Ruffle / Bubble Inflation', () => mrp.ruffleWave, (v) => (mrp.ruffleWave = v), { min: 0, max: 1.2, step: 0.03 }, onChange);
+    slider(sOrg, 'Bladders / Polyps / Conules', () => mrp.vesicleAbundance, (v) => (mrp.vesicleAbundance = v), { min: 0, max: 1.6, step: 0.05 }, onChange);
+    stepper(sOrg, 'Branch / Fork Order', () => mrp.branchOrder, (v) => (mrp.branchOrder = v), { min: 1, max: 3, integer: true }, onChange);
+
+    const sCur = section('Ocean Current & Surge Kinematics', this.inspBody, { hint: 'SO(3) surge' });
+    slider(sCur, 'Prevailing Current Lean', () => mrp.currentLeanDeg, (v) => (mrp.currentLeanDeg = v), { min: 0, max: 45, step: 1, unit: '°' }, onChange);
+    slider(sCur, 'Underwater Surge Sway', () => mrp.currentSway, (v) => (mrp.currentSway = v), { min: 0, max: 1.8, step: 0.04 }, onChange);
   }
 
   // --- FERN / PLANT TABS ---
@@ -1875,6 +2026,22 @@ class FrontierStudio {
       slider(sPig, 'Margin / Tip Blend', () => flp.edgeBlend, (v) => (flp.edgeBlend = v), { min: 0, max: 1, step: 0.03 }, onChange);
       slider(sPig, 'Velvet Throat Size', () => flp.throatSize, (v) => (flp.throatSize = v), { min: 0, max: 0.65, step: 0.02 }, onChange);
       slider(sPig, 'Vein Guide Contrast', () => flp.veinContrast, (v) => (flp.veinContrast = v), { min: 0, max: 1, step: 0.03 }, onChange);
+    } else if (layer.kind === 'marine' && layer.marine) {
+      const mrp = layer.marine;
+      const sPal = section('Curated Reef & Kelp Colorways', this.inspBody, { hint: 'swatches' });
+      this.appendMarineColorwaySwatches(sPal, mrp, onChange);
+
+      const sPig = section('5-Zone Marine & Biolum Pigments', this.inspBody, { hint: 'ocean SSS' });
+      const markCustom = (fn: (c: string) => void) => (c: string) => {
+        mrp.colorPalette = 'custom';
+        fn(c);
+      };
+      colorField(sPig, 'Primary Thallus / Coral', () => mrp.huePrimary, markCustom((c) => (mrp.huePrimary = c)), onChange);
+      colorField(sPig, 'Secondary Blade / Atrium', () => mrp.hueSecondary, markCustom((c) => (mrp.hueSecondary = c)), onChange);
+      colorField(sPig, 'Bladders / Glowing Tips', () => mrp.hueAccent, markCustom((c) => (mrp.hueAccent = c)), onChange);
+      colorField(sPig, 'Holdfast / Reef Base', () => mrp.hueHoldfast, markCustom((c) => (mrp.hueHoldfast = c)), onChange);
+      colorField(sPig, 'Polyps / Epiphytes', () => mrp.huePolyp, markCustom((c) => (mrp.huePolyp = c)), onChange);
+      slider(sPig, 'Subsurface Translucency', () => mrp.translucency, (v) => (mrp.translucency = v), { min: 0.05, max: 0.95, step: 0.03 }, onChange);
     } else if (layer.kind === 'fern' && layer.fern) {
       const fp = layer.fern;
       const sCol = section('Chlorophyll, Cuticle & Senescence', this.inspBody, { hint: 'SSS' });
@@ -2214,8 +2381,18 @@ class FrontierStudio {
       }
     }
     if (cmd === 'add') {
-      const k = rest.toLowerCase();
-      if (k === 'tree' || k === 'palm' || k === 'flower' || k === 'tropical' || k === 'fern' || k === 'moss' || k === 'hair') {
+      const rawK = rest.toLowerCase();
+      const k = rawK === 'sea' || rawK === 'kelp' || rawK === 'coral' ? 'marine' : rawK;
+      if (
+        k === 'tree' ||
+        k === 'palm' ||
+        k === 'flower' ||
+        k === 'marine' ||
+        k === 'tropical' ||
+        k === 'fern' ||
+        k === 'moss' ||
+        k === 'hair'
+      ) {
         this.addLayer(k);
         return `added ${k}`;
       }

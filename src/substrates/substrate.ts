@@ -39,6 +39,8 @@ import { fbm3, ridged3 } from '../core/noise';
 
 export type SubstrateKind =
   | 'none'
+  | 'coral_reef_ledge'
+  | 'rippled_seabed_sand'
   | 'wet_basalt_crag'
   | 'forest_carpet'
   | 'humus_mound'
@@ -51,6 +53,8 @@ export type SubstrateKind =
 
 export const SUBSTRATE_NAMES: Record<SubstrateKind, string> = {
   none: 'None (Origin)',
+  coral_reef_ledge: 'Calcified Coral Reef Ledge',
+  rippled_seabed_sand: 'Current-Rippled Ocean Sand',
   wet_basalt_crag: 'Wet Volcanic Basalt Crag',
   forest_carpet: 'Undulating Forest Carpet',
   humus_mound: 'Forest Humus Mound',
@@ -107,6 +111,48 @@ export class HostSubstrate {
 
     if (kind === 'none') {
       return { pos: v3((u - 0.5) * S * 0.2, 0, (v - 0.5) * S * 0.2), crevice: 0, emitterMask: 1 };
+    }
+
+    if (kind === 'coral_reef_ledge') {
+      // Terraced aragonite coral reef limestone outcrop with porous bio-eroded pockets & coralline ledges
+      const ang = Math.atan2(v - 0.5, u - 0.5);
+      const rad = Math.hypot(u - 0.5, v - 0.5) * 2.0;
+      const reefOutline =
+        0.92 + 0.10 * Math.sin(ang * 3 + 0.9) + 0.07 * Math.cos(ang * 5 - 0.8) + 0.04 * Math.sin(ang * 7 + 2.1);
+      const normR = rad / reefOutline;
+      const clampedR = Math.min(1.06, normR);
+      const x = Math.cos(ang) * clampedR * 1.15 * S;
+      const z = Math.sin(ang) * clampedR * 1.15 * S;
+
+      const shelf = (1 - Math.pow(Math.min(1, normR), 2.1)) * S * 0.22;
+      const terraceStep = Math.tanh(Math.sin((normR * 2.4 + 0.15) * Math.PI) * 2.6) * S * 0.038;
+      const porous =
+        ridged3((x * 3.4) / S, 0.8, (z * 3.4) / S, this.seed, 4) * roughness * S * 0.075 +
+        fbm3((x * 8.5) / S, 2.1, (z * 8.5) / S, this.seed ^ 0x57a, 3) * roughness * S * 0.024;
+      const bevel = smoothstep(1.05, 0.78, normR);
+      const y = (shelf + terraceStep + porous) * bevel - (1 - bevel) * 0.04 * S;
+      const crev = saturate(0.88 - porous / Math.max(1e-4, roughness * S * 0.085 + 0.006));
+      return { pos: v3(x, y, z), crevice: crev, emitterMask: smoothstep(0.95, 0.74, normR) };
+    }
+
+    if (kind === 'rippled_seabed_sand') {
+      // Subtidal carbonate seafloor sandbar with asymmetric current-driven ripples & gentle sand swells
+      const a = 2 * u - 1;
+      const b = 2 * v - 1;
+      const ex = a * Math.sqrt(Math.max(0, 1 - 0.5 * b * b));
+      const ez = b * Math.sqrt(Math.max(0, 1 - 0.5 * a * a));
+      const r = Math.min(1, Math.hypot(ex, ez));
+      const x = ex * S * 1.25;
+      const z = ez * S * 1.25;
+
+      const warp = fbm3((x * 2.2) / S, 0.4, (z * 2.2) / S, this.seed, 3) * 1.4;
+      const ripplePhase = ((x * 0.85 + z * 0.52) / S) * 18.0 + warp;
+      // Asymmetric wave-current sand ripple profile (steep lee face, gentle stoss slope)
+      const ripple = (Math.sin(ripplePhase) + 0.28 * Math.sin(ripplePhase * 2.0 - 0.7)) * roughness * S * 0.022;
+      const bank = (1 - Math.pow(r, 2.4)) * S * 0.11;
+      const y = Math.max(-0.02 * S, (bank + ripple) * smoothstep(1.02, 0.84, r));
+      const crev = saturate(0.45 - ripple / Math.max(1e-4, roughness * S * 0.03 + 0.004));
+      return { pos: v3(x, y, z), crevice: crev, emitterMask: smoothstep(0.96, 0.76, r) };
     }
 
     if (kind === 'wet_basalt_crag') {
@@ -483,13 +529,19 @@ export class HostSubstrate {
         let col = mixRgb(palette.base, palette.crevice, saturate(s.crevice * 0.85));
         if (kind === 'scalp_bust' && s.emitterMask > 0.25) {
           col = mixRgb(col, palette.accent, s.emitterMask * 0.45);
+        } else if (kind === 'coral_reef_ledge') {
+          // Crustose pink/violet coralline algae (*Lithothamnion*) colonizing exposed reef crests!
+          const corallinePatch = saturate(
+            0.5 + 0.65 * fbm3(s.pos.x * 3.8, s.pos.y * 4.2, s.pos.z * 3.8, this.seed ^ 0x993, 3),
+          );
+          col = mixRgb(col, palette.accent, saturate((1 - s.crevice) * corallinePatch * 0.68));
         } else {
           col = mixRgb(col, palette.accent, saturate((1 - s.crevice) * 0.35));
         }
         col = { r: col.r * wetDarken, g: col.g * wetDarken, b: col.b * wetDarken };
         const rough =
-          kind === 'wet_basalt_crag'
-            ? clamp(0.46 - s.moisture * 0.24, 0.16, 0.55)
+          kind === 'wet_basalt_crag' || kind === 'coral_reef_ledge'
+            ? clamp(0.50 - s.moisture * 0.22, 0.18, 0.58)
             : clamp(0.92 - s.moisture * 0.32, 0.35, 0.98);
         row.push(
           mesh.addVertex({
@@ -561,6 +613,18 @@ export class HostSubstrate {
 
   private substrateColors(): { base: RGB; crevice: RGB; accent: RGB } {
     switch (this.params.kind) {
+      case 'coral_reef_ledge':
+        return {
+          base: hexToLinearRgb('#5b5260'),
+          crevice: hexToLinearRgb('#1c1826'),
+          accent: hexToLinearRgb('#9e5282'),
+        };
+      case 'rippled_seabed_sand':
+        return {
+          base: hexToLinearRgb('#8c8370'),
+          crevice: hexToLinearRgb('#4c473e'),
+          accent: hexToLinearRgb('#b8ad94'),
+        };
       case 'wet_basalt_crag':
         return {
           base: hexToLinearRgb('#191d22'),
