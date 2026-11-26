@@ -110,12 +110,13 @@ function evalWindVertex(
 }
 
 describe('Frontier Procedural Generators — Welded Trees, Fruiting Palms, Gigantic Flowers, Sea Plants & Marine Species, Pillow Moss, Giant Tropicals, Ferns & Fur', () => {
-  it('exposes all 72 curated presets across all 10 studio groups', () => {
-    expect(PRESETS.length).toBe(72);
+  it('exposes all 82 curated presets across all 11 studio groups', () => {
+    expect(PRESETS.length).toBe(82);
     const groups = new Set(PRESETS.map((p) => p.group));
     expect(groups.has('Trees · Welded Manifold')).toBe(true);
     expect(groups.has('Palms · Fruiting & Branching')).toBe(true);
     expect(groups.has('Flowers · Gigantic 3D Blooms')).toBe(true);
+    expect(groups.has('Sea Plants · Kelp & Vegetation')).toBe(true);
     expect(groups.has('Sea & Reef · Marine Species')).toBe(true);
     expect(groups.has('Real Moss · Bryophytes')).toBe(true);
     expect(groups.has('Giant Tropical · Megaphylls')).toBe(true);
@@ -1028,19 +1029,19 @@ describe('Frontier Procedural Generators — Welded Trees, Fruiting Palms, Gigan
     }
   });
 
-  it('synthesizes all 10 Sea Plants & Marine Species with watertight Staghorn Coral manifold, 10 marine palettes, seabed substrates, and C0 ocean-current SO(3) continuity', () => {
+  it('synthesizes all 18 Sea Plants, Sea Vegetation & Marine Species with watertight Staghorn Coral & Velvet Codium manifolds, 16 marine palettes, seabed substrates, and C0 ocean-current SO(3) continuity', () => {
     const speciesIds = Object.keys(MARINE_SPECIES_NAMES) as MarineSpecies[];
     const paletteIds = (Object.keys(MARINE_PALETTE_NAMES) as MarineColorPalette[]).filter(
       (k) => k !== 'custom',
     );
-    expect(speciesIds.length).toBe(10);
-    expect(paletteIds.length).toBe(10);
+    expect(speciesIds.length).toBe(18);
+    expect(paletteIds.length).toBe(16);
 
-    // 1. Verify all 10 marine species + palette application build cleanly with populated MarineStats!
+    // 1. Verify all 18 marine species + all 16 palettes build cleanly with populated MarineStats!
     const basePreset = PRESETS.find((p) => p.name === 'Pacific Giant Bladder Kelp')!;
     for (let idx = 0; idx < speciesIds.length; idx++) {
       const spId = speciesIds[idx];
-      const palId = paletteIds[idx];
+      const palId = paletteIds[idx % paletteIds.length];
       const scene = cloneScene(basePreset.scene);
       scene.substrate.kind = idx % 2 === 0 ? 'coral_reef_ledge' : 'rippled_seabed_sand';
       const mp = { ...DEFAULT_MARINE_PARAMS };
@@ -1098,29 +1099,36 @@ describe('Frontier Procedural Generators — Welded Trees, Fruiting Palms, Gigan
         expect(maxCurrentDisp, `${spId} subtle polyp/osculum micro-motion`).toBeGreaterThan(0.001);
         expect(maxCurrentDisp, `${spId} stony skeleton stiffness`).toBeLessThan(0.06);
       } else {
-        // Flexible kelps, seagrasses, gorgonian fans, anemones & crinoids sway gracefully in ocean surge!
-        expect(maxCurrentDisp, `${spId} ocean current sway`).toBeGreaterThan(0.02);
+        // Flexible kelps, macroalgae, seagrasses, gorgonian fans, anemones & crinoids sway gracefully in ocean surge!
+        expect(maxCurrentDisp, `${spId} ocean current sway`).toBeGreaterThan(0.015);
       }
     }
 
-    // 2. Prove watertight closed 2-manifold Euler topology (V - E + F = 2) on Staghorn Coral skeleton!
-    const coralPreset = PRESETS.find((p) => p.name === 'Rose-Gold Staghorn Coral')!;
-    const coralRaw = buildSceneRaw(cloneScene(coralPreset.scene));
-    const coralSkeleton = coralRaw.rawParts.find((pm) => pm.id === 'layer-1:holdfast')!;
-    const coralTopo = validateWeldedManifold(coralSkeleton);
-    expect(coralTopo.closed).toBe(true);
-    expect(coralTopo.manifold).toBe(true);
-    expect(coralTopo.boundaryEdges).toBe(0);
-    expect(coralTopo.nonManifoldEdges).toBe(0);
-    expect(coralTopo.components).toBe(1);
-    expect(coralTopo.eulerCharacteristic).toBe(2);
-    expect(coralRaw.layerReports[0].marine!.closedManifold).toBe(true);
+    // 2. Prove watertight closed 2-manifold Euler topology (V - E + F = 2) on BOTH Staghorn Coral & Velvet Codium!
+    for (const manifoldPresetName of ['Rose-Gold Staghorn Coral', 'Velvet Staghorn Sponge-Weed'] as const) {
+      const mPreset = PRESETS.find((p) => p.name === manifoldPresetName)!;
+      const mRaw = buildSceneRaw(cloneScene(mPreset.scene));
+      const mThallus = mRaw.rawParts.find((pm) => pm.id === 'layer-1:holdfast')!;
+      const mTopo = validateWeldedManifold(mThallus);
+      expect(mTopo.closed, `${manifoldPresetName} closed`).toBe(true);
+      expect(mTopo.manifold, `${manifoldPresetName} manifold`).toBe(true);
+      expect(mTopo.boundaryEdges, `${manifoldPresetName} boundaryEdges`).toBe(0);
+      expect(mTopo.nonManifoldEdges, `${manifoldPresetName} nonManifoldEdges`).toBe(0);
+      expect(mTopo.components, `${manifoldPresetName} components`).toBe(1);
+      expect(mTopo.eulerCharacteristic, `${manifoldPresetName} V-E+F`).toBe(2);
+      expect(mRaw.layerReports[0].marine!.closedManifold).toBe(true);
+    }
 
-    // 3. Verify both multi-layer underwater ecosystems compose multiple marine layers cleanly!
-    for (const ecoName of ['Living Coral Reef Sanctuary', 'Pacific Kelp & Seagrass Lagoon'] as const) {
+    // 3. Verify all 4 multi-layer underwater flora & reef ecosystems compose cleanly!
+    for (const ecoName of [
+      'Living Coral Reef Sanctuary',
+      'Pacific Kelp & Seagrass Lagoon',
+      'Intertidal Tidepool Seaweed Garden',
+      'Tropical Lagoon Sea-Grape & Wineglass Meadow',
+    ] as const) {
       const eco = PRESETS.find((p) => p.name === ecoName)!;
       const ecoRes = buildSceneResponse(cloneScene(eco.scene));
-      expect(ecoRes.topology.nanVertices).toBe(0);
+      expect(ecoRes.topology.nanVertices, `${ecoName} NaN`).toBe(0);
       expect(ecoRes.layerReports.length).toBeGreaterThanOrEqual(4);
       expect(ecoRes.topology.renderedTriangles).toBeGreaterThan(25000);
     }

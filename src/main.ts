@@ -1570,8 +1570,14 @@ class FrontierStudio {
   private appendMarineColorwaySwatches(parent: HTMLElement, mrp: MarineParams, onChange: () => void): void {
     const swatchOrder: Array<{ id: Exclude<MarineColorPalette, 'custom'>; short: string }> = [
       { id: 'pacific_amber_kelp', short: 'Amber Kelp' },
-      { id: 'emerald_seagrass', short: 'Seagrass' },
+      { id: 'fucus_intertidal_amber', short: 'Rockweed' },
+      { id: 'emerald_seagrass', short: 'Posidonia' },
+      { id: 'eelgrass_teal_meadow', short: 'Eelgrass' },
       { id: 'jade_tidepool', short: 'Jade Ulva' },
+      { id: 'caulerpa_emerald_caviar', short: 'Sea Grapes' },
+      { id: 'acetabularia_mint_parasol', short: 'Wineglass' },
+      { id: 'padina_peacock_chalk', short: 'Peacock' },
+      { id: 'crimson_dulse_rhodo', short: 'Red Dulse' },
       { id: 'acropora_rose_gold', short: 'Rose Reef' },
       { id: 'royal_purple_gorgonian', short: 'Sea Fan' },
       { id: 'biolum_bubble_anemone', short: 'Biolum' },
@@ -1629,11 +1635,11 @@ class FrontierStudio {
       onChange,
     );
     slider(sSp, 'Colony Height / Span', () => mrp.colonyHeight, (v) => (mrp.colonyHeight = v), { min: 0.25, max: 6.0, step: 0.05, unit: 'm' }, onChange);
-    stepper(sSp, 'Stipes / Tubes / Arms', () => mrp.colonyCount, (v) => (mrp.colonyCount = v), { min: 1, max: 32, integer: true }, onChange);
+    stepper(sSp, 'Stipes / Shoots / Tubes', () => mrp.colonyCount, (v) => (mrp.colonyCount = v), { min: 1, max: 44, integer: true }, onChange);
     slider(sSp, 'Crown / Meadow Spread', () => mrp.canopySpread, (v) => (mrp.canopySpread = v), { min: 0.35, max: 1.85, step: 0.04 }, onChange);
     slider(sSp, 'Blade / Tentacle Length', () => mrp.organLength, (v) => (mrp.organLength = v), { min: 0.10, max: 2.2, step: 0.03, unit: 'm' }, onChange);
 
-    const sCol = section('Reef & Bioluminescent Colorways', this.inspBody, { hint: '1-click' });
+    const sCol = section('Marine Flora & Reef Colorways', this.inspBody, { hint: '1-click' });
     this.appendMarineColorwaySwatches(sCol, mrp, onChange);
 
     this.appendLiveWindMiniSection();
@@ -1641,11 +1647,11 @@ class FrontierStudio {
 
   private buildMarineDetailTab(mrp: MarineParams, onChange: () => void): void {
     const sOrg = section('Thallus, Corallite & Tentacle Sculpt', this.inspBody, { hint: 'anatomy' });
-    slider(sOrg, 'Organ Width / Gauge', () => mrp.organWidth, (v) => (mrp.organWidth = v), { min: 0.04, max: 0.75, step: 0.02 }, onChange);
+    slider(sOrg, 'Organ Width / Gauge', () => mrp.organWidth, (v) => (mrp.organWidth = v), { min: 0.04, max: 0.85, step: 0.02 }, onChange);
     slider(sOrg, 'Organ / Lattice Density', () => mrp.organDensity, (v) => (mrp.organDensity = v), { min: 0.4, max: 1.8, step: 0.05 }, onChange);
     slider(sOrg, 'Ruffle / Bubble Inflation', () => mrp.ruffleWave, (v) => (mrp.ruffleWave = v), { min: 0, max: 1.2, step: 0.03 }, onChange);
-    slider(sOrg, 'Bladders / Polyps / Conules', () => mrp.vesicleAbundance, (v) => (mrp.vesicleAbundance = v), { min: 0, max: 1.6, step: 0.05 }, onChange);
-    stepper(sOrg, 'Branch / Fork Order', () => mrp.branchOrder, (v) => (mrp.branchOrder = v), { min: 1, max: 3, integer: true }, onChange);
+    slider(sOrg, 'Bladders / Grapes / Polyps', () => mrp.vesicleAbundance, (v) => (mrp.vesicleAbundance = v), { min: 0, max: 1.6, step: 0.05 }, onChange);
+    stepper(sOrg, 'Branch / Fork Order', () => mrp.branchOrder, (v) => (mrp.branchOrder = v), { min: 1, max: 4, integer: true }, onChange);
 
     const sCur = section('Ocean Current & Surge Kinematics', this.inspBody, { hint: 'SO(3) surge' });
     slider(sCur, 'Prevailing Current Lean', () => mrp.currentLeanDeg, (v) => (mrp.currentLeanDeg = v), { min: 0, max: 45, step: 1, unit: '°' }, onChange);
@@ -2382,7 +2388,15 @@ class FrontierStudio {
     }
     if (cmd === 'add') {
       const rawK = rest.toLowerCase();
-      const k = rawK === 'sea' || rawK === 'kelp' || rawK === 'coral' ? 'marine' : rawK;
+      const k =
+        rawK === 'sea' ||
+        rawK === 'kelp' ||
+        rawK === 'seaweed' ||
+        rawK === 'seagrass' ||
+        rawK === 'algae' ||
+        rawK === 'coral'
+          ? 'marine'
+          : rawK;
       if (
         k === 'tree' ||
         k === 'palm' ||
